@@ -98,6 +98,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # A control change whose duration is linked to its source (CR 611.3).
     "steal_target_permanent_linked_to_self": "control",
     "sacrifice_self": "zones",
+    # The controller-chosen sacrifice (Dire Fleet Warmonger's optional cost).
+    "sacrifice_matching_permanent": "zones",
     "upkeep_pay_or_sacrifice_enchantment": "upkeep",
     "upkeep_pay_or_sacrifice_self": "upkeep",
     "upkeep_pay_to_untap_self": "upkeep",

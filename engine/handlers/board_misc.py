@@ -544,3 +544,20 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
         f"({permanent.metadata[key]} left)"
     )
     return True, "resolved"
+
+
+@effect_handler("sacrifice_matching_permanent")
+def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Sacrifice a creature" / "sacrifice another creature" as an effect the
+    controller performs (Dire Fleet Warmonger's accepted cost). Routed through
+    ``arm_forced_sacrifice``: a human seat picks which through the standing
+    prompt, everyone else takes the deterministic heuristic."""
+    caster_index = game.players.index(context.caster)
+    exclude = context.source_permanent if instruction.payload.get("exclude_self") else None
+    game.arm_forced_sacrifice(
+        caster_index, 1,
+        filter=str(instruction.payload.get("filter", "creature")),
+        exclude=exclude,
+        reason=context.card.name,
+    )
+    return True, "resolved"

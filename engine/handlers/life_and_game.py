@@ -185,6 +185,20 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         life_gain = max(0, int(context.results.get(source_key, 0)))
     else:
         life_gain = resolve_amount(instruction.payload.get("amount", 0), x_value)
+    # "…for each creature you control with flying" (Aven Gagglemaster): the
+    # gain is multiplied by a battlefield count of the gainer's own permanents,
+    # keywords asked of layer 6 so a granted flying counts.
+    per_each = instruction.payload.get("per_each")
+    if per_each is not None and per_each.get("zone") == "battlefield":
+        wanted_types = tuple(per_each.get("card_types") or ())
+        wanted_keywords = tuple(per_each.get("with_keywords") or ())
+        life_gain *= sum(
+            1
+            for perm in game.controlled_by(gainer)
+            if (not wanted_types or ("creature" in wanted_types and perm.is_creature)
+                or any(perm.has_type(t) for t in wanted_types if t != "creature"))
+            and all(game._has_keyword(perm, kw) for kw in wanted_keywords)
+        )
     game._gain_life(gainer, life_gain, card.name)
     return True, "resolved"
 

@@ -86,7 +86,17 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             amount = parse_amount(stream)
             if stream.accept_word("life"):
                 player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
-                return ast.GainLife(player, amount)
+                # "…for each creature you control with flying" (Aven
+                # Gagglemaster) — recorded rather than consumed-and-dropped,
+                # mirroring the loses-life multiplier.
+                per_each: ast.ObjectFilter | None = None
+                for_each_mark = stream.mark()
+                if stream.accept_phrase("for", "each"):
+                    try:
+                        per_each = parse_object_filter(stream)
+                    except GrammarError:
+                        stream.reset(for_each_mark)
+                return ast.GainLife(player, amount, per_each=per_each)
         except GrammarError:
             pass
         stream.reset(mark)

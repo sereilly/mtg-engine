@@ -446,6 +446,26 @@ def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
     Refusing here keeps that distinction visible instead of quietly sacrificing
     the wrong thing.
     """
+    # "Sacrifice a creature" / "sacrifice another creature" (Dire Fleet
+    # Warmonger's optional cost): the *controller chooses* which, so this
+    # arms the forced-sacrifice prompt rather than acting on a known
+    # permanent. Bare creature filters only — the prompt's candidate test
+    # reads one type word, and a narrowing it cannot test must refuse.
+    if (
+        node.player.kind == "you"
+        and isinstance(node.subject, ast.TargetSpec)
+        and not node.subject.targeted
+        and node.subject.count == 1
+        and node.subject.filter.card_types == ("creature",)
+        and node.subject.filter == ast.ObjectFilter(
+            card_types=("creature",),
+            other_than_source=node.subject.filter.other_than_source,
+        )
+    ):
+        payload: dict[str, object] = {"filter": "creature"}
+        if node.subject.filter.other_than_source:
+            payload["exclude_self"] = True
+        return (OracleInstruction("sacrifice_matching_permanent", "", payload),)
     if not _is_source(node.subject):
         raise LoweringError("no handler for sacrificing a chosen permanent", node=node)
     if node.player.kind != "you":

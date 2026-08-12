@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 60.0% | 55.5% | 34.8% | 140 |
+| M21 *(measured)* | 285 | 503 | 60.4% | 55.9% | 35.2% | 142 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,8 +33,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 275 | 142 | expected a subject |  |
-| 105 | 51 | unrecognized effect verb |  |
-| 66 | 47 | unconsumed text |  |
+| 104 | 50 | unrecognized effect verb |  |
+| 65 | 46 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 5 | expected a keyword ability |  |
@@ -97,6 +97,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Attacking creatures get +2/+0 until end of turn.`
 - **Atog**
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
+- **Aven Gagglemaster**
+  - `When this creature enters, you gain 2 life for each creature you control with flying.`
 - **Bad Moon**
   - `Black creatures get +1/+1.`
   - `Black creatures get +1/+1.`
@@ -323,6 +325,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
+- **Dire Fleet Warmonger**
+  - `At the beginning of combat on your turn, you may sacrifice another creature. If you do, this creature gets +2/+2 and gains trample until end of turn. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
 - **Disenchant**
   - `Destroy target artifact or enchantment.`
   - `Destroy target artifact or enchantment.`

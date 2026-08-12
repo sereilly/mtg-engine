@@ -186,6 +186,19 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     if cost is not None and not game._player_can_pay_generic(player, int(cost)):
         return _run(game, on_decline, context) if on_decline else (True, "resolved")
 
+    # The same rule for an *action* cost ("you may sacrifice another
+    # creature", Dire Fleet Warmonger): with nothing legal to sacrifice, the
+    # offer is never made — otherwise accepting would run the if-you-do branch
+    # against a cost that never happens.
+    for step in on_accept:
+        if step.kind != "sacrifice_matching_permanent":
+            continue
+        exclude = context.source_permanent if step.payload.get("exclude_self") else None
+        if not game._sacrifice_candidate_indices(
+            player, str(step.payload.get("filter", "creature")), exclude
+        ):
+            return _run(game, on_decline, context) if on_decline else (True, "resolved")
+
     entry = {
         "card_name": context.card.name,
         "cost": int(cost or 0),

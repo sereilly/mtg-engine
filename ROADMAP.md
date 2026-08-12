@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 160/285) to the full release line - **137 sets, 33,594
+M21 measured at 162/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -798,6 +798,38 @@ back-references the machinery already promised:
 **Next:** the may-with-action-cost ordering question above; then the
 remaining triggered-ability block and no-handler tail, where the support
 report names every card.
+
+---
+
+## Round 23: the may-with-action-cost, answered by never offering the unpayable
+
+*(2026-08-11, same day.)* M21 **160 → 162**: Dire Fleet Warmonger and Aven
+Gagglemaster. The round-22 question — how does a "you may <action>. If you
+do, …" trigger wait for its action cost's own pending choice — dissolved on
+inspection into two smaller obligations, both already idioms:
+
+- **"Sacrifice a creature" lowers onto the forced-sacrifice prompt**
+  (`sacrifice_matching_permanent` → `arm_forced_sacrifice`), with "another"
+  carried as the exclusion the prompt enforces and any narrowing the
+  prompt's one-type-word candidate test cannot honour still refusing. The
+  refusal test this retires said exactly what was missing ("needs the
+  pending-choice machinery"); it now pins the lowering instead.
+- **The `may` handler learned action-cost affordability**: with nothing
+  legal to sacrifice, the offer is never made — the same rule it has always
+  applied to mana — so the if-you-do pump can never be taken for free. That,
+  plus the standing prompt gating every other action while the pick is owed,
+  is what makes the accept-then-choose ordering safe without a new
+  suspension: the pump lands before the chosen creature leaves, but nothing
+  can observe the board in between.
+- **Aven Gagglemaster** is the gains-life mirror of Liliana, Death Mage's
+  loses-life multiplier: "for each creature you control with flying" rides
+  ``GainLife.per_each``, counted over the gainer's own battlefield with
+  keywords asked of layer 6 — a granted flying counts, and the
+  Gagglemaster's own wings count it among its flock.
+
+**Still in the family:** Crypt Lurker's either/or action cost ("sacrifice a
+creature **or** discard a creature card"), which needs an or-composed cost
+prompt, not just this round's single-action one.
 
 ---
 

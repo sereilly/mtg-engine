@@ -15,6 +15,7 @@ from ..errors import LoweringError
 from ._common import (
     _amount_payload,
     _describe_targets,
+    _restrictions_beyond,
 )
 
 
@@ -51,6 +52,32 @@ def _lower_gain_life(
     payload: dict[str, object] = {
         "amount": _amount_payload(node.amount), "recipient": recipient,
     }
+    # "…for each creature you control with flying" (Aven Gagglemaster): a
+    # battlefield count of the gainer's own permanents. The honoured fields are
+    # exactly what the handler tests; anything else refuses rather than being
+    # dropped into a larger gain.
+    if node.per_each is not None:
+        filt = node.per_each
+        if node.player.kind != "you" or filt.zone != "battlefield":
+            raise LoweringError(
+                "the per-each life gain counts the gainer's own battlefield", node=node
+            )
+        leftover = _restrictions_beyond(
+            filt, frozenset({"card_types", "controller", "with_keywords"})
+        )
+        if leftover:
+            raise LoweringError(
+                "the per-each life gain cannot count this restriction: "
+                + ", ".join(leftover),
+                node=node,
+            )
+        payload["per_each"] = {
+            "zone": "battlefield",
+            "controller": filt.controller or "you",
+            "card_types": list(filt.card_types),
+            "with_keywords": list(filt.with_keywords),
+        }
+        return (OracleInstruction("target_gains_life", "", payload),)
     _describe_targets(payload, node.player)
     return (OracleInstruction("target_gains_life", "", payload),)
 

@@ -22,6 +22,9 @@ from ._core import (
 class GainLife:
     player: PlayerRef
     amount: Amount
+    # "…for each creature you control with flying" (Aven Gagglemaster) — a
+    # battlefield-count multiplier, mirroring LoseLife's graveyard one.
+    per_each: object | None = None
 
 
 @dataclass(frozen=True)

@@ -8,6 +8,8 @@ the condition half of a trigger or an intervening-if.
 The narrow waist of the parser — below is a fragment, above is a *line*.
 """
 
+import dataclasses
+
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
@@ -108,9 +110,17 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         return _parse_prevent(stream)
     if stream.at_word("sacrifice"):
         stream.advance()
+        # "Sacrifice **another** creature" (Dire Fleet Warmonger) — the same
+        # reading the cost parser gives the word: a restriction on what may be
+        # sacrificed, carried on the filter's existing field.
+        another = bool(stream.accept_word("another"))
         subject = parse_recipient(stream)
         if subject is None:
             raise stream.error("expected something to sacrifice")
+        if another and isinstance(subject, ast.TargetSpec):
+            subject = dataclasses.replace(
+                subject, filter=dataclasses.replace(subject.filter, other_than_source=True)
+            )
         # "… unless you pay {W}{W}" — a pay-or-else prompt, kept fused because
         # that is the shape the upkeep dispatcher's handlers implement.
         mark = stream.mark()

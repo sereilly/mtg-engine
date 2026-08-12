@@ -432,15 +432,24 @@ def test_sacrifice_is_not_tied_to_a_card_type():
     assert _instructions("Sacrifice this artifact.", "Test") == [("sacrifice_self", {})]
 
 
-def test_sacrificing_a_chosen_permanent_is_refused():
-    """"Sacrifice a creature" makes a *player* choose which one, which needs
-    the pending-choice machinery. Lowering it to sacrifice_self would sacrifice
-    the source instead — the wrong permanent, silently."""
+def test_sacrificing_a_chosen_permanent_arms_the_choice():
+    """"Sacrifice a creature" makes a *player* choose which one. It used to
+    refuse for want of the pending-choice machinery; it now lowers onto it
+    (Dire Fleet Warmonger's optional cost), with "another" carried as the
+    exclusion the prompt enforces. A narrowing the prompt cannot test still
+    refuses — the candidate check reads one type word."""
     result = compile_line("Sacrifice a creature.", card_name="Test")
+    assert result.lowered, result.failure_reason
+    assert [(i.kind, i.payload) for i in result.instructions] == [
+        ("sacrifice_matching_permanent", {"filter": "creature"})
+    ]
 
-    assert result.parsed, "the line should parse; only the lowering refuses"
-    assert not result.lowered
-    assert "chosen permanent" in result.failure_reason
+    another = compile_line("Sacrifice another creature.", card_name="Test")
+    assert another.lowered, another.failure_reason
+    assert another.instructions[0].payload == {"filter": "creature", "exclude_self": True}
+
+    narrowed = compile_line("Sacrifice a black creature.", card_name="Test")
+    assert narrowed.parsed and not narrowed.lowered
 
 
 # ---------------------------------------------------------------------------
