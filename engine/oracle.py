@@ -852,28 +852,42 @@ def _is_supported_keyword_line(line: str) -> bool:
         return False
     # The two parameterised keywords are admitted by prefix plus quality:
     # "protection from white and from blue" and "hexproof from blue" carry the
-    # quality as payload, not as part of the keyword's identity. Only *colour*
-    # qualities are admitted, because colours are what _protection_colors and
-    # _can_be_targeted model — admitting "protection from Demons" would ship
-    # the word and silently drop the shield, so a non-colour quality keeps the
-    # whole line refused with the clause named.
+    # quality as payload, not as part of the keyword's identity. What may be
+    # admitted is exactly what the shield machinery models — colours for both,
+    # and for protection also "multicolored", "planeswalkers" and creature
+    # subtypes ("Demons and from Dragons", Baneslayer Angel), the qualities
+    # ``_protection_qualities`` reads. A quality it does not model keeps the
+    # whole line refused with the clause named, because admitting the word
+    # would ship the card and silently drop the shield.
     return all(
-        part in IMPLEMENTED_KEYWORDS or _colour_qualified_keyword_part(part)
+        part in IMPLEMENTED_KEYWORDS or _qualified_keyword_part(part)
         for part in parts
     )
 
 
-def _colour_qualified_keyword_part(part: str) -> bool:
-    for prefix in ("protection from ", "hexproof from "):
+def _protection_quality_word(word: str) -> bool:
+    if word in _COLOR_WORD_TO_SYMBOL or word in ("multicolored", "planeswalkers", "planeswalker"):
+        return True
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    singular = word[:-1] if word.endswith("s") else word
+    return word in CREATURE_TYPES or singular in CREATURE_TYPES
+
+
+def _qualified_keyword_part(part: str) -> bool:
+    for prefix, admit in (
+        ("protection from ", _protection_quality_word),
+        # Hexproof stays colour-only: _can_be_targeted's hexproof branch reads
+        # colour words alone.
+        ("hexproof from ", lambda w: w in _COLOR_WORD_TO_SYMBOL),
+    ):
         if part.startswith(prefix):
             qualities = [
                 q.strip()
                 for q in re.split(r",|\band from\b|\band\b", part[len(prefix):])
                 if q.strip()
             ]
-            return bool(qualities) and all(
-                q in _COLOR_WORD_TO_SYMBOL for q in qualities
-            )
+            return bool(qualities) and all(admit(q) for q in qualities)
     return False
 
 

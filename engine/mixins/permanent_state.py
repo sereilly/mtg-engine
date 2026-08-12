@@ -658,25 +658,55 @@ class PermanentStateMixin:
             for perm in self.controlled_by(seat)
         )
 
-    def _protection_colors(self, permanent: Permanent) -> set[str]:
-        """Color symbols this permanent has protection from (CR 702.16).
+    @staticmethod
+    def _protection_quality_of(word: str) -> tuple[str, str] | None:
+        """The canonical quality one word of a protection clause names, or None.
 
-        Sourced from a printed "protection from [color]" static line or from a
-        ``protection_from_<color>`` metadata flag granted by an Aura. Only color
-        qualities are modeled — Limited Edition Alpha protection is always from a
-        single color (e.g. Black Knight's "protection from white").
+        Four families (CR 702.16, the qualities this engine models): a colour
+        ("white"), "multicolored" (Basri's Lieutenant), a card type
+        ("planeswalkers", Sparkhunter Masticore), and a creature subtype
+        ("Demons", Baneslayer Angel; "Dogs", Pack Leader's flock). Subtypes
+        print pluralized, the catalog stores singulars.
         """
-        colors: set[str] = set()
+        word = word.strip().lower()
+        if not word:
+            return None
+        symbol = _COLOR_WORD_TO_SYMBOL.get(word)
+        if symbol:
+            return ("color", symbol)
+        if word == "multicolored":
+            return ("multicolored", "")
+        if word in ("planeswalker", "planeswalkers"):
+            return ("card_type", "planeswalker")
+        from ..grammar.vocabulary import CREATURE_TYPES
+
+        singular = word[:-1] if word.endswith("s") else word
+        if word in CREATURE_TYPES:
+            return ("subtype", word)
+        if singular in CREATURE_TYPES:
+            return ("subtype", singular)
+        return None
+
+    def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:
+        """The qualities this permanent has protection from (CR 702.16).
+
+        Sourced from a printed "protection from [quality]" line (static or
+        comma-joined keyword form), from an attached Aura (the Ward cycle), or
+        from a ``protection_from_<color>`` metadata flag. A word naming no
+        modelled quality contributes nothing — but such a line never compiles
+        in the first place: the keyword gate refuses it with the clause named.
+        """
+        qualities: set[tuple[str, str]] = set()
         program = compile_card_oracle(permanent.effective_card)
 
         def _absorb(clause: str) -> None:
             # CR 702.16g/h/i: "protection from [A] and from [B]" (and comma
             # separated variants) is shorthand for several separate protection
-            # abilities. Pull every color word out of the remaining clause.
+            # abilities.
             for word in re.split(r",|\band from\b|\band\b", clause):
-                symbol = _COLOR_WORD_TO_SYMBOL.get(word.strip())
-                if symbol:
-                    colors.add(symbol)
+                quality = self._protection_quality_of(word)
+                if quality is not None:
+                    qualities.add(quality)
 
         for instr in program.instructions:
             if instr.kind == "static_line" and instr.value.startswith("protection from "):
@@ -701,7 +731,7 @@ class PermanentStateMixin:
             for word in aura_protection_colors(aura.card.oracle_text):
                 symbol = _COLOR_WORD_TO_SYMBOL.get(word)
                 if symbol:
-                    colors.add(symbol)
+                    qualities.add(("color", symbol))
         # The metadata channel remains for protection granted with a lifetime of
         # its own (a spell granting it until end of turn). No card in the pool
         # uses it today; it is how such a grant would be expressed, and CR
@@ -710,18 +740,55 @@ class PermanentStateMixin:
             if key.startswith("protection_from_"):
                 symbol = _COLOR_WORD_TO_SYMBOL.get(key[len("protection_from_"):])
                 if symbol:
-                    colors.add(symbol)
+                    qualities.add(("color", symbol))
         # No Sleight of Mind step here: the clause above was read off
         # ``effective_card``, whose text layer 3 has already rewritten, so
         # "protection from blue" already reads "protection from red". Remapping
         # again applied the change twice — invisible for the one-effect case
         # only because the second application had nothing left to match.
-        return colors
+        return qualities
+
+    def _protection_colors(self, permanent: Permanent) -> set[str]:
+        """The colour slice of :meth:`_protection_qualities`, kept for the
+        consumers whose question genuinely is a colour (the Aura-attach checks,
+        the Circle prompts)."""
+        return {
+            value
+            for kind, value in self._protection_qualities(permanent)
+            if kind == "color"
+        }
+
+    def _permanent_has_quality(self, source: Permanent, quality: tuple[str, str]) -> bool:
+        kind, value = quality
+        if kind == "color":
+            return value in self._effective_colors(source)
+        if kind == "multicolored":
+            return len(self._effective_colors(source)) >= 2
+        if kind in ("card_type", "subtype"):
+            # has_type resolves through the layer system, so a granted or
+            # layer-4 type counts exactly as a printed one.
+            return source.has_type(value)
+        return False
+
+    def _card_has_quality(self, card: CardDefinition, quality: tuple[str, str]) -> bool:
+        """The same question of a *card* — a spell on the stack, which has no
+        permanent to ask the layers about."""
+        kind, value = quality
+        if kind == "color":
+            return value in card.colors
+        if kind == "multicolored":
+            return len(set(card.colors)) >= 2
+        if kind in ("card_type", "subtype"):
+            return value in (card.type_line or "").lower().split()
+        return False
 
     def _is_protected_from(self, victim: Permanent, source: Permanent) -> bool:
-        """True if *victim* has protection from a color *source* has (CR 702.16e/f)."""
-        protection = self._protection_colors(victim)
-        return bool(protection and protection & self._effective_colors(source))
+        """True if *victim* has protection from a quality *source* has
+        (CR 702.16e/f)."""
+        return any(
+            self._permanent_has_quality(source, quality)
+            for quality in self._protection_qualities(victim)
+        )
 
     def _can_be_targeted(
         self,
@@ -746,10 +813,11 @@ class PermanentStateMixin:
         """
         if self._has_keyword(target, "shroud"):
             return False
-        protection = self._protection_colors(target)
-        if protection and source_card is not None:
-            if protection & set(source_card.colors):
-                return False
+        if source_card is not None and any(
+            self._card_has_quality(source_card, quality)
+            for quality in self._protection_qualities(target)
+        ):
+            return False
         if caster_index is not None and caster_index != self.controller_index_of(target):
             if self._has_keyword(target, "hexproof"):
                 return False

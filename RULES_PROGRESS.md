@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**237 / 585 tracked rules covered (40%)** — 1022 tests, 0 unannotated.
+**237 / 585 tracked rules covered (40%)** — 1027 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -860,7 +860,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.12** Indestructible *(2 tests, subrules b)*
 - [x] **702.14** Landwalk *(6 tests, subrules bc)*
 - [x] **702.15** Lifelink *(6 tests, subrules b)*
-- [x] **702.16** Protection *(33 tests, subrules abcdefghjkmn)*
+- [x] **702.16** Protection *(39 tests, subrules abcdefghjkmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(3 tests, subrules a)*
 - [x] **702.19** Trample *(9 tests, subrules bf)*

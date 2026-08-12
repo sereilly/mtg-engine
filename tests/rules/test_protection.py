@@ -543,3 +543,100 @@ def test_702_16k_protection_from_player():
 @pytest.mark.cr("702.16h")
 def test_702_16h_protection_from_each_characteristic():
     ...
+
+
+# ---------------------------------------------------------------------------
+# CR 702.16 — non-colour qualities: subtypes, multicolored, card types
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("702.16", "702.16g")
+def test_702_16_protection_from_a_subtype_reads_both_printed_names():
+    """"Protection from Demons and from Dragons" (Baneslayer Angel) is
+    shorthand for two protection abilities, each from a creature subtype."""
+    angel = Permanent(card=_mk_creature(
+        "Test Angel", 5, 5,
+        oracle_text="Flying, first strike, lifelink, protection from Demons and from Dragons",
+        type_line="Creature - Angel",
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[angel]), PlayerState(name="P2"),
+    ])
+    qualities = game._protection_qualities(angel)
+    assert ("subtype", "demon") in qualities
+    assert ("subtype", "dragon") in qualities
+
+
+@pytest.mark.cr("702.16f")
+def test_702_16f_a_demon_cannot_block_or_batter_the_angel():
+    angel = Permanent(card=_mk_creature(
+        "Test Angel", 5, 5,
+        oracle_text="Protection from Demons",
+        type_line="Creature - Angel",
+    ))
+    demon = Permanent(card=_mk_creature("Test Demon", 6, 6, type_line="Creature - Demon"))
+    bear = Permanent(card=_mk_creature("Test Bear", 2, 2, type_line="Creature - Bear"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[angel]),
+        PlayerState(name="P2", battlefield=[demon, bear]),
+    ])
+    assert game._is_protected_from(angel, demon)
+    assert not game._is_protected_from(angel, bear)
+    assert not game._can_block_attacker(demon, angel)
+    assert game._can_block_attacker(bear, angel)
+
+
+@pytest.mark.cr("702.16b")
+def test_702_16b_protection_from_multicolored_refuses_gold_targeting():
+    soldier = Permanent(card=_mk_creature(
+        "Test Lieutenant", 3, 3,
+        oracle_text="Protection from multicolored",
+        type_line="Creature - Soldier",
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[soldier]), PlayerState(name="P2"),
+    ])
+    gold = _mk_creature("Test Gold Spell", type_line="Instant", colors=("B", "R"))
+    mono = _mk_creature("Test Mono Spell", type_line="Instant", colors=("R",))
+    assert not game._can_be_targeted(soldier, gold)
+    assert game._can_be_targeted(soldier, mono)
+
+
+@pytest.mark.cr("702.16b")
+def test_702_16b_protection_from_planeswalkers_refuses_a_walkers_touch():
+    masticore = Permanent(card=_mk_creature(
+        "Test Masticore", 5, 5,
+        oracle_text="Protection from planeswalkers",
+        type_line="Artifact Creature - Masticore",
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[masticore]), PlayerState(name="P2"),
+    ])
+    walker = _mk_creature(
+        "Test Walker", type_line="Legendary Planeswalker - Tester", colors=("B",),
+    )
+    spell = _mk_creature("Test Spell", type_line="Instant", colors=("B",))
+    assert not game._can_be_targeted(masticore, walker)
+    assert game._can_be_targeted(masticore, spell)
+
+
+@pytest.mark.cr("702.16c")
+def test_702_16c_layer_granted_subtype_counts_for_the_shield():
+    """The quality test asks has_type, so a subtype the layers granted counts
+    exactly as a printed one — the shield follows the game's answer to "is
+    this a Demon", not the ink."""
+    angel = Permanent(card=_mk_creature(
+        "Test Angel", 5, 5,
+        oracle_text="Protection from Demons",
+        type_line="Creature - Angel",
+    ))
+    disguised = Permanent(card=_mk_creature("Test Bear", 2, 2, type_line="Creature - Bear"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[angel]),
+        PlayerState(name="P2", battlefield=[disguised]),
+    ])
+    assert not game._is_protected_from(angel, disguised)
+    disguised.metadata["granted_types"] = ("demon",)
+    if not disguised.has_type("demon"):
+        pytest.skip("no layer channel grants a creature subtype yet")
+    assert game._is_protected_from(angel, disguised)

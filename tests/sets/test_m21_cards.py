@@ -1648,3 +1648,23 @@ def test_unsubstantiate_bounces_a_creature_when_one_was_chosen(set_pool):
     assert result.supported, result.details
     assert not game.is_on_battlefield(bear)
     assert [c.name for c in p2.hand] == ["Pridemalkin"]
+
+
+# --- Round 25: protection grows past colour ----------------------------------
+
+
+def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool):
+    pool = set_pool("M21")
+    program = compile_card_oracle(pool["Baneslayer Angel"])
+    assert program.supported, program.reason
+    angel = Permanent(card=pool["Baneslayer Angel"])
+    dragon = Permanent(card=pool["Gadrak, the Crown-Scourge"])  # a Dragon
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[angel]),
+        PlayerState(name="P2", battlefield=[dragon]),
+    ])
+    assert game._is_protected_from(angel, dragon)
+    assert not game._can_block_attacker(dragon, angel)
+    # And the colour half of her line still reads: nothing here is a Demon or
+    # Dragon spell, so an ordinary removal spell may still target her.
+    assert game._can_be_targeted(angel, pool["Shock"])

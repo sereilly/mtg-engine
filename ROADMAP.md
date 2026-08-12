@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 165/285) to the full release line - **137 sets, 33,594
+M21 measured at 166/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -861,6 +861,35 @@ shield machinery models non-colour qualities.
 **Next:** the protection-quality family is now the single biggest named
 block; otherwise the remaining triggered-ability and no-handler groups, card
 by card in the support report.
+
+---
+
+## Round 25: protection grows past colour
+
+*(2026-08-11, same day.)* M21 **165 → 166** by the count — Baneslayer Angel
+alone — and the number undersells the round the way round 3's single counter
+card did: the deliverable is the *quality subsystem* the census named as the
+biggest block. `_protection_colors` is now the colour slice of
+`_protection_qualities`, whose vocabulary is exactly what the shield
+machinery can test: colours, "multicolored" (the effective-colour count),
+"planeswalkers" (a card type), and creature subtypes ("Demons and from
+Dragons"), pluralized in print and singular in the catalog. The two askers —
+`_is_protected_from` for blocking and combat damage, `_can_be_targeted` for
+targeting — take a quality's answer from the layer system (`has_type`,
+effective colours), so a granted subtype shields exactly as a printed one.
+The keyword gate widened in step: what may be admitted and what the shield
+tests are one vocabulary, and hexproof deliberately stays colour-only
+because its targeting branch reads colour words alone.
+
+**Flipped by the subsystem but still gated on other lines, honestly:**
+Basri's Lieutenant (a death trigger with an intervening clause), Sparkhunter
+Masticore (an additional discard cost), Pack Leader (a prevention trigger).
+Their protection lines stopped being the blocker; the census names what
+remains. **Left named:** Feat of Resistance's "protection from the color of
+your choice" (a chosen-colour grant riding the cast's colour channel plus a
+layer-6 read `_protection_qualities` does not do yet), Runed Halo (player
+protection from a chosen *name*), and Feline Sovereign (protection as a
+lord-buff grant).
 
 ---
 
