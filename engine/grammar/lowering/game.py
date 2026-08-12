@@ -282,4 +282,9 @@ def _lower_lose_life(node: ast.LoseLife) -> tuple[OracleInstruction, ...]:
     if node.player.kind == "each_opponent":
         payload["recipient"] = "each_opponent"
         return (OracleInstruction("target_loses_life", "", payload),)
+    if node.player.kind == "each_player":
+        # "Each player loses 2 life." (Bad Deal) — caster included, CR 120.3
+        # plain, same handler with one more recipient key.
+        payload["recipient"] = "each_player"
+        return (OracleInstruction("target_loses_life", "", payload),)
     raise LoweringError(f"unsupported life-loss target {node.player.kind!r}", node=node)

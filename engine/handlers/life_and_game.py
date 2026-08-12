@@ -94,6 +94,10 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
             game.players[i]
             for i in game.opponents_of(game.players.index(context.caster))
         ]
+    elif recipient == "each_player":
+        # "Each player loses 2 life." (Bad Deal) — the caster too; a player who
+        # has already left the game is nobody (CR 800.4a).
+        victims = [p for p in game.players if not p.lost]
     elif recipient == "last_target_controller":
         # "Destroy target creature. Its controller loses 2 life." (Liliana,
         # Death Mage.) The destroy step recorded the controller before the

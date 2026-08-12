@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
-from ..pt import add_pt_modifier, set_base_pt
+from ..pt import add_plus1_counters, add_pt_modifier, set_base_pt
 from ._common import (
     apply_temp_pt_boost,
     permanent_matches_filter,
@@ -247,8 +247,7 @@ def add_plus1_counters_for_each_creature_died(game: Game, instruction: OracleIns
     count = int((context.trigger_context or {}).get("count", 0))
     if source is None or count <= 0:
         return True, "resolved"
-    source.power_bonus += count * int(instruction.payload.get("power", 1))
-    source.toughness_bonus += count * int(instruction.payload.get("toughness", 1))
+    add_plus1_counters(source, count)
     game.log.append(f"{source.card.name} gets {count} +1/+1 counter(s)")
     return True, "resolved"
 
@@ -259,8 +258,7 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    source_permanent.power_bonus += int(instruction.payload.get("power", 0))
-    source_permanent.toughness_bonus += int(instruction.payload.get("toughness", 0))
+    add_plus1_counters(source_permanent)
     game.log.append(f"{card.name} gets a +1/+1 counter")
     return True, "resolved"
 
@@ -283,8 +281,6 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     the scan reached first — twice, if two slots decayed.
     """
     card = context.card
-    power = int(instruction.payload.get("power", 1))
-    toughness = int(instruction.payload.get("toughness", 1))
     targets = instruction.payload.get("targets") or {}
     maximum = targets.get("count") if isinstance(targets, dict) else None
 
@@ -316,15 +312,23 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
             game.log.append(f"{card.name}: no creatures were given counters")
             return True, "resolved"
         for creature in chosen[:maximum]:
-            add_pt_modifier(creature, power, toughness)
+            add_plus1_counters(creature)
             game.log.append(f"{creature.card.name} gets a +1/+1 counter ({card.name})")
         return True, "resolved"
 
-    target_creature = resolve_target_permanent(game, context)
+    filters = instruction.payload.get("targets", {}).get("filter") or {}
+
+    def counter_target_legal(perm) -> bool:
+        # "target creature with a +1/+1 counter on it" (Tempered Veteran): the
+        # counter restriction is enforced at resolution too, so the fallback
+        # scan can never land on a counterless creature.
+        return perm.is_creature and permanent_matches_filter(perm, filters)
+
+    target_creature = resolve_target_permanent(game, context, predicate=counter_target_legal)
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    add_pt_modifier(target_creature, power, toughness)
+    add_plus1_counters(target_creature)
     game.log.append(f"{target_creature.card.name} gets a +1/+1 counter ({card.name})")
     return True, "resolved"
 
@@ -339,11 +343,7 @@ def add_counter_to_each_you_control(game: Game, instruction: OracleInstruction, 
     for perm in game.controlled_by(caster):
         if not perm.is_creature:
             continue
-        add_pt_modifier(
-            perm,
-            int(instruction.payload.get("power", 1)),
-            int(instruction.payload.get("toughness", 1)),
-        )
+        add_plus1_counters(perm)
     game.log.append(f"{card.name}: each creature {caster.name} controls gets a +1/+1 counter")
     return True, "resolved"
 

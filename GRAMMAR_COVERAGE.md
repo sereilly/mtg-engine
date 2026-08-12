@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 61.0% | 56.5% | 35.8% | 145 |
+| M21 *(measured)* | 285 | 503 | 61.8% | 57.5% | 36.8% | 149 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,8 +33,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 275 | 142 | expected a subject |  |
-| 104 | 50 | unrecognized effect verb |  |
-| 64 | 45 | unconsumed text |  |
+| 103 | 49 | unrecognized effect verb |  |
+| 61 | 42 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 5 | expected a keyword ability |  |
@@ -99,6 +99,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
 - **Aven Gagglemaster**
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
+- **Bad Deal**
+  - `You draw two cards and each opponent discards two cards. Each player loses 2 life.`
 - **Bad Moon**
   - `Black creatures get +1/+1.`
   - `Black creatures get +1/+1.`
@@ -194,6 +196,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{2}, {T}: Add one mana of any color.`
 - **Chandra's Firemaw**
   - `When this creature enters, you may search your library and/or graveyard for a card named Chandra, Flame's Catalyst, reveal it, and put it into your hand. If you search your library this way, shuffle.`
+- **Chandra's Magmutt**
+  - `{T}: This creature deals 1 damage to target player or planeswalker.`
 - **Chaoslace**
   - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
   - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
@@ -651,6 +655,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Zombies you control get +1/+0.`
 - **Liliana's Scorn**
   - `Destroy target creature. You may search your library and/or graveyard for a card named Liliana, Death Mage, reveal it, and put it into your hand. If you search your library this way, shuffle.`
+- **Liliana's Steward**
+  - `{T}, Sacrifice this creature: Target opponent discards a card. Activate only as a sorcery.`
 - **Living Lands**
   - `All Forests are 1/1 creatures that are still lands.`
   - `All Forests are 1/1 creatures that are still lands.`
@@ -717,6 +723,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Target player discards X cards at random.`
   - `Target player discards X cards at random.`
   - `Target player discards X cards at random.`
+- **Miscast**
+  - `Counter target instant or sorcery spell unless its controller pays {3}.`
 - **Mox Emerald**
   - `{T}: Add {G}.`
   - `{T}: Add {G}.`
@@ -1097,6 +1105,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Teferi's Wavecaster**
   - `When this creature enters, you may search your library and/or graveyard for a card named Teferi, Timeless Voyager, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Tempered Veteran**
+  - `{W}, {T}: Put a +1/+1 counter on target creature with a +1/+1 counter on it.`
   - `{4}{W}{W}, {T}: Put a +1/+1 counter on target creature.`
 - **Temple of Epiphany**
   - `When this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`

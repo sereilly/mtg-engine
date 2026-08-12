@@ -17,15 +17,18 @@ from ._common import (
 
 
 # Restrictions ``counter_top_stack_spell`` reads off its own payload: the
-# colour gate (the Blasts, Lifeforce, Deathgrip) and the mana-value gate
-# (Spell Blast). Every other field of the noun phrase is refused by
-# _restrictions_beyond, because this handler picks the spell to counter itself
-# and would ignore anything it was not told to check.
-_COUNTER_HONOURED_FILTER_FIELDS = frozenset({"colors", "mana_value"})
+# colour gate (the Blasts, Lifeforce, Deathgrip), the mana-value gate
+# (Spell Blast), the spell-type gate (Miscast's "instant or sorcery spell"),
+# and the "spell" head noun recorded as zone="stack". Every other field of the
+# noun phrase is refused by _restrictions_beyond, because this handler picks
+# the spell to counter itself and would ignore anything it was not told to
+# check.
+_COUNTER_HONOURED_FILTER_FIELDS = frozenset({"colors", "mana_value", "card_types", "zone"})
 
-# The "unless … pays" cost the counter flow can offer. ``{X}`` is the only one:
-# handlers/stack.py arms a pending payment sized from the caster's chosen X, and
-# there is no flow for a fixed or coloured cost.
+# The "unless … pays" costs the counter flow can offer: ``{X}`` (Power Sink,
+# sized from the caster's chosen X) and a fixed generic amount (Miscast's
+# ``{3}``). Both arm the same pending mana payment; a coloured pip has no
+# charging flow and refuses.
 _COUNTER_UNLESS_PAYS_X = (("X", 1),)
 
 # Penalties for declining that cost which the counter flow performs while it
@@ -47,7 +50,17 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
     if spec.quantifier != "target":
         raise LoweringError("no handler for a non-targeted counter", node=node)
     filt = spec.filter
+    if filt.zone not in ("battlefield", "stack"):
+        # "battlefield" is the ObjectFilter default a bare "target spell"
+        # carries; "stack" is the recorded "… spell" head noun. Any zone a
+        # postmodifier actually named is an object the counter flow cannot see.
+        raise LoweringError("the counter flow reads spells on the stack", node=node)
     payload: dict[str, object] = {}
+    if filt.card_types:
+        # "target instant or sorcery spell" (Miscast). The handler tests the
+        # chosen spell's primary type against this union, the same shape as the
+        # colour gate below.
+        payload["card_types"] = list(filt.card_types)
     if filt.colors:
         if len(filt.colors) > 1:
             raise LoweringError("no handler for a multi-colour counter filter", node=node)
@@ -68,9 +81,17 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
         )
 
     if node.unless_pays is not None:
-        if node.unless_pays.pips != _COUNTER_UNLESS_PAYS_X:
+        if node.unless_pays.pips == _COUNTER_UNLESS_PAYS_X:
+            payload["unless_pays_x"] = True
+        elif (
+            len(node.unless_pays.pips) == 1
+            and node.unless_pays.pips[0][0] == "generic"
+        ):
+            # Miscast's "{3}": the same pending payment Power Sink arms, with
+            # the amount fixed by the printed cost instead of a chosen X.
+            payload["unless_pays_amount"] = node.unless_pays.pips[0][1]
+        else:
             raise LoweringError("no counter flow offers this cost", node=node)
-        payload["unless_pays_x"] = True
     if node.unpaid_penalty is not None:
         if node.unless_pays is None:
             raise LoweringError("a decline penalty with no cost to decline", node=node)

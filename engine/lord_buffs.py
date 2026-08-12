@@ -149,12 +149,14 @@ class LordBuff:
 # Derivation
 # ---------------------------------------------------------------------------
 
-# "get +1/+1" / "gets +0/+2". Both persons are printed, because the subject may
-# be a plural noun phrase or a subtype name that reads as singular.
-_PT_RE = re.compile(r"^gets? \+(?P<power>\d+)/\+(?P<toughness>\d+)$")
+# "get +1/+1" / "gets +0/+2" / "get -1/-1" (Kaervek, the Spiteful). Both persons
+# are printed, because the subject may be a plural noun phrase or a subtype name
+# that reads as singular; both signs, because a debuff is the same layer-7c
+# contribution with a negative delta and ``int()`` reads the sign as printed.
+_PT_RE = re.compile(r"^gets? (?P<power>[+-]\d+)/(?P<toughness>[+-]\d+)$")
 
 _PT_AND_KEYWORD_RE = re.compile(
-    r"^gets? \+(?P<power>\d+)/\+(?P<toughness>\d+) and ha(?:ve|s) (?P<keywords>.+)$"
+    r"^gets? (?P<power>[+-]\d+)/(?P<toughness>[+-]\d+) and ha(?:ve|s) (?P<keywords>.+)$"
 )
 
 _KEYWORD_RE = re.compile(r"^ha(?:ve|s) (?P<keywords>.+)$")

@@ -18,7 +18,7 @@ import dataclasses
 
 from . import ast
 from .amounts import parse_amount
-from .lexer import NUMBER, WORD
+from .lexer import NUMBER, PT, WORD
 from .stream import TokenStream
 from .vocabulary import (
     ALL_SUBTYPES,
@@ -206,6 +206,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     is_source = False
     is_enchanted = False
     is_card = False
+    with_plus1_counter = False
     zone = "battlefield"
     zone_owner: ast.PlayerRef | None = None
     saw_head = False
@@ -334,6 +335,13 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 stream.reset(probe)
                 break
             is_card = _accept_card_noun(stream)
+            # "target instant or sorcery **spell**" (Miscast): the head noun
+            # after a type union may be "spell", naming an object on the stack
+            # rather than a permanent of those types. Recorded as the zone so
+            # a lowering that resolves battlefield objects refuses the line
+            # instead of reading it as "target instant or sorcery".
+            if not is_card and stream.accept_word("spell", "spells"):
+                zone = "stack"
             saw_head = True
             break
 
@@ -471,6 +479,24 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             if stream.accept_word("toughness"):
                 toughness = _parse_comparison(stream)
                 continue
+            # "with a +1/+1 counter on it" (Tempered Veteran). Only the +1/+1
+            # kind is accepted: the counters the engine records under another
+            # name have no matcher, so a phrase naming one fails the line
+            # loudly rather than matching every creature.
+            if stream.at_word("a", "an"):
+                counter_probe = stream.mark()
+                stream.advance()
+                token = stream.peek()
+                if (
+                    token is not None
+                    and token.kind == PT
+                    and token.text == "+1/+1"
+                ):
+                    stream.advance()
+                    if stream.accept_word("counter") and stream.accept_phrase("on", "it"):
+                        with_plus1_counter = True
+                        continue
+                stream.reset(counter_probe)
             # "with mana value X" (Spell Blast). Two words, so it is tried
             # before the keyword list — "mana" alone is not a keyword, but
             # leaving the phrase unmatched would strand "value X" and fail the
@@ -523,6 +549,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         zone=zone,
         zone_owner=zone_owner,
         is_card=is_card,
+        with_plus1_counter=with_plus1_counter,
         other_than_source=other_than_source,
         is_source=is_source,
         is_enchanted=is_enchanted,

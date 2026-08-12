@@ -94,6 +94,14 @@ def _derive(line: str) -> LordBuff | None:
             LordBuff(LordBuffFilter(subtypes=("wall",), other_than_source=True), 0, 0,
                      ("flying",)),
         ),
+        # The signs are read as printed (Kaervek, the Spiteful's "-1/-1") —
+        # a debuff is the same layer-7c contribution with a negative delta.
+        (
+            "Other Goblins get -2/-1.",
+            LordBuff(
+                LordBuffFilter(subtypes=("goblin",), other_than_source=True), -2, -1,
+            ),
+        ),
     ],
 )
 def test_an_invented_card_with_the_template_derives(line, expected):
@@ -170,7 +178,6 @@ def test_the_spells_keep_their_own_instruction_kind(catalog_by_name):
         ("Other Goblins get +1/+1 and have protection from blue.",
          "protection is a channel of its own, not layer 6"),
         ("Creatures with flying get +1/+1.", "no keyword restriction on the buffed set"),
-        ("Other Goblins get -1/-1.", "the table carries no negative buff"),
     ],
 )
 def test_an_unimplemented_shape_refuses_rather_than_partly_matching(line, why):

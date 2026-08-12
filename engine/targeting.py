@@ -320,6 +320,12 @@ def _counter_spec(payload: dict) -> dict:
     color = payload.get("color_filter")
     if color:
         spec["stack_color_filter"] = color
+    card_types = payload.get("card_types")
+    if card_types:
+        # Miscast: "target instant or sorcery spell" — the same union the
+        # handler tests at resolution, so the picker offers exactly what the
+        # counter would counter.
+        spec["stack_card_types"] = list(card_types)
     return spec
 
 
@@ -526,7 +532,17 @@ def _from_targets_payload(targets) -> dict | None:
         # this is its own prompt rather than a repeated "any target".
         return {"kind": "divided"}
     if kind == "player":
-        return {"kind": "player"}
+        spec = {"kind": "player"}
+        if targets.get("opponents_only"):
+            # "Target opponent" — the caster's own seat is not a legal answer
+            # (CR 115.4). The same flag Word of Command's kind-table entry
+            # carries, enforced by legality's seat check.
+            spec["opponents_only"] = True
+        return spec
+    if kind == "player_or_planeswalker":
+        # Chandra's Magmutt: player faces plus planeswalker permanents — the
+        # "any" picker minus its creature half.
+        return {"kind": "player_or_planeswalker"}
     if kind == "spell":
         # A spell on the stack, which the UI picks from a different zone than
         # any permanent — "stack" is the name for that picker.

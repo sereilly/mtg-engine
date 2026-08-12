@@ -78,7 +78,19 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
                 "the controller discard is chosen and fixed-count", node=node
             )
         return (OracleInstruction("discard_controller_cards", "", {"amount": amount}),)
-    if node.player.kind not in ("target_player", "that_player"):
+    # "Each opponent discards two cards." (Bad Deal.) Chosen discards, one
+    # pending choice per opponent — the random and variable forms stay with the
+    # targeted handlers below, whose contracts they are.
+    if node.player.kind == "each_opponent":
+        amount = _amount_payload(node.count)
+        if node.at_random or not isinstance(amount, int):
+            raise LoweringError(
+                "the each-opponent discard is chosen and fixed-count", node=node
+            )
+        return (
+            OracleInstruction("each_opponent_discards_cards", "", {"amount": amount}),
+        )
+    if node.player.kind not in ("target_player", "target_opponent", "that_player"):
         raise LoweringError(f"no discard handler for {node.player.kind!r}", node=node)
     amount = _amount_payload(node.count)
     # "…, that player discards a card at random" on a damage trigger. The

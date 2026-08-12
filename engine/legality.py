@@ -380,7 +380,7 @@ class LegalityMixin:
         targets: list[dict] = []
         # Player faces are legal for player-targeted, "any target", and divided
         # spells — but not a divided land selection (Volcanic Eruption's Mountains).
-        if kind in ("player", "any", "divided") and not spec.get("land_filter"):
+        if kind in ("player", "any", "divided", "player_or_planeswalker") and not spec.get("land_filter"):
             for seat in range(len(self.players)):
                 # "target opponent" (Word of Command) can't be the caster's own seat.
                 if spec.get("opponents_only") and seat == caster_index:
@@ -469,6 +469,15 @@ class LegalityMixin:
             # Ali Baba's "target Wall" (and any other parsed tap-target filter);
             # Icy Manipulator's payload is empty, so everything passes.
             return permanent_matches_filter(perm, instruction.payload)
+        if instruction.kind == "add_counter_to_target":
+            # Tempered Veteran's "target creature with a +1/+1 counter on it" —
+            # the same filter the handler enforces at resolution, so the picker
+            # offers exactly what the ability could affect. Most counter
+            # placements carry an empty filter and every creature passes.
+            targets = instruction.payload.get("targets") or {}
+            return perm.is_creature and permanent_matches_filter(
+                perm, targets.get("filter") or {}
+            )
         return True
 
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:
@@ -476,6 +485,11 @@ class LegalityMixin:
         # Artifact copying a Mox is an "Artifact Enchantment" and must be a
         # legal target both as an artifact and as an enchantment.
         type_line = perm.effective_card.type_line.lower()
+        if kind == "player_or_planeswalker":
+            # "Target player or planeswalker" (Chandra's Magmutt): the only
+            # permanents in the union are planeswalkers — the player faces were
+            # already added by the seat loop above.
+            return perm.has_type("planeswalker")
         if kind in ("creature", "any", "divided"):
             # Volcanic Eruption: a divided spell that targets Mountains, not creatures.
             land_filter = spec.get("land_filter")
@@ -591,6 +605,12 @@ class LegalityMixin:
             if item_card is None:
                 continue
             if instant_sorcery_only and item_card.primary_type not in ("instant", "sorcery"):
+                continue
+            # Miscast: "target instant or sorcery spell" — the union the
+            # compiled counter carries, tested here so the picker offers only
+            # what the handler would counter.
+            stack_card_types = spec.get("stack_card_types")
+            if stack_card_types and item_card.primary_type not in stack_card_types:
                 continue
             if color_filter and color_filter not in self._stack_item_colors(item):
                 continue

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**237 / 585 tracked rules covered (40%)** — 1027 tests, 0 unannotated.
+**237 / 585 tracked rules covered (40%)** — 1028 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -758,7 +758,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(48 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(7 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
-- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(54 tests, subrules abcd)*
+- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(55 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [ ] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each...
 - [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(13 tests, subrules b)*
@@ -885,7 +885,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(1 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(71 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(72 tests, subrules abcdefghijkmnpqrsy)*
 - [ ] **704.6** Some variant games include additional state-based actions that aren’t normally applicable:
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*

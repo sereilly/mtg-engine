@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 166/285) to the full release line - **137 sets, 33,594
+M21 measured at 173/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -890,6 +890,85 @@ your choice" (a chosen-colour grant riding the cast's colour channel plus a
 layer-6 read `_protection_qualities` does not do yet), Runed Halo (player
 protection from a chosen *name*), and Feline Sovereign (protection as a
 lord-buff grant).
+
+---
+
+## Round 26: six widenings, and counters become countable
+
+*(2026-08-11, same day.)* M21 **166 → 173**: Bad Deal, Liliana's Steward,
+Kaervek the Spiteful, Azusa Lost but Seeking, Chandra's Magmutt, Miscast,
+Tempered Veteran. Seven cards from six independent widenings, each a small
+entry in machinery that already existed — chosen from a fresh line-by-line
+probe (`compile_line` names the exact refusal, which beats reading the
+aggregate report buckets):
+
+- **Discard recipients.** The discard lowering learned `each_opponent` (one
+  pending discard choice per opponent — Bad Deal) and `target_opponent`
+  (Liliana's Steward, whose sacrifice cost and sorcery-speed gate already
+  worked). Lose-life learned `each_player` (CR 800.4a excludes a departed
+  seat). The `opponents_only` picker flag turned out to be **dropped** by
+  `_from_targets_payload` for every player-kind target — the phase-out sweep
+  had been writing it into payloads targeting.py then discarded — so the fix
+  serves Teferi, Timeless Voyager's −8 as well as the Steward.
+- **Negative lord buffs.** Kaervek's "Other creatures get -1/-1." was USABLE
+  in the grammar and refused by `lord_buff_for` — the two front ends of one
+  table disagreeing on a sign. `_PT_RE` reads `[+-]` now; the consumer's
+  arithmetic and the 704.5f death were already correct.
+- **The creature static gate asks the land-play table.** Azusa was Fastbond's
+  exact template on a creature: enforced correctly by
+  `_land_play_allowances` (which scans every controlled permanent), reported
+  unsupported because `_is_supported_static_creature_line` never consulted
+  the table `_derived_static_claims` has asked since it was written. Only the
+  permission clause claims; a rider-only line still refuses.
+- **"Target player or planeswalker"** (Chandra's Magmutt) — a new
+  `player_or_planeswalker` target kind: player faces plus planeswalker
+  permanents, the "any target" resolution shape minus the creature half.
+  Parsed only in the damage-recipient position, so no other lowering can
+  receive the flag and silently narrow it.
+- **The counter filter grows types and a fixed price** (Miscast). "Target
+  instant or sorcery **spell**" records the head noun as zone="stack" (the
+  bare types would read as battlefield permanents — the dropped-rider class);
+  the counter lowering, handler, and stack picker all honour the union, and
+  the "unless its controller pays {3}" fixed cost arms the same pending
+  payment Power Sink's X does. Coloured pips still refuse.
+- **Counters became state** (Tempered Veteran). "With a +1/+1 counter on it"
+  is a question about *counters*, and the engine could not answer it: every
+  +1/+1 counter was a bare P/T bonus, `metadata["plus_counters"]` written by
+  **nothing** — so the 704.5q plus/minus cancellation sweep was unreachable
+  from real play and the web card face showed no counter for a counter the
+  engine had placed. `pt.add_plus1_counters` now records both channels at
+  every placing site (the three handlers, Khabál Ghoul's, Rock Hydra's
+  enters-with-X), and the filter reads the record — a Giant Growth writes
+  power_bonus too, which is exactly why the bonus could never be the answer.
+
+**Found red on HEAD, fixed in passing:** three LEA counterspell tests
+(`Blue/Red Elemental Blast`, `Spell Blast`) asserted the log line round 19's
+`_bin_spell_card` refactor reworded, and had been failing since that commit —
+the round-19 "suite green" predates its final wording. The behaviour
+(countered, binned, never resolved) was intact; the assertions now read the
+one bin-line verb.
+
+**Written down, not acted on:** Rock Hydra's "for each 1 damage … remove a
++1/+1 counter from it and prevent that 1 damage" is acknowledged in
+`IMPLEMENTED_ELSEWHERE` as "prevention.py (Rock Hydra's +1/+1 counter
+shield)" — but that file only implements his *activated* {R} shield; nothing
+reads counters in any damage path, so the automatic shield is the Nine Lives
+class (supported, partially implemented) hiding behind a
+verified-sounding acknowledgement. The counter record this round added is
+the prerequisite for fixing it honestly.
+
+Two ratchet tests pinned refusals this round implemented (the fixed
+unless-pays cost, the negative lord buff); both now pin the implementations,
+and the coloured-pip refusal keeps a test. Suite 4,796 at 18.9s, every
+`--check` green, shipped pool untouched at 388/388, zero hooks, zero ceiling
+raises.
+
+**Next:** modal triggered abilities (Trufflesnout and Elder Gargaroth — every
+bullet already USABLE, only the trigger-head assembly missing), then the
+census's remaining named blocks: the drawn-two-cards-this-turn tracker family
+(Gnarled Sage, Tome Anima, Jolrael, Mystic Skyfish), cast-trigger type
+narrowings (Spellgorger Weird), and the intervening-if object filter
+(Turret Ogre, Furious Rise).
 
 ---
 

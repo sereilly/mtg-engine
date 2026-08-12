@@ -44,13 +44,13 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 203 |
-| card_hooks bespoke (name-keyed) | 148 |
+| parse rule | 204 |
+| card_hooks bespoke (name-keyed) | 147 |
 | activation cost | 113 |
 | trigger table | 78 |
 | keyword table | 59 |
 | aura enchant noun (oracle_instructions attach) | 44 |
-| static-line table | 42 |
+| static-line table | 43 |
 | mixin text scan | 34 |
 | aura static (oracle_instructions/permanent_state) | 31 |
 | activation gate (stack/activation) | 15 |
@@ -59,10 +59,10 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | ante boilerplate (deck construction, not gameplay) | 4 |
 | modal machinery | 3 |
 | global_statics.py | 2 |
-| land_play_allowance.py | 2 |
 | cost_modifiers.py | 2 |
 | phases/draw_step.py (counter damage) | 1 |
 | x spend color (stack/activation) | 1 |
+| land_play_allowance.py | 1 |
 | draw_step_modifiers.py | 1 |
 | handler ← counter_top_stack_spell | 1 |
 | global_statics.py (lingering rider) | 1 |

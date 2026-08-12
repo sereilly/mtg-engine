@@ -200,6 +200,11 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
             return False
         if op == "eq" and cmc != bound:
             return False
+    # "with a +1/+1 counter on it" (Tempered Veteran). Asks the counter
+    # *record*, not the P/T bonus — a Giant Growth also writes power_bonus, and
+    # reading the bonus as the counter would let it qualify.
+    if payload.get("with_plus1_counter") and int(perm.metadata.get("plus_counters", 0)) <= 0:
+        return False
     return True
 
 

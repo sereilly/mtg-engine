@@ -79,6 +79,16 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         if color_filter and color_filter not in game._stack_item_colors(target):
             game.log.append(f"{card.name}: {target.card.name} is not color {color_filter}, cannot counter")
             return True, "resolved"
+        # Miscast: "counter target instant or sorcery spell" — the union the
+        # payload carries is tested against the chosen spell's primary type,
+        # the same shape as the colour gate above.
+        card_types = instruction.payload.get("card_types")
+        if card_types and target.card.primary_type not in card_types:
+            game.log.append(
+                f"{card.name}: {target.card.name} is not "
+                f"{' or '.join(card_types)}, cannot counter"
+            )
+            return True, "resolved"
         # Spell Blast: X must equal the target spell's mana value. When no X was
         # chosen (None, or 0 auto-inferred from an empty pool), assume the caster
         # chose the matching value.
@@ -96,8 +106,13 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # (a human taps lands and pays/declines via the prompt; headless/AI play is
         # auto-resolved deterministically). Paying {0} always succeeds, so X=0 never
         # counters — resolve that immediately without a prompt.
-        if instruction.payload.get("unless_pays_x"):
-            cost = max(0, int(context.x_value or 0))
+        if instruction.payload.get("unless_pays_x") or instruction.payload.get("unless_pays_amount"):
+            # Power Sink sizes the cost from its caster's chosen X; Miscast
+            # prints it. Everything after the amount is one flow.
+            if instruction.payload.get("unless_pays_x"):
+                cost = max(0, int(context.x_value or 0))
+            else:
+                cost = max(0, int(instruction.payload["unless_pays_amount"]))
             if cost == 0:
                 game.log.append(
                     f"{game.players[target.caster_index].name} pays {{0}}; "

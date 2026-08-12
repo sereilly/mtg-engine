@@ -84,3 +84,21 @@ def switch_pt(perm: Permanent) -> None:
     """Layer 7d: switch power and toughness until end of turn (the flag is
     cleared at cleanup). Two switches cancel out."""
     perm.metadata["pt_switched"] = not perm.metadata.get("pt_switched", False)
+
+
+def add_plus1_counters(perm: Permanent, count: int = 1) -> None:
+    """Place *count* +1/+1 counters: the persistent P/T channel plus the
+    ``plus_counters`` record (CR 122).
+
+    The record is not cosmetic. The 704.5q sweep cancels it against -1/-1
+    counters, the web layer renders it on the card face, and "target creature
+    with a +1/+1 counter on it" (Tempered Veteran) is a question about
+    *counters*, which a bare P/T bonus cannot answer — a Giant Growth also
+    writes power_bonus, and reading the bonus as the counter would let it
+    qualify. Every handler that places a +1/+1 counter goes through here, so
+    the two channels cannot drift.
+    """
+    if count <= 0:
+        return
+    add_pt_modifier(perm, count, count)
+    perm.metadata["plus_counters"] = int(perm.metadata.get("plus_counters", 0)) + count

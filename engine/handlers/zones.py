@@ -308,6 +308,30 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
     return True, "pending_discard"
 
 
+@effect_handler("each_opponent_discards_cards")
+def each_opponent_discards_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each opponent discards two cards." (Bad Deal.) A chosen discard per
+    opponent, so each gets their own pending choice; an AI seat answers with
+    the discard default the moment it is armed, a human's queues."""
+    amount = int(instruction.payload.get("amount", 0))
+    caster_index = game.players.index(context.caster)
+    any_pending = False
+    for seat in game.opponents_of(caster_index):
+        opponent = game.players[seat]
+        actual = min(amount, len(opponent.hand))
+        if actual <= 0:
+            game.log.append(f"{opponent.name} has no cards to discard")
+            continue
+        game.arm_pending_choice(
+            "discard", seat,
+            count=actual,
+            allow_top_of_library=game._controls_top_of_library_discard(opponent),
+        )
+        game.log.append(f"{opponent.name} must choose {actual} card(s) to discard")
+        any_pending = True
+    return True, ("pending_discard" if any_pending else "resolved")
+
+
 @effect_handler("opponent_discards_random_card_on_damage")
 def opponent_discards_random_card_on_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Hypnotic Specter: "Whenever this creature deals damage to a player, that

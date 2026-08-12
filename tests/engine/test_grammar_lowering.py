@@ -1038,12 +1038,25 @@ def test_the_unpaid_penalty_is_a_rider_not_a_second_step():
     assert len(result.instructions) == 1
 
 
-def test_a_fixed_unless_pays_cost_is_refused():
-    """Only {X} has a payment flow: the pending prompt is sized from the
-    caster's chosen X. Lowering "pays {2}" to the same flag would prompt for the
-    wrong amount."""
+def test_a_fixed_unless_pays_cost_carries_its_printed_amount():
+    """The fixed form (Miscast's {3}) arms the same pending payment Power Sink
+    does, sized from the printed cost rather than a chosen X — so the amount
+    must ride the payload, and the two flags never appear together."""
     result = compile_line(
         "Counter target spell unless its controller pays {2}.", card_name="Test"
+    )
+
+    assert result.lowered
+    payload = result.instructions[0].payload
+    assert payload.get("unless_pays_amount") == 2
+    assert "unless_pays_x" not in payload
+
+
+def test_a_coloured_unless_pays_cost_is_refused():
+    """No flow charges a coloured pip: the pending payment is generic mana
+    only, so "pays {W}" must refuse rather than prompt for the wrong cost."""
+    result = compile_line(
+        "Counter target spell unless its controller pays {1}{W}.", card_name="Test"
     )
 
     assert result.parsed and not result.lowered

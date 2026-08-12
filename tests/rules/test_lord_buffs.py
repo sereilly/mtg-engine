@@ -153,6 +153,32 @@ def test_a_colour_anthem_reaches_only_that_colour():
     assert black.effective_power == 2
 
 
+@pytest.mark.cr("613.4c", "704.5f")
+def test_a_negative_anthem_is_the_same_contribution_with_the_printed_sign():
+    """"Other creatures get -1/-1" (Kaervek, the Spiteful) is one more reading
+    of the template, not a new family — and a creature it empties dies to the
+    ordinary state-based action, on every recompute, with no delta to unwind
+    when the lord leaves."""
+    debuffer = Permanent(card=_card(
+        "Invented Tyrant", "Creature — Kobold", "Other creatures get -1/-1.",
+        power="3", toughness="3",
+    ))
+    sturdy = Permanent(card=KOBOLD)
+    game, players = _game([debuffer, sturdy])
+
+    assert (debuffer.effective_power, debuffer.effective_toughness) == (3, 3)
+    assert (sturdy.effective_power, sturdy.effective_toughness) == (0, 0)
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(sturdy)
+
+    players[0].battlefield.remove(debuffer)
+    game._recompute_continuous_effects()
+    survivor = Permanent(card=KOBOLD)
+    players[0].battlefield.append(survivor)
+    game._recompute_continuous_effects()
+    assert (survivor.effective_power, survivor.effective_toughness) == (1, 1)
+
+
 # ---------------------------------------------------------------------------
 # The qualifiers the old consumer dropped
 # ---------------------------------------------------------------------------

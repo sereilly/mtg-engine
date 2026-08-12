@@ -1221,6 +1221,18 @@ def _is_supported_static_creature_line(line: str) -> bool:
     # reported unsupported rather than admitted and dropped.
     if lord_buff_for(normalized) is not None:
         return True
+    # "You may play two additional lands on each of your turns." (Azusa, Lost
+    # but Seeking.) The land-drop path derives the allowance from every
+    # controlled permanent's own text (engine/land_play_allowance.py), creatures
+    # included — the noncreature classifier has asked this table since it was
+    # written, and a creature printing the same template was enforced correctly
+    # while reported unsupported. Only the permission clause claims: Fastbond's
+    # damage rider is a trigger that table does not own, so a rider line on a
+    # creature still refuses rather than compiling with the damage absent.
+    from .land_play_allowance import land_play_line
+
+    if land_play_line(normalized) == "allowance":
+        return True
     # "As this creature enters, it becomes your choice of <body>, …"
     # (Primal Clay). Carried out by _initialize_permanent_state, which reads the
     # bodies from this same parser — so what is claimed here and what is applied

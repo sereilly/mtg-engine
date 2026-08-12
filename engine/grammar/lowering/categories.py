@@ -106,6 +106,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "discard_target_cards": "zones",
     # The controller's own chosen discard (Jeskai Elder's if-you-do branch).
     "discard_controller_cards": "zones",
+    # "Each opponent discards two cards." (Bad Deal) — one pending discard
+    # choice per opponent, same flow as the targeted form.
+    "each_opponent_discards_cards": "zones",
     "discard_x_target_cards": "zones",
     "opponent_discards_random_card_on_damage": "zones",
     "grant_regeneration_to_target_creature": "regeneration",

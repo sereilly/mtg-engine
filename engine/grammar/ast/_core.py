@@ -139,6 +139,10 @@ class ObjectFilter:
     # graveyard" would lower identically to the untemplatable "target creature
     # from your graveyard" — the dropped-rider bug class.
     is_card: bool = False
+    # "with a +1/+1 counter on it" (Tempered Veteran) — the object carries at
+    # least one +1/+1 counter, read off the ``plus_counters`` record the
+    # placing handlers keep (CR 122).
+    with_plus1_counter: bool = False
     # "other than this creature" / "other Zombies" — excludes the source.
     other_than_source: bool = False
     # "this creature" / "this artifact" — the ability's own source.
@@ -209,6 +213,11 @@ class ObjectFilter:
             }
         if self.colored:
             payload["colored_only"] = True
+        # "with a +1/+1 counter on it" (Tempered Veteran). Emitted only when
+        # set, so every payload written before this key existed is
+        # byte-identical.
+        if self.with_plus1_counter:
+            payload["with_plus1_counter"] = True
         return payload
 
 
@@ -217,6 +226,11 @@ class PlayerRef:
     """A player or set of players."""
     kind: str  # you | each_player | each_opponent | target_player | target_opponent
                # | that_player | controller | owner | defending_player | chosen_player
+    # "target player or planeswalker" (Chandra's Magmutt) — one chosen target
+    # that may be a player face or a planeswalker permanent (CR 115.4 without
+    # the creature half). Set only by the production that read the union, so a
+    # lowering that never sees the phrase never sees the flag.
+    or_planeswalker: bool = False
 
 
 @dataclass(frozen=True)

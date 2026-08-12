@@ -24,6 +24,21 @@ from ..phrases import _parse_duration, _parse_mana_payment, _parse_where_x_is
 # ---------------------------------------------------------------------------
 
 
+def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
+    """A damage recipient, plus the one union only damage prints: "target
+    player or planeswalker" (Chandra's Magmutt). Read here rather than in
+    ``parse_player_ref`` so the flag exists only where the damage lowering —
+    the one consumer that honours it — can receive it."""
+    recipient = parse_recipient(stream)
+    if (
+        isinstance(recipient, ast.PlayerRef)
+        and recipient.kind == "target_player"
+        and stream.accept_phrase("or", "planeswalker")
+    ):
+        return ast.PlayerRef("target_player", or_planeswalker=True)
+    return recipient
+
+
 def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Statement:
     """``<source> deals <amount> damage to <recipients> [riders]``.
 
@@ -68,7 +83,7 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
     recipients: list[ast.Recipient] = []
     chooser: ast.PlayerRef | None = None
     if stream.accept_word("to"):
-        recipient = parse_recipient(stream)
+        recipient = _parse_damage_recipient(stream)
         if recipient is None:
             raise stream.error("expected a damage recipient")
         recipients.append(recipient)

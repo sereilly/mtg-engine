@@ -1668,3 +1668,236 @@ def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool
     # And the colour half of her line still reads: nothing here is a Demon or
     # Dragon spell, so an ordinary removal spell may still target her.
     assert game._can_be_targeted(angel, pool["Shock"])
+
+
+# --- Round 26: recipient and filter widenings ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Bad Deal",           # draw 2, each opponent discards 2, each player loses 2
+        "Liliana's Steward",  # sac: target opponent discards; sorcery-speed only
+    ],
+)
+def test_round_26_discard_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def test_bad_deal_draws_discards_and_drains_every_life_total(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", hand=[pool["Bad Deal"]],
+        library=[pool["Island"], pool["Swamp"], pool["Swamp"]],
+    )
+    p2 = PlayerState(name="P2", hand=[pool["Shock"], pool["Island"], pool["Swamp"]])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Bad Deal")
+    assert result.supported, result.details
+    game.auto_resolve_pending_choices()
+
+    assert len(p1.hand) == 2, "the caster drew two"
+    assert len(p2.hand) == 1, "the opponent discarded two of three"
+    assert p1.life == 18, "each player includes the caster (CR 120.3)"
+    assert p2.life == 18
+
+
+def test_bad_deal_queues_a_choice_for_an_interactive_opponent(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Bad Deal"]], library=[pool["Island"]] * 3)
+    p2 = PlayerState(name="P2", hand=[pool["Shock"], pool["Island"]])
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {1}
+
+    result = game.cast_from_hand(0, "Bad Deal")
+    assert result.supported, result.details
+    pending = game.pending_choices_of("discard", 1)
+    assert pending and pending[0].data["count"] == 2
+    assert game.confirm_discard(1, [0, 1])
+    assert len(p2.hand) == 0
+
+
+def test_lilianas_steward_feeds_herself_to_empty_an_opposing_hand(set_pool):
+    pool = set_pool("M21")
+    steward = Permanent(card=pool["Liliana's Steward"])
+    p1 = PlayerState(name="P1", battlefield=[steward])
+    p2 = PlayerState(name="P2", hand=[pool["Shock"], pool["Island"]])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)  # "Activate only as a sorcery" needs the main phase
+
+    result = game.activate_permanent_ability(
+        0, "Liliana's Steward", ability_index=0, target_player_index=1,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(steward), "the sacrifice was a cost"
+    game.auto_resolve_pending_choices()
+    assert len(p2.hand) == 1, "the targeted opponent discarded one card"
+
+
+def test_lilianas_steward_cannot_point_at_her_own_controller(set_pool):
+    pool = set_pool("M21")
+    program = compile_card_oracle(pool["Liliana's Steward"])
+    from engine.targeting import derive_activation_spec
+
+    ability = next(a for a in program.activated_abilities if a.supported)
+    spec = derive_activation_spec(ability)
+    assert spec == {"kind": "player", "opponents_only": True}
+
+
+def test_miscast_counters_an_instant_that_goes_unpaid(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Shock"]])
+    p2 = PlayerState(name="P2", hand=[pool["Miscast"]])
+    game = Game(players=[p1, p2])
+
+    game.queue_from_hand(0, "Shock", target_player_index=1)
+    result = game.cast_from_hand(1, "Miscast", target_stack_index=0)
+    assert result.supported, result.details
+    # With nothing to pay {3} from, the Shock is countered and never resolves.
+    assert not game.stack
+    assert any(c.name == "Shock" for c in p1.graveyard)
+    assert p2.life == 20
+
+
+def test_miscast_cannot_touch_a_creature_spell(set_pool):
+    pool = set_pool("M21")
+    program = compile_card_oracle(pool["Miscast"])
+    assert program.supported, program.reason
+    p1 = PlayerState(name="P1", hand=[pool["Concordia Pegasus"]])
+    p2 = PlayerState(name="P2", hand=[pool["Miscast"]])
+    game = Game(players=[p1, p2])
+
+    game.queue_from_hand(0, "Concordia Pegasus")
+    from engine.targeting import derive_cast_spec
+
+    spec = derive_cast_spec(pool["Miscast"], program)
+    assert spec == {"kind": "stack", "stack_card_types": ["instant", "sorcery"]}
+    assert game._enumerate_stack_targets(pool["Miscast"], spec) == [], (
+        "a creature spell is not offered to an instant-or-sorcery counter"
+    )
+
+
+def test_chandras_magmutt_pings_a_face_or_a_walker(set_pool):
+    pool = set_pool("M21")
+    magmutt = Permanent(card=pool["Chandra's Magmutt"])
+    assert compile_card_oracle(magmutt.card).supported
+    walker = Permanent(card=pool["Basri Ket"], metadata={"loyalty_counters": 3})
+    p1 = PlayerState(name="P1", battlefield=[magmutt])
+    p2 = PlayerState(name="P2", battlefield=[walker])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(
+        0, "Chandra's Magmutt", ability_index=0, target_player_index=1,
+    )
+    assert result.supported, result.details
+    assert p2.life == 19, "the player face is a legal target"
+
+    magmutt.tapped = False
+    result = game.activate_permanent_ability(
+        0, "Chandra's Magmutt", ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert walker.metadata["loyalty_counters"] == 2, "damage strips loyalty (CR 306.8)"
+    assert p2.life == 19, "the walker soaked it, not the player"
+
+
+def test_chandras_magmutt_never_offers_a_creature(set_pool):
+    pool = set_pool("M21")
+    magmutt = Permanent(card=pool["Chandra's Magmutt"])
+    bear = Permanent(card=pool["Pridemalkin"])
+    walker = Permanent(card=pool["Basri Ket"], metadata={"loyalty_counters": 3})
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[magmutt]),
+        PlayerState(name="P2", battlefield=[bear, walker]),
+    ])
+    program = compile_card_oracle(magmutt.card)
+    from engine.targeting import derive_activation_spec
+
+    ability = next(a for a in program.activated_abilities if a.supported)
+    spec = derive_activation_spec(ability)
+    assert spec == {"kind": "player_or_planeswalker"}
+    offered = game._enumerate_targets(
+        0, magmutt.card, spec, for_cast=False,
+        ability_instruction=ability.instruction, source_permanent=magmutt,
+    )
+    names = {t.get("name") for t in offered if t["kind"] == "permanent"}
+    assert names == {"Basri Ket"}, "planeswalkers yes, creatures no"
+    assert {t["seat"] for t in offered if t["kind"] == "player"} == {0, 1}
+
+
+def test_tempered_veteran_tends_only_an_already_counted_creature(set_pool):
+    pool = set_pool("M21")
+    veteran = Permanent(card=pool["Tempered Veteran"])
+    cat = Permanent(card=pool["Pridemalkin"])  # 2/1, no counter yet
+    p1 = PlayerState(name="P1", battlefield=[veteran, cat])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    program = compile_card_oracle(veteran.card)
+    assert program.supported, program.reason
+
+    from engine.targeting import derive_activation_spec
+
+    cheap = program.activated_abilities[0]  # {W}, {T}: counter on a counted creature
+    offered = game._enumerate_targets(
+        0, veteran.card, derive_activation_spec(cheap), for_cast=False,
+        ability_instruction=cheap.instruction, source_permanent=veteran,
+    )
+    assert offered == [], "with no counter anywhere, the cheap ability has no target"
+
+    # The expensive ability seeds the counter; the cheap one can then grow it.
+    result = game.activate_permanent_ability(
+        0, "Tempered Veteran", ability_index=1,
+        target_player_index=0, target_permanent_index=1,
+    )
+    assert result.supported, result.details
+    assert cat.metadata["plus_counters"] == 1, "the counter is recorded, not just P/T"
+    assert (cat.effective_power, cat.effective_toughness) == (3, 2)
+
+    veteran.tapped = False
+    offered = game._enumerate_targets(
+        0, veteran.card, derive_activation_spec(cheap), for_cast=False,
+        ability_instruction=cheap.instruction, source_permanent=veteran,
+    )
+    assert [t.get("name") for t in offered] == ["Pridemalkin"]
+    result = game.activate_permanent_ability(
+        0, "Tempered Veteran", ability_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    assert result.supported, result.details
+    assert cat.metadata["plus_counters"] == 2
+    assert (cat.effective_power, cat.effective_toughness) == (4, 3)
+
+
+def test_azusa_grants_two_additional_land_plays(set_pool):
+    pool = set_pool("M21")
+    azusa = Permanent(card=pool["Azusa, Lost but Seeking"])
+    assert compile_card_oracle(azusa.card).supported
+    p1 = PlayerState(name="P1", battlefield=[azusa], hand=[pool["Forest"]] * 4)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = True  # CR 305.2's count is enforced in this mode
+
+    plays = [game.cast_from_hand(0, "Forest").supported for _ in range(4)]
+    assert plays == [True, True, True, False], "one land plus Azusa's two"
+
+
+def test_kaervek_shrinks_every_other_creature_and_not_himself(set_pool):
+    pool = set_pool("M21")
+    kaervek = Permanent(card=pool["Kaervek, the Spiteful"])
+    own_bird = Permanent(card=pool["Concordia Pegasus"])    # 1/3, his own side
+    frail = Permanent(card=pool["Speaker of the Heavens"])  # 1/1, opposing
+    p1 = PlayerState(name="P1", battlefield=[kaervek, own_bird])
+    p2 = PlayerState(name="P2", battlefield=[frail])
+    game = Game(players=[p1, p2])
+
+    program = compile_card_oracle(kaervek.card)
+    assert program.supported, program.reason
+    game._recalculate_lord_buffs()
+
+    assert kaervek.effective_power == 3, "'Other creatures' excludes the source"
+    assert own_bird.effective_power == 0, "his own side shrinks too"
+    assert frail.effective_toughness == 0
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(frail), "a 1/1 dies under him (CR 704.5f)"
+    assert game.is_on_battlefield(own_bird)

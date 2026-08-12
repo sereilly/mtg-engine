@@ -134,7 +134,17 @@ def _targets_payload(recipient: ast.Recipient) -> dict[str, object] | None:
     """
     if isinstance(recipient, ast.PlayerRef):
         if recipient.kind == "target_player":
+            if recipient.or_planeswalker:
+                # "target player or planeswalker" — one chosen slot answered by
+                # a player face or a planeswalker permanent, the "any target"
+                # resolution shape minus the creature half.
+                return {"quantifier": "target", "kind": "player_or_planeswalker"}
             return {"quantifier": "target", "kind": "player"}
+        if recipient.kind == "target_opponent":
+            # "Target opponent" is a player target the caster's own seat cannot
+            # answer (CR 115.4) — the same flag the phase-out sweep and Word of
+            # Command's spec carry, so every player picker reads one vocabulary.
+            return {"quantifier": "target", "kind": "player", "opponents_only": True}
         return None
     if not isinstance(recipient, ast.TargetSpec):
         return None

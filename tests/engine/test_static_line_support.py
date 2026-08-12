@@ -36,6 +36,7 @@ import pytest
 from engine.card_loader import load_catalog
 from engine.characteristic_defining import dynamic_pt_for
 from engine.combat_restrictions import combat_restriction_for
+from engine.land_play_allowance import land_play_line
 from engine.lord_buffs import lord_buff_for
 from engine.oracle import (
     _is_supported_static_creature_line,
@@ -90,6 +91,12 @@ def _derived(normalized: str) -> bool:
         or combat_restriction_for(normalized) is not None
         or static_bonus_for(normalized) is not None
         or lord_buff_for(normalized) is not None
+        # "You may play two additional lands on each of your turns" (Azusa,
+        # Fastbond) — dispatched by mixins/effects.py:_land_play_allowances,
+        # which reads every controlled permanent's own text through the same
+        # table the gate asks. Only the permission clause is a claim: the
+        # damage rider is a trigger the table does not own.
+        or land_play_line(normalized) == "allowance"
     )
 
 

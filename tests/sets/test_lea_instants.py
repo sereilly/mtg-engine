@@ -634,7 +634,8 @@ def test_blue_elemental_blast_counters_red_spell(all_cards):
     result = game.cast_from_hand(0, "Blue Elemental Blast", target_player_index=1)
 
     assert result.supported
-    assert any("Blue Elemental Blast countered Lightning Bolt" in line for line in game.log)
+    # The round-19 wording: the one _bin_spell_card line carries the verb.
+    assert any("Lightning Bolt was countered by Blue Elemental Blast" in line for line in game.log)
     assert not game.stack, "Stack should be empty after counterspell resolves"
 
 
@@ -1004,7 +1005,8 @@ def test_red_elemental_blast_counters_blue_spell(all_cards):
     result = game.cast_from_hand(0, "Red Elemental Blast", target_player_index=1)
 
     assert result.supported
-    assert any("Red Elemental Blast countered Ancestral Recall" in line for line in game.log)
+    # The round-19 wording: the one _bin_spell_card line carries the verb.
+    assert any("Ancestral Recall was countered by Red Elemental Blast" in line for line in game.log)
     assert not game.stack, "Stack should be empty after counterspell resolves"
 
 
@@ -1151,7 +1153,8 @@ def test_spell_blast_counters_spell_with_matching_x(all_cards):
     result = game.cast_from_hand(0, "Spell Blast", target_player_index=1, x_value=5)
 
     assert result.supported
-    assert any("Spell Blast countered Air Elemental" in line for line in game.log)
+    # The round-19 wording: the one _bin_spell_card line carries the verb.
+    assert any("Air Elemental was countered by Spell Blast" in line for line in game.log)
     assert not game.stack
     assert not p2.battlefield
 

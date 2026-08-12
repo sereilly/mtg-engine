@@ -38,7 +38,7 @@ from ..lord_buffs import (
 )
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
-from ..pt import clear_base_pt, set_base_pt
+from ..pt import add_plus1_counters, clear_base_pt, set_base_pt
 
 
 # Characteristic-defining P/T (CR 604.3 / layer 7a). There is no registry to
@@ -231,12 +231,13 @@ class PermanentStateMixin:
             permanent.power_bonus += 7
             permanent.metadata["plus_1_0_counters"] = 7
 
-        # enters with X +1/+1 counters
+        # enters with X +1/+1 counters (Rock Hydra) — recorded as counters, not
+        # a bare bonus, so the 704.5q sweep, the card face and any "with a
+        # +1/+1 counter on it" restriction all see them.
         if any(ENTERS_WITH_X_PLUS_1_1_COUNTERS == line for line in program.static_lines) or ENTERS_WITH_X_PLUS_1_1_COUNTERS in text:
             x_value = permanent.metadata.get("cast_x_value")
             if isinstance(x_value, int) and x_value > 0:
-                permanent.power_bonus += x_value
-                permanent.toughness_bonus += x_value
+                add_plus1_counters(permanent, x_value)
 
         # copy-as-enter creature
         if any(COPY_CREATURE_ON_ENTER == line for line in program.static_lines) or COPY_CREATURE_ON_ENTER in text:
