@@ -123,20 +123,24 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
 # --- The quantifier round: "up to N" is not one target ----------------------
 
 
-def test_rewind_is_no_longer_reported_as_supported(set_pool):
-    """It was: "Counter target spell. Untap up to four lands." compiled with the
-    untap half silently reduced to one land, because every consumer of an
-    ``up_to`` subject threw the count away. A card that plays wrong is worse
-    than a card that reports unsupported, so this pins the retreat."""
-    assert not compile_card_oracle(set_pool("M21")["Rewind"]).supported
+def test_rewind_untap_lowers_to_a_resolution_time_choice(set_pool):
+    """The retreat this test used to pin is over: "Untap up to four lands."
+    compiled halved (one land), then refused by name, and now lowers to
+    ``untap_up_to_matching`` — a pending choice on resolution, because no
+    "target" is printed and nothing is chosen at cast."""
+    program = compile_card_oracle(set_pool("M21")["Rewind"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [i.kind for i in steps] == ["counter_top_stack_spell", "untap_up_to_matching"]
+    assert steps[1].payload == {"amount": 4, "filter": {"type_filter": "land"}}
 
 
-@pytest.mark.parametrize(
-    "line",
-    ["Tap up to two target creatures.", "Untap up to four lands."],
-)
-def test_several_targets_are_refused_rather_than_halved(line):
-    result = compile_line(line, card_name="Test")
+def test_targeted_several_taps_are_still_refused_rather_than_halved():
+    """The *targeted* family stays refused: "tap up to two target creatures"
+    names cast-time targets no tap handler resolves as a list. Rewind's
+    untargeted spelling is the one that got a lowering, and the ``targeted``
+    flag on the spec is what keeps the two apart."""
+    result = compile_line("Tap up to two target creatures.", card_name="Test")
 
     assert result.parsed
     assert not result.lowered
@@ -1117,3 +1121,143 @@ def test_garruk_savage_herald_bite_compiles_to_the_two_target_kind(set_pool):
     walker_card = set_pool("M21")["Garruk, Savage Herald"]
     program = compile_card_oracle(walker_card)
     assert program.activated_abilities[1].instruction.kind == "target_bites_target"
+
+
+# --- Round 20: Rewind, See the Truth, and the modal-honesty sweep -----------
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["Rewind", "See the Truth", "Read the Tides", "Pestilent Haze", "Destructive Tampering"],
+)
+def test_round_20_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def test_rewind_counters_and_lets_its_caster_untap_up_to_four_lands(set_pool):
+    """"Untap up to four lands." prints no "target": the lands are chosen on
+    resolution through the pending-choice queue, not at cast."""
+    pool = set_pool("M21")
+    lands = [Permanent(card=pool["Island"], tapped=True) for _ in range(3)]
+    p1 = PlayerState(name="P1", hand=[pool["Rewind"]], battlefield=lands)
+    p2 = PlayerState(name="P2", hand=[pool["Shock"]])
+    game = Game(players=[p1, p2])
+    queued = game.queue_from_hand(1, "Shock", target_player_index=0)
+    assert queued.supported, queued.details
+    result = game.cast_from_hand(0, "Rewind")
+    assert result.supported, result.details
+    # The counter half already resolved; the untap half is waiting on picks.
+    assert not game.stack
+    assert any(c.name == "Shock" for c in p2.graveyard)
+    pending = game.pending_choices_of("untap_up_to", 0)
+    assert pending and pending[0].data["amount"] == 4
+    ids = [game.permanent_id_of(perm) for perm in lands[:2]]
+    assert game.confirm_untap_up_to(0, ids)
+    assert [perm.tapped for perm in lands] == [False, False, True]
+
+
+def test_rewind_rejects_more_picks_than_printed(set_pool):
+    pool = set_pool("M21")
+    lands = [Permanent(card=pool["Island"], tapped=True) for _ in range(5)]
+    p1 = PlayerState(name="P1", battlefield=lands)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.arm_pending_choice(
+        "untap_up_to", 0, amount=4, filter={"type_filter": "land"}, card_name="Rewind",
+    )
+    ids = [game.permanent_id_of(perm) for perm in lands]
+    assert not game.confirm_untap_up_to(0, ids), "five picks against 'up to four'"
+    assert all(perm.tapped for perm in lands), "nothing moved on a rejected answer"
+    assert game.confirm_untap_up_to(0, ids[:4])
+
+
+def test_see_the_truth_from_hand_keeps_one_and_bottoms_the_rest(set_pool):
+    pool = set_pool("M21")
+    library = [pool["Shock"], pool["Rewind"], pool["Island"], pool["Concordia Pegasus"]]
+    p1 = PlayerState(name="P1", hand=[pool["See the Truth"]], library=list(library))
+    game = Game(players=[p1, PlayerState(name="P2")])
+    result = game.cast_from_hand(0, "See the Truth")
+    assert result.supported, result.details
+    # The pick suspends the resolution: the spell is not yet in the graveyard
+    # (CR 608.2n) while its controller is looking.
+    assert not any(c.name == "See the Truth" for c in p1.graveyard)
+    assert game.confirm_look_top_pick(0, 1)
+    assert [c.name for c in p1.hand] == ["Rewind"]
+    # The other two looked-at cards went under the Pegasus.
+    assert [c.name for c in p1.library] == ["Concordia Pegasus", "Shock", "Island"]
+    assert any(c.name == "See the Truth" for c in p1.graveyard)
+
+
+def test_see_the_truth_cast_from_exile_takes_all_three(set_pool):
+    """The cast-zone conditional, fed by the permission seam: cast from
+    anywhere but the hand, every looked-at card goes to the hand and there is
+    no choice at all."""
+    from engine.cast_permissions import grant_permission
+
+    pool = set_pool("M21")
+    truth = pool["See the Truth"]
+    p1 = PlayerState(
+        name="P1", exile=[truth],
+        library=[pool["Shock"], pool["Rewind"], pool["Island"], pool["Concordia Pegasus"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    grant_permission(
+        game, player_index=0, zone="exile", mode="cast",
+        cards=[truth], duration="end_of_turn", source_name="Test Grant",
+    )
+    result = game.cast_from_hand(0, "See the Truth", from_zone="exile")
+    assert result.supported, result.details
+    assert not game.pending_choices_of("look_top_pick")
+    assert sorted(c.name for c in p1.hand) == ["Island", "Rewind", "Shock"]
+    assert [c.name for c in p1.library] == ["Concordia Pegasus"]
+
+
+def test_read_the_tides_second_mode_bounces_both_chosen_creatures(set_pool):
+    pool = set_pool("M21")
+    bears = [Permanent(card=pool["Concordia Pegasus"]) for _ in range(3)]
+    p1 = PlayerState(name="P1", hand=[pool["Read the Tides"]])
+    p2 = PlayerState(name="P2", battlefield=list(bears))
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        0, "Read the Tides", target_player_index=1,
+        target_permanent_index=[0, 2], mode_index=1,
+    )
+    assert result.supported, result.details
+    assert len(p2.battlefield) == 1
+    assert len(p2.hand) == 2
+
+
+def test_pestilent_haze_second_mode_strips_loyalty_from_every_walker(set_pool):
+    pool = set_pool("M21")
+    mine = Permanent(card=pool["Basri Ket"], metadata={"loyalty_counters": 3})
+    theirs = Permanent(card=pool["Garruk, Unleashed"], metadata={"loyalty_counters": 2})
+    p1 = PlayerState(name="P1", hand=[pool["Pestilent Haze"]], battlefield=[mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(0, "Pestilent Haze", mode_index=1)
+    assert result.supported, result.details
+    assert mine.metadata["loyalty_counters"] == 1
+    # Garruk hit zero and the state-based sweep collected him (CR 704.5i).
+    assert not game.is_on_battlefield(theirs)
+    assert any(c.name == "Garruk, Unleashed" for c in p2.graveyard)
+
+
+def test_destructive_tampering_second_mode_grounds_blockers_for_the_turn(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Destructive Tampering"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    result = game.cast_from_hand(0, "Destructive Tampering", mode_index=1)
+    assert result.supported, result.details
+    assert game.blocking_restrictions_until_eot
+    # A ground attacker, so blocking legality turns on the restriction alone:
+    # the grounded cat may not block, the flyer still may ("without flying"
+    # spares it, asked of layer 6).
+    attacker = Permanent(card=pool["Pridemalkin"])
+    grounded = Permanent(card=pool["Pridemalkin"])
+    flyer = Permanent(card=pool["Concordia Pegasus"])
+    assert game._can_block_attacker(flyer, attacker) is True
+    assert game._can_block_attacker(grounded, attacker) is False
+    # CR 514.2: the restriction ends with the turn.
+    game.resolve_cleanup_step(0)
+    assert not game.blocking_restrictions_until_eot
+    assert game._can_block_attacker(grounded, attacker) is True

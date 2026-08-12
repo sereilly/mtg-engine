@@ -4299,6 +4299,106 @@ function renderSearchLibraryModal(info) {
   if (confirmBtn) confirmBtn.disabled = searchLibrarySelectedIndex === null;
 }
 
+// See the Truth's pick: the looked-at top cards; clicking one keeps it and
+// bottoms the rest, so there is no separate confirm step.
+function getLookTopPickInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.look_top_pick;
+  if (!info) return null;
+  if (info.caster_seat !== seat) return null;
+  return info;
+}
+
+function renderLookTopPickModal(info) {
+  const modal = document.getElementById("lookTopPickModal");
+  if (!modal) return;
+  if (!info) {
+    modal.classList.add("hidden");
+    return;
+  }
+  modal.classList.remove("hidden");
+  const subtitle = document.getElementById("lookTopPickSubtitle");
+  if (subtitle) {
+    subtitle.textContent = `${info.card_name}: click a card to put it into your hand; the rest go to the bottom of your library.`;
+  }
+  const grid = document.getElementById("lookTopPickGrid");
+  if (grid) {
+    grid.innerHTML = (info.cards || [])
+      .map((card, idx) => {
+        const inner = card.image_uri
+          ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+          : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
+        return `<div class="library-card-choice" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+      })
+      .join("");
+    grid.querySelectorAll(".library-card-choice").forEach((el) => {
+      el.addEventListener("click", async () => {
+        modal.classList.add("hidden");
+        await sendAction({ seat, action: "look_top_pick_confirm", hand_index: Number(el.dataset.idx) });
+      });
+    });
+  }
+}
+
+// Rewind's "Untap up to four lands": a resolution-time multi-select over
+// matching permanents, capped at the printed amount. Confirming with nothing
+// selected is legal ("up to" includes zero).
+let untapUpToSelected = new Set();
+
+function getUntapUpToInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.untap_up_to;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
+function renderUntapUpToModal(info) {
+  const modal = document.getElementById("untapUpToModal");
+  if (!modal) return;
+  if (!info) {
+    modal.classList.add("hidden");
+    untapUpToSelected = new Set();
+    return;
+  }
+  modal.classList.remove("hidden");
+  const subtitle = document.getElementById("untapUpToSubtitle");
+  if (subtitle) {
+    subtitle.textContent = `${info.card_name}: choose up to ${info.amount} to untap (tapped ones shown first).`;
+  }
+  const list = document.getElementById("untapUpToList");
+  const confirmBtn = document.getElementById("untapUpToConfirmBtn");
+  const candidates = [...(info.candidates || [])].sort((a, b) => Number(b.tapped) - Number(a.tapped));
+  if (list) {
+    list.innerHTML = candidates
+      .map((entry) => {
+        const selectedClass = untapUpToSelected.has(entry.id) ? " selected" : "";
+        const state = entry.tapped ? "tapped" : "untapped";
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${escapeHtml(state)}${entry.seat !== seat ? " (opponent's)" : ""}</div></div>`;
+      })
+      .join("") || `<div class="modal-empty-note">Nothing to untap.</div>`;
+    list.querySelectorAll(".library-card-choice").forEach((el) => {
+      el.addEventListener("click", () => {
+        const id = Number(el.dataset.id);
+        if (untapUpToSelected.has(id)) untapUpToSelected.delete(id);
+        else if (untapUpToSelected.size < Number(info.amount || 0)) untapUpToSelected.add(id);
+        else return;
+        el.classList.toggle("selected");
+      });
+    });
+  }
+  if (confirmBtn && !confirmBtn.dataset.bound) {
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", async () => {
+      const ids = [...untapUpToSelected];
+      untapUpToSelected = new Set();
+      delete confirmBtn.dataset.bound;
+      modal.classList.add("hidden");
+      await sendAction({ seat, action: "untap_up_to_confirm", target_permanent_ids: ids });
+    });
+  }
+}
+
 // Chandra, Heart of Fire's −9: a two-zone multi-select search. Any number of
 // the highlighted (matching) cards may be picked across both grids; confirm
 // exiles them, and confirming with nothing picked is the fail-to-find.
@@ -9844,6 +9944,8 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderActivationPrompt();
   renderSearchLibraryModal(searchLibraryInfo);
   renderSearchExileModal(getSearchExileInfo(state));
+  renderUntapUpToModal(getUntapUpToInfo(state));
+  renderLookTopPickModal(getLookTopPickInfo(state));
   renderReorderLibraryModal(reorderLibraryInfo);
   renderHandRevealModal(getHandRevealInfo(state));
   renderDrawChoiceModals(state);

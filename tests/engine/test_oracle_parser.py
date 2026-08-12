@@ -98,9 +98,12 @@ def test_a_modal_spells_card_level_instruction_is_its_first_mode():
     ]
 
 
-def test_a_mode_nothing_reads_is_reported_unsupported_on_its_own():
-    """A card with one readable mode and one unreadable one still resolves the
-    readable one — support is per mode, not per card."""
+def test_a_mode_nothing_reads_refuses_the_whole_card():
+    """The reversal of the policy this test used to pin. Per-mode support let a
+    card with one dead mode report supported — the UI then offered the whole
+    mode list and the dead choice resolved to nothing (the Read the Tides
+    finding, round 17). The gate is all-of, like the planeswalker one: every
+    printed mode or the card refuses, naming the mode nothing reads."""
     card = _mk_card(
         "Half Test",
         "Instant",
@@ -109,8 +112,9 @@ def test_a_mode_nothing_reads_is_reported_unsupported_on_its_own():
 
     program = compile_card_oracle(card)
 
-    assert [mode.supported for mode in program.modes] == [True, False]
-    assert program.modes[1].instruction is None
+    assert not program.supported
+    assert "modal mode not implemented" in program.reason
+    assert "Ponder the infinite" in program.reason
 
 
 def test_a_head_asking_for_more_than_one_mode_is_not_read_as_choose_one():

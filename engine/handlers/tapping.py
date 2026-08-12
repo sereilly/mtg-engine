@@ -163,3 +163,23 @@ def tap_target_player_lands_and_drain_mana(game: Game, instruction: OracleInstru
     target.creature_only_mana.clear()
     game.log.append(f"{card.name} tapped all lands and drained mana from {target.name}")
     return True, "resolved"
+
+
+@effect_handler("untap_up_to_matching")
+def untap_up_to_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Untap up to four lands." (Rewind.) No "target" is printed, so nothing
+    was chosen at cast: the controller picks the permanents now, on
+    resolution, through the pending-choice queue — the shape round 15's census
+    said this clause needed, as distinct from the targeted "up to N" family."""
+    caster_index = game.players.index(context.caster)
+    game.arm_pending_choice(
+        "untap_up_to", caster_index,
+        amount=int(instruction.payload.get("amount", 0)),
+        filter=dict(instruction.payload.get("filter") or {}),
+        card_name=context.card.name,
+    )
+    game.log.append(
+        f"{context.caster.name} may untap up to "
+        f"{instruction.payload.get('amount', 0)} matching permanents"
+    )
+    return True, "pending_untap_up_to"

@@ -536,7 +536,7 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
 
     # CR 115.4 "any target" — creatures, players, planeswalkers, battles.
     if stream.accept_phrase("any", "target"):
-        return ast.TargetSpec("any_target")
+        return ast.TargetSpec("any_target", targeted=True)
 
     # "each of up to two target creatures you control" — a distributive wrapper
     # over the noun phrase rather than a quantifier of its own. It names exactly
@@ -559,6 +559,11 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     other_before_target = False
     distinct_from_prior = False
 
+    # Whether the word "target" is printed — recorded, not merely consumed:
+    # "up to four lands" (Rewind) names no targets and is chosen on
+    # resolution, where "up to two target creatures" is chosen at cast.
+    targeted = False
+
     if stream.accept_phrase("up", "to"):
         quantifier = "up_to"
         token = stream.peek()
@@ -570,9 +575,10 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
             other_before_target = True
         # "up to one target creature", "up to two target creatures" — the word
         # "target" is part of the printed quantifier phrase, not the filter.
-        stream.accept_word("target")
+        targeted = bool(stream.accept_word("target")) or other_before_target
     elif stream.accept_word("target"):
         quantifier = "target"
+        targeted = True
     elif stream.at_word("another") and stream.peek_word(1) == "target":
         # "another target creature" (Garruk, Savage Herald) — a second chosen
         # object, distinct from the sentence's earlier choice. Guarded on the
@@ -580,6 +586,7 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         # <object>" is untouched.
         stream.advance(2)
         quantifier = "target"
+        targeted = True
         distinct_from_prior = True
     elif stream.accept_word("each"):
         quantifier = "each"
@@ -609,7 +616,10 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         return None
     if other_before_target:
         filt = dataclasses.replace(filt, other_than_source=True)
-    return ast.TargetSpec(quantifier, filt, count, distinct_from_prior=distinct_from_prior)
+    return ast.TargetSpec(
+        quantifier, filt, count,
+        distinct_from_prior=distinct_from_prior, targeted=targeted,
+    )
 
 
 def parse_recipient(stream: TokenStream) -> ast.Recipient | None:

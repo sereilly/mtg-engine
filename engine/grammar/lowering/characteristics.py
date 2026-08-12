@@ -270,6 +270,28 @@ def _lower_remove_counter(node: ast.RemoveCounter) -> tuple[OracleInstruction, .
     one, so anything else refuses rather than compiling onto a handler that
     would quietly do that instead.
     """
+    # "Remove two loyalty counters from each planeswalker." (Pestilent Haze's
+    # second mode.) A sweep, not a choice: every planeswalker on every
+    # battlefield loses that many, and CR 704.5i collects the ones that hit
+    # zero. Only the loyalty/planeswalker pairing has a handler — loyalty is
+    # the one counter kind whose storage the handler knows how to reach.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "each"
+        and node.counter == "loyalty"
+    ):
+        if node.subject.filter.card_types != ("planeswalker",):
+            raise LoweringError(
+                "the loyalty sweep removes from planeswalkers alone", node=node
+            )
+        amount = _amount_payload(node.count)
+        if not isinstance(amount, int) or amount <= 0:
+            raise LoweringError("the loyalty sweep takes a fixed count", node=node)
+        return (
+            OracleInstruction(
+                "remove_loyalty_from_each_planeswalker", "", {"amount": amount}
+            ),
+        )
     if not _is_source(node.subject):
         raise LoweringError(
             "the only counter-removal handler reads the ability's own source", node=node

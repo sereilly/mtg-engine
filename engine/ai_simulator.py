@@ -46,7 +46,7 @@ class SimulationReport:
 # tests/ai/test_ai_simulator.py.
 _SIMULATED_CHOICES = (
     "search_library", "search_exile_cards", "scry", "reorder_library", "discard",
-    "balance", "optional_pay",
+    "balance", "optional_pay", "untap_up_to", "look_top_pick",
 )
 
 

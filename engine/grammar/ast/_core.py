@@ -226,6 +226,13 @@ class TargetSpec:
     # object that must differ from the sentence's earlier choice — not from the
     # ability's source, which is what the filter's other_than_source says.
     distinct_from_prior: bool = False
+    # Whether the word "target" was printed. The quantifier alone cannot say:
+    # "up to two target creatures" (Read the Tides — chosen at cast, CR 601.2c)
+    # and "up to four lands" (Rewind — chosen on resolution, no targets at all)
+    # both read as ``up_to``, and the two reach entirely different machinery.
+    # The parser used to consume the word and discard the fact, which is the
+    # round-15 finding this field closes.
+    targeted: bool = False
 
 
 # A recipient of damage/effects can be objects, players, or the "any target"

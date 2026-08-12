@@ -63,6 +63,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "add_corpse_counters_for_each_creature_died": "counters",
     "add_plus1_counters_for_each_creature_died": "counters",
     "remove_counter_from_self": "counters",
+    # Pestilent Haze's second mode: loyalty stripped from every walker at once.
+    "remove_loyalty_from_each_planeswalker": "counters",
     "draw_then_discard_self": "zones",
     "target_gains_life": "life",
     "target_loses_life": "life",
@@ -78,6 +80,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "tap_self": "tapping",
     "untap_target_permanent": "tapping",
     "untap_target_land": "tapping",
+    # "Untap up to four lands." (Rewind) — the controller picks the lands on
+    # resolution through the pending-choice queue; no "target" is printed.
+    "untap_up_to_matching": "tapping",
     "untap_self": "tapping",
     "untap_enchanted_creature": "tapping",
     "grant_prevention_shield": "prevention",
@@ -115,6 +120,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # grant over it. All zone work — the permission is about which zone a card
     # may be cast from — so no new category and GRAMMAR_CATEGORIES is unchanged.
     "exile_top_of_library": "zones",
+    "look_top_pick_to_hand": "zones",
     "search_and_exile_matching": "zones",
     "grant_cast_permission": "zones",
     "grant_extra_turn": "turns",
@@ -143,6 +149,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Restrictions on declaring attackers/blockers (CR 506, 509).
     "cant_attack_without_land_type": "combat_restrictions",
     "cant_block_power_n_or_greater": "combat_restrictions",
+    # The one-shot, turn-scoped blanket ("Creatures without flying can't block
+    # this turn", Destructive Tampering's second mode).
+    "cant_block_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     "tap_or_untap_target": "tapping",
     "draw_target_cards": "zones",

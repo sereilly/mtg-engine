@@ -212,12 +212,22 @@ def _parse_zone(stream: TokenStream) -> ast.Zone:
         "their", "owner", "'s"
     ):
         owner = ast.PlayerRef("owner")
+    elif stream.accept_phrase("their", "owners'"):
+        # "Return up to two target creatures to their owners' hands." (Read
+        # the Tides.) The plural possessive is one token to the lexer; each
+        # object still goes to its *own* owner's zone (CR 400.3), so the
+        # owner reference is the same one the singular spelling records.
+        owner = ast.PlayerRef("owner")
     elif stream.accept_phrase("its", "controller", "'s"):
         owner = ast.PlayerRef("controller")
     else:
         stream.accept_word("a", "an", "the")
     name = stream.peek_word()
-    if name not in _ZONES:
+    # "hands" is the plural template's spelling of "hand" — one zone per
+    # object, pluralized because the objects are.
+    if name is not None and name.endswith("s") and name[:-1] in _ZONES:
+        name = name[:-1]
+    elif name not in _ZONES:
         raise stream.error("expected a zone name")
     stream.advance()
     return ast.Zone(name, owner)

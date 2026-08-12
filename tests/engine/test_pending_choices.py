@@ -240,6 +240,8 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # The picks are the cards the same resolution's next step ("You may
         # cast them this turn.") grants permission over.
         "search_exile_cards",
+        # Reshapes the library; the spell's own CR 608.2n move waits behind it.
+        "look_top_pick",
     }, suspending
 
 

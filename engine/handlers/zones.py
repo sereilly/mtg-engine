@@ -5,7 +5,12 @@ from typing import TYPE_CHECKING
 
 from ..keywords import grant_keyword
 from ..models import Permanent
-from ._common import permanent_matches_filter, resolve_amount, resolve_target_permanent
+from ._common import (
+    permanent_matches_filter,
+    resolve_amount,
+    resolve_target_permanent,
+    resolve_target_permanents,
+)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -427,6 +432,22 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
 
 @effect_handler("bounce_target_creature")
 def bounce_target_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    # "Return up to two target creatures to their owners' hands." (Read the
+    # Tides' second mode.) The several-targets description says a list was
+    # collected: each slot resolves strictly (a departed target is dropped,
+    # CR 608.2b) and each creature goes to its own owner's hand (CR 400.3).
+    targets_desc = instruction.payload.get("targets") or {}
+    if isinstance(targets_desc, dict) and isinstance(targets_desc.get("count"), int) and targets_desc["count"] > 1:
+        chosen = resolve_target_permanents(game, context)
+        for perm in chosen:
+            owner_idx = game.owner_index_of(perm)
+            owner = game.players[owner_idx] if owner_idx is not None else context.caster
+            owner.hand.append(perm.card)
+            game.remove_from_battlefield(perm)
+            game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
+        if not chosen:
+            game.log.append("No creatures to return")
+        return True, "resolved"
     target = context.target
     bounced = game._bounce_target_creature(target, context.target_permanent_index)
     game.log.append("Returned creature to hand" if bounced else "No creature to return")
@@ -1074,3 +1095,33 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
 
     game.log.append(f"{source_name}: unrecognized cast permission payload")
     return True, "resolved"
+
+
+@effect_handler("look_top_pick_to_hand")
+def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """See the Truth: look at the top N, put one into your hand and the rest
+    on the bottom in any order — unless the spell was cast from anywhere other
+    than the hand, in which case every looked-at card goes to the hand and
+    there is nothing to choose. ``context.cast_from_zone`` is the field the
+    permission-seam round added for exactly this sentence."""
+    caster = context.caster
+    amount = int(instruction.payload.get("amount", 0))
+    top_count = min(amount, len(caster.library))
+    if top_count <= 0:
+        game.log.append(f"{caster.name} has no cards to look at")
+        return True, "resolved"
+    if context.cast_from_zone != "hand":
+        taken = [caster.library.pop(0) for _ in range(top_count)]
+        caster.hand.extend(taken)
+        game.log.append(
+            f"{context.card.name} was cast from the {context.cast_from_zone}: "
+            f"{caster.name} puts all {top_count} looked-at cards into their hand"
+        )
+        return True, "resolved"
+    caster_index = game.players.index(caster)
+    game.arm_pending_choice(
+        "look_top_pick", caster_index,
+        top_count=top_count, amount=amount, card_name=context.card.name,
+    )
+    game.log.append(f"{caster.name} is looking at the top {top_count} cards of their library")
+    return True, "pending_look_top_pick"

@@ -12,6 +12,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _describe_several_targets,
     _describe_targets,
     _filter_payload,
     _full_mana_payload,
@@ -133,6 +134,24 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
     elif _is_source(spec):
         return (OracleInstruction("tap_self", "", {}),)
 
+    # "Untap up to four lands." (Rewind.) No "target" is printed: nothing is
+    # chosen as the spell is cast — the controller picks the lands as it
+    # resolves (a pending choice), which is why this branch demands the spec
+    # be *untargeted* and why it never reaches engine/targeting.py.
+    if (
+        isinstance(node, ast.Untap)
+        and spec.quantifier == "up_to"
+        and not spec.targeted
+        and spec.filter.card_types == ("land",)
+        and spec.filter == ast.ObjectFilter(card_types=("land",))
+    ):
+        return (
+            OracleInstruction(
+                "untap_up_to_matching",
+                "",
+                {"amount": spec.count, "filter": {"type_filter": "land"}},
+            ),
+        )
     if _names_several_targets(spec):
         # "Tap up to two target creatures" (Frost Breath), "Untap up to four
         # lands" (Rewind). Both tap handlers resolve exactly one permanent, so
@@ -199,6 +218,23 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
     exact bug the Animate Dead targeting test pins.
     """
     subject = node.subject
+    # "Return up to two target creatures to their owners' hands." (Read the
+    # Tides' second mode.) Same instruction as the single-target bounce — the
+    # effect per creature is identical — described with the several-targets
+    # opt-in so the handler resolves a list and the picker collects up to N.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and _names_several_targets(subject)
+        and node.from_zone is None
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "owner"
+        and not subject.filter.is_card
+        and subject.filter.card_types == ("creature",)
+    ):
+        several: dict[str, object] = {}
+        _describe_several_targets(several, subject)
+        return (OracleInstruction("bounce_target_creature", "", several),)
     if not _is_target(subject):
         # "target" and "up to one target" (Liliana, Death Mage's +1) both
         # resolve one chosen object; anything wider has no handler.

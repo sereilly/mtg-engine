@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 58.3% | 52.5% | 31.8% | 129 |
+| M21 *(measured)* | 285 | 503 | 58.8% | 53.5% | 32.8% | 131 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -46,10 +46,10 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
 | 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
-| 4 | 2 | expected the player whose hand is looked at |  |
 | 4 | 1 | expected 'mana' |  |
 | 4 | 4 | unrecognized discard cost |  |
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
+| 3 | 1 | expected 'your' |  |
 | 3 | 1 | no tap-or-untap handler honours this restriction |  |
 | 3 | 3 | no return handler honours this restriction |  |
 | 2 | 1 | expected a permanent to put counters on |  |
@@ -312,6 +312,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Destroy target permanent.`
 - **Destructive Tampering**
   - `• Destroy target artifact.`
+  - `• Creatures without flying can't block this turn.`
 - **Dingus Egg**
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
@@ -764,6 +765,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
 - **Pestilent Haze**
   - `• All creatures get -2/-2 until end of turn.`
+  - `• Remove two loyalty counters from each planeswalker.`
 - **Phantasmal Forces**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
@@ -837,6 +839,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Target creature you control gets +1/+1 and gains hexproof until end of turn. (It can't be the target of spells or abilities your opponents control.)`
 - **Read the Tides**
   - `• Draw three cards.`
+  - `• Return up to two target creatures to their owners' hands.`
 - **Reconstruction**
   - `Return target artifact card from your graveyard to your hand.`
 - **Red Elemental Blast**
@@ -870,6 +873,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Revitalize**
   - `You gain 3 life.`
   - `Draw a card.`
+- **Rewind**
+  - `Counter target spell. Untap up to four lands.`
 - **Riddleform**
   - `{2}{U}: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
 - **Righteousness**
@@ -940,6 +945,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{B}: Regenerate this creature.`
   - `{B}: Regenerate this creature.`
   - `{B}: Regenerate this creature.`
+- **See the Truth**
+  - `Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. If this spell was cast from anywhere other than your hand, put each of those cards into your hand instead.`
 - **Selfless Savior**
   - `Sacrifice this creature: Another target creature you control gains indestructible until end of turn. (Damage and effects that say "destroy" don't destroy it.)`
 - **Sengir Vampire**

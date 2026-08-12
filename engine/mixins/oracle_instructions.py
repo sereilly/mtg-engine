@@ -56,6 +56,7 @@ class OracleInstructionsMixin:
         mode_index: int | None = None,
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
+        cast_from_zone: str = "hand",
     ) -> None:
         instruction = self._select_executable_instruction(card, mode_index)
         if instruction is None:
@@ -90,6 +91,7 @@ class OracleInstructionsMixin:
                     "old_color": old_color,
                 },
                 stack_target=stack_target,
+                cast_from_zone=cast_from_zone,
             ),
         )
         state_machine.run(instruction)

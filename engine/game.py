@@ -238,6 +238,12 @@ class Game(
     # cost waivers ("without paying their mana costs"). CastPermission entries
     # (engine/cast_permissions.py); turn-scoped ones are swept at cleanup.
     cast_permissions: list = field(default_factory=list)
+    # "Creatures without flying can't block this turn." (Destructive
+    # Tampering's second mode) — one-shot blanket blocking restrictions,
+    # CR 509.1b. Each entry: {"filter": {type_filter, with_keywords,
+    # without_keywords}, "source_name"}. Read by _can_block_attacker (which is
+    # also what the legality enumerator asks), swept at cleanup.
+    blocking_restrictions_until_eot: list = field(default_factory=list)
     # Nafs Asp: "that player loses N life at the beginning of their next draw
     # step unless they pay {cost} before that draw step." Each entry is
     # {"player_index", "amount", "cost", "source_name"}. Populated by the

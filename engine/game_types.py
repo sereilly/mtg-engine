@@ -116,6 +116,11 @@ class OracleExecutionContext:
     # What the caster picked beyond the target, carried through from the stack
     # item unchanged. Keys are CHOICE_KEYS.
     choices: dict = field(default_factory=dict)
+    # Which zone the resolving spell was cast from ("hand" unless a permission
+    # effect opened another; see StackItem.cast_from_zone). What "if this
+    # spell was cast from anywhere other than your hand" (See the Truth)
+    # reads.
+    cast_from_zone: str = "hand"
     # Scratchpad for values one instruction produces and a later instruction in
     # the same resolution consumes ("deals X damage… you gain that much life").
     # Compositional effects need this: once "deal damage and gain life" is two

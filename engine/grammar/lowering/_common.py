@@ -107,6 +107,14 @@ def _describe_several_targets(payload: dict[str, object], recipient: ast.TargetS
     So a lowering says "my handler reads a list" by calling *this*, and
     :func:`_names_several_targets` keeps refusing everywhere else.
     """
+    if not recipient.targeted:
+        # "Up to four lands" (Rewind) prints no "target": nothing is chosen at
+        # cast, so describing it here would raise a cast-time picker in front
+        # of a choice CR says is made on resolution.
+        raise LoweringError(
+            "this 'up to N' names no targets; the choice belongs to resolution",
+            node=recipient,
+        )
     payload["targets"] = {
         "quantifier": recipient.quantifier,
         "kind": "object",

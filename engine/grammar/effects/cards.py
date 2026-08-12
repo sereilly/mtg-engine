@@ -205,6 +205,37 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     """
     stream.expect_word("look")
     stream.expect_word("at")
+    # "Look at the top three cards of your library. Put one of those cards
+    # into your hand and the rest on the bottom of your library in any order.
+    # If this spell was cast from anywhere other than your hand, put each of
+    # those cards into your hand instead." (See the Truth.) One production for
+    # the whole three-sentence template, interior full stops included — the
+    # sentences share one looked-at set, and the cast-zone conditional is the
+    # card's whole reason to exist, so a wording without it must keep refusing
+    # rather than quietly becoming the plain pick.
+    if stream.accept_phrase("the", "top"):
+        count = parse_amount(stream)
+        for word in ("cards", "of", "your", "library"):
+            stream.expect_word(word)
+        if not stream.accept_punct("."):
+            raise stream.error("expected the sorting sentence after the look")
+        for word in (
+            "put", "one", "of", "those", "cards", "into", "your", "hand",
+            "and", "the", "rest", "on", "the", "bottom", "of", "your",
+            "library", "in", "any", "order",
+        ):
+            stream.expect_word(word)
+        if not stream.accept_punct("."):
+            raise stream.error("expected the cast-zone sentence after the sort")
+        for word in (
+            "if", "this", "spell", "was", "cast", "from", "anywhere",
+            "other", "than", "your", "hand",
+        ):
+            stream.expect_word(word)
+        stream.accept_punct(",")
+        for word in ("put", "each", "of", "those", "cards", "into", "your", "hand", "instead"):
+            stream.expect_word(word)
+        return ast.LookTopPickToHand(count)
     player = parse_player_ref(stream)
     if player is None:
         raise stream.error("expected the player whose hand is looked at")

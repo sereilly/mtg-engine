@@ -353,6 +353,28 @@ class DeclareBlockersStepMixin:
         if attacker.metadata.get("cant_be_blocked_until_eot"):
             return False
 
+        # One-shot blanket restrictions ("Creatures without flying can't block
+        # this turn", Destructive Tampering). Keywords are asked of layer 6, so
+        # a creature granted flying after the spell resolved may block.
+        for entry in self.blocking_restrictions_until_eot:
+            filt = entry.get("filter") or {}
+            type_filter = filt.get("type_filter", "creature")
+            if type_filter == "creature" and not blocker.is_creature:
+                continue
+            if type_filter != "creature" and not blocker.has_type(type_filter):
+                continue
+            if any(
+                not self._has_keyword(blocker, kw)
+                for kw in filt.get("with_keywords") or []
+            ):
+                continue
+            if any(
+                self._has_keyword(blocker, kw)
+                for kw in filt.get("without_keywords") or []
+            ):
+                continue
+            return False
+
         attacker_program = compile_card_oracle(attacker.effective_card)
         attacker_kinds = {i.kind for i in attacker_program.instructions}
 

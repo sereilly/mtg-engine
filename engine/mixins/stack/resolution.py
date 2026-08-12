@@ -271,6 +271,7 @@ class StackResolutionMixin:
             old_color=item.choices.get("old_color"),
             divided_targets=item.choices.get("divided_targets"),
             exile_instead_of_graveyard=item.exile_instead_of_graveyard,
+            cast_from_zone=item.cast_from_zone,
         )
         return
     def _resolve_card(
@@ -288,6 +289,7 @@ class StackResolutionMixin:
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
         exile_instead_of_graveyard: bool = False,
+        cast_from_zone: str = "hand",
     ) -> None:
         caster = self.players[caster_index]
         primary_type = card.primary_type
@@ -383,6 +385,7 @@ class StackResolutionMixin:
                 mode_index=chosen_mode_index,
                 old_color=old_color,
                 divided_targets=divided_targets,
+                cast_from_zone=cast_from_zone,
             )
 
         def finish() -> None:

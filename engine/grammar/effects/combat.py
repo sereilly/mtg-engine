@@ -50,6 +50,18 @@ def _parse_cant_attack_or_block(
         )
 
     if stream.accept_word("block"):
+        # "Creatures without flying can't block this turn." (Destructive
+        # Tampering's second mode): no object after "block" — the restriction
+        # is a blanket over the *subject*, scoped by the printed duration.
+        # Only the durationed form is claimed; a bare "<subject> can't block"
+        # would be a static ability and refuses below by falling through.
+        if not stream.at_word("creatures"):
+            duration = _parse_duration(stream)
+            if duration.kind is None:
+                raise stream.error("expected 'creatures' or a duration after \"can't block\"")
+            return ast.CombatRestriction(
+                subject, "cant_block_until_eot", (("duration", duration.kind),)
+            )
         stream.expect_word("creatures")
         if not stream.accept_phrase("with", "power"):
             raise stream.error("expected 'with power'")

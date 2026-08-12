@@ -207,6 +207,50 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
     return payload
 
 
+@prompt_renderer("look_top_pick")
+def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
+    """See the Truth's pick: the looked-at top cards, keep one, the rest go to
+    the bottom. Only the owner sees the card faces."""
+    choice = choices[0]
+    caster = ctx.game.players[choice.player_index]
+    top_count = min(int(choice.data.get("top_count", 0)), len(caster.library))
+    return {
+        "caster_seat": choice.player_index,
+        "top_count": top_count,
+        "card_name": choice.data.get("card_name", ""),
+        "cards": [ctx.serialize_card(card) for card in caster.library[:top_count]],
+    }
+
+
+@prompt_renderer("untap_up_to")
+def _untap_up_to(ctx: PromptContext, choices: list) -> dict:
+    """"Untap up to four lands." (Rewind): every matching permanent on every
+    battlefield, by stable id, multi-select up to the amount. The engine
+    re-validates each id, so the candidate list is a hint."""
+    from engine.handlers._common import permanent_matches_filter
+
+    choice = choices[0]
+    filt = dict(choice.data.get("filter") or {})
+    candidates = [
+        {
+            "seat": seat,
+            "index": index,
+            "id": ctx.game.permanent_id_of(perm),
+            "name": perm.card.name,
+            "tapped": perm.tapped,
+        }
+        for seat, player in enumerate(ctx.game.players)
+        for index, perm in enumerate(player.battlefield)
+        if permanent_matches_filter(perm, filt)
+    ]
+    return {
+        "player_seat": choice.player_index,
+        "amount": choice.data.get("amount", 0),
+        "card_name": choice.data.get("card_name", ""),
+        "candidates": candidates,
+    }
+
+
 @prompt_renderer("search_exile_cards")
 def _search_exile(ctx: PromptContext, choices: list) -> dict:
     """The two-zone exile search (Chandra, Heart of Fire's −9): both zones'

@@ -11,6 +11,7 @@ from ..errors import LoweringError
 from ._common import (
     _REST_OF_TURN,
     _is_target,
+    _restrictions_beyond,
     _targets_only,
 )
 
@@ -29,6 +30,45 @@ def _lower_combat_restriction(node: ast.CombatRestriction) -> tuple[OracleInstru
     — byte for byte, so the differential can hold the two to agreement rather
     than merely to "both did something".
     """
+    # "Creatures without flying can't block this turn." (Destructive
+    # Tampering's second mode) — a one-shot, turn-scoped blanket over the
+    # subject, not a property of a permanent: the payload carries the filter
+    # the blocker gate tests, and cleanup sweeps the state it arms. The gate
+    # tests card types and (without-)keywords; any other narrowing refuses
+    # rather than being dropped.
+    if node.kind == "cant_block_until_eot":
+        payload = dict(node.payload)
+        if payload.get("duration") not in _REST_OF_TURN:
+            raise LoweringError(
+                "a blanket can't-block with no end-of-turn duration is a "
+                "static ability",
+                node=node,
+            )
+        if not isinstance(node.subject, ast.TargetSpec) or node.subject.quantifier != "all":
+            raise LoweringError(
+                "the blanket can't-block reads a plural subject", node=node
+            )
+        filt = node.subject.filter
+        leftover = _restrictions_beyond(
+            filt, frozenset({"card_types", "with_keywords", "without_keywords"})
+        )
+        if leftover:
+            raise LoweringError(
+                "the blocker gate cannot test this restriction: " + ", ".join(leftover),
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "cant_block_until_eot", "",
+                {
+                    "filter": {
+                        "type_filter": filt.card_types[0] if filt.card_types else "creature",
+                        "with_keywords": list(filt.with_keywords),
+                        "without_keywords": list(filt.without_keywords),
+                    }
+                },
+            ),
+        )
     return (OracleInstruction(node.kind, "", dict(node.payload)),)
 
 

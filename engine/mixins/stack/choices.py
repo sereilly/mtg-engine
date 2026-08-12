@@ -24,6 +24,7 @@ from __future__ import annotations
 import random
 
 from ...auras import attach_aura
+from ...handlers._common import permanent_matches_filter
 from ...land_types import change_land_type
 from ...models import CardDefinition, Permanent
 from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
@@ -340,6 +341,86 @@ class PendingChoicesMixin:
         found = choose_search_card(self, choice.player_index, choice.data)
         if found is None or not self._resolve_search_library(choice, found[1], found[0]):
             self._resolve_search_library(choice, -1, "none")
+
+    # -- Look at the top N, keep one, bottom the rest (See the Truth) ---------
+
+    def confirm_look_top_pick(self, player_index: int, keep_index: int) -> bool:
+        return self.resolve_pending_choice(
+            "look_top_pick", player_index, keep_index=keep_index
+        )
+
+    def _resolve_look_top_pick(self, choice: PendingChoice, keep_index: int) -> bool:
+        caster = self.players[choice.player_index]
+        top_count = min(int(choice.data.get("top_count", 0)), len(caster.library))
+        if not isinstance(keep_index, int) or not (0 <= keep_index < top_count):
+            return False
+        kept = caster.library.pop(keep_index)
+        caster.hand.append(kept)
+        # "…and the rest on the bottom of your library in any order." The rest
+        # go down in the order they lay; the ordering freedom is the player's
+        # by rule, and a client that wants a specific order sends the cards it
+        # keeps caring about via future answers — nothing else reads it.
+        for _ in range(top_count - 1):
+            caster.library.append(caster.library.pop(0))
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{caster.name} put {kept.name} into their hand and the rest on the bottom"
+        )
+        return True
+
+    def _default_look_top_pick(self, choice: PendingChoice) -> None:
+        """A non-interactive seat keeps the first card it looked at."""
+        if not self._resolve_look_top_pick(choice, 0):
+            self.discard_pending_choice(choice)
+
+    # -- "Untap up to N <objects>" chosen on resolution (Rewind) --------------
+
+    def confirm_untap_up_to(self, player_index: int, permanent_ids: list) -> bool:
+        """*permanent_ids* addresses the chosen permanents by stable id — an
+        empty list is a legal answer ("up to" includes zero)."""
+        return self.resolve_pending_choice(
+            "untap_up_to", player_index, permanent_ids=permanent_ids
+        )
+
+    def _resolve_untap_up_to(self, choice: PendingChoice, permanent_ids: list) -> bool:
+        """Validated whole before anything untaps: one bad id rejects the
+        answer and leaves the prompt queued, matching the exile search."""
+        amount = int(choice.data.get("amount", 0))
+        filt = dict(choice.data.get("filter") or {})
+        ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
+        if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
+            return False
+        if len(ids) > amount:
+            return False
+        chosen = []
+        for pid in ids:
+            perm = self.permanent_by_id(pid)
+            if perm is None or not permanent_matches_filter(perm, filt):
+                return False
+            chosen.append(perm)
+        for perm in chosen:
+            perm.tapped = False
+        names = ", ".join(perm.card.name for perm in chosen) if chosen else "nothing"
+        self.log.append(
+            f"{self.players[choice.player_index].name} untapped {names} "
+            f"({choice.data.get('card_name', '')})"
+        )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_untap_up_to(self, choice: PendingChoice) -> None:
+        """A non-interactive seat untaps its own tapped matching permanents,
+        oldest first — its own because untapping an opponent's land is a gift,
+        and tapped ones because untapping an untapped land is a wasted pick."""
+        amount = int(choice.data.get("amount", 0))
+        filt = dict(choice.data.get("filter") or {})
+        own = [
+            perm for perm in self.controlled_by(choice.player_index)
+            if perm.tapped and permanent_matches_filter(perm, filt)
+        ]
+        picks = [self.permanent_id_of(perm) for perm in own[:amount]]
+        if not self._resolve_untap_up_to(choice, [p for p in picks if p is not None]):
+            self._resolve_untap_up_to(choice, [])
 
     # -- Two-zone exile search (Chandra, Heart of Fire's −9) ------------------
 
@@ -1345,6 +1426,35 @@ register_choice(
     # A search takes a card out of the library and shuffles what is left, so any
     # later step of the same resolution reads a library the answer decided.
     suspends=True,
+)
+
+register_choice(
+    "look_top_pick",
+    resolve=lambda game, choice, r: game._resolve_look_top_pick(choice, r.get("keep_index", -1)),
+    default=lambda game, choice: game._default_look_top_pick(choice),
+    action="look_top_pick_confirm",
+    prompt_key="look_top_pick",
+    blocked_detail="choose a card to keep before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The answer reshapes the library, and CR 608.2n's move to the graveyard
+    # is a later step of the same resolution — the scry discipline exactly.
+    suspends=True,
+)
+
+register_choice(
+    "untap_up_to",
+    resolve=lambda game, choice, r: game._resolve_untap_up_to(choice, r.get("permanent_ids") or []),
+    default=lambda game, choice: game._default_untap_up_to(choice),
+    action="untap_up_to_confirm",
+    prompt_key="untap_up_to",
+    blocked_detail="choose which permanents to untap before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # Deliberately not suspending: the untap is the last step of the effect
+    # that armed it, so nothing later in the same resolution reads the answer.
 )
 
 register_choice(

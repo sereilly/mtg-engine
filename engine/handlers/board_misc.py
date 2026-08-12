@@ -487,6 +487,29 @@ def cast_face_down_creature(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+@effect_handler("remove_loyalty_from_each_planeswalker")
+def remove_loyalty_from_each_planeswalker(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Remove two loyalty counters from each planeswalker." (Pestilent Haze's
+    second mode.) Loyalty is its counters (CR 306.5c); the walkers this
+    empties are collected by the state-based sweep (CR 704.5i) after the
+    spell finishes, not here."""
+    amount = int(instruction.payload.get("amount", 0))
+    touched = 0
+    for permanent in game.all_permanents():
+        if not permanent.has_type("planeswalker"):
+            continue
+        current = int(permanent.metadata.get("loyalty_counters", 0))
+        permanent.metadata["loyalty_counters"] = max(0, current - amount)
+        touched += 1
+        game.log.append(
+            f"{context.card.name}: {permanent.card.name} loses {amount} loyalty "
+            f"({permanent.metadata['loyalty_counters']} left)"
+        )
+    if not touched:
+        game.log.append(f"{context.card.name}: no planeswalkers to strip")
+    return True, "resolved"
+
+
 @effect_handler("remove_counter_from_self")
 def remove_counter_from_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Armageddon Clock: "Remove a doom counter from this artifact."

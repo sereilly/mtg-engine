@@ -524,3 +524,16 @@ def _lower_cast_permission(
         )
 
     raise LoweringError(f"no cast-permission lowering for {node.what!r}", node=node)
+
+
+def _lower_look_top_pick(node: ast.LookTopPickToHand) -> tuple[OracleInstruction, ...]:
+    """"Look at the top three cards of your library. Put one of those cards
+    into your hand and the rest on the bottom of your library in any order.
+    …" (See the Truth.) The handler asks its controller through the
+    pending-choice queue when cast from the hand, and skips the choice
+    entirely when the cast came from anywhere else — the conditional reads
+    ``OracleExecutionContext.cast_from_zone``."""
+    amount = _amount_payload(node.count)
+    if not isinstance(amount, int) or amount <= 0:
+        raise LoweringError("the look-top pick takes a fixed count", node=node)
+    return (OracleInstruction("look_top_pick_to_hand", "", {"amount": amount}),)

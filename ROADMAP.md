@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 149/285) to the full release line - **137 sets, 33,594
+M21 measured at 151/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -668,6 +668,57 @@ day the set ships.
 **Next:** unchanged from round 17 — Rewind's untargeted "choose up to N on
 resolution", the modal-mode sweep, then See the Truth, whose blocker
 (`cast_from_zone`) this round built in passing.
+
+---
+
+## Round 20: the round-17 backlog cleared — Rewind, See the Truth, and the modal gate
+
+*(2026-08-11, same day.)* M21 **149 → 151** by the count, five cards by what
+actually changed: Rewind and See the Truth flipped, and the three
+supported-but-lying modal cards (Read the Tides, Pestilent Haze, Destructive
+Tampering) stopped lying. Every item was named by round 17's "Next" list, and
+each turned out to be its own mechanism:
+
+- **The `targeted` flag closes the round-15 finding.** "Up to two target
+  creatures" and "up to four lands" both read as quantifier `up_to`, and the
+  parser consumed the word "target" without recording it — so the AST could
+  not say which family a clause belonged to. `TargetSpec.targeted` records it;
+  `_describe_several_targets` now *refuses* an untargeted spec (a cast-time
+  picker in front of a resolution-time choice), and Rewind's lowering demands
+  the opposite. The two "up to N" families are separated by evidence now, not
+  by which lowering happened to see the clause first.
+- **Rewind** — "Untap up to four lands." is a pending choice
+  (`untap_up_to`), armed on resolution, answered by stable permanent id,
+  whole-answer validation (five picks against "up to four" moves nothing).
+  Deliberately not suspending: the untap is its effect's last step.
+- **See the Truth** — one three-sentence production, and the payoff for round
+  19's field: the handler reads `cast_from_zone` off the resolution context,
+  asks its `look_top_pick` choice only for a hand cast, and puts all three
+  cards into the hand when the spell arrived from anywhere else — tested
+  through a round-19 exile grant, the two subsystems meeting on one card. The
+  pick suspends (the scry discipline: CR 608.2n's graveyard move waits).
+- **The modal gate is all-of now.** `_modal_options`' per-mode support policy
+  — "a card with one readable mode and one unreadable one still resolves the
+  readable one" — was the Read the Tides bug as design; the compiler now
+  refuses a card whose mode list has a dead entry, naming the mode. The three
+  cards it would have refused were fixed in the same round: multi-target
+  bounce for "their owners' hands" (the plural possessive is one lexer token;
+  each creature still goes to its own owner, CR 400.3), a loyalty sweep for
+  "remove two loyalty counters from each planeswalker" (CR 704.5i collects
+  the emptied walkers), and the one-shot blanket "creatures without flying
+  can't block this turn" — Game-level state read by `_can_block_attacker`
+  with keywords asked of layer 6, so a creature granted flying after the
+  spell resolves may still block, and one entering later may not.
+
+Fallout worth the note: two ratchet tests existed to pin the *refusals* while
+they were the honest state (`test_rewind_is_no_longer_reported_as_supported`,
+the untargeted half of `test_several_targets_are_refused_rather_than_halved`).
+Their purpose was fulfilled, not violated — both now pin the implementations
+instead, and the targeted-several-tap refusal keeps its test.
+
+**Next:** the "unsupported triggered ability" block (26 M21 cards) and the
+"no handler implements this spell's effect" tail (22), which the support
+report now names card by card.
 
 ---
 

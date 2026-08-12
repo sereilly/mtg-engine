@@ -42,7 +42,7 @@ def test_simple_damage_to_any_target():
     assert statement == ast.DealDamage(
         source=ast.TargetSpec("this", ast.ObjectFilter(is_source=True)),
         amount=ast.Fixed(3),
-        recipients=(ast.TargetSpec("any_target"),),
+        recipients=(ast.TargetSpec("any_target", targeted=True),),
     )
 
 
@@ -110,7 +110,7 @@ def test_divided_damage_is_recorded_as_a_rider():
 def test_pump_with_duration():
     statement = _statement("Target creature gets +3/+3 until end of turn.")
     assert statement == ast.Pump(
-        subject=ast.TargetSpec("target", ast.ObjectFilter(card_types=("creature",))),
+        subject=ast.TargetSpec("target", ast.ObjectFilter(card_types=("creature",)), targeted=True),
         power=ast.Fixed(3),
         toughness=ast.Fixed(3),
         duration=ast.Duration("until_end_of_turn"),
@@ -136,7 +136,7 @@ def test_bare_plural_subject_is_an_implicit_all():
 def test_keyword_grant_with_duration():
     statement = _statement("Target creature gains flying until end of turn.")
     assert statement == ast.GainKeyword(
-        subject=ast.TargetSpec("target", ast.ObjectFilter(card_types=("creature",))),
+        subject=ast.TargetSpec("target", ast.ObjectFilter(card_types=("creature",)), targeted=True),
         keywords=("flying",),
         duration=ast.Duration("until_end_of_turn"),
     )

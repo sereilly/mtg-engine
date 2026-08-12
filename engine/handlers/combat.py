@@ -250,3 +250,19 @@ def grant_banding_to_target(game: Game, instruction: OracleInstruction, context:
     grant_keyword(target_creature, "banding", until_eot=True)
     game.log.append(f"{target_creature.card.name} gains banding until end of turn")
     return True, "resolved"
+
+
+@effect_handler("cant_block_until_eot")
+def cant_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Creatures without flying can't block this turn." (Destructive
+    Tampering's second mode.) Arms a blanket restriction the blocker gate
+    (``_can_block_attacker``) tests for the rest of the turn; cleanup sweeps
+    it. State plus a reader, never a flag stamped per creature — a creature
+    entering after this resolves is restricted too, which per-permanent flags
+    would miss."""
+    game.blocking_restrictions_until_eot.append({
+        "filter": dict(instruction.payload.get("filter") or {}),
+        "source_name": context.card.name,
+    })
+    game.log.append(f"{context.card.name}: the named creatures can't block this turn")
+    return True, "resolved"

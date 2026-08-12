@@ -21,7 +21,7 @@ fail if one of them is unsupported. `measured` is a set ingested so its numbers
 can be read *before* the work of supporting it is done: the coverage instruments
 load it (`manifest_set_paths(include_measured=True)`), `load_catalog` does not,
 and no player can put one of its cards in a deck. Core Set 2021 (M21,
-285 cards, 52% supported) sits there.
+285 cards, 53% supported) sits there.
 
 **A measured set is nameable by the reporting scripts** — `--set M21` works, and
 the label says "measured, not shipped" so its numbers can't be read as

@@ -1719,6 +1719,20 @@ def _compile_card_oracle(
         # first. Built from the original text to keep human-readable labels.
         modes = _modal_options(oracle_text, name)
 
+        # All-of, like the planeswalker gate and for the same reason: the UI
+        # offers the whole mode list, so a card with one dead mode is offered
+        # a choice it then declines to perform (the Read the Tides finding,
+        # round 17 — "a modal spell needs every mode implemented or the card
+        # is lying about the ones it isn't").
+        dead_mode = next((m for m in modes if m.instruction is None), None)
+        if dead_mode is not None:
+            return OracleProgram(
+                False,
+                "unsupported",
+                f"modal mode not implemented: {dead_mode.label!r}",
+                normalized_text,
+            )
+
         if not instructions and modes and modes[0].instruction is not None:
             # A modal spell's card-level instruction is its *first* mode's — the
             # bullets are alternatives, so there is no other honest candidate,

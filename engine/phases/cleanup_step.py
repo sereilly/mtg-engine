@@ -70,6 +70,8 @@ class CleanupStepMixin:
         # end with the turn; an undurationed grant (Chandra, Flame's Catalyst's
         # −2) survives the sweep and dies with its card's zone instead.
         expire_end_of_turn_permissions(self)
+        # "…can't block this turn" blanket restrictions end with the turn too.
+        self.blocking_restrictions_until_eot.clear()
         # "Until the end of your next turn, they can't phase in." (Teferi,
         # Timeless Voyager.) The block counts the *caster's* turn ends; this
         # cleanup ends the active player's turn, so their countdowns tick.

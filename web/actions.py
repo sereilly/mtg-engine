@@ -1025,6 +1025,36 @@ def do_action(session_id: str, req: GameActionRequest):
         # when nothing in the searched zones matches the restriction.
         session.game.decline_search_library(req.seat)
 
+    elif req.action == "look_top_pick_confirm":
+        pending = next(
+            (c for c in session.game.pending_choices_of("look_top_pick")),
+            None,
+        )
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no look choice pending")
+        if req.seat != pending.player_index:
+            raise HTTPException(status_code=400, detail="not your choice")
+        if req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index (looked-at card index) is required")
+        ok = session.game.confirm_look_top_pick(req.seat, req.hand_index)
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid card index")
+
+    elif req.action == "untap_up_to_confirm":
+        pending = next(
+            (c for c in session.game.pending_choices_of("untap_up_to")),
+            None,
+        )
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no untap choice pending")
+        if req.seat != pending.player_index:
+            raise HTTPException(status_code=400, detail="not your choice")
+        # An empty list is legal — "up to" includes zero (CR 601.2c's cousin
+        # on resolution); the ids ride the same field every other action uses.
+        ok = session.game.confirm_untap_up_to(req.seat, req.target_permanent_ids or [])
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid untap selection")
+
     elif req.action == "search_exile_confirm":
         pending = next(
             (c for c in session.game.pending_choices_of("search_exile_cards")),

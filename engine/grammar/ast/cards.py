@@ -121,6 +121,22 @@ class Shuffle:
 
 
 @dataclass(frozen=True)
+class LookTopPickToHand:
+    """``Look at the top three cards of your library. Put one of those cards
+    into your hand and the rest on the bottom of your library in any order.
+    If this spell was cast from anywhere other than your hand, put each of
+    those cards into your hand instead.`` (See the Truth.)
+
+    One node for the whole three-sentence template — the sentences share one
+    set of looked-at cards, so parsed apart two of them dangle. The cast-zone
+    conditional is part of the shape, not a separate statement: it reads the
+    resolution context's ``cast_from_zone``, the field the stack object
+    carries since the permission-seam round.
+    """
+    count: Amount
+
+
+@dataclass(frozen=True)
 class ExileTopOfLibrary:
     """``Exile the top three cards of your library.`` (Chandra, Heart of Fire's
     +1.) Always the controller's own library — no card prints another player's
