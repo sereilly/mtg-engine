@@ -57,6 +57,9 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_enters", ("a", "creature", "enters")),
     ("land_enters", ("a", "land", "enters")),
     ("artifact_enters", ("an", "artifact", "enters")),
+    # "…your second card each turn" (Mystic Skyfish, Jolrael) — a different
+    # article, so no prefix collision with the bare draw event above.
+    ("draws_second_card", ("you", "draw", "your", "second", "card", "each", "turn")),
     ("draws_card", ("you", "draw", "a", "card")),
 )
 

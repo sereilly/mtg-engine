@@ -56,6 +56,7 @@ EXAMPLE_TEXTS: dict[str, str] = {
     "artifact_enters": "whenever an artifact enters the battlefield",
     "one_or_more_attack": "whenever one or more creatures you control attack",
     "draws_card": "whenever you draw a card",
+    "draws_second_card": "whenever you draw your second card each turn",
     "deals_damage_to_player": "whenever this creature deals damage to a player",
     # when
     "enters_battlefield": "when this creature enters the battlefield",

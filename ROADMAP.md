@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 175/285) to the full release line - **137 sets, 33,594
+M21 measured at 178/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -1023,6 +1023,65 @@ cast-trigger type narrowings (Spellgorger Weird), and the intervening-if
 object filter (Turret Ogre) — plus the counters-as-state families the
 round-26 record unlocked (Basri's Lieutenant, Pridemalkin, Sigiled
 Contender).
+
+---
+
+## Round 28: three narrowings, three mechanisms
+
+*(2026-08-11, same day.)* M21 **175 → 178**: Spellgorger Weird, Turret Ogre,
+Mystic Skyfish — the three census blocks round 27 queued, each its own
+mechanism:
+
+- **Cast triggers narrow by type** (Spellgorger Weird). Round 7's shape
+  exactly: the narrowed pattern lands on *both* sides of the pipeline
+  (oracle regex table and grammar parser), specific-before-prefix, with the
+  type word as condition payload the `you_cast_spell` event filter tests
+  against the cast card's type line. The word list is closed to what the
+  filter can test — a subtype ("Dog spell", Rin and Seri) keeps refusing
+  rather than compiling a trigger that fires on every spell. "Enchantment"
+  stays its own condition kind; the article split ("a"/"an") keeps the two
+  from colliding.
+- **An intervening-if can carry an object filter** (Turret Ogre). "If you
+  control another creature with power 4 or greater" needed four small
+  pieces, each closing a silent-drop hole: the condition parse accepts
+  "another" (CR 109.5's exclusion, contracted into an article);
+  `ObjectFilter.to_payload` emits **power and toughness bounds** (both,
+  because emitting one and dropping the other would let a toughness
+  restriction vanish — the same rule mana_value already followed);
+  `permanent_matches_filter` tests them against the layer-computed stats (a
+  pumped 1/3 counts while pumped, tested); and the `controls` condition
+  honours `exclude_self`, without which an invented power-4 creature with
+  Turret Ogre's text would count itself. The ETB trigger path also gained
+  the CR 603.4 gate the stack path got in round 16 — it executes inline and
+  never passed through that read, so the Ogre would have pinged with no big
+  creature in play.
+- **"Whenever you draw your second card each turn"** (Mystic Skyfish).
+  The record already existed — `cards_drawn_this_turn`, per seat, fed by
+  every draw path since Jandor's Ring needed "the last card you drew" — so
+  the round added only the announcement: a sweep in
+  `check_state_based_actions` with a once-per-turn flag, firing
+  `draws_second_card` through the event bus with a controller-scoped
+  filter. The sweep site is deliberate: there is no one draw seam (a dozen
+  paths append to the record, three of them calling `player.draw` around
+  `_draw_with_replacements` despite its "only way to draw" docstring), and
+  a site every action already passes through cannot be forgotten by the
+  next draw path — the trigger still enqueues before any player next gets
+  priority, which is when a trigger is noticed anyway (CR 603.3b). Jolrael's
+  trigger reads through the same condition; she stays honestly gated on her
+  X/X-setting ability.
+
+Consolidating the draw paths onto `_draw_with_replacements` is written down
+as owed — the direct `player.draw` calls in the zones handlers skip any
+armed draw replacement today, which is its docstring's own warning.
+
+Suite 4,810 at 19.6s, every `--check` green, shipped pool 388/388, zero
+hooks, zero ceiling raises.
+
+**Next:** the conditional-static family ("as long as" P/T, keyword and
+evasion grants: Gnarled Sage, Tome Anima, Sigiled Contender, Radha,
+Predatory Wurm — five cards on one mechanism), then the counter-state
+death trigger (Basri's Lieutenant) and Pridemalkin's counter-filtered
+trample grant.
 
 ---
 

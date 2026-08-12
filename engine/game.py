@@ -265,6 +265,11 @@ class Game(
     outside_game_draw_replacements: set = field(default_factory=set)
     # Both of the above are *armed state*, like a prevention shield. The
     # suspended draw itself waits on pending_replacement_choices.
+    # Seats whose "whenever you draw your second card each turn" triggers have
+    # fired this turn (Mystic Skyfish) — the condition fires once per turn, so
+    # the sweep that watches ``cards_drawn_this_turn`` needs to remember who it
+    # already announced. Reset with the other per-turn counters.
+    second_draw_fired_this_turn: set = field(default_factory=set)
     # Global statics whose source has left but whose effect continues
     # until end of turn (Titania's Song). Cleared at cleanup.
     lingering_global_statics: list = field(default_factory=list)

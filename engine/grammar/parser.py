@@ -277,6 +277,21 @@ def _split_on_colon(tokens: tuple) -> int | None:
     return None
 
 
+# The type words a cast-trigger narrowing may consume ("…you cast a
+# noncreature spell"), mapped to the filter each means. Held to the words the
+# event filter can test against a cast card's type line — mirroring the oracle
+# trigger table's alternation — and deliberately without "enchantment", whose
+# printed article ("an") belongs to its own condition kind.
+_CAST_TYPE_FILTERS: dict[str, "ast.ObjectFilter"] = {
+    "noncreature": ast.ObjectFilter(excluded_types=("creature",)),
+    "nonartifact": ast.ObjectFilter(excluded_types=("artifact",)),
+    "creature": ast.ObjectFilter(card_types=("creature",)),
+    "artifact": ast.ObjectFilter(card_types=("artifact",)),
+    "instant": ast.ObjectFilter(card_types=("instant",)),
+    "sorcery": ast.ObjectFilter(card_types=("sorcery",)),
+}
+
+
 def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
     """"Whenever **a Forest an opponent controls** becomes tapped" (Lifetap) /
     "Whenever **a Mountain** is tapped for mana" (Gauntlet of Might).
@@ -350,6 +365,23 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                     "you_cast_spell", "whenever",
                     subject=ast.ObjectFilter(colors=tuple(colors)),
                 )
+        stream.reset(mark)
+        # "…you cast a noncreature spell" (Spellgorger Weird): a type
+        # narrowing of the same condition. The word list mirrors the oracle
+        # table's — only what the cast filter tests may be consumed, so a
+        # subtype word ("Dog spell") keeps refusing the line rather than
+        # compiling a trigger that fires on every spell. Read before the
+        # phrase table, whose bare "you cast a spell" entry is its prefix.
+        mark = stream.mark()
+        if stream.accept_phrase("you", "cast", "a"):
+            word = stream.peek_word()
+            narrowed = _CAST_TYPE_FILTERS.get(word or "")
+            if narrowed is not None:
+                stream.advance()
+                if stream.accept_word("spell"):
+                    return ast.TriggerEvent(
+                        "you_cast_spell", "whenever", subject=narrowed,
+                    )
         stream.reset(mark)
         for kind, phrase in _WHENEVER_EVENTS:
             if stream.accept_phrase(*phrase):

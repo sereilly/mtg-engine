@@ -354,8 +354,15 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
             # "you control **a** Swamp". The article carries no meaning of its
             # own, but the noun parser refuses it as an unknown adjective, so
             # leaving it would refuse every singular condition in the pool.
-            stream.accept_word("a", "an")
+            # "**another** creature…" (Turret Ogre) is an article carrying the
+            # source-exclusion — CR 109.5's "other", contracted — so it sets
+            # the same field the leading adjective "other" does.
+            another = stream.accept_word("another")
+            if not another:
+                stream.accept_word("a", "an")
             filt = parse_object_filter(stream)
+            if another:
+                filt = dataclasses.replace(filt, other_than_source=True)
             comparison = None if not negated else ast.Comparison("eq", ast.Fixed(0))
             return ast.Controls(player, filt, comparison)
         # "you gained 3 or more life this turn" (Indulging Patrician). "Or more"

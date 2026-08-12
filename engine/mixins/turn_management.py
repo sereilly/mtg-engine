@@ -157,6 +157,8 @@ class TurnManagementMixin:
         self.lamp_draw_replacements = {}
         # Ring of Ma'rûf's armed replacement likewise lasts only "this turn".
         self.outside_game_draw_replacements = set()
+        # The second-draw sweep's once-per-turn memory (Mystic Skyfish).
+        self.second_draw_fired_this_turn = set()
         for player in self.players:
             player.damage_taken_this_turn = 0
             player.artifact_damage_taken_this_turn = 0

@@ -450,6 +450,16 @@ class StackResolutionMixin:
                 target_permanent_id=target_permanent_id,
                 source_permanent=permanent,
             )
+            # CR 603.4: an intervening-if gates the trigger. This inline path
+            # is both fire and resolution for an ETB trigger, so the one read
+            # here is the same check the stack path makes at line ~223 —
+            # without it, Turret Ogre would ping with no big creature in play.
+            gate = (trig.instruction.payload or {}).get("intervening_if")
+            if gate is not None and not evaluate_condition(self, context, gate):
+                self.log.append(
+                    f"{permanent.card.name}'s trigger did nothing: its condition is not met"
+                )
+                continue
             self._execute_oracle_instruction(trig.instruction, context)
     def _select_executable_instruction(
         self, card: CardDefinition, mode_index: int | None = None

@@ -211,6 +211,18 @@ class ObjectFilter:
                 "op": self.mana_value.op,
                 "value": self.mana_value.value.value,
             }
+        # "with power 4 or greater" (Turret Ogre's intervening-if). Same rule
+        # as mana_value: a literal bound rides the payload and the matcher
+        # tests it against the layer-computed stat; a variable bound stays
+        # unemitted. Both stats, because emitting one and dropping the other
+        # would let a toughness restriction vanish silently.
+        if self.power is not None and isinstance(self.power.value, Fixed):
+            payload["power"] = {"op": self.power.op, "value": self.power.value.value}
+        if self.toughness is not None and isinstance(self.toughness.value, Fixed):
+            payload["toughness"] = {
+                "op": self.toughness.op,
+                "value": self.toughness.value.value,
+            }
         if self.colored:
             payload["colored_only"] = True
         # "with a +1/+1 counter on it" (Tempered Veteran). Emitted only when

@@ -185,27 +185,41 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         return False
     # "with mana value 3 or less" (Eliminate). CR 202.3: a permanent's mana
     # value comes from its mana cost — the ingested cmc; a token's is 0.
-    mana_value = payload.get("mana_value")
-    if mana_value:
-        cmc = int(getattr(perm.effective_card, "cmc", 0) or 0)
-        bound = int(mana_value.get("value", 0))
-        op = mana_value.get("op")
-        if op == "le" and cmc > bound:
-            return False
-        if op == "lt" and cmc >= bound:
-            return False
-        if op == "ge" and cmc < bound:
-            return False
-        if op == "gt" and cmc <= bound:
-            return False
-        if op == "eq" and cmc != bound:
-            return False
+    if not _comparison_holds(payload.get("mana_value"),
+                             int(getattr(perm.effective_card, "cmc", 0) or 0)):
+        return False
+    # "with power 4 or greater" (Turret Ogre's intervening-if): the
+    # layer-computed stats, so a pumped 2/2 qualifies while it is pumped.
+    if not _comparison_holds(payload.get("power"), perm.effective_power):
+        return False
+    if not _comparison_holds(payload.get("toughness"), perm.effective_toughness):
+        return False
     # "with a +1/+1 counter on it" (Tempered Veteran). Asks the counter
     # *record*, not the P/T bonus — a Giant Growth also writes power_bonus, and
     # reading the bonus as the counter would let it qualify.
     if payload.get("with_plus1_counter") and int(perm.metadata.get("plus_counters", 0)) <= 0:
         return False
     return True
+
+
+def _comparison_holds(comparison: dict | None, actual: int) -> bool:
+    """Whether *actual* satisfies a lowered ``{op, value}`` bound (absent means
+    unrestricted)."""
+    if not comparison:
+        return True
+    bound = int(comparison.get("value", 0))
+    op = comparison.get("op")
+    if op == "le":
+        return actual <= bound
+    if op == "lt":
+        return actual < bound
+    if op == "ge":
+        return actual >= bound
+    if op == "gt":
+        return actual > bound
+    if op == "eq":
+        return actual == bound
+    return False
 
 
 def pick_target_permanent(

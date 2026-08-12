@@ -224,6 +224,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # event filter; must precede its unnarrowed prefix below.
     ("you_cast_spell",
      r"whenever you cast a spell that's (?P<cast_colors>[a-z]+(?:, [a-z]+)*,? or [a-z]+)"),
+    # A type narrowing ("…a noncreature spell", Spellgorger Weird). The word
+    # list is exactly what the event filter tests against the cast card's type
+    # line — a word outside it (a subtype, say) must keep refusing rather than
+    # compile and fire on every spell. "enchantment" stays its own condition
+    # kind ("…an enchantment spell", Verduran Enchantress) for the label's
+    # sake; the article split ("a"/"an") keeps the two from colliding.
+    ("you_cast_spell",
+     r"whenever you cast a (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell"),
     ("you_cast_spell",              r"whenever you cast a spell"),
     ("enchantment_cast",            r"whenever you cast an enchantment spell"),
     ("creature_enters",             r"whenever a creature enters(?: the battlefield)?"),
@@ -231,6 +239,10 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("artifact_enters",             r"whenever an artifact enters(?: the battlefield)?"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
     ("draws_card",                  r"whenever you draw a card"),
+    # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
+    # turn, announced by the draw sweep in check_state_based_actions off the
+    # cards_drawn_this_turn record every draw path already feeds.
+    ("draws_second_card",           r"whenever you draw your second card each turn"),
 )
 
 # "when" triggers (enter/leave events)

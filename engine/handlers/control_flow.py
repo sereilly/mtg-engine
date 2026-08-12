@@ -79,11 +79,16 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         if who in ("each_opponent", "target_opponent", "opponent"):
             players = [p for p in game.players if p is not context.caster]
         filters = payload.get("filter") or {}
+        # "another creature…" (Turret Ogre): the asking ability's own source
+        # never satisfies its own condition. Outside the matcher's vocabulary
+        # — it answers about a permanent alone — so it is asked here, the same
+        # split the counter handler makes.
+        source = context.source_permanent if filters.get("exclude_self") else None
         count = sum(
             1
             for player in players
             for permanent in game.controlled_by(player)
-            if permanent_matches_filter(permanent, filters)
+            if permanent is not source and permanent_matches_filter(permanent, filters)
         )
         wanted = payload.get("count")
         op = payload.get("op", "eq")

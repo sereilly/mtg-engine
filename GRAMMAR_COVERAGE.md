@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 61.8% | 57.5% | 36.8% | 149 |
+| M21 *(measured)* | 285 | 503 | 62.6% | 58.3% | 37.6% | 153 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,8 +32,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 275 | 142 | expected a subject |  |
-| 103 | 49 | unrecognized effect verb |  |
+| 270 | 137 | expected a subject |  |
+| 104 | 50 | unrecognized effect verb |  |
 | 61 | 42 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -587,6 +587,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Whenever this creature deals combat damage to a player, you may draw a card. If you do, discard a card.`
 - **Jihad**
   - `White creatures get +2/+1 as long as the chosen player controls a nontoken permanent of the chosen color.`
+- **Jolrael, Mwonvuli Recluse**
+  - `Whenever you draw your second card each turn, create a 2/2 green Cat creature token.`
 - **Jump**
   - `Target creature gains flying until end of turn.`
   - `Target creature gains flying until end of turn.`
@@ -745,6 +747,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{T}: Add {U}.`
   - `{T}: Add {U}.`
   - `{T}: Add {U}.`
+- **Mystic Skyfish**
+  - `Whenever you draw your second card each turn, this creature gains flying until end of turn.`
 - **Nevinyrral's Disk**
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
@@ -1056,6 +1060,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
+- **Spellgorger Weird**
+  - `Whenever you cast a noncreature spell, put a +1/+1 counter on this creature.`
 - **Spined Megalodon**
   - `Whenever this creature attacks, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
 - **Spirit of Malevolence**
@@ -1185,6 +1191,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Destroy target Wall. It can't be regenerated.`
   - `Destroy target Wall. It can't be regenerated.`
   - `Destroy target Wall. It can't be regenerated.`
+- **Turret Ogre**
+  - `When this creature enters, if you control another creature with power 4 or greater, this creature deals 2 damage to each opponent.`
 - **Twinblade Assassins**
   - `At the beginning of your end step, if a creature died this turn, draw a card.`
 - **Unsubstantiate**

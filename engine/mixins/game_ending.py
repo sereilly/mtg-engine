@@ -581,4 +581,21 @@ class GameEndingMixin:
         # (life, empty library, poison), so settle it once the game is decided.
         self._maybe_award_ante()
 
+        # "Whenever you draw your second card each turn" (Mystic Skyfish).
+        # Announced here rather than at each draw site because there is no one
+        # draw seam — a dozen paths append to ``cards_drawn_this_turn`` — and a
+        # site every action already passes through cannot be forgotten by the
+        # next one. The once-per-turn flag is what makes the sweep idempotent,
+        # and the trigger still enqueues before any player next gets priority,
+        # which is when a triggered ability is noticed anyway (CR 603.3b).
+        from ..events import emit
+
+        for seat, player in enumerate(self.players):
+            if seat in self.second_draw_fired_this_turn or player.lost:
+                continue
+            if len(player.cards_drawn_this_turn) < 2:
+                continue
+            self.second_draw_fired_this_turn.add(seat)
+            emit(self, "draws_second_card", seat=seat)
+
         return any_changed

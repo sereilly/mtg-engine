@@ -1670,6 +1670,112 @@ def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool
     assert game._can_be_targeted(angel, pool["Shock"])
 
 
+# --- Round 28: cast-type narrowing, filtered intervening-if, second draw ------
+
+
+@pytest.mark.parametrize(
+    "name", ["Spellgorger Weird", "Turret Ogre", "Mystic Skyfish"],
+)
+def test_round_28_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def test_spellgorger_weird_counts_only_noncreature_spells(set_pool):
+    pool = set_pool("M21")
+    weird = Permanent(card=pool["Spellgorger Weird"])
+    p1 = PlayerState(
+        name="P1", battlefield=[weird],
+        hand=[pool["Shock"], pool["Concordia Pegasus"]],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Shock", target_player_index=1)
+    assert result.supported, result.details
+    game._settle()
+    assert weird.metadata.get("plus_counters", 0) == 1, "an instant counts"
+
+    result = game.cast_from_hand(0, "Concordia Pegasus")
+    assert result.supported, result.details
+    game._settle()
+    assert weird.metadata.get("plus_counters", 0) == 1, "a creature spell does not"
+
+
+def test_turret_ogre_needs_another_big_creature(set_pool):
+    pool = set_pool("M21")
+    # Alone, his own power 4 does not satisfy "another creature" (CR 109.5).
+    p1 = PlayerState(name="P1", hand=[pool["Turret Ogre"]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(0, "Turret Ogre")
+    assert result.supported, result.details
+    game._settle()
+    assert p2.life == 20, "no other big creature, no damage"
+
+    # With a 6/6 already out, the trigger's condition holds.
+    big = Permanent(card=pool["Elder Gargaroth"])
+    q1 = PlayerState(name="Q1", hand=[pool["Turret Ogre"]], battlefield=[big])
+    q2 = PlayerState(name="Q2")
+    game2 = Game(players=[q1, q2])
+    result = game2.cast_from_hand(0, "Turret Ogre")
+    assert result.supported, result.details
+    game2._settle()
+    assert q2.life == 18
+
+
+def test_turret_ogre_counts_a_pumped_small_creature(set_pool):
+    """The bound reads the layer-computed power, not the printed one."""
+    pool = set_pool("M21")
+    small = Permanent(card=pool["Concordia Pegasus"])  # 1/3 printed
+    from engine.pt import add_pt_modifier
+
+    add_pt_modifier(small, 3, 0)  # 4/3 while modified
+    p1 = PlayerState(name="P1", hand=[pool["Turret Ogre"]], battlefield=[small])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(0, "Turret Ogre")
+    assert result.supported, result.details
+    game._settle()
+    assert p2.life == 18
+
+
+def test_mystic_skyfish_lifts_off_on_the_second_draw(set_pool):
+    pool = set_pool("M21")
+    skyfish = Permanent(card=pool["Mystic Skyfish"])
+    p1 = PlayerState(
+        name="P1", battlefield=[skyfish], library=[pool["Island"]] * 4,
+    )
+    p2 = PlayerState(name="P2", library=[pool["Island"]] * 4)
+    game = Game(players=[p1, p2])
+    game.begin_turn_bookkeeping(0)
+
+    game._draw_with_replacements(p1, 1)
+    game._settle()
+    assert not game._has_keyword(skyfish, "flying"), "one draw is not two"
+
+    game._draw_with_replacements(p1, 1)
+    game._settle()
+    assert game._has_keyword(skyfish, "flying"), "the second draw lifts it"
+
+    # Once per turn: a third draw does not queue a second trigger.
+    fired = len(game.second_draw_fired_this_turn)
+    game._draw_with_replacements(p1, 1)
+    game._settle()
+    assert len(game.second_draw_fired_this_turn) == fired
+
+    # CR 514.2: the grant wears off at cleanup, and the next turn's second
+    # draw fires afresh.
+    game.resolve_cleanup_step(0)
+    assert not game._has_keyword(skyfish, "flying")
+    game.begin_turn_bookkeeping(1)
+    game._draw_with_replacements(p2, 2)
+    game._settle()
+    assert not game._has_keyword(skyfish, "flying"), (
+        "an opponent's second draw is not 'you draw'"
+    )
+
+
 # --- Round 27: modal triggered abilities --------------------------------------
 
 

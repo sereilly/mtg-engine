@@ -221,6 +221,17 @@ def _controller_cast_filter(
         }
         if wanted and not (wanted & set(card.colors)):
             return False
+    # "…a noncreature spell" (Spellgorger Weird): the type word from the
+    # trigger's own text, tested against the cast card's type line — "non"
+    # negates, so a noncreature trigger stays silent for a creature spell.
+    cast_type = trig.condition.payload.get("cast_type")
+    if cast_type:
+        type_line = card.type_line.lower()
+        if cast_type.startswith("non"):
+            if cast_type[3:] in type_line:
+                return False
+        elif cast_type not in type_line:
+            return False
     return True
 
 
@@ -274,6 +285,16 @@ def _becomes_tapped_filter(
     if scope == "opponent":
         return tapped_controller != observer
     return tapped_controller == observer
+
+
+@event_filter("draws_second_card")
+def _second_draw_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever **you** draw your second card each turn" — only the drawing
+    seat's own permanents."""
+    seat = event.payload.get("seat")
+    return seat is not None and game.controller_index_of(permanent) == seat
 
 
 def _controller_of(game: Game, permanent: Permanent) -> PlayerState:
