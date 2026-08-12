@@ -135,6 +135,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "opponents_who_could_not_discard_lose_life": "life",
     "discard_hand": "zones",
     "put_target_on_library_top": "zones",
+    "put_graveyard_card_on_library_bottom": "zones",
+    # Unsubstantiate: a spell unstacked to its owner's hand, or a creature bounced.
+    "return_spell_or_creature_to_hand": "zones",
     "put_cards_from_hand_onto_battlefield": "zones",
     "reveal_top_to_hand_or_bottom": "zones",
     "exile_all_matching": "zones",

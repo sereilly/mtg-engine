@@ -1569,3 +1569,82 @@ def test_dire_fleet_warmonger_with_nothing_to_eat_is_never_asked(set_pool):
         "made and the pump cannot be taken for free"
     )
     assert warmonger.effective_power == 3
+
+
+# --- Round 24: two spellings and two destinations ----------------------------
+
+
+@pytest.mark.parametrize(
+    "name", ["Falconer Adept", "Epitaph Golem", "Unsubstantiate"],
+)
+def test_round_24_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def test_falconer_adept_token_arrives_tapped_and_attacking(set_pool):
+    pool = set_pool("M21")
+    adept = Permanent(card=pool["Falconer Adept"])
+    p1 = PlayerState(name="P1", battlefield=[adept])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game._settle()
+    birds = [p for p in p1.battlefield if p.card.name == "Bird Token"]
+    assert len(birds) == 1
+    assert birds[0].tapped
+    bird_index = p1.battlefield.index(birds[0])
+    assert bird_index in game.combat_attackers, "the Bird joined the attack"
+
+
+def test_epitaph_golem_bottoms_a_chosen_graveyard_card(set_pool):
+    pool = set_pool("M21")
+    golem = Permanent(card=pool["Epitaph Golem"])
+    p1 = PlayerState(
+        name="P1", battlefield=[golem],
+        graveyard=[pool["Shock"], pool["Concordia Pegasus"]],
+        library=[pool["Island"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    result = game.activate_permanent_ability(
+        0, "Epitaph Golem", ability_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    assert result.supported, result.details
+    assert [c.name for c in p1.graveyard] == ["Shock"]
+    assert [c.name for c in p1.library] == ["Island", "Concordia Pegasus"]
+
+
+def test_unsubstantiate_returns_a_spell_from_the_stack_unbinned(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Shock"]])
+    p2 = PlayerState(name="P2", hand=[pool["Unsubstantiate"]])
+    game = Game(players=[p1, p2])
+    queued = game.queue_from_hand(0, "Shock", target_player_index=1)
+    assert queued.supported, queued.details
+    result = game.cast_from_hand(1, "Unsubstantiate", target_stack_index=0)
+    assert result.supported, result.details
+    # The spell went back to its owner's hand — not the graveyard, so it was
+    # never countered and can be cast again.
+    assert [c.name for c in p1.hand] == ["Shock"]
+    assert not any(c.name == "Shock" for c in p1.graveyard)
+    assert not game.stack
+    assert p2.life == 20, "the returned Shock never resolved"
+
+
+def test_unsubstantiate_bounces_a_creature_when_one_was_chosen(set_pool):
+    pool = set_pool("M21")
+    bear = Permanent(card=pool["Pridemalkin"])
+    p1 = PlayerState(name="P1", hand=[pool["Unsubstantiate"]])
+    p2 = PlayerState(name="P2", battlefield=[bear])
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        0, "Unsubstantiate", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(bear)
+    assert [c.name for c in p2.hand] == ["Pridemalkin"]

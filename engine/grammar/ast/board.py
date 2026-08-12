@@ -102,6 +102,10 @@ class ReturnToZone:
     subject: Recipient
     to: Zone
     from_zone: Zone | None = None
+    # "Return target spell or creature to its owner's hand." (Unsubstantiate):
+    # the chosen object may be on the stack instead of the battlefield, a
+    # union no object filter expresses — so it is a flag on the node.
+    also_stack: bool = False
 
 
 @dataclass(frozen=True)
@@ -120,6 +124,14 @@ class PutOnLibraryTop:
     Voyager.) Its own node rather than a ReturnToZone: the destination is a
     *position* in a zone, which Zone cannot say, and collapsing it to
     "library" would lose where in the library the card lands."""
+    target: Recipient
+
+
+@dataclass(frozen=True)
+class PutOnLibraryBottom:
+    """``Put target card from your graveyard on the bottom of your library.``
+    (Epitaph Golem.) The zone the card leaves rides the target's filter, as
+    every return does; the bottom is what tells it from :class:`PutOnLibraryTop`."""
     target: Recipient
 
 

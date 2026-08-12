@@ -141,7 +141,11 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     # Both words are recorded — a token entering merely tapped, or merely
     # attacking, would be a different effect wearing the same head.
     tapped = attacking = False
-    if stream.accept_phrase("that", "are", "tapped", "and", "attacking"):
+    # Basri Ket prints the plural ("that are"), Falconer Adept the singular
+    # contraction ("that's") — one entry state, two spellings.
+    if stream.accept_phrase("that", "are", "tapped", "and", "attacking") or stream.accept_phrase(
+        "that", "'s", "tapped", "and", "attacking"
+    ):
         tapped = attacking = True
 
     # CR 111.4 — the creating ability may set the token's name. When it does

@@ -369,9 +369,10 @@ class LegalityMixin:
             return self._enumerate_stack_targets(card, spec)
         if kind == "spell_or_permanent":
             # Lace recolor: legal on any permanent on the battlefield or any spell
-            # on the stack. Enumerate both and concatenate.
+            # on the stack. Enumerate both and concatenate. Unsubstantiate narrows
+            # the permanent half to creatures via `permanent_kind`.
             perms = self._enumerate_targets(
-                caster_index, card, {**spec, "kind": "permanent"},
+                caster_index, card, {**spec, "kind": spec.get("permanent_kind", "permanent")},
                 for_cast=for_cast, ability_instruction=ability_instruction,
             )
             return perms + self._enumerate_stack_targets(card, spec)

@@ -73,6 +73,7 @@ from .characteristics import (
 )
 from .board import (
     _lower_phase_out,
+    _lower_put_on_library_bottom,
     _lower_put_on_library_top,
     _lower_put_onto_battlefield,
     _DESTROY_ALL_KINDS,
@@ -188,6 +189,7 @@ __all__ = [
     "_lower_tap",
     "_reads_no_return_restriction",
     "_lower_phase_out",
+    "_lower_put_on_library_bottom",
     "_lower_put_on_library_top",
     "_lower_put_onto_battlefield",
     "_lower_return_to_zone",

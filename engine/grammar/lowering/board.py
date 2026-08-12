@@ -119,6 +119,25 @@ def _lower_delayed_destroy(
     return (OracleInstruction("delayed_destroy_blocked_or_blocker", "", {}),)
 
 
+def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleInstruction, ...]:
+    """"Put target card from your graveyard on the bottom of your library."
+    (Epitaph Golem.) Only that exact scope has a handler: the card comes out
+    of the caster's own graveyard and goes under their own library."""
+    spec = node.target
+    if not isinstance(spec, ast.TargetSpec) or not _is_target(spec):
+        raise LoweringError("the bottoming handler reads one chosen card", node=node)
+    filt = spec.filter
+    if not filt.is_card or filt.zone != "graveyard" or (
+        filt.zone_owner is None or filt.zone_owner.kind != "you"
+    ):
+        raise LoweringError(
+            "the bottoming handler reads the caster's own graveyard", node=node
+        )
+    if filt != ast.ObjectFilter(is_card=True, zone="graveyard", zone_owner=filt.zone_owner):
+        raise LoweringError("no bottoming handler honours this restriction", node=node)
+    return (OracleInstruction("put_graveyard_card_on_library_bottom", "", {}),)
+
+
 def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
     if not isinstance(node.subject, ast.TargetSpec):
         raise LoweringError("tap/untap needs an object target", node=node)
@@ -219,6 +238,13 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
     tell the picker to offer creatures in play for a reanimation spell — the
     exact bug the Animate Dead targeting test pins.
     """
+    # "Return target spell or creature to its owner's hand." (Unsubstantiate):
+    # a spell on the stack goes back to its owner's hand (CR 608.2b never
+    # applies — the spell is the target, not a resolver of it), a creature is
+    # the ordinary bounce. One instruction; the handler branches on which kind
+    # of object was chosen.
+    if node.also_stack:
+        return (OracleInstruction("return_spell_or_creature_to_hand", "", {}),)
     subject = node.subject
     # "Return up to two target creatures to their owners' hands." (Read the
     # Tides' second mode.) Same instruction as the single-target bounce — the

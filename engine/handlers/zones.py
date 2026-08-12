@@ -1196,3 +1196,44 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     )
     game.log.append(f"{caster.name} must choose {amount} card(s) to discard")
     return True, "pending_discard"
+
+
+@effect_handler("put_graveyard_card_on_library_bottom")
+def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put target card from your graveyard on the bottom of your library."
+    (Epitaph Golem.) Honours the chosen graveyard index, else takes the first
+    card — the stale-choice fallback every other graveyard reader uses."""
+    caster = context.caster
+    if not caster.graveyard:
+        game.log.append(f"{context.card.name}: no card in the graveyard to bottom")
+        return True, "resolved"
+    idx = context.target_permanent_index
+    if not (isinstance(idx, int) and 0 <= idx < len(caster.graveyard)):
+        idx = 0
+    card = caster.graveyard.pop(idx)
+    caster.library.append(card)
+    game.log.append(f"{context.card.name}: {card.name} put on the bottom of {caster.name}'s library")
+    return True, "resolved"
+
+
+@effect_handler("return_spell_or_creature_to_hand")
+def return_spell_or_creature_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Return target spell or creature to its owner's hand." (Unsubstantiate.)
+    A chosen spell is unstacked to its owner's hand — not countered, so
+    nothing is binned and no counter triggers fire; a chosen creature is the
+    ordinary bounce."""
+    chosen = context.stack_target
+    if chosen is not None and chosen in game.stack:
+        game.stack.remove(chosen)
+        owner = game.players[chosen.caster_index]
+        owner.hand.append(chosen.card)
+        game.log.append(
+            f"{context.card.name} returned {chosen.card.name} from the stack "
+            f"to {owner.name}'s hand"
+        )
+        return True, "resolved"
+    bounced = game._bounce_target_creature(context.target, context.target_permanent_index)
+    game.log.append(
+        "Returned creature to hand" if bounced else f"{context.card.name}: nothing was returned"
+    )
+    return True, "resolved"

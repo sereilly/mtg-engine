@@ -82,6 +82,7 @@ from .lowering import (
     _lower_pump,
     _lower_put_counter,
     _lower_phase_out,
+    _lower_put_on_library_bottom,
     _lower_put_on_library_top,
     _lower_put_onto_battlefield,
     _lower_regenerate,
@@ -235,6 +236,9 @@ def lower_statement(
 
     if isinstance(statement, ast.PutOnLibraryTop):
         return _lower_put_on_library_top(statement)
+
+    if isinstance(statement, ast.PutOnLibraryBottom):
+        return _lower_put_on_library_bottom(statement)
 
     if isinstance(statement, ast.PutOntoBattlefield):
         return _lower_put_onto_battlefield(statement)

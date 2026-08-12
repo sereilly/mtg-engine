@@ -265,6 +265,11 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     if moved is not None and stream.at_word("on", "onto"):
         if stream.accept_phrase("on", "top", "of", "its", "owner", "'s", "library"):
             return ast.PutOnLibraryTop(moved)
+        # "Put target card from your graveyard on the bottom of your library."
+        # (Epitaph Golem.) The zone the card leaves rides the noun phrase, as
+        # in every return; the destination decides the node.
+        if stream.accept_phrase("on", "the", "bottom", "of", "your", "library"):
+            return ast.PutOnLibraryBottom(moved)
         if stream.accept_word("onto"):
             stream.expect_word("the")
             stream.expect_word("battlefield")

@@ -66,6 +66,27 @@ def _parse_return(stream: TokenStream) -> ast.Statement:
     destination is parsed here.
     """
     stream.expect_word("return")
+    # "Return target spell or creature to its owner's hand." (Unsubstantiate.)
+    # A union across two zones — the stack and the battlefield — which no
+    # object filter expresses, so the template is read whole and the node
+    # carries the stack half as a flag.
+    union_mark = stream.mark()
+    if stream.accept_phrase("target", "spell", "or", "creature"):
+        if stream.accept_word("to"):
+            destination = _parse_zone(stream)
+            if (
+                destination.name == "hand"
+                and destination.owner is not None
+                and destination.owner.kind == "owner"
+            ):
+                return ast.ReturnToZone(
+                    ast.TargetSpec(
+                        "target", ast.ObjectFilter(card_types=("creature",)),
+                        targeted=True,
+                    ),
+                    destination, None, also_stack=True,
+                )
+        stream.reset(union_mark)
     subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected something to return")

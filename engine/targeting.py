@@ -183,6 +183,15 @@ def _narrowing_flags(source: dict) -> dict:
 # want the same creature picker.
 _KIND_TO_SPEC: dict[str, dict] = {
     "recolor_target_from_text": {"kind": "spell_or_permanent"},
+    # Unsubstantiate: a spell on the stack or a creature on the battlefield —
+    # the recolor picker's zones, narrowed to creatures on the permanent half.
+    "return_spell_or_creature_to_hand": {
+        "kind": "spell_or_permanent", "permanent_kind": "creature",
+    },
+    # Epitaph Golem: any card in the activator's own graveyard.
+    "put_graveyard_card_on_library_bottom": {
+        "kind": "graveyard_creature", "own_graveyard_only": True, "any_card": True,
+    },
     "mark_text_modified": {"kind": "permanent"},
     "counter_top_stack_spell": {"kind": "stack"},
     "berserk_pump": {"kind": "creature"},

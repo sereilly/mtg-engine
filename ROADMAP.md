@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 162/285) to the full release line - **137 sets, 33,594
+M21 measured at 165/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -830,6 +830,37 @@ inspection into two smaller obligations, both already idioms:
 **Still in the family:** Crypt Lurker's either/or action cost ("sacrifice a
 creature **or** discard a creature card"), which needs an or-composed cost
 prompt, not just this round's single-action one.
+
+---
+
+## Round 24: two spellings and two destinations
+
+*(2026-08-11, same day.)* M21 **162 → 165**: Falconer Adept, Epitaph Golem,
+Unsubstantiate — chosen from a fresh census of the 123 remaining by first
+failing clause, which also sized the big blocks this round did *not* touch:
+the protection-quality family ("protection from multicolored", "from Demons
+and from Dragons", "from the chosen color") keeps turning up across both the
+keyword gate and the rider parser, and stays deliberately refused until the
+shield machinery models non-colour qualities.
+
+- **Falconer Adept** cost exactly one spelling: Basri Ket's tokens are "that
+  **are** tapped and attacking", the Adept's single Bird is "that**'s**" —
+  the entry-state machinery from the walker round did the rest.
+- **Epitaph Golem** is `PutOnLibraryTop`'s mirror: "put target card from
+  your graveyard on the bottom of your library", scoped exactly to the
+  caster's own graveyard and own library, everything else refusing.
+- **Unsubstantiate** is a union across *zones* no object filter expresses —
+  "target spell or creature" — so the template is read whole and the node
+  carries the stack half as a flag. A chosen spell is unstacked to its
+  owner's hand: not countered, so nothing is binned, no counter hooks fire,
+  and the test pins that the returned Shock never resolved and can be recast.
+  The creature half is the ordinary bounce. The picker is the Lace cycle's
+  spell-or-permanent one, narrowed to creatures on the battlefield half by a
+  new `permanent_kind` flag.
+
+**Next:** the protection-quality family is now the single biggest named
+block; otherwise the remaining triggered-ability and no-handler groups, card
+by card in the support report.
 
 ---
 

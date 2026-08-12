@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 60.4% | 55.9% | 35.2% | 142 |
+| M21 *(measured)* | 285 | 503 | 61.0% | 56.5% | 35.8% | 145 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,14 +34,14 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | ---: | ---: | --- | --- |
 | 275 | 142 | expected a subject |  |
 | 104 | 50 | unrecognized effect verb |  |
-| 65 | 46 | unconsumed text |  |
+| 64 | 45 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 5 | expected a keyword ability |  |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
-| 7 | 4 | expected a quantity |  |
 | 6 | 3 | no lowering for RawEffect |  |
+| 6 | 3 | expected a quantity |  |
 | 5 | 2 | expected 'the number of' in a where-clause |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
@@ -55,8 +55,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2 | 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
-| 2 | 2 | expected a destination zone after 'return' |  |
 | 2 | 2 | expected 'unless defending player controls' |  |
+| 2 | 2 | expected a power/toughness value |  |
 
 ## Cards executing through the grammar
 
@@ -377,8 +377,12 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{T}: Regenerate target Elephant.`
 - **Eliminate**
   - `Destroy target creature or planeswalker with mana value 3 or less.`
+- **Epitaph Golem**
+  - `{2}: Put target card from your graveyard on the bottom of your library.`
 - **Faith's Fetters**
   - `When this Aura enters, you gain 4 life.`
+- **Falconer Adept**
+  - `Whenever this creature attacks, create a 1/1 white Bird creature token with flying that's tapped and attacking.`
 - **Feedback**
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
@@ -1174,6 +1178,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Destroy target Wall. It can't be regenerated.`
 - **Twinblade Assassins**
   - `At the beginning of your end step, if a creature died this turn, draw a card.`
+- **Unsubstantiate**
+  - `Return target spell or creature to its owner's hand.`
 - **Unsummon**
   - `Return target creature to its owner's hand.`
   - `Return target creature to its owner's hand.`
