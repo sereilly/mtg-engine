@@ -1670,6 +1670,85 @@ def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool
     assert game._can_be_targeted(angel, pool["Shock"])
 
 
+# --- Round 29: the conditional-static family ----------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["Predatory Wurm", "Gnarled Sage", "Sigiled Contender", "Tome Anima"],
+)
+def test_round_29_conditional_static_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def test_predatory_wurm_grows_under_its_own_garruk_only(set_pool):
+    pool = set_pool("M21")
+    wurm = Permanent(card=pool["Predatory Wurm"])  # 4/4 printed
+    garruk = Permanent(card=pool["Garruk, Unleashed"], metadata={"loyalty_counters": 4})
+    p1 = PlayerState(name="P1", battlefield=[wurm])
+    p2 = PlayerState(name="P2", battlefield=[garruk])
+    game = Game(players=[p1, p2])
+
+    game._recompute_continuous_effects()
+    assert wurm.effective_power == 4, "an opponent's Garruk is not 'you control'"
+
+    p1.battlefield.append(
+        Permanent(card=pool["Garruk, Unleashed"], metadata={"loyalty_counters": 4})
+    )
+    game._recompute_continuous_effects()
+    assert (wurm.effective_power, wurm.effective_toughness) == (6, 6)
+
+
+def test_gnarled_sage_stands_taller_after_the_second_draw(set_pool):
+    pool = set_pool("M21")
+    sage = Permanent(card=pool["Gnarled Sage"])  # 4/4 printed
+    p1 = PlayerState(name="P1", battlefield=[sage], library=[pool["Island"]] * 3)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.begin_turn_bookkeeping(0)
+
+    game._recompute_continuous_effects()
+    assert sage.effective_toughness == 4
+    assert not game._has_keyword(sage, "vigilance")
+
+    game._draw_with_replacements(p1, 2)
+    game._settle()
+    assert sage.effective_toughness == 6
+    assert game._has_keyword(sage, "vigilance")
+
+
+def test_sigiled_contender_lifelinks_only_while_counted(set_pool):
+    pool = set_pool("M21")
+    contender = Permanent(card=pool["Sigiled Contender"])  # 3/3 printed
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[contender]), PlayerState(name="P2"),
+    ])
+    game._recompute_continuous_effects()
+    assert not game._has_keyword(contender, "lifelink")
+
+    from engine.pt import add_plus1_counters
+
+    add_plus1_counters(contender)
+    game._recompute_continuous_effects()
+    assert game._has_keyword(contender, "lifelink")
+
+
+def test_tome_anima_slips_past_blockers_after_two_draws(set_pool):
+    pool = set_pool("M21")
+    anima = Permanent(card=pool["Tome Anima"])
+    blocker = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", battlefield=[anima], library=[pool["Island"]] * 3)
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+    game.begin_turn_bookkeeping(0)
+
+    assert game._can_block_attacker(blocker, anima), "no draws yet: blockable"
+    game._draw_with_replacements(p1, 2)
+    game._settle()
+    assert not game._can_block_attacker(blocker, anima)
+    assert game.is_unblockable(anima), "the UI tag tracks the same condition"
+
+
 # --- Round 28: cast-type narrowing, filtered intervening-if, second draw ------
 
 

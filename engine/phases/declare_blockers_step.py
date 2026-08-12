@@ -16,6 +16,7 @@ from ..auras import aura_restriction_active
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..pt import add_pt_modifier
+from ..static_bonuses import conditional_static_holds
 from ..trigger_utils import matching_triggers
 
 # Landwalk keyword → the basic land subtype the defender must control for the
@@ -379,6 +380,20 @@ class DeclareBlockersStepMixin:
         attacker_kinds = {i.kind for i in attacker_program.instructions}
 
         if "cant_be_blocked" in attacker_kinds:
+            return False
+
+        # "This creature can't be blocked as long as …" (Tome Anima). Asked
+        # now rather than materialized on a recompute, because the condition
+        # can change between recomputes and blocking is the read that matters.
+        attacker_seat = self.controller_index_of(attacker)
+        if attacker_seat is not None and any(
+            cs.kind == "conditional_static"
+            and cs.payload.get("cant_be_blocked")
+            and conditional_static_holds(
+                self, attacker_seat, attacker, cs.payload.get("condition") or {}
+            )
+            for cs in attacker_program.instructions
+        ):
             return False
 
         attacker_has_flying = self._has_keyword(attacker, "flying")

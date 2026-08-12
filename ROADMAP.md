@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 178/285) to the full release line - **137 sets, 33,594
+M21 measured at 182/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -1082,6 +1082,50 @@ evasion grants: Gnarled Sage, Tome Anima, Sigiled Contender, Radha,
 Predatory Wurm — five cards on one mechanism), then the counter-state
 death trigger (Basri's Lieutenant) and Pridemalkin's counter-filtered
 trample grant.
+
+---
+
+## Round 29: "as long as" becomes one table
+
+*(2026-08-12.)* M21 **178 → 182**: Predatory Wurm, Gnarled Sage, Sigiled
+Contender, Tome Anima. The conditional-static family, generalized rather than
+extended: `static_bonuses.py`'s two legacy kinds baked the condition into the
+instruction kind — one dispatch branch per condition per effect class, which
+is multiplicative — so everything new rides one `conditional_static` kind
+whose condition *and* effect are payload. Three conditions (drawn-N-this-turn
+off the round-28 record, controls-a-`<subtype>`-planeswalker through
+`has_type`, has-a-+1/+1-counter off the round-26 record) crossed with three
+effect classes, and the crossing is free: Gnarled Sage's "+0/+2 and has
+vigilance" is one entry, not a fourth kind.
+
+**Who consumes which half is split by layer, and the split is the design:**
+
+- The **P/T delta** joins the legacy kinds' derived 7c channel in
+  `_refresh_dynamic_creatures` — recompute-written, like
+  `conditional_land_bonus` always was.
+- The **keyword grants** are written by `_recalculate_lord_buffs`, and only
+  by it, because that pass owns the derived-grant channel's clear/rebuild —
+  a grant written from any other pass would be wiped whenever the lord pass
+  runs alone, which it does from six call sites.
+- **"Can't be blocked"** is asked at block-legality time (and by the UI's
+  `is_unblockable` tag), never materialized: the condition can change
+  between recomputes, and the blocking check is the read that matters.
+
+Keywords are gated on `IMPLEMENTED_KEYWORDS` at derivation — a conditional
+grant of a word without behaviour is a grant of nothing, so the line refuses
+instead (the lord-buff table's own rule). Radha stays gated honestly: her
+conditional first strike would derive, but her top-of-library line and
+where-clause pump do not, and her self-noun normalizes to her name rather
+than "this creature" — a sixth condition wording for a card two other lines
+keep unsupported anyway.
+
+Suite 4,818 at 23.3s, every `--check` green, shipped pool 388/388, zero
+hooks, zero ceiling raises.
+
+**Next:** Basri's Lieutenant's counter-state death trigger ("if it had a
++1/+1 counter on it" — last-known information over the round-26 record),
+Pridemalkin's counter-filtered trample grant (a lord-buff subject
+qualifier), and the remaining no-handler tail the support report names.
 
 ---
 

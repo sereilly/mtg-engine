@@ -38,6 +38,7 @@ import re
 from .handlers._common import permanent_matches_filter
 from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle, expand_modal_activated_lines
+from .static_bonuses import conditional_static_holds
 from .targeting import (
     derive_activation_spec,
     derive_cast_spec,
@@ -193,8 +194,18 @@ class LegalityMixin:
             return False
         if perm.metadata.get("cant_be_blocked_until_eot"):
             return True
+        seat = self.controller_index_of(perm)
         return any(
-            i.kind == "cant_be_blocked" for i in compile_card_oracle(perm.effective_card).instructions
+            i.kind == "cant_be_blocked"
+            # "…as long as <condition>" (Tome Anima): unblockable exactly
+            # while the condition holds, so the UI tag tracks the state.
+            or (
+                i.kind == "conditional_static"
+                and i.payload.get("cant_be_blocked")
+                and seat is not None
+                and conditional_static_holds(self, seat, perm, i.payload.get("condition") or {})
+            )
+            for i in compile_card_oracle(perm.effective_card).instructions
         )
 
     def opponents_of(self, player_index: int) -> list[int]:

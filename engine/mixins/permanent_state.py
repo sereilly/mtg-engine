@@ -39,6 +39,7 @@ from ..lord_buffs import (
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..pt import add_plus1_counters, clear_base_pt, set_base_pt
+from ..static_bonuses import conditional_static_holds
 
 
 # Characteristic-defining P/T (CR 604.3 / layer 7a). There is no registry to
@@ -469,6 +470,25 @@ class PermanentStateMixin:
                 _apply_conditional_bonus(
                     permanent, "conditional_untapped_bonus", not permanent.tapped,
                     int(untapped_bonus_instr.payload["power"]), int(untapped_bonus_instr.payload["toughness"]),
+                )
+
+            # The general conditional static (engine/static_bonuses.py): its
+            # P/T half contributes to this same derived 7c channel. The
+            # keyword half lives with the derived grants in
+            # _recalculate_lord_buffs — that pass owns their clear/rebuild —
+            # and "can't be blocked" is asked at block-legality time.
+            for cs in prog.instructions:
+                if cs.kind != "conditional_static":
+                    continue
+                cs_power = int(cs.payload.get("power", 0))
+                cs_toughness = int(cs.payload.get("toughness", 0))
+                if not (cs_power or cs_toughness):
+                    continue
+                holds = conditional_static_holds(
+                    self, seat, permanent, cs.payload.get("condition") or {}
+                )
+                _apply_conditional_bonus(
+                    permanent, "conditional_static", holds, cs_power, cs_toughness
                 )
 
     @staticmethod
@@ -948,6 +968,26 @@ class PermanentStateMixin:
                             add_derived_grant(target_perm, keyword)
                         if flag is not None:
                             _grant_ability(target_perm, flag)
+
+        # Step 3: conditional self-grants — the keyword half of "…as long as
+        # <condition>" (Sigiled Contender's lifelink, Gnarled Sage's
+        # vigilance). Written in this pass because it owns the derived-grant
+        # channel's clear/rebuild: a grant written by any other pass would be
+        # wiped whenever this one runs alone. The P/T half is contributed by
+        # _refresh_dynamic_creatures into its own derived channel.
+        for cs_seat, cs_perm in self.permanents_with_controller():
+            for cs in compile_card_oracle(_eff_card(cs_perm)).instructions:
+                if cs.kind != "conditional_static":
+                    continue
+                cs_keywords = cs.payload.get("keywords") or ()
+                if not cs_keywords:
+                    continue
+                if not conditional_static_holds(
+                    self, cs_seat, cs_perm, cs.payload.get("condition") or {}
+                ):
+                    continue
+                for keyword in cs_keywords:
+                    add_derived_grant(cs_perm, keyword)
 
     # Conditions a lord buff may hang on, keyed by what engine/lord_buffs.py
     # derives. A condition that table can name with no predicate here would be a
