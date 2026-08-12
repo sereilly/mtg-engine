@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 186/285) to the full release line - **137 sets, 33,594
+M21 measured at 187/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -1241,6 +1241,56 @@ hooks, zero ceiling raises.
 until-end-of-turn debuff — "creatures your opponents control get -2/-2",
 whose static twin Waker of Waves also needs), then the remaining no-handler
 tail.
+
+---
+
+## Round 32: the opponent-scoped board, in both readings
+
+*(2026-08-12, same day.)* M21 **186 → 187**: Massacre Wurm. One card by the
+count and three mechanisms by the work, because "creatures your opponents
+control" is printed in both of the readings round 21's note keeps separating
+— with a duration it is a one-shot that locks its set in at resolution
+(CR 611.2c), without one it is a static rebuilt on every recompute
+(CR 611.3a) — and the scope needed spelling out in each.
+
+- **The noun phrase** gained the plural spelling ("your opponents control"),
+  mapping onto the same `opponent` scope the singular "an opponent controls"
+  already set.
+- **The one-shot** (the Wurm's entry) needed a third scope on
+  `buff_creatures_global`, because its existing `all` flag means *every*
+  player's creatures — the caster's own board included. Lowered as an
+  unmistakable `opponents_only` key rather than by widening `all`, and
+  emitted only when the scope is opponents, so every payload written before
+  it is byte-identical.
+- **The static** (Waker of Waves' twin) needed the same distinction in
+  `_recalculate_lord_buffs`, whose scope was a two-way `you`-or-everyone
+  choice. Folded into "everyone", the source would have shrunk its own side.
+- **The death trigger** is its own condition kind rather than a payload
+  narrowing of the round-30 one, because the *scoping* is the whole dispatch:
+  one fires for observers who controlled the dead creature, the other for
+  those who did not. And "that player" is the third piece of last-known
+  information this effort has needed (CR 603.10): a graveyard card cannot say
+  who controlled the permanent, and under Control Magic the controller is not
+  the owner — so the seat is frozen in the death's context beside the counter
+  and power records rounds 30 and 31 put there.
+
+**Waker of Waves stays honestly unsupported** on its other ability
+("Discard this card:" — an activation cost paid from *hand*, which is a
+mechanic with no seam in this engine, not a wording gap). Its anthem line
+derives correctly, so the card compiles to no instructions at all and the
+behaviour cannot be tested through it; the scope's property is pinned with an
+invented card in `tests/rules/test_lord_buffs.py`, where that table's
+properties live, and the per-set test asserts the line derives *and* the card
+still refuses. That pairing is the honest shape for a card blocked elsewhere.
+
+Suite 4,838 at 20.6s, every `--check` green, shipped pool 388/388, zero
+hooks, zero ceiling raises.
+
+**Next:** the no-handler tail card by card — Vito, Thorn of the Dusk Rose
+("whenever you gain life, target opponent loses that much life", the
+life-gain event's mirror), Hooded Blightfang's deathtouch-attacks trigger,
+and the "activate from hand" seam Waker of Waves and Sparkhunter Masticore
+both want.
 
 ---
 

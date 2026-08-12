@@ -1124,18 +1124,25 @@ class GameHelpersMixin:
         died_context = {
             "dead_name": dead_permanent.card.name,
             "had_plus1_counter": int(dead_permanent.metadata.get("plus_counters", 0)) > 0,
+            # Who controlled it, for "that player loses 2 life" (Massacre
+            # Wurm): the graveyard card cannot say, and under Control Magic
+            # the controller is not the owner.
+            "dead_controller": dead_seat,
         }
         for controller_index, observer in self.permanents_with_controller():
             program = compile_card_oracle(observer.card)
-            # "Whenever this creature or another creature you control dies"
-            # (Basri's Lieutenant) — the source's own death counts, so this
-            # condition is collected before the self-exclusion below. Scoped
-            # to observers whose controller controlled the dead creature,
-            # which is what "you control" means.
-            if dead_seat == controller_index:
+            # The two controller-scoped death conditions, which differ only in
+            # *whose* creature died — so the scope is the whole dispatch and
+            # they cannot share a kind. Collected before the self-exclusion
+            # below, because "this creature or another creature you control"
+            # (Basri's Lieutenant) counts the source's own death.
+            scoped = (
+                "creature_you_control_dies" if dead_seat == controller_index
+                else "creature_opponent_controls_dies"
+            )
+            if dead_seat is not None:
                 for trig in matching_triggers(
-                    observer.effective_card,
-                    condition_kinds={"creature_you_control_dies"},
+                    observer.effective_card, condition_kinds={scoped},
                 ):
                     events.append(make_trigger_event(
                         controller_index, observer, trig,

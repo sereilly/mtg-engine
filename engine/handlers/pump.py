@@ -140,7 +140,14 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     toughness_delta = int(instruction.payload.get("toughness", 0))
     attacking_only = bool(instruction.payload.get("attacking_only"))
     blocking_only = bool(instruction.payload.get("blocking_only"))
-    target_players = game.players if instruction.payload.get("all") else [caster]
+    if instruction.payload.get("opponents_only"):
+        # "Creatures your opponents control get -2/-2 until end of turn"
+        # (Massacre Wurm): every opponent's board and none of the caster's.
+        target_players = [
+            game.players[i] for i in game.opponents_of(game.players.index(caster))
+        ]
+    else:
+        target_players = game.players if instruction.payload.get("all") else [caster]
     for player in target_players:
         for perm in list(player.battlefield):
             if not perm.is_creature:

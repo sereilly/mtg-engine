@@ -153,6 +153,28 @@ def test_a_colour_anthem_reaches_only_that_colour():
     assert black.effective_power == 2
 
 
+@pytest.mark.cr("613.4c")
+def test_the_opponent_scope_reaches_every_other_seat_and_none_of_your_own():
+    """"Creatures your opponents control get -1/-0" (Waker of Waves). Read as
+    the everyone-else default it would shrink the source's own side too, which
+    is why the scope is spelled out in the consumer rather than folded in."""
+    mine = Permanent(card=_card("Mine", "Creature — Soldier", ""))
+    theirs = Permanent(card=_card("Theirs", "Creature — Soldier", ""))
+    source = Permanent(card=_card(
+        "Invented Drowner", "Creature — Whale",
+        "Creatures your opponents control get -1/-0.", power="7", toughness="7",
+    ))
+    game, players = _game([mine, source], [theirs])
+
+    assert (theirs.effective_power, theirs.effective_toughness) == (1, 2)
+    assert (mine.effective_power, mine.effective_toughness) == (2, 2)
+    assert source.effective_power == 7, "the source is on its controller's side"
+
+    players[0].battlefield.remove(source)
+    game._recompute_continuous_effects()
+    assert theirs.effective_power == 2, "CR 611.3b: removal is the absent contribution"
+
+
 @pytest.mark.cr("613.4c", "704.5f")
 def test_a_negative_anthem_is_the_same_contribution_with_the_printed_sign():
     """"Other creatures get -1/-1" (Kaervek, the Spiteful) is one more reading

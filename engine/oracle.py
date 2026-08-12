@@ -182,6 +182,11 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_dies",                   r"whenever a land is put into a graveyard from the battlefield"),
     ("creature_dies",               r"whenever a creature dies"),
     ("creature_you_control_dies",   r"whenever a creature you control dies"),
+    # The mirror scope (Massacre Wurm). Its own kind rather than a payload
+    # narrowing, because the dispatcher's *scoping* differs: this one fires for
+    # observers who did **not** control the dead creature.
+    ("creature_opponent_controls_dies",
+     r"whenever a creature an opponent controls dies"),
     # The same set spelled to make the source's own death explicit (Basri's
     # Lieutenant). "This creature" is one of the creatures you control — its
     # controller is who "you" means — so the union names exactly what the

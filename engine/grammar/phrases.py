@@ -30,6 +30,8 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_you_control_dies",
      ("this", "creature", "or", "another", "creature", "you", "control", "dies")),
     ("creature_you_control_dies", ("a", "creature", "you", "control", "dies")),
+    ("creature_opponent_controls_dies",
+     ("a", "creature", "an", "opponent", "controls", "dies")),
     # Longer phrases first: this list is matched in order, so a prefix entry
     # would claim the shorter reading and strand the rest of the clause.
     ("creature_dealt_damage_by_self_dies",

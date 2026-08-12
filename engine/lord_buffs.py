@@ -238,6 +238,13 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
     if words[index:index + 2] == ["you", "control"]:
         controller = "you"
         index += 2
+    # "Creatures **your opponents control** get -1/-0" (Waker of Waves) — the
+    # debuff's mirror of "you control", and a scope the consumer has to know
+    # about explicitly: read as "every player" it would shrink the source's
+    # own creatures too.
+    elif words[index:index + 3] == ["your", "opponents", "control"]:
+        controller = "opponent"
+        index += 3
 
     # "…with a +1/+1 counter on it" (Pridemalkin). Spelled out in full so a
     # differently-worded restriction ("with a -1/-1 counter", "with two or

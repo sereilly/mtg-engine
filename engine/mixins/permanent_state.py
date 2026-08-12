@@ -960,9 +960,16 @@ class PermanentStateMixin:
                     source_perm, buff.condition
                 ):
                     continue
-                scope = (
-                    [ctrl_player] if buff.filter.controller == "you" else self.players
-                )
+                if buff.filter.controller == "you":
+                    scope = [ctrl_player]
+                elif buff.filter.controller == "opponent":
+                    # "Creatures your opponents control get -1/-0" (Waker of
+                    # Waves). Spelled out rather than folded into the
+                    # everyone-else default: read as "every player" the source
+                    # would shrink its own side too.
+                    scope = [p for p in self.players if p is not ctrl_player]
+                else:
+                    scope = self.players
                 keywords = list(buff.keywords)
                 flag = (
                     GRANTED_ACTIVATED_ABILITIES[buff.granted_ability]

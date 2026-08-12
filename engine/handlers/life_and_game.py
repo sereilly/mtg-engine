@@ -98,6 +98,16 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
         # "Each player loses 2 life." (Bad Deal) — the caster too; a player who
         # has already left the game is nobody (CR 800.4a).
         victims = [p for p in game.players if not p.lost]
+    elif recipient == "dead_controller":
+        # "Whenever a creature an opponent controls dies, that player loses 2
+        # life." (Massacre Wurm.) The seat is last-known information the death
+        # recorded (CR 603.10) — a graveyard card cannot say who controlled the
+        # permanent, and Control Magic makes controller and owner differ.
+        seat = (context.trigger_context or {}).get("dead_controller")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded controller, no life lost")
+            return True, "resolved"
+        victims = [game.players[seat]]
     elif recipient == "last_target_controller":
         # "Destroy target creature. Its controller loses 2 life." (Liliana,
         # Death Mage.) The destroy step recorded the controller before the

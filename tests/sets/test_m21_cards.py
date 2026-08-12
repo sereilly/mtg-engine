@@ -1670,6 +1670,75 @@ def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool
     assert game._can_be_targeted(angel, pool["Shock"])
 
 
+# --- Round 32: the opponent-scoped board, in both readings --------------------
+
+
+def test_massacre_wurm_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Massacre Wurm"])
+    assert program.supported, program.reason
+
+
+def test_massacre_wurm_shrinks_only_the_other_side(set_pool):
+    pool = set_pool("M21")
+    mine = Permanent(card=pool["Alpine Watchdog"])        # 2/2, the caster's
+    theirs = Permanent(card=pool["Alpine Watchdog"])      # 2/2, dies to -2/-2
+    sturdy = Permanent(card=pool["Concordia Pegasus"])    # 1/3, survives at -1/1
+    p1 = PlayerState(name="P1", hand=[pool["Massacre Wurm"]], battlefield=[mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs, sturdy])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Massacre Wurm")
+    assert result.supported, result.details
+    game._settle()
+
+    assert game.is_on_battlefield(mine), "the caster's own board is untouched"
+    assert (mine.effective_power, mine.effective_toughness) == (2, 2)
+    assert not game.is_on_battlefield(theirs), "a 2/2 dies to -2/-2"
+    assert (sturdy.effective_power, sturdy.effective_toughness) == (-1, 1)
+    # And the death trigger it just caused drains that creature's controller.
+    assert p2.life == 18
+    assert p1.life == 20
+
+
+def test_massacre_wurm_drains_the_dead_creatures_controller(set_pool):
+    pool = set_pool("M21")
+    wurm = Permanent(card=pool["Massacre Wurm"])
+    mine = Permanent(card=pool["Alpine Watchdog"])
+    theirs = Permanent(card=pool["Alpine Watchdog"])
+    p1 = PlayerState(name="P1", battlefield=[wurm, mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+
+    # The Wurm's controller losing a creature triggers nothing.
+    game._permanent_to_graveyard(p1, mine)
+    game.remove_from_battlefield(mine)
+    game._settle()
+    assert (p1.life, p2.life) == (20, 20)
+
+    game._permanent_to_graveyard(p2, theirs)
+    game.remove_from_battlefield(theirs)
+    game._settle()
+    assert p2.life == 18, "that player is the dead creature's controller"
+    assert p1.life == 20
+
+
+def test_waker_of_waves_static_line_reads_even_though_the_card_does_not(set_pool):
+    """Its anthem line derives; the card stays unsupported on its other
+    ability ("Discard this card:" — activating from hand, a mechanic the
+    engine has no seam for), so it compiles to no instructions at all. The
+    behaviour of the scope is pinned with an invented card in
+    tests/rules/test_lord_buffs.py, where the table's properties live."""
+    from engine.lord_buffs import lord_buff_for
+    from engine.oracle import normalize_creature_line
+
+    buff = lord_buff_for(
+        normalize_creature_line("Creatures your opponents control get -1/-0.")
+    )
+    assert buff is not None and buff.filter.controller == "opponent"
+    assert (buff.power, buff.toughness) == (-1, 0)
+    assert not compile_card_oracle(set_pool("M21")["Waker of Waves"]).supported
+
+
 # --- Round 31: a counter placement becomes an event ---------------------------
 
 

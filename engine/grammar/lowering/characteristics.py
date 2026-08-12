@@ -90,6 +90,13 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         if filt.colors:
             payload["color"] = filt.colors[0]
         payload["all"] = filt.controller != "you"
+        # "Creatures your opponents control get -2/-2 until end of turn"
+        # (Massacre Wurm's entry). `all` cannot say this: it means "every
+        # player's", which would debuff the caster's own board too. Emitted
+        # only when the scope is opponents, so every payload written before
+        # this key existed is byte-identical.
+        if filt.controller == "opponent":
+            payload["opponents_only"] = True
         if filt.attacking:
             payload["attacking_only"] = True
         if filt.blocking:

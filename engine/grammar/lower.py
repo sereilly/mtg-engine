@@ -160,7 +160,7 @@ def lower_statement(
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
-        return _lower_lose_life(statement)
+        return _lower_lose_life(statement, event)
     if isinstance(statement, ast.Destroy):
         return _lower_destroy(statement, event)
     if isinstance(statement, (ast.Tap, ast.Untap)):

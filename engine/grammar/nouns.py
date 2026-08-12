@@ -417,6 +417,12 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         if stream.accept_phrase("an", "opponent", "controls"):
             controller = "opponent"
             continue
+        # "creatures **your opponents** control" (Massacre Wurm, Waker of
+        # Waves) — the plural spelling of the same scope: every opponent's
+        # creatures, and none of the controller's own.
+        if stream.accept_phrase("your", "opponents", "control"):
+            controller = "opponent"
+            continue
         # "each creature target opponent controls" (Teferi, Timeless Voyager's
         # −8): the controller is a chosen player — the spell targets the
         # opponent, not the creatures.

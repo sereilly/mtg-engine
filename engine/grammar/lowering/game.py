@@ -255,7 +255,9 @@ def _lower_win_game(node: ast.WinGame) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("player_wins_game", "", {}),)
 
 
-def _lower_lose_life(node: ast.LoseLife) -> tuple[OracleInstruction, ...]:
+def _lower_lose_life(
+    node: ast.LoseLife, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     payload: dict[str, object] = {"amount": _amount_payload(node.amount)}
     # "Each opponent who can't loses 3 life." (Liliana, Waker of the Dead) —
     # attached by the sentence-loop rider to a preceding each-player discard,
@@ -283,6 +285,19 @@ def _lower_lose_life(node: ast.LoseLife) -> tuple[OracleInstruction, ...]:
             "owner": (filt.zone_owner.kind if filt.zone_owner else "owner"),
             "card_types": list(filt.card_types),
         }
+        return (OracleInstruction("target_loses_life", "", payload),)
+    # "Whenever a creature an opponent controls dies, **that player** loses 2
+    # life." (Massacre Wurm.) "That player" is the dead creature's controller,
+    # which no board read can recover once it is in a graveyard — so the seat
+    # is last-known information the fire site records, exactly as Basri's
+    # Lieutenant's counter clause and Conclave Mentor's power are. Only under
+    # this event: anywhere else "that player" is the ordinary chosen target
+    # below.
+    if (
+        node.player.kind == "that_player"
+        and event == "creature_opponent_controls_dies"
+    ):
+        payload["recipient"] = "dead_controller"
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind in ("target_player", "target_opponent", "that_player"):
         return (OracleInstruction("target_loses_life", "", payload),)
