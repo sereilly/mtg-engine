@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 58.8% | 53.5% | 32.8% | 131 |
+| M21 *(measured)* | 285 | 503 | 59.6% | 54.9% | 34.2% | 137 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,9 +32,9 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 278 | 145 | expected a subject |  |
+| 275 | 142 | expected a subject |  |
 | 107 | 53 | unrecognized effect verb |  |
-| 67 | 48 | unconsumed text |  |
+| 66 | 47 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 5 | expected a keyword ability |  |
@@ -51,12 +51,12 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | no tap-or-untap handler honours this restriction |  |
-| 3 | 3 | no return handler honours this restriction |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
 | 2 | 2 | expected a destination zone after 'return' |  |
+| 2 | 2 | expected 'unless defending player controls' |  |
 
 ## Cards executing through the grammar
 
@@ -100,6 +100,9 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Black creatures get +1/+1.`
   - `Black creatures get +1/+1.`
   - `Black creatures get +1/+1.`
+- **Barrin, Tolarian Archmage**
+  - `When Barrin enters, return up to one other target creature or planeswalker to its owner's hand.`
+  - `At the beginning of your end step, if a permanent was put into your hand from the battlefield this turn, draw a card.`
 - **Basalt Monolith**
   - `{T}: Add {C}{C}{C}.`
   - `{3}: Untap this artifact.`
@@ -610,6 +613,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Library of Alexandria**
   - `{T}: Add {C}.`
   - `{T}: Draw a card. Activate only if you have exactly seven cards in hand.`
+- **Life Goes On**
+  - `You gain 4 life. If a creature died this turn, you gain 8 life instead.`
 - **Lifeforce**
   - `{G}{G}: Counter target black spell.`
   - `{G}{G}: Counter target black spell.`
@@ -884,6 +889,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Target blocking creature gets +7/+7 until end of turn.`
 - **Rise Again**
   - `Return target creature card from your graveyard to the battlefield.`
+- **Roaming Ghostlight**
+  - `When this creature enters, return up to one target non-Spirit creature to its owner's hand.`
 - **Rock Hydra**
   - `{R}: Prevent the next 1 damage that would be dealt to this creature this turn.`
   - `{R}{R}{R}: Put a +1/+1 counter on this creature. Activate only during your upkeep.`
@@ -926,6 +933,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Remove a corpse counter from this creature: Regenerate this creature.`
   - `At the beginning of each end step, put a corpse counter on this creature for each creature that died this turn.`
   - `Remove a corpse counter from this creature: Regenerate this creature.`
+- **Scorching Dragonfire**
+  - `Scorching Dragonfire deals 3 damage to target creature or planeswalker. If that creature or planeswalker would die this turn, exile it instead.`
 - **Scoured Barrens**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {W} or {B}.`
@@ -968,6 +977,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Destroy target artifact.`
 - **Shatterstorm**
   - `Destroy all artifacts. They can't be regenerated.`
+- **Shipwreck Dowser**
+  - `When this creature enters, return target instant or sorcery card from your graveyard to your hand.`
 - **Shivan Dragon**
   - `{R}: This creature gets +1/+0 until end of turn.`
   - `{R}: This creature gets +1/+0 until end of turn.`
@@ -1011,6 +1022,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
+- **Soul Sear**
+  - `Soul Sear deals 5 damage to target creature or planeswalker. That permanent loses indestructible until end of turn.`
 - **Sparkhunter Masticore**
   - `{1}: This creature deals 1 damage to target planeswalker.`
   - `{3}: This creature gains indestructible until end of turn.`

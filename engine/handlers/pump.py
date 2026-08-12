@@ -12,7 +12,7 @@ from ._common import (
     resolve_target_permanents,
 )
 from .registry import effect_handler
-from ..keywords import grant_keyword
+from ..keywords import grant_keyword, remove_keyword
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -384,6 +384,28 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
         grant_keyword(target_creature, keyword, until_eot=True)
     game.log.append(
         f"{target_creature.card.name} gains {' and '.join(keywords)} until end of turn ({card.name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("remove_target_keyword_until_eot")
+def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"It loses indestructible until end of turn." (Soul Sear — the pronoun
+    binds the damage sentence's target.) `remove_keyword` puts the removal
+    into layer 6, so it beats an older grant by timestamp and expires at
+    cleanup with everything else until-end-of-turn."""
+    card = context.card
+    # The damage target may be a planeswalker, so no creature predicate: the
+    # removal reaches whatever permanent the spell chose.
+    target = resolve_target_permanent(game, context, predicate=lambda p: True)
+    if target is None:
+        game.log.append(f"{card.name}: no valid target to strip")
+        return True, "resolved"
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    for keyword in keywords:
+        remove_keyword(target, keyword, until_eot=True)
+    game.log.append(
+        f"{target.card.name} loses {' and '.join(keywords)} until end of turn ({card.name})"
     )
     return True, "resolved"
 

@@ -8,6 +8,8 @@ Control changes lower to a *contribution* rather than a move — see
 owner.
 """
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
@@ -241,7 +243,20 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
         raise LoweringError("no handler for returning a non-targeted object", node=node)
     assert isinstance(subject, ast.TargetSpec)
     filt = subject.filter
-    if _reads_no_return_restriction(filt):
+
+    # The narrowings the *bounce* path enforces at resolution (the payload
+    # filter reaches the handler's predicate): "non-Spirit creature" (Roaming
+    # Ghostlight), "other target creature or planeswalker" (Barrin, Tolarian
+    # Archmage). Stripped before the blanket refusal below so only these two —
+    # not every adjective — pass; the graveyard handlers still see the full
+    # filter and keep their own gates.
+    bounce_extras = (filt.excluded_subtypes, filt.other_than_source)
+    bare_for_gate = dataclasses.replace(
+        filt, excluded_subtypes=(), other_than_source=False
+    )
+    if node.from_zone is None and _reads_no_return_restriction(bare_for_gate):
+        raise LoweringError("no return handler honours this restriction", node=node)
+    if node.from_zone is not None and _reads_no_return_restriction(filt):
         raise LoweringError("no return handler honours this restriction", node=node)
 
     source, destination = node.from_zone, node.to
@@ -260,9 +275,21 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
                 raise LoweringError("this handler returns cards to your own hand", node=node)
             # The named card type is a filter the handler applies, so it is
             # carried rather than collapsed: reading "artifact card" as "any
-            # card" would let Reconstruction return a creature.
+            # card" would let Reconstruction return a creature. A *union*
+            # ("instant or sorcery card", Shipwreck Dowser) travels as its own
+            # additive key, so Raise Dead's payload stays byte-identical.
             if len(filt.card_types) > 1:
-                raise LoweringError("this handler reads one card type", node=node)
+                return (
+                    OracleInstruction(
+                        "return_creature_from_graveyard_to_hand",
+                        "",
+                        {
+                            "any_card": False,
+                            "card_type": None,
+                            "card_types": list(filt.card_types),
+                        },
+                    ),
+                )
             card_type = filt.card_types[0] if filt.card_types else None
             return (
                 OracleInstruction(
@@ -292,8 +319,19 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
             raise LoweringError("the bounce handler returns a permanent to its owner", node=node)
         if filt.is_card:
             raise LoweringError("no handler bounces a card that is not in play", node=node)
-        if filt.card_types != ("creature",):
+        if set(filt.card_types) not in ({"creature"}, {"creature", "planeswalker"}):
             raise LoweringError("the bounce handler only returns creatures", node=node)
+        if any(bounce_extras) or filt.card_types != ("creature",):
+            # A narrowed or widened bounce carries what the handler's
+            # predicate and the picker must both honour; the bare Unsummon
+            # payload stays byte-identical on the branch below.
+            payload: dict[str, object] = {"filter": {
+                key: value
+                for key, value in _filter_payload(filt).items()
+                if key in ("type_filter", "exclude_subtypes", "exclude_self")
+            }}
+            _describe_targets(payload, subject)
+            return (OracleInstruction("bounce_target_creature", "", payload),)
         return (OracleInstruction("bounce_target_creature", "", {}),)
 
     raise LoweringError("no handler for this zone change", node=node)

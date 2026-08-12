@@ -151,6 +151,7 @@ class TurnManagementMixin:
         self.active_player_index = player_index
         self.lands_played_this_turn[player_index] = 0
         self.creatures_died_this_turn = 0
+        self.permanents_to_hand_this_turn = {}
         # Aladdin's Lamp: an armed "next draw this turn" replacement expires
         # with the turn it was activated on.
         self.lamp_draw_replacements = {}

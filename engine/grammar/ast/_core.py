@@ -195,6 +195,10 @@ class ObjectFilter:
             payload["blocking_only"] = True
         if self.other_than_source:
             payload["exclude_self"] = True
+        # "non-Spirit creature" (Roaming Ghostlight). Emitted only when set, so
+        # every payload written before this key existed is byte-identical.
+        if self.excluded_subtypes:
+            payload["exclude_subtypes"] = list(self.excluded_subtypes)
         # "with mana value 3 or less" (Eliminate). Only a literal bound has a
         # payload form; a variable one ("mana value X") is left unemitted so
         # _filter_payload refuses the line rather than dropping the bound.
@@ -353,8 +357,18 @@ class RawCondition:
     text: str
 
 
+@dataclass(frozen=True)
+class ReturnedToHandThisTurn:
+    """"if a permanent was put into your hand from the battlefield this turn"
+    (Barrin, Tolarian Archmage's end-step trigger, CR 603.4 intervening-if).
+
+    A history, like :class:`DiedThisTurn`: no read of the board can answer it,
+    so the game keeps a per-seat counter the bounce paths feed."""
+
+
 Condition = Union[
-    Controls, IsState, DiedThisTurn, LifeGainedThisTurn, PaidCost, RawCondition
+    Controls, IsState, DiedThisTurn, LifeGainedThisTurn, PaidCost, RawCondition,
+    ReturnedToHandThisTurn,
 ]
 
 

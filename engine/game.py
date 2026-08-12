@@ -244,6 +244,11 @@ class Game(
     # without_keywords}, "source_name"}. Read by _can_block_attacker (which is
     # also what the legality enumerator asks), swept at cleanup.
     blocking_restrictions_until_eot: list = field(default_factory=list)
+    # How many permanents each seat has had put into their hand from the
+    # battlefield this turn — the history Barrin, Tolarian Archmage's end-step
+    # intervening-if reads. Keyed by owner seat (the hand the card landed in),
+    # fed by the bounce paths, reset with the other per-turn counters.
+    permanents_to_hand_this_turn: dict = field(default_factory=dict)
     # Nafs Asp: "that player loses N life at the beginning of their next draw
     # step unless they pay {cost} before that draw step." Each entry is
     # {"player_index", "amount", "cost", "source_name"}. Populated by the

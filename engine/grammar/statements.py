@@ -364,6 +364,16 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
         _parse_duration(stream)
         return ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))
 
+    # "if a permanent was put into your hand from the battlefield this turn"
+    # (Barrin, Tolarian Archmage). Every word is read: "from the battlefield"
+    # is what keeps a draw or a graveyard return from satisfying it.
+    if stream.accept_phrase(
+        "a", "permanent", "was", "put", "into", "your", "hand",
+        "from", "the", "battlefield",
+    ):
+        _parse_duration(stream)
+        return ast.ReturnedToHandThisTurn()
+
     # "it is untapped" and "it's untapped" are the same condition; the lexer
     # splits the contraction into "it" + "'s", so both spellings are listed
     # rather than the apostrophe being skipped wherever it turns up.

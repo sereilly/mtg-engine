@@ -956,6 +956,10 @@ class EffectsMixin:
         owner_idx = self.owner_index_of(chosen)
         owner = self.players[owner_idx] if owner_idx is not None else target
         owner.hand.append(chosen.card)
+        if owner_idx is not None:
+            self.permanents_to_hand_this_turn[owner_idx] = (
+                self.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
+            )
         # Identity: ``remove`` would bounce a look-alike instead of the chosen one.
         self.remove_from_battlefield(chosen)
         return True

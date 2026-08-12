@@ -323,7 +323,11 @@ def _graveyard_return_spec(payload: dict) -> dict:
     it.
     """
     spec: dict = {"kind": "graveyard_creature", "own_graveyard_only": True}
-    if payload.get("any_card"):
+    if payload.get("card_types"):
+        # "target instant or sorcery card" (Shipwreck Dowser) — the union the
+        # round-19 graveyard picker already tests by primary type.
+        spec["card_types"] = list(payload["card_types"])
+    elif payload.get("any_card"):
         spec["any_card"] = True
     elif payload.get("card_type") not in (None, "creature"):
         spec["card_type"] = payload["card_type"]

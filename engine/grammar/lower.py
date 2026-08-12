@@ -70,6 +70,7 @@ from .lowering import (
     _lower_for_each,
     _lower_gain_control,
     _lower_gain_keyword,
+    _lower_lose_keyword,
     _lower_gain_life,
     _lower_look_at_hand,
     _lower_lose_game,
@@ -146,6 +147,8 @@ def lower_statement(
         return _lower_set_base_pt(statement)
     if isinstance(statement, ast.GainKeyword):
         return _lower_gain_keyword(statement)
+    if isinstance(statement, ast.LoseKeyword):
+        return _lower_lose_keyword(statement)
     if isinstance(statement, ast.PutCounter):
         return _lower_put_counter(statement)
     if isinstance(statement, ast.RemoveCounter):
@@ -395,6 +398,8 @@ def _lower_condition(condition: ast.Condition) -> dict[str, object]:
         return {"kind": "is_state", "state": condition.state, "negated": condition.negated}
     if isinstance(condition, ast.DiedThisTurn):
         return {"kind": "died_this_turn", "filter": condition.filter.to_payload()}
+    if isinstance(condition, ast.ReturnedToHandThisTurn):
+        return {"kind": "returned_to_hand_this_turn"}
     if isinstance(condition, ast.LifeGainedThisTurn):
         # The seat rides the payload rather than being baked into the kind, so
         # "if an opponent gained…" is the same condition with a different `who`

@@ -178,6 +178,11 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         return False
     if exclude_types and any(perm.has_type(t) for t in exclude_types):
         return False
+    # "non-Spirit creature" (Roaming Ghostlight). has_type, like the positive
+    # subtype test above, so a granted or layer-4 subtype excludes too.
+    exclude_subtypes = payload.get("exclude_subtypes") or []
+    if exclude_subtypes and any(perm.has_type(s) for s in exclude_subtypes):
+        return False
     # "with mana value 3 or less" (Eliminate). CR 202.3: a permanent's mana
     # value comes from its mana cost — the ingested cmc; a token's is 0.
     mana_value = payload.get("mana_value")

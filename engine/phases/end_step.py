@@ -27,12 +27,19 @@ END_STEP_DEATH_COUNTER_KINDS = frozenset({
 })
 END_STEP_EMPTY_BOARD_KINDS = frozenset({"sacrifice_if_no_creatures"})
 END_STEP_DID_NOT_ATTACK_KINDS = frozenset({"end_step_damage_if_not_attacked"})
+# Kinds fired only through a CR 603.4 intervening-if the grammar lowered onto
+# the payload (Barrin, Tolarian Archmage's "if a permanent was put into your
+# hand from the battlefield this turn, draw a card"). The gate is evaluated
+# here — a false condition keeps the trigger off the stack entirely — and
+# again at resolution by the payload reader in resolve_top_of_stack.
+END_STEP_INTERVENING_IF_KINDS = frozenset({"draw_controller_cards"})
 
 #: Every instruction kind an ``end_step`` trigger can be dispatched on.
 END_STEP_DISPATCHED_KINDS = (
     END_STEP_DEATH_COUNTER_KINDS
     | END_STEP_EMPTY_BOARD_KINDS
     | END_STEP_DID_NOT_ATTACK_KINDS
+    | END_STEP_INTERVENING_IF_KINDS
 )
 
 
@@ -136,6 +143,34 @@ class EndStepMixin:
             instruction_kinds=END_STEP_DID_NOT_ATTACK_KINDS,
             players=[self.players[player_index]],
         ):
+            events.append(make_trigger_event(controller_index, permanent, trig))
+
+        # A trigger whose whole gate is a CR 603.4 intervening-if (Barrin,
+        # Tolarian Archmage). Scoped like Erg Raiders to this end step's own
+        # player — the printed condition says "your". A kind in this set with
+        # no gate on its payload is not enqueued at all: this block exists
+        # *because* of the condition, and an unconditional trigger lowering to
+        # one of these kinds should be a new block, not a free ride.
+        from ..game_types import OracleExecutionContext
+        from ..handlers.control_flow import evaluate_condition
+
+        for controller_index, permanent, trig in iter_triggered_abilities(
+            self,
+            condition_kinds={"end_step"},
+            instruction_kinds=END_STEP_INTERVENING_IF_KINDS,
+            players=[self.players[player_index]],
+        ):
+            gate = (trig.instruction.payload or {}).get("intervening_if")
+            if gate is None:
+                continue
+            fire_context = OracleExecutionContext(
+                caster=self.players[controller_index],
+                target=self.players[controller_index],
+                card=permanent.card,
+                source_permanent=permanent,
+            )
+            if not evaluate_condition(self, fire_context, gate):
+                continue
             events.append(make_trigger_event(controller_index, permanent, trig))
 
         # Emblems (CR 114.4): "At the beginning of your end step, …" (Garruk,

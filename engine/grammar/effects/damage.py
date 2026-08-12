@@ -178,9 +178,32 @@ def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None
 
     if stream.accept_phrase("if", "it", "'s", "a", "creature"):
         stream.accept_punct(",")
-    elif not stream.at_word("it"):
+    elif not stream.at_word("it", "if"):
         stream.reset(mark)
         return None
+
+    def _that_object_would_die() -> bool:
+        """``if that creature [or planeswalker] would die`` — the modern
+        templating of Disintegrate's ``if it would die`` (Scorching
+        Dragonfire). "That <types>" names the damage target the sentence
+        before this one chose; the type words are consumed against the same
+        closed set the noun parser reads, so a rider on something never
+        damaged cannot be claimed."""
+        probe = stream.mark()
+        if not stream.accept_word("that"):
+            return False
+        if not stream.accept_word("creature", "planeswalker", "permanent"):
+            stream.reset(probe)
+            return False
+        if stream.accept_word("or") and not stream.accept_word(
+            "creature", "planeswalker", "permanent"
+        ):
+            stream.reset(probe)
+            return False
+        if not stream.accept_phrase("would", "die"):
+            stream.reset(probe)
+            return False
+        return True
 
     while True:
         if stream.accept_phrase("it", "can't", "be", "regenerated") or stream.accept_phrase(
@@ -188,7 +211,14 @@ def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None
         ):
             _parse_duration(stream)
             no_regen = True
-        elif stream.accept_phrase("if", "it", "would", "die"):
+        else:
+            probe = stream.mark()
+            matched_die = stream.accept_phrase("if", "it", "would", "die")
+            if not matched_die and stream.accept_word("if"):
+                matched_die = _that_object_would_die()
+            if not matched_die:
+                stream.reset(probe)
+                break
             _parse_duration(stream)
             stream.accept_punct(",")
             if stream.accept_phrase("exile", "it", "instead"):
@@ -196,8 +226,6 @@ def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None
             else:
                 stream.reset(mark)
                 return None
-        else:
-            break
         stream.accept_punct(",")
         stream.accept_word("and")
 

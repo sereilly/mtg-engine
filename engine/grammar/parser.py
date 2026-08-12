@@ -54,6 +54,7 @@ from .effects import (
     _parse_activation_restriction,
     _parse_damage_rider_sentence,
     _parse_gains,
+    _parse_loses,
     _parse_unpaid_penalty_sentence,
 )
 from .statements import (
@@ -402,6 +403,15 @@ def _statement_bound_target(statement: ast.Statement) -> ast.TargetSpec | None:
             if found is not None:
                 return found
         return None
+    # "Soul Sear deals 5 damage to target creature or planeswalker. It loses
+    # indestructible…" — the damage sentence's chosen recipient is what the
+    # pronoun names. Recipients live in their own tuple on DealDamage, which
+    # the field scan below cannot see.
+    if isinstance(statement, ast.DealDamage):
+        for recipient in reversed(statement.recipients):
+            if isinstance(recipient, ast.TargetSpec) and recipient.quantifier in ("target", "up_to"):
+                return recipient
+        return None
     for field_name in ("subject", "target"):
         candidate = getattr(statement, field_name, None)
         if isinstance(candidate, ast.TargetSpec) and candidate.quantifier in ("target", "up_to"):
@@ -425,8 +435,34 @@ def _parse_pronoun_grant_rider(
     if target is None:
         return None
     mark = stream.mark()
+    # "It gains …" / "That permanent loses …" (Soul Sear) — two spellings of
+    # the same back-reference. The noun spelling is only claimed when a
+    # grant/loss verb follows, so "that creature's controller …" (a different
+    # referent) keeps its own reading.
     if not stream.accept_word("it"):
-        return None
+        if not stream.accept_word("that"):
+            return None
+        if not stream.accept_word("creature", "permanent", "planeswalker"):
+            stream.reset(mark)
+            return None
+        if not stream.at_word("gains", "gain", "loses", "lose"):
+            stream.reset(mark)
+            return None
+    # "It loses indestructible until end of turn." (Soul Sear) — the negative
+    # half of the same pronoun binding: the previous sentence's target loses a
+    # keyword, not the ability's source.
+    if stream.at_word("loses", "lose"):
+        try:
+            loss = _parse_loses(stream, target)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if not isinstance(loss, ast.LoseKeyword):
+            # "It loses 2 life" would be a pronoun for a player, which this
+            # binding cannot mean — leave the sentence to fail loudly.
+            stream.reset(mark)
+            return None
+        return loss
     if not stream.at_word("gains", "gain"):
         stream.reset(mark)
         return None
@@ -479,6 +515,42 @@ def _parse_exile_instead_rider(
         stream.reset(mark)
         return False
     steps[-1] = replace(last, exile_instead=True)
+    return True
+
+
+def _parse_conditional_instead_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """``You gain 4 life. If a creature died this turn, you gain 8 life
+    instead.`` (Life Goes On.)
+
+    The second sentence *replaces* the first when its condition holds, so the
+    pair folds into one ``Conditional`` — then the bigger gain, otherwise the
+    printed base. Parsed apart, the two sentences would gain 12 life on a
+    death; the "instead" is the whole content of the sentence, so it is
+    required, and only a same-shaped statement may replace the last step.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.GainLife):
+        return False
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        return False
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    try:
+        replacement = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    if not isinstance(replacement, ast.GainLife) or not stream.accept_word("instead"):
+        stream.reset(mark)
+        return False
+    steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
     return True
 
 
@@ -545,6 +617,8 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
                 steps.append(who_cant)
                 continue
             if _parse_exile_instead_rider(stream, steps):
+                continue
+            if _parse_conditional_instead_rider(stream, steps):
                 continue
             # A trailing "Activate only during your upkeep." belongs to the
             # ability, not to the effect. Consuming it here keeps the line

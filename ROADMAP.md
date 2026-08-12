@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 151/285) to the full release line - **137 sets, 33,594
+M21 measured at 157/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -719,6 +719,52 @@ instead, and the targeted-several-tap refusal keeps its test.
 **Next:** the "unsupported triggered ability" block (26 M21 cards) and the
 "no handler implements this spell's effect" tail (22), which the support
 report now names card by card.
+
+---
+
+## Round 21: bounce and burn — riders, unions, and one history
+
+*(2026-08-11, same day.)* M21 **151 → 157**: Roaming Ghostlight, Barrin
+Tolarian Archmage, Shipwreck Dowser, Scorching Dragonfire, Soul Sear, Life
+Goes On — the first slice of the triggered-ability block and the no-handler
+tail, chosen because they share machinery in pairs:
+
+- **Type unions reach planeswalkers.** "Target creature or planeswalker" was
+  already parsed for damage; the bounce and the graveyard return learned the
+  same shape. The bounce lowering admits exactly two narrowings beyond the
+  bare creature ("non-Spirit", "other … creature or planeswalker") and
+  carries them as payload the handler *enforces* — resolved strictly, no
+  fallback scan, because "up to one" legally names nothing and a decayed
+  choice must bounce nothing rather than something else. `ObjectFilter`
+  learned to emit `exclude_subtypes` and the shared matcher to test it, by
+  `has_type` so a granted subtype excludes too.
+- **Two rider spellings.** Disintegrate's "if it would die" grew the modern
+  "if **that creature or planeswalker** would die this turn, exile it
+  instead" (Scorching Dragonfire — the exile-if-dies machinery existed end to
+  end; only the parser refused the spelling). And the pronoun grant rider
+  ("It gains …") got its negative twin: "**That permanent loses**
+  indestructible until end of turn" (Soul Sear) binds to the damage
+  sentence's target — `_statement_bound_target` learned to look in
+  `DealDamage.recipients` — and lowers onto `remove_keyword`, layer 6's
+  removal, so it beats an older grant by timestamp and expires at cleanup.
+- **One new history.** Barrin's end-step intervening-if reads "a permanent
+  was put into your hand from the battlefield this turn" — a per-seat counter
+  the bounce paths feed, reset with the other per-turn counters. Bouncing the
+  *opponent's* walker does not satisfy it (CR 400.3: the card goes to its
+  owner's hand), which the test pins because it is exactly the mistake a
+  reader of the card would make. His trigger is also the first card through
+  the resolution-side CR 603.4 payload gate round 16 left "armed for the
+  first card that needs it" — and it exposed that `resolve_end_step`'s
+  closed dispatch table never fired it: a new `END_STEP_INTERVENING_IF_KINDS`
+  block evaluates the gate at fire time, scoped to the end step's own player.
+- **Life Goes On** is a fold, not a sequence: "If a creature died this turn,
+  you gain 8 life **instead**" replaces the sentence before it, so the rider
+  parser rewrites the pair into one `Conditional` — parsed apart, the two
+  sentences would stack to 12.
+
+**Next:** unchanged — the remaining triggered-ability block (20 cards now),
+led by the "you may … If you do, …" trigger family (Jeskai Elder, Crypt
+Lurker, Dire Fleet Warmonger), and the rest of the no-handler tail.
 
 ---
 

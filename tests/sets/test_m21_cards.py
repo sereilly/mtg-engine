@@ -1261,3 +1261,168 @@ def test_destructive_tampering_second_mode_grounds_blockers_for_the_turn(set_poo
     game.resolve_cleanup_step(0)
     assert not game.blocking_restrictions_until_eot
     assert game._can_block_attacker(grounded, attacker) is True
+
+
+# --- Round 21: bounce and burn — riders, unions, and one history ------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Roaming Ghostlight", "Barrin, Tolarian Archmage", "Shipwreck Dowser",
+        "Scorching Dragonfire", "Soul Sear", "Life Goes On",
+    ],
+)
+def test_round_21_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def test_scorching_dragonfire_exiles_what_it_kills(set_pool):
+    pool = set_pool("M21")
+    victim = Permanent(card=pool["Concordia Pegasus"])  # 1/3
+    p1 = PlayerState(name="P1", hand=[pool["Scorching Dragonfire"]])
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        0, "Scorching Dragonfire", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(victim)
+    assert any(c.name == "Concordia Pegasus" for c in p2.exile)
+    assert not any(c.name == "Concordia Pegasus" for c in p2.graveyard)
+
+
+def test_soul_sear_strips_indestructible_before_the_damage_kills(set_pool):
+    from engine.keywords import grant_keyword
+
+    pool = set_pool("M21")
+    tough = Permanent(card=pool["Concordia Pegasus"])
+    grant_keyword(tough, "indestructible")
+    p1 = PlayerState(name="P1", hand=[pool["Soul Sear"]])
+    p2 = PlayerState(name="P2", battlefield=[tough])
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        0, "Soul Sear", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(tough), (
+        "5 damage kills a 1/3 whose indestructible was removed by the rider"
+    )
+
+
+def test_roaming_ghostlight_cannot_bounce_a_spirit(set_pool):
+    pool = set_pool("M21")
+    spirit = Permanent(card=pool["Roaming Ghostlight"])   # a Spirit itself
+    pegasus = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", hand=[pool["Roaming Ghostlight"]])
+    p2 = PlayerState(name="P2", battlefield=[spirit, pegasus])
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        0, "Roaming Ghostlight", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    # The chosen Spirit is not a legal object for the trigger, and "up to one"
+    # may legally affect nothing — so nothing was bounced.
+    assert game.is_on_battlefield(spirit)
+    assert game.is_on_battlefield(pegasus)
+    assert len(p2.hand) == 0
+
+
+def test_roaming_ghostlight_bounces_a_non_spirit(set_pool):
+    pool = set_pool("M21")
+    pegasus = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", hand=[pool["Roaming Ghostlight"]])
+    p2 = PlayerState(name="P2", battlefield=[pegasus])
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        0, "Roaming Ghostlight", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(pegasus)
+    assert [c.name for c in p2.hand] == ["Concordia Pegasus"]
+
+
+def test_barrin_bounces_a_planeswalker_to_its_owners_hand(set_pool):
+    """The union half: "up to one other target creature **or planeswalker**".
+    And the CR 400.3 nuance the end-step test below leans on: the walker goes
+    to its *owner's* hand, so bouncing the opponent's does not feed Barrin's
+    own put-into-your-hand history."""
+    pool = set_pool("M21")
+    walker = Permanent(
+        card=pool["Garruk, Unleashed"], metadata={"loyalty_counters": 4},
+    )
+    p1 = PlayerState(name="P1", hand=[pool["Barrin, Tolarian Archmage"]])
+    p2 = PlayerState(name="P2", battlefield=[walker])
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        0, "Barrin, Tolarian Archmage", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(walker)
+    assert any(c.name == "Garruk, Unleashed" for c in p2.hand)
+    assert game.permanents_to_hand_this_turn.get(0, 0) == 0
+    assert game.permanents_to_hand_this_turn.get(1, 0) == 1
+
+
+def test_barrin_draws_at_end_step_after_bouncing_his_controllers_own(set_pool):
+    pool = set_pool("M21")
+    mine = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(
+        name="P1", hand=[pool["Barrin, Tolarian Archmage"]],
+        battlefield=[mine], library=[pool["Island"]] * 3,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    result = game.cast_from_hand(
+        0, "Barrin, Tolarian Archmage", target_player_index=0, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert any(c.name == "Concordia Pegasus" for c in p1.hand)
+    # The bounce landed in *your* hand, which is what the end-step
+    # intervening-if reads (CR 603.4). The trigger goes on the stack and
+    # resolves through the ordinary settle.
+    hand_before = len(p1.hand)
+    game.resolve_end_step(0)
+    game._settle()
+    assert len(p1.hand) == hand_before + 1
+
+
+def test_barrin_end_step_trigger_stays_quiet_without_a_bounce(set_pool):
+    pool = set_pool("M21")
+    barrin = Permanent(card=pool["Barrin, Tolarian Archmage"])
+    p1 = PlayerState(name="P1", battlefield=[barrin], library=[pool["Island"]] * 3)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    hand_before = len(p1.hand)
+    game.resolve_end_step(0)
+    game._settle()
+    assert not game.stack
+    assert len(p1.hand) == hand_before, (
+        "nothing was put into Barrin's controller's hand from the battlefield "
+        "this turn, so CR 603.4 keeps the trigger off the stack"
+    )
+
+
+def test_shipwreck_dowser_returns_an_instant_but_not_a_creature(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", hand=[pool["Shipwreck Dowser"]],
+        graveyard=[pool["Concordia Pegasus"], pool["Shock"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    result = game.cast_from_hand(
+        0, "Shipwreck Dowser", target_player_index=0, target_permanent_index=1,
+    )
+    assert result.supported, result.details
+    assert any(c.name == "Shock" for c in p1.hand)
+    assert any(c.name == "Concordia Pegasus" for c in p1.graveyard)
+
+
+def test_life_goes_on_gains_eight_only_over_a_body(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Life Goes On"], pool["Life Goes On"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    assert game.cast_from_hand(0, "Life Goes On").supported
+    assert p1.life == 24
+    game.creatures_died_this_turn = 1
+    assert game.cast_from_hand(0, "Life Goes On").supported
+    assert p1.life == 32, "a creature died this turn, so the 8-life arm applies"

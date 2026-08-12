@@ -364,8 +364,13 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     caster = context.caster
     any_card = bool(instruction.payload.get("any_card"))
     card_type = instruction.payload.get("card_type")
+    # "target instant or sorcery card" (Shipwreck Dowser) — a type union,
+    # tested by primary type exactly as the graveyard picker offers it.
+    card_types = tuple(instruction.payload.get("card_types") or ())
 
     def _eligible(card) -> bool:
+        if card_types:
+            return card.primary_type in card_types
         if any_card:
             return True
         return card_type is not None and card_type in card.type_line.lower()
@@ -376,6 +381,17 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
         caster.graveyard[idx]
     ):
         chosen = caster.graveyard.pop(idx)
+        caster.hand.append(chosen)
+        game.log.append(f"Returned {chosen.name} from graveyard to hand")
+        return True, "resolved"
+    if card_types:
+        chosen_index = next(
+            (i for i, c in enumerate(caster.graveyard) if _eligible(c)), None
+        )
+        if chosen_index is None:
+            game.log.append(f"No {' or '.join(card_types)} card in graveyard to return")
+            return True, "resolved"
+        chosen = caster.graveyard.pop(chosen_index)
         caster.hand.append(chosen)
         game.log.append(f"Returned {chosen.name} from graveyard to hand")
         return True, "resolved"
@@ -443,10 +459,44 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
             owner_idx = game.owner_index_of(perm)
             owner = game.players[owner_idx] if owner_idx is not None else context.caster
             owner.hand.append(perm.card)
+            if owner_idx is not None:
+                game.permanents_to_hand_this_turn[owner_idx] = (
+                    game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
+                )
             game.remove_from_battlefield(perm)
             game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
         if not chosen:
             game.log.append("No creatures to return")
+        return True, "resolved"
+    # A narrowed or widened bounce ("up to one target non-Spirit creature",
+    # Roaming Ghostlight; "up to one other target creature or planeswalker",
+    # Barrin) carries its filter. Resolved strictly — no fallback scan, since
+    # "up to one" legally names nothing — and enforced here so a stale or
+    # illegal choice bounces nothing rather than the wrong thing.
+    bounce_filter = instruction.payload.get("filter")
+    if bounce_filter:
+        source = context.source_permanent
+
+        def _legal(perm) -> bool:
+            if bounce_filter.get("exclude_self") and perm is source:
+                return False
+            return permanent_matches_filter(perm, bounce_filter)
+
+        perm = resolve_target_permanent(
+            game, context, predicate=_legal, fallback_on_invalid_choice=False,
+        )
+        if perm is None:
+            game.log.append(f"{context.card.name}: nothing was returned")
+            return True, "resolved"
+        owner_idx = game.owner_index_of(perm)
+        owner = game.players[owner_idx] if owner_idx is not None else context.caster
+        owner.hand.append(perm.card)
+        if owner_idx is not None:
+            game.permanents_to_hand_this_turn[owner_idx] = (
+                game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
+            )
+        game.remove_from_battlefield(perm)
+        game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
         return True, "resolved"
     target = context.target
     bounced = game._bounce_target_creature(target, context.target_permanent_index)

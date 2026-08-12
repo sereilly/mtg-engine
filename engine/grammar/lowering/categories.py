@@ -49,6 +49,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_target_flying_until_eot": "pump",
     "grant_self_flying_until_eot": "pump",
     "grant_target_keyword_until_eot": "pump",
+    # The negative twin ("It loses indestructible until end of turn", Soul Sear).
+    "remove_target_keyword_until_eot": "pump",
     "grant_self_keyword_until_eot": "pump",
     "grant_banding_to_target": "pump",
     "add_counter_to_self": "pump",

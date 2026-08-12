@@ -176,6 +176,34 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("grant_target_keyword_until_eot", "", payload),)
 
 
+def _lower_lose_keyword(node: ast.LoseKeyword) -> tuple[OracleInstruction, ...]:
+    """"It loses indestructible until end of turn." (Soul Sear, bound to the
+    damage sentence's target by the pronoun rider.)
+
+    The mirror of the targeted grant: `remove_keyword` puts the removal into
+    layer 6, so it composes with grants by timestamp rather than by flag
+    fights. Gated on IMPLEMENTED_KEYWORDS exactly like the grant — removing a
+    word whose behaviour is not built would report a removal of nothing.
+    """
+    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
+        raise LoweringError(
+            "a durationless keyword loss is a static ability, which needs the "
+            "CR 613 layers engine",
+            node=node,
+        )
+    if not _is_target(node.subject):
+        raise LoweringError("no handler removes a keyword from this subject", node=node)
+    for keyword in node.keywords:
+        if keyword not in IMPLEMENTED_KEYWORDS:
+            raise LoweringError(
+                f"removing {keyword!r} needs the keyword implemented", node=node
+            )
+    payload: dict[str, object] = {"keywords": tuple(node.keywords)}
+    assert isinstance(node.subject, ast.TargetSpec)
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("remove_target_keyword_until_eot", "", payload),)
+
+
 def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
     # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) Only the
     # source's own loyalty has a home (metadata["loyalty_counters"], CR 306.5c),
