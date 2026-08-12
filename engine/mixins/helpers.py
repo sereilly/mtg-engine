@@ -537,6 +537,27 @@ class GameHelpersMixin:
                     ability_text=may_trig.source_line,
                 )
                 self.log.append(f"{permanent.card.name} triggered (died)")
+            # "When this creature dies, you gain life equal to its power."
+            # (Conclave Mentor.) The power is read *now* — the permanent is
+            # about to leave, and CR 603.10 says the trigger uses the
+            # information it had — and carried to the resolution that gains it.
+            for power_trig in matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"dies"},
+                instruction_kinds={"target_gains_life"},
+            ):
+                if power_trig.instruction.payload.get("amount_from") != "dead_power":
+                    continue
+                self._enqueue_triggered_ability(
+                    controller_index=self.players.index(player),
+                    source_permanent=permanent,
+                    card=permanent.card,
+                    instruction=power_trig.instruction,
+                    effect_kind=power_trig.effect_kind,
+                    ability_text=power_trig.source_line,
+                    trigger_context={"dead_power": max(0, permanent.effective_power)},
+                )
+                self.log.append(f"{permanent.card.name} triggered (died)")
         text = permanent.card.oracle_text.lower()
         if (
             "when this enchantment is put into a graveyard from the battlefield, you lose the game"

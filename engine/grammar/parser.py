@@ -40,14 +40,13 @@ from . import ast
 from .amounts import parse_amount
 from .derived import derived_instruction_for_line
 from .errors import GrammarError
-from .lexer import (BULLET, MANA, PUNCT, QUOTE, SELF, tokenize)
+from .lexer import (BULLET, MANA, PT, PUNCT, QUOTE, SELF, tokenize)
 from .nouns import (parse_target_spec)
 from .registries import registry_for_line
 from .stream import TokenStream
 from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, match_longest)
 from .phrases import (
-    _AT_EVENTS,
-    _WHENEVER_EVENTS,
+    _parse_trigger_event,
 )
 from .effects import (
     _expect_counter_kind,
@@ -282,139 +281,6 @@ def _split_on_colon(tokens: tuple) -> int | None:
 # event filter can test against a cast card's type line — mirroring the oracle
 # trigger table's alternation — and deliberately without "enchantment", whose
 # printed article ("an") belongs to its own condition kind.
-_CAST_TYPE_FILTERS: dict[str, "ast.ObjectFilter"] = {
-    "noncreature": ast.ObjectFilter(excluded_types=("creature",)),
-    "nonartifact": ast.ObjectFilter(excluded_types=("artifact",)),
-    "creature": ast.ObjectFilter(card_types=("creature",)),
-    "artifact": ast.ObjectFilter(card_types=("artifact",)),
-    "instant": ast.ObjectFilter(card_types=("instant",)),
-    "sorcery": ast.ObjectFilter(card_types=("sorcery",)),
-}
-
-
-def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
-    """"Whenever **a Forest an opponent controls** becomes tapped" (Lifetap) /
-    "Whenever **a Mountain** is tapped for mana" (Gauntlet of Might).
-
-    The two tapping events whose subject is *quantified* rather than named. The
-    literal phrases in ``_WHENEVER_EVENTS`` cover the named subjects ("enchanted
-    land", "this land", "a player taps a land"); here the subject is a noun
-    phrase, so it is parsed and carried on the event instead of being spelled
-    out once per printed land type.
-
-    Tried only after that table, which is what keeps "whenever enchanted land
-    becomes tapped" reading as ``enchanted_land_tapped``: ``parse_target_spec``
-    would happily claim "enchanted land" as a quantified subject and name a
-    condition the legacy table does not, which is precisely the disagreement
-    ``test_every_executed_trigger_agrees_with_the_legacy_condition_table``
-    exists to catch.
-    """
-    mark = stream.mark()
-    spec = parse_target_spec(stream)
-    # Only the indefinite "a <filter>" reading. "each"/"all"/"target" would be a
-    # different event, and "this"/"enchanted" belong to the table above.
-    if spec is not None and spec.quantifier == "a" and spec.filter is not None:
-        if stream.accept_phrase("becomes", "tapped"):
-            return ast.TriggerEvent(
-                "permanent_becomes_tapped", "whenever", subject=spec.filter
-            )
-        if stream.accept_phrase("is", "tapped", "for", "mana"):
-            return ast.TriggerEvent(
-                "land_tapped_for_mana", "whenever", subject=spec.filter
-            )
-    stream.reset(mark)
-    return None
-
-
-def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
-    if stream.accept_word("whenever"):
-        # "…casts a *blue* spell" (the Rod/Cup/Sphere cycle). The colour is part
-        # of the condition rather than a per-card hook, which is what lets one
-        # dispatcher serve every card written this way.
-        mark = stream.mark()
-        if stream.accept_phrase("a", "player", "casts", "a"):
-            colour = stream.peek_word()
-            if colour in COLOR_WORDS:
-                stream.advance()
-                if stream.accept_word("spell"):
-                    return ast.TriggerEvent(
-                        "spell_cast", "whenever",
-                        subject=ast.ObjectFilter(colors=(COLOR_WORDS[colour],)),
-                    )
-        stream.reset(mark)
-        # "…you cast a spell that's white, blue, black, or red" (Quirion
-        # Dryad): a colour-list narrowing of you_cast_spell. Read before the
-        # phrase table, whose bare "you cast a spell" entry is its prefix.
-        mark = stream.mark()
-        if stream.accept_phrase("you", "cast", "a", "spell", "that", "'s"):
-            colors: list[str] = []
-            while True:
-                word = stream.peek_word()
-                if word not in COLOR_WORDS:
-                    break
-                stream.advance()
-                colors.append(COLOR_WORDS[word])
-                if stream.accept_punct(","):
-                    stream.accept_word("or")
-                    continue
-                if stream.accept_word("or"):
-                    continue
-                break
-            if len(colors) >= 2:
-                return ast.TriggerEvent(
-                    "you_cast_spell", "whenever",
-                    subject=ast.ObjectFilter(colors=tuple(colors)),
-                )
-        stream.reset(mark)
-        # "…you cast a noncreature spell" (Spellgorger Weird): a type
-        # narrowing of the same condition. The word list mirrors the oracle
-        # table's — only what the cast filter tests may be consumed, so a
-        # subtype word ("Dog spell") keeps refusing the line rather than
-        # compiling a trigger that fires on every spell. Read before the
-        # phrase table, whose bare "you cast a spell" entry is its prefix.
-        mark = stream.mark()
-        if stream.accept_phrase("you", "cast", "a"):
-            word = stream.peek_word()
-            narrowed = _CAST_TYPE_FILTERS.get(word or "")
-            if narrowed is not None:
-                stream.advance()
-                if stream.accept_word("spell"):
-                    return ast.TriggerEvent(
-                        "you_cast_spell", "whenever", subject=narrowed,
-                    )
-        stream.reset(mark)
-        for kind, phrase in _WHENEVER_EVENTS:
-            if stream.accept_phrase(*phrase):
-                return ast.TriggerEvent(kind, "whenever")
-        return _parse_quantified_tap_event(stream)
-    if stream.accept_word("at"):
-        for kind, phrase in _AT_EVENTS:
-            if stream.accept_phrase(*phrase):
-                return ast.TriggerEvent(kind, "at")
-        return None
-    if stream.accept_word("when"):
-        if stream.accept_phrase("this", "creature", "dies"):
-            return ast.TriggerEvent("dies", "when")
-        if stream.accept_phrase("you", "control", "no", "islands"):
-            return ast.TriggerEvent("no_islands", "when")
-        if stream.accept_phrase("you", "control", "no", "lands"):
-            return ast.TriggerEvent("no_lands", "when")
-        mark = stream.mark()
-        if stream.at_kind(SELF) or stream.at_word("this"):
-            stream.advance()
-            if not stream.at_kind(SELF):
-                stream.accept_word("creature", "artifact", "enchantment", "land", "aura")
-            if stream.accept_word("enters"):
-                stream.accept_phrase("the", "battlefield")
-                return ast.TriggerEvent("enters_battlefield", "when")
-            if stream.accept_word("leaves"):
-                stream.accept_phrase("the", "battlefield")
-                return ast.TriggerEvent("leaves_battlefield", "when")
-        stream.reset(mark)
-        return None
-    return None
-
-
 def _statement_bound_target(statement: ast.Statement) -> ast.TargetSpec | None:
     """The chosen target a following pronoun sentence refers back to, or None.
 

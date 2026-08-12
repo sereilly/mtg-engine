@@ -158,7 +158,7 @@ def lower_statement(
     if isinstance(statement, ast.RemoveCounter):
         return _lower_remove_counter(statement)
     if isinstance(statement, ast.GainLife):
-        return _lower_gain_life(statement, produced)
+        return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
         return _lower_lose_life(statement)
     if isinstance(statement, ast.Destroy):

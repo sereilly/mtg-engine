@@ -244,6 +244,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_enters",                 r"whenever a land enters(?: the battlefield)?"),
     ("artifact_enters",             r"whenever an artifact enters(?: the battlefield)?"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
+    # "…are put on another non-Hydra creature you control" (Wildwood Scourge).
+    # The excluded subtype is captured as condition payload, so a card printed
+    # with any other tribe needs no code; "another" and "you control" are
+    # fixed, because they are what the event filter enforces — a wording
+    # without them names a different set and must refuse rather than be read
+    # as this one.
+    ("counters_put_on_creature",
+     r"whenever one or more \+1/\+1 counters are put on another "
+     r"non-(?P<counters_excluded_subtype>[a-z]+) creature you control"),
     ("draws_card",                  r"whenever you draw a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
     # turn, announced by the draw sweep in check_state_based_actions off the
@@ -1316,6 +1325,16 @@ def _is_supported_static_creature_line(line: str) -> bool:
     from .enter_effects import choosable_bodies
 
     if choosable_bodies(normalized):
+        return True
+    # A CR 614 replacement carried out by engine/replacements.py from the
+    # permanent's own text (Conclave Mentor's extra +1/+1 counter). The
+    # constant is imported rather than spelled out: the interceptor
+    # self-selects on that exact string, so a copy here could claim a line
+    # nothing implements. Ali from Cairo's line predates this and is still a
+    # literal in the list below.
+    from .replacements import EXTRA_PLUS1_COUNTER_TEXT
+
+    if normalized == EXTRA_PLUS1_COUNTER_TEXT:
         return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",

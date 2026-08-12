@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
-from ..pt import add_plus1_counters, add_pt_modifier, set_base_pt
+from ..pt import add_pt_modifier, set_base_pt
 from ._common import (
     apply_temp_pt_boost,
     permanent_matches_filter,
@@ -247,7 +247,7 @@ def add_plus1_counters_for_each_creature_died(game: Game, instruction: OracleIns
     count = int((context.trigger_context or {}).get("count", 0))
     if source is None or count <= 0:
         return True, "resolved"
-    add_plus1_counters(source, count)
+    game.place_plus1_counters(source, count)
     game.log.append(f"{source.card.name} gets {count} +1/+1 counter(s)")
     return True, "resolved"
 
@@ -258,7 +258,7 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    add_plus1_counters(source_permanent)
+    game.place_plus1_counters(source_permanent)
     game.log.append(f"{card.name} gets a +1/+1 counter")
     return True, "resolved"
 
@@ -312,7 +312,7 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
             game.log.append(f"{card.name}: no creatures were given counters")
             return True, "resolved"
         for creature in chosen[:maximum]:
-            add_plus1_counters(creature)
+            game.place_plus1_counters(creature)
             game.log.append(f"{creature.card.name} gets a +1/+1 counter ({card.name})")
         return True, "resolved"
 
@@ -328,7 +328,7 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    add_plus1_counters(target_creature)
+    game.place_plus1_counters(target_creature)
     game.log.append(f"{target_creature.card.name} gets a +1/+1 counter ({card.name})")
     return True, "resolved"
 
@@ -343,7 +343,7 @@ def add_counter_to_each_you_control(game: Game, instruction: OracleInstruction, 
     for perm in game.controlled_by(caster):
         if not perm.is_creature:
             continue
-        add_plus1_counters(perm)
+        game.place_plus1_counters(perm)
     game.log.append(f"{card.name}: each creature {caster.name} controls gets a +1/+1 counter")
     return True, "resolved"
 

@@ -16,10 +16,13 @@ use them: a table is a thing a new card is added to, a branch is a thing that
 has to be found first.
 """
 
+from dataclasses import replace
+
 from . import ast
-from .lexer import (MANA, PUNCT)
+from .lexer import (MANA, PT, PUNCT, SELF)
+from .nouns import (parse_target_spec)
 from .stream import TokenStream
-from .vocabulary import (KEYWORD_INDEX, match_longest)
+from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, match_longest)
 _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("land_dies", ("a", "land", "is", "put", "into", "a", "graveyard", "from", "the", "battlefield")),
     # Longest first: the explicit-self spelling (Basri's Lieutenant) names the
@@ -263,3 +266,172 @@ def _parse_mana_payment(stream: TokenStream, *, allow_variable: bool = False) ->
     if not pips:
         raise stream.error("expected a mana cost to pay")
     return ast.ManaCost(tuple(sorted(pips.items())))
+
+
+# ---------------------------------------------------------------------------
+# Trigger events (the condition half of a triggered ability line)
+# ---------------------------------------------------------------------------
+#
+# Fragment productions over the word tables above: they read the clause
+# between the trigger word and the comma, and nothing about a whole line.
+# They lived in parser.py until the counters-put-on production pushed that
+# module past the thousand-line guard, which is the guard working as
+# documented — the family that should absorb this work is the one whose
+# tables the productions already read.
+
+_CAST_TYPE_FILTERS: dict[str, "ast.ObjectFilter"] = {
+    "noncreature": ast.ObjectFilter(excluded_types=("creature",)),
+    "nonartifact": ast.ObjectFilter(excluded_types=("artifact",)),
+    "creature": ast.ObjectFilter(card_types=("creature",)),
+    "artifact": ast.ObjectFilter(card_types=("artifact",)),
+    "instant": ast.ObjectFilter(card_types=("instant",)),
+    "sorcery": ast.ObjectFilter(card_types=("sorcery",)),
+}
+
+
+def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
+    """"Whenever **a Forest an opponent controls** becomes tapped" (Lifetap) /
+    "Whenever **a Mountain** is tapped for mana" (Gauntlet of Might).
+
+    The two tapping events whose subject is *quantified* rather than named. The
+    literal phrases in ``_WHENEVER_EVENTS`` cover the named subjects ("enchanted
+    land", "this land", "a player taps a land"); here the subject is a noun
+    phrase, so it is parsed and carried on the event instead of being spelled
+    out once per printed land type.
+
+    Tried only after that table, which is what keeps "whenever enchanted land
+    becomes tapped" reading as ``enchanted_land_tapped``: ``parse_target_spec``
+    would happily claim "enchanted land" as a quantified subject and name a
+    condition the legacy table does not, which is precisely the disagreement
+    ``test_every_executed_trigger_agrees_with_the_legacy_condition_table``
+    exists to catch.
+    """
+    mark = stream.mark()
+    spec = parse_target_spec(stream)
+    # Only the indefinite "a <filter>" reading. "each"/"all"/"target" would be a
+    # different event, and "this"/"enchanted" belong to the table above.
+    if spec is not None and spec.quantifier == "a" and spec.filter is not None:
+        if stream.accept_phrase("becomes", "tapped"):
+            return ast.TriggerEvent(
+                "permanent_becomes_tapped", "whenever", subject=spec.filter
+            )
+        if stream.accept_phrase("is", "tapped", "for", "mana"):
+            return ast.TriggerEvent(
+                "land_tapped_for_mana", "whenever", subject=spec.filter
+            )
+    stream.reset(mark)
+    return None
+
+
+def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
+    if stream.accept_word("whenever"):
+        # "…one or more +1/+1 counters are put on <noun phrase>" (Wildwood
+        # Scourge). The subject is parsed as a noun phrase and carried on the
+        # event, so the exclusion and the controller scope are data — the same
+        # shape the quantified tap events above use.
+        mark = stream.mark()
+        if stream.accept_phrase("one", "or", "more"):
+            token = stream.peek()
+            if token is not None and token.kind == PT and token.text == "+1/+1":
+                stream.advance()
+                if stream.accept_phrase("counters", "are", "put", "on"):
+                    # "another" sits where the article does, so it is read here
+                    # and folded onto the filter's existing exclusion field —
+                    # the idiom `_parse_cost_object` and the condition parser
+                    # already use, rather than a noun-parser quantifier that
+                    # would change every targeted line in the pool.
+                    another = bool(stream.accept_word("another"))
+                    subject = parse_target_spec(stream)
+                    if subject is not None:
+                        filt = subject.filter
+                        if another:
+                            filt = replace(filt, other_than_source=True)
+                        return ast.TriggerEvent(
+                            "counters_put_on_creature", "whenever", subject=filt,
+                        )
+        stream.reset(mark)
+        # "…casts a *blue* spell" (the Rod/Cup/Sphere cycle). The colour is part
+        # of the condition rather than a per-card hook, which is what lets one
+        # dispatcher serve every card written this way.
+        mark = stream.mark()
+        if stream.accept_phrase("a", "player", "casts", "a"):
+            colour = stream.peek_word()
+            if colour in COLOR_WORDS:
+                stream.advance()
+                if stream.accept_word("spell"):
+                    return ast.TriggerEvent(
+                        "spell_cast", "whenever",
+                        subject=ast.ObjectFilter(colors=(COLOR_WORDS[colour],)),
+                    )
+        stream.reset(mark)
+        # "…you cast a spell that's white, blue, black, or red" (Quirion
+        # Dryad): a colour-list narrowing of you_cast_spell. Read before the
+        # phrase table, whose bare "you cast a spell" entry is its prefix.
+        mark = stream.mark()
+        if stream.accept_phrase("you", "cast", "a", "spell", "that", "'s"):
+            colors: list[str] = []
+            while True:
+                word = stream.peek_word()
+                if word not in COLOR_WORDS:
+                    break
+                stream.advance()
+                colors.append(COLOR_WORDS[word])
+                if stream.accept_punct(","):
+                    stream.accept_word("or")
+                    continue
+                if stream.accept_word("or"):
+                    continue
+                break
+            if len(colors) >= 2:
+                return ast.TriggerEvent(
+                    "you_cast_spell", "whenever",
+                    subject=ast.ObjectFilter(colors=tuple(colors)),
+                )
+        stream.reset(mark)
+        # "…you cast a noncreature spell" (Spellgorger Weird): a type
+        # narrowing of the same condition. The word list mirrors the oracle
+        # table's — only what the cast filter tests may be consumed, so a
+        # subtype word ("Dog spell") keeps refusing the line rather than
+        # compiling a trigger that fires on every spell. Read before the
+        # phrase table, whose bare "you cast a spell" entry is its prefix.
+        mark = stream.mark()
+        if stream.accept_phrase("you", "cast", "a"):
+            word = stream.peek_word()
+            narrowed = _CAST_TYPE_FILTERS.get(word or "")
+            if narrowed is not None:
+                stream.advance()
+                if stream.accept_word("spell"):
+                    return ast.TriggerEvent(
+                        "you_cast_spell", "whenever", subject=narrowed,
+                    )
+        stream.reset(mark)
+        for kind, phrase in _WHENEVER_EVENTS:
+            if stream.accept_phrase(*phrase):
+                return ast.TriggerEvent(kind, "whenever")
+        return _parse_quantified_tap_event(stream)
+    if stream.accept_word("at"):
+        for kind, phrase in _AT_EVENTS:
+            if stream.accept_phrase(*phrase):
+                return ast.TriggerEvent(kind, "at")
+        return None
+    if stream.accept_word("when"):
+        if stream.accept_phrase("this", "creature", "dies"):
+            return ast.TriggerEvent("dies", "when")
+        if stream.accept_phrase("you", "control", "no", "islands"):
+            return ast.TriggerEvent("no_islands", "when")
+        if stream.accept_phrase("you", "control", "no", "lands"):
+            return ast.TriggerEvent("no_lands", "when")
+        mark = stream.mark()
+        if stream.at_kind(SELF) or stream.at_word("this"):
+            stream.advance()
+            if not stream.at_kind(SELF):
+                stream.accept_word("creature", "artifact", "enchantment", "land", "aura")
+            if stream.accept_word("enters"):
+                stream.accept_phrase("the", "battlefield")
+                return ast.TriggerEvent("enters_battlefield", "when")
+            if stream.accept_word("leaves"):
+                stream.accept_phrase("the", "battlefield")
+                return ast.TriggerEvent("leaves_battlefield", "when")
+        stream.reset(mark)
+        return None
+    return None

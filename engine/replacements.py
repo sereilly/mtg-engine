@@ -122,6 +122,7 @@ EXILE_INSTEAD_OF_DYING = 10  # Disintegrate's "exile it instead"
 DISCARD_DESTINATION = 10  # Library of Leng
 DRAW_FROM_OUTSIDE = 10  # Ring of Ma'rûf
 DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
+EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
 
 # Set on the event once an interceptor consumes it. It lives on the payload
 # because the payload is the one piece of state the 616.1 loop threads through
@@ -310,10 +311,43 @@ LIFE_GAIN_TO_DRAW_TEXT = "if you would gain life, draw that many cards instead"
 DAMAGE_LIFE_FLOOR_TEXT = (
     "damage that would reduce your life total to less than 1 reduces it to 1 instead"
 )
+EXTRA_PLUS1_COUNTER_TEXT = (
+    "if one or more +1/+1 counters would be put on a creature you control, "
+    "that many plus one +1/+1 counters are put on that creature instead"
+)
 
 
 def _applies_life_gain_to_draw(game, payload: dict) -> bool:
     return game._player_controls_text(payload["player"], LIFE_GAIN_TO_DRAW_TEXT)
+
+
+def _applies_extra_plus1_counter(game, payload: dict) -> bool:
+    player = payload.get("player")
+    return player is not None and game._player_controls_text(
+        player, EXTRA_PLUS1_COUNTER_TEXT
+    )
+
+
+@replacement_effect(
+    "plus1_counters", EXTRA_PLUS1_COUNTER, applies=_applies_extra_plus1_counter
+)
+def _one_more_plus1_counter(game, payload: dict) -> ReplacementOutcome | None:
+    """Conclave Mentor: "If one or more +1/+1 counters would be put on a
+    creature you control, that many plus one +1/+1 counters are put on that
+    creature instead."
+
+    A *modifying* replacement, not a consuming one: the event still happens,
+    with a bigger number. Returning ``new_amount`` would be the shape damage
+    uses, but this event's quantity is ``count`` — so the payload is written
+    directly and nothing is consumed, which is also what keeps a second
+    Mentor from being skipped (CR 616.1f re-asks the rest against the raised
+    count, and each applies once).
+    """
+    payload["count"] = int(payload.get("count", 0)) + 1
+    permanent = payload.get("permanent")
+    name = getattr(getattr(permanent, "card", None), "name", "a creature")
+    game.log.append(f"{name} gets one more +1/+1 counter (Conclave Mentor)")
+    return ReplacementOutcome()
 
 
 @replacement_effect("life_gain", LIFE_GAIN_TO_DRAW, applies=_applies_life_gain_to_draw)

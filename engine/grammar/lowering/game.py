@@ -25,9 +25,29 @@ from ._common import (
 
 
 def _lower_gain_life(
-    node: ast.GainLife, produced: frozenset[str] = frozenset()
+    node: ast.GainLife,
+    produced: frozenset[str] = frozenset(),
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     recipient = "caster" if node.player.kind == "you" else "target"
+    # "When this creature dies, you gain life equal to **its** power."
+    # (Conclave Mentor.) "It" is the source, which is in a graveyard by the
+    # time this resolves — so the amount is last-known information (CR 603.10)
+    # frozen by the fire site, exactly as Basri's Lieutenant's counter clause
+    # is. Admitted only under a dies trigger, because that is the only event
+    # that records it; anywhere else the back-reference still refuses below.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and event == "dies"
+        and node.player.kind == "you"
+    ):
+        return (
+            OracleInstruction(
+                "target_gains_life", "",
+                {"amount_from": "dead_power", "recipient": "caster"},
+            ),
+        )
     if isinstance(node.amount, ast.ThatMuch):
         # "You gain life equal to the damage dealt" — reads the value the
         # preceding damage instruction recorded in the resolution scratchpad,

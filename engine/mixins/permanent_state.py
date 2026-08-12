@@ -38,7 +38,7 @@ from ..lord_buffs import (
 )
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
-from ..pt import add_plus1_counters, clear_base_pt, set_base_pt
+from ..pt import clear_base_pt, set_base_pt
 from ..static_bonuses import conditional_static_holds
 
 
@@ -238,7 +238,10 @@ class PermanentStateMixin:
         if any(ENTERS_WITH_X_PLUS_1_1_COUNTERS == line for line in program.static_lines) or ENTERS_WITH_X_PLUS_1_1_COUNTERS in text:
             x_value = permanent.metadata.get("cast_x_value")
             if isinstance(x_value, int) and x_value > 0:
-                add_plus1_counters(permanent, x_value)
+                # Through the seam: entering with counters is a counter
+                # placement like any other, so a Conclave Mentor raises it
+                # (CR 614.1c's replacement applies as the permanent enters).
+                self.place_plus1_counters(permanent, x_value)
 
         # copy-as-enter creature
         if any(COPY_CREATURE_ON_ENTER == line for line in program.static_lines) or COPY_CREATURE_ON_ENTER in text:

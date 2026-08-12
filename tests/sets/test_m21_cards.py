@@ -1670,6 +1670,99 @@ def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool
     assert game._can_be_targeted(angel, pool["Shock"])
 
 
+# --- Round 31: a counter placement becomes an event ---------------------------
+
+
+@pytest.mark.parametrize("name", ["Conclave Mentor", "Wildwood Scourge"])
+def test_round_31_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def test_conclave_mentor_raises_a_counter_placed_by_another_card(set_pool):
+    pool = set_pool("M21")
+    mentor = Permanent(card=pool["Conclave Mentor"])
+    veteran = Permanent(card=pool["Tempered Veteran"])
+    cat = Permanent(card=pool["Pridemalkin"])  # 2/1 printed
+    p1 = PlayerState(name="P1", battlefield=[mentor, veteran, cat])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.start_turn(0)
+
+    # Tempered Veteran's expensive ability places one counter; the Mentor
+    # makes it two, without either card knowing about the other.
+    result = game.activate_permanent_ability(
+        0, "Tempered Veteran", ability_index=1,
+        target_player_index=0, target_permanent_index=2,
+    )
+    assert result.supported, result.details
+    assert cat.metadata["plus_counters"] == 2
+    assert (cat.effective_power, cat.effective_toughness) == (4, 3)
+
+
+def test_conclave_mentor_pays_out_its_power_as_it_dies(set_pool):
+    pool = set_pool("M21")
+    mentor = Permanent(card=pool["Conclave Mentor"])  # 2/2 printed
+    p1 = PlayerState(name="P1", battlefield=[mentor])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    # A counter of its own first: the life gained is the power it had when it
+    # died, not the printed number.
+    game.place_plus1_counters(mentor, 1)
+    assert mentor.effective_power == 4, "its own replacement raised the placement"
+
+    game._permanent_to_graveyard(p1, mentor)
+    game.remove_from_battlefield(mentor)
+    game._settle()
+    assert p1.life == 24
+
+
+def _living_scourge(game, player, card):
+    """A Wildwood Scourge with entry counters on it.
+
+    It is printed 0/0 — an X-cost Hydra — so one placed bare dies to CR 704.5f
+    before anything can trigger. Its own placement feeds nothing ("another"),
+    which is exactly what the next assertions rely on.
+    """
+    scourge = Permanent(card=card)
+    player.battlefield.append(scourge)
+    game.place_plus1_counters(scourge, 2)
+    game._settle()
+    return scourge
+
+
+def test_wildwood_scourge_grows_with_its_flock(set_pool):
+    pool = set_pool("M21")
+    other = Permanent(card=pool["Concordia Pegasus"])
+    theirs = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", battlefield=[other])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    scourge = _living_scourge(game, p1, pool["Wildwood Scourge"])
+    assert scourge.metadata["plus_counters"] == 2, "its own counters feed nothing"
+
+    game.place_plus1_counters(other, 1)
+    game._settle()
+    assert scourge.metadata["plus_counters"] == 3, "a counted ally feeds the Hydra"
+
+    game.place_plus1_counters(theirs, 1)
+    game._settle()
+    assert scourge.metadata["plus_counters"] == 3, "'you control' scopes it"
+
+
+def test_wildwood_scourge_ignores_another_hydra(set_pool):
+    """The excluded subtype is condition payload read off the printed line."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1")
+    game = Game(players=[p1, PlayerState(name="P2")])
+    scourge = _living_scourge(game, p1, pool["Wildwood Scourge"])
+    hydra = _living_scourge(game, p1, pool["Wildwood Scourge"])
+
+    before = scourge.metadata["plus_counters"]
+    game.place_plus1_counters(hydra, 1)
+    game._settle()
+    assert scourge.metadata["plus_counters"] == before
+
+
 # --- Round 30: counters as a filter, and as last-known information ------------
 
 

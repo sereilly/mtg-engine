@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 184/285) to the full release line - **137 sets, 33,594
+M21 measured at 186/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -1180,6 +1180,67 @@ hooks, zero ceiling raises.
 the counter-replacement pair (Conclave Mentor's "that many plus one"
 replacement, CR 614, and Wildwood Scourge's counters-put-on trigger), and
 Massacre Wurm's opponent-scoped death trigger.
+
+---
+
+## Round 31: a counter placement becomes an event
+
+*(2026-08-12, same day.)* M21 **184 → 186**: Conclave Mentor and Wildwood
+Scourge — 99 unsupported, under a hundred for the first time. Round 26 made
++1/+1 counters *state*; this round makes placing them an **event**, which is
+what both cards need and neither could have alone.
+
+**`Game.place_plus1_counters` is the seam**, and `pt.add_plus1_counters` is
+now strictly the library operation beneath it — the same split
+`_draw_with_replacements` makes over `player.draw`. Placing counters runs the
+CR 614 replacements, then writes, then emits. Every counter-placing site goes
+through it: the five handlers and the enters-with-X path (a Conclave Mentor
+raises a Hydra's entry counters, CR 614.1c).
+
+**The debt round 28 wrote down is the reason there is a guard.** Three zones
+handlers still call `player.draw` around the draw seam, skipping any armed
+replacement — its own docstring warns about exactly that. So
+`tests/engine/test_counter_placement.py` bans `add_plus1_counters` outside
+`pt.py` and the seam, by AST rather than by grep, while the debt is still
+cheap to prevent.
+
+- **Conclave Mentor** is one interceptor on a new `plus1_counters` kind,
+  self-selecting on its printed text like every other (the constant is
+  exported, so the grammar's registry claim and the creature support gate
+  both read the *same string* the interceptor matches — Ali from Cairo's
+  older literal is noted as the exception it is). It *modifies* rather than
+  consumes: the payload's count goes up and nothing is replaced, so CR
+  616.1f re-asks the rest against the raised number. The test that matters
+  places the counter from **Tempered Veteran**, a card that has never heard
+  of the Mentor.
+- Its second line is round 30's idiom again: "you gain life equal to **its**
+  power" on a dies trigger is last-known information (CR 603.10), frozen by
+  the fire site because a creature in a graveyard has no power to read.
+- **Wildwood Scourge** rides the emit. The excluded subtype is condition
+  payload, so a card printed with another tribe needs no code; "another" is
+  read the way `_parse_cost_object` reads it — consumed at the call site and
+  folded onto the filter's exclusion field — rather than becoming a
+  noun-parser quantifier, which the sacrifice-cost comment already explains
+  would change every targeted line in the pool.
+
+**The thousand-line guard fired, and was obeyed rather than raised.** The new
+production pushed `parser.py` to 1,023 lines; the trigger-event productions
+moved to `phrases.py`, whose documented job is "word tables and productions
+that read a fragment" — and whose tables those productions already read.
+`parser.py` is 865 lines and holds only line-level work.
+
+One thing worth knowing about Wildwood Scourge as a fixture: it is a printed
+**0/0**, so one put on the battlefield without its X counters dies to CR
+704.5f before anything can trigger. The per-set test says so in a helper
+rather than working around it silently.
+
+Suite 4,833 at 20.2s, every `--check` green, shipped pool 388/388, zero
+hooks, zero ceiling raises.
+
+**Next:** Massacre Wurm (an opponent-scoped death trigger plus a mass
+until-end-of-turn debuff — "creatures your opponents control get -2/-2",
+whose static twin Waker of Waves also needs), then the remaining no-handler
+tail.
 
 ---
 

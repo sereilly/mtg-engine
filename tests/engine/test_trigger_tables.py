@@ -66,6 +66,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "one_or_more_attack": "whenever one or more creatures you control attack",
     "draws_card": "whenever you draw a card",
     "draws_second_card": "whenever you draw your second card each turn",
+    "counters_put_on_creature": (
+        "whenever one or more +1/+1 counters are put on another non-hydra "
+        "creature you control"
+    ),
     "deals_damage_to_player": "whenever this creature deals damage to a player",
     # when
     "enters_battlefield": "when this creature enters the battlefield",

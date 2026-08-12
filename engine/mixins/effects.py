@@ -8,8 +8,10 @@ from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..auras import aura_restriction_active
 from ..damage_events import deal_damage, lifelink_life_gained
+from ..events import emit
 from ..land_play_allowance import LandPlayAllowance, land_play_allowance_for
 from ..models import CardDefinition, Permanent, PlayerState
+from ..pt import add_plus1_counters
 from ..replacement_choices import pending_choices_for, resolve_choice
 from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
 from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
@@ -539,6 +541,55 @@ class EffectsMixin:
         return any(
             phrase in perm.card.oracle_text.lower() for perm in self.controlled_by(player)
         )
+
+    def place_plus1_counters(self, permanent: Permanent, count: int = 1) -> int:
+        """Put *count* +1/+1 counters on *permanent*, as a replaceable event.
+
+        The counters are an **event**, not just a write: CR 614 lets an effect
+        change how many arrive (Conclave Mentor's "that many plus one"), and
+        CR 603 lets one trigger on their arrival (Wildwood Scourge). This is
+        the one place that happens, and every counter-placing handler calls
+        it.
+
+        ``engine/pt.py``'s ``add_plus1_counters`` is the library operation
+        underneath — it writes the two channels and knows nothing about the
+        game — exactly as ``player.draw`` sits under
+        :meth:`_draw_with_replacements`. Reaching for it directly is how a
+        replacement gets skipped, which is why
+        ``tests/engine/test_counter_placement.py`` bans it outside this seam.
+
+        Returns how many counters actually arrived.
+        """
+        if count <= 0:
+            return 0
+        seat = self.controller_index_of(permanent)
+        consumed, payload = apply_replacements(
+            self,
+            "plus1_counters",
+            {
+                "permanent": permanent,
+                "count": count,
+                # The affected player is the counters' recipient's controller,
+                # which is who CR 616.1 asks when several effects contend.
+                "player": self.players[seat] if seat is not None else None,
+            },
+        )
+        # No interceptor *consumes* this event — a replacement that removed the
+        # counters entirely would be a different card — so `consumed` staying
+        # False is the normal path and a True is honoured rather than assumed
+        # impossible.
+        if consumed:
+            return 0
+        placed = max(0, int(payload.get("count", count)))
+        if placed <= 0:
+            return 0
+        add_plus1_counters(permanent, placed)
+        if seat is not None:
+            emit(
+                self, "counters_put_on_creature",
+                subject=permanent, seat=seat, count=placed,
+            )
+        return placed
 
     def _draw_with_replacements(self, player: PlayerState, count: int) -> int:
         """Draw ``count`` cards for *player*, letting an armed draw replacement

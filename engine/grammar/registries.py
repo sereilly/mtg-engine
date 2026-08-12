@@ -35,6 +35,7 @@ from ..enter_effects import enter_effect_line
 from ..land_play_allowance import land_play_line
 from ..replacements import (
     DAMAGE_LIFE_FLOOR_TEXT,
+    EXTRA_PLUS1_COUNTER_TEXT,
     LIFE_GAIN_TO_DRAW_TEXT,
     TOP_OF_LIBRARY_DISCARD_TEXT,
 )
@@ -69,6 +70,9 @@ _REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # names ("top of library", "graveyard"), so the interceptor implements the
     # tail as well.
     (TOP_OF_LIBRARY_DISCARD_TEXT, " of into your graveyard"),
+    # _one_more_plus1_counter (Conclave Mentor): the phrase is the whole line,
+    # matched against the counter-placing seam in mixins/effects.py.
+    (EXTRA_PLUS1_COUNTER_TEXT, ""),
 )
 
 

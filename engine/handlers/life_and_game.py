@@ -185,7 +185,14 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # it recorded in the context scratchpad. This is what lets damage-then-gain
     # be two composable instructions instead of one fused kind.
     source_key = instruction.payload.get("amount_from")
-    if source_key is not None:
+    if source_key == "dead_power":
+        # "When this creature dies, you gain life equal to its power."
+        # (Conclave Mentor.) The source is in a graveyard by now, so the only
+        # legal reading is the last-known information the death recorded
+        # (CR 603.10) — an absent record gains nothing rather than reading a
+        # card's printed power as if it were the permanent's.
+        life_gain = max(0, int((context.trigger_context or {}).get("dead_power", 0)))
+    elif source_key is not None:
         life_gain = max(0, int(context.results.get(source_key, 0)))
     else:
         life_gain = resolve_amount(instruction.payload.get("amount", 0), x_value)

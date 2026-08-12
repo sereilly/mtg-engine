@@ -287,6 +287,32 @@ def _becomes_tapped_filter(
     return tapped_controller == observer
 
 
+@event_filter("counters_put_on_creature")
+def _counters_put_on_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever one or more +1/+1 counters are put on another non-Hydra
+    creature you control" (Wildwood Scourge).
+
+    "You control" is the observer's own seat, "another" excludes the observer
+    itself (CR 109.5), and the excluded subtype arrives as condition payload
+    from the trigger's own text — so a card printed with a different tribe
+    needs no code here.
+    """
+    counted = event.subject
+    if counted is None or event.payload.get("seat") is None:
+        return False
+    if game.controller_index_of(permanent) != event.payload["seat"]:
+        return False
+    if counted is permanent:
+        return False
+    excluded = trig.condition.payload.get("counters_excluded_subtype")
+    # has_type, not the printed line: a creature *made* a Hydra by layer 4 is
+    # one, which is the same reading every other subtype test in the engine
+    # makes.
+    return not (excluded and counted.has_type(excluded))
+
+
 @event_filter("draws_second_card")
 def _second_draw_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
