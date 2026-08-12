@@ -1095,6 +1095,25 @@ class PendingChoicesMixin:
             self._execute_oracle_instruction(step, context)
         return True
 
+    def _resolve_mode_choice(self, choice: PendingChoice, mode_index: int) -> bool:
+        """Run the chosen mode of a modal triggered ability (Trufflesnout,
+        Elder Gargaroth). The modes travel as instructions with the resolution
+        context they belong to, the optional-pay shape — an index outside the
+        list is refused and the prompt stays owed."""
+        modes = tuple(choice.data.get("_modes") or ())
+        context = choice.data.get("_context")
+        if not (0 <= mode_index < len(modes)) or context is None:
+            return False
+        self.discard_pending_choice(choice)
+        labels = choice.data.get("labels") or ()
+        if 0 <= mode_index < len(labels):
+            self.log.append(
+                f"{choice.data.get('card_name', 'Ability')}: chose \"{labels[mode_index]}\""
+            )
+        self._execute_oracle_instruction(modes[mode_index], context)
+        self.check_state_based_actions()
+        return True
+
     def _apply_optional_pay_decline(self, player_index: int, entry: dict) -> None:
         """The consequence of NOT paying an optional-pay prompt. Plain "may pay"
         riders (the color rods) have none; "unless you pay" entries (Hasran
@@ -1647,6 +1666,19 @@ register_choice(
     prompt_key="body_choice",
     blocked_detail="choose the entering creature's body before other actions",
     default_at_arm=True,
+)
+
+register_choice(
+    "mode_choice",
+    resolve=lambda game, choice, r: game._resolve_mode_choice(choice, r["mode_index"]),
+    # The first printed mode — a stated policy (like the up-to-N maximum), not
+    # a valuation; a card whose AI should ever pick otherwise needs one.
+    default=lambda game, choice: game._resolve_mode_choice(choice, 0),
+    action="mode_choice_confirm",
+    prompt_key="mode_choice",
+    blocked_detail="choose a mode for the triggered ability before other actions",
+    default_at_arm=True,
+    spectator_visible=True,
 )
 
 register_choice(

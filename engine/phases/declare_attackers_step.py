@@ -334,8 +334,12 @@ class DeclareAttackersStepMixin:
             if not (0 <= idx < len(controller.battlefield)):
                 continue
             permanent = controller.battlefield[idx]
+            # "attacks or blocks" (Elder Gargaroth) is the same per-creature
+            # firing on each half of its union — this is the attack half, the
+            # blocker-side twin in declare_blockers_step is the other.
             for trig in matching_triggers(
-                permanent.effective_card, condition_kinds={"creature_attacks"}
+                permanent.effective_card,
+                condition_kinds={"creature_attacks", "creature_attacks_or_blocks"},
             ):
                 # "Whenever this creature attacks AND ISN'T BLOCKED" (Merchant
                 # Ship, Pirate Ship riders) can't be evaluated until blockers

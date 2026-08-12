@@ -640,8 +640,11 @@ class DeclareBlockersStepMixin:
             if not (0 <= blocker_idx < len(defender.battlefield)):
                 continue
             blocker = defender.battlefield[blocker_idx]
+            # "attacks or blocks" (Elder Gargaroth): the block half of the
+            # union — the attack half fires in declare_attackers_step.
             for trig in matching_triggers(
-                blocker.effective_card, condition_kinds={"creature_blocks"}
+                blocker.effective_card,
+                condition_kinds={"creature_blocks", "creature_attacks_or_blocks"},
             ):
                 self._stack_push(
                     StackItem(

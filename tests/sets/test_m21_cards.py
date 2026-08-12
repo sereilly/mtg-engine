@@ -1670,6 +1670,113 @@ def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool
     assert game._can_be_targeted(angel, pool["Shock"])
 
 
+# --- Round 27: modal triggered abilities --------------------------------------
+
+
+@pytest.mark.parametrize("name", ["Trufflesnout", "Elder Gargaroth"])
+def test_round_27_modal_trigger_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+    trig = next(t for t in program.triggered_abilities if t.supported)
+    assert trig.instruction is not None and trig.instruction.kind == "choose_one"
+    assert program.modes == (), "a trigger's modes are not cast-time modes"
+
+
+def test_trufflesnout_default_takes_the_first_printed_mode(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Trufflesnout"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    result = game.cast_from_hand(0, "Trufflesnout")
+    assert result.supported, result.details
+    game._settle()
+
+    snout = next(p for p in p1.battlefield if p.card.name == "Trufflesnout")
+    assert snout.metadata.get("plus_counters", 0) == 1, "mode 0: the counter"
+    assert (snout.effective_power, snout.effective_toughness) == (3, 3)
+    assert p1.life == 20, "the life mode was not also taken"
+
+
+def test_trufflesnout_interactive_controller_may_take_the_life_instead(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Trufflesnout"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.interactive_seats = {0}
+
+    result = game.cast_from_hand(0, "Trufflesnout")
+    assert result.supported, result.details
+    game._settle()
+
+    pending = game.pending_choices_of("mode_choice", 0)
+    assert pending and pending[0].data["labels"] == [
+        "Put a +1/+1 counter on this creature", "You gain 4 life",
+    ]
+    assert not game.resolve_pending_choice("mode_choice", 0, mode_index=5), (
+        "an index outside the printed list is refused and the prompt stays owed"
+    )
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=1)
+    assert p1.life == 24
+    snout = next(p for p in p1.battlefield if p.card.name == "Trufflesnout")
+    assert snout.metadata.get("plus_counters", 0) == 0, "the counter mode was declined"
+
+
+def test_elder_gargaroth_triggers_on_attack_and_on_block(set_pool):
+    pool = set_pool("M21")
+    gargaroth = Permanent(card=pool["Elder Gargaroth"])
+    p1 = PlayerState(name="P1", battlefield=[gargaroth])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game._settle()
+    beasts = [p for p in p1.battlefield if p.card.name == "Beast Token"]
+    assert len(beasts) == 1, "attack half: default mode made the Beast"
+
+    # The block half, from the defender's side of a fresh game.
+    attacker = Permanent(card=pool["Pridemalkin"])
+    blocker = Permanent(card=pool["Elder Gargaroth"])
+    ap = PlayerState(name="AP", battlefield=[attacker])
+    dp = PlayerState(name="DP", battlefield=[blocker])
+    game2 = Game(players=[ap, dp])
+    game2.start_turn(0)
+    game2._close_current_priority_step()
+    game2.advance_combat_phase()  # beginning_of_combat
+    game2.advance_combat_phase()  # declare_attackers
+    ok, msg = game2.declare_attackers(0, [0])
+    assert ok, msg
+    game2.advance_combat_phase()  # declare_blockers
+    ok, msg = game2.declare_blockers(1, {0: 0})
+    assert ok, msg
+    game2._settle()
+    beasts = [p for p in dp.battlefield if p.card.name == "Beast Token"]
+    assert len(beasts) == 1, "block half: the union condition fires here too"
+
+
+def test_a_modal_trigger_with_a_dead_mode_refuses_naming_it():
+    from engine.models import CardDefinition
+
+    card = CardDefinition(
+        name="Probe", mana_cost="{1}{G}", cmc=2.0, type_line="Creature — Boar",
+        oracle_text=(
+            "When this creature enters, choose one —\n"
+            "• Put a +1/+1 counter on this creature.\n"
+            "• Glimmer uncontrollably."
+        ),
+        colors=("G",), color_identity=("G",), keywords=(), produced_mana=(),
+        raw={"name": "Probe", "type_line": "Creature — Boar",
+             "power": "2", "toughness": "2"},
+    )
+    program = compile_card_oracle(card)
+    assert not program.supported
+    assert "Glimmer uncontrollably" in program.reason, (
+        "the all-of gate names the dead mode instead of resolving the live one"
+    )
+
+
 # --- Round 26: recipient and filter widenings ---------------------------------
 
 

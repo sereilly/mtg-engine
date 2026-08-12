@@ -507,6 +507,20 @@ def _body_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("mode_choice")
+def _mode_choice(ctx: PromptContext, choices: list) -> dict:
+    """A modal triggered ability's "Choose one —" (Trufflesnout, Elder
+    Gargaroth): the printed bullet labels, answered by index."""
+    data = choices[0].data
+    return {
+        "card_name": data["card_name"],
+        "modes": [
+            {"index": i, "label": label}
+            for i, label in enumerate(data.get("labels") or [])
+        ],
+    }
+
+
 @prompt_renderer("least_power_choice")
 def _least_power_choice(ctx: PromptContext, choices: list) -> dict:
     data = choices[0].data

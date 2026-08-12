@@ -224,6 +224,34 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     return True, "resolved"
 
 
+@effect_handler("choose_one")
+def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """A modal triggered ability's "Choose one —" (Trufflesnout, Elder
+    Gargaroth): the controller picks one of the modes the payload carries and
+    that mode's instruction runs against this same context.
+
+    The pick is a ``mode_choice`` pending prompt for an interactive
+    controller; every other seat takes the default (the first printed mode —
+    a stated policy, not a valuation) the moment it is armed, because the
+    trigger's resolution has to finish. CR 700.2b would have the mode chosen
+    as the ability is put on the stack; asking at resolution is the same
+    standing approximation the engine makes for an ETB trigger's target, and
+    nothing can act in between because the prompt blocks the owing seat.
+    """
+    modes = tuple(instruction.payload.get("modes") or ())
+    if not modes:
+        return True, "resolved"
+    player_index = game.players.index(context.caster)
+    game.arm_pending_choice(
+        "mode_choice", player_index,
+        card_name=context.card.name,
+        labels=[mode["label"] for mode in modes],
+        _modes=tuple(mode["instruction"] for mode in modes),
+        _context=context,
+    )
+    return True, "resolved"
+
+
 @effect_handler("for_each")
 def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"For each <objects>, <effect>." The matching set is snapshotted before

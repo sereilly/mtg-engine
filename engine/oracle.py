@@ -835,6 +835,64 @@ def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption
     return ()
 
 
+def _modal_trigger_ability(
+    lines: list[str], index: int, card_name: str | None,
+) -> tuple[ParsedTriggeredAbility, int] | str | None:
+    """The modal triggered ability whose head sits at *index*, with how many
+    bullet lines it consumed — or a refusal reason, or None.
+
+    "When this creature enters, choose one —" plus the bullets below it
+    (Trufflesnout; Elder Gargaroth's attacks-or-blocks). The head's condition
+    and each bullet are read by the same front ends any other line goes to;
+    the grouping alone is this module's job, exactly as it is for a modal
+    spell. The assembled instruction is one ``choose_one`` carrying every
+    mode, because a triggered ability triggers *once* and the controller picks
+    a mode when it goes on the stack (CR 700.2b) — expanding to one trigger
+    per bullet, the way modal activated abilities are rewritten, would fire
+    them all.
+
+    Returns None when the line is not a modal trigger head at all (an
+    ordinary line, or a head whose count the engine cannot carry — "choose
+    one or more" fails `_modal_head`'s lowering check and stays refused). A
+    *recognized* head with an unreadable condition or a dead mode returns the
+    refusal reason instead: the all-of gate round 20 established for modal
+    spells, because a mode list with a dead entry is a card that offers a
+    choice and then declines to perform it.
+    """
+    head = lines[index].strip()
+    if _modal_head(head, grammar_ast.TriggeredAbilityNode) is None:
+        return None
+    bullets = _bullets_after(lines, index)
+    if not bullets:
+        return None
+    trig = _parse_triggered_ability(head, card_name)
+    if trig is None:
+        return f"unsupported modal trigger condition: {head!r}"
+    modes: list[dict] = []
+    for label in bullets:
+        found = _line_instruction(label, card_name)
+        if found is None:
+            return f"unsupported mode of a triggered ability: {label!r}"
+        instruction = found[0]
+        if "targets" in instruction.payload:
+            # The mode picker resolves at trigger resolution; nothing collects
+            # a target after a mode is chosen, so a targeted mode would run
+            # against a target nobody picked.
+            return f"a targeted mode of a triggered ability has no picker: {label!r}"
+        modes.append({"label": label.rstrip("."), "instruction": instruction})
+    choose = OracleInstruction("choose_one", "", {"modes": tuple(modes)})
+    return (
+        ParsedTriggeredAbility(
+            source_line=" ".join([head] + [f"• {b}" for b in bullets]),
+            condition=trig.condition,
+            instruction=choose,
+            supported=True,
+            effect_kind=triggered_label("choose_one", trig.condition.kind),
+        ),
+        len(bullets),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Creature-line helpers
 # ---------------------------------------------------------------------------
@@ -1305,9 +1363,27 @@ def _parse_creature_program(
     static_lines: list[str] = []
 
     any_supported_trigger = False
-    for raw_line in text.splitlines():
+    lines = text.splitlines()
+    index = 0
+    while index < len(lines):
+        raw_line = lines[index]
+        index += 1
         line = raw_line.strip()
         if not line:
+            continue
+
+        # 0. Modal triggered ability — a head plus the bullet run below it,
+        # consumed together so the bullets never reach the per-line steps
+        # (where each would refuse as an orphaned fragment).
+        modal_trigger = _modal_trigger_ability(lines, index - 1, card_name)
+        if isinstance(modal_trigger, str):
+            return False, "unsupported", modal_trigger, (), (), (), ()
+        if modal_trigger is not None:
+            trig, consumed = modal_trigger
+            triggered.append(trig)
+            any_supported_trigger = True
+            instructions.append(trig.instruction)
+            index += consumed
             continue
 
         # 1. Plain keyword line (e.g. "Flying, Trample")

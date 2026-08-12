@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 173/285) to the full release line - **137 sets, 33,594
+M21 measured at 175/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -969,6 +969,60 @@ census's remaining named blocks: the drawn-two-cards-this-turn tracker family
 (Gnarled Sage, Tome Anima, Jolrael, Mystic Skyfish), cast-trigger type
 narrowings (Spellgorger Weird), and the intervening-if object filter
 (Turret Ogre, Furious Rise).
+
+---
+
+## Round 27: a trigger learns to offer a choice
+
+*(2026-08-11, same day.)* M21 **173 → 175**: Trufflesnout and Elder Gargaroth
+— the modal triggered abilities round 26's census named first. The pieces were
+already waiting, and the seam even said so: `_modal_options`' docstring noted
+that a modal *trigger* "reaches here and is not claimed, because its head
+parses as a `TriggeredAbilityNode`". This round claims it:
+
+- **Grouping is the compiler's job, reading is the grammar's** — the same
+  split the modal-spell path established. `_modal_trigger_ability` reads the
+  head through `_modal_head(…, TriggeredAbilityNode)`, the condition through
+  the ordinary trigger parser, each bullet through `_line_instruction`, and
+  assembles one `choose_one` instruction carrying every mode. One
+  instruction, not one trigger per bullet — a triggered ability triggers
+  *once*, and the expansion trick modal activated abilities use would fire
+  them all. The classifier's line loop consumes head plus bullets together,
+  so a bullet never reaches the per-line steps as an orphaned fragment.
+- **The choice is a pending prompt, the `may` shape.** `choose_one` arms a
+  `mode_choice` carrying the mode instructions and the resolution context;
+  the resolver runs the picked one. `default_at_arm`: a non-interactive seat
+  takes the first printed mode the moment it is armed (a stated policy, like
+  the up-to-N maximum — a card whose AI should pick otherwise needs a
+  valuation, not a special case), so the headless simulator needed nothing.
+  CR 700.2b would choose the mode as the ability goes on the stack; asking at
+  resolution is the same standing approximation the engine already makes for
+  an ETB trigger's target, and the prompt blocks the owing seat meanwhile.
+- **The all-of gate from round 20 applies here too**: a recognized head with
+  an unreadable condition or a dead bullet refuses the whole card naming the
+  clause — a mode list with a dead entry is a card that offers a choice and
+  then declines to perform it. A *targeted* mode also refuses (nothing
+  collects a target after the mode is picked), and "choose one or more"
+  stays refused by the head's own lowering, exactly as for spells.
+- **`creature_attacks_or_blocks` had a parse and no dispatch** — both trigger
+  tables knew the words; no combat step fired them. The two per-creature
+  sites (`_fire_creature_attacks_triggers`, `_fire_creature_blocks_triggers`)
+  take a condition-kind set, so the union condition is one entry in each, and
+  the per-set test drives both halves: Gargaroth's Beast arrives on attack
+  and on block.
+- **Web:** one renderer, one `ActionKind` (`mode_choice_confirm`, answered by
+  index), the registration's prompt riding the three generic loops — covered
+  by construction, per the pending-choices design.
+
+Suite 4,803 at 19.8s, every `--check` green, shipped pool 388/388, zero
+hooks, zero ceiling raises.
+
+**Next:** the census's remaining named blocks — the drawn-two-cards-this-turn
+tracker family (Gnarled Sage, Tome Anima, Jolrael, Mystic Skyfish),
+cast-trigger type narrowings (Spellgorger Weird), and the intervening-if
+object filter (Turret Ogre) — plus the counters-as-state families the
+round-26 record unlocked (Basri's Lieutenant, Pridemalkin, Sigiled
+Contender).
 
 ---
 

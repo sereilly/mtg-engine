@@ -68,6 +68,7 @@ ActionKind = Literal[
     "enter_choice_confirm",
     "body_choice_confirm",
     "least_power_choice_confirm",
+    "mode_choice_confirm",
     "lamp_draw_confirm",
     "outside_game_draw_confirm",
     "assign_defender_piles",

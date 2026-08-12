@@ -1245,6 +1245,16 @@ def do_action(session_id: str, req: GameActionRequest):
         if not session.game.confirm_enter_body_choice(req.seat, req.hand_index):
             raise HTTPException(status_code=400, detail="no body choice is pending for you")
 
+    elif req.action == "mode_choice_confirm":
+        # A modal triggered ability (Trufflesnout, Elder Gargaroth): the
+        # controller picks a mode (hand_index = position in the offered list).
+        if req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index (mode index) is required")
+        if not session.game.resolve_pending_choice(
+            "mode_choice", req.seat, mode_index=req.hand_index
+        ):
+            raise HTTPException(status_code=400, detail="no mode choice is pending for you")
+
     elif req.action == "least_power_choice_confirm":
         # Drop of Honey: the controller picks which of the creatures tied for
         # least power is destroyed (target_seat + target_permanent_index).
