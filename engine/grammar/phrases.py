@@ -22,6 +22,10 @@ from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
 _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("land_dies", ("a", "land", "is", "put", "into", "a", "graveyard", "from", "the", "battlefield")),
+    # Longest first: the explicit-self spelling (Basri's Lieutenant) names the
+    # same set as the bare one below it — see the oracle table's note.
+    ("creature_you_control_dies",
+     ("this", "creature", "or", "another", "creature", "you", "control", "dies")),
     ("creature_you_control_dies", ("a", "creature", "you", "control", "dies")),
     # Longer phrases first: this list is matched in order, so a prefix entry
     # would claim the shorter reading and strand the rest of the clause.

@@ -132,6 +132,14 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
     if kind == "died_this_turn":
         return int(getattr(game, "creatures_died_this_turn", 0) or 0) > 0
 
+    if kind == "had_plus1_counter":
+        # "if it had a +1/+1 counter on it" (Basri's Lieutenant). The creature
+        # is already in the graveyard by the time this resolves, so the only
+        # legal source is the last-known information the fire site recorded
+        # (CR 603.10). No record means nothing observed the death — False,
+        # rather than a guess at a board that no longer holds the answer.
+        return bool((context.trigger_context or {}).get("had_plus1_counter"))
+
     if kind == "returned_to_hand_this_turn":
         # "a permanent was put into your hand from the battlefield this turn"
         # (Barrin). "Your" is the ability's controller; the bounce paths feed

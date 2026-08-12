@@ -13,7 +13,7 @@ import dataclasses
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import (SELF, WORD)
+from .lexer import (PT, SELF, WORD)
 from .nouns import (parse_object_filter, parse_player_ref, parse_recipient)
 from .stream import TokenStream
 from .phrases import (
@@ -390,6 +390,21 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
     ):
         _parse_duration(stream)
         return ast.ReturnedToHandThisTurn()
+
+    # "if it had a +1/+1 counter on it" (Basri's Lieutenant). Past tense, and
+    # that is the whole point: "it" is the creature that just died, so the
+    # answer is last-known information (CR 603.10) recorded as the trigger
+    # fires rather than a board state anything could read afterwards.
+    # "+1/+1" lexes as a PT token, so the phrase is matched in two halves
+    # around it rather than as a word run.
+    counter_mark = stream.mark()
+    if stream.accept_phrase("it", "had", "a"):
+        token = stream.peek()
+        if token is not None and token.kind == PT and token.text == "+1/+1":
+            stream.advance()
+            if stream.accept_phrase("counter", "on", "it"):
+                return ast.HadPlus1Counter()
+    stream.reset(counter_mark)
 
     # "it is untapped" and "it's untapped" are the same condition; the lexer
     # splits the contraction into "it" + "'s", so both spellings are listed

@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 62.6% | 58.3% | 37.6% | 153 |
+| M21 *(measured)* | 285 | 503 | 62.8% | 58.6% | 38.0% | 153 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 270 | 137 | expected a subject |  |
+| 269 | 136 | expected a subject |  |
 | 104 | 50 | unrecognized effect verb |  |
 | 61 | 42 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -124,6 +124,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Put a +1/+1 counter on each of up to two target creatures. You may search your library and/or graveyard for a card named Basri, Devoted Paladin, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Basri's Lieutenant**
   - `When this creature enters, put a +1/+1 counter on target creature you control.`
+  - `Whenever this creature or another creature you control dies, if it had a +1/+1 counter on it, create a 2/2 white Knight creature token with vigilance.`
 - **Basri's Solidarity**
   - `Put a +1/+1 counter on each creature you control.`
 - **Battle-Rattle Shaman**
@@ -829,6 +830,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is the number of untapped lands they controlled at the beginning of this turn.`
 - **Pridemalkin**
   - `When this creature enters, put a +1/+1 counter on target creature you control.`
+  - `Each creature you control with a +1/+1 counter on it has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
 - **Prismite**
   - `{2}: Add one mana of any color.`
 - **Prodigal Sorcerer**

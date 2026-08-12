@@ -128,6 +128,11 @@ class LordBuffFilter:
     # *read*, not when the board is recomputed — a creature that taps between
     # recomputes must lose an untapped-only bonus immediately (CR 611.3a).
     qualifier: str | None = None
+    # "…with a +1/+1 counter on it" (Pridemalkin). A restriction on the buffed
+    # set, read off the ``plus_counters`` record rather than the P/T bonus —
+    # the same distinction ``permanent_matches_filter`` makes, and for the same
+    # reason: a Giant Growth writes power_bonus and places no counter.
+    with_plus1_counter: bool = False
 
 
 @dataclass(frozen=True)
@@ -199,7 +204,14 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
     qualifier: str | None = None
     colors: list[str] = []
     subtypes: list[str] = []
+    with_plus1_counter = False
 
+    # "Each creature you control…" / "All creatures…": a distributive article
+    # naming exactly the set an unqualified anthem already reaches, so it is
+    # consumed and contributes nothing. Not interchangeable with "other",
+    # which *excludes* the source — hence separate words rather than one list.
+    if index < len(words) and words[index] in ("each", "all"):
+        index += 1
     if index < len(words) and words[index] == "other":
         other = True
         index += 1
@@ -227,6 +239,14 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
         controller = "you"
         index += 2
 
+    # "…with a +1/+1 counter on it" (Pridemalkin). Spelled out in full so a
+    # differently-worded restriction ("with a -1/-1 counter", "with two or
+    # more counters") leaves words unconsumed and refuses the line rather
+    # than being read as this one.
+    if words[index:index + 6] == ["with", "a", "+1/+1", "counter", "on", "it"]:
+        with_plus1_counter = True
+        index += 6
+
     if index != len(words):
         return None
     return LordBuffFilter(
@@ -235,6 +255,7 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
         controller=controller,
         other_than_source=other,
         qualifier=qualifier,
+        with_plus1_counter=with_plus1_counter,
     )
 
 
@@ -340,6 +361,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["other"] = True
     if buff.filter.qualifier:
         payload["while"] = buff.filter.qualifier
+    if buff.filter.with_plus1_counter:
+        payload["with_plus1_counter"] = True
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
     if buff.granted_ability:
@@ -358,6 +381,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             controller=payload.get("controller"),
             other_than_source=bool(payload.get("other")),
             qualifier=payload.get("while"),
+            with_plus1_counter=bool(payload.get("with_plus1_counter")),
         ),
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),

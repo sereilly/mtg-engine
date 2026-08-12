@@ -392,9 +392,19 @@ class ReturnedToHandThisTurn:
     so the game keeps a per-seat counter the bounce paths feed."""
 
 
+@dataclass(frozen=True)
+class HadPlus1Counter:
+    """"if it had a +1/+1 counter on it" (Basri's Lieutenant, CR 603.4).
+
+    About the creature that just died, so it is answerable only from
+    last-known information (CR 603.10): the fire site records the answer as
+    the trigger goes on the stack, and the resolution-side gate reads that
+    record rather than a board the creature has already left."""
+
+
 Condition = Union[
-    Controls, IsState, DiedThisTurn, LifeGainedThisTurn, PaidCost, RawCondition,
-    ReturnedToHandThisTurn,
+    Controls, IsState, DiedThisTurn, HadPlus1Counter, LifeGainedThisTurn,
+    PaidCost, RawCondition, ReturnedToHandThisTurn,
 ]
 
 

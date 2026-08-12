@@ -936,6 +936,13 @@ class PermanentStateMixin:
                 return False
             if any(not target_perm.has_type(subtype) for subtype in filt.subtypes):
                 return False
+            # "…with a +1/+1 counter on it" (Pridemalkin): the counter record,
+            # not the P/T bonus — a pump writes power_bonus and places no
+            # counter, so reading the bonus would buff the wrong creatures.
+            if filt.with_plus1_counter and int(
+                target_perm.metadata.get("plus_counters", 0)
+            ) <= 0:
+                return False
             return True
 
         # Step 2: re-apply from every permanent currently on the battlefield.

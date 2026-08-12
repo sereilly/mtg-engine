@@ -407,6 +407,8 @@ def _lower_condition(condition: ast.Condition) -> dict[str, object]:
         return {"kind": "died_this_turn", "filter": condition.filter.to_payload()}
     if isinstance(condition, ast.ReturnedToHandThisTurn):
         return {"kind": "returned_to_hand_this_turn"}
+    if isinstance(condition, ast.HadPlus1Counter):
+        return {"kind": "had_plus1_counter"}
     if isinstance(condition, ast.LifeGainedThisTurn):
         # The seat rides the payload rather than being baked into the kind, so
         # "if an opponent gained…" is the same condition with a different `who`
@@ -577,6 +579,7 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         controller=filt.controller,
         other_than_source=filt.other_than_source,
         qualifier=qualifier,
+        with_plus1_counter=filt.with_plus1_counter,
     )
 
 
@@ -588,6 +591,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "subtypes": lord.subtypes,
         "controller": lord.controller,
         "other_than_source": lord.other_than_source,
+        "with_plus1_counter": lord.with_plus1_counter,
     }
     if lord.qualifier is not None:
         field_name, value = QUALIFIER_FIELDS[lord.qualifier]
@@ -604,7 +608,11 @@ def _lower_lord_effects(
     if len(subjects) != 1:
         raise LoweringError("a static ability over two different subjects", node=node)
     subject = subjects.pop()
-    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "all":
+    # "All creatures…" and "Each creature you control…" (Pridemalkin) name the
+    # same set — a static ability applies to every object matching its
+    # description (CR 611.3a), so the distributive article is a spelling, not a
+    # different effect. The derivation table consumes both words the same way.
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier not in ("all", "each"):
         raise LoweringError("static abilities need the CR 613 layers engine", node=node)
 
     power = toughness = 0

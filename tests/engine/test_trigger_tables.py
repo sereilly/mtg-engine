@@ -28,11 +28,20 @@ from tests.helpers import LEA_PATH
 # Canonical oracle-text (normalized) example for every trigger-condition kind.
 # When adding a pattern to a table, add its example here — the shadowing test
 # fails otherwise.
-EXAMPLE_TEXTS: dict[str, str] = {
+#
+# A kind may carry **several** examples, as a tuple: one printed wording per
+# pattern that names it ("whenever a creature you control dies" and the
+# explicit-self spelling Basri's Lieutenant prints). Without that, a second
+# spelling would be untested by the shadowing guard — the lookup is by kind,
+# so it would only ever see the first.
+EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # whenever
     "land_dies": "whenever a land is put into a graveyard from the battlefield",
     "creature_dies": "whenever a creature dies",
-    "creature_you_control_dies": "whenever a creature you control dies",
+    "creature_you_control_dies": (
+        "whenever a creature you control dies",
+        "whenever this creature or another creature you control dies",
+    ),
     "creature_deals_damage": "whenever this creature deals damage",
     "creature_deals_combat_damage": "whenever this creature deals combat damage to a player",
     "creature_blocks_or_blocked_by_nonwall": "whenever this creature blocks or becomes blocked by a non-wall creature",
@@ -84,6 +93,14 @@ _TABLES = [
 ]
 
 
+def _examples(kind: str) -> tuple[str, ...]:
+    """Every canonical text for *kind* — one entry may hold several."""
+    found = EXAMPLE_TEXTS.get(kind)
+    if found is None:
+        return ()
+    return (found,) if isinstance(found, str) else tuple(found)
+
+
 def test_every_pattern_has_an_example():
     missing = [
         kind
@@ -109,27 +126,32 @@ def test_every_example_matches_its_own_pattern():
         for kind, pattern in table:
             patterns_by_kind.setdefault(kind, []).append(pattern)
         for kind, patterns in patterns_by_kind.items():
-            example = EXAMPLE_TEXTS.get(kind)
-            if example is None:
-                continue  # covered by test_every_pattern_has_an_example
-            assert any(re.match(pattern, example) for pattern in patterns), (
-                f"{kind}: canonical example {example!r} matches none of its patterns"
-            )
+            for example in _examples(kind):
+                assert any(re.match(pattern, example) for pattern in patterns), (
+                    f"{kind}: canonical example {example!r} matches none of its patterns"
+                )
 
 
 @pytest.mark.parametrize("table_name,table", _TABLES)
 def test_no_pattern_shadows_a_later_one(table_name, table):
     """An earlier pattern must never match a later pattern's canonical text —
-    otherwise the later (more specific) pattern is dead code."""
+    otherwise the later (more specific) pattern is dead code.
+
+    Same-kind pairs are exempt, and only those: shadowing is harmful because
+    the swallowed text compiles to a *different* condition than it names, and
+    two patterns producing one kind produce one answer. Two spellings of one
+    kind still have to earn their place — every example is checked against
+    every earlier pattern of every *other* kind.
+    """
     for i, (early_kind, early_pattern) in enumerate(table):
         for later_kind, _ in table[i + 1:]:
-            example = EXAMPLE_TEXTS.get(later_kind)
-            if example is None:
+            if later_kind == early_kind:
                 continue
-            assert not re.match(early_pattern, example), (
-                f"{table_name}: pattern {early_kind!r} shadows {later_kind!r} "
-                f"(matches its example {example!r}); move the specific pattern first"
-            )
+            for example in _examples(later_kind):
+                assert not re.match(early_pattern, example), (
+                    f"{table_name}: pattern {early_kind!r} shadows {later_kind!r} "
+                    f"(matches its example {example!r}); move the specific pattern first"
+                )
 
 
 # --- regression: the two shadows found in the LEA-era table -----------------

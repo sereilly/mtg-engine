@@ -1670,6 +1670,104 @@ def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool
     assert game._can_be_targeted(angel, pool["Shock"])
 
 
+# --- Round 30: counters as a filter, and as last-known information ------------
+
+
+@pytest.mark.parametrize("name", ["Pridemalkin", "Basri's Lieutenant"])
+def test_round_30_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def test_pridemalkin_tramples_only_the_counted(set_pool):
+    pool = set_pool("M21")
+    cat = Permanent(card=pool["Pridemalkin"])
+    counted = Permanent(card=pool["Concordia Pegasus"])
+    plain = Permanent(card=pool["Alpine Watchdog"])
+    theirs = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", battlefield=[cat, counted, plain])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+
+    from engine.pt import add_plus1_counters, add_pt_modifier
+
+    add_plus1_counters(counted)
+    add_plus1_counters(theirs)
+    # A pump is not a counter: the record is what the filter reads.
+    add_pt_modifier(plain, 1, 1)
+    game._recompute_continuous_effects()
+
+    assert game._has_keyword(counted, "trample")
+    assert not game._has_keyword(plain, "trample"), "a pump places no counter"
+    assert not game._has_keyword(theirs, "trample"), "'you control' scopes it"
+    assert not game._has_keyword(cat, "trample"), "the Cat has no counter itself"
+
+
+def test_basris_lieutenant_knights_a_counted_death(set_pool):
+    pool = set_pool("M21")
+    lieutenant = Permanent(card=pool["Basri's Lieutenant"])
+    counted = Permanent(card=pool["Concordia Pegasus"])
+    plain = Permanent(card=pool["Alpine Watchdog"])
+    p1 = PlayerState(name="P1", battlefield=[lieutenant, counted, plain])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    from engine.pt import add_plus1_counters
+
+    add_plus1_counters(counted)
+
+    # An uncounted death makes nothing.
+    game._permanent_to_graveyard(p1, plain)
+    game.remove_from_battlefield(plain)
+    game._settle()
+    assert not [p for p in p1.battlefield if p.card.name == "Knight Token"]
+
+    # A counted one does — the counter is read as last-known information,
+    # after the creature is already in the graveyard.
+    game._permanent_to_graveyard(p1, counted)
+    game.remove_from_battlefield(counted)
+    game._settle()
+    knights = [p for p in p1.battlefield if p.card.name == "Knight Token"]
+    assert len(knights) == 1
+    assert (knights[0].effective_power, knights[0].effective_toughness) == (2, 2)
+    assert game._has_keyword(knights[0], "vigilance")
+
+
+def test_basris_lieutenant_triggers_on_its_own_counted_death(set_pool):
+    """"This creature or another creature you control" includes itself, so the
+    self-exclusion every other dies-trigger applies must not reach it."""
+    pool = set_pool("M21")
+    lieutenant = Permanent(card=pool["Basri's Lieutenant"])
+    p1 = PlayerState(name="P1", battlefield=[lieutenant])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    from engine.pt import add_plus1_counters
+
+    add_plus1_counters(lieutenant)
+    game._permanent_to_graveyard(p1, lieutenant)
+    game.remove_from_battlefield(lieutenant)
+    game._settle()
+
+    assert len([p for p in p1.battlefield if p.card.name == "Knight Token"]) == 1
+
+
+def test_basris_lieutenant_ignores_an_opponents_counted_death(set_pool):
+    pool = set_pool("M21")
+    lieutenant = Permanent(card=pool["Basri's Lieutenant"])
+    theirs = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", battlefield=[lieutenant])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+
+    from engine.pt import add_plus1_counters
+
+    add_plus1_counters(theirs)
+    game._permanent_to_graveyard(p2, theirs)
+    game.remove_from_battlefield(theirs)
+    game._settle()
+
+    assert not [p for p in p1.battlefield if p.card.name == "Knight Token"]
+
+
 # --- Round 29: the conditional-static family ----------------------------------
 
 

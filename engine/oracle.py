@@ -182,6 +182,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_dies",                   r"whenever a land is put into a graveyard from the battlefield"),
     ("creature_dies",               r"whenever a creature dies"),
     ("creature_you_control_dies",   r"whenever a creature you control dies"),
+    # The same set spelled to make the source's own death explicit (Basri's
+    # Lieutenant). "This creature" is one of the creatures you control — its
+    # controller is who "you" means — so the union names exactly what the
+    # entry above does, and mapping both onto one kind keeps one dispatcher.
+    ("creature_you_control_dies",
+     r"whenever this creature or another creature you control dies"),
     # First match wins and patterns are unanchored at the end, so a pattern
     # that is a strict prefix of a later pattern's text would shadow it —
     # specific forms must precede their generic prefixes. Guarded by

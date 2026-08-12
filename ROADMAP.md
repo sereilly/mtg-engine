@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 182/285) to the full release line - **137 sets, 33,594
+M21 measured at 184/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -1126,6 +1126,60 @@ hooks, zero ceiling raises.
 +1/+1 counter on it" — last-known information over the round-26 record),
 Pridemalkin's counter-filtered trample grant (a lord-buff subject
 qualifier), and the remaining no-handler tail the support report names.
+
+---
+
+## Round 30: counters as a filter, and as last-known information
+
+*(2026-08-12, same day.)* M21 **182 → 184**: Pridemalkin and Basri's
+Lieutenant. Both are the round-26 counter record paying out again, in the two
+places a counter can be asked about — while the creature is on the
+battlefield, and after it has left.
+
+- **Pridemalkin** is a lord buff with a restriction the table could not hold:
+  "Each creature you control **with a +1/+1 counter on it** has trample."
+  `LordBuffFilter` grew the field, `_parse_subject` grew the postmodifier
+  (spelled out in full, so "with a -1/-1 counter" leaves words unconsumed and
+  refuses rather than being read as this one), and the grammar's round-trip
+  equality — the mechanism that makes a dropped restriction impossible —
+  carried it across for free once both ends knew the field. The distributive
+  article came with it: "Each creature you control…" and "All creatures…"
+  name the same set (CR 611.3a), so `each` is a spelling rather than a
+  different effect, consumed as a no-op on both sides. The consumer reads the
+  counter *record*, not the P/T bonus — a Giant Growth writes power_bonus and
+  places no counter, which the test pins.
+- **Basri's Lieutenant** needed three pieces. The trigger spelling
+  ("this creature **or another** creature you control dies") maps onto the
+  existing `creature_you_control_dies` rather than minting a kind: the union
+  names exactly the set the bare wording does, since "you" is the ability's
+  controller. That condition had a parse in both tables and, like round 28's
+  attacks-or-blocks, **no dispatcher** — `_fire_creature_dies_triggers` knew
+  only `creature_dies`. It collects both now, scoped to observers who
+  controlled the dead creature, and the self-exclusion every other dies
+  trigger applies is skipped for it, because this one is about its own death
+  too.
+- **The intervening clause is last-known information** (CR 603.10). "If it
+  had a +1/+1 counter on it" cannot be answered at resolution — the creature
+  is in a graveyard with no counters — so the fire site freezes the answer
+  into the trigger's context and the resolution-side CR 603.4 gate reads that
+  record. No record means False: nothing observed the death, so the trigger
+  declines rather than guessing at a board that no longer holds the answer.
+
+**The trigger-table guard got stricter while being fixed.** Two patterns
+sharing one kind made its shadowing test compare a pattern against its own
+kind's example and fail. The lookup was one example per kind, so a second
+spelling was *untestable* — the guard could never see it. A kind may now
+carry several examples, every one checked against every earlier pattern of
+every other kind, and only same-kind pairs are exempt (two patterns
+producing one condition produce one answer, so nothing is dead).
+
+Suite 4,824 at 20.3s, every `--check` green, shipped pool 388/388, zero
+hooks, zero ceiling raises.
+
+**Next:** the no-handler tail the support report names card by card, led by
+the counter-replacement pair (Conclave Mentor's "that many plus one"
+replacement, CR 614, and Wildwood Scourge's counters-put-on trigger), and
+Massacre Wurm's opponent-scoped death trigger.
 
 ---
 

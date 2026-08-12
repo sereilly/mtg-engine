@@ -1096,10 +1096,32 @@ class GameHelpersMixin:
         resolves; it is enqueued only when it qualifies.
         """
         events: list[dict] = []
+        # Last-known information about the creature that died (CR 603.10),
+        # frozen here because nothing downstream can read it: by the time a
+        # trigger resolves the permanent is in a graveyard with no counters.
+        dead_seat = self.controller_index_of(dead_permanent)
+        died_context = {
+            "dead_name": dead_permanent.card.name,
+            "had_plus1_counter": int(dead_permanent.metadata.get("plus_counters", 0)) > 0,
+        }
         for controller_index, observer in self.permanents_with_controller():
+            program = compile_card_oracle(observer.card)
+            # "Whenever this creature or another creature you control dies"
+            # (Basri's Lieutenant) — the source's own death counts, so this
+            # condition is collected before the self-exclusion below. Scoped
+            # to observers whose controller controlled the dead creature,
+            # which is what "you control" means.
+            if dead_seat == controller_index:
+                for trig in matching_triggers(
+                    observer.effective_card,
+                    condition_kinds={"creature_you_control_dies"},
+                ):
+                    events.append(make_trigger_event(
+                        controller_index, observer, trig,
+                        trigger_context=dict(died_context),
+                    ))
             if observer is dead_permanent:
                 continue
-            program = compile_card_oracle(observer.card)
             for trig in program.triggered_abilities:
                 # Sengir Vampire: "Whenever a creature dealt damage by this
                 # creature this turn dies, put a +1/+1 counter on this creature."
