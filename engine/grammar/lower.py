@@ -74,6 +74,7 @@ from .lowering import (
     _lower_gain_life,
     _lower_double_power,
     _lower_exile_graveyard,
+    _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
     _lower_lose_game,
     _lower_lose_life,
@@ -265,6 +266,8 @@ def lower_statement(
     if isinstance(statement, ast.Sacrifice):
         return _lower_sacrifice(statement)
 
+    if isinstance(statement, ast.RevealHandAndChoose):
+        return _lower_reveal_hand_and_choose(statement)
     if isinstance(statement, ast.ExileGraveyard):
         return _lower_exile_graveyard(statement)
     if isinstance(statement, ast.LookAtHand):

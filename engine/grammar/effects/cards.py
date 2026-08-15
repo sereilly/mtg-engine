@@ -390,6 +390,46 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     return ast.SearchLibrary(ast.PlayerRef("you"), filt, destination, graveyard)
 
 
+def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
+    """``<player> reveals their hand. You choose a <filter> card from it.
+    That player discards that card.`` (Duress.)
+
+    Read whole, interior full stops included, because the three sentences share
+    one revealed hand: split apart, the choice would be over a zone nobody
+    revealed. Returns None quietly when the words are not this template, so an
+    ordinary "reveals" keeps its own error.
+
+    Every fixed word is expected. "You choose" is the *caster* choosing from
+    someone else's hidden zone, which is the whole novelty here — a production
+    that skipped it could not tell this from the victim choosing, and those are
+    different cards.
+    """
+    mark = stream.mark()
+    player = parse_player_ref(stream)
+    if player is None or player.kind not in ("target_player", "target_opponent"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("reveals", "their", "hand"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("you", "choose"):
+        stream.reset(mark)
+        return None
+    chosen = parse_target_spec(stream)
+    if chosen is None or chosen.quantifier != "a" or not chosen.filter.is_card:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("from", "it"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if stream.accept_phrase("that", "player", "discards", "that", "card"):
+        return ast.RevealHandAndChoose(player, chosen.filter, fate="discard")
+    stream.reset(mark)
+    return None
+
+
 def _parse_exile_graveyard(stream: TokenStream) -> ast.Statement | None:
     """``Exile target player's graveyard.`` (Tormod's Crypt.)
 

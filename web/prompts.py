@@ -310,6 +310,27 @@ def _scry(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("revealed_hand_pick")
+def _revealed_hand_pick(ctx: PromptContext, choices: list) -> dict:
+    """Duress: the *caster* picks out of the victim's revealed hand.
+
+    The whole hand is sent — the card revealed it (CR 701.20), so hiding the
+    unpickable cards would show the chooser less than the game does — with the
+    legal indices marked so the client can offer only those.
+    """
+    choice = choices[0]
+    victim_seat = int(choice.data["victim_index"])
+    victim = ctx.game.players[victim_seat]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name"),
+        "victim_seat": victim_seat,
+        "victim_name": victim.name,
+        "legal_indices": list(choice.data.get("legal_indices") or []),
+        "cards": [ctx.serialize_card(card) for card in victim.hand],
+    }
+
+
 @prompt_renderer("discard")
 def _discard(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

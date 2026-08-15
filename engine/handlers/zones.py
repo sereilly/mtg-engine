@@ -11,6 +11,7 @@ from ._common import (
     resolve_target_permanent,
     resolve_target_permanents,
 )
+from ..search_filters import search_matches
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -594,6 +595,53 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     if controller_index is not None:
         context.results["exiled_permanent_controller"] = controller_index
     game.log.append(f"{card.name} exiled {perm.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("reveal_hand_and_choose")
+def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target opponent reveals their hand. You choose a noncreature, nonland
+    card from it. That player discards that card." (Duress.)
+
+    The first time one player chooses from *another* player's hidden zone. The
+    reveal is what makes that legal (CR 701.20 — the hand is public information
+    from here on), so it is logged rather than assumed, and the choice is queued
+    on the **caster's** seat with the victim's as payload: every other pending
+    choice in the engine is owed by the player it is about, and this one is not.
+
+    Nothing is queued when no card in the hand answers the filter — a choice
+    with no legal answer is not a choice, and leaving it queued would block the
+    caster on a prompt they cannot satisfy.
+    """
+    card = context.card
+    victim = context.target if context.target is not None else context.caster
+    victim_index = next(
+        (i for i, seated in enumerate(game.players) if seated is victim), None
+    )
+    caster_index = next(
+        (i for i, seated in enumerate(game.players) if seated is context.caster), None
+    )
+    if victim_index is None or caster_index is None:
+        return True, "resolved"
+    exclude_types = list(instruction.payload.get("exclude_types") or ())
+    legal = [
+        index
+        for index, held in enumerate(victim.hand)
+        if search_matches(held, {"exclude_types": exclude_types})
+    ]
+    game.log.append(
+        f"{victim.name} revealed their hand ({len(victim.hand)} card(s)) to {card.name}"
+    )
+    if not legal:
+        game.log.append(f"{card.name}: no card in that hand can be chosen")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "revealed_hand_pick", caster_index,
+        card_name=card.name,
+        victim_index=victim_index,
+        legal_indices=legal,
+        fate=str(instruction.payload.get("fate", "discard")),
+    )
     return True, "resolved"
 
 

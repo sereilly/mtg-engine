@@ -204,3 +204,79 @@ def test_crash_through_still_reaches_creatures_only(set_pool):
 
     assert game._has_keyword(creature, "trample")
     assert not game._has_keyword(land, "trample")
+
+
+# --- One player chooses from another player's hidden zone --------------------
+
+
+def test_duress_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Duress"])
+    assert program.supported, program.reason
+
+
+def _duress_game(set_pool, victim_hand, interactive=True):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Duress"]], library=[pool["Swamp"]] * 4)
+    p2 = PlayerState(name="P2", hand=[pool[name] for name in victim_hand])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    if interactive:
+        game.interactive_seats = {0}
+    result = game.cast_from_hand(0, "Duress", target_player_index=1)
+    assert result.supported, result.details
+    game._settle()
+    return game, p1, p2
+
+
+def test_duress_queues_its_choice_on_the_caster_not_the_victim(set_pool):
+    """Every other pending choice in the engine is owed by the player it is
+    about; this one is not. "**You** choose" is the caster, picking out of
+    someone else's hidden zone — the capability this round added."""
+    game, _, _ = _duress_game(
+        set_pool, ["Alpine Watchdog", "Shock", "Island", "Volcanic Salvo"]
+    )
+
+    choice = game.pending_choices_of("revealed_hand_pick")[0]
+    assert choice.player_index == 0, "the caster chooses"
+    assert choice.data["victim_index"] == 1
+    assert choice.data["legal_indices"] == [1, 3], "the two noncreature, nonland cards"
+
+
+def test_duress_refuses_a_card_its_filter_excludes(set_pool):
+    """The legal indices are re-checked against the record armed with the
+    choice, never trusted from the wire — a client offering the whole hand would
+    otherwise turn "a noncreature, nonland card" into "any card"."""
+    game, _, p2 = _duress_game(
+        set_pool, ["Alpine Watchdog", "Shock", "Island", "Volcanic Salvo"]
+    )
+
+    assert not game.confirm_revealed_hand_pick(0, 0), "a creature card"
+    assert not game.confirm_revealed_hand_pick(0, 2), "a land card"
+    assert p2.graveyard == [], "a rejected answer discards nothing"
+    assert game.pending_choices_of("revealed_hand_pick"), "and leaves the prompt owed"
+
+    assert game.confirm_revealed_hand_pick(0, 1)
+    assert [c.name for c in p2.graveyard] == ["Shock"]
+    assert [c.name for c in p2.hand] == ["Alpine Watchdog", "Island", "Volcanic Salvo"]
+
+
+def test_duress_with_nothing_legal_to_take_queues_nothing(set_pool):
+    """A choice with no legal answer is not a choice — leaving it queued would
+    block the caster on a prompt they cannot satisfy."""
+    game, _, p2 = _duress_game(set_pool, ["Alpine Watchdog", "Island"])
+
+    assert game.pending_choices_of("revealed_hand_pick") == []
+    assert p2.graveyard == []
+    assert any("no card in that hand can be chosen" in line for line in game.log)
+
+
+def test_a_non_interactive_caster_takes_the_costliest_legal_card(set_pool):
+    """A stated policy, like the up-to-N maximum and the modal first mode: mana
+    value is the one ranking every card in the pool answers."""
+    game, _, p2 = _duress_game(
+        set_pool, ["Shock", "Volcanic Salvo", "Island"], interactive=False
+    )
+    game.auto_resolve_pending_choices()
+
+    assert [c.name for c in p2.graveyard] == ["Volcanic Salvo"]
+    assert game.pending_choices == []

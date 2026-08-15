@@ -55,9 +55,19 @@ def search_matches(card, data: dict) -> bool:
     ``card_type`` plus the ``restrictions`` the lowering was able to honour.
     Missing keys mean "unrestricted", so a search armed by an older payload
     behaves exactly as it did.
+
+    Also the predicate the **revealed-hand picker** answers with (Duress), for
+    the reason in this module's docstring: a card-level restriction that only
+    one of the engine, the AI and the web layer knew about would be a choice
+    that is legal in one seat and not in another. ``exclude_types`` arrived with
+    that caller — "a **noncreature, nonland** card" is the same question about
+    the same card, asked with the answer inverted.
     """
     card_type = data.get("card_type", "any")
     if card_type != "any" and card.primary_type != card_type:
+        return False
+    type_line = card.type_line.lower()
+    if any(excluded in type_line for excluded in data.get("exclude_types") or ()):
         return False
     restrictions = data.get("restrictions") or {}
     named = restrictions.get("named")

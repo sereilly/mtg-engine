@@ -302,6 +302,38 @@ def _lower_reveal_top(node: ast.RevealTopToHandOrBottom) -> tuple[OracleInstruct
     )
 
 
+# The ``ObjectFilter`` fields the revealed-hand picker can test. The exclusion
+# is the only narrowing any printing of this template uses, and
+# `search_filters.search_matches` is what tests it — so a field outside this set
+# refuses the line rather than leaving the caster choosing from the whole hand
+# while the card claims a restriction. Same rule the search lowering follows,
+# and the same predicate underneath it.
+_REVEALED_HAND_FIELDS = frozenset({"excluded_types", "is_card"})
+
+
+def _lower_reveal_hand_and_choose(
+    node: ast.RevealHandAndChoose,
+) -> tuple[OracleInstruction, ...]:
+    """"Target opponent reveals their hand. You choose a noncreature, nonland
+    card from it. That player discards that card." (Duress.)
+
+    One instruction for the whole template: the reveal is what makes the choice
+    legal, and the discard is what the choice was for, so splitting them would
+    put a chosen card between two instructions with nothing carrying it.
+    """
+    leftover = _restrictions_beyond(node.filter, _REVEALED_HAND_FIELDS)
+    if leftover:
+        raise LoweringError(
+            "the revealed-hand picker cannot narrow by: " + ", ".join(leftover),
+            node=node,
+        )
+    payload: dict[str, object] = {"fate": node.fate}
+    if node.filter.excluded_types:
+        payload["exclude_types"] = list(node.filter.excluded_types)
+    _describe_targets(payload, node.player)
+    return (OracleInstruction("reveal_hand_and_choose", "", payload),)
+
+
 def _lower_exile_graveyard(node: ast.ExileGraveyard) -> tuple[OracleInstruction, ...]:
     """"Exile target player's graveyard." (Tormod's Crypt.)
 

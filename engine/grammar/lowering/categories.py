@@ -122,6 +122,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Looking at a hand reads a hidden zone; the legacy rule and the handler
     # both live in the engine's zones modules.
     "exile_target_graveyard": "zones",
+    "reveal_hand_and_choose": "zones",
     "look_at_target_hand": "zones",
     # A library search moves a card between hidden zones — same module, same
     # category as the other zone-change handlers.

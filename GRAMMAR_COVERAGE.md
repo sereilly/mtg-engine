@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 67.4% | 63.6% | 41.2% | 165 |
+| M21 *(measured)* | 285 | 503 | 67.6% | 63.8% | 41.4% | 166 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,7 +33,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 257 | 124 | expected a subject |  |
-| 97 | 43 | unrecognized effect verb |  |
+| 96 | 42 | unrecognized effect verb |  |
 | 56 | 37 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -359,6 +359,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+- **Duress**
+  - `Target opponent reveals their hand. You choose a noncreature, nonland card from it. That player discards that card.`
 - **Dwarven Demolition Team**
   - `{T}: Destroy target Wall.`
   - `{T}: Destroy target Wall.`

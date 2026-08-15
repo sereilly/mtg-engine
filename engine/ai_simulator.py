@@ -47,6 +47,10 @@ class SimulationReport:
 _SIMULATED_CHOICES = (
     "search_library", "search_exile_cards", "scry", "reorder_library", "discard",
     "balance", "optional_pay", "untap_up_to", "look_top_pick",
+    # Appended rather than inserted: no deck the simulator builds arms this
+    # one today, so the position cannot change an existing seed, and a
+    # blocking prompt left owed would freeze the seat that owes it.
+    "revealed_hand_pick",
 )
 
 

@@ -34,6 +34,7 @@ from .effects import (
     _parse_discard,
     _parse_draw,
     _parse_exile_graveyard,
+    _parse_reveal_hand_and_choose,
     _parse_exile_top_of_library,
     _parse_enchant,
     _parse_extra_turn,
@@ -270,6 +271,14 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
 
 def parse_statement(stream: TokenStream) -> ast.Statement:
     """One sentence's worth of effect, including ``if``/``may`` wrappers."""
+    # "Target opponent reveals their hand. You choose … from it. That player
+    # discards that card." (Duress.) Read before anything else, because it
+    # spans three printed sentences: the sentence loop above would hand the
+    # first one to the subject-verb reader, which has no "reveals" and would
+    # fail the line on a word that is only the opening of a longer template.
+    revealed = _parse_reveal_hand_and_choose(stream)
+    if revealed is not None:
+        return revealed
     # "[Until end of turn,] you may play/cast <cards> [this turn] […]" — a
     # cast-or-play permission (CR 601.3). Tried before the "you may" wrapper
     # below: the permission IS the sentence's whole effect, where the wrapper

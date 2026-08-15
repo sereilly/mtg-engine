@@ -1098,6 +1098,18 @@ def do_action(session_id: str, req: GameActionRequest):
         if not ok:
             raise HTTPException(status_code=400, detail="invalid scry arrangement")
 
+    elif req.action == "revealed_hand_pick_confirm":
+        pending = next(iter(session.game.pending_choices_of("revealed_hand_pick")), None)
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no revealed-hand choice pending")
+        if req.seat != pending.player_index:
+            raise HTTPException(status_code=400, detail="not your choice")
+        if req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index is required")
+        ok = session.game.confirm_revealed_hand_pick(req.seat, req.hand_index)
+        if not ok:
+            raise HTTPException(status_code=400, detail="that card cannot be chosen")
+
     elif req.action == "discard_confirm":
         pending = session.game.pending_discard
         if pending is None:

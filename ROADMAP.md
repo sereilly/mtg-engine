@@ -1674,6 +1674,58 @@ card at the cost of a ceiling raise, so the linkage wants deriving first.
 
 ---
 
+## Round 38: one player chooses from another player's hidden zone
+
+*(2026-08-15.)* M21 **201 → 202**: Duress. One card, and the capability behind
+it is one the engine has never had — which is the whole of the round.
+
+**Every other pending choice in this engine is owed by the player it is
+about.** A discard, a sacrifice, a scry, a library search: the seat that answers
+and the zone being decided are the same player, so "whose prompt is this" and
+"whose cards are these" have always been one number. Duress separates them. The
+*caster* chooses, out of the *opponent's* hand, and the registry took it without
+a new field — `PendingChoice.player_index` was already "the seat that chooses"
+rather than "the seat this is about", and the victim rides in the data. That the
+shape fitted is worth recording; it is the test of whether round 16's queue was
+a queue or a pile of special cases.
+
+**The reveal is what makes it legal, so it is performed rather than assumed.**
+CR 701.20: the hand is public from the moment the card reveals it. The prompt
+therefore carries the **whole** hand with the legal indices marked, rather than
+only the choosable cards — hiding the rest would show the chooser less than the
+game does, and the spectator sees the same prompt for the same reason.
+
+**Three refusals, each closing a hole the search picker already taught us
+about.** The legal indices are re-checked against the record armed with the
+choice rather than trusted from the wire (a client offering the whole hand would
+turn "a noncreature, nonland card" into "any card"); a filter field the picker
+cannot test refuses the *line*; and a hand with nothing legal in it queues
+nothing at all, because a choice with no legal answer is not a choice and
+leaving it queued would block the caster on a prompt they cannot satisfy.
+
+`search_filters.search_matches` grew `exclude_types` and took a third caller —
+which is that module's stated purpose: a card-level restriction only one of the
+engine, the AI and the web layer knew about would be a choice legal in one seat
+and not in another. The AI default takes the costliest legal card, a stated
+policy like the up-to-N maximum and the modal first mode.
+
+Suite 4,917 at 18.2s, every `--check` green, shipped pool 388/388, zero hooks,
+zero ceiling raises. All ten new tests were watched to fail on HEAD, five of
+them at the web API — the prompt is a client-visible surface and M21 is
+measured, so it is pinned there the way round 19's cast-from-zone work is.
+
+**Next:** Kitesail Freebooter is now one thing away and that thing is a
+subsystem: an object **exiled with** a permanent and returned when it leaves.
+The pool's only exile-until-leaves is Oubliette's, which phases out and is
+name-keyed in `card_hooks.py` — routing Freebooter through it buys one card and
+raises the hook ceiling, so the linkage wants deriving first (the shape is
+`cast_permissions.py`'s: a collection on `Game`, granted by an effect, swept
+when its source leaves). Idol of Endurance and Archfiend's Vessel want the same
+seam. Otherwise the census's cheapest remaining lines: the fight family (Primal
+Might, Hunter's Edge, Heartfire Immolator) and the discard-cost family.
+
+---
+
 ## Standing invariants
 
 Anything that weakens these is a regression regardless of what it enables:

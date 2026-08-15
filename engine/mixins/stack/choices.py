@@ -608,6 +608,55 @@ class PendingChoicesMixin:
         self.discard_pending_choice(choice)
         return True
 
+    def confirm_revealed_hand_pick(self, player_index: int, hand_index: int) -> bool:
+        return self.resolve_pending_choice(
+            "revealed_hand_pick", player_index, hand_index=hand_index
+        )
+
+    def _resolve_revealed_hand_pick(self, choice: PendingChoice, hand_index: int) -> bool:
+        """The caster's pick out of a revealed hand (Duress).
+
+        The legal indices are re-checked against the record armed with the
+        choice rather than trusted from the wire: a client offering the whole
+        hand would otherwise turn "a noncreature, nonland card" into "any card",
+        which is the same hole the search picker closed.
+        """
+        if hand_index not in (choice.data.get("legal_indices") or []):
+            return False
+        victim_index = int(choice.data["victim_index"])
+        if not self._apply_revealed_hand_fate(choice, victim_index, hand_index):
+            return False
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_revealed_hand_pick(self, choice: PendingChoice) -> None:
+        """A non-interactive caster takes the costliest legal card.
+
+        A stated policy, like the up-to-N maximum and the modal first mode: mana
+        value is the one ranking every card in the pool answers, and a card that
+        wants a cleverer pick needs a valuation rather than a special case here.
+        """
+        legal = list(choice.data.get("legal_indices") or [])
+        victim_index = int(choice.data["victim_index"])
+        if legal and 0 <= victim_index < len(self.players):
+            hand = self.players[victim_index].hand
+            legal.sort(key=lambda i: (-(hand[i].cmc if i < len(hand) else 0), i))
+            self._apply_revealed_hand_fate(choice, victim_index, legal[0])
+        self.discard_pending_choice(choice)
+
+    def _apply_revealed_hand_fate(
+        self, choice: PendingChoice, victim_index: int, hand_index: int
+    ) -> bool:
+        """What happens to the chosen card. One place, because the family varies
+        only here — Duress discards it, and the exile ending arrives with the
+        card that needs it."""
+        from ...handlers.zones import _resolve_one_discard
+
+        fate = str(choice.data.get("fate", "discard"))
+        if fate != "discard":
+            return False
+        return _resolve_one_discard(self, victim_index, hand_index, to_library=False)
+
     def _default_discard(self, choice: PendingChoice) -> None:
         """Discard the lowest-index cards, keeping them in the graveyard."""
         from ...handlers.zones import _resolve_one_discard
@@ -1522,6 +1571,18 @@ register_choice(
     # later step of the same resolution and must see the library the scry
     # arranged, not the one it was handed.
     suspends=True,
+)
+
+register_choice(
+    "revealed_hand_pick",
+    resolve=lambda game, choice, r: game._resolve_revealed_hand_pick(choice, r["hand_index"]),
+    default=lambda game, choice: game._default_revealed_hand_pick(choice),
+    action="revealed_hand_pick_confirm",
+    prompt_key="revealed_hand_pick",
+    blocked_detail="choose a card from the revealed hand before other actions",
+    # The revealed hand is public from the moment it is revealed (CR 701.20),
+    # so a spectator sees the prompt exactly as the choosing seat does.
+    spectator_visible=True,
 )
 
 register_choice(

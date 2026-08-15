@@ -50,6 +50,7 @@ ActionKind = Literal[
     "reorder_library_confirm",
     "scry_confirm",
     "discard_confirm",
+    "revealed_hand_pick_confirm",
     "leng_discard_confirm",
     "balance_confirm",
     "sacrifice_confirm",

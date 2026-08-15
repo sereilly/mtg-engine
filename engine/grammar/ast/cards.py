@@ -137,6 +137,25 @@ class LookTopPickToHand:
 
 
 @dataclass(frozen=True)
+class RevealHandAndChoose:
+    """``Target opponent reveals their hand. You choose a <filter> card from
+    it. That player discards that card.`` (Duress.)
+
+    Three printed sentences, one node — for the same reason See the Truth's
+    three are one: they share the revealed hand, and parsed apart the middle
+    sentence would be a choice over a zone nobody revealed and the last one a
+    discard of a card nobody chose.
+
+    *fate* is what happens to the chosen card, because that is the only thing
+    the family varies (Kitesail Freebooter exiles it instead of discarding it),
+    and it decides which handler ending runs.
+    """
+    player: PlayerRef
+    filter: ObjectFilter
+    fate: str = "discard"
+
+
+@dataclass(frozen=True)
 class ExileGraveyard:
     """``Exile target player's graveyard.`` (Tormod's Crypt.)
 
