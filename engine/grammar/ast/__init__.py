@@ -77,6 +77,7 @@ from .damage import (
     DamageRiders,
     DealDamage,
     DamageUnlessPay,
+    Fight,
     PreventDamage,
 )
 from .characteristics import (
@@ -202,6 +203,7 @@ __all__ = [
     "DamageRiders",
     "DealDamage",
     "DamageUnlessPay",
+    "Fight",
     "PreventDamage",
     # characteristics
     "Pump",

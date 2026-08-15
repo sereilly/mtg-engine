@@ -4,7 +4,10 @@ from typing import TYPE_CHECKING
 
 from ..models import Permanent
 from ..resumption import run_resumable
-from ._common import apply_damage_to_creature, resolve_amount, resolve_target_permanent
+from ._common import (
+    apply_damage_to_creature, permanent_matches_filter, resolve_amount,
+    resolve_target_permanent,
+)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -23,8 +26,9 @@ def _damage_reporter(game: Game, card, permanent):
 
     def report(dealt: int) -> None:
         game.log.append(f"{card.name} dealt {dealt} damage to {permanent.card.name}")
-        if dealt > 0 and permanent.damage_marked < permanent.effective_toughness:
-            game._fire_dealt_damage_triggers(permanent)
+        # See apply_damage_to_creature: the trigger is not gated on survival.
+        if dealt > 0:
+            game._fire_dealt_damage_triggers(permanent, dealt)
 
     return report
 
@@ -44,7 +48,15 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     if instruction.payload.get("destroys_source_at_end_step") and source_permanent is not None:
         source_permanent.metadata["destroy_at_next_end_step"] = True
 
-    damage = resolve_amount(instruction.payload.get("amount", 0), x_value)
+    # "…it deals **that much** damage" (Brash Taunter): the number is the firing
+    # event's, frozen into the trigger's context by the fire site. An absent
+    # record deals nothing rather than falling back to an amount the card never
+    # printed — the same rule target_loses_life follows.
+    from_trigger = instruction.payload.get("amount_from_trigger")
+    if from_trigger is not None:
+        damage = max(0, int((context.trigger_context or {}).get(from_trigger, 0)))
+    else:
+        damage = resolve_amount(instruction.payload.get("amount", 0), x_value)
     target_perm_idx = context.target_permanent_index
     # "…and N damage to you": a second damage instruction in the same sequence
     # aimed at the source's controller rather than the spell's target. Reads the
@@ -441,6 +453,71 @@ def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, 
         game.log.append(
             f"{game.players[chooser_index].name} chooses any target for {context.card.name}'s {amount} damage"
         )
+    return True, "resolved"
+
+
+@effect_handler("source_fights_target")
+def source_fights_target(game, instruction, context):
+    """"This creature fights another target creature." (CR 701.14 — Brash
+    Taunter; Primal Might's second sentence prints the same exchange.)
+
+    All four of the rule, because each of them is a way to get this wrong:
+
+    - **701.14a** each deals damage equal to its power to the other, and both
+      amounts are read *before* either is dealt — a fighter that dies to the
+      first half still dealt its own damage.
+    - **701.14b** if either is no longer on the battlefield or no longer a
+      creature, **neither** fights. That is why this is one instruction and not
+      two damage steps: written as two, the first would resolve and the second
+      would not.
+    - **701.14c** a creature that fights itself deals twice its power to
+      itself, which falls out of dealing both halves to the same permanent.
+    - **701.14d** the damage is not combat damage, so it goes through the
+      ordinary creature-damage path.
+    """
+    card = context.card
+    fighter = context.source_permanent
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+
+    def eligible(perm) -> bool:
+        if not perm.is_creature:
+            return False
+        if instruction.payload.get("exclude_self") and perm is fighter:
+            return False
+        return permanent_matches_filter(perm, filters)
+
+    opponent = resolve_target_permanent(game, context, predicate=eligible)
+    # CR 701.14b, checked as one condition: either fighter missing means no
+    # damage at all, from either side.
+    if (
+        fighter is None
+        or opponent is None
+        or not game.is_on_battlefield(fighter)
+        or not fighter.is_creature
+        or not opponent.is_creature
+    ):
+        game.log.append(f"{card.name}: the fight needs two creatures, so neither deals damage")
+        return True, "resolved"
+
+    # Both powers read before either is dealt (701.14a): a fighter killed by the
+    # first half has still dealt its own damage.
+    fighter_power = fighter.effective_power
+    opponent_power = opponent.effective_power
+    game.log.append(f"{fighter.card.name} fights {opponent.card.name}")
+    apply_damage_to_creature(
+        game, opponent, fighter_power, fighter,
+        log_message=lambda dealt: (
+            f"{fighter.card.name} deals {dealt} damage to {opponent.card.name}"
+        ),
+        asks=True,
+    )
+    apply_damage_to_creature(
+        game, fighter, opponent_power, opponent,
+        log_message=lambda dealt: (
+            f"{opponent.card.name} deals {dealt} damage to {fighter.card.name}"
+        ),
+        asks=True,
+    )
     return True, "resolved"
 
 

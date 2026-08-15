@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**240 / 585 tracked rules covered (41%)** — 1049 tests, 0 unannotated.
+**240 / 585 tracked rules covered (41%)** — 1053 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -936,3 +936,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **806.1** In Free-for-All multiplayer games, a group of players compete as individuals against each other.
 - [ ] **806.2** Any multiplayer options used are determined before play begins. The Free-for-All variant uses the...
 - [ ] **806.3** The players are randomly seated around the table.
+
+## Cited outside tracked scope (consider widening SCOPE)
+
+- **701.14** Keyword Actions (4 tests)

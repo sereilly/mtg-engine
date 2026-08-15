@@ -78,7 +78,7 @@ def apply_damage_to_creature(
     asks: bool = False,
 ) -> int:
     """Mark non-combat damage on a single creature and fire its "dealt damage"
-    triggers if it survived.
+    triggers.
 
     Destruction is not this function's job: lethal damage is a state-based
     action (CR 704.5g, regeneration replacing it per CR 701.19), checked in
@@ -95,8 +95,15 @@ def apply_damage_to_creature(
     def finish(dealt: int) -> None:
         if log_message is not None:
             game.log.append(log_message(dealt))
-        if dealt > 0 and perm.damage_marked < perm.effective_toughness:
-            game._fire_dealt_damage_triggers(perm)
+        if dealt > 0:
+            # Not gated on survival. "Whenever this creature is dealt damage"
+            # triggers on the damage (CR 603.2), and whether the creature dies
+            # is a state-based action that has not run yet — so the guard that
+            # stood here (`damage_marked < effective_toughness`) was reading a
+            # rule that does not exist. Harmless for Fungusaur, whose counter on
+            # a dying creature does nothing anyway; wrong for Brash Taunter,
+            # which is *indestructible* and reflects every point it takes.
+            game._fire_dealt_damage_triggers(perm, dealt)
         if then is not None:
             then(dealt)
 

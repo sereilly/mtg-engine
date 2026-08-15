@@ -18,7 +18,9 @@ from ._common import (
     _describe_targets,
     _filter_payload,
     _full_mana_payload,
+    _back_reference_payload,
     _is_source,
+    _is_target,
     _is_you,
     _targets_payload,
 )
@@ -195,7 +197,51 @@ def _lower_damage_unless_pay(
     )
 
 
-def _lower_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
+def _lower_fight(
+    node: ast.Fight, whole_effect: bool = True
+) -> tuple[OracleInstruction, ...]:
+    """"This creature fights another target creature." (Brash Taunter.)
+
+    Only the shape where the ability's own source is one of the two fighters:
+    the other is a chosen target, so one picker answers the whole clause. A
+    fight between *two* chosen creatures picks twice and is a different
+    instruction; refusing it here keeps the difference visible rather than
+    quietly fighting the source instead.
+
+    ``whole_effect`` is what separates the two spellings of "it". On a
+    permanent's own ability it is the source; as the *second sentence* of a
+    spell — "Target creature you control gets +X/+X … **Then it** fights up to
+    one target creature you don't control" (Primal Might) — it back-references
+    the target the first sentence chose, and a sorcery has no source permanent
+    at all. Lowered as this instruction, Primal Might pumped whichever creature
+    the single picker offered and then fought nobody: supported, and doing
+    something else. The fused two-target pair is what that card wants.
+    """
+    if not whole_effect:
+        raise LoweringError(
+            "\"it fights\" after another sentence names that sentence's target, "
+            "which needs the two-target fused pair",
+            node=node,
+        )
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "only a fight with the ability's own source has a handler", node=node
+        )
+    if not _is_target(node.opponent):
+        raise LoweringError("the creature fought must be a chosen target", node=node)
+    assert isinstance(node.opponent, ast.TargetSpec)
+    payload: dict[str, object] = {
+        "exclude_self": bool(node.opponent.filter.other_than_source),
+    }
+    _describe_targets(payload, node.opponent)
+    return (OracleInstruction("source_fights_target", "", payload),)
+
+
+def _lower_damage(
+    node: ast.DealDamage,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
     if isinstance(node.amount, ast.CountOf):
         return _lower_counted_damage(node)
     if isinstance(node.amount, ast.BoardCount):
@@ -229,7 +275,16 @@ def _lower_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
                 },
             ),
         )
-    amount = _amount_payload(node.amount)
+    # "…it deals **that much** damage to target opponent." (Brash Taunter.) The
+    # number is the firing event's, not this effect's, so it arrives as a
+    # trigger-context key rather than as an amount — the same two channels
+    # `_back_reference_payload` decides between everywhere else.
+    if isinstance(node.amount, ast.ThatMuch):
+        back_reference = _back_reference_payload(node.amount, produced, event)
+        amount: int | str = 0
+    else:
+        back_reference = {}
+        amount = _amount_payload(node.amount)
 
     sweep = _sweep_kind(node.recipients)
     if sweep is not None:
@@ -239,7 +294,9 @@ def _lower_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
         raise LoweringError("multi-recipient damage without a sweep shape", node=node)
 
     recipient = node.recipients[0]
-    payload: dict[str, object] = {"amount": amount}
+    payload: dict[str, object] = (
+        dict(back_reference) if back_reference else {"amount": amount}
+    )
     if node.riders.no_regen:
         payload["no_regen"] = True
     if node.riders.exile_if_dies:
@@ -268,7 +325,10 @@ def _lower_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
         # single face takes, so shields and replacements see each event.
         payload["recipient"] = "each_opponent"
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind not in (
-        "target_player", "that_player", "controller", "each_player"
+        # "target opponent" joins the chosen-player forms: the damage handler
+        # takes the seat off the resolution context either way, and the
+        # opponents_only narrowing rides the target description below.
+        "target_player", "target_opponent", "that_player", "controller", "each_player"
     ):
         raise LoweringError(f"unsupported damage recipient {recipient.kind!r}", node=node)
     elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier not in (

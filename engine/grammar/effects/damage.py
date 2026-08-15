@@ -10,6 +10,8 @@ parse the same recipient and duration vocabulary, and a card that prevents is
 always describing a damage event it expects.
 """
 
+import dataclasses
+
 from .. import ast
 from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
@@ -37,6 +39,27 @@ def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
     ):
         return ast.PlayerRef("target_player", or_planeswalker=True)
     return recipient
+
+
+def _parse_fight(stream: TokenStream, subject: ast.Recipient) -> ast.Fight:
+    """``<subject> fights <opponent>.`` (CR 701.14 — Brash Taunter, Primal Might.)
+
+    "Another" is consumed here and folded onto the opponent's filter, the idiom
+    the cost parser and the trigger subjects already use; CR 701.14c allows a
+    creature to fight itself, so the word is a *restriction* the card printed
+    rather than something the rule requires.
+    """
+    stream.expect_word("fights", "fight")
+    another = bool(stream.accept_word("another"))
+    opponent = parse_recipient(stream)
+    if opponent is None:
+        raise stream.error("expected a creature to fight")
+    if another and isinstance(opponent, ast.TargetSpec):
+        opponent = dataclasses.replace(
+            opponent,
+            filter=dataclasses.replace(opponent.filter, other_than_source=True),
+        )
+    return ast.Fight(subject, opponent)
 
 
 def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Statement:

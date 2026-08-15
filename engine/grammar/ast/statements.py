@@ -33,6 +33,7 @@ from ._core import (
 )
 from .damage import (
     DamageUnlessPay,
+    Fight,
     DealDamage,
     PreventDamage,
 )
@@ -113,7 +114,7 @@ Effect = Union[
     SearchLibrary, SearchAndExile, ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
     RevealHandAndChoose,
     Shuffle, ExtraTurn, WinGame, LoseGame, DrawGame, BecomeColor,
-    SacrificeUnlessPay, DamageUnlessPay, LookAtHand, CantBe, CombatRestriction,
+    SacrificeUnlessPay, DamageUnlessPay, Fight, LookAtHand, CantBe, CombatRestriction,
     ChangeText, GainControl, RawEffect,
 ]
 # `CombatRestriction` was absent from this union for as long as it existed: it

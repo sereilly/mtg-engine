@@ -630,7 +630,7 @@ class CombatDamageStepMixin:
                     return
                 if source is not None:
                     self._record_damage_source(victim, source)
-                self._fire_dealt_damage_triggers(victim)
+                self._fire_dealt_damage_triggers(victim, amount)
                 add_lifelink(lifelink_seat, lifelink_life_gained(source, amount))
 
             return dealt

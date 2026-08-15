@@ -181,11 +181,16 @@ def _amount_payload(amount: ast.Amount) -> int | str:
 # than a rule — an event either carries a number or it does not, and a kind
 # absent here refuses the back-reference instead of reading a zero out of an
 # empty context. (El-Hajjâj's "whenever this creature deals damage, you gain
-# that much life" is the next entry this wants; its fire site records the
-# amount under a different key, so it is a change to make deliberately rather
-# than by adding a row.)
+# that much life" is still not here: its fire site records the amount under a
+# different key, so claiming its line would retire a hook onto a handler
+# reading the wrong name — a change to make deliberately rather than by adding
+# a row.)
 _EVENT_QUANTITIES: dict[str, str] = {
     "you_gain_life": "life_gained",
+    # "Whenever this creature **is dealt damage**, it deals that much damage to
+    # target opponent." (Brash Taunter.) The number is frozen by the fire site,
+    # because by resolution the marked damage may have been added to or wiped.
+    "creature_dealt_damage": "damage_dealt",
 }
 
 # The scratchpad keys that are *quantities*. `lower._PRODUCES` also records

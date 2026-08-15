@@ -51,6 +51,7 @@ from .effects import (
     _parse_player_adds_mana,
     _parse_prevent,
     _parse_double,
+    _parse_fight,
     _parse_put_counter,
     _parse_remove_counter,
     _parse_return,
@@ -221,6 +222,8 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         source_target = source_spec if isinstance(source_spec, ast.TargetSpec) else None
         if token.text in ("deals", "deal"):
             return _parse_damage(stream, source_target)
+        if token.text in ("fights", "fight"):
+            return _parse_fight(stream, source_spec)
         if token.text in ("gets", "get"):
             return _parse_gets(stream, source_spec)
         if token.text in ("gains", "gain"):

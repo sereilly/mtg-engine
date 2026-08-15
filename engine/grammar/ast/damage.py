@@ -45,6 +45,19 @@ class DealDamage:
 
 
 @dataclass(frozen=True)
+class Fight:
+    """``<subject> fights <opponent>.`` (CR 701.14 — Brash Taunter, Primal Might.)
+
+    Its own node rather than two :class:`DealDamage` steps, because CR 701.14b
+    makes the exchange atomic: if either creature has left the battlefield or
+    stopped being a creature, *neither* deals damage. Written as two steps the
+    first would resolve and the second would not, which is a different card.
+    """
+    subject: Recipient
+    opponent: Recipient
+
+
+@dataclass(frozen=True)
 class DamageUnlessPay:
     """"<source> deals N damage to you unless you pay <cost>." (Force of
     Nature, Hasran Ogress.)

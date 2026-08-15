@@ -62,6 +62,7 @@ from .lowering import (
     _lower_damage,
     _lower_damage_conjunction,
     _lower_damage_unless_pay,
+    _lower_fight,
     _lower_destroy,
     _lower_discard,
     _lower_draw,
@@ -157,7 +158,9 @@ def lower_statement(
     """
     dispatch_event = event if whole_effect else None
     if isinstance(statement, ast.DealDamage):
-        return _lower_damage(statement)
+        return _lower_damage(statement, event, produced)
+    if isinstance(statement, ast.Fight):
+        return _lower_fight(statement, whole_effect)
     if isinstance(statement, ast.DamageUnlessPay):
         return _lower_damage_unless_pay(statement, dispatch_event)
     if isinstance(statement, ast.Pump):

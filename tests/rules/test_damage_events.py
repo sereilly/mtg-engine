@@ -21,7 +21,7 @@ import pytest
 from engine import PlayerState
 from engine.damage_events import _assert_one_order_space, damage_candidates, deal_damage
 from engine.game import Game
-from engine.models import Permanent
+from engine.models import CardDefinition, Permanent
 from engine.prevention import POOL
 from engine.replacements import REPLACEMENTS, replacement_effect
 from tests.helpers import _mk_creature_card
@@ -328,3 +328,94 @@ def test_120_8_a_zero_damage_event_spends_nothing():
 
     assert (outcome.consumed, outcome.dealt, outcome.result) == (False, 0, 0)
     assert p1.damage_prevention_pool == 2, "a 0-damage event consumed a shield"
+
+
+# ---------------------------------------------------------------------------
+# 701.14 — Fight
+# ---------------------------------------------------------------------------
+
+
+def _fighter(name: str, power: int, toughness: int, oracle_text: str = "") -> CardDefinition:
+    raw = {
+        "name": name, "type_line": "Creature — Test",
+        "power": str(power), "toughness": str(toughness),
+    }
+    return CardDefinition(
+        name=name, mana_cost="{1}{R}", cmc=2.0, type_line="Creature — Test",
+        oracle_text=oracle_text, colors=("R",), color_identity=("R",),
+        keywords=(), produced_mana=(), raw=raw,
+        power=str(power), toughness=str(toughness),
+    )
+
+
+_FIGHTER_TEXT = "{T}: This creature fights another target creature."
+
+
+def _fight_game(mine_pt, theirs_pt):
+    mine = Permanent(card=_fighter("Brawler", *mine_pt, oracle_text=_FIGHTER_TEXT))
+    theirs = Permanent(card=_fighter("Bystander", *theirs_pt))
+    p1 = PlayerState(name="P1", battlefield=[mine], life=20)
+    p2 = PlayerState(name="P2", battlefield=[theirs], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, mine, theirs
+
+
+@pytest.mark.cr("701.14a")
+def test_701_14a_each_fighter_deals_damage_equal_to_its_power_to_the_other():
+    game, mine, theirs = _fight_game((3, 5), (2, 6))
+
+    result = game.activate_permanent_ability(
+        0, "Brawler", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert theirs.damage_marked == 3
+    assert mine.damage_marked == 2
+
+
+@pytest.mark.cr("701.14a")
+def test_701_14a_both_powers_are_read_before_either_half_is_dealt():
+    """A fighter killed by the first half has still dealt its own damage — so a
+    1/1 and a 5/5 trade, rather than the 1/1 dying first and dealing nothing."""
+    game, mine, theirs = _fight_game((1, 1), (5, 5))
+
+    game.activate_permanent_ability(
+        0, "Brawler", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert theirs.damage_marked == 1, "the dying fighter still dealt its power"
+    assert not game.is_on_battlefield(mine)
+
+
+@pytest.mark.cr("701.14b")
+def test_701_14b_with_only_one_creature_neither_deals_damage():
+    """"If one or both creatures instructed to fight are no longer on the
+    battlefield … neither of them fights or deals damage." That is why the
+    exchange is one instruction: two damage steps would run the first."""
+    mine = Permanent(card=_fighter("Brawler", 3, 5, oracle_text=_FIGHTER_TEXT))
+    p1 = PlayerState(name="P1", battlefield=[mine], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Brawler", target_player_index=1)
+    game._settle()
+
+    assert mine.damage_marked == 0
+
+
+@pytest.mark.cr("701.14d")
+def test_701_14d_the_damage_a_fight_deals_is_not_combat_damage():
+    """It goes through the ordinary creature-damage path, so a blanket combat
+    shield does not see it."""
+    game, mine, theirs = _fight_game((3, 5), (2, 6))
+    game.players[1].combat_damage_prevented_this_turn = True
+
+    game.activate_permanent_ability(
+        0, "Brawler", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert theirs.damage_marked == 3

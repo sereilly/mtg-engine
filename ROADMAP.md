@@ -1714,7 +1714,8 @@ zero ceiling raises. All ten new tests were watched to fail on HEAD, five of
 them at the web API — the prompt is a client-visible surface and M21 is
 measured, so it is pinned there the way round 19's cast-from-zone work is.
 
-**Next:** Kitesail Freebooter is now one thing away and that thing is a
+**Next (superseded by round 39 below):** Kitesail Freebooter is now one thing
+away and that thing is a
 subsystem: an object **exiled with** a permanent and returned when it leaves.
 The pool's only exile-until-leaves is Oubliette's, which phases out and is
 name-keyed in `card_hooks.py` — routing Freebooter through it buys one card and
@@ -1783,3 +1784,65 @@ Anything that weakens these is a regression regardless of what it enables:
    says; deriving that from the compiled program makes it a tautology, and the
    only exemptions that stay are ones where the tautology has actually been
    demonstrated. An acknowledgement carries the measurement, not an opinion.
+
+## Round 39: fight, and a trigger that was gated on surviving
+
+*(2026-08-15, same day.)* M21 **202 → 203**: Brash Taunter. One card by the
+count and three findings by the work — the third of which was a rule this engine
+had invented.
+
+**Fight is CR 701.14, and all four of its sentences are load-bearing.** 701.14a:
+each creature deals damage equal to its power to the other, and *both powers are
+read before either half is dealt* — a fighter killed by the first half has still
+dealt its own. 701.14b: if either is no longer on the battlefield or no longer a
+creature, **neither** fights, which is exactly why this is one instruction and
+not two damage steps (written as two, the first would resolve and the second
+would not). 701.14c: a creature fighting itself takes twice its power, which
+falls out of dealing both halves to the same permanent. 701.14d: the damage is
+not combat damage, so a blanket combat shield does not see it.
+
+**"Whenever this creature is dealt damage" was gated on the creature
+surviving.** `apply_damage_to_creature` fired the trigger only when
+`damage_marked < effective_toughness` — a guard reading a rule that does not
+exist. CR 603.2 triggers on the event; whether the creature dies is a
+state-based action that has not run yet. It was harmless for the one card that
+had the condition (Fungusaur, whose counter on a dying creature does nothing)
+and wrong for the card that arrived: Brash Taunter is **indestructible** and
+reflects every point it takes, so under the guard it reflected nothing from any
+lethal-looking hit. The same fire site also filtered by *instruction kind* —
+`add_counter_to_self`, Fungusaur's one shape — so every other card written with
+this condition parsed it and never fired, which is the failure
+`engine/events.py` exists to describe. Both gone, and the amount is frozen into
+the trigger's context because "it deals **that much** damage" has nowhere else
+to read it (`_EVENT_QUANTITIES` gains its second entry, the one round 33 wrote
+down).
+
+**And a card that reported supported while doing something else — caught before
+it shipped.** `source_fights_target` was written for "**This creature** fights
+another target creature", and Primal Might's "Then **it** fights up to one
+target creature you don't control" lowers to the same AST subject: both are
+`is_source`. Compiled that way, Primal Might reported supported and then pumped
+whichever creature its single picker offered — the *opponent's* — and fought
+nobody. `whole_effect`, the parameter round 34 split out of `event`, is exactly
+the distinction: on a permanent's ability "it" is the source; as the second
+sentence of a spell it back-references the first sentence's target, and a
+sorcery has no source permanent at all. A nested fight refuses, and Primal Might
+is honestly unsupported until the fused two-target pair exists.
+
+Suite 4,926 at 18.4s, every `--check` green, shipped pool 388/388, zero hooks,
+zero ceiling raises. Seven of the nine new tests were watched to fail on HEAD.
+
+**Next: the fused two-target pair**, which three cards now want and one already
+has half-wrong. Primal Might ("gets +X/+X … then **it** fights up to one target
+creature you don't control") and Hunter's Edge ("put a +1/+1 counter on target
+creature you control. Then **that creature** deals damage equal to its power to
+target creature you don't control") are one shape: do something to target 1,
+then target 1 acts on target 2. `target_bites_target` is the one-instruction
+version of it already — and carries **one** filter for both slots, so Garruk,
+Savage Herald's −2 offers only the caster's creatures for a bitten creature the
+handler would let be anyone's. Per-slot filters fix that card too. Then
+Heartfire Immolator, whose source is sacrificed as a cost so its power is
+last-known information, and the exiled-with linkage (Kitesail Freebooter, Idol
+of Endurance).
+
+---

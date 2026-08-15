@@ -25,6 +25,7 @@ production is in — moving one between families is not a caller-visible change.
 """
 
 from .damage import (
+    _parse_fight,
     _parse_damage,
     _parse_damage_unless_pay,
     _parse_damage_rider_sentence,
@@ -126,6 +127,7 @@ __all__ = [
     "_parse_exile_top_of_library",
     "_parse_player_adds_mana",
     "_parse_double",
+    "_parse_fight",
     "_parse_look_at_hand",
     "_parse_reveal_top",
     "_parse_search_library",

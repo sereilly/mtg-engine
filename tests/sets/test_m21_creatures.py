@@ -1670,3 +1670,85 @@ def test_a_cast_is_recorded_even_when_the_spell_never_resolves(set_pool):
 
     game.begin_turn_bookkeeping(1)
     assert p1.spells_cast_this_turn == [], "a 'this turn' record that never resets is a turn-two bug"
+
+
+# --- Fight (CR 701.14), and the damage a creature reflects -------------------
+
+
+def test_brash_taunter_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Brash Taunter"])
+    assert program.supported, program.reason
+
+
+def test_brash_taunter_fights_and_reflects_what_it_takes(set_pool):
+    """Its two lines meet. The fight deals both halves (CR 701.14a), the
+    Taunter survives its six because it is indestructible, and the "whenever
+    this creature is dealt damage" trigger sends that six at the opponent."""
+    pool = set_pool("M21")
+    taunter = Permanent(card=pool["Brash Taunter"])       # 1/1 indestructible
+    gargaroth = Permanent(card=pool["Elder Gargaroth"])   # 6/6
+    p1 = PlayerState(name="P1", battlefield=[taunter])
+    p2 = PlayerState(name="P2", battlefield=[gargaroth])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    result = game.activate_permanent_ability(
+        0, "Brash Taunter", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert gargaroth.damage_marked == 1, "the Taunter's own power"
+    assert taunter.damage_marked == 6
+    assert game.is_on_battlefield(taunter), "indestructible"
+    assert p2.life == 14, "the six it took, reflected"
+
+
+def test_a_dealt_damage_trigger_is_not_gated_on_surviving(set_pool):
+    """"Whenever this creature is dealt damage" triggers on the damage
+    (CR 603.2); whether the creature dies is a state-based action that has not
+    run yet. The guard that stood here read a rule that does not exist — it was
+    harmless for a card whose trigger puts a counter on a dying creature, and
+    wrong for one that is indestructible."""
+    pool = set_pool("M21")
+    taunter = Permanent(card=pool["Brash Taunter"])
+    p1 = PlayerState(name="P1", battlefield=[taunter])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    from engine.handlers._common import apply_damage_to_creature
+
+    # Nine damage to a 1/1: lethal by the numbers, and it still reflects.
+    apply_damage_to_creature(game, taunter, 9, source=None)
+    game._settle()
+
+    assert p2.life == 11
+
+
+def test_the_fight_needs_two_creatures_or_neither_deals(set_pool):
+    """CR 701.14b, and the reason this is one instruction rather than two
+    damage steps: written as two, the first would resolve and the second would
+    not."""
+    pool = set_pool("M21")
+    taunter = Permanent(card=pool["Brash Taunter"])
+    p1 = PlayerState(name="P1", battlefield=[taunter])
+    p2 = PlayerState(name="P2")                     # nothing to fight
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Brash Taunter", target_player_index=1)
+    game._settle()
+
+    assert taunter.damage_marked == 0
+    assert p2.life == 20
+    assert any("neither deals damage" in line for line in game.log)
+
+
+def test_primal_might_refuses_rather_than_fighting_the_wrong_creature(set_pool):
+    """"Then **it** fights…" after another sentence names that sentence's
+    target, and a sorcery has no source permanent at all. Lowered as the
+    source-fights instruction it pumped whichever creature the single picker
+    offered and then fought nobody — supported, and doing something else. It
+    stays honestly unsupported until the fused two-target pair exists."""
+    program = compile_card_oracle(set_pool("M21")["Primal Might"])
+    assert not program.supported

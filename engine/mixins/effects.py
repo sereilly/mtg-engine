@@ -83,16 +83,30 @@ class EffectsMixin:
         ]
         self._enqueue_triggered_batch(events)
 
-    def _fire_dealt_damage_triggers(self, permanent: Permanent) -> None:
-        """Put 'whenever this creature is dealt damage' triggers (e.g. Fungusaur) onto
-        the stack; they resolve off the stack (CR 603.3) rather than inline."""
+    def _fire_dealt_damage_triggers(self, permanent: Permanent, amount: int = 0) -> None:
+        """Put 'whenever this creature is dealt damage' triggers (Fungusaur,
+        Brash Taunter) onto the stack; they resolve off the stack (CR 603.3)
+        rather than inline.
+
+        *amount* is how much was dealt, frozen into the trigger's context
+        because "it deals **that much** damage" (Brash Taunter) has nowhere else
+        to read it: by the time the trigger resolves, the marked damage may have
+        been added to by something else or wiped by a cleanup.
+
+        The instruction-kind filter is gone. It named `add_counter_to_self` —
+        Fungusaur's one shape — so every other card written with this condition
+        parsed it and then never fired, which is the failure `engine/events.py`
+        exists to describe.
+        """
         controller_index = self._controller_index_of(permanent)
         events = [
-            make_trigger_event(controller_index, permanent, trig)
+            make_trigger_event(
+                controller_index, permanent, trig,
+                trigger_context={"damage_dealt": max(0, int(amount))},
+            )
             for trig in matching_triggers(
                 permanent.effective_card,
                 condition_kinds={"creature_dealt_damage"},
-                instruction_kinds={"add_counter_to_self"},
             )
         ]
         self._enqueue_triggered_batch(events)

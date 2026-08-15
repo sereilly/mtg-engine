@@ -150,6 +150,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_team_keyword_until_eot": "pump",
     "add_loyalty_counters": "counters",
     "target_bites_target": "damage",
+    "source_fights_target": "damage",
     "phase_out_target": "zones",
     "grant_team_assign_unblocked_until_eot": "pump",
     "phase_out_opponent_creatures": "zones",
