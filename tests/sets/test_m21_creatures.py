@@ -1760,3 +1760,60 @@ def test_a_fight_that_is_not_the_whole_effect_still_refuses():
 
     nested = compile_line("Draw a card. Then it fights another target creature.")
     assert not nested.lowered
+
+
+# --- What a sacrificed source is still worth ---------------------------------
+
+
+def test_heartfire_immolator_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Heartfire Immolator"])
+    assert program.supported, program.reason
+
+
+def test_heartfire_immolator_deals_the_power_it_had_when_it_was_sacrificed(set_pool):
+    """The source pays for its own ability by being sacrificed, so by
+    resolution it is in a graveyard and its power is last-known information
+    (CR 608.2). Prowess is what makes the distinction observable: a 2/1 that
+    saw a noncreature spell this turn deals **three**, not two."""
+    pool = set_pool("M21")
+    immolator = Permanent(card=pool["Heartfire Immolator"])   # 2/1, prowess
+    victim = Permanent(card=pool["Elder Gargaroth"])          # 6/6
+    p1 = PlayerState(
+        name="P1", battlefield=[immolator], hand=[pool["Shock"]],
+        library=[pool["Mountain"]] * 4,
+    )
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game._settle()
+    assert immolator.effective_power == 3, "prowess"
+
+    result = game.activate_permanent_ability(
+        0, "Heartfire Immolator", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert not game.is_on_battlefield(immolator), "sacrificed to pay the cost"
+    assert victim.damage_marked == 3, "the power it had, not the power it was printed with"
+
+
+def test_heartfire_immolator_can_aim_at_a_planeswalker(set_pool):
+    """"Target creature **or planeswalker**" — the union is the filter, and it
+    is enforced at resolution as well as offered by the picker."""
+    pool = set_pool("M21")
+    immolator = Permanent(card=pool["Heartfire Immolator"])
+    walker = Permanent(card=pool["Basri Ket"], metadata={"loyalty_counters": 4})
+    p1 = PlayerState(name="P1", battlefield=[immolator])
+    p2 = PlayerState(name="P2", battlefield=[walker])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(
+        0, "Heartfire Immolator", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert walker.metadata["loyalty_counters"] == 2, "damage to a walker is loyalty (CR 120.3c)"

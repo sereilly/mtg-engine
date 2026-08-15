@@ -528,6 +528,42 @@ def _exchange_fight_damage(game, fighter, opponent) -> None:
     )
 
 
+@effect_handler("source_bites_target")
+def source_bites_target(game, instruction, context):
+    """"It deals damage equal to its power to target creature or planeswalker."
+    (Heartfire Immolator.)
+
+    The source paid for this by being **sacrificed**, so by the time it resolves
+    it is in a graveyard. Its power is last-known information (CR 608.2), and
+    the ``Permanent`` object still carries it: the layer state is recomputed
+    without the permanent, but the metadata the bonuses live in belongs to the
+    object and nothing off the battlefield touches it. A prowess-pumped
+    Immolator therefore deals three, which is the case that makes the
+    distinction observable — and its test.
+    """
+    card = context.card
+    source = context.source_permanent
+    if source is None:
+        game.log.append(f"{card.name}: nothing to deal the damage")
+        return True, "resolved"
+    filters = instruction.payload.get("filter") or {}
+    victim = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: permanent_matches_filter(perm, filters),
+    )
+    if victim is None:
+        game.log.append(f"{card.name}: no valid target")
+        return True, "resolved"
+    apply_damage_to_creature(
+        game, victim, source.effective_power, source,
+        log_message=lambda dealt: (
+            f"{source.card.name} deals {dealt} damage to {victim.card.name}"
+        ),
+        asks=True,
+    )
+    return True, "resolved"
+
+
 @effect_handler("prepare_then_interact")
 def prepare_then_interact(game, instruction, context):
     """"Target creature you control gets +X/+X until end of turn. Then it

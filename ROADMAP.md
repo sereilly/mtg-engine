@@ -1954,3 +1954,48 @@ rather than a trigger). Then the exiled-with linkage (Kitesail Freebooter, Idol
 of Endurance) and the discard-cost family, both still as round 38 left them.
 
 ---
+
+## Round 42: what a sacrificed source is still worth
+
+*(2026-08-15, same day.)* M21 **205 → 206**: Heartfire Immolator, the third card
+of the fight family and the one round 41 left standing. A small round, and the
+interesting part is what it did *not* need.
+
+"{R}, Sacrifice this creature: It deals damage equal to its power to target
+creature or planeswalker." The source pays for its own ability by being
+sacrificed, so by the time the ability resolves it is in a graveyard — and its
+power is last-known information (CR 608.2). Rounds 30, 31 and 32 each had to
+*freeze* such a value at the fire site, because the thing being asked about
+(a dead creature's counters, its power, its controller) genuinely stops being
+readable. This one does not: the layer state is recomputed without the
+permanent, but the P/T bonuses live in metadata that belongs to the ``Permanent``
+object, and nothing off the battlefield touches them. So the handler reads
+``source_permanent.effective_power`` at resolution and gets the right answer.
+
+**Prowess is what makes that claim testable rather than assumed.** A 2/1 that
+saw a noncreature spell this turn is a 3/1, and the test casts the Shock first:
+the Immolator deals **three**, not the two it is printed with. Without that the
+"last-known" reading and a naive printed-power reading are indistinguishable,
+which is exactly the kind of test that passes for the wrong reason.
+
+Suite 4,937 at 18.3s, every `--check` green, shipped pool 388/388, zero hooks,
+zero ceiling raises. All three new tests were watched to fail on HEAD.
+
+**Next**, both measured rather than guessed:
+
+- **Havoc Jester** ("Whenever you sacrifice a permanent, this creature deals 1
+  damage to any target") wants a **sacrifice seam**, the fourth of its kind
+  after the draw, life-gain and counter-placement ones. Sacrifices are not
+  centralised: the *cost* path bins two of them in `stack/activation.py`, the
+  pending-choice queue two more, `phases/upkeep_effects.py` four, and
+  `mixins/game_ending.py` two — each its own `remove_from_battlefield` +
+  `_permanent_to_graveyard` + log. CR 701.21a is one sentence, so one function
+  can hold it, and the emit goes where lifelink and deathtouch went.
+- **Rookie Mistake** ("Until end of turn, target creature gets +0/+2 and another
+  target creature gets -2/-0") needs two things, both small after round 41: a
+  **leading** duration clause (the phrase prints before the sentence, and only
+  the trailing form parses today), and a second fused pair — two targets with
+  two *different* effects, which is the per-slot filter machinery again in a
+  shape where neither slot acts on the other.
+
+---

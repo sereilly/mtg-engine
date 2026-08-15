@@ -377,6 +377,26 @@ def _lower_damage(
                 },
             ),
         )
+    # "It deals damage equal to **its power** to target creature or
+    # planeswalker." (Heartfire Immolator.) The source is sacrificed to pay the
+    # cost, so by resolution it is in a graveyard — its power is last-known
+    # information (CR 608.2), which the Permanent object still carries because
+    # nothing off the battlefield touches it. Its own kind rather than the
+    # generic damage, because the amount is a *read* rather than a number.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and node.source is not None
+        and _is_source(node.source)
+        and len(node.recipients) == 1
+        and _is_target(node.recipients[0])
+    ):
+        assert isinstance(node.recipients[0], ast.TargetSpec)
+        payload: dict[str, object] = {}
+        _describe_targets(payload, node.recipients[0])
+        payload["filter"] = _filter_payload(node.recipients[0].filter)
+        return (OracleInstruction("source_bites_target", "", payload),)
+
     # "…it deals **that much** damage to target opponent." (Brash Taunter.) The
     # number is the firing event's, not this effect's, so it arrives as a
     # trigger-context key rather than as an amount — the same two channels
