@@ -332,3 +332,45 @@ def test_the_fallback_still_reaches_the_prompt_it_exists_for(by_name):
 
     assert spec["kind"] == "creature"
     assert [t["name"] for t in spec["valid_targets"]] == ["Grizzly Bears"]
+
+
+def test_a_narrowing_only_one_slot_names_does_not_narrow_the_picker():
+    """Two targets, differently restricted: the spec must narrow by what
+    **every** slot admits, never by what one does.
+
+    The picker enumerates one legal set for all the slots of a description, so
+    a flag read off a single filter is applied to every slot — and "target
+    creature you control deals damage … to **another target creature**" names
+    the caster's creature and then anyone's. Read that way the ability could
+    bite nothing but its own board, while its own handler was written to allow
+    either. Per-slot legality stays the handler's; this is only about what the
+    prompt is allowed to hide.
+    """
+    from engine.targeting import _from_targets_payload
+
+    one_filter = _from_targets_payload({
+        "quantifier": "target", "kind": "object", "count": 2,
+        "filter": {"type_filter": "creature", "controller": "you"},
+    })
+    assert one_filter["own_only"] is True, "a single filter still narrows"
+
+    per_slot = _from_targets_payload({
+        "quantifier": "target", "kind": "object", "count": 2,
+        "filter": {"type_filter": "creature", "controller": "you"},
+        "filters": [
+            {"type_filter": "creature", "controller": "you"},
+            {"type_filter": "creature"},
+        ],
+    })
+    assert per_slot["max_targets"] == 2
+    assert "own_only" not in per_slot
+
+    both_slots = _from_targets_payload({
+        "quantifier": "target", "kind": "object", "count": 2,
+        "filter": {"type_filter": "creature", "controller": "you"},
+        "filters": [
+            {"type_filter": "creature", "controller": "you"},
+            {"type_filter": "creature", "controller": "you"},
+        ],
+    })
+    assert both_slots["own_only"] is True, "a narrowing every slot names still applies"

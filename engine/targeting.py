@@ -550,7 +550,22 @@ def _from_targets_payload(targets) -> dict | None:
     if kind != "object":
         return None
     filt = targets.get("filter") or {}
-    flags = _narrowing_flags(filt)
+    # A description whose slots are *differently* restricted carries one filter
+    # per slot. The picker enumerates one legal set for all of them, so a
+    # narrowing may only be applied to that set when **every** slot has it —
+    # otherwise the flag hides a target one slot legitimately admits, which is
+    # what kept Garruk, Savage Herald's -2 from ever biting an opponent's
+    # creature. Per-slot legality is the handler's, and it already enforced it.
+    slot_filters = targets.get("filters")
+    if isinstance(slot_filters, list) and len(slot_filters) > 1:
+        per_slot = [_narrowing_flags(slot or {}) for slot in slot_filters]
+        flags = {
+            key: value
+            for key, value in per_slot[0].items()
+            if all(other.get(key) == value for other in per_slot[1:])
+        }
+    else:
+        flags = _narrowing_flags(filt)
     # "Up to N target …", N > 1. The picker has to know the maximum, or it would
     # collect one target for a spell that names several — which is what the
     # instruction's own lowering refuses to emit until a handler reads a list.

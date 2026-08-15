@@ -269,7 +269,18 @@ def _lower_damage(
                         "quantifier": "target",
                         "kind": "object",
                         "filter": _filter_payload(node.source.filter),
-                        # Two picks: the biter (first), then the bitten.
+                        # Two picks: the biter (first), then the bitten — and
+                        # they are *differently* restricted. "Target creature
+                        # you control deals damage … to **another target
+                        # creature**" names the caster's creature and then
+                        # anyone's, and one filter for both slots is what made
+                        # the picker offer only the caster's for the second:
+                        # Garruk's -2 could bite nothing but his own board while
+                        # its handler was written to allow either.
+                        "filters": [
+                            _filter_payload(node.source.filter),
+                            _filter_payload(node.recipients[0].filter),
+                        ],
                         "count": 2,
                     },
                 },

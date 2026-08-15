@@ -36,6 +36,11 @@ class AbilityActivationMixin:
         permanent_index: int | None = None,
         mana_color: str | None = None,
         target_permanent_index: int | None = None,
+        # The chosen targets' stable ids, when the caller already knows them
+        # (the web layer resolves them off the wire). Several targets may sit
+        # on different battlefields, which one `target_player_index` cannot
+        # express — see `_stack_push`.
+        target_permanent_ids: list[int | None] | None = None,
         target_stack_index: int | None = None,
         ability_index: int | None = None,
         x_value: int | None = None,
@@ -59,6 +64,7 @@ class AbilityActivationMixin:
             permanent_index=permanent_index,
             mana_color=mana_color,
             target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
             target_stack_index=target_stack_index,
             ability_index=ability_index,
             x_value=x_value,
@@ -116,6 +122,11 @@ class AbilityActivationMixin:
         permanent_index: int | None = None,
         mana_color: str | None = None,
         target_permanent_index: int | None = None,
+        # The chosen targets' stable ids, when the caller already knows them
+        # (the web layer resolves them off the wire). Several targets may sit
+        # on different battlefields, which one `target_player_index` cannot
+        # express — see `_stack_push`.
+        target_permanent_ids: list[int | None] | None = None,
         target_stack_index: int | None = None,
         ability_index: int | None = None,
         x_value: int | None = None,
@@ -703,6 +714,7 @@ class AbilityActivationMixin:
                 caster_index=controller_index,
                 target_player_index=target_idx,
                 target_permanent_index=target_permanent_index,
+                target_permanent_id=target_permanent_ids,
                 x_value=x_value,
                 ability_instruction=instruction,
                 ability_effect_kind=ability.effect_kind,

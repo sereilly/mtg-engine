@@ -1043,6 +1043,16 @@ class GameHelpersMixin:
         reads the id (``engine/handlers/_common.py``) and only falls back to
         the index when the id no longer resolves, which is exactly the
         situation the old code was already in."""
+        if item.target_permanent_id is not None:
+            # The caller already knows the identities. The web layer does: it
+            # resolves `target_permanent_ids` off the wire and then used to
+            # throw them away here, so a pair of targets on *two* battlefields
+            # was re-derived against the single `target_player_index` and the
+            # second slot resolved to whatever sat at that index on the wrong
+            # board. Garruk, Savage Herald's -2 names one creature you control
+            # and then anyone's, so it is the shape that needed this.
+            self.stack.append(item)
+            return item
         seat = item.target_player_index
         if seat is None:
             # The convention resolution uses when no target player was named.

@@ -1846,3 +1846,56 @@ last-known information, and the exiled-with linkage (Kitesail Freebooter, Idol
 of Endurance).
 
 ---
+
+## Round 40: two targets can be on two boards
+
+*(2026-08-15, same day.)* M21 **203 → 203**, and the flat count is the point:
+this round bought no new card and fixed one that had been playing as a strictly
+smaller card since it shipped. Garruk, Savage Herald's −2 reads "Target creature
+you control deals damage equal to its power to **another target creature**", and
+it could bite nothing but its own board.
+
+**Two things hid the second half, at two different layers.**
+
+- **The picker carried one filter for both slots.** A two-target description
+  records `filter` once, and `_narrowing_flags` read `controller: "you"` off it
+  and applied `own_only` to the whole prompt — so the enumerator offered only
+  the caster's creatures for a slot the *handler* was already written to let be
+  anyone's. The description now carries `filters`, one per slot, and a flag
+  applies only when **every** slot names it. Per-slot legality stays where it
+  was; this is only about what the prompt is allowed to hide.
+- **The stack re-derived both identities from one seat.** `_stack_push` stamps a
+  chosen index into a stable id at the boundary (the permanent-id round's whole
+  point), and it did that by asking `permanent_ids_at(target_player_index, …)` —
+  one seat, for a list. A second slot on the *other* battlefield resolved to
+  whatever sat at that index on the wrong board. The web layer already knew
+  better: it resolves `target_permanent_ids` off the wire and then threw them
+  away. It passes them through now, and `_stack_push` respects ids the caller
+  supplied rather than re-deriving them.
+
+Both halves were needed. Fixing only the picker offers a target the wire cannot
+carry — which is worse than hiding it, because it looks legal and silently does
+nothing.
+
+Suite 4,928 at 18.2s, every `--check` green, shipped pool 388/388, zero hooks,
+zero ceiling raises.
+
+**Next: the fused two-target pair**, measured but not built, so the next session
+starts from facts rather than a guess:
+
+- **Primal Might** parses today as `Sequence([Pump, Fight])` with the Fight's
+  subject `is_source` — round 39's `whole_effect` refusal is what keeps it
+  honestly unsupported. A fuser matching exactly that pair (the shape
+  `_fused_draw_then_discard` already uses) plus one handler that pumps slot 1
+  and then fights slot 1 against slot 2 is the whole of it, and the per-slot
+  filters this round added are what the two differently-restricted slots need.
+- **Hunter's Edge** needs one thing more: "Put a +1/+1 counter on target
+  creature you control. Then **that creature** deals damage…" fails at
+  `expected a subject`, because `parse_recipient` does not accept "that
+  creature" as a *subject* (only the object position reads that quantifier
+  today). One production, then the same fuser.
+- **Heartfire Immolator** is the third: its source is sacrificed as a cost, so
+  "It deals damage equal to its power" is last-known information — the round-33
+  idiom, in an activation rather than a trigger.
+
+---

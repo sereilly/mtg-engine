@@ -312,3 +312,53 @@ def test_garruk_savage_herald_bite_compiles_to_the_two_target_kind(set_pool):
     walker_card = set_pool("M21")["Garruk, Savage Herald"]
     program = compile_card_oracle(walker_card)
     assert program.activated_abilities[1].instruction.kind == "target_bites_target"
+
+
+def test_garruk_savage_herald_can_bite_an_opponents_creature(set_pool):
+    """"Target creature you control deals damage … to **another target
+    creature**" names the caster's creature and then *anyone's*. Two things
+    hid the second half.
+
+    The picker carried one filter for both slots, so "you control" narrowed
+    them both and only the caster's creatures were ever offered — the ability
+    could bite nothing but its own board, while its handler was written to
+    allow either. And the stack re-derived both targets' identities from the
+    single `target_player_index`, so a second slot on the other battlefield
+    resolved to whatever sat at that index on the wrong board.
+    """
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("M21")
+    walker_card = pool["Garruk, Savage Herald"]
+    program = compile_card_oracle(walker_card)
+    bite = program.activated_abilities[1]
+
+    spec = derive_activation_spec(bite)
+    assert spec["max_targets"] == 2
+    assert "own_only" not in spec, "the second slot admits any creature"
+
+    walker = Permanent(card=walker_card, metadata={"loyalty_counters": 5})
+    mine = Permanent(card=pool["Elder Gargaroth"])       # 6/6, the biter
+    theirs = Permanent(card=pool["Concordia Pegasus"])   # 1/3, the bitten
+    p1 = PlayerState(name="P1", battlefield=[walker, mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    offered = game._enumerate_targets(
+        0, walker_card, spec, for_cast=False,
+        ability_instruction=bite.instruction, source_permanent=walker,
+    )
+    assert {t.get("name") for t in offered} == {"Elder Gargaroth", "Concordia Pegasus"}
+
+    result = game.activate_permanent_ability(
+        0, "Garruk, Savage Herald", ability_index=1,
+        target_player_index=0, target_permanent_index=[1, 0],
+        target_permanent_ids=[mine.permanent_id, theirs.permanent_id],
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert theirs.damage_marked == 6
+    assert not game.is_on_battlefield(theirs)
+    assert mine.damage_marked == 0, "a bite is one-way"

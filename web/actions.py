@@ -141,10 +141,17 @@ def _resolve_permanent_ids(game, req: GameActionRequest) -> GameActionRequest:
             indices.append(game.battlefield_index_of(permanent))
             seats.add(seat)
         update["target_permanent_indices"] = indices
+        # Kept, not just converted. A pair of targets may sit on *two*
+        # battlefields ("target creature you control … another target
+        # creature", Garruk, Savage Herald's -2), and the engine re-derives
+        # identities from one `target_seat` unless the caller supplies them —
+        # so the ids resolved here are what the second slot's identity comes
+        # from.
+        update["target_permanent_ids"] = list(req.target_permanent_ids)
         if len(seats) == 1:
             # A single-seat list is what ``target_permanent_indices`` means;
             # a spread across seats has to arrive as ``divided_targets``, which
-            # carries a seat per entry.
+            # carries a seat per entry, or through the ids above.
             update["target_seat"] = seats.pop()
 
     if req.source_permanent_id is not None:
@@ -530,7 +537,12 @@ def do_action(session_id: str, req: GameActionRequest):
                 target_player_index=target,
                 permanent_index=permanent_index,
                 mana_color=req.mana_color,
-                target_permanent_index=req.target_permanent_index,
+                target_permanent_index=(
+                    req.target_permanent_indices
+                    if req.target_permanent_indices is not None
+                    else req.target_permanent_index
+                ),
+                target_permanent_ids=req.target_permanent_ids,
                 target_stack_index=engine_stack_index,
                 ability_index=req.ability_index,
                 x_value=req.x_value,
