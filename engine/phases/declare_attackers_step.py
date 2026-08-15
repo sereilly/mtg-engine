@@ -10,6 +10,7 @@ pass. Also holds the attack-legality query (``can_attack``),
 """
 
 from ..auras import aura_restriction_active
+from ..events import emit
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..trigger_utils import matching_triggers
@@ -136,8 +137,10 @@ class DeclareAttackersStepMixin:
         self.combat_blockers_locked = False
         self._prune_combat_state()
 
+        declared: list[Permanent] = []
         for idx in unique_indices:
             attacker = controller.battlefield[idx]
+            declared.append(attacker)
             # CR 702.20b: attacking doesn't cause a creature with vigilance to tap.
             if not self._has_keyword(attacker, "vigilance"):
                 self.become_tapped(attacker)
@@ -151,6 +154,7 @@ class DeclareAttackersStepMixin:
         if unique_indices:
             self._fire_attack_triggers(controller_index)
             self._fire_creature_attacks_triggers(controller_index, unique_indices)
+            self._fire_matching_creature_attacks_triggers(declared)
             self._fire_delayed_attack_triggers(controller_index, unique_indices)
         # CR 508.4: once attackers have been declared (the turn-based action of the
         # declare attackers step), the active player receives priority.
@@ -282,6 +286,12 @@ class DeclareAttackersStepMixin:
     def _must_attack_if_able(self, attacker: Permanent) -> bool:
         if attacker.metadata.get("must_attack_until_eot"):
             return True
+        # An Aura can impose the requirement too (Furor of the Bitten). Asked of
+        # the attached Auras rather than stamped on the creature, so the
+        # requirement ends when the Aura leaves and nothing has to undo it —
+        # the model every other Aura restriction already follows.
+        if aura_restriction_active(attacker, "must_attack_each_combat"):
+            return True
         program = compile_card_oracle(attacker.effective_card)
         return any(i.kind == "must_attack_each_combat" for i in program.instructions)
 
@@ -364,6 +374,24 @@ class DeclareAttackersStepMixin:
                     )
                 )
                 self.log.append(f"{permanent.card.name} triggered on attack (added to stack)")
+
+    def _fire_matching_creature_attacks_triggers(
+        self, declared: list[Permanent]
+    ) -> None:
+        """"Whenever a creature you control with deathtouch attacks …" (Hooded
+        Blightfang) — once for each declared attacker that answers the trigger's
+        own subject filter.
+
+        The third of the three attack-trigger shapes, and the only one whose
+        source need not be attacking: ``_fire_attack_triggers`` fires once for
+        the whole declaration, ``_fire_creature_attacks_triggers`` fires an
+        attacker's own ability, and this one announces *each attacker* to the
+        whole board. That is what the event bus is for — the announcement is
+        game-wide and the narrowing is the trigger's own noun phrase, so no
+        card is named here.
+        """
+        for attacker in declared:
+            emit(self, "matching_creature_attacks", subject=attacker)
 
     # ------------------------------------------------------------------
     # Banding declaration (CR 702.22)

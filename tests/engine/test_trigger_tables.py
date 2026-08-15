@@ -48,8 +48,21 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "creature_blocks_or_blocked_by_nonwall": "whenever this creature blocks or becomes blocked by a non-wall creature",
     "creature_deals_damage_to_opponent": "whenever this creature deals damage to an opponent",
     "creature_attacks": "whenever this creature attacks",
-    "creature_blocks": "whenever this creature blocks",
-    "creature_becomes_blocked": "whenever this creature becomes blocked",
+    # A narrowed spelling beside its bare one: the subject filter is what makes
+    # the pair two different firings (CR 509.3c/509.3d), so both are checked
+    # against every earlier pattern of every other kind.
+    "matching_creature_attacks": "whenever a creature you control with deathtouch attacks",
+    "matching_creature_damages_planeswalker": (
+        "whenever a creature you control with deathtouch deals damage to a planeswalker"
+    ),
+    "creature_blocks": (
+        "whenever this creature blocks",
+        "whenever this creature blocks a creature with flying",
+    ),
+    "creature_becomes_blocked": (
+        "whenever this creature becomes blocked",
+        "whenever this creature becomes blocked by a creature",
+    ),
     "creature_attacks_or_blocks": "whenever this creature attacks or blocks",
     "creature_dealt_damage": "whenever this creature is dealt damage",
     "creature_dealt_damage_by_self_dies": "whenever a creature dealt damage by this creature this turn dies",
@@ -61,12 +74,14 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
     "enchantment_cast": "whenever you cast an enchantment spell",
-    "creature_enters": "whenever a creature enters the battlefield",
     "land_enters": "whenever a land enters the battlefield",
-    "artifact_enters": "whenever an artifact enters the battlefield",
+    "matching_permanent_enters": (
+        "whenever a creature you control with power 4 or greater enters"
+    ),
     "one_or_more_attack": "whenever one or more creatures you control attack",
     "draws_card": "whenever you draw a card",
     "draws_second_card": "whenever you draw your second card each turn",
+    "you_gain_life": "whenever you gain life",
     "counters_put_on_creature": (
         "whenever one or more +1/+1 counters are put on another non-hydra "
         "creature you control"
@@ -76,7 +91,6 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "enters_battlefield": "when this creature enters the battlefield",
     "leaves_battlefield": "when this creature leaves the battlefield",
     "dies": "when this creature dies",
-    "you_gain_life": "when you gain life",
     "becomes_target": "when this creature becomes the target of a spell",
     "no_islands": "when you control no islands",
     "no_lands": "when you control no lands",

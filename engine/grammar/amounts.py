@@ -14,12 +14,14 @@ from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
 
 
-def parse_amount(stream: TokenStream, *, back_reference: str = "damage_dealt") -> ast.Amount:
+def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> ast.Amount:
     """Parse a quantity at the cursor.
 
-    *back_reference* names the result key a bare "that much" refers to, which
-    depends on the surrounding effect ("you gain that much life" after damage
-    means the damage dealt).
+    *back_reference* names the result key a bare "that much" refers to, for a
+    caller that knows it from the words it has already read. The default is
+    None, because in general the sentence does not say: "that much" points at
+    the enclosing effect's earlier step or at the event that fired the ability,
+    and only lowering can see either. See :class:`ast.ThatMuch`.
     """
     token = stream.peek()
     if token is None:

@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 63.8% | 59.8% | 39.0% | 157 |
+| M21 *(measured)* | 285 | 503 | 67.4% | 63.6% | 41.2% | 165 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,9 +32,9 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 266 | 133 | expected a subject |  |
-| 102 | 48 | unrecognized effect verb |  |
-| 61 | 42 | unconsumed text |  |
+| 257 | 124 | expected a subject |  |
+| 97 | 43 | unrecognized effect verb |  |
+| 56 | 37 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 5 | expected a keyword ability |  |
@@ -52,7 +52,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | no tap-or-untap handler honours this restriction |  |
 | 2 | 1 | expected a permanent to put counters on |  |
-| 2 | 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
+| 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
 | 2 | 2 | expected 'unless defending player controls' |  |
@@ -446,6 +446,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Garruk's Uprising**
   - `When this enchantment enters, if you control a creature with power 4 or greater, draw a card.`
   - `Creatures you control have trample. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
+  - `Whenever a creature you control with power 4 or greater enters, draw a card.`
 - **Garruk's Warsteed**
   - `When this creature enters, you may search your library and/or graveyard for a card named Garruk, Savage Herald, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Gauntlet of Might**
@@ -465,6 +466,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{T}: Look at target player's hand.`
   - `{T}: Look at target player's hand.`
   - `{T}: Look at target player's hand.`
+- **Gloom Sower**
+  - `Whenever this creature becomes blocked by a creature, that creature's controller loses 2 life and you gain 2 life.`
 - **Glorious Anthem**
   - `Creatures you control get +1/+1.`
 - **Goblin Arsonist**
@@ -510,6 +513,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
   - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
   - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
+- **Heroic Intervention**
+  - `Permanents you control gain hexproof and indestructible until end of turn.`
 - **Historian of Zhalfir**
   - `Whenever this creature attacks, if you control a Teferi planeswalker, draw a card.`
 - **Hobblefiend**
@@ -519,6 +524,9 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{W}: Enchanted creature gets +0/+1 until end of turn.`
   - `{W}: Enchanted creature gets +0/+1 until end of turn.`
   - `{W}: Enchanted creature gets +0/+1 until end of turn.`
+- **Hooded Blightfang**
+  - `Whenever a creature you control with deathtouch attacks, each opponent loses 1 life and you gain 1 life.`
+  - `Whenever a creature you control with deathtouch deals damage to a planeswalker, destroy that planeswalker.`
 - **Howl from Beyond**
   - `Target creature gets +X/+0 until end of turn.`
   - `Target creature gets +X/+0 until end of turn.`
@@ -555,6 +563,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
+- **Invigorating Surge**
+  - `Put a +1/+1 counter on target creature you control, then double the number of +1/+1 counters on that creature.`
 - **Iron Star**
   - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
@@ -1040,6 +1050,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Change the text of target spell or permanent by replacing all instances of one color word with another. (For example, you may change "target black spell" to "target blue spell." This effect lasts indefinitely.)`
   - `Change the text of target spell or permanent by replacing all instances of one color word with another. (For example, you may change "target black spell" to "target blue spell." This effect lasts indefinitely.)`
   - `Change the text of target spell or permanent by replacing all instances of one color word with another. (For example, you may change "target black spell" to "target blue spell." This effect lasts indefinitely.)`
+- **Snarespinner**
+  - `Whenever this creature blocks a creature with flying, this creature gets +2/+0 until end of turn.`
 - **Sol Ring**
   - `{T}: Add {C}{C}.`
   - `{T}: Add {C}{C}.`
@@ -1177,6 +1189,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Take an extra turn after this one.`
 - **Titanic Growth**
   - `Target creature gets +4/+4 until end of turn.`
+- **Tormod's Crypt**
+  - `{T}, Sacrifice this artifact: Exile target player's graveyard.`
 - **Tranquil Cove**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {W} or {U}.`
@@ -1202,6 +1216,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `When this creature enters, if you control another creature with power 4 or greater, this creature deals 2 damage to each opponent.`
 - **Twinblade Assassins**
   - `At the beginning of your end step, if a creature died this turn, draw a card.`
+- **Unleash Fury**
+  - `Double the power of target creature until end of turn.`
 - **Unsubstantiate**
   - `Return target spell or creature to its owner's hand.`
 - **Unsummon**
@@ -1224,6 +1240,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Village Rites**
   - `Draw two cards.`
 - **Vito, Thorn of the Dusk Rose**
+  - `Whenever you gain life, target opponent loses that much life.`
   - `{3}{B}{B}: Creatures you control gain lifelink until end of turn.`
 - **Volcanic Geyser**
   - `Volcanic Geyser deals X damage to any target.`
@@ -1263,6 +1280,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
+- **Watcher of the Spheres**
+  - `Whenever another creature you control with flying enters, this creature gets +1/+1 until end of turn.`
 - **Wildwood Scourge**
   - `Whenever one or more +1/+1 counters are put on another non-Hydra creature you control, put a +1/+1 counter on this creature.`
 - **Will-o'-the-Wisp**

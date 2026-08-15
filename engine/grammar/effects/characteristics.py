@@ -288,7 +288,25 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected a permanent to put counters on")
-    placement = ast.PutCounter(subject, counter, count, up_to)
+    # "…, then double the number of +1/+1 counters on that creature."
+    # (Invigorating Surge.) A rider on this placement rather than a second
+    # sentence: "that creature" is the one just chosen, so parsed apart the
+    # doubling would be looking for a target nobody picked. The counter kind is
+    # spelled out and must match what was placed — "then double the number of
+    # -1/-1 counters" is a different card and has to keep refusing.
+    then_double = False
+    double_mark = stream.mark()
+    if stream.accept_punct(",") and stream.accept_phrase("then", "double", "the", "number", "of"):
+        doubled = _expect_counter_kind(stream)
+        if (
+            doubled.text == counter
+            and stream.accept_word("counter", "counters")
+            and stream.accept_phrase("on", "that", "creature")
+        ):
+            then_double = True
+    if not then_double:
+        stream.reset(double_mark)
+    placement = ast.PutCounter(subject, counter, count, up_to, then_double=then_double)
 
     # "…for each creature that died this turn" multiplies the placement; it is
     # not a rider on it. Modelled as an iteration wrapping the placement so a
@@ -299,6 +317,24 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     if iterated is None:
         return placement
     return ast.ForEach(iterated, placement)
+
+
+def _parse_double(stream: TokenStream) -> ast.DoublePower:
+    """``Double the power of <subject> until end of turn.`` (Unleash Fury.)
+
+    Only power: doubling toughness, life or mana are separate effects with
+    separate handlers, and consuming the noun without checking it is how one
+    card's production quietly claims another's.
+    """
+    stream.expect_word("double")
+    stream.expect_word("the")
+    if not stream.accept_word("power"):
+        raise stream.error("only doubling power has a handler")
+    stream.expect_word("of")
+    subject = parse_recipient(stream)
+    if subject is None:
+        raise stream.error("expected something whose power to double")
+    return ast.DoublePower(subject, _parse_duration(stream))
 
 
 def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:

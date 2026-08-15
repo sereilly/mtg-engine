@@ -21,7 +21,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.auras import aura_static_pt_grant, auras_attached_to
 from engine.card_loader import load_catalog
-from engine.models import Permanent
+from engine.models import CardDefinition, Permanent
 
 
 @pytest.fixture(scope="module")
@@ -432,3 +432,71 @@ def test_613_1d_an_artifact_creature_is_not_animated_again(catalog):
     attach_aura(aura, creature_artifact)
 
     assert animating_auras(creature_artifact) == []
+
+
+# ---------------------------------------------------------------------------
+# 613.1d — an Aura that adds a subtype
+# ---------------------------------------------------------------------------
+
+
+def _typed_aura(subtype: str) -> CardDefinition:
+    return CardDefinition(
+        name=f"{subtype.title()}making", mana_cost="{1}{W}", cmc=2.0,
+        type_line="Enchantment — Aura",
+        oracle_text=(
+            "Enchant creature\n"
+            f"Enchanted creature gets +2/+2, has flying, and is a {subtype.title()} "
+            "in addition to its other types."
+        ),
+        colors=("W",), color_identity=("W",), keywords=(), produced_mana=(),
+        raw={"name": f"{subtype.title()}making", "type_line": "Enchantment — Aura"},
+    )
+
+
+@pytest.mark.cr("613.1d")
+def test_613_1d_an_aura_adds_a_subtype_without_replacing_the_printed_ones():
+    """"…in addition to its other types" is layer 4 *addition*. A land-type
+    change (CR 305.7) replaces; this does not, and the two therefore cannot
+    share a contribution."""
+    from engine.auras import attach_aura
+
+    beast = Permanent(card=CardDefinition(
+        name="Bear", mana_cost="{1}{G}", cmc=2.0, type_line="Creature — Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(), raw={"name": "Bear", "type_line": "Creature — Bear",
+                               "power": "2", "toughness": "2"},
+    ))
+    aura = Permanent(card=_typed_aura("knight"))
+    owner = PlayerState(name="P1", battlefield=[beast, aura], life=20)
+    game = Game(players=[owner, PlayerState(name="P2", life=20)])
+    attach_aura(aura, beast)
+    game._recompute_continuous_effects()
+
+    assert beast.has_type("knight")
+    assert beast.has_type("bear"), "the printed subtype survives"
+    assert beast.is_creature
+
+
+@pytest.mark.cr("611.3")
+def test_611_3_the_added_subtype_ends_with_the_aura():
+    """Derived every recompute, so nothing has to find and undo it."""
+    from engine.auras import attach_aura, detach_aura
+
+    beast = Permanent(card=CardDefinition(
+        name="Bear", mana_cost="{1}{G}", cmc=2.0, type_line="Creature — Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(), raw={"name": "Bear", "type_line": "Creature — Bear",
+                               "power": "2", "toughness": "2"},
+    ))
+    aura = Permanent(card=_typed_aura("knight"))
+    owner = PlayerState(name="P1", battlefield=[beast, aura], life=20)
+    game = Game(players=[owner, PlayerState(name="P2", life=20)])
+    attach_aura(aura, beast)
+    game._recompute_continuous_effects()
+    assert beast.has_type("knight")
+
+    detach_aura(aura, beast)
+    game._recompute_continuous_effects()
+
+    assert not beast.has_type("knight")
+    assert beast.has_type("bear")

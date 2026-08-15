@@ -196,6 +196,7 @@ class DeclareBlockersStepMixin:
         # 509.1i / 509.2a: abilities that trigger on blockers being declared fire now.
         self._fire_block_triggers(controller_index)
         self._fire_creature_blocks_triggers(controller_index, assignments)
+        self._fire_becomes_blocked_triggers(controller_index, assignments)
         self._apply_rampage_and_flanking(controller_index)
         # CR 509.4/802.4: once every defending player has declared, the active
         # player receives priority.
@@ -609,19 +610,19 @@ class DeclareBlockersStepMixin:
         # A blocker that blocks an attacker (509.3a "Whenever this creature blocks").
         # A creature blocking several attackers fires once per attacker it blocks.
         # Scoped to this defender's own declared blocks (nested by defender, CR 802).
-        for blocker_idx, attacker_idxs in self.combat_blockers.get(controller_index, {}).items():
-            if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
-                continue
-            blocker = defender.battlefield[blocker_idx]
-            for attacker_idx in attacker_idxs:
-                if 0 <= attacker_idx < len(attacker_controller.battlefield):
-                    queue_trigger(
-                        blocker,
-                        controller_index,
-                        attacker_controller.battlefield[attacker_idx],
-                        self.active_player_index,
-                        attacker_idx,
-                    )
+        # Slots resolve through the shared reader, so this pass and the two below
+        # it turn combat's index maps into permanents in one place.
+        for _, blocker, blocked in self._resolved_block_pairs(
+            controller_index, self.combat_blockers.get(controller_index, {})
+        ):
+            for attacker_idx, attacker in blocked:
+                queue_trigger(
+                    blocker,
+                    controller_index,
+                    attacker,
+                    self.active_player_index,
+                    attacker_idx,
+                )
 
         # An attacker that becomes blocked (509.3c/509.3d "becomes blocked"), scoped
         # to attackers aimed at this defender (CR 802.4a).
@@ -645,39 +646,153 @@ class DeclareBlockersStepMixin:
         """Put each blocker's own "whenever this creature blocks" triggers on
         the stack (e.g. Ydwen Efreet's coin flip) — once per blocking
         creature declared this call, regardless of how many attackers it
-        blocks (unlike Cockatrice's per-attacker-blocked firing)."""
-        if controller_index < 0 or controller_index >= len(self.players):
-            return
+        blocks (unlike Cockatrice's per-attacker-blocked firing).
+
+        "…blocks **a creature with flying**" (Snarespinner) narrows the same
+        trigger by what was blocked, so it fires once for each blocked attacker
+        the filter admits. The unnarrowed form keeps its once-per-blocker
+        firing — CR 509.3c/509.3d draw exactly that line, and the filter's
+        presence is what tells the two apart.
+        """
+        from ..events import trigger_subject_matches
         from ..game_types import StackItem
 
-        defender = self.players[controller_index]
-        for blocker_idx in assignments:
-            if not (0 <= blocker_idx < len(defender.battlefield)):
-                continue
-            blocker = defender.battlefield[blocker_idx]
+        for blocker_idx, blocker, blocked in self._resolved_block_pairs(
+            controller_index, assignments
+        ):
             # "attacks or blocks" (Elder Gargaroth): the block half of the
             # union — the attack half fires in declare_attackers_step.
             for trig in matching_triggers(
                 blocker.effective_card,
                 condition_kinds={"creature_blocks", "creature_attacks_or_blocks"},
             ):
-                self._stack_push(
-                    StackItem(
-                        card=blocker.card,
-                        caster_index=controller_index,
-                        # The blocker's own controller/index, so the coin-flip
-                        # handler can remove IT from combat without re-deriving
-                        # who owns it.
-                        target_player_index=controller_index,
-                        target_permanent_index=blocker_idx,
-                        x_value=None,
-                        ability_instruction=trig.instruction,
-                        ability_effect_kind=trig.effect_kind,
-                        source_permanent=blocker,
-                        ability_text=trig.source_line,
+                if not trig.condition.payload.get("blocked_filter"):
+                    firings = 1
+                else:
+                    firings = sum(
+                        1
+                        for _, attacker in blocked
+                        if trigger_subject_matches(
+                            self, trig, "blocked", attacker,
+                            observer=controller_index, source=blocker,
+                        )
                     )
-                )
-                self.log.append(f"{blocker.card.name} triggered on block (added to stack)")
+                for _ in range(firings):
+                    self._stack_push(
+                        StackItem(
+                            card=blocker.card,
+                            caster_index=controller_index,
+                            # The blocker's own controller/index, so the coin-flip
+                            # handler can remove IT from combat without re-deriving
+                            # who owns it.
+                            target_player_index=controller_index,
+                            target_permanent_index=blocker_idx,
+                            x_value=None,
+                            ability_instruction=trig.instruction,
+                            ability_effect_kind=trig.effect_kind,
+                            source_permanent=blocker,
+                            ability_text=trig.source_line,
+                        )
+                    )
+                    self.log.append(f"{blocker.card.name} triggered on block (added to stack)")
+
+    def _resolved_block_pairs(
+        self, controller_index: int, assignments: dict[int, list[int]]
+    ) -> list[tuple[int, Permanent, list[tuple[int, Permanent]]]]:
+        """``(blocker index, blocker, [(attacker index, attacker)])`` for a
+        declaration, with every slot resolved exactly once.
+
+        The combat maps are index-keyed by design, so reading a permanent out of
+        one means a positional battlefield read — the thing
+        ``tests/engine/test_control_reads.py`` ratchets. Doing it here, once, is
+        what lets the two fire sites below take permanents rather than each
+        re-resolving the same slots.
+        """
+        if not (0 <= controller_index < len(self.players)):
+            return []
+        defender = self.players[controller_index]
+        attacker_controller = (
+            self.players[self.active_player_index]
+            if 0 <= self.active_player_index < len(self.players)
+            else None
+        )
+        pairs: list[tuple[int, Permanent, list[tuple[int, Permanent]]]] = []
+        for blocker_idx, attacker_indices in assignments.items():
+            if not (0 <= blocker_idx < len(defender.battlefield)):
+                continue
+            blocked: list[tuple[int, Permanent]] = []
+            if attacker_controller is not None:
+                blocked = [
+                    (idx, attacker_controller.battlefield[idx])
+                    for idx in attacker_indices
+                    if 0 <= idx < len(attacker_controller.battlefield)
+                ]
+            pairs.append((blocker_idx, defender.battlefield[blocker_idx], blocked))
+        return pairs
+
+    def _fire_becomes_blocked_triggers(
+        self, controller_index: int, assignments: dict[int, list[int]]
+    ) -> None:
+        """An attacker's own "whenever this creature becomes blocked" triggers.
+
+        CR 509.3c/509.3d is the whole design: the bare wording fires **once**
+        for the creature however many blockers it has, while "becomes blocked
+        **by a creature**" fires once for *each* creature that blocks it. The
+        subject filter is what separates them, so the count is read off the
+        condition rather than off a per-card list — which is also why this
+        dispatcher can exist at all. It never had one: `creature_becomes_blocked`
+        parsed in both tables and no combat step fired it, the same shape as
+        `creature_attacks_or_blocks` and `creature_you_control_dies` before it.
+        """
+        if not (0 <= self.active_player_index < len(self.players)):
+            return
+        from ..events import trigger_subject_matches
+        from ..game_types import StackItem
+
+        blockers_of: dict[int, tuple[Permanent, list[Permanent]]] = {}
+        for _, blocker, blocked in self._resolved_block_pairs(
+            controller_index, assignments
+        ):
+            for attacker_idx, attacker in blocked:
+                blockers_of.setdefault(attacker_idx, (attacker, []))[1].append(blocker)
+        for attacker_idx, (attacker, blockers) in blockers_of.items():
+            seat = self.active_player_index
+            for trig in matching_triggers(
+                attacker.effective_card, condition_kinds={"creature_becomes_blocked"}
+            ):
+                if not trig.condition.payload.get("blocker_filter"):
+                    matched = blockers[:1]
+                else:
+                    matched = [
+                        b for b in blockers
+                        if trigger_subject_matches(
+                            self, trig, "blocker", b, observer=seat, source=attacker
+                        )
+                    ]
+                for blocker in matched:
+                    self._stack_push(
+                        StackItem(
+                            card=attacker.card,
+                            caster_index=seat,
+                            target_player_index=seat,
+                            target_permanent_index=attacker_idx,
+                            x_value=None,
+                            ability_instruction=trig.instruction,
+                            ability_effect_kind=trig.effect_kind,
+                            source_permanent=attacker,
+                            ability_text=trig.source_line,
+                            # "That creature's controller" is the blocker's, and
+                            # a blocker can leave before this resolves — so the
+                            # seat is frozen now (CR 603.10), exactly as the
+                            # death triggers freeze theirs.
+                            trigger_context={
+                                "event_subject_controller": self.controller_index_of(blocker),
+                            },
+                        )
+                    )
+                    self.log.append(
+                        f"{attacker.card.name} triggered on becoming blocked (added to stack)"
+                    )
 
     def _apply_temporary_buff(self, permanent: Permanent, power: int, toughness: int) -> None:
         """Apply an "until end of turn" P/T change that the cleanup step reverts."""

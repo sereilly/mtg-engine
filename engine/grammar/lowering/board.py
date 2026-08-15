@@ -50,6 +50,13 @@ _BASIC_LAND_TYPES = frozenset({"plains", "island", "swamp", "mountain", "forest"
 _BLOCK_PAIR_EVENTS = frozenset({"creature_blocks_or_blocked_by_nonwall"})
 
 
+# Trigger events whose fire site stamps the object the event was about onto the
+# stack item, so an effect may say "that <noun>" and mean it.
+_EVENT_SUBJECT_DESTROY_EVENTS: frozenset[str] = frozenset({
+    "matching_creature_damages_planeswalker",   # Hooded Blightfang
+})
+
+
 def _lower_destroy(node: ast.Destroy, event: str | None = None) -> tuple[OracleInstruction, ...]:
     if node.delay:
         return _lower_delayed_destroy(node, event)
@@ -77,6 +84,26 @@ def _lower_destroy(node: ast.Destroy, event: str | None = None) -> tuple[OracleI
             raise LoweringError("no sweep handler for this destroy scope", node=node)
         payload = {"bypass_regeneration": True} if node.no_regen else {}
         return (OracleInstruction(kind, "", payload),)
+
+    # "…destroy **that planeswalker**." (Hooded Blightfang.) "That" is not a
+    # target the card ever asked for — it is the object the trigger's event was
+    # about, which the fire site stamps onto the stack item by permanent id. So
+    # this rides the ordinary destroy handler and simply does not describe a
+    # cast-time target: `_describe_targets` below would raise a picker for a
+    # choice CR 603.3d says was never offered. Admitted only under the events
+    # whose fire site records one, because everywhere else "that" has no
+    # referent and a bare destroy would hit whatever the context happened to
+    # hold.
+    if spec.quantifier == "that":
+        if event not in _EVENT_SUBJECT_DESTROY_EVENTS:
+            raise LoweringError(
+                "\"that\" names the firing event's object, and this event records none",
+                node=node,
+            )
+        payload = _filter_payload(filt)
+        if node.no_regen:
+            payload["bypass_regeneration"] = True
+        return (OracleInstruction("destroy_target_permanent", "", payload),)
 
     if spec.quantifier not in ("target", "up_to"):
         raise LoweringError("unsupported destroy quantifier", node=node)

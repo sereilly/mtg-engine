@@ -1294,6 +1294,386 @@ both want.
 
 ---
 
+## Round 33: the life-gain event, and what "that much" was pointing at
+
+*(2026-08-13.)* M21 **187 → 189**: Vito, Thorn of the Dusk Rose and Heroic
+Intervention. Two cards, and the round's substance is a phrase that had been
+lying about itself since the grammar was written.
+
+**A bare "that much" named a producer it could not know.** `parse_amount`
+defaulted its back-reference to `"damage_dealt"`, so *every* bare occurrence in
+the pool parsed as `ThatMuch("damage_dealt")` — Vito's life, Basri Ket's
+attacker count, Kinetic Augur's discards, all of them. It read as evidence and
+was a guess. It survived because it never had to be right: the only
+back-reference the whole pool lowers is Conclave Mentor's, and that one comes
+from words that *do* name their producer. It parses as `ThatMuch(None)` now:
+"equal to the damage dealt" names a producer, "that much" does not, and lowering
+is the layer that can see one. `_back_reference_payload` is that place, and it resolves
+against two channels that are genuinely different places — `amount_from`, a key
+in this resolution's scratchpad, and `amount_from_trigger`, a key in the firing
+event's captured context. Reading either for the other yields a silent zero,
+which is why they are separate payload keys rather than one with a convention.
+Conclave Mentor's `dead_power` moved onto the second, where it always belonged;
+the `amount_from == "dead_power"` special case in the handler is gone.
+
+**Which events carry a number is a table** (`_EVENT_QUANTITIES`), not a rule.
+One entry, `you_gain_life` → `life_gained`. El-Hajjâj's "whenever this creature
+deals damage, you gain that much life" is the obvious second and is deliberately
+*not* there: its fire site records the amount under a different key, so claiming
+its line would retire a hook onto a handler reading the wrong name. That is a
+change to make with its eyes open, not a row to add.
+
+**The event itself is one `emit` at the one life-gain seam.** `Game._gain_life`
+is where lifelink, a drain spell, an upkeep trigger and a planeswalker ultimate
+all arrive, so "Whenever you gain life" needed no fire site of its own — the
+same shape as round 31's counter-placement seam. It emits **after** the CR 614
+replacements and after the per-turn record, because CR 119.9 is explicit: a
+gain of 0 is not a life-gain event, and a gain Lich replaced with draws never
+happened. The filter is the seat-scoped one the second-draw trigger uses, since
+"you" on a triggered ability is its controller (CR 109.5) and the announcement
+is game-wide. `you_gain_life` had a row in the **when** table with no dispatcher
+and no card — a life gain is repeatable, so every printing is "*Whenever*" —
+and that dead row is deleted rather than duplicated: a kind lives in one table,
+because the shadowing guard keys its canonical examples by kind.
+
+**One bug found by the card, in a shared path.** A triggered ability with no
+chosen target resolved against `1 - caster_index`. That is the opponent for two
+players and `players[-1]` at seat 2 of a three-handed game — *the caster*, which
+"target opponent" can never be (CR 102.3). Vito would have drained himself in a
+Free-For-All. `_default_opposing_seat` answers the first living opponent, with
+the old expression kept as the fallback for a table with none left, so nothing
+mid-teardown changes and the two-player answer is identical.
+
+**Heroic Intervention** is the small half: "Permanents you control" is the
+creature team grant over a wider board, and the width is the only difference —
+so it is a payload key (`every_permanent`) emitted only for the wider reading,
+leaving every payload written before it byte-identical. Hexproof is read by
+`_can_be_targeted` and indestructible by `_is_indestructible`, neither of which
+asks what type the permanent is, so the handler's loop is the whole change. The
+lowering now also refuses a narrowing it cannot honour, which the old
+creature-only branch never had to say out loud.
+
+**The per-set file split, because the guard fired.** `test_m21_cards.py` passed
+2,600 lines and `test_per_set_files_stay_readable` failed — obeyed rather than
+raised, exactly as round 31 obeyed the thousand-line one. It is now
+`test_m21_creatures.py` (91), `test_m21_cards.py` (50), `test_m21_planeswalkers.py`
+(26), `test_m21_instants.py` (22), `test_m21_sorceries.py` (11) and
+`test_m21_lands.py` (1) — 201 tests before and after. What stayed in
+`cards.py` is what `tests/sets/README.md` says is not a per-card test: the
+per-round compile sweeps that span several types, the grammar probes that name
+no card, and the per-turn records.
+
+Suite 4,854 at 17.8s, every `--check` green, shipped pool 388/388, zero hooks,
+zero ceiling raises. Three of the four new rules tests were watched to fail on
+HEAD; the fourth (a 0-life gain announces nothing) passes there vacuously and is
+a guard against the emit ever moving above the zero check.
+
+**Next:** Hooded Blightfang, whose two trigger heads want the mechanism the
+census has now named three times — **a trigger event whose subject is an object
+filter** ("a creature you control *with deathtouch* attacks"). It is the same
+gap behind Snarespinner ("blocks a creature with flying"), Thieves' Guild
+Enforcer ("this creature or another Rogue you control enters"), Watcher of the
+Spheres and Feline Sovereign, which makes it the largest named block left. Then
+the "activate from hand" seam (Waker of Waves, Niambi, Subira) and the
+conditional cost *reduction* family (Stormwing Entity, Chandra's Incinerator,
+Volcanic Salvo, Sanguine Indulgence, Discontinuity).
+
+---
+
+## Round 34: a trigger's subject is an object filter
+
+*(2026-08-13, same day.)* M21 **189 → 192**: Hooded Blightfang, Snarespinner,
+Gloom Sower — the block the census had named three times. A fourth card,
+**Garruk's Uprising**, stops lying without moving the count.
+
+**One printed phrase, read by one parser, on both sides of the pipeline.** The
+compiler takes a trigger's *condition* from `engine/oracle.py`'s regex table and
+only its *effect* from the grammar, so a narrowed condition is read twice — and
+a regex cannot describe "a creature you control with power 4 or greater" without
+approximating it. So the regex only *delimits* the phrase: a named group ending
+in `_subject`, bounded by the comma a trigger condition ends at, whose contents
+go through `grammar.parse_subject_filter` — the same noun parser the grammar's
+own side uses. Both ends emit the `ObjectFilter` payload
+`permanent_matches_filter` already tests.
+`test_a_narrowed_trigger_reads_the_same_subject_on_both_sides` compares the two
+over the whole pool, which is the guard that makes "both sides" mean something.
+
+**Two gates, and the second is the load-bearing one.** A phrase the noun parser
+refuses is refused. A phrase it *reads* whose filter the **dispatcher** cannot
+test is also refused — `TESTABLE_SUBJECT_FILTER_KEYS` names what
+`trigger_subject_matches` implements, and a key outside it makes the condition
+refuse at compile time rather than being ignored at fire time. An ignored
+restriction on a trigger is not a narrower card, it is a card firing on
+everything; that asymmetry is why the refusal lives in the compiler.
+
+**Five events, and the shape differed at each one.**
+
+- **`matching_creature_attacks`** (Blightfang) is a *third* attack-trigger
+  shape, and the only one whose source need not be attacking: one site fires
+  once per declaration, another fires an attacker's own ability, and this
+  announces each attacker to the whole board. That is what the event bus is
+  for — no card is named at the fire site.
+- **`matching_creature_damages_planeswalker`** (Blightfang's second line) is one
+  emit at `_mark_damage_on_permanent`, the same seam lifelink and deathtouch
+  sit on, so a ping destroys exactly as a blocker does. It uses `collect`
+  rather than `emit` — the reason that function is separate — to stamp the
+  walker's **id** onto each stack item, because "destroy that planeswalker" must
+  resolve the object the event was about and an index is not an identity
+  (CR 400.7). `_enqueue_triggered_ability` grew `target_permanent_id` to carry it.
+- **`creature_blocks` / `creature_becomes_blocked`** are where the CR does the
+  design for us. **509.3c**: "becomes blocked" fires once for the creature
+  however many blockers it has. **509.3d**: "becomes blocked **by a creature**"
+  fires once for *each* creature that blocks it. The subject filter's presence
+  is exactly that distinction, so the firing count is read off the condition.
+  `creature_becomes_blocked` had no dispatcher at all — the fourth kind found
+  parsing in both tables and firing nowhere, after `creature_attacks_or_blocks`
+  (round 28), `creature_you_control_dies` (round 30) and `you_gain_life` (round
+  33). And Snarespinner had been compiling to the *unnarrowed* condition with
+  "a creature with flying" dropped on the floor.
+- **`matching_permanent_enters`** is one emit at
+  `_put_permanent_onto_battlefield` — the single seam a resolving spell, a
+  token, a reanimation and a cleanup return all pass through — placed after the
+  continuous recompute, because a filter about power asks what the board makes
+  the permanent (CR 611.3a). **Garruk's Uprising** is what it was for: the card
+  reported supported while its third line compiled to *nothing*, drawing no
+  card for the 6/6 it watches for. `creature_enters` and `artifact_enters` are
+  deleted rather than kept beside the new kind — no dispatcher, and between them
+  no card.
+
+**Two things fell out that the round did not set out to do.**
+
+- **The trigger event is threaded into nested statements now.** Gloom Sower's
+  "that creature's controller loses 2 life **and** you gain 2 life" is a
+  conjunction, and `lower_statement` deliberately did not pass `event` down —
+  so the back-reference lowered as an ordinary chosen target, which is right
+  with two players by accident. The unthreaded parameter was two questions
+  wearing one name: *what event is this under* (true of every clause, so
+  threaded) and *is this the trigger's whole instruction* (what the three
+  dispatch-selecting lowerings actually need, now `whole_effect`).
+- **"That player" is one concept.** Massacre Wurm's dead creature's controller
+  and Gloom Sower's blocker's controller are the same question asked of
+  different events, so `dead_controller` became `event_subject_controller` and
+  the events that record one are a table beside `_EVENT_QUANTITIES`.
+
+**The positional-indexing ratchet fired and was answered by tightening it.**
+Resolving combat's index maps into permanents is a positional battlefield read,
+and the new fire sites needed several. `_resolved_block_pairs` does it once for
+all three block passes, which took `declare_blockers_step` from 19 to **18** —
+the baseline moved down, not up.
+
+Suite 4,872 at 18.0s, every `--check` green, shipped pool 388/388, zero hooks,
+zero ceiling raises. M21's parsed share went 63.8% → 65.2%.
+
+**Next:** the enters family now has its dispatcher, so the cards behind it are
+blocked only on their *other* lines — Watcher of the Spheres and Stormwing
+Entity on conditional cost **reduction** (with Chandra's Incinerator, Volcanic
+Salvo, Sanguine Indulgence, Discontinuity: a five-card block), Terror of the
+Peaks on "costs an additional 3 life", Thieves' Guild Enforcer on an
+opponent's-graveyard conditional static. Then the "activate from hand" seam
+(Waker of Waves, Niambi, Subira, Sanctum of Shattered Heights) and the
+reveal-your-hand-and-choose family (Duress, Kitesail Freebooter).
+
+---
+
+## Round 35: costs go down as well as up
+
+*(2026-08-13, same day.)* M21 **192 → 195**: Vryn Wingmare, Watcher of the
+Spheres, Stormwing Entity. `engine/cost_modifiers.py` opened with a scope note
+promising exactly this — "reduction … should come with the card that needs it,
+not before" — and three cards now need it, so the promise is kept rather than
+widened on speculation.
+
+**A reduction is not an increase with a minus sign, and CR 118.7 is why.**
+118.7a: a generic reduction touches only the generic component. 118.7b: a
+coloured reduction against a cost with no mana of that colour comes off generic
+instead. 118.7c: a coloured reduction larger than that colour's component takes
+it to nothing and the difference spills onto generic. 601.2f: nothing goes below
+{0}. Those four sentences are `reduce_cost`, in one place, because a caller
+doing the subtraction itself is a caller that gets 118.7b wrong — and a cost
+error in this direction makes a spell castable that is not. Stormwing Entity
+is the worked example: {3}{U}{U} less {2}{U} is {1}{U}, one blue pip off the
+coloured half and two off the generic.
+
+**Two mechanisms wearing one phrase.** A *permanent's* modifier is a board
+effect — found by scanning battlefields, applied to other objects — and grew
+three narrowings the template already printed: a keyword ("spells **with
+flying**"), a controller scope ("**you cast**"), and "non" as the printed
+negation of a type word rather than a type of its own (Vryn Wingmare). A
+*spell's own* reduction is a property of the card being cast, read off its own
+text and gated on a condition about the caster's turn; no permanent is involved,
+so no scan would ever find it. They meet in `cost_reduction_for_cast` and
+nowhere else.
+
+**The condition table refuses what it cannot answer.** "…if you've cast an
+instant or sorcery spell this turn" and "…if you've gained 3 or more life this
+turn" are rows; a wording outside them, or an amount this cannot compute
+({X} — Volcanic Salvo, Chandra's Incinerator), refuses the whole line. Reading
+an unrecognized condition as satisfied would make the spell cheaper than it is,
+and cheaper is the one direction a cost error must never go.
+
+**`spells_cast_this_turn` is written where the cast is *announced*.** A spell
+that is countered was still cast (CR 601.2i finishes the casting before anyone
+may respond), so the record sits beside the cast-trigger emit rather than at the
+payment site or the resolution.
+
+**Two claims that had quietly expired, both found by making the change:**
+
+- **`ai_policy._extra_generic_tax` passed seat 0** with a comment saying no
+  registered modifier depended on the caster — true while every one of them was
+  scoped by the *card's* colour, false the moment a card printed "spells **you
+  cast** cost {1} less". It is `_cost_for` now, threading the real seat by
+  identity and reading the same three functions the cast path does, so a
+  discount the AI can see is one the cast will honour.
+- **The *creature* support gate had never asked the cost table.** Gloom is an
+  enchantment, so the noncreature classifier's claim list was enough; a creature
+  printing the same template was taxed correctly by the casting path while
+  reported unsupported. That is Azusa's shape against the land-play table
+  (round 26), one table over. Adding it made
+  `test_every_admitted_static_line_is_backed_by_code` fire on Gloom — correctly:
+  the gate and the dispatch must read the same table, and the guard's list of
+  tables is part of that contract.
+
+The rules test that pinned the *absence* of reductions retired into one that
+pins them; what stays refused (Fireball's per-target surcharge, a mana ability)
+keeps its assertion. `scripts/parse_coverage.py` got one reordering so Gloom's
+lines keep naming `cost_modifiers.py` rather than the gate that now delegates
+to it — the report is more use naming the module that carries a line out.
+
+Suite 4,887 at 18.0s, every `--check` green, shipped pool 388/388, zero hooks,
+zero ceiling raises. M21's parsed share went 65.2% → 66.2%.
+
+**Left standing, with their reasons:** Pursued Whale ("spells your opponents
+cast **that target this creature**" — a narrowing about the spell's targets,
+which no filter here expresses), Sanctum of Tranquil Light (a per-Shrine
+*activation* reduction), and the three {X} self-reductions. Sanguine Indulgence
+and Discontinuity now read their cost lines and are blocked only on their
+effects — a graveyard-to-hand multi-return and "End the turn".
+
+**Next:** the "activate from hand" seam (Waker of Waves, Niambi, Subira,
+Sanctum of Shattered Heights — four cards on one discard-cost mechanism), then
+the reveal-your-hand-and-choose family (Duress, Kitesail Freebooter) and the
+fight family (Primal Might, Brash Taunter, Hunter's Edge).
+
+---
+
+## Round 36: an Aura is more than its first line
+
+*(2026-08-13, same day.)* M21 **195 → 198**: Capture Sphere, Dub, Furor of the
+Bitten. The round started as "grow the Aura effect table" and found a bug class
+on the way in — which is why it is worth writing down in the order it happened.
+
+**Every reader of an Aura's enchant clause assumed it was printed first.** The
+table reported Capture Sphere unsupported with the reason "unimplemented aura
+effect: **flash**": its printed keyword line was being handed to the *effect*
+table, which of course does not implement flash. Asking the keyword gate first
+fixed the reason — and then the card compiled supported and did nothing, which
+is worse. `aura_enchant_noun` read `oracle_text.split("\n")[0]`, so an Aura with
+a keyword above its enchant line named no noun, and **the spell resolved, entered
+the battlefield, and attached to nothing**. Behind that, `_apply_aura_effect`
+dispatched on `normalized_text.startswith("enchant creature")` — five branch
+heads with the same assumption — and so did the 303.4g unattached-Aura sweep,
+the graveyard-Aura target check, the Aura death trigger and three upkeep passes.
+Eleven readers, one question, and every Aura in the *shipped* pool prints its
+enchant line first, so all eleven were right until M21.
+
+`auras.aura_enchant_clause` is that question now, asked of the printed lines
+because the clause **is** a line — and the normalized text has already joined
+them, which is why two of the conversions had to change what they passed as well
+as how they asked. There is no rule that the enchant ability comes first; there
+is a convention about an Aura's *own* abilities, and a keyword line is not one
+of them.
+
+**Then the two effect readings the round was for.**
+
+- **A subtype, added in layer 4** (Dub; Demonic Embrace prints the same shape).
+  "…gets +2/+2, has first strike, and is a Knight in addition to its other
+  types" is one printed line carrying three effects in three layers — 7c, 6 and
+  4 — so one pattern is shared by three readers rather than each re-parsing the
+  line and one of them dropping its half. Added, never replacing (CR 613.1d,
+  against 305.7's land-type *change*), so a Dog stays a Dog; derived from the
+  Aura's text every recompute, so detaching simply stops contributing.
+  The subtype alternation **is** the ingested creature-type vocabulary, so the
+  gate and the grant refuse the same words — an invented type leaves the whole
+  line unclaimed instead of being claimed and granted nothing.
+- **A combat requirement** (Furor of the Bitten). "…gets +2/+2 **and attacks
+  each combat if able**" joins `aura_restrictions`, and `_must_attack_if_able`
+  asks the attached Auras beside the creature's own text. Not stamped on the
+  creature: the requirement ends with the Aura, and nothing has to find it.
+
+**One import-order note worth keeping.** The vocabulary lives in
+`engine.grammar.vocabulary`, and the grammar package imports back into
+`auras.py` (`registries` wants `aura_continuous_claim`), so building that
+alternation at import time is a cycle. `_LazyPattern` compiles on first use —
+five lines, and the alternative was a second reader of the vocabulary data.
+
+Suite 4,897 at 18.0s, every `--check` green, shipped pool 388/388, zero hooks,
+zero ceiling raises. All eight new per-set tests were watched to fail on HEAD.
+
+**Left standing:** Demonic Embrace reads its Aura line now and is blocked only
+on "You may cast this card from your graveyard by paying 3 life and discarding a
+card" — a *cast* additional cost over the round-19 permission seam, which is the
+same discard-cost mechanism the next round wants. Faith's Fetters and Enthralling
+Hold keep their honest refusals ("can't attack or block, **and its activated
+abilities can't be activated unless they're mana abilities**"; "you can't choose
+an untapped creature as this spell's target as you cast it").
+
+**Next:** unchanged — the discard-cost family, which is now five cards rather
+than four (Waker of Waves, Niambi, Subira, Sanctum of Shattered Heights,
+Sparkhunter Masticore) plus Demonic Embrace's graveyard cast, and inside it the
+genuinely new seam: **activating an ability of a card in hand**.
+
+---
+
+## Round 37: two verbs, and the census that chose them
+
+*(2026-08-13, same day.)* M21 **198 → 201**: Unleash Fury, Invigorating Surge,
+Tormod's Crypt. A deliberately small round, and the choosing is the part worth
+recording: **59 of the 87 remaining cards are blocked by exactly one line**, so
+the question stopped being "what is the biggest mechanism" and became "which one
+line is cheapest per card". The census answers that directly, and these three
+were the answer.
+
+- **"Double" reads the board at resolution** (Unleash Fury, Invigorating
+  Surge). Its own AST node rather than a `Pump` whose amount is "the subject's
+  power": a pump's amount is fixed when the effect is created, and this one is
+  read as it resolves — so a creature a Titanic Growth already took to 6 goes
+  to **12**, not to 4. Writing it as a Pump would need an Amount meaning "ask
+  the board later", which is a bigger idea than one card needs and would make
+  the two indistinguishable in the IR. Two refusals kept: a *durationless*
+  doubling is a continuous effect the layers would have to own, and doubling
+  **toughness** is a different effect — consuming the noun without checking it
+  is how one card's production quietly claims another's.
+- **The counter doubling is a rider, not a sentence.** "…, then double the
+  number of +1/+1 counters on **that creature**" back-references the creature
+  the same clause just chose, so parsed apart it would be looking for a target
+  nobody picked. It rides `add_counter_to_target` as payload and is read
+  *after* the placement, so the counter this spell put down is doubled too
+  (0 → 1 → 2). It also places through round 31's seam, which is what makes
+  `test_the_doubled_counters_go_through_the_replacement_seam` interesting: a
+  Conclave Mentor raises the doubling exactly as it raised the first counter
+  (CR 614.1c), for five rather than four.
+- **Exiling a whole zone** (Tormod's Crypt). Its own node too, for the reason
+  the doubling is: there is nothing to filter and no card to target among them,
+  only which player's graveyard. A graveyard is its owner's zone (CR 404.1) and
+  so is exile, so the whole list moves with no CR 400.3 ownership lookup.
+
+Suite 4,906 at 18.3s, every `--check` green, shipped pool 388/388, zero hooks,
+zero ceiling raises. M21's parsed share went 66.2% → 67.4%. Eight of the nine
+new per-set tests were watched to fail on HEAD.
+
+**Next**, and the reason this round did *not* take it: the
+**reveal-and-choose** family (Duress, Kitesail Freebooter) is one printed
+sentence — "target opponent reveals their hand. You choose a noncreature,
+nonland card from it." — and a capability the engine has never had: **one player
+choosing from another player's hidden zone**. That is a pending-choice kind, a
+renderer and an AI default, and Kitesail Freebooter needs a second thing beyond
+it — an object *exiled with* a permanent and returned when it leaves. The
+existing exile-until-leaves in the pool is Oubliette's, which phases out and is
+name-keyed in `card_hooks.py`; doing Freebooter through that seam would buy one
+card at the cost of a ceiling raise, so the linkage wants deriving first.
+
+---
+
 ## Standing invariants
 
 Anything that weakens these is a regression regardless of what it enables:

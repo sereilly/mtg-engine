@@ -540,6 +540,12 @@ class PlayerState:
     # record here, so effects that replace a draw but still put a card in hand
     # (Aladdin's Lamp) append too. Cleared in begin_turn_bookkeeping.
     cards_drawn_this_turn: list = field(default_factory=list)
+    # Spells this player has cast this turn, in cast order — recorded where the
+    # cast is *announced* (`_apply_cast_triggers`), so a spell that was countered
+    # still counts: "you've cast an instant or sorcery spell this turn"
+    # (Stormwing Entity) asks about the casting, not about the resolution.
+    # Cleared in begin_turn_bookkeeping.
+    spells_cast_this_turn: list = field(default_factory=list)
 
     def draw(self, count: int = 1) -> int:
         actual = 0

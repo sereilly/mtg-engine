@@ -9,6 +9,7 @@ put wherever it goes afterwards.
 
 from __future__ import annotations
 
+from ...auras import aura_enchant_clause
 from ...classifier import CardClassification, classify_card
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
 from ...handlers.control_flow import evaluate_condition
@@ -32,6 +33,27 @@ class StackResolutionMixin:
             owner.graveyard.append(card)
             self.log.append(f"{card.name} {verb} and moved to graveyard")
 
+    def _default_opposing_seat(self, caster_index: int) -> int:
+        """The seat a triggered ability affects when nothing chose one.
+
+        This engine picks a trigger's target at its fire site or not at all — a
+        standing approximation of CR 603.3d, which chooses it as the ability
+        goes on the stack. Where nothing chose, the ability still has to resolve
+        against *someone*, and that someone was ``1 - caster_index``: right for
+        two players, and at seat 2 of a three-handed game ``players[-1]``, which
+        is the caster itself. A player is never their own opponent (CR 102.3),
+        so Vito would have drained himself.
+
+        The first living opponent in seat order instead. The old answer is kept
+        as the fallback for a table with no living opponent left, so nothing
+        that reaches here mid-teardown changes.
+        """
+        opponents = self.opponents_of(caster_index)
+        if opponents:
+            return opponents[0]
+        fallback = 1 - caster_index
+        return fallback if 0 <= fallback < len(self.players) else caster_index
+
     def _enqueue_triggered_ability(
         self,
         *,
@@ -43,6 +65,10 @@ class StackResolutionMixin:
         ability_text: str | None = None,
         target_player_index: int | None = None,
         target_permanent_index: int | None = None,
+        # A trigger that acts on the object its event was about ("destroy that
+        # planeswalker") is stamped with that object's id by the fire site. The
+        # index is unstable across a removal; the id is the identity (CR 400.7).
+        target_permanent_id: int | None = None,
         trigger_context: dict | None = None,
         hook_key: str | None = None,
         hook_event: dict | None = None,
@@ -62,6 +88,7 @@ class StackResolutionMixin:
                 caster_index=controller_index,
                 target_player_index=target_player_index,
                 target_permanent_index=target_permanent_index,
+                target_permanent_id=target_permanent_id,
                 x_value=None,
                 ability_instruction=instruction,
                 ability_effect_kind=effect_kind,
@@ -196,7 +223,11 @@ class StackResolutionMixin:
             return
         if item.ability_instruction is not None:
             caster = self.players[item.caster_index]
-            target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
+            target_idx = (
+                item.target_player_index
+                if item.target_player_index is not None
+                else self._default_opposing_seat(item.caster_index)
+            )
             target = self.players[target_idx]
             context = OracleExecutionContext(
                 caster=caster,
@@ -329,7 +360,7 @@ class StackResolutionMixin:
             # remaining on the battlefield unattached (MTG Rule 303.4g)
             if (
                 "Aura" in card.type_line
-                and card.oracle_text.lower().split("\n")[0].strip().startswith("enchant")
+                and aura_enchant_clause(card.oracle_text) is not None
                 and permanent.metadata.get("attached_to") is None
             ):
                 holder = self.controller_index_of(permanent)

@@ -501,3 +501,103 @@ def test_509_4_no_alpha_card_puts_creatures_onto_battlefield_blocking(all_cards)
         for card in all_cards
     ]
     assert not any("onto the battlefield blocking" in text for text in texts)
+
+
+# ---------------------------------------------------------------------------
+# 509.3c / 509.3d — how often a becomes-blocked trigger fires
+# ---------------------------------------------------------------------------
+
+_BARE = "Whenever this creature becomes blocked, you gain 1 life."
+_PER_BLOCKER = "Whenever this creature becomes blocked by a creature, you gain 1 life."
+
+
+def _blocked_by_two(oracle_text: str) -> tuple[Game, PlayerState]:
+    attacker = Permanent(card=_mk_creature("Watched", 1, 4, oracle_text=oracle_text))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[
+            Permanent(card=_mk_creature("First", 1, 1)),
+            Permanent(card=_mk_creature("Second", 1, 1)),
+        ],
+    )
+    game = Game(players=[p1, p2])
+    _to_declare_blockers(game, [0])
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 0})
+    assert ok, msg
+    game._settle()
+    return game, p1
+
+
+@pytest.mark.cr("509.3c")
+def test_509_3c_a_bare_becomes_blocked_trigger_fires_once_however_many_blockers():
+    """"…generally triggers only once each combat for that creature, even if
+    it's blocked by multiple creatures.\""""
+    _, p1 = _blocked_by_two(_BARE)
+    assert p1.life == 21
+
+
+@pytest.mark.cr("509.3d")
+def test_509_3d_becomes_blocked_by_a_creature_fires_once_per_blocker():
+    """"…triggers once for each creature that blocks the specified creature."
+
+    The only difference on the card is the words "by a creature", which the
+    condition carries as a subject filter — so the count is read off the
+    trigger rather than off a list of card names."""
+    _, p1 = _blocked_by_two(_PER_BLOCKER)
+    assert p1.life == 22
+
+
+@pytest.mark.cr("509.3d")
+def test_509_3d_a_narrowed_becomes_blocked_trigger_counts_only_what_it_names():
+    """"…by a creature with flying" admits one of the two blockers."""
+    attacker = Permanent(card=_mk_creature(
+        "Watched", 1, 4,
+        oracle_text="Whenever this creature becomes blocked by a creature with flying, you gain 1 life.",
+    ))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[
+            Permanent(card=_mk_creature("Grounded", 1, 1)),
+            Permanent(card=_mk_creature("Winged", 1, 1, keywords=("Flying",))),
+        ],
+    )
+    game = Game(players=[p1, p2])
+    _to_declare_blockers(game, [0])
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 0})
+    assert ok, msg
+    game._settle()
+
+    assert p1.life == 21
+
+
+@pytest.mark.cr("509.3a")
+def test_509_3a_a_narrowed_blocks_trigger_reads_what_was_blocked():
+    """The blocker's own side of the same distinction: "whenever this creature
+    blocks **a creature with flying**" is answered by the attacker, not by the
+    blocker. Two games rather than one, because a creature without an ability
+    saying otherwise blocks only one attacker (CR 509.1b)."""
+    def gained(attacker_keywords: tuple[str, ...]) -> int:
+        attacker = Permanent(card=_mk_creature(
+            "Attacker", 1, 1, keywords=attacker_keywords
+        ))
+        blocker = Permanent(card=_mk_creature(
+            "Watcher", 0, 6,
+            keywords=("Reach",),   # or it could not block the flier at all
+            oracle_text=(
+                "Whenever this creature blocks a creature with flying, "
+                "you gain 1 life."
+            ),
+        ))
+        p1 = PlayerState(name="P1", battlefield=[attacker])
+        p2 = PlayerState(name="P2", battlefield=[blocker])
+        game = Game(players=[p1, p2])
+        _to_declare_blockers(game, [0])
+        ok, msg = game.declare_blockers(1, {0: 0})
+        assert ok, msg
+        game._settle()
+        return p2.life - 20
+
+    assert gained(("Flying",)) == 1
+    assert gained(()) == 0, "the rider is enforced, not consumed and dropped"

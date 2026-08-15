@@ -11,7 +11,10 @@ rest-of-turn duration by damage and combat. A fragment several families need is
 not one family's property, and leaving it in one is what couples the rest to it.
 
 `GRAMMAR_ONLY_PAYLOAD_KEYS` is here too, since it describes payloads rather
-than any one effect.
+than any one effect. So is `_back_reference_payload`, for the same reason the
+two above are: "that much" is a fragment life, damage and cards all read, and
+what it points at is one question with one answer — a family deciding it alone
+would be a family deciding it differently.
 """
 
 import dataclasses
@@ -170,6 +173,63 @@ def _amount_payload(amount: ast.Amount) -> int | str:
     if isinstance(amount, ast.Var):
         return amount.name
     raise LoweringError(f"unsupported quantity {type(amount).__name__}", node=amount)
+
+
+# What a bare "that much" names when the effect is a *triggered ability*: the
+# quantity the firing event carried, frozen into the trigger's context by the
+# fire site. Keyed by trigger-condition kind, and deliberately a table rather
+# than a rule — an event either carries a number or it does not, and a kind
+# absent here refuses the back-reference instead of reading a zero out of an
+# empty context. (El-Hajjâj's "whenever this creature deals damage, you gain
+# that much life" is the next entry this wants; its fire site records the
+# amount under a different key, so it is a change to make deliberately rather
+# than by adding a row.)
+_EVENT_QUANTITIES: dict[str, str] = {
+    "you_gain_life": "life_gained",
+}
+
+# The scratchpad keys that are *quantities*. `lower._PRODUCES` also records
+# things no amount can read — a controller's seat, a list of exiled cards — so
+# a bare back-reference resolves against this narrower set. A producer added
+# there and not here fails safe: the bare reading refuses rather than reading a
+# number out of something that is not one.
+_PRODUCED_QUANTITIES: frozenset[str] = frozenset({"damage_dealt"})
+
+
+def _back_reference_payload(
+    amount: ast.ThatMuch,
+    produced: frozenset[str],
+    event: str | None,
+) -> dict[str, object]:
+    """Where a handler should read *amount* from, as payload keys.
+
+    ``amount_from`` is a key in this resolution's scratchpad (an earlier step of
+    the same effect recorded it); ``amount_from_trigger`` is a key in the firing
+    event's captured context. Which one applies is decided here, once, rather
+    than by each effect family guessing — reading a trigger's number out of the
+    scratchpad silently yields zero, which is the failure this refuses on
+    behalf of every caller.
+    """
+    if amount.source is not None:
+        # The words named the producer ("equal to the damage dealt"), so a step
+        # of this same effect has to have recorded it.
+        if amount.source in produced:
+            return {"amount_from": amount.source}
+        raise LoweringError(
+            f"back-reference to {amount.source!r} with no producer in this effect",
+            node=amount,
+        )
+    key = _EVENT_QUANTITIES.get(event or "")
+    if key is not None:
+        return {"amount_from_trigger": key}
+    within = tuple(sorted(produced & _PRODUCED_QUANTITIES))
+    if len(within) == 1:
+        return {"amount_from": within[0]}
+    raise LoweringError(
+        "bare back-reference with no producer in this effect and no quantity "
+        "on its trigger",
+        node=amount,
+    )
 
 
 def _is_source(subject: ast.Recipient) -> bool:

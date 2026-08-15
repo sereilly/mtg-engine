@@ -172,18 +172,27 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
 def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Creatures you control gain flying until end of turn." (Basri, Devoted
     Paladin's −6.) The affected set locks in at resolution (CR 611.2c), which
-    is why this walks the board now instead of contributing a derived buff."""
+    is why this walks the board now instead of contributing a derived buff.
+
+    ``every_permanent`` widens the same grant to the whole board (Heroic
+    Intervention's "Permanents you control gain hexproof and indestructible"):
+    both keywords are asked of the permanent, not of the creature — hexproof is
+    read by ``_can_be_targeted`` and indestructible by ``_is_indestructible``,
+    neither of which cares what type it is — so the only thing that changes is
+    who is in the loop."""
     caster_index = game.players.index(context.caster)
     keywords = tuple(instruction.payload.get("keywords") or ())
+    every_permanent = bool(instruction.payload.get("every_permanent"))
     granted = 0
     for perm in game.controlled_by(caster_index):
-        if not perm.is_creature:
+        if not every_permanent and not perm.is_creature:
             continue
         for keyword in keywords:
             grant_keyword(perm, keyword, until_eot=True)
         granted += 1
+    noun = "permanent(s)" if every_permanent else "creature(s)"
     game.log.append(
-        f"{context.card.name}: {granted} creature(s) gain {', '.join(keywords)} until end of turn"
+        f"{context.card.name}: {granted} {noun} gain {', '.join(keywords)} until end of turn"
     )
     return True, "resolved"
 
@@ -337,6 +346,49 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         return True, "resolved"
     game.place_plus1_counters(target_creature)
     game.log.append(f"{target_creature.card.name} gets a +1/+1 counter ({card.name})")
+    # "…, then double the number of +1/+1 counters on that creature."
+    # (Invigorating Surge.) Read *after* the placement, so the one just put down
+    # is doubled too — and placed through the same seam, so a Conclave Mentor
+    # raises the doubling exactly as it raised the first counter (CR 614).
+    if instruction.payload.get("then_double"):
+        existing = int(target_creature.metadata.get("plus_counters", 0))
+        if existing:
+            game.place_plus1_counters(target_creature, existing)
+            game.log.append(
+                f"{target_creature.card.name}'s +1/+1 counters doubled to "
+                f"{target_creature.metadata.get('plus_counters', 0)} ({card.name})"
+            )
+    return True, "resolved"
+
+
+@effect_handler("double_target_power_until_eot")
+def double_target_power_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Double the power of target creature until end of turn." (Unleash Fury.)
+
+    The power is read at resolution and added as an until-end-of-turn boost, so
+    doubling a 3/3 that a Giant Growth already pumped doubles the *six*, not the
+    printed three — which is what "double" means and what an amount fixed when
+    the spell was cast could not express.
+    """
+    card = context.card
+    target_creature = resolve_target_permanent(
+        game, context, predicate=lambda perm: perm.is_creature
+    )
+    if target_creature is None:
+        game.log.append(f"{card.name}: no valid creature target")
+        return True, "resolved"
+    power = target_creature.effective_power
+    if power <= 0:
+        # Doubling nothing (or a negative power) adds nothing: CR 107.1b has no
+        # negative power on the battlefield, and +0/+0 is not worth logging as
+        # an effect that happened.
+        game.log.append(f"{card.name}: {target_creature.card.name} has no power to double")
+        return True, "resolved"
+    apply_temp_pt_boost(target_creature, power, 0)
+    game.log.append(
+        f"{card.name} doubled {target_creature.card.name}'s power to "
+        f"{target_creature.effective_power}"
+    )
     return True, "resolved"
 
 

@@ -9,6 +9,7 @@ from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import attach_aura, aura_animates_artifact, aura_keyword_grants
+from ..auras import aura_enchants
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..keywords import remove_keyword
 from ..land_animation import LAND_ANIMATION_KIND
@@ -103,6 +104,13 @@ class OracleInstructionsMixin:
         oracle compiler already recognizes these conditions, so a card written
         "whenever you cast an enchantment spell" needs no registry entry.
         """
+        # The record "you've cast an instant or sorcery spell this turn"
+        # (Stormwing Entity) reads, kept here rather than at the payment site
+        # because this is where the *cast* is announced: a spell that is
+        # countered was still cast, and CR 601.2i finishes the casting before
+        # anything can respond.
+        if 0 <= caster_index < len(self.players):
+            self.players[caster_index].spells_cast_this_turn.append(card)
         emit(self, "you_cast_spell", subject=card, caster_index=caster_index)
         emit(self, "enchantment_cast", subject=card, caster_index=caster_index)
         # Prowess (CR 702.108a): each creature the caster controls with the
@@ -183,13 +191,22 @@ class OracleInstructionsMixin:
         """
         program = compile_card_oracle(aura_permanent.card)
         text = program.normalized_text
-        if not any(instr.kind == "spell_pattern" and instr.value.startswith("enchant") for instr in program.instructions) and not text.startswith("enchant enchantment"):
+        # The enchant clause is asked of the *printed* text: it is a line,
+        # and `normalized_text` has already joined the lines into one blob.
+        printed = aura_permanent.card.oracle_text
+        if not any(
+            instr.kind == "spell_pattern" and instr.value.startswith("enchant")
+            for instr in program.instructions
+        ) and not aura_enchants(printed, "enchantment"):
             return
 
         target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
         target_player = self.players[target_idx]
 
-        if text.startswith("enchant creature"):
+        # The enchant clause is *found* rather than assumed to be the first
+        # thing in the text — Capture Sphere prints "Flash" above it, and
+        # every branch below used to answer no for it (engine/auras.py).
+        if aura_enchants(printed, "creature"):
             # Special-case reanimation-style Auras (e.g., Animate Dead) which target a
             # creature card in a graveyard and return it to the battlefield attached
             # to this Aura. Detect the presence of the reanimation language and
@@ -380,7 +397,7 @@ class OracleInstructionsMixin:
                 if key not in _pre_meta_keys and key not in _ATTACHMENT_KEYS
             ]
 
-        elif text.startswith("enchant land"):
+        elif aura_enchants(printed, "land"):
             target_land = None
             if target_permanent_index is not None:
                 candidate = self.chosen_permanent(
@@ -426,7 +443,7 @@ class OracleInstructionsMixin:
                     _aura=aura_permanent,
                 )
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
-        elif text.startswith("enchant wall"):
+        elif aura_enchants(printed, "wall"):
             target_wall = None
             if isinstance(target_permanent_index, int):
                 candidate = self.chosen_permanent(
@@ -449,7 +466,7 @@ class OracleInstructionsMixin:
                 # (CR 611.3 — the Wall stops being able to attack). Otherwise the
                 # Wall could keep attacking after Animate Wall is removed.
                 self.log.append(f"{target_wall.card.name} can attack as though it didn't have defender")
-        elif text.startswith("enchant artifact"):
+        elif aura_enchants(printed, "artifact"):
             # Attach this Aura to the specified artifact (or first artifact found)
             target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
             target_player = self.players[target_idx]
@@ -498,7 +515,7 @@ class OracleInstructionsMixin:
                     "into an artifact creature"
                 )
 
-        elif text.startswith("enchant enchantment"):
+        elif aura_enchants(printed, "enchantment"):
             # Attach this Aura to the specified enchantment (or first enchantment found)
             target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
             target_player = self.players[target_idx]

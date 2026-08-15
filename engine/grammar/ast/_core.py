@@ -39,10 +39,25 @@ class CountOf:
 
 @dataclass(frozen=True)
 class ThatMuch:
-    """A back-reference to a value produced earlier in the same resolution
-    ("you gain that much life", "equal to the damage dealt"). *source* names the
-    key the earlier effect recorded, e.g. "damage_dealt"."""
-    source: str
+    """A back-reference to a quantity the surrounding context produced
+    ("you gain that much life", "equal to the damage dealt").
+
+    *source* names the key that quantity was recorded under when the **words
+    say which** — "equal to the damage dealt" is `damage_dealt`, "equal to its
+    power" is `its_power`. A bare "that much" / "that many" names nothing: it
+    points at whatever the enclosing effect or the firing event produced, which
+    the parser cannot know from the sentence alone, and it carries `None` to say
+    so. Lowering is the layer that resolves it — against the steps of this same
+    effect or against the trigger's own event, both in
+    `lowering/_common.py::_back_reference_payload` — and refuses when neither
+    offers a number.
+
+    It used to default to `"damage_dealt"`, which read as evidence and was only
+    a guess: under "Whenever you gain life, target opponent loses that much
+    life" there is no damage anywhere, and a lowering that trusted the name
+    would have taken the wrong number from the wrong place.
+    """
+    source: str | None = None
 
 
 @dataclass(frozen=True)

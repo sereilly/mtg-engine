@@ -7,10 +7,14 @@ phase modules and mixins. That has two consequences at scale.
 
 The first is that support is invisible from the card's side. The oracle
 compiler recognizes trigger conditions it has no dispatcher for — ``spell_cast``,
-``creature_enters``, ``artifact_enters``, ``draws_card`` and others parse
-happily and then never fire, so cards needing them get routed to a name-keyed
+``creature_enters``, ``artifact_enters``, ``draws_card`` and others parsed
+happily and then never fired, so cards needing them got routed to a name-keyed
 hook in ``card_hooks.py`` instead. Six cards were name-keyed for cast triggers
-the parser already understood.
+the parser already understood. (Two of those examples are gone rather than
+fixed: nothing in the pool printed the bare "whenever a creature/artifact
+enters", and the narrowed form every real card *does* print now fires through
+``matching_permanent_enters``. A row with no dispatcher and no card is the
+failure this module is about, in its quietest form.)
 
 The second is that adding a trigger condition means finding or creating a fire
 site rather than adding a registry row — the opposite of how the rest of the
@@ -28,6 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Iterable
 
+from .handlers._common import permanent_matches_filter
 from .trigger_utils import iter_triggered_abilities, make_trigger_event
 
 if TYPE_CHECKING:
@@ -313,6 +318,22 @@ def _counters_put_on_filter(
     return not (excluded and counted.has_type(excluded))
 
 
+@event_filter("you_gain_life")
+def _gains_life_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever **you** gain life" (Vito) — only the gaining seat's own
+    permanents.
+
+    "You" on a permanent's triggered ability is that permanent's controller
+    (CR 109.5), so an opponent's lifelink swing must leave Vito silent. The
+    same seat-scoped shape the second-draw filter uses, and for the same
+    reason: the event is announced once, game-wide, and the narrowing is the
+    trigger's own word."""
+    seat = event.payload.get("seat")
+    return seat is not None and game.controller_index_of(permanent) == seat
+
+
 @event_filter("draws_second_card")
 def _second_draw_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
@@ -321,6 +342,102 @@ def _second_draw_filter(
     seat's own permanents."""
     seat = event.payload.get("seat")
     return seat is not None and game.controller_index_of(permanent) == seat
+
+
+# ---------------------------------------------------------------------------
+# A trigger whose subject is a set of objects
+# ---------------------------------------------------------------------------
+
+
+# The events announced game-wide whose *whole* applicability is the trigger's
+# own subject filter, and the payload key each records it under. One filter per
+# event, so the registration is a row rather than a predicate.
+_SUBJECT_LED_FILTER_KEYS: dict[str, str] = {
+    "matching_creature_attacks": "attacker",
+    "matching_creature_damages_planeswalker": "damager",
+    "matching_permanent_enters": "enterer",
+}
+
+
+@event_filter(*_SUBJECT_LED_FILTER_KEYS)
+def _subject_led_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever a creature you control with deathtouch attacks / deals damage
+    to a planeswalker …" (Hooded Blightfang).
+
+    The announcement is game-wide and every narrowing the card prints is in the
+    trigger's own noun phrase — "you control" included, which is why the
+    observer is the permanent's own controller (CR 109.5) rather than anything
+    the event carries. An *unnarrowed* condition would therefore fire for every
+    permanent on the board, which is why the compiler refuses one it cannot
+    test rather than admitting an empty filter here.
+    """
+    return trigger_subject_matches(
+        game, trig, _SUBJECT_LED_FILTER_KEYS[event.kind], event.subject,
+        observer=game.controller_index_of(permanent), source=permanent,
+    )
+
+
+# The filter-payload keys :func:`trigger_subject_matches` implements. A narrowed
+# trigger condition carrying anything outside this set is refused when it is
+# *compiled* (engine/oracle.py::_resolve_subject_groups), not silently ignored
+# here: a restriction the dispatcher cannot test would make the trigger fire on
+# a strictly larger set than the card prints, which is the one thing a trigger
+# must never do. Everything down to `with_plus1_counter` is delegated to
+# `permanent_matches_filter`, which every other filter reader already shares;
+# the last three need the game (layer-6 keywords, the observer's seat, the
+# source's identity) and are tested here.
+TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
+    "type_filter", "subtype_filter", "color_filter",
+    "exclude_colors", "exclude_types", "exclude_subtypes",
+    "tapped_only", "mana_value", "power", "toughness", "with_plus1_counter",
+    "with_keywords", "controller", "exclude_self",
+})
+
+
+def trigger_subject_matches(
+    game: Game,
+    trig: ParsedTriggeredAbility,
+    key: str,
+    obj: Permanent | None,
+    *,
+    observer: int | None,
+    source: Permanent | None = None,
+) -> bool:
+    """Whether *obj* is in the set *trig*'s condition names under ``<key>_filter``.
+
+    An absent filter is no narrowing at all, so it matches — "whenever this
+    creature blocks" is the same event as "…blocks a creature" minus the
+    restriction, and CR 509.3c/509.3d say the difference is how often it fires,
+    which is the fire site's business rather than this predicate's.
+    """
+    described = trig.condition.payload.get(f"{key}_filter")
+    if not described:
+        return True
+    if obj is None:
+        return False
+    if not permanent_matches_filter(obj, described):
+        return False
+    # "You control" is the *observer's* seat — the controller of the permanent
+    # whose ability this is (CR 109.5), not the controller of the event.
+    controller = described.get("controller")
+    if controller is not None:
+        seat = game.controller_index_of(obj)
+        if seat is None or observer is None:
+            return False
+        if (seat == observer) != (controller == "you"):
+            return False
+    # Keywords are asked of layer 6, so a creature *granted* deathtouch answers
+    # a deathtouch-narrowed trigger exactly as a printed one does.
+    for keyword in described.get("with_keywords") or ():
+        if not game._has_keyword(obj, keyword):
+            return False
+    # "Another" (CR 109.5) excludes the ability's own source by identity — a
+    # look-alike on the same battlefield is a different permanent.
+    if described.get("exclude_self") and source is not None and obj is source:
+        return False
+    return True
 
 
 def _controller_of(game: Game, permanent: Permanent) -> PlayerState:

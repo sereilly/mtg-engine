@@ -18,9 +18,12 @@ from __future__ import annotations
 import re
 
 from ...cast_permissions import consume as consume_permission, permission_for
+from ...auras import aura_enchant_clause
 from ...cast_restrictions import check_cast_timing
 from ...classifier import classify_card
-from ...cost_modifiers import spell_cost_tax
+from ...cost_modifiers import (
+    CostReduction, cost_reduction_for_cast, reduce_cost, spell_cost_tax,
+)
 from ...game_types import SimulationResult, StackItem
 from ...handlers._common import permanent_matches_filter
 from ...models import CardDefinition, Permanent, PlayerState
@@ -44,17 +47,21 @@ def aura_enchant_noun(card: CardDefinition) -> str | None:
 
     Returns None for non-Auras and for Auras that don't enchant battlefield
     permanents (e.g. Animate Dead's "enchant creature card in a graveyard").
+
+    The enchant line is *found*, not assumed to be the first one. Every Aura in
+    the shipped pool prints it first, so reading line 0 was right until Capture
+    Sphere printed "Flash" above it — and the failure was silent in the worst
+    way: the Aura resolved, entered the battlefield, and attached to nothing.
     """
     if "Aura" not in card.type_line:
         return None
-    first_line = card.oracle_text.lower().split("\n")[0]
-    first_line = re.sub(r"\([^)]*\)", "", first_line).strip()  # drop reminder text
-    if not first_line.startswith("enchant "):
-        return None
-    noun = first_line[len("enchant "):].strip()
-    if "graveyard" in noun:
-        return None
-    return noun
+    for raw_line in card.oracle_text.lower().split("\n"):
+        line = re.sub(r"\([^)]*\)", "", raw_line).strip()  # drop reminder text
+        if not line.startswith("enchant "):
+            continue
+        noun = line[len("enchant "):].strip()
+        return None if "graveyard" in noun else noun
+    return None
 
 
 def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
@@ -180,6 +187,11 @@ class SpellCastingMixin:
             extra_generic_tax += spell_tax
             self.log.append(f"{card.name} is taxed by {', '.join(taxing_names)}")
 
+        # CR 601.2f: increases first, then reductions.
+        cost_reduction, reducing_names = cost_reduction_for_cast(self, caster_index, card)
+        if cost_reduction:
+            self.log.append(f"{card.name} costs less to cast ({', '.join(reducing_names)})")
+
         # Accept cards with supported triggered abilities (match classifier logic)
         if not classification.supported:
             if classification.reason == "unsupported triggered ability":
@@ -248,7 +260,10 @@ class SpellCastingMixin:
         x_color = x_spend_color_from_text(card.oracle_text)
         resolved_x_value = x_value
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
-            resolved_x_value = self._infer_x_value(caster, card.mana_cost, extra_generic_tax, x_color=x_color)
+            resolved_x_value = self._infer_x_value(
+                caster, card.mana_cost, extra_generic_tax, x_color=x_color,
+                reduction=cost_reduction,
+            )
 
         # A cost waiver ("cast spells from your hand without paying their mana
         # costs", Chandra, Flame's Catalyst's −8). An X spell defaults to
@@ -281,8 +296,12 @@ class SpellCastingMixin:
                 details = f"{card.name} has no mana cost; the cost is unpayable (CR 118.6)"
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
-            cost = self._parse_mana_cost(
-                card.mana_cost, x_value=resolved_x_value, extra_generic=extra_generic_tax, x_color=x_color
+            cost = reduce_cost(
+                self._parse_mana_cost(
+                    card.mana_cost, x_value=resolved_x_value,
+                    extra_generic=extra_generic_tax, x_color=x_color,
+                ),
+                cost_reduction,
             )
             if not self._pay_mana_cost(
                 caster, cost, creature_spell=card.primary_type == "creature"
@@ -403,8 +422,8 @@ class SpellCastingMixin:
                     ):
                         return False, f"no valid target for {card.name}"
                 else:
-                    first_line = card.oracle_text.lower().split("\n")[0].strip()
-                    if first_line.startswith("enchant ") and "graveyard" in first_line:
+                    clause = aura_enchant_clause(card.oracle_text)
+                    if clause is not None and "graveyard" in clause:
                         # e.g. "enchant creature card in a graveyard" (Animate Dead).
                         # If the player chose a specific graveyard card, validate that
                         # choice; otherwise require at least one legal creature card.
@@ -613,9 +632,16 @@ class SpellCastingMixin:
 
         return True, "valid"
     def _infer_x_value(
-        self, player: PlayerState, mana_cost: str, extra_generic: int = 0, x_color: str | None = None
+        self, player: PlayerState, mana_cost: str, extra_generic: int = 0,
+        x_color: str | None = None, reduction: CostReduction | None = None,
     ) -> int:
-        required = self._parse_mana_cost(mana_cost, x_value=0, extra_generic=extra_generic)
+        # The reduction is applied before X is inferred, because X is whatever
+        # is left after the rest of the cost is paid — inferring it from the
+        # undiscounted cost would spend the discount on nothing.
+        required = reduce_cost(
+            self._parse_mana_cost(mana_cost, x_value=0, extra_generic=extra_generic),
+            reduction or CostReduction(),
+        )
         temp = {symbol: player.mana_pool.get(symbol, 0) for symbol in ("W", "U", "B", "R", "G", "C")}
 
         if temp.get("W", 0) < required["W"]:

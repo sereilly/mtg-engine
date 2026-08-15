@@ -390,6 +390,28 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     return ast.SearchLibrary(ast.PlayerRef("you"), filt, destination, graveyard)
 
 
+def _parse_exile_graveyard(stream: TokenStream) -> ast.Statement | None:
+    """``Exile target player's graveyard.`` (Tormod's Crypt.)
+
+    Returns None quietly on anything else, so the ordinary permanent exile keeps
+    its own errors. The possessive and the zone noun are both expected: "exile
+    target player" is not a sentence, and consuming the player and stopping
+    would leave a production that exiles whatever the next reader assumes.
+    """
+    mark = stream.mark()
+    stream.expect_word("exile")
+    player = parse_player_ref(stream)
+    if (
+        isinstance(player, ast.PlayerRef)
+        and player.kind in ("target_player", "target_opponent")
+        and stream.accept_word("'s")
+        and stream.accept_word("graveyard")
+    ):
+        return ast.ExileGraveyard(player)
+    stream.reset(mark)
+    return None
+
+
 def _parse_exile_top_of_library(stream: TokenStream) -> ast.Statement | None:
     """``Exile the top three cards of your library.`` (Chandra, Heart of
     Fire's +1.) Returns None rather than raising when the sentence is an

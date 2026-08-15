@@ -7,8 +7,9 @@ from ..ante import is_ante_card
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..auras import aura_restriction_active
+from ..auras import aura_enchants
 from ..damage_events import deal_damage, lifelink_life_gained
-from ..events import emit
+from ..events import Event, collect, emit
 from ..land_play_allowance import LandPlayAllowance, land_play_allowance_for
 from ..models import CardDefinition, Permanent, PlayerState
 from ..pt import add_plus1_counters
@@ -28,7 +29,7 @@ class EffectsMixin:
             return
         prog = compile_card_oracle(aura.card)
         text = prog.normalized_text
-        if not text.startswith("enchant creature"):
+        if not aura_enchants(aura.card.oracle_text, "creature"):
             return
         controller_index = self.players.index(controller)
         for trig in prog.triggered_abilities:
@@ -390,6 +391,7 @@ class EffectsMixin:
             if is_planeswalker:
                 loyalty = permanent.metadata.get("loyalty_counters", 0)
                 permanent.metadata["loyalty_counters"] = max(0, loyalty - outcome.result)
+                self._announce_planeswalker_damage(permanent, source)
             if permanent.is_creature or not is_planeswalker:
                 permanent.damage_marked += outcome.result
         # CR 702.15b. Combat is excluded because the combat damage step tallies
@@ -415,6 +417,43 @@ class EffectsMixin:
         if then is not None:
             then(outcome.dealt)
         return outcome.dealt
+
+    def _announce_planeswalker_damage(self, walker, source) -> None:
+        """"Whenever a creature you control with deathtouch deals damage to a
+        planeswalker …" (Hooded Blightfang).
+
+        One emit on the one path every damage-to-a-permanent caller runs
+        through, which is the same argument lifelink and deathtouch make two
+        lines below: the rule is about *damage*, not combat damage, so a ping
+        ability announces exactly as a blocker does. The *damager* is the
+        event's subject — that is what the trigger's noun phrase describes — and
+        the walker rides along as the payload, because "destroy that
+        planeswalker" needs it and it may be gone by the time the trigger
+        resolves.
+        """
+        if source is None or getattr(source, "has_keyword", None) is None:
+            # A spell or a bare card deals damage too; only a permanent can
+            # answer a subject filter about creatures.
+            return
+        # `collect` rather than `emit`, for the reason it is a separate function:
+        # each trigger's stack item is stamped with the walker's **id** before it
+        # goes on, so "destroy that planeswalker" resolves the object the event
+        # was about rather than whatever slid into its slot (CR 400.7 — an index
+        # is not an identity).
+        events = collect(
+            self,
+            Event(
+                kind="matching_creature_damages_planeswalker",
+                subject=source,
+                payload={"walker_id": walker.permanent_id},
+            ),
+        )
+        seat = self.controller_index_of(walker)
+        for event in events:
+            event["target_permanent_id"] = walker.permanent_id
+            if seat is not None:
+                event["target_player_index"] = seat
+        self._enqueue_triggered_batch(events)
 
     def _apply_lifelink(self, source, dealt: int) -> None:
         """CR 702.15b for damage dealt outside the combat damage step.
@@ -768,7 +807,16 @@ class EffectsMixin:
 
     def _gain_life(self, target: PlayerState, amount: int, source_name: str | None = None) -> None:
         """Apply a life gain, honoring 'If you would gain life, draw that many cards
-        instead' replacement effects (e.g. Lich, CR 614)."""
+        instead' replacement effects (e.g. Lich, CR 614), then announce it.
+
+        The one seam every life gain passes through, so "Whenever you gain life"
+        (Vito, Thorn of the Dusk Rose) is one ``emit`` here rather than a fire
+        site per source — lifelink, a drain spell, an upkeep trigger and a
+        planeswalker ultimate all arrive at this line. The event is emitted
+        *after* the replacements and after the record, because CR 614 can change
+        the number or take the gain away entirely: a life gain that was replaced
+        never happened, and one whose amount was raised is that larger event.
+        """
         if amount <= 0:
             return
         consumed, payload = apply_replacements(
@@ -786,6 +834,12 @@ class EffectsMixin:
         # arrived, not the life the effect set out to give.
         target.life_gained_this_turn += amount
         self.log.append(f"{target.name} gained {amount} life{source} ({before} -> {target.life})")
+        if amount > 0:
+            # By identity, not `players.index`: PlayerState is a value-compared
+            # dataclass, so two seats holding the same cards match each other —
+            # the look-alike problem the battlefield reads already guard against.
+            seat = next(i for i, p in enumerate(self.players) if p is target)
+            emit(self, "you_gain_life", seat=seat, life_gained=amount)
 
     def _deal_damage_to_player(
         self, target: PlayerState, amount: int, source=None, *, then=None, restart=None,

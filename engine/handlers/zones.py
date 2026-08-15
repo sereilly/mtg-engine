@@ -597,6 +597,25 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("exile_target_graveyard")
+def exile_target_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile target player's graveyard." (Tormod's Crypt.)
+
+    The whole zone at once. A graveyard is its owner's (CR 404.1) and so is the
+    exile zone, so every card goes from one to the other with no CR 400.3
+    ownership lookup — and the list is emptied rather than filtered, because the
+    card names no restriction.
+    """
+    victim = context.target if context.target is not None else context.caster
+    exiled = list(victim.graveyard)
+    victim.graveyard.clear()
+    victim.exile.extend(exiled)
+    game.log.append(
+        f"{context.card.name} exiled {victim.name}'s graveyard ({len(exiled)} card(s))"
+    )
+    return True, "resolved"
+
+
 @effect_handler("exile_target_graveyard_card")
 def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile target card from a graveyard." (Return to Nature's third mode,

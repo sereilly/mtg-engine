@@ -44,6 +44,47 @@ _KEYWORDS = (
     rf"mountainwalk|plainswalk|desertwalk|protection from (?:{_COLORS})"
 )
 
+# "Enchanted creature gets +2/+2, has first strike, and is a Knight in addition
+# to its other types." (Dub; Demonic Embrace prints the same shape.) Defined
+# above the template table because three readers share it — the P/T, the
+# keyword and the subtype each belong to a different CR 613 layer, and reading
+# the line three times with three regexes is how one of the three gets dropped.
+#
+# The subtype alternation is the ingested vocabulary rather than `[a-z]+`, so
+# the *gate* and the *grant* refuse the same words: a made-up type would
+# otherwise be claimed here and then granted nothing, which is the shape this
+# whole module exists to prevent.
+class _LazyPattern:
+    """A pattern compiled on first use rather than at import.
+
+    ``engine.grammar.vocabulary`` is where the creature types live, and the
+    grammar package reaches back into this module (``registries`` imports
+    ``aura_continuous_claim``) — so reading the vocabulary at import time is a
+    cycle. Deferring it is the whole fix; nothing else about the pattern is
+    unusual.
+    """
+
+    def __init__(self, build):
+        self._build, self._compiled = build, None
+
+    def match(self, text: str):
+        if self._compiled is None:
+            self._compiled = self._build()
+        return self._compiled.match(text)
+
+
+def _build_type_addition_grant() -> re.Pattern[str]:
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    subtypes = "|".join(sorted(map(re.escape, CREATURE_TYPES), key=len, reverse=True))
+    return re.compile(
+        rf"^enchanted {_NOUN} gets [+-]\d+/[+-]\d+, has (?P<keyword>{_KEYWORDS}), "
+        rf"and is an? (?P<subtype>{subtypes}) in addition to its other types$"
+    )
+
+
+_TYPE_ADDITION_GRANT = _LazyPattern(_build_type_addition_grant)
+
 # Templates. Several of these genuinely repeat across the pool (the P/T
 # modifications, the keyword grants, the protection cycle, the upkeep damage
 # family), which is why they are written as patterns rather than listed.
@@ -87,6 +128,24 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(rf'^enchanted {_NOUN} has "[^"]+"$'),
         "granted activated/triggered ability — _apply_aura_effect",
+    ),
+    (
+        # "…gets +2/+2, has first strike, and is a Knight in addition to its
+        # other types." (Dub, Demonic Embrace.) One printed line carrying three
+        # effects in three layers — 7c, 6 and 4 — which is why each half is read
+        # by the reader that owns that layer rather than by a flag here.
+        _TYPE_ADDITION_GRANT,
+        "P/T + keyword + layer-4 subtype — aura_type_grants / layer_bridge",
+    ),
+    (
+        # Furor of the Bitten: P/T plus a combat requirement (CR 508.1a). The
+        # P/T half is read by `aura_static_pt_grant`, which searches rather than
+        # anchors, and the requirement by `aura_restrictions` — so this one
+        # entry claims a line whose two halves live in two places.
+        re.compile(
+            rf"^enchanted {_NOUN} gets [+-]\d+/[+-]\d+ and attacks each combat if able$"
+        ),
+        "static P/T + must-attack requirement — declare_attackers_step",
     ),
     (
         re.compile(
@@ -196,6 +255,36 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
+def aura_enchant_clause(oracle_text: str) -> str | None:
+    """The noun an Aura's "Enchant <noun>" line names, or None if it has none.
+
+    The one reader of that clause. Every Aura in the shipped pool prints it
+    first, so its askers all spelled the question as "does the text start with
+    'enchant creature'" — and Capture Sphere, which prints "Flash" above it,
+    resolved into play attached to nothing while every one of those readers
+    quietly answered no. There is no rule that the enchant ability is printed
+    first; there is only a convention among an Aura's *own* abilities, and a
+    keyword line is not one of them.
+
+    Returns the noun as printed, graveyard forms included ("creature card in a
+    graveyard"), because the reanimation branch needs to tell them apart. The
+    battlefield-only question is :func:`stack.casting.aura_enchant_noun`.
+    """
+    for raw_line in (oracle_text or "").lower().split("\n"):
+        line = re.sub(r"\([^)]*\)", "", raw_line).strip()
+        if line.startswith("enchant "):
+            return line[len("enchant "):].strip()
+    return None
+
+
+def aura_enchants(oracle_text: str, noun: str) -> bool:
+    """Whether this Aura's enchant clause names *noun* (a prefix match, so
+    "creature" answers "enchant creature card in a graveyard" too — exactly
+    what ``text.startswith("enchant creature")`` used to mean)."""
+    clause = aura_enchant_clause(oracle_text)
+    return clause is not None and clause.startswith(noun)
+
+
 def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     """Name the code implementing *normalized_line*, or None if nothing does.
 
@@ -224,12 +313,23 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
 
     The "Enchant <noun>" line itself is the targeting restriction, consumed by
     ``targeting.py``/``stack/casting.aura_enchant_noun``, and is not an effect.
+
+    A line that is *entirely a printed keyword* is not an effect line either —
+    it is the Aura's own ability, carried out wherever that keyword is. Capture
+    Sphere is why: its first line is "Flash", the flash gate reads it correctly
+    off the CardDefinition, and this table then reported the card unsupported
+    with the reason "unimplemented aura effect: flash". Asked of the keyword
+    gate rather than of a list here, so what an Aura may print and what the
+    engine implements stay one table (`IMPLEMENTED_KEYWORDS`).
     """
+    from .oracle import _is_supported_keyword_line
+
     return [
         line
         for line in normalized_lines
         if line
         and not line.startswith("enchant ")
+        and not _is_supported_keyword_line(line)
         and aura_effect_claim(line, card_name) is None
     ]
 
@@ -374,7 +474,7 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
     grants: list[str] = []
     for raw_line in oracle_text.split("\n"):
         line = _line_text(raw_line)
-        match = _KEYWORD_GRANT.match(line)
+        match = _KEYWORD_GRANT.match(line) or _TYPE_ADDITION_GRANT.match(line)
         if match is not None:
             grants.append(match.group("keyword"))
         elif _COMPOUND_INDESTRUCTIBLE.match(line):
@@ -418,6 +518,15 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         "ignores_defender",
     ),
     (
+        # Furor of the Bitten. The P/T half is read by `aura_static_pt_grant`,
+        # which searches rather than anchors — so this pattern claims the whole
+        # line and neither half is dropped.
+        re.compile(
+            rf"^enchanted {_NOUN} gets [+-]\d+/[+-]\d+ and attacks each combat if able$"
+        ),
+        "must_attack_each_combat",
+    ),
+    (
         # The other half of Consecrate Land's compound line; the indestructible
         # half is a layer-6 keyword grant (aura_keyword_grants).
         re.compile(
@@ -439,6 +548,21 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
 _PROTECTION_GRANT = re.compile(
     rf"^enchanted {_NOUN} has protection from (?P<color>{_COLORS})\b"
 )
+
+
+def aura_type_grants(oracle_text: str) -> tuple[str, ...]:
+    """Creature subtypes an Aura *adds* to what it enchants (CR 613 layer 4).
+
+    "…and is a Knight in addition to its other types" — added, never replacing,
+    which is the difference between this and a land-type change (CR 305.7) and
+    why it goes through ``add_types`` with ``replace_subtypes`` off.
+    """
+    granted: list[str] = []
+    for raw_line in oracle_text.split("\n"):
+        match = _TYPE_ADDITION_GRANT.match(_line_text(raw_line))
+        if match is not None:
+            granted.append(match.group("subtype"))
+    return tuple(granted)
 
 
 def aura_restrictions(oracle_text: str) -> frozenset[str]:

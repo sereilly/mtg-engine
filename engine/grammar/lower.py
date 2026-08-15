@@ -72,6 +72,8 @@ from .lowering import (
     _lower_gain_keyword,
     _lower_lose_keyword,
     _lower_gain_life,
+    _lower_double_power,
+    _lower_exile_graveyard,
     _lower_look_at_hand,
     _lower_lose_game,
     _lower_lose_life,
@@ -128,23 +130,35 @@ def lower_statement(
     produced: frozenset[str] = frozenset(),
     *,
     event: str | None = None,
+    whole_effect: bool = True,
 ) -> tuple[OracleInstruction, ...]:
     """Lower one statement into the instructions that perform it, in order.
 
     *produced* names the scratchpad values earlier steps of the same effect
     already recorded; a back-reference without a producer is refused.
 
-    *event* is the trigger kind when this statement is a triggered ability's
-    whole effect, and None everywhere else. It is deliberately **not** threaded
-    into nested statements: the flows that read it (the upkeep pay-or-else
-    registry, the pending optional-pay queue) act on a trigger's own effect, so
-    a nested occurrence sees None and refuses rather than assuming the enclosing
-    trigger's dispatch would reach it.
+    *event* is the trigger kind when this statement is (part of) a triggered
+    ability's effect, and None everywhere else. It is threaded into nested
+    statements because it is simply true of them: every clause of a trigger is
+    under that trigger's event, so "that player" and "that much" refer to it
+    wherever in the sentence they sit. Gloom Sower is why — its "that creature's
+    controller" is one half of a conjunction, and an unthreaded event left it
+    lowering as an ordinary chosen target that happens to be right with two
+    players.
+
+    *whole_effect* is the distinction that was hiding inside the unthreaded
+    parameter, and it is a different question: three lowerings pick between two
+    engine *dispatch* paths by the trigger kind (the upkeep pay-or-else
+    registry, the delayed block-pair destroy, an Aura's mana trigger), and each
+    of those registries dispatches on the ability's whole instruction. A nested
+    occurrence is not that instruction, so those readers see None and refuse
+    rather than emitting a kind nothing will reach.
     """
+    dispatch_event = event if whole_effect else None
     if isinstance(statement, ast.DealDamage):
         return _lower_damage(statement)
     if isinstance(statement, ast.DamageUnlessPay):
-        return _lower_damage_unless_pay(statement, event)
+        return _lower_damage_unless_pay(statement, dispatch_event)
     if isinstance(statement, ast.Pump):
         return _lower_pump(statement)
     if isinstance(statement, ast.SetBasePT):
@@ -155,14 +169,16 @@ def lower_statement(
         return _lower_lose_keyword(statement)
     if isinstance(statement, ast.PutCounter):
         return _lower_put_counter(statement)
+    if isinstance(statement, ast.DoublePower):
+        return _lower_double_power(statement)
     if isinstance(statement, ast.RemoveCounter):
         return _lower_remove_counter(statement)
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
-        return _lower_lose_life(statement, event)
+        return _lower_lose_life(statement, event, produced)
     if isinstance(statement, ast.Destroy):
-        return _lower_destroy(statement, event)
+        return _lower_destroy(statement, dispatch_event)
     if isinstance(statement, (ast.Tap, ast.Untap)):
         return _lower_tap(statement)
     if isinstance(statement, ast.TapOrUntap):
@@ -176,7 +192,7 @@ def lower_statement(
     if isinstance(statement, ast.AddMana):
         return _lower_add_mana(statement)
     if isinstance(statement, ast.AddManaForTappedLand):
-        return _lower_add_mana_for_tapped_land(statement, event)
+        return _lower_add_mana_for_tapped_land(statement, dispatch_event)
     if isinstance(statement, ast.CreateToken):
         return _lower_create_token(statement, produced)
 
@@ -188,7 +204,7 @@ def lower_statement(
             isinstance(effect, ast.DealDamage) for effect in statement.effects
         ):
             return _lower_damage_conjunction(statement)
-        return _lower_steps(statement.effects, produced)
+        return _lower_steps(statement.effects, produced, event)
 
     if isinstance(statement, ast.SacrificeUnlessPay):
         return _lower_sacrifice_unless_pay(statement)
@@ -249,6 +265,8 @@ def lower_statement(
     if isinstance(statement, ast.Sacrifice):
         return _lower_sacrifice(statement)
 
+    if isinstance(statement, ast.ExileGraveyard):
+        return _lower_exile_graveyard(statement)
     if isinstance(statement, ast.LookAtHand):
         return _lower_look_at_hand(statement)
 
@@ -299,11 +317,14 @@ def lower_statement(
             fused = fuse(statement.steps)
             if fused is not None:
                 return fused
-        return _lower_steps(statement.steps, produced)
+        return _lower_steps(statement.steps, produced, event)
 
     if isinstance(statement, ast.Conditional):
-        then = lower_statement(statement.then, produced)
-        otherwise = lower_statement(statement.otherwise, produced) if statement.otherwise else ()
+        then = lower_statement(statement.then, produced, event=event, whole_effect=False)
+        otherwise = (
+            lower_statement(statement.otherwise, produced, event=event, whole_effect=False)
+            if statement.otherwise else ()
+        )
         return (
             OracleInstruction(
                 "if_then", "",
@@ -316,7 +337,7 @@ def lower_statement(
         )
 
     if isinstance(statement, ast.May):
-        return _lower_may(statement, produced)
+        return _lower_may(statement, produced, event)
 
     if isinstance(statement, ast.RawEffect) and statement.text == "grant_team_assign_unblocked_until_eot":
         # Garruk, Savage Herald's −7 — the one quoted team grant with a
@@ -326,7 +347,9 @@ def lower_statement(
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
 
 
-def _lower_may(node: ast.May, produced: frozenset[str]) -> tuple[OracleInstruction, ...]:
+def _lower_may(
+    node: ast.May, produced: frozenset[str], event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
     """"You may pay {N}. If you do, …" and "You may <action>".
 
     This replaces the ``optional_pay`` hook shape, which could only express a
@@ -349,9 +372,9 @@ def _lower_may(node: ast.May, produced: frozenset[str]) -> tuple[OracleInstructi
     a spell's whole line once the trigger prefix is gone. It stops being a trap
     when the prompt moves to the general pending-choice queue (roadmap phase 4).
     """
-    action = lower_statement(node.action, produced) if node.action else ()
-    then = lower_statement(node.then, produced) if node.then else ()
-    otherwise = lower_statement(node.otherwise, produced) if node.otherwise else ()
+    action = lower_statement(node.action, produced, event=event, whole_effect=False) if node.action else ()
+    then = lower_statement(node.then, produced, event=event, whole_effect=False) if node.then else ()
+    otherwise = lower_statement(node.otherwise, produced, event=event, whole_effect=False) if node.otherwise else ()
 
     payload: dict[str, object] = {"actor": node.actor.kind}
     if node.cost is not None:
@@ -376,12 +399,14 @@ def _lower_may(node: ast.May, produced: frozenset[str]) -> tuple[OracleInstructi
 
 
 def _lower_steps(
-    steps: tuple[ast.Statement, ...], produced: frozenset[str]
+    steps: tuple[ast.Statement, ...],
+    produced: frozenset[str],
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """Lower consecutive steps, threading what each one records forward."""
     instructions: tuple[OracleInstruction, ...] = ()
     for step in steps:
-        lowered = lower_statement(step, produced)
+        lowered = lower_statement(step, produced, event=event, whole_effect=False)
         for instruction in lowered:
             result = _PRODUCES.get(instruction.kind)
             if result is not None:

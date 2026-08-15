@@ -321,9 +321,86 @@ def test_back_reference_without_a_producer_is_refused():
     """El-Hajjâj's "you gain that much life" reads the *trigger's* captured
     event, not this resolution's scratchpad. Lowering it as a scratchpad read
     would silently gain zero life, so the grammar refuses and the legacy
-    trigger handler keeps the card."""
+    trigger handler keeps the card — `creature_deals_damage` is deliberately
+    not in `_EVENT_QUANTITIES` while its fire site records the amount under a
+    different key."""
     result = compile_line(
         "Whenever this creature deals damage, you gain that much life."
+    )
+    assert result.parsed
+    assert not result.lowered
+    assert "no producer" in result.failure_reason
+
+
+def test_a_bare_that_much_names_nothing_until_lowering_resolves_it():
+    """A bare "that much" is not evidence of damage. It used to parse as
+    ``ThatMuch("damage_dealt")`` whatever the sentence said, so under a life-gain
+    trigger the AST asserted a producer that is nowhere on the card; the words
+    "equal to the damage dealt" are what actually name one."""
+    from engine.grammar import parse_line
+    from engine.grammar.ast import ThatMuch
+
+    bare = parse_line("Target opponent loses that much life.")
+    assert bare.statement.amount == ThatMuch(None)
+
+    named = parse_line("This creature deals 2 damage to you. You gain that much life.")
+    gain = named.statement.steps[1]
+    assert gain.amount == ThatMuch(None), "still bare — the producer is a step, not a word"
+
+    spelled = parse_line("You gain life equal to the damage dealt.")
+    assert spelled.statement.amount == ThatMuch("damage_dealt")
+
+
+def test_a_back_reference_reads_the_trigger_when_the_event_carries_a_number():
+    """Vito. The two channels are different payload keys, because they are
+    different places: ``amount_from`` is this resolution's scratchpad and
+    ``amount_from_trigger`` is the firing event's captured context. Reading one
+    for the other yields a silent zero."""
+    from_trigger = _instructions(
+        "Whenever you gain life, target opponent loses that much life."
+    )
+    assert from_trigger == [("target_loses_life", {"amount_from_trigger": "life_gained"})]
+
+    within = _instructions(
+        "This spell deals 3 damage to target creature. You gain that much life."
+    )
+    assert within[1] == ("target_gains_life", {"amount_from": "damage_dealt", "recipient": "caster"})
+
+
+def test_the_team_keyword_grant_carries_how_wide_it_reaches():
+    """"Creatures you control" and "permanents you control" are one grant of
+    differing width, so the width is a payload key and not a second kind. It is
+    emitted only for the wider reading, which keeps every payload written before
+    it byte-identical."""
+    assert _instructions("Creatures you control gain trample until end of turn.") == [
+        ("grant_team_keyword_until_eot", {"keywords": ("trample",)})
+    ]
+    assert _instructions(
+        "Permanents you control gain hexproof and indestructible until end of turn."
+    ) == [
+        (
+            "grant_team_keyword_until_eot",
+            {"keywords": ("hexproof", "indestructible"), "every_permanent": True},
+        )
+    ]
+
+
+def test_the_team_keyword_grant_refuses_a_narrowing_it_cannot_honour():
+    """The handler loops over the controller's board and tests nothing else, so
+    a printed restriction it cannot apply has to refuse rather than be dropped
+    into a wider grant."""
+    result = compile_line(
+        "Artifact creatures you control gain flying until end of turn."
+    )
+    assert result.parsed
+    assert not result.lowered
+
+
+def test_a_bare_back_reference_under_a_quantityless_trigger_is_refused():
+    """The table is the gate: a trigger kind that carries no number refuses the
+    back-reference rather than reading a zero out of an empty context."""
+    result = compile_line(
+        "Whenever this creature attacks, target opponent loses that much life."
     )
     assert result.parsed
     assert not result.lowered
@@ -3293,3 +3370,64 @@ def test_a_pay_to_untap_on_another_trigger_is_not_the_fused_kind():
     )
 
     assert [instruction.kind for instruction in result.instructions] == ["may"]
+
+
+def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
+    """The two front ends turn one printed phrase into one filter.
+
+    ``engine/oracle.py`` takes a trigger's *condition* from its regex table and
+    ``engine/grammar/`` takes the *effect*, so a narrowed condition is read
+    twice — once by a regex that only delimits the noun phrase, once by the noun
+    parser itself. Both go through ``parse_subject_filter``, and this is what
+    holds them to it: a regex that approximated the subject would let the
+    dispatcher test one set while the grammar claimed another, and the card
+    would compile with its two halves disagreeing about which creatures it
+    watches.
+
+    The comparison is over the trigger *head* rather than the whole line on
+    purpose. A card whose effect the grammar refuses (Terror of the Peaks) is
+    honestly unsupported for that reason, and it is still worth knowing that
+    the head it does read means the same thing on both sides.
+    """
+    from engine.card_loader import load_cards, manifest_set_paths
+    from engine.grammar.lexer import tokenize
+    from engine.grammar.lowering._common import _filter_payload
+    from engine.grammar.phrases import _parse_trigger_event
+    from engine.grammar.stream import TokenStream
+    from engine.oracle import _parse_trigger_condition, normalize_creature_line
+
+    checked = 0
+    disagreements = []
+    # Measured sets included, as the coverage instruments include them: this
+    # asks whether the two readers agree about text the engine can see, and
+    # every printing of this family today is in M21.
+    for card in load_cards(manifest_set_paths(include_measured=True)):
+        for line in (card.oracle_text or "").splitlines():
+            condition, _ = _parse_trigger_condition(normalize_creature_line(line))
+            if condition is None:
+                continue
+            described = [
+                value for key, value in condition.payload.items()
+                if key.endswith("_filter")
+            ]
+            if not described:
+                continue
+            lexed = tokenize(line, card_name=card.name)
+            event = _parse_trigger_event(TokenStream(lexed.tokens, line))
+            subject = getattr(event, "subject", None)
+            if subject is None:
+                disagreements.append(
+                    f"{card.name}: {line}\n    the table read a subject, the grammar did not"
+                )
+                continue
+            checked += 1
+            if _filter_payload(subject) != described[0]:
+                disagreements.append(
+                    f"{card.name}: {line}\n    table:   {described[0]}"
+                    f"\n    grammar: {_filter_payload(subject)}"
+                )
+    assert not disagreements, (
+        "the two front ends read one printed subject differently:\n"
+        + "\n".join(disagreements)
+    )
+    assert checked, "no card in the pool exercises a subject-filtered trigger"

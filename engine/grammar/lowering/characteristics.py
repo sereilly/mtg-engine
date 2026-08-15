@@ -23,6 +23,7 @@ from ._common import (
     _is_source,
     _is_target,
     _names_several_targets,
+    _restrictions_beyond,
     _signed,
 )
 
@@ -139,24 +140,37 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         raise LoweringError(reason, node=node)
     # "Creatures you control gain flying until end of turn." (Basri, Devoted
     # Paladin's −6.) A team grant locked in at resolution (CR 611.2c) — its own
-    # kind, resolved over the controller's creatures by the handler.
+    # kind, resolved over the controller's board by the handler.
+    #
+    # "**Permanents** you control gain hexproof and indestructible" (Heroic
+    # Intervention) is the same grant over a wider board, and the width is the
+    # only difference — so it is a payload key rather than a second kind. The
+    # key is emitted only for the wider reading, which leaves every payload
+    # written before it byte-identical, and the handler defaults to creatures.
     if (
         isinstance(node.subject, ast.TargetSpec)
         and node.subject.quantifier == "all"
-        and node.subject.filter.card_types == ("creature",)
+        and node.subject.filter.card_types in ((), ("creature",))
         and node.subject.filter.controller == "you"
         and node.duration.kind in ("until_end_of_turn", "this_turn")
     ):
+        leftover = _restrictions_beyond(
+            node.subject.filter, frozenset({"card_types", "controller"})
+        )
+        if leftover:
+            raise LoweringError(
+                "the team keyword grant cannot narrow by: " + ", ".join(leftover),
+                node=node,
+            )
         for keyword in node.keywords:
             if keyword not in IMPLEMENTED_KEYWORDS:
                 raise LoweringError(
                     f"granting {keyword!r} needs the keyword implemented", node=node
                 )
-        return (
-            OracleInstruction(
-                "grant_team_keyword_until_eot", "", {"keywords": tuple(node.keywords)}
-            ),
-        )
+        team_payload: dict[str, object] = {"keywords": tuple(node.keywords)}
+        if not node.subject.filter.card_types:
+            team_payload["every_permanent"] = True
+        return (OracleInstruction("grant_team_keyword_until_eot", "", team_payload),)
     scope = "self" if _is_source(node.subject) else ("target" if _is_target(node.subject) else None)
     if scope is None:
         raise LoweringError("unsupported keyword-grant subject", node=node)
@@ -181,6 +195,28 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     assert isinstance(node.subject, ast.TargetSpec)
     _describe_targets(payload, node.subject)
     return (OracleInstruction("grant_target_keyword_until_eot", "", payload),)
+
+
+def _lower_double_power(node: ast.DoublePower) -> tuple[OracleInstruction, ...]:
+    """"Double the power of target creature until end of turn." (Unleash Fury.)
+
+    The duration is required, and required to be this one: a *permanent*
+    doubling is a continuous effect the layer system would have to own, and
+    reading it as an until-end-of-turn boost would give the card back at
+    cleanup something it never said it would.
+    """
+    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
+        raise LoweringError(
+            "a durationless power doubling is a continuous effect, which needs "
+            "the CR 613 layers engine",
+            node=node,
+        )
+    if not _is_target(node.subject):
+        raise LoweringError("power doubling on a non-target subject", node=node)
+    assert isinstance(node.subject, ast.TargetSpec)
+    payload: dict[str, object] = {}
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("double_target_power_until_eot", "", payload),)
 
 
 def _lower_lose_keyword(node: ast.LoseKeyword) -> tuple[OracleInstruction, ...]:
@@ -251,6 +287,14 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
         # second name for the same effect.
         assert isinstance(node.subject, ast.TargetSpec)
         payload: dict[str, object] = {"power": 1, "toughness": 1}
+        # "…, then double the number of +1/+1 counters on that creature."
+        # (Invigorating Surge.) Payload on the same instruction, because the
+        # doubling is about the creature this one just chose — a second
+        # instruction would have to re-find it, and "that creature" names no
+        # target of its own. Emitted only when printed, so every payload
+        # written before it is byte-identical.
+        if node.then_double:
+            payload["then_double"] = True
         _describe_targets(payload, node.subject)
         return (OracleInstruction("add_counter_to_target", "", payload),)
     if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in (

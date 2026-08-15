@@ -33,6 +33,7 @@ from .damage import (
     _parse_colour_source_prevention,
 )
 from .characteristics import (
+    _parse_double,
     _parse_gets,
     _parse_gains,
     _parse_loses,
@@ -60,6 +61,7 @@ from .cards import (
     _parse_scry,
     _parse_add_mana,
     _parse_cast_permission,
+    _parse_exile_graveyard,
     _parse_exile_top_of_library,
     _parse_player_adds_mana,
     _parse_look_at_hand,
@@ -118,8 +120,10 @@ __all__ = [
     "_parse_scry",
     "_parse_add_mana",
     "_parse_cast_permission",
+    "_parse_exile_graveyard",
     "_parse_exile_top_of_library",
     "_parse_player_adds_mana",
+    "_parse_double",
     "_parse_look_at_hand",
     "_parse_reveal_top",
     "_parse_search_library",

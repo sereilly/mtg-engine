@@ -19,7 +19,8 @@ has to be found first.
 from dataclasses import replace
 
 from . import ast
-from .lexer import (MANA, PT, PUNCT, SELF)
+from .errors import GrammarError
+from .lexer import (MANA, PT, PUNCT, SELF, tokenize)
 from .nouns import (parse_target_spec)
 from .stream import TokenStream
 from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, match_longest)
@@ -63,13 +64,41 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("opponent_casts_spell", ("an", "opponent", "casts", "a", "spell")),
     ("enchantment_cast", ("you", "cast", "an", "enchantment", "spell")),
     ("you_cast_spell", ("you", "cast", "a", "spell")),
-    ("creature_enters", ("a", "creature", "enters")),
+    # Ankh of Mishra's, which has its own fire site. The bare creature and
+    # artifact entries that used to sit beside it are gone: they had no
+    # dispatcher and no card, and the subject-led production below reads the
+    # same words as `matching_permanent_enters`, which does fire.
     ("land_enters", ("a", "land", "enters")),
-    ("artifact_enters", ("an", "artifact", "enters")),
     # "…your second card each turn" (Mystic Skyfish, Jolrael) — a different
     # article, so no prefix collision with the bare draw event above.
     ("draws_second_card", ("you", "draw", "your", "second", "card", "each", "turn")),
     ("draws_card", ("you", "draw", "a", "card")),
+    # "Whenever you gain life …" (Vito). No amount in the phrase: how much was
+    # gained is the event's, and a "that much" in the effect reads it out of the
+    # trigger's captured context rather than out of these words.
+    ("you_gain_life", ("you", "gain", "life")),
+)
+
+# Events whose subject is an object *filter* the trigger carries, keyed by the
+# fixed words printed in front of it. The mirror of the `_subject`-group
+# patterns in engine/oracle.py's table: one printed phrase, read by the same
+# noun parser on both sides of the pipeline, and held equal by
+# `test_a_narrowed_trigger_reads_the_same_subject_on_both_sides`.
+_FILTERED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("this", "creature", "blocks"), "creature_blocks"),
+    (("this", "creature", "becomes", "blocked", "by"), "creature_becomes_blocked"),
+)
+
+# The same, for events whose subject comes *first* — "a creature you control
+# with deathtouch **attacks**". The verb behind the noun phrase names the event,
+# so the phrase is read speculatively and these decide whether it was one.
+# Longest first, per the ordering rule the whenever table follows.
+_SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("deals", "damage", "to", "a", "planeswalker"),
+     "matching_creature_damages_planeswalker"),
+    (("attacks",), "matching_creature_attacks"),
+    (("enters", "the", "battlefield"), "matching_permanent_enters"),
+    (("enters",), "matching_permanent_enters"),
 )
 
 _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -136,6 +165,58 @@ _ZONES = frozenset({"battlefield", "graveyard", "hand", "library", "exile", "sta
 # ---------------------------------------------------------------------------
 # Small shared productions
 # ---------------------------------------------------------------------------
+
+
+def parse_subject_filter(phrase: str) -> ast.ObjectFilter | None:
+    """The set of objects a printed noun phrase names, or None if it refuses.
+
+    The whole phrase must be consumed. That is what makes this safe to give a
+    *trigger* its subject: "a creature you control with deathtouch" is a
+    narrowing, and a reader that consumed "a creature you control" and stopped
+    would announce a trigger firing on a strictly larger set than the card
+    prints — the dropped-rider bug class, in the one position where it fires on
+    every creature instead of one.
+
+    Public because ``engine/oracle.py``'s trigger-condition table reads its
+    subjects through this: both front ends of the pipeline turn one printed
+    phrase into one filter, rather than a regex approximating what the noun
+    parser does. Held to that by
+    ``test_a_narrowed_trigger_reads_the_same_subject_on_both_sides``.
+    """
+    lexed = tokenize(phrase)
+    if not lexed.tokens:
+        return None
+    stream = TokenStream(lexed.tokens, phrase)
+    filt = parse_subject_filter_at(stream)
+    return filt if filt is not None and stream.exhausted else None
+
+
+def parse_subject_filter_at(stream: TokenStream) -> ast.ObjectFilter | None:
+    """:func:`parse_subject_filter` over a stream, consuming what it reads.
+
+    Refuses anything but the two articles a trigger subject is printed with —
+    "a creature you control …" and "another Rogue you control …". "Target
+    creature" and "each creature" name a chosen or an exhaustive set, and a
+    condition claiming to fire on one of those would be describing a different
+    card.
+    """
+    mark = stream.mark()
+    # "another" sits where the article does, so it is read here and folded onto
+    # the filter's exclusion field — the idiom `_parse_cost_object` and the
+    # counters event above already use, rather than a noun-parser quantifier
+    # that would change every targeted line in the pool. It leaves a bare noun
+    # behind ("another **Rogue you control**"), which the noun parser quantifies
+    # as the sweep "all"; without "another" the article has to be printed.
+    another = bool(stream.accept_word("another"))
+    try:
+        spec = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if spec is None or spec.quantifier != ("all" if another else "a"):
+        stream.reset(mark)
+        return None
+    return replace(spec.filter, other_than_source=True) if another else spec.filter
 
 
 def _parse_duration(stream: TokenStream) -> ast.Duration:
@@ -407,9 +488,34 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                         "you_cast_spell", "whenever", subject=narrowed,
                     )
         stream.reset(mark)
+        # Events whose *subject* is a noun phrase rather than the source. Each
+        # is read before the phrase table below, whose bare entry is its strict
+        # prefix — matching that first is what left Snarespinner compiled to an
+        # unnarrowed "this creature blocks" with its rider on the floor.
+        for phrase, kind in _FILTERED_EVENTS:
+            mark = stream.mark()
+            if stream.accept_phrase(*phrase):
+                subject = parse_subject_filter_at(stream)
+                if subject is not None:
+                    return ast.TriggerEvent(kind, "whenever", subject=subject)
+            stream.reset(mark)
         for kind, phrase in _WHENEVER_EVENTS:
             if stream.accept_phrase(*phrase):
                 return ast.TriggerEvent(kind, "whenever")
+        # "Whenever a creature you control with deathtouch attacks / deals
+        # damage to a planeswalker" (Hooded Blightfang): the subject leads, so
+        # there is no fixed prefix to key on — the noun phrase is tried and the
+        # verb behind it decides whether it was one. *After* the phrase table,
+        # because that table's entries are the specific readings: "a land
+        # enters" is Ankh of Mishra's own event with its own fire site, and this
+        # production would otherwise claim it as a generic entry.
+        mark = stream.mark()
+        subject = parse_subject_filter_at(stream)
+        if subject is not None:
+            for phrase, kind in _SUBJECT_LED_EVENTS:
+                if stream.accept_phrase(*phrase):
+                    return ast.TriggerEvent(kind, "whenever", subject=subject)
+        stream.reset(mark)
         return _parse_quantified_tap_event(stream)
     if stream.accept_word("at"):
         for kind, phrase in _AT_EVENTS:

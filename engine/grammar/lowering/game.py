@@ -14,6 +14,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (
     _amount_payload,
+    _back_reference_payload,
     _describe_targets,
     _restrictions_beyond,
 )
@@ -45,28 +46,23 @@ def _lower_gain_life(
         return (
             OracleInstruction(
                 "target_gains_life", "",
-                {"amount_from": "dead_power", "recipient": "caster"},
+                {"amount_from_trigger": "dead_power", "recipient": "caster"},
             ),
         )
     if isinstance(node.amount, ast.ThatMuch):
         # "You gain life equal to the damage dealt" — reads the value the
         # preceding damage instruction recorded in the resolution scratchpad,
         # which is what lets the two effects be separate instructions at all.
-        #
-        # That only holds when the producer is in *this* resolution. On a
-        # triggered ability ("Whenever this creature deals damage, you gain that
-        # much life") the amount comes from the trigger's captured event, which
-        # is a different mechanism — so refuse rather than read an empty
-        # scratchpad and silently gain 0 life.
-        if node.amount.source not in produced:
-            raise LoweringError(
-                f"back-reference to {node.amount.source!r} with no producer in this effect",
-                node=node,
-            )
+        # A bare "that much" may instead name the firing event's own quantity;
+        # `_back_reference_payload` is the one place that decides which, and
+        # refuses when neither offers a number rather than reading a zero.
         return (
             OracleInstruction(
                 "target_gains_life", "",
-                {"amount_from": node.amount.source, "recipient": recipient},
+                {
+                    **_back_reference_payload(node.amount, produced, event),
+                    "recipient": recipient,
+                },
             ),
         )
     payload: dict[str, object] = {
@@ -255,10 +251,30 @@ def _lower_win_game(node: ast.WinGame) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("player_wins_game", "", {}),)
 
 
+# Trigger events after which "that player" names the controller of the object
+# the event was about, frozen into the trigger's context by the fire site.
+_EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
+    "creature_opponent_controls_dies",   # Massacre Wurm — the dead creature's
+    "creature_becomes_blocked",          # Gloom Sower — the blocker's
+})
+
+
 def _lower_lose_life(
-    node: ast.LoseLife, event: str | None = None
+    node: ast.LoseLife,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
-    payload: dict[str, object] = {"amount": _amount_payload(node.amount)}
+    # "Whenever you gain life, target opponent loses **that much** life."
+    # (Vito, Thorn of the Dusk Rose.) The number is the life-gain event's, not
+    # anything this effect computed, so it arrives as a trigger-context key
+    # rather than as an amount. Resolved before the payload is built, because
+    # an amount and a back-reference are alternatives — carrying both would let
+    # a handler read whichever it happened to check first.
+    payload: dict[str, object] = (
+        dict(_back_reference_payload(node.amount, produced, event))
+        if isinstance(node.amount, ast.ThatMuch)
+        else {"amount": _amount_payload(node.amount)}
+    )
     # "Each opponent who can't loses 3 life." (Liliana, Waker of the Dead) —
     # attached by the sentence-loop rider to a preceding each-player discard,
     # whose handler records the players that could not pay. Reading that record
@@ -286,18 +302,16 @@ def _lower_lose_life(
             "card_types": list(filt.card_types),
         }
         return (OracleInstruction("target_loses_life", "", payload),)
-    # "Whenever a creature an opponent controls dies, **that player** loses 2
-    # life." (Massacre Wurm.) "That player" is the dead creature's controller,
-    # which no board read can recover once it is in a graveyard — so the seat
-    # is last-known information the fire site records, exactly as Basri's
-    # Lieutenant's counter clause and Conclave Mentor's power are. Only under
-    # this event: anywhere else "that player" is the ordinary chosen target
-    # below.
-    if (
-        node.player.kind == "that_player"
-        and event == "creature_opponent_controls_dies"
-    ):
-        payload["recipient"] = "dead_controller"
+    # "**That player**" after an event that was *about an object*: the object's
+    # controller. Massacre Wurm's dead creature is in a graveyard by the time
+    # the trigger resolves and Gloom Sower's blocker may have left combat, so
+    # neither seat survives a board read — the fire site freezes it (CR 603.10),
+    # exactly as Basri's Lieutenant's counter clause and Conclave Mentor's power
+    # are frozen. Which events carry a subject is a table rather than a rule,
+    # for the reason `_EVENT_QUANTITIES` is: an event either had one or it did
+    # not. Anywhere else "that player" is the ordinary chosen target below.
+    if node.player.kind == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
+        payload["recipient"] = "event_subject_controller"
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind in ("target_player", "target_opponent", "that_player"):
         return (OracleInstruction("target_loses_life", "", payload),)

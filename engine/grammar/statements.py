@@ -33,6 +33,7 @@ from .effects import (
     _parse_destroy,
     _parse_discard,
     _parse_draw,
+    _parse_exile_graveyard,
     _parse_exile_top_of_library,
     _parse_enchant,
     _parse_extra_turn,
@@ -48,6 +49,7 @@ from .effects import (
     _parse_modal_head,
     _parse_player_adds_mana,
     _parse_prevent,
+    _parse_double,
     _parse_put_counter,
     _parse_remove_counter,
     _parse_return,
@@ -92,6 +94,8 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         return _parse_tap_untap(stream)
     if stream.at_word("put"):
         return _parse_put_counter(stream)
+    if stream.at_word("double"):
+        return _parse_double(stream)
     if stream.at_word("remove"):
         removal = _parse_remove_counter(stream)
         if removal is not None:
@@ -141,6 +145,12 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         from_library = _parse_exile_top_of_library(stream)
         if from_library is not None:
             return from_library
+        # "Exile target player's graveyard" is a whole zone, which the
+        # recipient parser below would read as the player alone and then
+        # choke on the possessive.
+        whole_graveyard = _parse_exile_graveyard(stream)
+        if whole_graveyard is not None:
+            return whole_graveyard
         stream.advance()
         subject = parse_recipient(stream)
         if subject is None:

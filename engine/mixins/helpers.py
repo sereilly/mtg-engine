@@ -546,7 +546,7 @@ class GameHelpersMixin:
                 condition_kinds={"dies"},
                 instruction_kinds={"target_gains_life"},
             ):
-                if power_trig.instruction.payload.get("amount_from") != "dead_power":
+                if power_trig.instruction.payload.get("amount_from_trigger") != "dead_power":
                     continue
                 self._enqueue_triggered_ability(
                     controller_index=self.players.index(player),
@@ -1126,8 +1126,10 @@ class GameHelpersMixin:
             "had_plus1_counter": int(dead_permanent.metadata.get("plus_counters", 0)) > 0,
             # Who controlled it, for "that player loses 2 life" (Massacre
             # Wurm): the graveyard card cannot say, and under Control Magic
-            # the controller is not the owner.
-            "dead_controller": dead_seat,
+            # the controller is not the owner. One key across every event that
+            # is about an object — the blocker's controller Gloom Sower reads
+            # is the same question asked of a different event.
+            "event_subject_controller": dead_seat,
         }
         for controller_index, observer in self.permanents_with_controller():
             program = compile_card_oracle(observer.card)
@@ -1212,3 +1214,11 @@ class GameHelpersMixin:
         # lord buffs so the new permanent immediately receives applicable bonuses,
         # and so any new lord immediately buffs existing matching permanents.
         self._recompute_continuous_effects()
+        # "Whenever a creature you control with power 4 or greater enters"
+        # (Garruk's Uprising). Every entry path in the engine — a resolving
+        # spell, a token, a reanimation, a cleanup return — comes through this
+        # one function, so the announcement is one emit rather than a fire site
+        # per path. After the recompute on purpose: a filter about power or type
+        # asks what the board makes the permanent, and a lord that applied as it
+        # entered is part of that (CR 611.3a).
+        emit(self, "matching_permanent_enters", subject=permanent)

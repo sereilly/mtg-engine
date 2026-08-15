@@ -36,6 +36,7 @@ import pytest
 from engine.card_loader import load_catalog
 from engine.characteristic_defining import dynamic_pt_for
 from engine.combat_restrictions import combat_restriction_for
+from engine.cost_modifiers import cost_modifier_claims_line
 from engine.land_play_allowance import land_play_line
 from engine.lord_buffs import lord_buff_for
 from engine.oracle import (
@@ -97,6 +98,12 @@ def _derived(normalized: str) -> bool:
         # table the gate asks. Only the permission clause is a claim: the
         # damage rider is a trigger the table does not own.
         or land_play_line(normalized) == "allowance"
+        # "White spells cost {3} more to cast" (Gloom), "Creature spells with
+        # flying you cast cost {1} less" (Watcher of the Spheres) — dispatched
+        # by mixins/stack/casting.py and activation.py through
+        # spell_cost_tax / spell_cost_reduction / ability_cost_tax, which read
+        # every permanent's own text through the same table the gate asks.
+        or cost_modifier_claims_line(normalized)
     )
 
 

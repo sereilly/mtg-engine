@@ -21,6 +21,7 @@ from .auras import (
     animating_auras,
     aura_keyword_grants,
     aura_static_pt_grant,
+    aura_type_grants,
     auras_attached_to,
 )
 from .control import control_changes, has_control_change
@@ -401,6 +402,24 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             effects.append(
                 add_types(only, card_types=["creature"], timestamp=0, label=static.name)
             )
+
+    # "…and is a Knight in addition to its other types" (Dub, Demonic Embrace).
+    # *Added*, not replacing — which is the whole difference from the land-type
+    # change below, and why the two cannot share a call. Derived from the Aura's
+    # own text on every recompute and stamped with the moment it attached
+    # (CR 613.7b), so detaching one simply stops contributing the type.
+    for aura in auras_attached_to(perm):
+        added = aura_type_grants(aura.card.oracle_text)
+        if not added:
+            continue
+        effects.append(
+            add_types(
+                only,
+                subtypes=list(added),
+                timestamp=int(aura.metadata.get("aura_timestamp", 0)),
+                label=f"aura:{aura.card.name}",
+            )
+        )
 
     # CR 305.7: setting a land's subtype *replaces* its old ones, so two of
     # these on one land do not commute — the newer contribution is what the land

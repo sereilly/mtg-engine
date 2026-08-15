@@ -68,6 +68,25 @@ class PutCounter:
     counter: str = "+1/+1"
     count: Amount = field(default_factory=lambda: Fixed(1))
     up_to: bool = False
+    # "…, then double the number of +1/+1 counters on that creature."
+    # (Invigorating Surge.) A rider rather than a second statement: "that
+    # creature" is the one this placement just chose, and reading it as its own
+    # sentence would leave the doubling looking for a target nobody picked.
+    then_double: bool = False
+
+
+@dataclass(frozen=True)
+class DoublePower:
+    """``Double the power of <subject> until end of turn.`` (Unleash Fury.)
+
+    Its own node rather than a :class:`Pump` whose amount is "the subject's
+    power": a pump's amount is fixed when the effect is created, and this one
+    reads the power *at resolution*. Writing it as a Pump would need an Amount
+    that means "ask the board later", which is a bigger idea than one card
+    needs — and the two would then be indistinguishable in the IR.
+    """
+    subject: Recipient
+    duration: Duration = field(default_factory=Duration)
 
 
 @dataclass(frozen=True)

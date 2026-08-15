@@ -57,6 +57,7 @@ from .damage import (
     _lower_prevent_all,
 )
 from .characteristics import (
+    _lower_double_power,
     _lower_pump,
     _lower_set_base_pt,
     _KEYWORD_GRANTS,
@@ -108,6 +109,7 @@ from .cards import (
     _lower_cast_permission,
     _lower_exile_top_of_library,
     _lower_look_top_pick,
+    _lower_exile_graveyard,
     _lower_look_at_hand,
     _lower_search_and_exile,
     _SEARCH_EXILE_HONOURED,
@@ -212,6 +214,8 @@ __all__ = [
     "_lower_add_mana",
     "_TAPPED_LAND_MANA_RECIPIENTS",
     "_lower_add_mana_for_tapped_land",
+    "_lower_double_power",
+    "_lower_exile_graveyard",
     "_lower_look_at_hand",
     "_SEARCH_HONOURED_FILTER_FIELDS",
     "_lower_search_library",

@@ -137,6 +137,18 @@ class LookTopPickToHand:
 
 
 @dataclass(frozen=True)
+class ExileGraveyard:
+    """``Exile target player's graveyard.`` (Tormod's Crypt.)
+
+    A whole *zone*, not a card in one, which is why it is its own node rather
+    than an :class:`Exile` over a noun phrase: there is nothing to filter, no
+    target among the cards, and the count is however many are there when it
+    resolves.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class ExileTopOfLibrary:
     """``Exile the top three cards of your library.`` (Chandra, Heart of Fire's
     +1.) Always the controller's own library — no card prints another player's

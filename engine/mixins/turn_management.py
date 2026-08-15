@@ -169,6 +169,7 @@ class TurnManagementMixin:
             # this loop is over self.players rather than the active one.
             player.life_gained_this_turn = 0
             player.creatures_died_under_your_control_this_turn = 0
+            player.spells_cast_this_turn = []
 
     def start_turn(self, player_index: int) -> None:
         self.begin_turn_bookkeeping(player_index)

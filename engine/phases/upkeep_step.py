@@ -13,6 +13,7 @@ dispatches. A new upkeep card is an entry there, never a branch here.
 
 import re
 
+from ..auras import aura_enchants
 from ..copies import RECOPY_EACH_UPKEEP, grants_ability
 from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..models import Permanent
@@ -122,7 +123,10 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if attached is None or not self.controls(controller, attached):
                 continue
             text = compile_card_oracle(permanent.effective_card).normalized_text
-            if not text.startswith("enchant land") or "you may pay" not in text or "you gain" not in text:
+            if (
+                not aura_enchants(permanent.effective_card.oracle_text, "land")
+                or "you may pay" not in text or "you gain" not in text
+            ):
                 continue
             pay_match = re.search(r"you may pay ((?:\{[wubrgc]\})+)", text)
             mana: dict[str, int] = {}
@@ -535,7 +539,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 continue
             prog = compile_card_oracle(permanent.effective_card)
             text = prog.normalized_text
-            if not text.startswith("enchant land"):
+            if not aura_enchants(permanent.effective_card.oracle_text, "land"):
                 continue
             attached_land = permanent.metadata.get("attached_to")
             if attached_land is None:
@@ -585,7 +589,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 continue
             prog = compile_card_oracle(permanent.effective_card)
             text = prog.normalized_text
-            if not text.startswith("enchant land"):
+            if not aura_enchants(permanent.effective_card.oracle_text, "land"):
                 continue
             attached_land = permanent.metadata.get("attached_to")
             if attached_land is None:

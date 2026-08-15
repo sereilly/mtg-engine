@@ -302,6 +302,17 @@ def _lower_reveal_top(node: ast.RevealTopToHandOrBottom) -> tuple[OracleInstruct
     )
 
 
+def _lower_exile_graveyard(node: ast.ExileGraveyard) -> tuple[OracleInstruction, ...]:
+    """"Exile target player's graveyard." (Tormod's Crypt.)
+
+    The whole zone, so there is no filter to carry and no card to resolve —
+    only which player's graveyard, which is the target description.
+    """
+    return (
+        OracleInstruction("exile_target_graveyard", "", _targets_only(node.player)),
+    )
+
+
 def _lower_look_at_hand(node: ast.LookAtHand) -> tuple[OracleInstruction, ...]:
     """"Look at target player's hand." (Glasses of Urza.)
 

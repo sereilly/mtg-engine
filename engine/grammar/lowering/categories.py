@@ -55,6 +55,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_banding_to_target": "pump",
     "add_counter_to_self": "pump",
     "add_counter_to_target": "pump",
+    "double_target_power_until_eot": "pump",
     "add_counter_to_each_you_control": "pump",
     # Counter placements sized by a board count. Their own category rather than
     # "pump": a corpse counter never touches power or toughness (it is
@@ -120,6 +121,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deny_regeneration_to_target": "regeneration",
     # Looking at a hand reads a hidden zone; the legacy rule and the handler
     # both live in the engine's zones modules.
+    "exile_target_graveyard": "zones",
     "look_at_target_hand": "zones",
     # A library search moves a card between hidden zones — same module, same
     # category as the other zone-change handlers.

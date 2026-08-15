@@ -13,7 +13,7 @@ from .ai_valuation import (
     mana_ability_amount,
     returns_creature_to_hand,
 )
-from .cost_modifiers import spell_cost_tax
+from .cost_modifiers import cost_reduction_for_cast, reduce_cost, spell_cost_tax
 from .classifier import classify_card
 from .game import Game
 from .handlers._common import permanent_matches_filter
@@ -97,12 +97,7 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs and card.primary_type != "land":
-            required = game._parse_mana_cost(
-                card.mana_cost,
-                x_value=x_value,
-                extra_generic=_extra_generic_tax(game, card),
-                x_color=x_spend_color_from_text(card.oracle_text),
-            )
+            required = _cost_for(game, player, card, x_value)
             plan = _plan_taps_for_cost(player, required)
             if plan is None:
                 continue
@@ -398,12 +393,7 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs:
-            required = game._parse_mana_cost(
-                card.mana_cost,
-                x_value=x_value,
-                extra_generic=_extra_generic_tax(game, card),
-                x_color=x_spend_color_from_text(card.oracle_text),
-            )
+            required = _cost_for(game, player, card, x_value)
             plan = _plan_taps_for_cost(player, required)
             if plan is None:
                 continue
@@ -548,12 +538,7 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
             score -= 4.0
     elif game.enforce_mana_costs:
         pool = _preview_pool_with_all_untapped_lands(game, player)
-        required = game._parse_mana_cost(
-            card.mana_cost,
-            x_value=x_value if x_value is not None else 0,
-            extra_generic=_extra_generic_tax(game, card),
-            x_color=x_spend_color_from_text(card.oracle_text),
-        )
+        required = _cost_for(game, player, card, x_value if x_value is not None else 0)
         if _can_pay_cost(pool, required, player.can_spend_white_as_red):
             score += 3.0  # castable as soon as it reaches hand
         else:
@@ -1030,11 +1015,31 @@ def _creature_stat(card: CardDefinition, key: str) -> int:
     return int(raw_value) if raw_value.isdigit() else 0
 
 
-def _extra_generic_tax(game: Game, card: CardDefinition) -> int:
-    # caster_index doesn't affect any registered cost modifier today (Gloom
-    # taxes by the card's own color); 0 is a safe placeholder.
-    tax, _names = spell_cost_tax(game, 0, card)
-    return tax
+def _cost_for(
+    game: Game, player: PlayerState, card: CardDefinition, x_value: int | None
+) -> dict[str, int]:
+    """What *player* actually pays for *card* — CR 601.2f, increases then
+    reductions, through the same three functions the cast path calls.
+
+    The seat is threaded rather than assumed. This used to pass 0 with a comment
+    saying no registered modifier depended on it, which was true while every one
+    of them was scoped by the *card's* colour; it stopped being true the moment
+    a card printed "spells **you cast** cost {1} less", and a claim about the
+    pool expires without anyone editing the comment. Identity, not
+    ``players.index``: PlayerState is value-compared.
+    """
+    seat = next((i for i, seated in enumerate(game.players) if seated is player), 0)
+    tax, _names = spell_cost_tax(game, seat, card)
+    reduction, _reducers = cost_reduction_for_cast(game, seat, card)
+    return reduce_cost(
+        game._parse_mana_cost(
+            card.mana_cost,
+            x_value=x_value,
+            extra_generic=tax,
+            x_color=x_spend_color_from_text(card.oracle_text),
+        ),
+        reduction,
+    )
 
 
 def _pick_x_value(game: Game, player: PlayerState, card: CardDefinition) -> int | None:
@@ -1047,11 +1052,9 @@ def _pick_x_value(game: Game, player: PlayerState, card: CardDefinition) -> int 
 
 def _max_affordable_x(game: Game, player: PlayerState, card: CardDefinition) -> int:
     pool = _preview_pool_with_all_untapped_lands(game, player)
-    extra_tax = _extra_generic_tax(game, card)
 
-    x_color = x_spend_color_from_text(card.oracle_text)
     for x_value in range(15, -1, -1):
-        required = game._parse_mana_cost(card.mana_cost, x_value=x_value, extra_generic=extra_tax, x_color=x_color)
+        required = _cost_for(game, player, card, x_value)
         if _can_pay_cost(pool, required, player.can_spend_white_as_red):
             return x_value
     return 0

@@ -203,8 +203,37 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_deals_damage",       r"whenever this creature deals damage"),
     ("creature_blocks_or_blocked_by_nonwall", r"whenever this creature blocks or becomes blocked by a non-wall creature"),
     ("creature_attacks_or_blocks",  r"whenever this creature attacks or blocks"),
+    # A trigger whose *subject* is a set of objects rather than the source:
+    # "whenever a creature you control with deathtouch attacks" (Hooded
+    # Blightfang). Its own kind rather than a narrowing of `creature_attacks`,
+    # because the scoping is the whole dispatch — that one fires the attacking
+    # creature's own ability, this one fires every permanent whose filter the
+    # attacker answers, and the source need not be attacking at all. The subject
+    # group is read by the noun parser (see `_resolve_subject_groups`), and the
+    # comma bound is load-bearing: a trigger condition ends at one, so `[^,]+`
+    # can never reach into the effect clause.
+    # The same subject over a damage event (Hooded Blightfang's second line).
+    # `deals_damage_to_player` above does not shadow it: "planeswalker" and
+    # "player" share four letters and diverge at the fifth, so the two recipients
+    # are disjoint literals rather than a prefix pair — which the shadowing
+    # guard checks rather than this comment asserting it.
+    ("matching_creature_damages_planeswalker",
+     r"whenever (?P<damager_subject>(?:a|another) [^,]+) deals damage to a planeswalker"),
+    ("matching_creature_attacks",
+     r"whenever (?P<attacker_subject>(?:a|another) [^,]+) attacks"),
     ("creature_attacks",            r"whenever this creature attacks"),
+    # "…blocks **a creature with flying**" (Snarespinner) narrows the source's
+    # own block trigger by what it blocked. Before the bare form, which is its
+    # strict prefix: matching that first is what made Snarespinner compile to an
+    # unnarrowed condition with its rider dropped on the floor.
+    ("creature_blocks",
+     r"whenever this creature blocks (?P<blocked_subject>(?:a|another) [^,]+)"),
     ("creature_blocks",             r"whenever this creature blocks"),
+    # "…becomes blocked by **a creature**" (Gloom Sower): once per blocking
+    # creature that answers the filter (CR 509.1h), where the bare form below
+    # fires once for the block itself. Same ordering rule.
+    ("creature_becomes_blocked",
+     r"whenever this creature becomes blocked by (?P<blocker_subject>(?:a|another) [^,]+)"),
     ("creature_becomes_blocked",    r"whenever this creature becomes blocked"),
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
@@ -245,9 +274,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever you cast a (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell"),
     ("you_cast_spell",              r"whenever you cast a spell"),
     ("enchantment_cast",            r"whenever you cast an enchantment spell"),
-    ("creature_enters",             r"whenever a creature enters(?: the battlefield)?"),
+    # Ankh of Mishra's land entry keeps its own kind and its own fire site, so
+    # it precedes the general form below — which is the ordinary
+    # specific-before-general rule, with the specific one being the *older*
+    # entry for once.
     ("land_enters",                 r"whenever a land enters(?: the battlefield)?"),
-    ("artifact_enters",             r"whenever an artifact enters(?: the battlefield)?"),
+    # "Whenever a creature you control with power 4 or greater enters" (Garruk's
+    # Uprising). `creature_enters` and `artifact_enters` used to sit here as bare
+    # forms with no dispatcher and, between them, no card — Garruk's Uprising
+    # reported *supported* with this line compiling to nothing at all, which is
+    # the partial-implementation class round 16 wrote down. Deleted rather than
+    # kept beside this one: "whenever a creature enters" is this pattern with an
+    # empty narrowing, and it fires now.
+    ("matching_permanent_enters",
+     r"whenever (?P<enterer_subject>(?:a|another) [^,]+) enters(?: the battlefield)?"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
     # "…are put on another non-Hydra creature you control" (Wildwood Scourge).
     # The excluded subtype is captured as condition payload, so a card printed
@@ -258,6 +298,11 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("counters_put_on_creature",
      r"whenever one or more \+1/\+1 counters are put on another "
      r"non-(?P<counters_excluded_subtype>[a-z]+) creature you control"),
+    # "Whenever you gain life …" (Vito, Thorn of the Dusk Rose). The event is
+    # emitted from the one life-gain seam (`Game._gain_life`) *after* the
+    # replacements have had the amount, so what the trigger sees is the life
+    # that actually arrived — the same reading `life_gained_this_turn` takes.
+    ("you_gain_life",               r"whenever you gain life"),
     ("draws_card",                  r"whenever you draw a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
     # turn, announced by the draw sweep in check_state_based_actions off the
@@ -270,7 +315,12 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("enters_battlefield",          r"when (?:this|.+) enters(?: the battlefield)?"),
     ("leaves_battlefield",          r"when (?:this|.+) leaves(?: the battlefield)?"),
     ("dies",                        r"when (?:this creature|.+) dies"),
-    ("you_gain_life",               r"when you gain life"),
+    # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
+    # and no card: a life gain is a repeatable event, so every printing of it is
+    # "**Whenever** you gain life" — the row above in the whenever table, which
+    # Vito reaches. A kind lives in one table, because the shadowing guard's
+    # canonical examples are keyed by kind and an example can only be a wording
+    # of one trigger word.
     ("becomes_target",              r"when (?:this|.+) becomes the target"),
     ("no_islands",                  r"when you control no islands"),
     ("no_lands",                    r"when you control no lands"),
@@ -458,6 +508,14 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
 # Trigger condition parsing
 # ---------------------------------------------------------------------------
 
+# A named group ending in this holds a printed *noun phrase* rather than a
+# word: "whenever a creature you control **with deathtouch** attacks". The regex
+# only delimits it — what it names is read by the noun parser, so the two front
+# ends of the pipeline turn one phrase into one filter instead of a regex
+# approximating what the grammar does.
+_SUBJECT_GROUP_SUFFIX = "_subject"
+
+
 def _match_trigger_patterns(
     text: str,
     patterns: tuple[tuple[str, re.Pattern[str]], ...],
@@ -465,15 +523,44 @@ def _match_trigger_patterns(
 ) -> TriggerCondition | None:
     for kind, pattern in patterns:
         m = pattern.match(text)
-        if m:
-            # Named groups become the condition's payload, so a narrowed
-            # condition ("…casts a *blue* spell") carries its restriction as
-            # data. Event dispatch reads it instead of needing a per-card hook.
-            payload = {k: v for k, v in m.groupdict().items() if v is not None}
-            return TriggerCondition(
-                kind=kind, trigger=trigger_word, raw_text=m.group(0), payload=payload
-            )
+        if not m:
+            continue
+        # Named groups become the condition's payload, so a narrowed
+        # condition ("…casts a *blue* spell") carries its restriction as
+        # data. Event dispatch reads it instead of needing a per-card hook.
+        payload = {k: v for k, v in m.groupdict().items() if v is not None}
+        payload = _resolve_subject_groups(payload)
+        if payload is None:
+            # The phrase is not a set of objects this engine can test. Refusing
+            # the *condition* — rather than falling through to a later, wider
+            # pattern — is the point: a trigger that fires on more than the card
+            # prints is the silent wrongness the whole table exists to avoid.
+            return None
+        return TriggerCondition(
+            kind=kind, trigger=trigger_word, raw_text=m.group(0), payload=payload
+        )
     return None
+
+
+def _resolve_subject_groups(payload: dict) -> dict | None:
+    """Turn every ``<name>_subject`` phrase in *payload* into a ``<name>_filter``
+    payload, or return None if one of them names a set the engine cannot test."""
+    from .events import TESTABLE_SUBJECT_FILTER_KEYS
+    from .grammar import subject_filter_payload
+
+    resolved = dict(payload)
+    for key, phrase in payload.items():
+        if not key.endswith(_SUBJECT_GROUP_SUFFIX):
+            continue
+        described = subject_filter_payload(str(phrase))
+        # The second gate is the load-bearing one: a filter the *dispatcher*
+        # cannot test is refused here rather than ignored there, because an
+        # ignored restriction is a trigger firing on more than the card says.
+        if described is None or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            return None
+        del resolved[key]
+        resolved[key[: -len(_SUBJECT_GROUP_SUFFIX)] + "_filter"] = described
+    return resolved
 
 
 def _parse_trigger_condition(normalized_line: str) -> tuple[TriggerCondition | None, str]:
@@ -1330,6 +1417,17 @@ def _is_supported_static_creature_line(line: str) -> bool:
     from .enter_effects import choosable_bodies
 
     if choosable_bodies(normalized):
+        return True
+    # A CR 601.2f cost change the casting path derives from every permanent's
+    # own text — "Noncreature spells cost {1} more to cast" (Vryn Wingmare),
+    # "Creature spells with flying you cast cost {1} less" (Watcher of the
+    # Spheres). The noncreature classifier has asked this table since it was
+    # written, and Gloom is an enchantment, so a *creature* printing the same
+    # template was taxed correctly while reported unsupported — the same shape
+    # Azusa had against the land-play table above.
+    from .cost_modifiers import cost_modifier_claims_line
+
+    if cost_modifier_claims_line(normalized):
         return True
     # A CR 614 replacement carried out by engine/replacements.py from the
     # permanent's own text (Conclave Mentor's extra +1/+1 counter). The

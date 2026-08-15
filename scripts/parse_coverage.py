@@ -652,6 +652,12 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         if _is_supported_keyword_line(line):
             coverage.claims.append((normalized, "keyword table"))
             continue
+        # Before the static-line gate, which now delegates to this table and
+        # would otherwise absorb the attribution: the report is more use naming
+        # the module that carries a line out than the gate that admits it.
+        if cost_modifiers_for(normalized):
+            coverage.claims.append((normalized, "cost_modifiers.py"))
+            continue
         if _is_supported_static_creature_line(line):
             coverage.claims.append((normalized, "static-line table"))
             continue

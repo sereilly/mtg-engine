@@ -81,7 +81,15 @@ def game_is_draw(game: Game, instruction: OracleInstruction, context: OracleExec
 @effect_handler("target_loses_life")
 def target_loses_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
-    amount = int(instruction.payload.get("amount", 0))
+    # "…loses **that much** life" (Vito): the number is the firing event's, not
+    # this effect's, so it is read out of the trigger's captured context under
+    # the key the lowering named. An absent record loses nothing rather than
+    # falling back to a static amount the card never printed.
+    from_trigger = instruction.payload.get("amount_from_trigger")
+    if from_trigger is not None:
+        amount = max(0, int((context.trigger_context or {}).get(from_trigger, 0)))
+    else:
+        amount = int(instruction.payload.get("amount", 0))
     # The same recipient key deal_damage reads: absent means the spell's
     # target, "caster" the controller ("You lose 3 life"), "each_opponent"
     # every living opponent. Life loss is not damage (CR 120.3), so no shield
@@ -98,12 +106,13 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
         # "Each player loses 2 life." (Bad Deal) — the caster too; a player who
         # has already left the game is nobody (CR 800.4a).
         victims = [p for p in game.players if not p.lost]
-    elif recipient == "dead_controller":
-        # "Whenever a creature an opponent controls dies, that player loses 2
-        # life." (Massacre Wurm.) The seat is last-known information the death
-        # recorded (CR 603.10) — a graveyard card cannot say who controlled the
-        # permanent, and Control Magic makes controller and owner differ.
-        seat = (context.trigger_context or {}).get("dead_controller")
+    elif recipient == "event_subject_controller":
+        # "That player" after an event about an object: the controller of that
+        # object, frozen by the fire site (CR 603.10). Massacre Wurm's dead
+        # creature is in a graveyard by now and Gloom Sower's blocker may have
+        # left combat, so a board read cannot answer either — and Control Magic
+        # makes controller and owner differ, so the owner is not the answer.
+        seat = (context.trigger_context or {}).get("event_subject_controller")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             game.log.append(f"{card.name}: no recorded controller, no life lost")
             return True, "resolved"
@@ -195,13 +204,15 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # it recorded in the context scratchpad. This is what lets damage-then-gain
     # be two composable instructions instead of one fused kind.
     source_key = instruction.payload.get("amount_from")
-    if source_key == "dead_power":
-        # "When this creature dies, you gain life equal to its power."
-        # (Conclave Mentor.) The source is in a graveyard by now, so the only
-        # legal reading is the last-known information the death recorded
-        # (CR 603.10) — an absent record gains nothing rather than reading a
+    trigger_key = instruction.payload.get("amount_from_trigger")
+    if trigger_key is not None:
+        # The firing event's own number, frozen into the trigger's context by
+        # the fire site: "…you gain life equal to its power" on a dies trigger
+        # (Conclave Mentor), whose source is in a graveyard by the time this
+        # resolves, so last-known information is the only legal reading
+        # (CR 603.10). An absent record gains nothing rather than reading a
         # card's printed power as if it were the permanent's.
-        life_gain = max(0, int((context.trigger_context or {}).get("dead_power", 0)))
+        life_gain = max(0, int((context.trigger_context or {}).get(trigger_key, 0)))
     elif source_key is not None:
         life_gain = max(0, int(context.results.get(source_key, 0)))
     else:

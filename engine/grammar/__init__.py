@@ -31,7 +31,9 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import GrammarError, LoweringError
 from .lower import GRAMMAR_ONLY_PAYLOAD_KEYS, categories_of, lower_ability
+from .lowering._common import _filter_payload
 from .parser import parse_line
+from .phrases import parse_subject_filter
 
 # Categories whose grammar output is executed. Held equal to every category
 # lower.py can emit, by tests/engine/test_grammar_categories.py — see the module
@@ -242,9 +244,34 @@ def behavioural_payload(payload: dict) -> dict:
     return {k: v for k, v in payload.items() if k not in GRAMMAR_ONLY_PAYLOAD_KEYS}
 
 
+def subject_filter_payload(phrase: str) -> dict | None:
+    """The payload form of the set of objects a narrowed trigger names.
+
+    "Whenever a creature you control **with deathtouch** attacks" (Hooded
+    Blightfang): the condition's subject is a noun phrase, so it is read by the
+    noun parser and carried as the ``ObjectFilter`` payload
+    ``permanent_matches_filter`` already tests — the same data a targeted line
+    carries, in the one position where getting it wrong fires on every creature
+    rather than on one.
+
+    None means refuse, for either of the two ways this can fail: the phrase is
+    not a subject the noun parser reads, or it is one carrying a restriction the
+    matcher cannot test. The caller (``engine/oracle.py``'s trigger table) makes
+    the whole condition refuse, because the alternative is a trigger that
+    announces itself on a strictly larger set than the card prints.
+    """
+    filt = parse_subject_filter(phrase)
+    if filt is None:
+        return None
+    try:
+        return _filter_payload(filt)
+    except LoweringError:
+        return None
+
+
 __all__ = [
     "GRAMMAR_ONLY_PAYLOAD_KEYS",
     "behavioural_payload",
     "CompiledLine", "GRAMMAR_CATEGORIES", "GrammarError", "LoweringError",
-    "ast", "compile_line", "parse_line",
+    "ast", "compile_line", "parse_line", "subject_filter_payload",
 ]
