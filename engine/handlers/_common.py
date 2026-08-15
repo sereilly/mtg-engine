@@ -364,7 +364,14 @@ def resolve_target_permanents(
         chosen = None
         if game is not None and isinstance(permanent_id, int):
             candidate = game.permanent_by_id(permanent_id)
-            if candidate is not None and game.controls(owner, candidate) and predicate(candidate):
+            # No seat check on this branch. An id *is* the identity (CR 400.7),
+            # so asking which battlefield it sits on is the index model showing
+            # through — and it is wrong for a description whose slots are on two
+            # boards ("target creature you control … another target creature").
+            # What restricts a slot is its own filter, which the caller's
+            # predicate carries; the index fallback below keeps the seat because
+            # a bare index means nothing without one.
+            if candidate is not None and predicate(candidate):
                 chosen = candidate
         if chosen is None and isinstance(index, int) and owner is not None:
             # Through the seam, not a raw subscript: the id above is the stable

@@ -10,6 +10,8 @@ the card each test is about.
 
 from __future__ import annotations
 
+import pytest
+
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
@@ -280,3 +282,103 @@ def test_a_non_interactive_caster_takes_the_costliest_legal_card(set_pool):
 
     assert [c.name for c in p2.graveyard] == ["Volcanic Salvo"]
     assert game.pending_choices == []
+
+
+# --- The fused pair: target 1 is prepared, then acts on target 2 -------------
+
+
+@pytest.mark.parametrize("name", ["Primal Might", "Hunter's Edge"])
+def test_round_41_fused_pair_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def _fused_pair_game(set_pool, spell, x_value=None):
+    pool = set_pool("M21")
+    mine = Permanent(card=pool["Alpine Watchdog"])       # 2/2
+    theirs = Permanent(card=pool["Concordia Pegasus"])   # 1/3
+    p1 = PlayerState(
+        name="P1", battlefield=[mine], hand=[pool[spell]], library=[pool["Forest"]] * 4
+    )
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    result = game.queue_from_hand(
+        0, spell,
+        target_player_index=0, target_permanent_index=[0, 0],
+        target_permanent_ids=[mine.permanent_id, theirs.permanent_id],
+        x_value=x_value,
+    )
+    assert result.supported, result.details
+    game._settle()
+    return game, mine, theirs
+
+
+def test_primal_might_pumps_its_own_creature_then_fights(set_pool):
+    """The two sentences are one instruction because the second one's subject
+    *is* the first one's target. Lowered as two steps the card pumped whichever
+    creature its single picker offered — the opponent's — and fought nobody."""
+    game, mine, theirs = _fused_pair_game(set_pool, "Primal Might", x_value=2)
+
+    assert (mine.effective_power, mine.effective_toughness) == (4, 4), "+X/+X first"
+    assert theirs.damage_marked == 4, "and the pumped power is what it fights with"
+    assert mine.damage_marked == 1, "a fight is mutual (CR 701.14a)"
+    assert not game.is_on_battlefield(theirs)
+
+
+def test_hunters_edge_is_the_one_way_half_of_the_same_shape(set_pool):
+    """"…deals damage equal to its power to target creature you don't control"
+    is a bite, not a fight: the counter goes on first, and only one side deals."""
+    game, mine, theirs = _fused_pair_game(set_pool, "Hunter's Edge")
+
+    assert mine.metadata["plus_counters"] == 1
+    assert (mine.effective_power, mine.effective_toughness) == (3, 3)
+    assert theirs.damage_marked == 3
+    assert mine.damage_marked == 0, "one-way"
+    assert not game.is_on_battlefield(theirs)
+
+
+def test_the_preparation_happens_even_when_the_second_slot_names_nobody(set_pool):
+    """"Up to one target creature you don't control" may legally name none
+    (CR 601.2c), and the pump is not conditional on the fight."""
+    pool = set_pool("M21")
+    mine = Permanent(card=pool["Alpine Watchdog"])
+    p1 = PlayerState(
+        name="P1", battlefield=[mine], hand=[pool["Primal Might"]],
+        library=[pool["Forest"]] * 4,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.queue_from_hand(
+        0, "Primal Might", target_player_index=0, target_permanent_index=[0],
+        target_permanent_ids=[mine.permanent_id], x_value=3,
+    )
+    game._settle()
+
+    assert (mine.effective_power, mine.effective_toughness) == (5, 5)
+    assert mine.damage_marked == 0
+
+
+def test_the_second_slot_refuses_a_creature_its_own_filter_excludes(set_pool):
+    """Per-slot filters are enforced at resolution, not only in the picker:
+    "target creature you **don't** control" cannot be answered with one of the
+    caster's own."""
+    pool = set_pool("M21")
+    mine = Permanent(card=pool["Alpine Watchdog"])
+    also_mine = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(
+        name="P1", battlefield=[mine, also_mine], hand=[pool["Hunter's Edge"]],
+        library=[pool["Forest"]] * 4,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.queue_from_hand(
+        0, "Hunter's Edge", target_player_index=0, target_permanent_index=[0, 1],
+        target_permanent_ids=[mine.permanent_id, also_mine.permanent_id],
+    )
+    game._settle()
+
+    assert mine.metadata["plus_counters"] == 1, "the counter still lands"
+    assert also_mine.damage_marked == 0, "but nothing is bitten"

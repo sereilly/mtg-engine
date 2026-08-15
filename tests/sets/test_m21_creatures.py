@@ -1744,11 +1744,19 @@ def test_the_fight_needs_two_creatures_or_neither_deals(set_pool):
     assert any("neither deals damage" in line for line in game.log)
 
 
-def test_primal_might_refuses_rather_than_fighting_the_wrong_creature(set_pool):
-    """"Then **it** fights…" after another sentence names that sentence's
-    target, and a sorcery has no source permanent at all. Lowered as the
-    source-fights instruction it pumped whichever creature the single picker
-    offered and then fought nobody — supported, and doing something else. It
-    stays honestly unsupported until the fused two-target pair exists."""
-    program = compile_card_oracle(set_pool("M21")["Primal Might"])
-    assert not program.supported
+def test_a_fight_that_is_not_the_whole_effect_still_refuses():
+    """Round 39's refusal, kept now that the card that motivated it has landed.
+
+    "Then **it** fights…" after another sentence names that sentence's target —
+    the fused pair is what reads it — so a bare `Fight` nested in a sequence
+    must not lower onto the source-fights instruction, which would fight
+    whichever creature the single picker offered. Primal Might proved it;
+    this pins the rule after Primal Might stopped being the example.
+    """
+    from engine.grammar import compile_line
+
+    whole = compile_line("This creature fights another target creature.")
+    assert whole.lowered, whole.failure_reason
+
+    nested = compile_line("Draw a card. Then it fights another target creature.")
+    assert not nested.lowered

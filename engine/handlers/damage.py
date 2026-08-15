@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 from ..models import Permanent
 from ..resumption import run_resumable
 from ._common import (
-    apply_damage_to_creature, permanent_matches_filter, resolve_amount,
-    resolve_target_permanent,
+    apply_damage_to_creature, apply_temp_pt_boost, permanent_matches_filter, resolve_amount,
+    resolve_target_permanent, resolve_target_permanents,
 )
 from .registry import effect_handler
 
@@ -499,8 +499,16 @@ def source_fights_target(game, instruction, context):
         game.log.append(f"{card.name}: the fight needs two creatures, so neither deals damage")
         return True, "resolved"
 
-    # Both powers read before either is dealt (701.14a): a fighter killed by the
-    # first half has still dealt its own damage.
+    _exchange_fight_damage(game, fighter, opponent)
+    return True, "resolved"
+
+
+def _exchange_fight_damage(game, fighter, opponent) -> None:
+    """The CR 701.14a exchange itself, shared by every card that prints one.
+
+    Both powers are read *before* either is dealt: a fighter killed by the
+    first half has still dealt its own damage.
+    """
     fighter_power = fighter.effective_power
     opponent_power = opponent.effective_power
     game.log.append(f"{fighter.card.name} fights {opponent.card.name}")
@@ -518,6 +526,76 @@ def source_fights_target(game, instruction, context):
         ),
         asks=True,
     )
+
+
+@effect_handler("prepare_then_interact")
+def prepare_then_interact(game, instruction, context):
+    """"Target creature you control gets +X/+X until end of turn. Then it
+    fights up to one target creature you don't control." (Primal Might; Hunter's
+    Edge prints the one-way half.)
+
+    Two chosen targets resolved positionally, the prepared one first. The
+    preparation happens whether or not the second slot answered — "up to one"
+    may legally name none (CR 601.2c), and the pump is not conditional on the
+    fight. The fight itself is CR 701.14b's all-or-nothing exchange, which is
+    why the two sentences are one instruction.
+    """
+    card = context.card
+    targets = instruction.payload.get("targets") or {}
+    slot_filters = targets.get("filters") or [targets.get("filter") or {}] * 2
+    caster_index = game.players.index(context.caster)
+
+    def slot_predicate(index: int):
+        wanted = slot_filters[index] if index < len(slot_filters) else {}
+
+        def eligible(perm) -> bool:
+            if not perm.is_creature or not permanent_matches_filter(perm, wanted):
+                return False
+            controller = wanted.get("controller")
+            if controller == "you":
+                return game.controls(caster_index, perm)
+            if controller == "not_you":
+                return not game.controls(caster_index, perm)
+            return True
+
+        return eligible
+
+    chosen = resolve_target_permanents(game, context, predicate=lambda perm: True)
+    first = chosen[0] if len(chosen) > 0 and slot_predicate(0)(chosen[0]) else None
+    second = chosen[1] if len(chosen) > 1 and slot_predicate(1)(chosen[1]) else None
+
+    if first is None:
+        game.log.append(f"{card.name}: no legal creature to affect")
+        return True, "resolved"
+
+    prepare = instruction.payload.get("prepare") or {}
+    if prepare.get("kind") == "pump":
+        power = resolve_amount(prepare.get("power", 0), context.x_value)
+        toughness = resolve_amount(prepare.get("toughness", 0), context.x_value)
+        apply_temp_pt_boost(first, power, toughness)
+        game.log.append(
+            f"{card.name} gives {first.card.name} +{power}/+{toughness} until end of turn"
+        )
+    elif prepare.get("kind") == "counter":
+        game.place_plus1_counters(first)
+        game.log.append(f"{first.card.name} gets a +1/+1 counter ({card.name})")
+
+    if second is None:
+        # "Up to one" may legally name none, and a slot that stopped answering
+        # is dropped (CR 608.2b) — the preparation above still happened.
+        game.log.append(f"{card.name}: no second creature, so no damage is exchanged")
+        return True, "resolved"
+
+    if instruction.payload.get("mode") == "fight":
+        _exchange_fight_damage(game, first, second)
+    else:
+        apply_damage_to_creature(
+            game, second, first.effective_power, first,
+            log_message=lambda dealt: (
+                f"{first.card.name} deals {dealt} damage to {second.card.name}"
+            ),
+            asks=True,
+        )
     return True, "resolved"
 
 

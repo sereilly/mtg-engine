@@ -15,6 +15,7 @@ from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import (PT, SELF, WORD)
 from .nouns import (parse_object_filter, parse_player_ref, parse_recipient)
+from .vocabulary import CARD_TYPES
 from .stream import TokenStream
 from .phrases import (
     _parse_duration,
@@ -65,6 +66,20 @@ from .effects import (
 # ---------------------------------------------------------------------------
 # Statement productions
 # ---------------------------------------------------------------------------
+
+
+def _parse_bound_subject(stream: TokenStream) -> ast.TargetSpec | None:
+    """``that <card type>`` as a sentence's subject, or None if that is not
+    what is at the cursor."""
+    mark = stream.mark()
+    if not stream.accept_word("that"):
+        return None
+    noun = stream.peek_word()
+    if noun is None or noun not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
 
 
 def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
@@ -207,7 +222,23 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         stream.advance()
         source_spec = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
     else:
-        source_spec = parse_recipient(stream)
+        # "**That creature** deals damage equal to its power to …" (Hunter's
+        # Edge): a back-reference to the object the *previous sentence* chose.
+        # Read only in the subject position, and deliberately not taught to the
+        # shared noun parser — `effects/board.py` explains why, and the reason
+        # holds: the phrase turns up all over the pool and a filter naming a
+        # card type nobody bound would lower through every one of them.
+        #
+        # Here it is safe because the quantifier is refused by default: no
+        # lowering accepts "that" (`_is_target` answers False), so a sentence
+        # that reaches one fails *by name* instead of failing to parse at all.
+        # A parse error would blame the subject for a missing production.
+        #
+        # `parse_recipient` runs first, and that order is load-bearing: "that
+        # creature**'s controller**" is a *player* reference it already reads,
+        # and a bound-subject reader that got there first would eat the noun and
+        # strand the possessive — which is exactly what it did to Gloom Sower.
+        source_spec = parse_recipient(stream) or _parse_bound_subject(stream)
 
     if source_spec is None:
         stream.reset(mark)

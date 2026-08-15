@@ -151,6 +151,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "add_loyalty_counters": "counters",
     "target_bites_target": "damage",
     "source_fights_target": "damage",
+    "prepare_then_interact": "damage",
     "phase_out_target": "zones",
     "grant_team_assign_unblocked_until_eot": "pump",
     "phase_out_opponent_creatures": "zones",

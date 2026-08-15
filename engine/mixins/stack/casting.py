@@ -78,6 +78,10 @@ class SpellCastingMixin:
         card_name: str,
         target_player_index: int | None = None,
         target_permanent_index: int | None = None,
+        # The chosen targets' stable ids, when the caller already knows them.
+        # A pair of targets may sit on two battlefields, which one
+        # `target_player_index` cannot express — see `_stack_push`.
+        target_permanent_ids: list[int | None] | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
         target_stack_index: int | None = None,
@@ -92,6 +96,7 @@ class SpellCastingMixin:
             card_name,
             target_player_index=target_player_index,
             target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
             x_value=x_value,
             new_color=new_color,
             target_stack_index=target_stack_index,
@@ -115,6 +120,10 @@ class SpellCastingMixin:
         card_name: str,
         target_player_index: int | None = None,
         target_permanent_index: int | None = None,
+        # The chosen targets' stable ids, when the caller already knows them.
+        # A pair of targets may sit on two battlefields, which one
+        # `target_player_index` cannot express — see `_stack_push`.
+        target_permanent_ids: list[int | None] | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
         target_stack_index: int | None = None,
@@ -337,6 +346,7 @@ class SpellCastingMixin:
                     caster_index=caster_index,
                     target_player_index=target_player_index,
                     target_permanent_index=target_permanent_index,
+                    target_permanent_id=target_permanent_ids,
                     x_value=resolved_x_value,
                     target_stack_item=target_stack_item_val,
                     chosen_mode_index=mode_index,

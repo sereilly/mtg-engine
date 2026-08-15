@@ -1899,3 +1899,58 @@ starts from facts rather than a guess:
   idiom, in an activation rather than a trigger.
 
 ---
+
+## Round 41: the fused pair, and the single-seat assumption's last two layers
+
+*(2026-08-15, same day.)* M21 **203 → 205**: Primal Might and Hunter's Edge —
+the pair round 40 measured and wrote up. Building it found the same assumption
+round 40 fixed at two layers sitting in two more.
+
+**One instruction, because the second sentence's subject *is* the first
+sentence's target.** "Target creature you control gets +X/+X until end of turn.
+Then **it** fights up to one target creature you don't control" and "Put a +1/+1
+counter on target creature you control. Then **that creature** deals damage
+equal to its power to target creature you don't control" are one shape:
+prepare slot 1, then slot 1 acts on slot 2. `_fused_prepare_then_interact`
+matches the AST pair — the idiom `_fused_draw_then_discard` established — and
+emits one instruction carrying the preparation (`pump` / `counter`), the mode
+(`fight` / `bite`) and round 40's per-slot filters, which is exactly what two
+differently-restricted slots need.
+
+Three properties the handler owes, each its own test: the preparation happens
+even when the second slot names nobody ("up to one" may legally name none, CR
+601.2c, and the pump is not conditional on the fight); the slot filters are
+enforced at *resolution*, not only in the picker; and a fight is CR 701.14's
+mutual exchange while a bite is one-way, which is the only difference between
+the two cards.
+
+**"That creature" is a subject now — read second, on purpose.** `parse_recipient`
+runs first, and that order is load-bearing: "that creature**'s controller**" is
+a *player* reference it already reads, and the bound-subject reader got there
+first on the first attempt and stranded the possessive — which broke Gloom
+Sower, caught by its own round-34 test. The quantifier is still refused by every
+lowering except the fuser, which is what makes reading it safe: a sentence that
+reaches one now fails *by name* instead of failing to parse, and a parse error
+blames the subject for a missing production.
+
+**And the single-seat assumption, twice more.** Round 40 found it in the picker
+and in `_stack_push`; it was also in `queue_from_hand` (which had no way to
+carry chosen ids at all) and — the real one — in `resolve_target_permanents`,
+which required *every* slot to be on the target player's battlefield. An id **is**
+the identity (CR 400.7), so asking which board it sits on is the index model
+showing through; the seat check now guards only the index fallback, where a bare
+index means nothing without one. What restricts a slot is its own filter, which
+the caller's predicate carries.
+
+Suite 4,934 at 18.7s, every `--check` green, shipped pool 388/388, zero hooks,
+zero ceiling raises. M21's parsed share 68.0% → 68.2%. All six new per-set tests
+were watched to fail on HEAD, and round 39's nested-fight refusal moved from
+naming Primal Might to pinning the rule now that the card has landed.
+
+**Next:** Heartfire Immolator is the third card of this family and the one still
+standing — its source is sacrificed as a *cost*, so "It deals damage equal to
+its power" is last-known information (the round-33 idiom, in an activation
+rather than a trigger). Then the exiled-with linkage (Kitesail Freebooter, Idol
+of Endurance) and the discard-cost family, both still as round 38 left them.
+
+---

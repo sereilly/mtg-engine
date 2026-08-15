@@ -62,6 +62,7 @@ from .lowering import (
     _lower_damage,
     _lower_damage_conjunction,
     _lower_damage_unless_pay,
+    _fused_prepare_then_interact,
     _lower_fight,
     _lower_destroy,
     _lower_discard,
@@ -319,7 +320,11 @@ def lower_statement(
         return _lower_exile(statement)
 
     if isinstance(statement, ast.Sequence):
-        for fuse in (_fused_draw_then_discard, _fused_exile_then_controller_life):
+        for fuse in (
+            _fused_draw_then_discard,
+            _fused_exile_then_controller_life,
+            _fused_prepare_then_interact,
+        ):
             fused = fuse(statement.steps)
             if fused is not None:
                 return fused

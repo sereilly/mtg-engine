@@ -44,6 +44,7 @@ from ._common import (
     _REST_OF_TURN,
 )
 from .damage import (
+    _fused_prepare_then_interact,
     _lower_fight,
     _sweep_kind,
     _SWAMPS_THEY_CONTROL,
@@ -217,6 +218,7 @@ __all__ = [
     "_TAPPED_LAND_MANA_RECIPIENTS",
     "_lower_add_mana_for_tapped_land",
     "_lower_double_power",
+    "_fused_prepare_then_interact",
     "_lower_fight",
     "_lower_exile_graveyard",
     "_lower_reveal_hand_and_choose",
