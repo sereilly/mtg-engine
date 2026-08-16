@@ -1094,15 +1094,10 @@ class EffectsMixin:
         chosen = pick_target_permanent(caster, chosen_index)
         if chosen is None:
             return None
-        # CR 400.3: a sacrificed stolen creature's card still goes to its
-        # owner's graveyard. Resolve the owner before leaving the battlefield.
-        owner_idx = self.owner_index_of(chosen)
-        owner = self.players[owner_idx] if owner_idx is not None else caster
-        # Identity: ``remove`` would sacrifice a look-alike instead of the
-        # creature the player chose.
-        self.remove_from_battlefield(chosen)
-        owner.graveyard.append(chosen.card)
-        return chosen
+        # CR 400.3 (the stolen creature's card goes to its *owner's* graveyard)
+        # used to be resolved here, by hand; it is one of the six things
+        # ``sacrifice_permanent`` does, and the only one this site remembered.
+        return self.sacrifice_permanent(chosen)
 
     def _apply_color_override(
         self,

@@ -854,6 +854,51 @@ class GameHelpersMixin:
             self._renumber_combat_after_removal(vacated)
         return removed
 
+    def sacrifice_permanent(self, permanent: Permanent) -> Permanent | None:
+        """Sacrifice *permanent* — CR 701.21a, the one transition.
+
+        "To sacrifice a permanent, its controller moves it from the battlefield
+        directly to its owner's graveyard." Two halves, and the second one is
+        where this was going wrong: of the thirteen sacrifice sites, **seven**
+        reached the graveyard by appending the card to some player's list
+        instead of going through :meth:`_permanent_to_graveyard` — so a
+        sacrificed permanent skipped everything that transition does. The owner
+        lookup (CR 400.3, which is a different player from the controller for
+        anything stolen), token cessation (CR 704.5d), the would-die
+        replacements (CR 614), the Aura teardown, and the death count.
+
+        The death count is the one with a card behind it in the shipped pool.
+        CR 700.4 defines *dies* as "is put into a graveyard from the
+        battlefield", and a sacrifice is exactly that — so a creature sacrificed
+        to cast Sacrifice has died, and Scavenging Ghoul's "for each creature
+        that died this turn" must count it. It did not: the cost path appended
+        the card and left ``creatures_died_this_turn`` at zero.
+
+        Sacrificing is **not** destroying, so regeneration and the effects that
+        replace destruction can't apply (701.21a again). That holds here by
+        shape rather than by a flag — regeneration is offered by the destruction
+        sweeps, and this doesn't go through them.
+
+        Returns the permanent when it was on the battlefield to sacrifice, None
+        when it was not. **The log line stays with the caller**: "…to activate
+        Ashnod's Altar", "…on upkeep", "…(Lord of the Pit)" is that site's
+        prose, not this rule's.
+        """
+        seat = self.controller_index_of(permanent)
+        if seat is None:
+            return None
+        # Resolved before the removal, because afterwards there is no
+        # battlefield to read it off.
+        controller = self.players[seat]
+        if self.remove_from_battlefield(permanent) is None:
+            return None
+        self._permanent_to_graveyard(controller, permanent)
+        # Announced after the permanent has gone, so a trigger that reads the
+        # board sees the board the sacrifice left behind (CR 603.10 — the
+        # trigger looks back at a game state that already happened).
+        emit(self, "you_sacrifice_permanent", subject=permanent, seat=seat)
+        return permanent
+
     # ------------------------------------------------------------------
     # Combat's slots, kept honest across a removal
     # ------------------------------------------------------------------

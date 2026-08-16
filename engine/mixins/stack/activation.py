@@ -644,8 +644,7 @@ class AbilityActivationMixin:
         # that has already lost it.
         if sacrifice_cost_permanent is not None:
             name = sacrifice_cost_permanent.card.name
-            self.remove_from_battlefield(sacrifice_cost_permanent)
-            self._permanent_to_graveyard(controller, sacrifice_cost_permanent)
+            self.sacrifice_permanent(sacrifice_cost_permanent)
             self.log.append(
                 f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
             )
@@ -664,8 +663,7 @@ class AbilityActivationMixin:
         # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman) is likewise
         # a cost, paid now — the ability still resolves from the graveyard.
         if ability.cost.sacrifice_self:
-            self.remove_from_battlefield(permanent)
-            self._permanent_to_graveyard(controller, permanent)
+            self.sacrifice_permanent(permanent)
             self.log.append(
                 f"{controller.name} sacrificed {permanent.card.name} to activate its ability"
             )

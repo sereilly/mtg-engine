@@ -402,8 +402,9 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 continue
             if chosen is not None and land is not chosen:
                 continue
-            removed = self.remove_from_battlefield(land)
-            controller.graveyard.append(removed.card)
+            removed = self.sacrifice_permanent(land)
+            if removed is None:
+                continue
             self.log.append(f"{source.card.name} forced sacrifice of {removed.card.name}")
             return removed
         # A stale pick (the land left the battlefield since the prompt) still

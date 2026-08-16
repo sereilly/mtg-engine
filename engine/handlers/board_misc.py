@@ -146,11 +146,7 @@ def sacrifice_if_no_creatures(game: Game, instruction: OracleInstruction, contex
     has_creatures = any(p.is_creature for p in game.all_permanents())
     if has_creatures:
         return True, "resolved"
-    holder = game.controller_index_of(source)
-    if holder is not None:
-        pl = game.players[holder]
-        game.remove_from_battlefield(source)
-        pl.graveyard.append(source.card)
+    if game.sacrifice_permanent(source) is not None:
         game.log.append(f"{source.card.name} sacrificed at end step (no creatures)")
     return True, "resolved"
 

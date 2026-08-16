@@ -303,6 +303,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # replacements have had the amount, so what the trigger sees is the life
     # that actually arrived — the same reading `life_gained_this_turn` takes.
     ("you_gain_life",               r"whenever you gain life"),
+    # "Whenever you sacrifice a permanent …" (Havoc Jester). Emitted from
+    # ``Game.sacrifice_permanent``, the one place CR 701.21a happens — which is
+    # why this row could be added without hunting for a fire site: there are
+    # thirteen sacrifices in this engine and one transition.
+    #
+    # Deliberately unnarrowed. Real cards also print "…sacrifice a creature" and
+    # "…sacrifice an artifact", and the subject-group machinery could read them,
+    # but nothing in the pool does — and a filter with no card behind it is
+    # untested by construction. A narrowed row goes *above* this one when a card
+    # brings it (the specific-before-generic rule), and "creature" is not a
+    # prefix of "permanent", so neither shadows the other.
+    ("you_sacrifice_permanent",     r"whenever you sacrifice a permanent"),
     ("draws_card",                  r"whenever you draw a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
     # turn, announced by the draw sweep in check_state_based_actions off the

@@ -318,28 +318,28 @@ def _counters_put_on_filter(
     return not (excluded and counted.has_type(excluded))
 
 
-@event_filter("you_gain_life")
-def _gains_life_filter(
+# The events whose whole narrowing is the word "you": announced once,
+# game-wide, carrying the seat it happened to, and matching only that seat's own
+# permanents. "You" on a permanent's triggered ability is that permanent's
+# controller (CR 109.5) — so an opponent's lifelink swing leaves Vito silent,
+# and an opponent feeding their own Altar leaves Havoc Jester silent.
+#
+# A set rather than three identical predicates. The third one (the sacrifice)
+# is what turned the shape into a table: two copies of a two-line body is a
+# coincidence, three is a rule that had been written down three times.
+_SEAT_SCOPED_EVENTS = frozenset({
+    "you_gain_life",
+    "draws_second_card",
+    "you_sacrifice_permanent",
+})
+
+
+@event_filter(*_SEAT_SCOPED_EVENTS)
+def _seat_scoped_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
 ) -> bool:
-    """"Whenever **you** gain life" (Vito) — only the gaining seat's own
-    permanents.
-
-    "You" on a permanent's triggered ability is that permanent's controller
-    (CR 109.5), so an opponent's lifelink swing must leave Vito silent. The
-    same seat-scoped shape the second-draw filter uses, and for the same
-    reason: the event is announced once, game-wide, and the narrowing is the
-    trigger's own word."""
-    seat = event.payload.get("seat")
-    return seat is not None and game.controller_index_of(permanent) == seat
-
-
-@event_filter("draws_second_card")
-def _second_draw_filter(
-    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
-) -> bool:
-    """"Whenever **you** draw your second card each turn" — only the drawing
-    seat's own permanents."""
+    """"Whenever **you** gain life / draw your second card / sacrifice a
+    permanent" — only the acting seat's own permanents."""
     seat = event.payload.get("seat")
     return seat is not None and game.controller_index_of(permanent) == seat
 

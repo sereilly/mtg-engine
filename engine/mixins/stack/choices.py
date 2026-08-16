@@ -1049,8 +1049,7 @@ class PendingChoicesMixin:
             for i in sorted(set(lands) | set(creatures), reverse=True)
         ]
         for perm in chosen_perms:
-            self.remove_from_battlefield(perm)
-            self._permanent_to_graveyard(player, perm)
+            self.sacrifice_permanent(perm)
         for i in sorted(hand, reverse=True):
             player.graveyard.append(player.hand.pop(i))
         self.discard_pending_choice(choice)
@@ -1294,8 +1293,7 @@ class PendingChoicesMixin:
                 key=lambda i: "you lose the game" in player.battlefield[i].card.oracle_text.lower(),
             )
             perm = self.permanent_at(player, idx)
-            self.remove_from_battlefield(perm)
-            self._permanent_to_graveyard(player, perm)
+            self.sacrifice_permanent(perm)
             self.log.append(f"{player.name} sacrificed {perm.card.name} ({reason})")
 
     def arm_forced_sacrifice(
@@ -1371,8 +1369,7 @@ class PendingChoicesMixin:
         # Resolved before any removal, so no index is held across one.
         removed: list[str] = []
         for perm in [self.permanent_at(player, i) for i in sorted(chosen, reverse=True)]:
-            self.remove_from_battlefield(perm)
-            self._permanent_to_graveyard(player, perm)
+            self.sacrifice_permanent(perm)
             removed.append(perm.card.name)
         for name in reversed(removed):
             self.log.append(f"{player.name} sacrificed {name} ({reason})")

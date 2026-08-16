@@ -1817,3 +1817,62 @@ def test_heartfire_immolator_can_aim_at_a_planeswalker(set_pool):
     game._settle()
 
     assert walker.metadata["loyalty_counters"] == 2, "damage to a walker is loyalty (CR 120.3c)"
+
+
+# --- The sacrifice-seam round ------------------------------------------------
+
+
+def test_havoc_jester_compiles_supported(set_pool):
+    """"Whenever you sacrifice a permanent, this creature deals 1 damage to any
+    target." The condition is the pool's first trigger on a *keyword action*
+    rather than on a zone change or a step, and it is announced from
+    ``Game.sacrifice_permanent`` — which is why it needed no fire site of its
+    own: there are thirteen sacrifices in this engine and one transition."""
+    assert compile_card_oracle(set_pool("M21")["Havoc Jester"]).supported
+
+
+def test_havoc_jester_fires_when_a_cost_is_paid_by_sacrificing(set_pool):
+    """The sacrifice that trips it is a *cost*, not an effect — Witch's Cauldron
+    eats a creature to pay for its own ability. The Jester's ping is a separate
+    ability on the stack, so both happen."""
+    pool = set_pool("M21")
+    jester = _nosick(Permanent(card=pool["Havoc Jester"]))
+    cauldron = _nosick(Permanent(card=pool["Witch's Cauldron"]))
+    food = _nosick(Permanent(card=pool["Alpine Watchdog"]))
+    p1 = PlayerState(name="P1", battlefield=[jester, cauldron, food],
+                     library=[pool["Swamp"]] * 4)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+
+    result = game.activate_permanent_ability(0, "Witch's Cauldron")
+    assert result.supported, result.details
+    game._settle()
+
+    assert not game.is_on_battlefield(food), "eaten to pay the cost"
+    assert p2.life == 19, "the Jester pinged for the sacrifice"
+
+
+def test_havoc_jester_stays_silent_when_an_opponent_sacrifices(set_pool):
+    """"Whenever **you** sacrifice" is the Jester's controller (CR 109.5). The
+    event is announced once, game-wide, carrying the seat that sacrificed — the
+    narrowing is the trigger's own word, not a second announcement."""
+    pool = set_pool("M21")
+    jester = _nosick(Permanent(card=pool["Havoc Jester"]))
+    cauldron = _nosick(Permanent(card=pool["Witch's Cauldron"]))
+    food = _nosick(Permanent(card=pool["Alpine Watchdog"]))
+    p1 = PlayerState(name="P1", battlefield=[jester])
+    p2 = PlayerState(name="P2", battlefield=[cauldron, food],
+                     library=[pool["Swamp"]] * 4)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 1
+
+    game.activate_permanent_ability(1, "Witch's Cauldron")
+    game._settle()
+
+    assert not game.is_on_battlefield(food), "the opponent's own creature went"
+    assert (p1.life, p2.life) == (20, 21), (
+        "no ping: the opponent sacrificed, and they gained the Cauldron's life"
+    )

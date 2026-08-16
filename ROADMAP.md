@@ -1999,3 +1999,78 @@ zero ceiling raises. All three new tests were watched to fail on HEAD.
   shape where neither slot acts on the other.
 
 ---
+
+## Round 43: thirteen sacrifices, one transition
+
+*(2026-08-15.)* M21 **206 → 207** (Havoc Jester). One card again, but the card
+is the smaller half: it wanted a fire site for "whenever you sacrifice a
+permanent", and going to look for one turned up what the sacrifices were
+actually doing.
+
+**The census.** Thirteen places in `engine/` sacrifice a permanent — two paying
+an activation cost, three answering a pending choice, four in the upkeep
+effects, one in the upkeep step, one for mana, one at the end step, one for the
+Sacrifice/Metamorphosis pair. They were written in **three spellings**:
+`remove_from_battlefield` + `_permanent_to_graveyard` (six of them), and
+`remove_from_battlefield` + `<somebody>.graveyard.append(card)` in two flavours
+— the controller's list, or the owner's (**seven** of them).
+
+That second group is the finding. `_permanent_to_graveyard` is where leaving the
+battlefield for a graveyard actually happens, and it does six things: it looks
+up the **owner** (CR 400.3 — a different player for anything stolen), makes a
+**token** cease to exist rather than depositing a card (CR 704.5d), runs the
+**would-die replacements** (CR 614), tears down an **Aura**, counts the
+**death**, and fires the **dies-triggers**. Seven sacrifices did none of that.
+
+The observable one is the death count, and it has a card behind it in the
+*shipped* pool. CR 700.4 defines *dies* as "is put into a graveyard from the
+battlefield", so a sacrifice is a death — but sacrificing a creature to cast
+**Sacrifice** left `creatures_died_this_turn` at zero, and **Scavenging Ghoul**
+got no corpse counter for a creature it had just watched die. Both Alpha cards,
+both marked verified, and the bug is thirty years of Magic old in this engine
+because nothing ever asked the two of them the same question.
+
+**`Game.sacrifice_permanent` is now the one transition** (CR 701.21a: "its
+controller moves it from the battlefield directly to its owner's graveyard"),
+and all thirteen sites are one call. The log line deliberately stays with the
+caller — "…to activate Witch's Cauldron", "…on upkeep", "…(Lord of the Pit)" is
+that site's prose, not the rule's. Regeneration still can't save a sacrifice
+(701.21a again), and it holds by *shape*: regeneration is offered by the
+destruction sweeps and this doesn't go through them. Pinned anyway, because the
+seam is exactly where a well-meaning "let it regenerate" would land.
+
+**Havoc Jester is then one row per table.** `emit` at the bottom of the seam,
+a pattern in the oracle trigger table and its twin in the grammar's phrase
+table, and the kind added to the event filter — where the third seat-scoped
+filter turned two identical predicates into a `_SEAT_SCOPED_EVENTS` set. "You"
+is the observer's own controller (CR 109.5), so an opponent feeding their own
+Witch's Cauldron leaves the Jester silent, which is its own test.
+
+Deliberately **unnarrowed**: real cards also print "…sacrifice a creature", the
+subject-group machinery could read one, and no card in the pool does — a filter
+with no card behind it is untested by construction.
+
+Suite **4,945** at 18.6s, every `--check` green, shipped pool 388/388, zero
+hooks on M21, zero ceiling raises. Six of the eight new tests were watched to
+fail on HEAD; the other two pin what the seam must keep doing (regeneration, and
+the opponent-scope) rather than what it changed.
+
+**Next**, both found by this round and both measured:
+
+- **The additional cost on the cast path is not paid.** "As an additional cost
+  to cast this spell, sacrifice a creature" is a `SUPPORTED_SPELL_PATTERNS`
+  substring — a marker instruction with no handler — so **Village Rites** casts
+  for free and draws two, and reports `supported` while doing it. Alpha's
+  Sacrifice and Metamorphosis escape only because a *card hook* folds the cost
+  into their effect, which is why the general form was never built. It wants
+  what the activation path already has: a cost object, a pending choice for
+  which creature, a legality gate ("can't cast it with no creature"), and the
+  seam above to perform it. M21 has two cards waiting on it.
+- **A trigger fired while paying a cost lands under the ability instead of on
+  top.** CR 602.2a puts an activated ability on the stack at announcement and
+  601.2h pays afterwards, so Havoc Jester's ping should resolve *before* Witch's
+  Cauldron's draw. This engine pays first and pushes second, so it resolves
+  after. No card could observe it until this round — a trigger on cost payment
+  is the first of its kind in the pool.
+
+---

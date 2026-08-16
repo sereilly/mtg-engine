@@ -123,8 +123,7 @@ class UpkeepEffectsMixin:
                 f"{permanent.card.name} dealt {counters} damage to each creature and each player"
             )
         else:
-            self.remove_from_battlefield(permanent)
-            controller.graveyard.append(permanent.card)
+            self.sacrifice_permanent(permanent)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
 
     @upkeep_effect("upkeep_self", "upkeep_pay_or_sacrifice_enchantment")
@@ -148,8 +147,7 @@ class UpkeepEffectsMixin:
                     controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
-            self.remove_from_battlefield(permanent)
-            controller.graveyard.append(permanent.card)
+            self.sacrifice_permanent(permanent)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
 
     @upkeep_effect("upkeep_each", "deal_damage")
@@ -638,8 +636,7 @@ class UpkeepEffectsMixin:
                     controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
-            self.remove_from_battlefield(permanent)
-            controller.graveyard.append(permanent.card)
+            self.sacrifice_permanent(permanent)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
 
     @upkeep_effect("upkeep_self", "target_gains_life")
@@ -670,6 +667,5 @@ class UpkeepEffectsMixin:
             for perm in self.controlled_by(controller)
         )
         if not has_island:
-            self.remove_from_battlefield(permanent)
-            controller.graveyard.append(permanent.card)
+            self.sacrifice_permanent(permanent)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} for lacking an Island")

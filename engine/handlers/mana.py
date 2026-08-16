@@ -108,10 +108,10 @@ def sacrifice_self_for_mana(game: Game, instruction: OracleInstruction, context:
         return False, "ability not implemented"
     caster.mana_pool[str(instruction.payload.get("color", "G"))] += int(instruction.payload.get("amount", 0))
     # Belt and braces for callers that reach this handler without going through
-    # the cost path (direct handler invocation in tests/scripts).
-    if game.controls(caster, source_permanent):
-        game.remove_from_battlefield(source_permanent)
-        caster.graveyard.append(source_permanent.card)
+    # the cost path (direct handler invocation in tests/scripts). Still on the
+    # battlefield means the cost path did not run, and the seam's own None
+    # return is the "already paid" case.
+    game.sacrifice_permanent(source_permanent)
     game.log.append(f"{card.name} sacrificed for mana")
     return True, "resolved"
 

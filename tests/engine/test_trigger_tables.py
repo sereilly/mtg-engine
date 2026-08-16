@@ -82,6 +82,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "draws_card": "whenever you draw a card",
     "draws_second_card": "whenever you draw your second card each turn",
     "you_gain_life": "whenever you gain life",
+    "you_sacrifice_permanent": "whenever you sacrifice a permanent",
     "counters_put_on_creature": (
         "whenever one or more +1/+1 counters are put on another non-hydra "
         "creature you control"

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**240 / 585 tracked rules covered (41%)** — 1053 tests, 0 unannotated.
+**243 / 585 tracked rules covered (41%)** — 1058 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [108. Cards](#108-cards) | 1/6 | 16% |
 | [109. Objects](#109-objects) | 1/5 | 20% |
 | [110. Permanents](#110-permanents) | 0/5 | 0% |
-| [111. Tokens](#111-tokens) | 0/13 | 0% |
+| [111. Tokens](#111-tokens) | 1/13 | 7% |
 | [112. Spells](#112-spells) | 0/4 | 0% |
 | [113. Abilities](#113-abilities) | 0/12 | 0% |
 | [115. Targets](#115-targets) | 4/10 | 40% |
@@ -84,8 +84,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [614. Replacement Effects](#614-replacement-effects) | 9/17 | 52% |
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
-| [700. General](#700-general) | 1/15 | 6% |
-| [701. Keyword Actions](#701-keyword-actions) | 7/17 | 41% |
+| [700. General](#700-general) | 2/15 | 13% |
+| [701. Keyword Actions](#701-keyword-actions) | 8/17 | 47% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 23/23 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 4/8 | 50% |
@@ -190,7 +190,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **108.1** Use the Oracle card reference when determining a card’s wording. A card’s Oracle text can be foun...
 - [ ] **108.2** When a rule or text on a card refers to a “card,” it means only a Magic card or an object represe...
-- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(3 tests)*
+- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(4 tests)*
 - [ ] **108.4** A card doesn’t have a controller unless that card represents a permanent or spell; in those cases...
 - [ ] **108.5** Nontraditional Magic cards can’t start the game in any zone other than the command zone (see rule...
 - [ ] **108.6** For more information about cards, see section 2, “Parts of a Card.”
@@ -219,7 +219,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **111.4** A spell or ability that creates a token sets both its name and its subtype(s). If the spell or ab...
 - [ ] **111.5** If a spell or ability would create a token, but a rule or effect states that a permanent with one...
 - [ ] **111.6** A token is subject to anything that affects permanents in general or that affects the token’s car...
-- [ ] **111.7** A token that’s in a zone other than the battlefield ceases to exist. This is a state-based action...
+- [x] **111.7** A token that’s in a zone other than the battlefield ceases to exist. This is a state-based action... *(1 tests)*
 - [ ] **111.8** A token that has left the battlefield can’t move to another zone or come back onto the battlefiel...
 - [ ] **111.9** Some effects instruct a player to create a legendary token. These may be written “create [name], ...
 - [ ] **111.10** Some effects instruct a player to create a predefined token. These effects use the definition bel...
@@ -469,7 +469,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
 - [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(1 tests)*
-- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(5 tests)*
+- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(6 tests)*
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
@@ -813,7 +813,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
 - [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(4 tests, subrules a)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
-- [ ] **700.4** The term dies means “is put into a graveyard from the battlefield.”
+- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(2 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
 - [ ] **700.6** The term historic refers to an object that has the legendary supertype, the artifact card type, o...
 - [ ] **700.7** If an ability uses a phrase such as “this [something]” to identify an object, where [something] i...
@@ -838,9 +838,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **701.12** Exchange
 - [ ] **701.13** Exile
 - [ ] **701.18** Play
-- [x] **701.19** Regenerate *(15 tests, subrules ac)*
+- [x] **701.19** Regenerate *(16 tests, subrules ac)*
 - [ ] **701.20** Reveal
-- [ ] **701.21** Sacrifice
+- [x] **701.21** Sacrifice *(5 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(2 tests, subrules a)*
 - [ ] **701.24** Shuffle
@@ -885,7 +885,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(1 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(72 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(73 tests, subrules abcdefghijkmnpqrsy)*
 - [ ] **704.6** Some variant games include additional state-based actions that aren’t normally applicable:
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*
