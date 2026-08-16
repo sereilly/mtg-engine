@@ -455,14 +455,18 @@ class OracleInstructionsMixin:
                 candidate = self.chosen_permanent(
                     target_player, target_permanent_index, target_permanent_id
                 )
-                if candidate is not None and "wall" in candidate.card.type_line.lower():
+                # `has_type`, so Animate Wall may enchant a creature that
+                # *became* a Wall (Primal Clay's third body) and may not enchant
+                # a printed Wall that stopped being one. "Enchant Wall" is a
+                # question about the permanent, not about its card.
+                if candidate is not None and candidate.has_type("wall"):
                     target_wall = candidate
             else:
                 target_wall = next(
                     (
                         perm
                         for perm in self.controlled_by(target_player)
-                        if "wall" in perm.card.type_line.lower()
+                        if perm.has_type("wall")
                     ),
                     None,
                 )

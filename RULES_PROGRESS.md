@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**244 / 585 tracked rules covered (41%)** — 1079 tests, 0 unannotated.
+**244 / 585 tracked rules covered (41%)** — 1082 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -646,7 +646,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(64 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(65 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -755,7 +755,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(53 tests, subrules bcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(56 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(7 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(56 tests, subrules abcd)*
@@ -850,7 +850,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **702.1** Most abilities describe exactly what they do in the card’s rules text. Some, though, are very com... *(1 tests)*
 - [x] **702.2** Deathtouch *(4 tests, subrules bc)*
-- [x] **702.3** Defender *(2 tests, subrules b)*
+- [x] **702.3** Defender *(3 tests, subrules b)*
 - [x] **702.4** Double Strike *(3 tests, subrules b)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.8** Flash *(2 tests, subrules ab)*

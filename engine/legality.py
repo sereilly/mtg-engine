@@ -554,7 +554,11 @@ class LegalityMixin:
         if kind == "permanent":
             color_filter = spec.get("color_filter")
             if color_filter:
-                return color_filter in perm.card.colors
+                # Layer 5, not the printed line. Deathlace makes a Grizzly Bears
+                # black; the *resolution* accepted it and this enumerator did
+                # not, so the picker offered nothing while a script could kill
+                # it — one question about one permanent with two answers.
+                return color_filter in perm.effective_colors
             if spec.get("enchant_enchantment"):
                 return "enchantment" in type_line
             return True

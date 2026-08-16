@@ -158,10 +158,10 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
             # Piety: only creatures blocking at resolution are buffed.
             if blocking_only and not game._is_blocking_creature(perm):
                 continue
-            actual_colors = set(perm.card.colors)
-            if "color_override" in perm.metadata:
-                actual_colors = {perm.metadata["color_override"]}
-            if color_sym and color_sym not in actual_colors:
+            # `effective_colors` is layer 5 — which already reads the
+            # override this used to patch on by hand, so the two-line
+            # reimplementation below it was a second copy of one rule.
+            if color_sym and color_sym not in perm.effective_colors:
                 continue
             apply_temp_pt_boost(perm, power_delta, toughness_delta)
     game.log.append(f"{card.name} buffed matching creatures")

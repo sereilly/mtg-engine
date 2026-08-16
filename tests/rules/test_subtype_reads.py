@@ -119,3 +119,83 @@ def test_a_granted_wall_is_not_a_legal_non_wall_target():
     )
 
     assert not game._ability_target_legal(instruction, clay)
+
+
+# ---------------------------------------------------------------------------
+# Layer 5 — a colour is computed too
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("613.1e", "601.2c")
+def test_a_laced_creature_is_offered_to_a_colour_targeted_ability():
+    """Deathlace makes a Grizzly Bears black; Northern Paladin destroys target
+    black permanent.
+
+    The *resolution* asked layer 5 and accepted it. The **picker** — the
+    enumerator the UI runs to decide what a player may click — asked the printed
+    colours and offered nothing. So the engine had two answers to one question,
+    and which one you got depended on whether you were a person or a script.
+    """
+    game, p1, p2 = _duel()
+    paladin = Permanent(card=_CATALOG["Northern Paladin"])
+    paladin.metadata["summoning_sickness_turn"] = -99
+    p1.battlefield.append(paladin)
+    bears = Permanent(card=_CATALOG["Grizzly Bears"])
+    p2.battlefield.append(bears)
+    p1.hand = [_CATALOG["Deathlace"]]
+
+    game.cast_from_hand(0, "Deathlace", target_player_index=1, target_permanent_index=0)
+    game._settle()
+    assert bears.effective_colors == {"B"}
+
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    spec = dict(derive_activation_spec(
+        compile_card_oracle(paladin.card).activated_abilities[0]
+    ))
+    kind = spec.pop("kind")
+    offered = game.enumerate_targets_for_kind(0, paladin.card, kind, **spec)
+
+    assert [entry["name"] for entry in offered] == ["Grizzly Bears"]
+
+
+@pytest.mark.cr("613.1e")
+def test_an_unlaced_creature_is_not_offered():
+    """The control: without the lace the Bears are green and the picker is
+    empty, so the test above is about layer 5 and not about the enumerator
+    offering everything."""
+    game, p1, p2 = _duel()
+    paladin = Permanent(card=_CATALOG["Northern Paladin"])
+    paladin.metadata["summoning_sickness_turn"] = -99
+    p1.battlefield.append(paladin)
+    p2.battlefield.append(Permanent(card=_CATALOG["Grizzly Bears"]))
+
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    spec = dict(derive_activation_spec(
+        compile_card_oracle(paladin.card).activated_abilities[0]
+    ))
+    kind = spec.pop("kind")
+
+    assert game.enumerate_targets_for_kind(0, paladin.card, kind, **spec) == []
+
+
+@pytest.mark.cr("613.1d", "702.3")
+def test_animate_wall_may_enchant_a_creature_that_became_a_wall():
+    """"Enchant Wall" is a question about the permanent. Primal Clay's third
+    body is a Wall, so Animate Wall attaches to it — the Aura's own target
+    search asked the printed line and refused."""
+    game, p1, _p2 = _duel()
+    clay = _wall_bodied_clay(game, 0)
+    p1.hand = [_CATALOG["Animate Wall"]]
+
+    game.cast_from_hand(0, "Animate Wall", target_player_index=0, target_permanent_index=0)
+    game._settle()
+
+    attached = [
+        perm for perm in game.controlled_by(0)
+        if perm.metadata.get("attached_to") is clay
+    ]
+    assert [perm.card.name for perm in attached] == ["Animate Wall"]

@@ -2350,3 +2350,66 @@ unable to block at all.
 - **The discard cost's picker** (unchanged from round 44).
 
 ---
+
+## Round 48: the guard that would have found round 47
+
+*(2026-08-15.)* Round 47 found four printed-type reads by grep and said the
+guard should be the thing that finds the fifth. It found six more, two of them
+with shipped cards behind them.
+
+**The picker and the resolution disagreed about colour.** `legality.py`'s target
+enumerator — what the UI runs to decide what a player may click — tested
+`perm.card.colors`, the printed line. So after a **Deathlace** makes a Grizzly
+Bears black, **Northern Paladin**'s "destroy target black permanent" offered
+*nothing*, while the resolution behind it (which asks layer 5) destroyed it
+happily. One question, two answers, and which one you got depended on whether
+you were a person or a script. Blue and Red Elemental Blast are the same pair
+with Thoughtlace and Chaoslace.
+
+**Animate Wall could not enchant the Wall round 47 created.** "Enchant Wall" is
+a question about the permanent; the Aura's own target search asked the card. So
+the fix that made Primal Clay's third body a Wall stopped one line short of the
+card most obviously about Walls.
+
+Four more with no card behind them *yet*, which is the point of fixing them
+now: Fear's "artifact creature and/or black creature" test (both halves
+printed — no card in this pool has fear, which is precisely why nobody noticed),
+Cockatrice and Thicket Basilisk's non-Wall victim filter, the colour-filtered
+mass pump (which had reimplemented layer 5's colour override by hand, two lines
+under the accessor that already did it), and the AI's "does the opponent control
+a <colour> <type>" read.
+
+**The guard is a ratchet with an exempt list**, the shape
+`test_control_reads.py` already uses. It matches `<something>.card.type_line` and
+`<something>.card.colors` — deliberately the *possessive*, a permanent reaching
+past itself into its card, because a local already named `card` is a
+CardDefinition and reading its printed line is the only thing it could mean.
+Six files are exempt and each says why:
+
+- `models.py` and the layer machinery **build** the computed answer out of the
+  printed one;
+- `auras.py` and `permanent_state.py` ask "is this *not* already a creature?"
+  before animating it — asking the computed type would include the type they
+  are about to add, so the answer would depend on whether it had been asked;
+- `game_ending.py` matches Aura / Equipment / Saga / Role shapes and the
+  **supertypes** Legendary and World, which `has_type` does not cover at all
+  (it answers card types and subtypes);
+- `casting.py` matches a spell on the stack, which is not a permanent.
+
+A second test fails when an exemption has no read left, so the list can only
+shrink.
+
+Suite **4,988** at 18.8s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Three of the five new tests were
+watched to fail on HEAD, the guard among them — it names all six offenders when
+the fixes are reverted, which is the check that it would have caught round 47.
+
+**Next:**
+
+- **The same audit for `effective_card`.** `has_type`/`effective_colors` have a
+  ratchet now; `perm.card.oracle_text` does not, and a text-changed permanent
+  (Sleight of Mind, Magical Hack) is the layer-3 version of exactly this bug.
+  The reads are far more numerous, so it wants the census before the guard.
+- **The discard cost's picker** (unchanged from round 44).
+
+---

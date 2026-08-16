@@ -690,7 +690,7 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
                     )
                 return any(
                     (not type_filter or perm.card.primary_type == type_filter)
-                    and (not color_filter or color_filter in perm.card.colors)
+                    and (not color_filter or color_filter in perm.effective_colors)
                     for perm in game.controlled_by(opponent)
                 )
 

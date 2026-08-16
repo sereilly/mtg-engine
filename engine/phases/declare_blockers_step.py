@@ -406,10 +406,13 @@ class DeclareBlockersStepMixin:
         # Fear: attacker can't be blocked except by artifact creatures and/or black creatures
         attacker_has_fear = self._has_keyword(attacker, "fear")
         if attacker_has_fear:
-            # artifact creatures can block (type_line contains 'artifact' and primary_type is creature)
-            is_artifact_creature = blocker.is_creature and "artifact" in blocker.card.type_line.lower()
-            # black creatures can block (color contains 'B')
-            is_black_creature = "B" in blocker.card.colors
+            # Both halves through the layers: an animated artifact is an
+            # artifact creature (613 layer 4) and a laced creature is black
+            # (layer 5). No card in this pool has fear, so nothing here is
+            # observable yet — which is exactly why it was written against the
+            # printed card and never noticed.
+            is_artifact_creature = blocker.is_creature and blocker.has_type("artifact")
+            is_black_creature = "B" in blocker.effective_colors
             if not (is_artifact_creature or is_black_creature):
                 return False
 
@@ -590,7 +593,7 @@ class DeclareBlockersStepMixin:
             victim_player_index: int,
             victim_index: int,
         ) -> None:
-            if "wall" in victim.card.type_line.lower():
+            if victim.has_type("wall"):
                 return
             instruction, source_line = block_destroy_instruction(source)
             if instruction is None:

@@ -130,3 +130,88 @@ def test_no_acknowledgement_has_gone_stale():
         if not any(token in text for token in wanted):
             stale.append(f"{name} no longer reads the storage ({reason})")
     assert not stale, "drop the stale acknowledgement(s): " + "; ".join(stale)
+
+
+# ---------------------------------------------------------------------------
+# The printed characteristics of a permanent's card
+# ---------------------------------------------------------------------------
+#
+# The guards above pin the *storage* of a layer's contributions. This one pins
+# the other end: reading ``perm.card.type_line`` or ``perm.card.colors`` to
+# decide what a permanent currently is. Those are the card as printed, which no
+# effect can change, and the accessors beside them (``has_type``,
+# ``effective_colors``) are the same question asked of CR 613.
+#
+# Round 47 found the shape at its sharpest: ``_can_block_attacker`` tested
+# Juggernaut's "can't be blocked by Walls" against the printed line and
+# Invisibility's "can only be blocked by Walls" against ``has_type``, three
+# lines apart — so a creature that *became* a Wall failed both restrictions at
+# once. Round 48 found five more, including a picker that offered no target for
+# Northern Paladin against a Deathlaced creature while the resolution behind it
+# happily destroyed one.
+#
+# A ratchet with an exempt list rather than a ban, because some readers really
+# do mean the card:
+#
+#   * the layer machinery itself has to start from the printed shape;
+#   * an effect that asks "is this *not* already a creature?" before animating
+#     it must not see the type it is about to add (engine/auras.py);
+#   * the state-based sweep matches Aura / Equipment / Saga / Role shapes, and
+#     supertypes (Legendary, World), which this engine does not model at
+#     layer 4 at all — ``has_type`` would answer False for every one of them.
+#
+# The list may only shrink. A new entry means either a real exemption with a
+# reason written here, or a read that should have been an accessor.
+
+# The pattern is deliberately ``<something>.card.<field>`` and not a bare
+# ``card.type_line``: a local named ``card`` already *is* a CardDefinition, so
+# reading its printed line is the only thing it could mean. It is the possessive
+# — a permanent reaching past itself into its card — that is the smell.
+_PRINTED_READS = re.compile(r"\.card\.(type_line|colors)\b")
+
+# file -> why its printed reads are the right question.
+PRINTED_READ_EXEMPTIONS: dict[str, str] = {
+    # The layer system's own input: the computed answer is built out of the
+    # printed shape, so somewhere has to read it first.
+    "models.py": "Permanent's accessors start from the printed basic land types",
+    # Asking the computed type here would include the type this very effect is
+    # about to add, so the answer would depend on whether it had already been
+    # asked — a self-reference, not a shortcut. Both sites say so in place.
+    "auras.py": "animating_auras must not see the creature type it grants",
+    "mixins/permanent_state.py": "the same self-reference, for global statics",
+    # Card shapes and supertypes this engine models on the printed line alone:
+    # `has_type` covers card types and subtypes, so it answers False for
+    # "Legendary" and "World" whatever the permanent is.
+    "mixins/game_ending.py": "Aura/Equipment/Saga/Role shapes and supertypes",
+    "mixins/helpers.py": "the Aura shape, plus a stack item's card colours",
+    # An object on the stack is not a permanent and has no layers applied to it
+    # here; its colour comes from the card (and a Lace's recolour, which
+    # `_stack_item_colors` folds in).
+    "mixins/stack/casting.py": "a spell on the stack, matched by its card",
+}
+
+
+def test_printed_type_and_colour_reads_stay_where_they_belong():
+    """"What type/colour is this permanent?" has one answer, and it is the
+    computed one."""
+    offenders = [
+        hit for hit in _hits(_PRINTED_READS, skip=set())
+        if hit[0].replace("\\", "/") not in PRINTED_READ_EXEMPTIONS
+    ]
+    assert not offenders, (
+        "printed type_line/colors read outside the exempt list — ask "
+        "permanent.has_type / permanent.effective_colors, or add the file to "
+        "PRINTED_READ_EXEMPTIONS with the reason it really means the card:\n"
+        + "\n".join(f"  {f}:{n}: {t}" for f, n, t in offenders)
+    )
+
+
+def test_no_printed_read_exemption_has_gone_stale():
+    """An exemption for a file that no longer has such a read is how the next
+    one gets in free. The list may only shrink."""
+    live = {hit[0].replace("\\", "/") for hit in _hits(_PRINTED_READS, skip=set())}
+    stale = sorted(set(PRINTED_READ_EXEMPTIONS) - live)
+    assert not stale, (
+        f"exemptions with no printed read left: {stale} — drop them from "
+        "PRINTED_READ_EXEMPTIONS"
+    )
