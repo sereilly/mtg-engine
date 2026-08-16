@@ -38,6 +38,15 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
     something different from a target of the same words.
     """
     owner = context.caster if spec.get("owner", "you") == "you" else (context.target or context.caster)
+    # A count of a *history* rather than of a zone: the creatures counted are
+    # exactly the ones no longer on the battlefield, so there is nothing to
+    # scan. Per seat, because the game-wide tally cannot answer "under your
+    # control" (round 14).
+    history = spec.get("history")
+    if history == "creatures_died_under_your_control":
+        return int(getattr(owner, "creatures_died_under_your_control_this_turn", 0))
+    if history is not None:
+        return 0
     filt = dict(spec.get("filter") or {})
     zone = spec.get("zone", "battlefield")
     if zone == "battlefield":

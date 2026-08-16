@@ -2820,3 +2820,44 @@ simulation byte-identical at 443 interactions.
 - **The legend rule reads the printed name** (unchanged from round 49).
 
 ---
+
+## Round 55: a count of what is no longer there
+
+*(2026-08-16.)* A small round on round 54's clause. M21 **208 → 209** —
+Liliana's Standard Bearer — plus a dropped rider the new guard found on its own,
+in a card nobody had asked about.
+
+**"…where X is the number of creatures that died under your control this
+turn."** A count of a *history*, and it is the opposite set from the one the
+bare filter names: the creatures counted are exactly the ones the battlefield no
+longer holds, so reading it as "creature" would count the survivors. It gets its
+own amount node (`CountOfDeaths`) beside `CountOf` for that reason, and reads
+the per-seat tracker round 14 built — the game-wide tally cannot answer "under
+**your** control", which the second test pins by killing two of the opponent's
+creatures and drawing one card.
+
+The lowering admits only the bare creature filter, because the tracker counts
+creatures and nothing narrower: a narrowing it cannot apply would be counted as
+if it were not there.
+
+**And the guard earned its keep.** Round 54 refused "a where-clause defined an X
+nothing reads", and Sanctum of Fruitful Harvest tripped it. The cause was not in
+the clause: `_parse_add_mana` read the count as
+`count.value if isinstance(count, ast.Fixed) else 1`, so **"Add X mana of any
+one color" parsed as one mana**. It refuses now. No card in this pool reaches
+the grammar with that shape — Black Lotus and Metamorphosis both keep their own
+fused handlers — which is the point: the narrowing would have waited for the
+card that finally printed it, and the guard found it without one.
+
+Suite **5,043** at 21.4s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. All three new tests were watched
+to fail on HEAD.
+
+**Next:** unchanged in substance from round 54 — the rest of the Shrine cycle
+(Fruitful Harvest now needs only a colour choice at a trigger's resolution,
+which is a new prompt kind; Shattered Heights the filtered discard cost;
+Tranquil Light a per-Shrine cost reduction; Sanctum of All a two-zone search and
+a trigger-doubling static), then Experimental Overload's variable-P/T token and
+Jolrael's team base-P/T, and the legend rule from round 49.
+
+---

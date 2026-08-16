@@ -417,6 +417,8 @@ def _lower_where_x(
     resolves it into the context's X at the single dispatch point, which is what
     lets one clause serve every effect family instead of one.
     """
+    if isinstance(node.definition, ast.CountOfDeaths):
+        return _lower_where_x_deaths(node, produced, event)
     if not isinstance(node.definition, ast.CountOf):
         raise LoweringError("only a count can define X in a where-clause", node=node)
     filt = node.definition.filter
@@ -451,6 +453,30 @@ def _lower_where_x(
         "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
         "filter": payload,
     })
+
+
+def _lower_where_x_deaths(
+    node: ast.WhereX, produced: frozenset[str], event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
+    """"…where X is the number of creatures that died under your control this
+    turn." (Liliana's Standard Bearer.)
+
+    The count is a per-seat turn history (``engine/models.py``'s
+    ``creatures_died_under_your_control_this_turn``, kept since round 14 because
+    the game-wide tally cannot answer "under your control"), so it reads a
+    counter rather than a zone. Only the bare creature filter is admitted: the
+    tracker counts creatures and nothing narrower, and a narrowing it cannot
+    apply would be counted as if it were not there.
+    """
+    filt = node.definition.filter
+    if filt.to_payload() != {"type_filter": "creature"} or filt.zone != "battlefield":
+        raise LoweringError(
+            "the death tracker counts creatures and cannot be narrowed", node=node
+        )
+    inner = lower_statement(node.statement, produced, event=event, whole_effect=False)
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    return _stamp_x_from_count(inner, {"history": "creatures_died_under_your_control"})
 
 
 def _lower_may(

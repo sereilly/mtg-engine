@@ -423,7 +423,15 @@ def _parse_where_x(stream: TokenStream) -> ast.Amount | None:
     stream.accept_word("the")
     if not stream.accept_phrase("number", "of"):
         raise stream.error("expected 'the number of' in a where-clause")
-    return ast.CountOf(parse_object_filter(stream))
+    filt = parse_object_filter(stream)
+    # "…the number of creatures **that died under your control this turn**"
+    # (Liliana's Standard Bearer). A history, and the opposite set from the one
+    # the bare filter names: these are exactly the creatures the battlefield no
+    # longer holds.
+    if stream.accept_phrase("that", "died", "under", "your", "control"):
+        _parse_duration(stream)
+        return ast.CountOfDeaths(filt)
+    return ast.CountOf(filt)
 
 
 def _parse_condition(stream: TokenStream) -> ast.Condition:

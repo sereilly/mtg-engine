@@ -2022,3 +2022,65 @@ def test_conclave_mentor_gains_the_life_it_had(set_pool):
         game._settle()
 
     assert p1.life == 22
+
+
+# --- Round 55: a where-clause that counts a history --------------------------
+
+
+def _death_board(set_pool):
+    pool = set_pool("M21")
+    p1, p2 = PlayerState(name="P1"), PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    p1.library = [pool["Swamp"]] * 12
+    return game, p1, p2, pool
+
+
+def test_lilianas_standard_bearer_draws_for_each_creature_that_died(set_pool):
+    """"…where X is the number of creatures that **died under your control**
+    this turn." The count is a history, so it is read off the per-seat tracker
+    rather than by scanning a zone — the creatures it counts are exactly the
+    ones no longer on the battlefield, and the bare filter "creature" would
+    count the survivors instead."""
+    game, p1, p2, pool = _death_board(set_pool)
+    for owner in (p1, p1, p1):
+        perm = Permanent(card=pool["Alpine Watchdog"])
+        owner.battlefield.append(perm)
+        game._permanent_to_graveyard(owner, perm)
+    p1.hand = [pool["Liliana's Standard Bearer"]]
+
+    game.queue_from_hand(0, "Liliana's Standard Bearer")
+    game._settle()
+
+    assert len([c for c in p1.hand if c.name == "Swamp"]) == 3
+
+
+def test_the_death_count_is_the_controllers_own(set_pool):
+    """The control, and what the tracker exists for: a creature that died under
+    the *opponent's* control is not counted, which a game-wide tally could not
+    tell apart."""
+    game, p1, p2, pool = _death_board(set_pool)
+    for owner in (p1, p2, p2):
+        perm = Permanent(card=pool["Alpine Watchdog"])
+        owner.battlefield.append(perm)
+        game._permanent_to_graveyard(owner, perm)
+    p1.hand = [pool["Liliana's Standard Bearer"]]
+
+    game.queue_from_hand(0, "Liliana's Standard Bearer")
+    game._settle()
+
+    assert len([c for c in p1.hand if c.name == "Swamp"]) == 1
+
+
+def test_a_variable_count_of_any_colour_mana_refuses(set_pool):
+    """Found by round 54's "an X nothing reads" guard rather than by a card.
+    "Add X mana of any one color" was read as **one** mana: the parser took
+    ``count.value if isinstance(count, ast.Fixed) else 1``, so a card printing X
+    would have added a single mana and reported success. Nothing in the pool
+    reaches the grammar with that shape — both cards that print it keep their own
+    fused handlers — which is exactly why it had to refuse rather than wait for
+    the card that would have found it."""
+    result = compile_line("Add X mana of any one color.")
+
+    assert not result.parsed
+    assert "variable count of any-colour mana" in (result.failure_reason or "")

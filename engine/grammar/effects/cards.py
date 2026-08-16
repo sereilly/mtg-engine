@@ -110,8 +110,15 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     stream.accept_word("any")
     stream.accept_word("one")
     stream.expect_word("color")
-    amount = count.value if isinstance(count, ast.Fixed) else 1
-    return ast.AddMana((), any_color=amount, source_text=_clause())
+    if not isinstance(count, ast.Fixed):
+        # "Add **X** mana of any one color" (Sanctum of Fruitful Harvest,
+        # Metamorphosis). The count was quietly becoming 1 here, which is the
+        # dropped-rider class: a card printing X would have added one mana and
+        # reported success. No card in this pool reaches the grammar with that
+        # shape today — both that print it keep their own fused handlers — so
+        # this refuses rather than guessing, and the line falls back visibly.
+        raise stream.error("a variable count of any-colour mana has no representation")
+    return ast.AddMana((), any_color=count.value, source_text=_clause())
 
 
 def _parse_player_adds_mana(

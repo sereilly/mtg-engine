@@ -38,6 +38,20 @@ class CountOf:
 
 
 @dataclass(frozen=True)
+class CountOfDeaths:
+    """"the number of creatures that died under your control this turn" — a
+    count of a *history*, not of the board.
+
+    Separate from :class:`CountOf` because the two move in opposite directions:
+    the creatures counted here are exactly the ones no longer on the
+    battlefield, so reading this as the plain filter "creature" would count the
+    survivors. The same distinction :class:`DiedThisTurn` draws for a "for
+    each" iterator, at the other end of the sentence.
+    """
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class ThatMuch:
     """A back-reference to a quantity the surrounding context produced
     ("you gain that much life", "equal to the damage dealt").
