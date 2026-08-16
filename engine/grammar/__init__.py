@@ -244,7 +244,7 @@ def behavioural_payload(payload: dict) -> dict:
     return {k: v for k, v in payload.items() if k not in GRAMMAR_ONLY_PAYLOAD_KEYS}
 
 
-def subject_filter_payload(phrase: str) -> dict | None:
+def subject_filter_payload(phrase: str, *, plural: bool = False) -> dict | None:
     """The payload form of the set of objects a narrowed trigger names.
 
     "Whenever a creature you control **with deathtouch** attacks" (Hooded
@@ -260,7 +260,7 @@ def subject_filter_payload(phrase: str) -> dict | None:
     the whole condition refuse, because the alternative is a trigger that
     announces itself on a strictly larger set than the card prints.
     """
-    filt = parse_subject_filter(phrase)
+    filt = parse_subject_filter(phrase, plural=plural)
     if filt is None:
         return None
     try:

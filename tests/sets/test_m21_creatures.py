@@ -2252,3 +2252,88 @@ def test_an_opponents_draw_does_not_fire_your_trigger(set_pool):
 
     assert coatl.metadata.get("plus_counters", 0) == 0
     assert oak.effective_power == 2
+
+
+# --- Round 59: how many creatures attacked ----------------------------------
+
+
+def _attack_board(set_pool, names):
+    pool = set_pool("M21")
+    perms = [_nosick(Permanent(card=pool[name])) for name in names]
+    p1 = PlayerState(name="P1", battlefield=perms, library=[pool["Island"]] * 5)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    return game, p1, perms
+
+
+def test_tide_skimmer_counts_the_fliers_in_the_declaration(set_pool):
+    """"Whenever you attack with two or more creatures with flying, draw a
+    card." The count and the noun phrase are both payload the compiler read off
+    the printed line, so the filter here is about the *declaration* — which is
+    the only announcement that can answer how many creatures attacked."""
+    game, p1, perms = _attack_board(set_pool, ["Tide Skimmer", "Gale Swooper"])
+
+    ok, msg = game.declare_attackers(0, [0, 1])
+    assert ok, msg
+    game._settle()
+
+    assert len(p1.hand) == 1
+
+
+def test_tide_skimmer_does_not_count_a_grounded_attacker(set_pool):
+    """The narrowing. Dropping "with flying" would make the Skimmer a strictly
+    better card, which is the one direction a trigger must never go."""
+    game, p1, perms = _attack_board(set_pool, ["Tide Skimmer", "Alpine Watchdog"])
+
+    ok, msg = game.declare_attackers(0, [0, 1])
+    assert ok, msg
+    game._settle()
+
+    assert p1.hand == []
+
+
+def test_makeshift_battalion_needs_itself_and_two_others(set_pool):
+    """"Battalion — Whenever this creature and at least two other creatures
+    attack…" The ability word is CR 207.2c flavour and is dropped before either
+    front end reads the line; what is left counts the *others*, so three
+    attackers are needed and the Battalion must be one of them."""
+    game, p1, perms = _attack_board(
+        set_pool, ["Makeshift Battalion", "Alpine Watchdog", "Gale Swooper"]
+    )
+
+    ok, msg = game.declare_attackers(0, [0, 1, 2])
+    assert ok, msg
+    game._settle()
+
+    assert perms[0].metadata["plus_counters"] == 1
+
+
+def test_makeshift_battalion_is_silent_with_only_one_other(set_pool):
+    game, p1, perms = _attack_board(
+        set_pool, ["Makeshift Battalion", "Alpine Watchdog"]
+    )
+
+    ok, msg = game.declare_attackers(0, [0, 1])
+    assert ok, msg
+    game._settle()
+
+    assert perms[0].metadata.get("plus_counters", 0) == 0
+
+
+def test_makeshift_battalion_must_be_attacking_itself(set_pool):
+    """"**This creature** and at least two other creatures" — three attackers
+    are not enough if the Battalion stayed home. Membership is by identity, so
+    a second Battalion in the same declaration would not stand in for it."""
+    game, p1, perms = _attack_board(
+        set_pool,
+        ["Makeshift Battalion", "Alpine Watchdog", "Gale Swooper", "Tide Skimmer"],
+    )
+
+    ok, msg = game.declare_attackers(0, [1, 2, 3])
+    assert ok, msg
+    game._settle()
+
+    assert perms[0].metadata.get("plus_counters", 0) == 0

@@ -358,6 +358,45 @@ def _seat_scoped_filter(
 # ---------------------------------------------------------------------------
 
 
+@event_filter("attackers_declared")
+def _attack_declaration_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """A trigger on the attack *declaration* (CR 508.1) — the only announcement
+    that can answer "how many creatures attacked".
+
+    Two printed spellings, one event, and the difference between them is
+    payload the compiler read off the line rather than two kinds:
+
+    - "Whenever you attack with **two or more creatures with flying**" (Tide
+      Skimmer) counts the attackers that answer a noun phrase, so a card printed
+      "three or more Zombies" needs nothing here.
+    - "Whenever **this creature and at least two** other creatures attack"
+      (Makeshift Battalion, under the ability word "Battalion") counts the
+      *others*, so the source must itself be among the attackers — by identity,
+      because a look-alike in the same declaration is a different permanent.
+
+    "You" is the trigger's own controller in both (CR 109.5), which is what
+    leaves the Skimmer silent through an opponent's alpha strike.
+    """
+    seat = game.controller_index_of(permanent)
+    if seat is None or seat != event.payload.get("seat"):
+        return False
+    attackers = event.payload.get("attackers") or ()
+    payload = trig.condition.payload
+    if "others_count" in payload:
+        if not any(attacker is permanent for attacker in attackers):
+            return False
+        return len(attackers) >= int(payload["others_count"]) + 1
+    described = payload.get("attacker_filter")
+    matching = sum(
+        1
+        for attacker in attackers
+        if subject_matches(game, attacker, described, observer=seat, source=permanent)
+    )
+    return matching >= int(payload.get("attackers_count", 1))
+
+
 # The events announced game-wide whose *whole* applicability is the trigger's
 # own subject filter, and the payload key each records it under. One filter per
 # event, so the registration is a row rather than a predicate.

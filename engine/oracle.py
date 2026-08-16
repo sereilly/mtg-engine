@@ -42,6 +42,8 @@ from .oracle_types import (
     TriggerCondition,
     _COLOR_WORD_TO_SYMBOL,
     _MANA_TOKEN_RE,
+    _NUMBER_WORDS,
+    strip_ability_word,
 )
 from .characteristic_defining import dynamic_pt_for
 from .auras import unclaimed_aura_lines
@@ -225,6 +227,26 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever (?P<damager_subject>(?:a|another) [^,]+) deals damage to a planeswalker"),
     ("matching_creature_attacks",
      r"whenever (?P<attacker_subject>(?:a|another) [^,]+) attacks"),
+    # Two spellings of one event: the *declaration* (CR 508.1), which is the
+    # only thing that can answer "how many creatures attacked". One kind and two
+    # rows, because what differs is not the event but what the card asks about
+    # it — and that is payload, the way a narrowed condition's filter is.
+    # Ordered above the bare per-creature "attacks" rows below: "this creature
+    # and at least …" is not a prefix of "this creature attacks", but the
+    # specific-before-generic rule is what keeps that true when either is edited.
+    #
+    # "Whenever you attack with two or more creatures with flying …" (Tide
+    # Skimmer). The count and the noun phrase are both payload: the regex
+    # delimits them and the noun parser reads the phrase (round 34).
+    ("attackers_declared",
+     r"whenever you attack with (?P<attackers_count>[a-z]+) or more (?P<attacker_subjects>[^,]+)"),
+    # "Whenever this creature and at least two other creatures attack …"
+    # (Makeshift Battalion, printed under the ability word "Battalion", which
+    # CR 207.2c strips before this table sees the line). The source must be
+    # among the attackers, so the *others* are counted and the source is the
+    # one that is not.
+    ("attackers_declared",
+     r"whenever this creature and at least (?P<others_count>[a-z]+) other creatures attack"),
     ("creature_attacks",            r"whenever this creature attacks"),
     # "…blocks **a creature with flying**" (Snarespinner) narrows the source's
     # own block trigger by what it blocked. Before the bare form, which is its
@@ -445,7 +467,7 @@ def _normalize_text(oracle_text: str) -> str:
 
 
 def normalize_creature_line(line: str) -> str:
-    lowered = line.lower()
+    lowered = strip_ability_word(line).lower()
     lowered = _PARENTHETICAL_RE.sub("", lowered)
     lowered = lowered.replace(";", ",")
     lowered = _WHITESPACE_RE.sub(" ", lowered).strip(" .,")
@@ -581,6 +603,18 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
 # approximating what the grammar does.
 _SUBJECT_GROUP_SUFFIX = "_subject"
 
+# The same idea for a printed *number*: "whenever you attack with **two** or
+# more creatures with flying". The regex delimits the word and `_NUMBER_WORDS`
+# reads it, so a count is data on the condition rather than a pattern per
+# number.
+_COUNT_GROUP_SUFFIX = "_count"
+
+# The same noun phrase in the one position where it is **counted** rather than
+# quantified: "two or more **creatures with flying**". A bare plural is the noun
+# parser's sweep quantifier, which every other subject position refuses — so the
+# plural spelling of the suffix is how a pattern says which reading it means.
+_PLURAL_SUBJECT_GROUP_SUFFIX = "_subjects"
+
 
 def _match_trigger_patterns(
     text: str,
@@ -609,23 +643,41 @@ def _match_trigger_patterns(
 
 
 def _resolve_subject_groups(payload: dict) -> dict | None:
-    """Turn every ``<name>_subject`` phrase in *payload* into a ``<name>_filter``
-    payload, or return None if one of them names a set the engine cannot test."""
+    """Turn every delimited group in *payload* into the value the dispatcher
+    reads, or return None if one of them says something it cannot test.
+
+    Two suffixes, both of which mean "the regex marked this out and something
+    else reads it": ``<name>_subject`` is a printed noun phrase, read by the
+    noun parser; ``<name>_count`` is a printed number word, read by the same
+    table every other text-keyed count uses. A number the table does not know
+    refuses the whole condition rather than defaulting to one — a trigger that
+    fires on one attacker where the card says three is the same silent widening
+    an ignored filter would be.
+    """
     from .grammar import subject_filter_payload
     from .subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 
     resolved = dict(payload)
-    for key, phrase in payload.items():
-        if not key.endswith(_SUBJECT_GROUP_SUFFIX):
+    for key, word in payload.items():
+        if not key.endswith(_COUNT_GROUP_SUFFIX):
             continue
-        described = subject_filter_payload(str(phrase))
+        count = _NUMBER_WORDS.get(str(word).strip())
+        if count is None:
+            return None
+        resolved[key] = count
+    for key, phrase in payload.items():
+        plural = key.endswith(_PLURAL_SUBJECT_GROUP_SUFFIX)
+        if not plural and not key.endswith(_SUBJECT_GROUP_SUFFIX):
+            continue
+        suffix = _PLURAL_SUBJECT_GROUP_SUFFIX if plural else _SUBJECT_GROUP_SUFFIX
+        described = subject_filter_payload(str(phrase), plural=plural)
         # The second gate is the load-bearing one: a filter the *dispatcher*
         # cannot test is refused here rather than ignored there, because an
         # ignored restriction is a trigger firing on more than the card says.
         if described is None or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
             return None
         del resolved[key]
-        resolved[key[: -len(_SUBJECT_GROUP_SUFFIX)] + "_filter"] = described
+        resolved[key[: -len(suffix)] + "_filter"] = described
     return resolved
 
 

@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 214/285) to the full release line - **137 sets, 33,594
+M21 measured at 216/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–55 — lives in git history at and before
-commit `b0c5a26`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–56 — lives in git history at and before
+commit `0cd54e4`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -266,106 +266,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 56: the third reader of a noun phrase
-
-*(2026-08-16.)* M21 **209 → 211** — Portcullis Vine and Run Afoul, one on each
-side of a sacrifice. The round is really about the thing both of them were
-waiting for, which had nothing to do with sacrifice.
-
-**A filter payload had two matchers, and only one of them was shared.**
-`permanent_matches_filter` answers every key readable off the permanent alone,
-and every filter reader in the engine already used it. Three keys are not
-readable that way — a keyword is a layer-6 question (CR 613.1f), "you control"
-is a seat comparison, "another" is an identity comparison — so they were tested
-*inline at the trigger fire sites*, next to the list of keys a compiler is
-allowed to admit. That made `TESTABLE_SUBJECT_FILTER_KEYS` a claim about
-triggers while reading as a claim about noun phrases, and the second caller is
-what found the difference: **a sacrifice names its victim with the same noun
-phrase a trigger names its subject**, and the paths that read it had only the
-pure matcher. A keyword narrowing was structurally untestable there, so both
-halves refused — correctly, and for a reason that was invisible from where they
-refused. `engine/subject_filters.py` is the one matcher and the one key set.
-
-**Both refusals were already written down, one of them naming the card.**
-`_is_chargeable_sacrifice` said "everything the pool prints but 'a creature
-**with defender**' (Portcullis Vine)"; the cost regex beside it said the same
-thing from the other side, anchored so the phrase could not match. Neither was a
-gap to be closed on sight — dropping the rider lets the Vine eat any creature
-while still reporting supported — and both now delegate to
-`object_only_filter` rather than deciding for themselves.
-
-**The cost regex only delimits now.** Round 34's idiom for a narrowed trigger
-condition — the regex marks out the noun phrase, `grammar.parse_subject_filter`
-reads it, a pool-wide guard compares the two front ends — applied to the third
-reader of one. That guard existed and asked the weaker question: *is something
-charged*. It now asks *is **this** charged*, comparing the charger's payload
-against the grammar's whole noun phrase, because "a creature with defender"
-charged as "a creature" is the dropped-rider bug with the card still green.
-
-**Four readers, one answer.** The activation-cost charger, the cast additional
-cost, the forced-sacrifice prompt and the UI's target enumerator each had their
-own idea of what may pay: two type-word comparisons, a two-branch
-`if filter == "nontoken" … elif filter == "creature"`, and a picker `kind`. All
-four now take a filter payload through `subject_matches`. The picker matters as
-much as the charger and for the reason round 48 recorded: a list that offers the
-Cat has its answer silently swapped for the deterministic pick at payment time,
-so the game depends on whether a person or a script answered.
-
-**"Of their choice" is read and then dropped, at the one place entitled to drop
-it.** Run Afoul prints "a creature **of their choice** with flying", so the
-phrase sits *between* the head noun and the restriction and cannot be consumed
-by the verb's production without stranding "with flying". It is a noun-phrase
-modifier, parsed as one, and `their_choice` is emitted into the payload
-**precisely so that every gate refuses it** — no matcher can test who picks. The
-sacrifice lowering names it as something the prompt already performs (CR 701.21a
-gives the choice to the sacrificing player) and removes it there. Only "their"
-is read: "of *your* choice" would be a different card.
-
-**Two near-misses, both caught by existing tests rather than by reading.**
-Widening the branch to any noun phrase routed "sacrifice **this** creature" (Sea
-Serpent, Island Fish Jasconius, Pirate Ship) to the prompt with an *empty*
-filter — a prompt over every permanent on the board — because a self-referential
-subject emits no payload keys at all. And `_resolve_sacrifice_inline` turned out
-to be a fourth copy of `default_sacrifice_pick`, carrying "keep the game-loser
-for last" and neither the smallest-first half nor the id tiebreak — while
-`default_sacrifice_pick`'s own docstring named it as one of the three callers it
-had unified. Two seats owing the same sacrifice through different paths would
-have given up different permanents. Both fixed; the AI simulation is
-byte-identical either way, which is what the docstring was quietly relying on.
-
-`nontoken` joined the payload vocabulary on the way (CR 111.1 — not a card type,
-so neither an excluded type nor an excluded subtype), because Lich's prompt had
-been carrying that restriction as one of the two magic words. A side effect
-worth naming: "sacrifice a **land**" lowers now where only "creature" did, so
-the template is general rather than one type wide.
-
-Suite **5,067** at 21.4s, every `--check` green, shipped pool 388/388, AI
-simulation byte-identical at 443 interactions. Five of the seven new tests were
-watched to fail on HEAD; the other two are controls — the narrowing the prompt
-*cannot* test, which must keep refusing, and Run Afoul against a board with no
-flier. `tests/engine/test_subject_filters.py` holds the key set to what is
-demonstrated rather than to what is listed: a key promised without a matcher
-behind it admits every card printing that phrase and then ignores it.
-
-**Next:**
-
-- **The Shrine cycle**, unchanged from round 55: Fruitful Harvest needs a colour
-  choice at a trigger's resolution, Shattered Heights the discard cost from the
-  hand-activation block, Tranquil Light a per-Shrine cost reduction, Sanctum of
-  All a two-zone search and a trigger-doubling static.
-- **The two replacement effects round 53 had to take away** — Fiery Emancipation
-  ("it deals triple that damage instead") and Teferi's Ageless Insight ("draw two
-  cards instead"). Sized this round and deliberately not started: the CR 614
-  registry is the **one** text-keyed registry `_derived_static_claims` does not
-  ask, so a permanent whose only ability is a replacement is unsupported however
-  well the interceptor works — and Fiery Emancipation additionally wants
-  something the engine does not have, since a damage event carries its `source`
-  but not the seat that controls it, and "a source **you control**" is
-  unanswerable from a bare `CardDefinition`. That seat would also buy Chandra's
-  Pyreling.
-- **Experimental Overload's variable-P/T token and Jolrael's team base-P/T**,
-  then the legend rule from round 49.
-
 ## Round 57: a damage event that knows who dealt it
 
 *(2026-08-16.)* M21 **211 → 213** — Fiery Emancipation, which round 53 had to
@@ -543,3 +443,76 @@ nothing happened at all.
   `player.draw` callers are a smaller list than that one was.
 - **Experimental Overload's variable-P/T token and Jolrael's team base-P/T**,
   then the legend rule from round 49.
+
+## Round 59: how many creatures attacked
+
+*(2026-08-16.)* M21 **214 → 216** — Tide Skimmer and Makeshift Battalion, two
+cards that ask a question no announcement in the engine could answer.
+
+**Three attack-trigger shapes existed and none of them was about the group.**
+`_fire_attack_triggers` fires once per declaration for one card's own ability
+(Raging River), `_fire_creature_attacks_triggers` fires each attacker's own
+ability, and `_fire_matching_creature_attacks_triggers` announces each attacker
+to the whole board. "Whenever you attack with **two or more** creatures with
+flying" and "whenever this creature and **at least two other** creatures attack"
+are neither per-card nor per-creature: they are about the declaration (CR 508.1),
+and the count is only knowable while the whole declaration is in hand.
+`attackers_declared` is the fourth shape, announced once, carrying the attackers
+themselves — not the `combat_attackers` map, because that is index-keyed and a
+later removal renumbers it.
+
+**One kind, two rows, and the difference is payload.** The two printed spellings
+could have been two condition kinds; they are one, because what differs is not
+the event but what the card asks about it — a count and a noun phrase for the
+Skimmer, a count of *others* plus "the source is one of them" for the Battalion.
+That is round 34's rule (a narrowing is data on the condition) applied to the
+count as well as the filter, and the count needed its own delimiter suffix:
+`<name>_count` is a printed number word, read by the same table every other
+text-keyed count uses, and a word that table does not know refuses the whole
+condition rather than defaulting to one.
+
+**The noun parser needed a plural reading, and it is worth being exact about
+why.** `parse_subject_filter` admits only "a creature you control …", refusing a
+bare plural because everywhere else that is the *sweep* quantifier and a trigger
+claiming to fire on "each creature" would be a different card. In "two or more
+**creatures with flying**" the phrase is counted rather than quantified: it names
+a kind and the number in front says how many. So the plural is admitted in that
+one position, and which position it is comes from the pattern's own group name —
+`_subjects` rather than `_subject`.
+
+**Ability words are gone, by rule rather than by card.** CR 207.2c: an ability
+word is italic flavour with no rules meaning at all, so "Battalion —" is dropped
+before either front end reads the line, from **one** function both call — a word
+stripped on one side only is a line whose two halves disagree about what was
+printed. The list is the printed vocabulary rather than the one word this pool
+has, because a word left out is a card whose whole line fails for a reason the
+parser is allowed to ignore. The control test is that a dash *without* an ability
+word in front of it is left alone: the strip is keyed on the vocabulary, not on
+the punctuation.
+
+A test had to change its mind rather than its expectation, which is the honest
+form: `test_an_ability_word_is_no_longer_filed_under_modal` pinned "Battalion —"
+failing on the trigger rather than on the dash, and that was right when the
+trigger genuinely could not be read. It now pins the line parsing.
+
+Suite **5,101** at 22.1s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. M21's parsed share moved 70.2% →
+70.6%. Three of the six new tests were watched to fail on the round-58 engine;
+the rest are controls — a grounded attacker, a two-creature attack, and a
+Battalion that stayed home.
+
+**Next:**
+
+- **The Shrine cycle**, unchanged: Fruitful Harvest's colour choice at a
+  trigger's resolution, Shattered Heights' discard cost from the
+  hand-activation block, Tranquil Light's per-Shrine cost reduction, Sanctum of
+  All's two-zone search and trigger-doubling static.
+- **An optional cost that is not generic.** "You may pay {1}{B}. If you do, …"
+  (Liliana's Devotee) refuses, and the reason is that there is no one way to pay
+  a mana cost here: the activation path spends from the pool and expects the
+  lands already tapped, the optional-pay prompt taps lands itself but only for
+  generic, and the two disagree about what "can pay" means. One payer would
+  serve every "you may pay" ever printed.
+- **The draw debt** (three `player.draw` callers, with round 31's AST-guard
+  shape to copy), then **Experimental Overload's variable-P/T token and
+  Jolrael's team base-P/T**, then the legend rule from round 49.

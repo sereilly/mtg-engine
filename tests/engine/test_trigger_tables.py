@@ -86,6 +86,12 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "source_you_control_damages_opponent": (
         "whenever a source you control deals noncombat damage to an opponent"
     ),
+    # Two rows, one kind: the event is the attack declaration and what differs
+    # is what the card asks about it.
+    "attackers_declared": (
+        "whenever you attack with two or more creatures with flying",
+        "whenever this creature and at least two other creatures attack",
+    ),
     "counters_put_on_creature": (
         "whenever one or more +1/+1 counters are put on another non-hydra "
         "creature you control"

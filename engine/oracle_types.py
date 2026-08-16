@@ -187,6 +187,43 @@ _NUMBER_WORDS = {
     "ten": 10,
 }
 
+
+# CR 207.2c: an ability word is italic flavour in front of an ability and has
+# **no rules meaning at all**. Stripping one is therefore not a guess about what
+# the card does — it is the rule — which is why this is a plain list of the
+# printed words rather than a per-card exception. Only "battalion" (Makeshift
+# Battalion) is in the pool today; the rest are here because a word left out is
+# a card whose whole line fails to parse for a reason the parser is allowed to
+# ignore, and because the list is data about Magic rather than about this pool.
+ABILITY_WORDS = frozenset({
+    "adamant", "addendum", "alliance", "battalion", "bloodrush", "boast",
+    "celebration", "channel", "chroma", "cohort", "constellation", "converge",
+    "corrupted", "council's dilemma", "coven", "delirium", "descend",
+    "domain", "eminence", "enrage", "fateful hour", "ferocious", "formidable",
+    "grandeur", "hellbent", "heroic", "imprint", "inspired", "join forces",
+    "kinship", "landfall", "lieutenant", "magecraft", "metalcraft", "morbid",
+    "pack tactics", "parley", "radiance", "raid", "rally", "revolt",
+    "spell mastery", "strive", "sweep", "tempting offer", "threshold",
+    "undergrowth", "will of the council",
+})
+
+#: The dashes Scryfall prints between an ability word and its ability.
+_ABILITY_WORD_DASHES = ("—", "–", "-")
+
+
+def strip_ability_word(line: str) -> str:
+    """*line* without a leading ability word (CR 207.2c), if it has one.
+
+    Read by both front ends — ``engine/oracle.py``'s line normalizer and
+    ``engine/grammar``'s line parser — because a word stripped on one side only
+    is a line the two halves of the pipeline disagree about.
+    """
+    for dash in _ABILITY_WORD_DASHES:
+        head, sep, tail = line.partition(f" {dash} ")
+        if sep and head.strip().lower() in ABILITY_WORDS:
+            return tail.lstrip()
+    return line
+
 # `_instruction`, `parse_number_token`, its lenient `_parse_number_token` twin
 # and `_extract_mana_cost_from_text` stood beside it. All four were
 # `engine/parsing/`'s toolkit — the shorthand every rule built its instruction

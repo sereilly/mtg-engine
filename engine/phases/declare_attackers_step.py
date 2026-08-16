@@ -155,6 +155,7 @@ class DeclareAttackersStepMixin:
             self._fire_attack_triggers(controller_index)
             self._fire_creature_attacks_triggers(controller_index, unique_indices)
             self._fire_matching_creature_attacks_triggers(declared)
+            self._announce_attack_declaration(controller_index, declared)
             self._fire_delayed_attack_triggers(controller_index, unique_indices)
         # CR 508.4: once attackers have been declared (the turn-based action of the
         # declare attackers step), the active player receives priority.
@@ -379,6 +380,25 @@ class DeclareAttackersStepMixin:
                     )
                 )
                 self.log.append(f"{permanent.card.name} triggered on attack (added to stack)")
+
+    def _announce_attack_declaration(
+        self, controller_index: int, declared: list[Permanent]
+    ) -> None:
+        """The declaration itself (CR 508.1), once, carrying *who* attacked.
+
+        The fourth attack-trigger shape and the only one that is about the
+        *group*: "whenever you attack with two or more creatures with flying"
+        (Tide Skimmer) and "whenever this creature and at least two other
+        creatures attack" (Makeshift Battalion) both ask how many attackers
+        there were, which no per-creature announcement can answer — the other
+        three fire once per declaration for one card's ability, once per
+        attacker's own ability, and once per attacker to the whole board.
+
+        The attackers ride the payload rather than being re-derived from
+        ``combat_attackers`` at the filter: the trigger is about the declaration
+        as it was announced, and a later removal renumbers that map.
+        """
+        emit(self, "attackers_declared", seat=controller_index, attackers=list(declared))
 
     def _fire_matching_creature_attacks_triggers(
         self, declared: list[Permanent]

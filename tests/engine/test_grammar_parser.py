@@ -278,18 +278,28 @@ def test_a_modal_head_buried_in_a_sequence_refuses(line: str):
     assert result.lowering_error == "a modal head is a whole clause, not a step inside one"
 
 
-def test_an_ability_word_is_no_longer_filed_under_modal():
-    """CR 207.2c ability words are printed with an em dash and have no rules
-    meaning. Rejecting every dash on sight put "Battalion — Whenever …" in the
-    modal backlog, which pointed the work at the wrong production entirely. The
-    line still fails — nothing reads the ability word — but it fails on the
-    trigger it really cannot read."""
+def test_an_ability_word_is_dropped_before_anything_reads_the_line():
+    """CR 207.2c: an ability word is italic flavour with **no rules meaning**,
+    so dropping it is the rule rather than a guess about the card.
+
+    Rejecting every em dash on sight once put "Battalion — Whenever …" in the
+    modal backlog, which pointed the work at the wrong production entirely; then
+    it failed honestly on the trigger it could not read. Now it reads both."""
     result = compile_line(
         "Battalion — Whenever this creature and at least two other creatures "
         "attack, put a +1/+1 counter on this creature."
     )
+    assert result.lowered, result.parse_error or result.lowering_error
+    assert [i.kind for i in result.instructions] == ["add_counter_to_self"]
+
+
+def test_a_dash_that_is_not_an_ability_word_is_left_alone():
+    """The control. The strip is keyed on the printed vocabulary (CR 207.2c),
+    not on the punctuation — a line that merely contains an em dash keeps
+    whatever it says in front of one."""
+    result = compile_line("Wumpus — Whenever this creature attacks, draw a card.")
+
     assert not result.parsed
-    assert result.parse_error == "expected a subject"
 
 
 # ---------------------------------------------------------------------------

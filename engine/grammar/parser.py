@@ -36,6 +36,7 @@ diffed before and after.
 import re
 from dataclasses import replace
 
+from ..oracle_types import strip_ability_word
 from ..subject_filters import object_only_filter
 from . import ast
 from .amounts import parse_amount
@@ -788,6 +789,11 @@ def parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
 
 
 def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
+    # CR 207.2c: an ability word is italic flavour with no rules meaning, so it
+    # is dropped before anything reads the line. Both front ends drop it, from
+    # the same function — a word stripped on one side only is a line whose two
+    # halves disagree about what was printed.
+    line = strip_ability_word(line)
     lexed = tokenize(line, card_name=card_name)
     if not lexed.tokens:
         raise GrammarError("empty line", line=line)

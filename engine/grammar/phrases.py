@@ -23,7 +23,7 @@ from .errors import GrammarError
 from .lexer import (MANA, PT, PUNCT, SELF, tokenize)
 from .nouns import (parse_target_spec)
 from .stream import TokenStream
-from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, match_longest)
+from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, NUMBER_WORDS, match_longest)
 _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("land_dies", ("a", "land", "is", "put", "into", "a", "graveyard", "from", "the", "battlefield")),
     # Longest first: the explicit-self spelling (Basri's Lieutenant) names the
@@ -187,7 +187,7 @@ _ZONES = frozenset({"battlefield", "graveyard", "hand", "library", "exile", "sta
 # ---------------------------------------------------------------------------
 
 
-def parse_subject_filter(phrase: str) -> ast.ObjectFilter | None:
+def parse_subject_filter(phrase: str, *, plural: bool = False) -> ast.ObjectFilter | None:
     """The set of objects a printed noun phrase names, or None if it refuses.
 
     The whole phrase must be consumed. That is what makes this safe to give a
@@ -202,23 +202,33 @@ def parse_subject_filter(phrase: str) -> ast.ObjectFilter | None:
     phrase into one filter, rather than a regex approximating what the noun
     parser does. Held to that by
     ``test_a_narrowed_trigger_reads_the_same_subject_on_both_sides``.
+
+    *plural* is for the one position where the noun phrase is **counted** rather
+    than quantified: "whenever you attack with two or more **creatures with
+    flying**" (Tide Skimmer). A bare plural is the noun parser's "all", which
+    everywhere else would be a sweep and is refused for that reason — here the
+    count in front of it is what says how many, so the phrase names a kind and
+    "all" is the right reading of it.
     """
     lexed = tokenize(phrase)
     if not lexed.tokens:
         return None
     stream = TokenStream(lexed.tokens, phrase)
-    filt = parse_subject_filter_at(stream)
+    filt = parse_subject_filter_at(stream, plural=plural)
     return filt if filt is not None and stream.exhausted else None
 
 
-def parse_subject_filter_at(stream: TokenStream) -> ast.ObjectFilter | None:
+def parse_subject_filter_at(
+    stream: TokenStream, *, plural: bool = False
+) -> ast.ObjectFilter | None:
     """:func:`parse_subject_filter` over a stream, consuming what it reads.
 
     Refuses anything but the two articles a trigger subject is printed with —
     "a creature you control …" and "another Rogue you control …". "Target
     creature" and "each creature" name a chosen or an exhaustive set, and a
     condition claiming to fire on one of those would be describing a different
-    card.
+    card. *plural* swaps the admitted quantifier for the counted position; see
+    :func:`parse_subject_filter`.
     """
     mark = stream.mark()
     # "another" sits where the article does, so it is read here and folded onto
@@ -233,10 +243,20 @@ def parse_subject_filter_at(stream: TokenStream) -> ast.ObjectFilter | None:
     except GrammarError:
         stream.reset(mark)
         return None
-    if spec is None or spec.quantifier != ("all" if another else "a"):
+    if spec is None or spec.quantifier != ("all" if (another or plural) else "a"):
         stream.reset(mark)
         return None
     return replace(spec.filter, other_than_source=True) if another else spec.filter
+
+
+def _accept_number(stream: TokenStream) -> int | None:
+    """A printed number word, consumed. None (nothing consumed) for anything
+    else, so the caller can reset and try the next production."""
+    word = stream.peek_word()
+    if word is None or word not in NUMBER_WORDS:
+        return None
+    stream.advance()
+    return NUMBER_WORDS[word]
 
 
 def _parse_duration(stream: TokenStream) -> ast.Duration:
@@ -519,6 +539,27 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                 if subject is not None:
                     return ast.TriggerEvent(kind, "whenever", subject=subject)
             stream.reset(mark)
+        # The two triggers on the *declaration* (CR 508.1) — how many creatures
+        # attacked, which no per-creature event can answer. Both read a printed
+        # number, and both are tried before the phrase table below, whose
+        # "this creature attacks" entry is the generic reading of the second.
+        mark = stream.mark()
+        if stream.accept_phrase("you", "attack", "with"):
+            count = _accept_number(stream)
+            if count is not None and stream.accept_phrase("or", "more"):
+                # The counted position: a bare plural names a *kind* here, and
+                # the number in front of it is what says how many.
+                subject = parse_subject_filter_at(stream, plural=True)
+                if subject is not None:
+                    return ast.TriggerEvent(
+                        "attackers_declared", "whenever", subject=subject
+                    )
+        stream.reset(mark)
+        if stream.accept_phrase("this", "creature", "and", "at", "least"):
+            count = _accept_number(stream)
+            if count is not None and stream.accept_phrase("other", "creatures", "attack"):
+                return ast.TriggerEvent("attackers_declared", "whenever")
+        stream.reset(mark)
         for kind, phrase in _WHENEVER_EVENTS:
             if stream.accept_phrase(*phrase):
                 return ast.TriggerEvent(kind, "whenever")

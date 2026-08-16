@@ -461,6 +461,14 @@ adding entries, not editing dispatch**:
   for the interactive pay-or-consequence upkeep triggers, keyed by the
   `(trigger condition, instruction kind)` pair the compiler produces. Everything
   a handler reads arrives on `UpkeepContext`. A duplicate pair raises at import.
+- **A trigger condition's narrowing is data, not a kind.** `engine/oracle.py`'s
+  pattern table delimits a printed noun phrase as a `<name>_subject` group
+  (`<name>_subjects` where it is *counted* rather than quantified) and a printed
+  number as `<name>_count`; the noun parser and `_NUMBER_WORDS` read them, so a
+  card printed with a different tribe or a different number needs no code. Two
+  rows may share one kind when what differs is the question rather than the
+  event (`attackers_declared`). Ability words (CR 207.2c) are dropped by
+  `oracle_types.strip_ability_word`, called by **both** front ends.
 - **A trigger condition needs a dispatcher, and parsing is not one.** A
   condition can be in `engine/oracle.py`'s pattern table *and* the grammar's
   phrase table and still have nothing that announces it: `draws_card` was, with
