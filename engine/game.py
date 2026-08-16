@@ -227,6 +227,13 @@ class Game(
     # "power", "toughness", "type_line", "colors", "keywords"}. Populated in
     # _permanent_to_graveyard, drained in resolve_end_step.
     pending_end_step_tokens: list = field(default_factory=list)
+    # CR 601.2i / 603.3b: triggers that fired while a spell was being cast or an
+    # ability activated, waiting for that object to finish being put on the
+    # stack so they can go on the stack *above* it. None means "not casting" —
+    # every other announcement goes straight onto the stack, which is why this
+    # is a nullable buffer rather than a queue that is always drained.
+    # See ``StackResolutionMixin.deferring_triggers``.
+    deferred_triggers: list | None = None
     # CR 603.7 delayed triggered abilities created by a resolving ability
     # ("Whenever one or more nontoken creatures attack this turn, …" — Basri
     # Ket's −2). Each entry: {"controller_index", "event", "batch", "nontoken",

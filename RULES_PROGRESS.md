@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**243 / 585 tracked rules covered (41%)** — 1065 tests, 0 unannotated.
+**243 / 585 tracked rules covered (41%)** — 1070 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -646,7 +646,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(58 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(61 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -656,7 +656,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(7 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(7 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(9 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(7 tests, subrules ac)*
@@ -665,7 +665,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(1 tests)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(7 tests, subrules b)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(8 tests)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(13 tests)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(2 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(1 tests)*
 - [ ] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit...
@@ -813,7 +813,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
 - [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(4 tests, subrules a)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
-- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(2 tests)*
+- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(4 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
 - [ ] **700.6** The term historic refers to an object that has the legendary supertype, the artifact card type, o...
 - [ ] **700.7** If an ability uses a phrase such as “this [something]” to identify an object, where [something] i...

@@ -125,7 +125,20 @@ class SpellCastingMixin:
         self._settle()
         self.clear_priority_window()
         return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
-    def queue_from_hand(
+    def queue_from_hand(self, *args, **kwargs) -> SimulationResult:
+        """Cast a spell — CR 601, start to finish — leaving it on the stack.
+
+        A wrapper around the whole process for one reason, and the reason is the
+        wrapper's shape: **everything CR 601.2 describes is one announcement**,
+        and a trigger that fires part-way through it waits for the end of that
+        announcement rather than going on the stack in the middle. Goremand
+        sacrifices a creature to be cast; Havoc Jester's answer to that belongs
+        *above* the Demon, not under it. See ``deferring_triggers``.
+        """
+        with self.deferring_triggers():
+            return self._cast_onto_stack(*args, **kwargs)
+
+    def _cast_onto_stack(
         self,
         caster_index: int,
         card_name: str,

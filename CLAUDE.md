@@ -557,7 +557,8 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (all 369 catalog cards, passing). **Generated
+manually validated in-game (369 of the 388 catalog cards, passing; the 19
+Revised added have no recorded result yet). **Generated
 automatically** — results are edited via the in-game Debug Menu, not by hand.
 
 A card is also reported `equivalent` when it is untested but a *passing* card

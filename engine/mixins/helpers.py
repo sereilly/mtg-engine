@@ -22,6 +22,19 @@ from ..replacements import apply_replacements
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 
+# The dies-triggers ``_permanent_to_graveyard`` carries out **inline** rather
+# than putting on the stack, each for the reason its own block there gives: the
+# life loss is part of the state-based sweep, the token is an obligation the
+# source outlives, and the combat relationship is unreadable a line later. They
+# are named here rather than tested for one at a time, so the general enqueue
+# beside them is "everything else" — a set that can be read, instead of a
+# sequence of loops whose gaps only show up as a card doing nothing.
+_INLINE_DIES_KINDS = frozenset({
+    "owner_loses_half_life",                    # Personal Incarnation
+    "arm_end_step_token",                       # Rukh Egg
+    "destroy_creatures_in_combat_with_source",  # Abu Ja'far
+})
+
 
 class GameHelpersMixin:
     def _find_controlled_permanent(
@@ -517,44 +530,36 @@ class GameHelpersMixin:
                     trigger_context={"combat_opponents": opponents},
                 )
                 self.log.append(f"{permanent.card.name} triggered (died in combat)")
-            # "When this creature dies, you may …" (Goblin Arsonist). The
-            # grammar's `may` wrapper carries the whole optional action, so it
-            # is enqueued as-is and resolves off the stack (CR 603.3). Only the
-            # wrapper kind takes this path — the specific dies shapes above
-            # stay inline for the reasons their comments give, so nothing
-            # fires twice.
-            for may_trig in matching_triggers(
-                permanent.effective_card,
-                condition_kinds={"dies"},
-                instruction_kinds={"may"},
+            # **Every other** "when this creature dies" trigger, onto the stack
+            # (CR 603.3). One loop, not one per instruction kind.
+            #
+            # This was six loops, each keyed to the kind of the card that added
+            # it — ``may`` for Goblin Arsonist, ``target_gains_life`` for
+            # Conclave Mentor, and so on — and the answer to "what happens when
+            # a creature with a dies-trigger this engine has not met before
+            # dies?" was *nothing at all*. Onulet ships in the shipped pool at
+            # 388/388, marked verified: "When this creature dies, you gain 2
+            # life", and no life was ever gained, because its instruction kind
+            # was `target_gains_life` without Conclave Mentor's payload key. A
+            # fire site that enumerates instruction kinds cannot be complete;
+            # it can only be as complete as the last card that touched it.
+            #
+            # ``dead_power`` is captured for every trigger whether or not it
+            # asks: the permanent is about to leave and CR 603.10 says the
+            # trigger uses the information the game had, so the read has to be
+            # here even though only some payloads consume it.
+            for trig in matching_triggers(
+                permanent.effective_card, condition_kinds={"dies"},
             ):
-                self._enqueue_triggered_ability(
-                    controller_index=self.players.index(player),
-                    source_permanent=permanent,
-                    card=permanent.card,
-                    instruction=may_trig.instruction,
-                    effect_kind=may_trig.effect_kind,
-                    ability_text=may_trig.source_line,
-                )
-                self.log.append(f"{permanent.card.name} triggered (died)")
-            # "When this creature dies, you gain life equal to its power."
-            # (Conclave Mentor.) The power is read *now* — the permanent is
-            # about to leave, and CR 603.10 says the trigger uses the
-            # information it had — and carried to the resolution that gains it.
-            for power_trig in matching_triggers(
-                permanent.effective_card,
-                condition_kinds={"dies"},
-                instruction_kinds={"target_gains_life"},
-            ):
-                if power_trig.instruction.payload.get("amount_from_trigger") != "dead_power":
+                if trig.instruction is None or trig.instruction.kind in _INLINE_DIES_KINDS:
                     continue
                 self._enqueue_triggered_ability(
                     controller_index=self.players.index(player),
                     source_permanent=permanent,
                     card=permanent.card,
-                    instruction=power_trig.instruction,
-                    effect_kind=power_trig.effect_kind,
-                    ability_text=power_trig.source_line,
+                    instruction=trig.instruction,
+                    effect_kind=trig.effect_kind,
+                    ability_text=trig.source_line,
                     trigger_context={"dead_power": max(0, permanent.effective_power)},
                 )
                 self.log.append(f"{permanent.card.name} triggered (died)")

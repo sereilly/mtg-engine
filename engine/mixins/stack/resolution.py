@@ -9,6 +9,8 @@ put wherever it goes afterwards.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 from ...auras import aura_enchant_clause
 from ...classifier import CardClassification, classify_card
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
@@ -78,7 +80,29 @@ class StackResolutionMixin:
         Mirrors the attack/block trigger model (declare_attackers_step._fire_attack_triggers).
         The trigger resolves later through resolve_top_of_stack — never inline at the
         moment it fires. ``card`` defaults to the source permanent's card (used as the
-        stack object's display name)."""
+        stack object's display name).
+
+        Mid-cast, it is *held* instead — see ``deferring_triggers``. The check
+        belongs on this end rather than on the batch above it because the batch
+        is not the only fire site: a dies-trigger enqueues from
+        ``_permanent_to_graveyard`` one ability at a time, and a creature
+        sacrificed to pay a cost dies exactly there."""
+        if self.deferred_triggers is not None:
+            self.deferred_triggers.append(dict(
+                controller_index=controller_index,
+                source_permanent=source_permanent,
+                card=card,
+                instruction=instruction,
+                effect_kind=effect_kind,
+                ability_text=ability_text,
+                target_player_index=target_player_index,
+                target_permanent_index=target_permanent_index,
+                target_permanent_id=target_permanent_id,
+                trigger_context=trigger_context,
+                hook_key=hook_key,
+                hook_event=hook_event,
+            ))
+            return
         stack_card = card if card is not None else (source_permanent.card if source_permanent is not None else None)
         if stack_card is None:
             return
@@ -118,6 +142,43 @@ class StackResolutionMixin:
 
         for _, event in sorted(enumerate(events), key=_key):
             self._enqueue_triggered_ability(**event)
+
+    @contextmanager
+    def deferring_triggers(self):
+        """Hold triggers fired inside this block until the block ends.
+
+        CR 601.2a puts a spell on the stack **first** and CR 601.2h pays its
+        costs afterwards; CR 602.2a/602.2b say the same of an activated ability.
+        A trigger that fires while a cost is being paid therefore belongs
+        *above* the object being cast — and CR 601.2c's parenthetical spells out
+        the mechanism: such abilities "wait to be put on the stack until the
+        spell has finished being cast".
+
+        This engine pays first and pushes second, because a payment that cannot
+        be made has to leave nothing behind — the rewind CR 601.2 describes,
+        done by never having built the stack item. That inverted the order for
+        every trigger a cost fires. Holding them here restores it without
+        touching the rewind: the buffer is flushed after the push, so the
+        observable sequence is the rule's, whatever the internal order was.
+
+        Nothing in the pool could see this until the sacrifice seam gave
+        "whenever you sacrifice a permanent" a fire site — Havoc Jester's ping
+        resolved *after* Witch's Cauldron's draw, and after Village Rites'.
+
+        Re-entrant by design: an inner block joins the outer buffer rather than
+        starting a second one, so a nested announcement still flushes exactly
+        once, at the point the outermost object is on the stack.
+        """
+        if self.deferred_triggers is not None:
+            yield
+            return
+        self.deferred_triggers = []
+        try:
+            yield
+        finally:
+            held, self.deferred_triggers = self.deferred_triggers, None
+            for event in held:
+                self._enqueue_triggered_ability(**event)
     def _settle(self) -> None:
         """Run state-based actions, then resolve the stack one item at a time,
         re-checking SBAs between each resolution (CR 704.3 + 603.3). Triggers that

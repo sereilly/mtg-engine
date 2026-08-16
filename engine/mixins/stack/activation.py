@@ -114,7 +114,20 @@ class AbilityActivationMixin:
 
         apply_prevention_shield(self, target_player, target_perm_idx, 1)
         return SimulationResult(label, True, "activated_prevent_one", "resolved")
-    def queue_permanent_ability(
+    def queue_permanent_ability(self, *args, **kwargs) -> SimulationResult:
+        """Activate an ability — CR 602, start to finish.
+
+        The same wrapper, for the same rule, as ``queue_from_hand``: CR 602.2b
+        routes activation through CR 601.2b–i, so an ability's costs are paid
+        inside one announcement and a trigger they fire waits for the end of it.
+        Witch's Cauldron eats a creature to pay for itself, and Havoc Jester's
+        ping belongs above the Cauldron's ability rather than under it. See
+        ``deferring_triggers``.
+        """
+        with self.deferring_triggers():
+            return self._activate_onto_stack(*args, **kwargs)
+
+    def _activate_onto_stack(
         self,
         controller_index: int,
         permanent_name: str,

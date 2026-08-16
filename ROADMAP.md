@@ -2153,3 +2153,71 @@ arrives on is, because a cost is not a target.
   does the "activate from hand" seam beside it.
 
 ---
+
+## Round 45: a trigger has to reach the stack, and reach it at the right moment
+
+*(2026-08-15.)* No support-count change — M21 stays at 209 — and five cards
+that reported `supported` now do what they print, one of them in the *shipped*
+pool. Two questions that look unrelated and turn out to be the same question,
+both of them answered by the fire site instead of by the rules.
+
+**Whether it fires.** `_permanent_to_graveyard` put a card's own dies-trigger
+on the stack through **one loop per instruction kind**, each added by the card
+that needed it: `may` for Goblin Arsonist, `target_gains_life` *with Conclave
+Mentor's payload key* for Conclave Mentor, and three carried out inline for
+reasons their comments give. A dies-trigger of any other shape did nothing at
+all. **Onulet** — "When this creature dies, you gain 2 life" — ships at 388/388
+supported and never gained a point of life in its life, because its instruction
+kind matched a loop whose payload check it failed. Four M21 cards were in the
+same position (Conclave Mentor's sibling shapes: a token, 3 damage, a
+sequence).
+
+It is now one loop over the card's dies-triggers, with the three genuinely
+inline kinds named in a frozenset beside it. A fire site that enumerates
+instruction kinds cannot be complete — it can only be as complete as the last
+card that touched it, which is a property no one can read off the code.
+
+**Nothing caught it because nothing had looked.** `CARD_VERIFICATION.md` said
+"Total 369 / Untested **0**" while the catalog holds 388: the file is generated
+on a Debug-Menu edit and had not been regenerated since Revised was ingested, so
+the 19 cards Revised added had no recorded result and the tracker reported none
+missing. Regenerated here — 388 total, 369 passing, **19 untested**, Onulet
+among them. A generated artifact that is stale does not read as stale; it reads
+as an answer.
+
+**When it fires.** Round 43's other finding, and it needed the fix above to be
+worth making. CR 601.2a puts a spell on the stack *first* and CR 601.2h pays its
+costs afterwards (CR 602.2a/602.2b say the same of an ability), so a trigger a
+cost fires belongs **above** the object it paid for — CR 601.2c's parenthetical
+spells out the mechanism: it waits "to be put on the stack until the spell has
+finished being cast". This engine pays first and pushes second, deliberately: an
+unpayable cost has to leave nothing behind, and the cheapest rewind is never
+having built the stack item. So every such trigger landed *underneath*.
+
+`deferring_triggers` holds them for the length of the announcement and flushes
+after the push, which restores the observable order without touching the
+rewind. `queue_from_hand` and `queue_permanent_ability` became two-line wrappers
+over the process they name — the wrapper *is* the statement that CR 601.2 is one
+announcement. The hold lives at the single-ability enqueue rather than at the
+APNAP batch, because the batch is not the only fire site: a dies-trigger
+enqueues one at a time from `_permanent_to_graveyard`, and a creature sacrificed
+to pay a cost dies exactly there. Onulet paying for Sacrifice exercises both
+halves in one line of stack.
+
+Suite **4,969** at 18.9s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Six of the seven new tests were
+watched to fail on HEAD; the seventh (Conclave Mentor) is the one dies-shape
+that already worked, which is what made the general case look covered.
+
+**Next:**
+
+- **The nineteen untested cards.** Now visible in the tracker, and Onulet is
+  the evidence that the list is worth working through rather than assuming.
+  `equivalent` reports 0 of them as covered by a passing peer, so every one
+  wants a real pass.
+- **The discard cost's picker** (unchanged from round 44): `cast_costs.py` pays
+  "discard a card", but a human seat discards whatever is first in hand, and
+  `derive_cast_spec` returns None because the client has no hand-card cast
+  prompt to return a spec to.
+
+---

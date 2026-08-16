@@ -1933,3 +1933,48 @@ def test_sparkhunter_masticore_keeps_its_planeswalker_protection(set_pool):
     game.enforce_mana_costs = False
 
     assert ("card_type", "planeswalker") in game._protection_qualities(masticore)
+
+
+# --- The trigger-timing round -----------------------------------------------
+
+
+def test_deathbloom_thallid_leaves_a_saproling_behind(set_pool):
+    """"When this creature dies, create a 1/1 green Saproling creature token."
+
+    One of four M21 cards whose dies-trigger had no fire site: the loop that put
+    them on the stack was keyed by instruction kind, one branch per card that
+    had needed one, so ``create_token`` fell through.
+    """
+    pool = set_pool("M21")
+    thallid = Permanent(card=pool["Deathbloom Thallid"])
+    p1 = PlayerState(name="P1", battlefield=[thallid])
+    p2 = PlayerState(name="P2", hand=[pool["Shock"]] * 3)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 1
+
+    while game.is_on_battlefield(thallid) and p2.hand:
+        game.cast_from_hand(1, "Shock", target_player_index=0, target_permanent_index=0)
+        game._settle()
+
+    assert [p.card.name for p in p1.battlefield] == ["Saproling Token"]
+
+
+def test_conclave_mentor_gains_the_life_it_had(set_pool):
+    """"When this creature dies, you gain life equal to its power." The power is
+    read as the permanent leaves (CR 603.10), which this fire site was already
+    doing — it is the only dies-shape it *did* get right, and the reason the
+    general case looked covered."""
+    pool = set_pool("M21")
+    mentor = Permanent(card=pool["Conclave Mentor"])   # 2/2
+    p1 = PlayerState(name="P1", battlefield=[mentor], life=20)
+    p2 = PlayerState(name="P2", hand=[pool["Shock"]] * 3)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 1
+
+    while game.is_on_battlefield(mentor) and p2.hand:
+        game.cast_from_hand(1, "Shock", target_player_index=0, target_permanent_index=0)
+        game._settle()
+
+    assert p1.life == 22
