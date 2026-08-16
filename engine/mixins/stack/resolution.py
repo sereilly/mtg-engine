@@ -283,6 +283,7 @@ class StackResolutionMixin:
                 stack_target=item.target_stack_item,
                 mode_index=item.chosen_mode_index,
                 old_color=item.choices.get("old_color"),
+                choices=item.choices,
             )
             self.log.append(f"{item.card.name} (copy) resolved")
             return
@@ -303,6 +304,7 @@ class StackResolutionMixin:
             divided_targets=item.choices.get("divided_targets"),
             exile_instead_of_graveyard=item.exile_instead_of_graveyard,
             cast_from_zone=item.cast_from_zone,
+            choices=item.choices,
         )
         return
     def _resolve_card(
@@ -321,6 +323,7 @@ class StackResolutionMixin:
         divided_targets: list[tuple[int, int | None]] | None = None,
         exile_instead_of_graveyard: bool = False,
         cast_from_zone: str = "hand",
+        choices: dict | None = None,
     ) -> None:
         caster = self.players[caster_index]
         primary_type = card.primary_type
@@ -417,6 +420,7 @@ class StackResolutionMixin:
                 old_color=old_color,
                 divided_targets=divided_targets,
                 cast_from_zone=cast_from_zone,
+                choices=choices,
             )
 
         def finish() -> None:

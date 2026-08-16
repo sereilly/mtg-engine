@@ -544,16 +544,28 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
 
 @effect_handler("sacrifice_matching_permanent")
 def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Sacrifice a creature" / "sacrifice another creature" as an effect the
-    controller performs (Dire Fleet Warmonger's accepted cost). Routed through
-    ``arm_forced_sacrifice``: a human seat picks which through the standing
-    prompt, everyone else takes the deterministic heuristic."""
+    """"Sacrifice a creature" / "sacrifice another creature" as an effect a
+    player performs (Dire Fleet Warmonger's accepted cost; Goremand's entry
+    trigger). Routed through ``arm_forced_sacrifice``: a human seat picks which
+    through the standing prompt, everyone else takes the deterministic
+    heuristic.
+
+    ``who`` names the payers — absent means the effect's own controller, which
+    is what a bare imperative means (CR 109.5). "Each opponent" arms the same
+    prompt for each of them, still living, in seat order so the AI simulation
+    stays seed-reproducible.
+    """
     caster_index = game.players.index(context.caster)
     exclude = context.source_permanent if instruction.payload.get("exclude_self") else None
-    game.arm_forced_sacrifice(
-        caster_index, 1,
-        filter=str(instruction.payload.get("filter", "creature")),
-        exclude=exclude,
-        reason=context.card.name,
-    )
+    if instruction.payload.get("who") == "each_opponent":
+        payers = list(game.opponents_of(caster_index))
+    else:
+        payers = [caster_index]
+    for seat in payers:
+        game.arm_forced_sacrifice(
+            seat, 1,
+            filter=str(instruction.payload.get("filter", "creature")),
+            exclude=exclude,
+            reason=context.card.name,
+        )
     return True, "resolved"

@@ -46,10 +46,21 @@ _COLOR_WORDS = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green
 
 @effect_handler("sacrifice_creature_for_mana")
 def sacrifice_creature_for_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"As an additional cost to cast this spell, sacrifice a creature." plus
-    the mana that cost buys.
+    """The mana an additional cost's sacrifice buys (Sacrifice, Metamorphosis).
 
-    Two cards print it and they differ in three ways, so all three are payload:
+    **The sacrifice is not performed here.** It is the spell's printed
+    additional cost, so CR 601.2b/601.2h pay it while the spell is being cast —
+    ``engine/cast_costs.py`` reads it and ``queue_from_hand`` performs it, the
+    same as for the two cards that print the identical sentence and buy nothing
+    with it. What arrives here is what the cost ate, on the stack item, and it
+    is off the battlefield by now: its mana value is last-known information
+    (CR 608.2h), which the ``Permanent`` object still carries.
+
+    This handler used to sacrifice a creature of its own at resolution. With the
+    cost also being paid, that was two creatures for one spell — the reason the
+    two halves had to separate in the same round the cost became general.
+
+    Two cards reach it and they differ in three ways, so all three are payload:
 
     ``color``       the mana symbol produced, or None when the card says "of any
                     one color" and the caster picks (the pick rides
@@ -66,10 +77,12 @@ def sacrifice_creature_for_mana(game: Game, instruction: OracleInstruction, cont
     in a handler, and the exact shape ``engine/parsing/`` was deleted to remove.
     """
     caster = context.caster
-    chosen = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
-    sacrificed_perm = game._sacrifice_creature_for_mana(caster, chosen_index=chosen)
+    sacrificed_perm = context.choices.get("sacrificed_for_cost")
     if sacrificed_perm is None:
-        game.log.append(f"{caster.name} had no creature to sacrifice")
+        # The spell reached resolution without its cost having been paid, which
+        # the casting gate makes impossible from `queue_from_hand` — a direct
+        # handler invocation (a test, a script) is the remaining way in.
+        game.log.append(f"{caster.name} sacrificed no creature for {context.card.name}")
         return True, "resolved"
     sacrificed = sacrificed_perm.card
     amount = int(sacrificed.cmc) + int(instruction.payload.get("bonus", 0))

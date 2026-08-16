@@ -557,15 +557,9 @@ class AbilityActivationMixin:
                 named_permanent
                 if any(perm is named_permanent for perm in candidates)
                 # A permanent whose death loses the game is kept for last, then
-                # the smallest — the same shape the forced-sacrifice default uses.
-                else min(
-                    candidates,
-                    key=lambda perm: (
-                        "you lose the game" in perm.card.oracle_text.lower(),
-                        perm.effective_power,
-                        perm.permanent_id,
-                    ),
-                )
+                # the smallest — one rule, shared with the cast-side additional
+                # cost and the forced-sacrifice default (`default_sacrifice_pick`).
+                else self.default_sacrifice_pick(candidates)
             )
 
         required_cost = dict(ability.cost.mana)

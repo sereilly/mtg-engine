@@ -19,6 +19,7 @@ import re
 
 from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
+from ...cast_costs import AdditionalCost, additional_costs
 from ...cast_restrictions import check_cast_timing
 from ...classifier import classify_card
 from ...cost_modifiers import (
@@ -90,6 +91,14 @@ class SpellCastingMixin:
         divided_targets: list[tuple[int, int | None]] | None = None,
         from_zone: str = "hand",
         use_free_permission: bool | None = None,
+        # Which permanent / which card in hand pays a printed additional cost
+        # (CR 601.2b). The same shape `activate_permanent_ability` takes, and
+        # for the same reason: the payer chooses, a cost is paid *during*
+        # casting, and a queued prompt would put the spell on the stack before
+        # its cost was collected. A seat that names neither gets the
+        # deterministic pick, which keeps AI and headless play unblocked.
+        cost_permanent_index: int | None = None,
+        cost_hand_index: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -105,6 +114,8 @@ class SpellCastingMixin:
             divided_targets=divided_targets,
             from_zone=from_zone,
             use_free_permission=use_free_permission,
+            cost_permanent_index=cost_permanent_index,
+            cost_hand_index=cost_hand_index,
         )
         if not queued.supported:
             return queued
@@ -132,6 +143,14 @@ class SpellCastingMixin:
         divided_targets: list[tuple[int, int | None]] | None = None,
         from_zone: str = "hand",
         use_free_permission: bool | None = None,
+        # Which permanent / which card in hand pays a printed additional cost
+        # (CR 601.2b). The same shape `activate_permanent_ability` takes, and
+        # for the same reason: the payer chooses, a cost is paid *during*
+        # casting, and a queued prompt would put the spell on the stack before
+        # its cost was collected. A seat that names neither gets the
+        # deterministic pick, which keeps AI and headless play unblocked.
+        cost_permanent_index: int | None = None,
+        cost_hand_index: int | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         # Casting from the hand is a rule; casting from anywhere else is an
@@ -223,6 +242,21 @@ class SpellCastingMixin:
         if timing_denial is not None:
             self.log.append(timing_denial)
             return SimulationResult(card.name, False, classification.effect_kind, timing_denial)
+
+        # A printed additional cost (CR 601.2b). Checked here, before a single
+        # mana is spent: CR 601.2h says an unpayable cost can't be paid, and the
+        # consequence is that the spell can't be cast at all — not that it is
+        # cast for free, which is what happened while the phrase lived in the
+        # spell-pattern whitelist. Paid further down, once every other cost has
+        # cleared and the card itself has left the hand.
+        cast_costs = additional_costs(card)
+        unpayable = self._unpayable_additional_cost(
+            caster_index, card, cast_costs, spell_hand_index=hand_index,
+            from_zone=from_zone,
+        )
+        if unpayable is not None:
+            self.log.append(unpayable)
+            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
 
         # Resolve an explicitly chosen target spell on the stack (Counterspell,
         # Fork). target_stack_index indexes into self.stack (bottom-first).
@@ -322,6 +356,14 @@ class SpellCastingMixin:
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
         card = source_zone.pop(hand_index)
+        # Now, and not before: the spell is no longer in the hand, so it cannot
+        # be discarded to pay for itself, and the creature it eats is gone from
+        # the battlefield before the spell is on the stack.
+        sacrificed_for_cost = self._pay_additional_costs(
+            caster_index, card, cast_costs,
+            cost_permanent_index=cost_permanent_index,
+            cost_hand_index=cost_hand_index,
+        )
         if permission is not None:
             consume_permission(self, permission, card)
         if from_zone != "hand":
@@ -358,6 +400,13 @@ class SpellCastingMixin:
                         "divided_targets": divided_targets,
                         "new_color": new_color,
                         "old_color": old_color,
+                        # What the additional cost ate, for the spell whose
+                        # effect asks about it ("…equal to the sacrificed
+                        # creature's mana value"). The Permanent is off the
+                        # battlefield by now, so this is last-known information
+                        # (CR 608.2h) held on the stack item rather than a
+                        # second lookup that could not succeed.
+                        "sacrificed_for_cost": sacrificed_for_cost,
                     },
                 )
             )
@@ -378,8 +427,129 @@ class SpellCastingMixin:
             target_player_index=target_player_index,
             target_permanent_index=target_permanent_index,
             x_value=resolved_x_value,
+            choices={"sacrificed_for_cost": sacrificed_for_cost},
         )
         return SimulationResult(card.name, True, classification.effect_kind, "resolved")
+    # ------------------------------------------------------------------
+    # Printed additional costs (CR 601.2b)
+    # ------------------------------------------------------------------
+
+    def _additional_cost_candidates(self, caster_index: int, cost: AdditionalCost) -> list[Permanent]:
+        """The permanents that could pay *cost*'s sacrifice, by identity.
+
+        Never by index: an index would be held across the removal that paying
+        performs, and would then name whichever permanent slid into the slot.
+        """
+        if not cost.sacrifice_type:
+            return []
+        type_filter = {"type_filter": cost.sacrifice_type}
+        return [
+            perm
+            for perm in self.controlled_by(caster_index)
+            if permanent_matches_filter(perm, type_filter)
+        ]
+
+    def _unpayable_additional_cost(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        costs: tuple[AdditionalCost, ...],
+        *,
+        spell_hand_index: int | None,
+        from_zone: str,
+    ) -> str | None:
+        """Why *card*'s printed additional costs can't be paid, or None.
+
+        CR 601.2h: "Unpayable costs can't be paid" — and CR 601.2 makes the
+        whole casting a rewind, so the answer is that the spell is not cast,
+        never that it is cast without the cost. Asked before any mana leaves the
+        pool, so a refusal costs the caster nothing.
+        """
+        caster = self.players[caster_index]
+        for cost in costs:
+            if cost.sacrifice_type:
+                if not self._additional_cost_candidates(caster_index, cost):
+                    return (
+                        f"{card.name} can't be cast: no {cost.sacrifice_type} to "
+                        f"sacrifice for its additional cost (CR 601.2h)"
+                    )
+            if cost.discard_cards:
+                # The spell itself is still in the zone it is being cast from,
+                # and it is about to be on the stack — so it cannot be one of
+                # the cards discarded to pay for itself.
+                available = len(caster.hand)
+                if from_zone == "hand" and spell_hand_index is not None:
+                    available -= 1
+                if available < cost.discard_cards:
+                    return (
+                        f"{card.name} can't be cast: not enough cards in hand to "
+                        f"discard for its additional cost (CR 601.2h)"
+                    )
+        return None
+
+    def _pay_additional_costs(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        costs: tuple[AdditionalCost, ...],
+        *,
+        cost_permanent_index: int | None,
+        cost_hand_index: int | None,
+    ) -> Permanent | None:
+        """Perform *card*'s printed additional costs, returning what was
+        sacrificed (for the spell whose effect asks about it).
+
+        The payer chooses (CR 601.2b), and the choice arrives with the action
+        rather than through the pending-choice queue — a queued prompt would put
+        the spell on the stack before its cost was collected, which is the
+        reasoning ``activate_permanent_ability`` already records for the
+        identically-shaped activation costs. A seat that names nothing gets a
+        deterministic pick so AI and headless play stay unblocked.
+        """
+        caster = self.players[caster_index]
+        sacrificed: Permanent | None = None
+        for cost in costs:
+            if cost.sacrifice_type:
+                candidates = self._additional_cost_candidates(caster_index, cost)
+                if not candidates:
+                    continue  # gated above; a board that changed since is a no-op
+                named = (
+                    self.permanent_at(caster, cost_permanent_index)
+                    if isinstance(cost_permanent_index, int)
+                    else None
+                )
+                chosen = (
+                    named
+                    # `in` compares Permanents by value and would match a
+                    # look-alike; membership is by identity.
+                    if any(perm is named for perm in candidates)
+                    else self.default_sacrifice_pick(candidates)
+                )
+                name = chosen.card.name
+                if self.sacrifice_permanent(chosen) is not None:
+                    sacrificed = chosen
+                    self.log.append(
+                        f"{caster.name} sacrificed {name} to cast {card.name}"
+                    )
+            if cost.discard_cards:
+                for _ in range(cost.discard_cards):
+                    if not caster.hand:
+                        break
+                    index = (
+                        cost_hand_index
+                        if isinstance(cost_hand_index, int)
+                        and 0 <= cost_hand_index < len(caster.hand)
+                        else 0
+                    )
+                    discarded = caster.hand.pop(index)
+                    self._discard_card(caster, discarded)
+                    self.log.append(
+                        f"{caster.name} discarded {discarded.name} to cast {card.name}"
+                    )
+                    # One named index pays one card; the rest take the default.
+                    cost_hand_index = None
+        return sacrificed
+
     def _destroy_target_legal(self, payload: dict, perm: Permanent) -> bool:
         """Whether *perm* satisfies a ``destroy_target_permanent`` instruction's
         target filters (type/subtype/colour/tapped + exclusions). Shared by cast

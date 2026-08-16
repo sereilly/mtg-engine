@@ -1876,3 +1876,60 @@ def test_havoc_jester_stays_silent_when_an_opponent_sacrifices(set_pool):
     assert (p1.life, p2.life) == (20, 21), (
         "no ping: the opponent sacrificed, and they gained the Cauldron's life"
     )
+
+
+# --- The additional-cost round ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Goremand",              # sacrifice cost // ETB: each opponent sacrifices
+        "Sparkhunter Masticore", # discard cost // protection from planeswalkers
+    ],
+)
+def test_additional_cost_creatures_compile_supported(set_pool, name):
+    """Both were reported "creature text too complex" naming the *cost* line,
+    which is the first line each prints — so nothing below it was ever read.
+    A cost is not an effect, and the compiler now hands the line to
+    engine/cast_costs.py instead of looking for an instruction in it."""
+    assert compile_card_oracle(set_pool("M21")[name]).supported
+
+
+def test_goremand_makes_each_opponent_sacrifice_when_it_enters(set_pool):
+    """"When this creature enters, each opponent sacrifices a creature."
+
+    The same prompt the controller-scoped form arms, owed by a different set of
+    seats — one instruction with the payer named, never a second kind, because
+    CR 701.21a already says the sacrificing player chooses.
+    """
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pool["Alpine Watchdog"])],
+                     hand=[pool["Goremand"]])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=pool["Concordia Pegasus"])])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Goremand")
+    game._settle()
+
+    assert [p.card.name for p in p2.battlefield] == [], "the opponent's creature went"
+    assert [p.card.name for p in p1.battlefield] == ["Goremand"], (
+        "and the Demon is not its own opponent (CR 102.3) — only the cost took one of ours"
+    )
+
+
+def test_sparkhunter_masticore_keeps_its_planeswalker_protection(set_pool):
+    """The card the cost line was hiding. "Protection from planeswalkers" is a
+    quality this engine models (CR 702.16), and the whole card was unsupported
+    only because the compiler stopped at line one."""
+    pool = set_pool("M21")
+    masticore = _nosick(Permanent(card=pool["Sparkhunter Masticore"]))
+    walker = Permanent(card=pool["Basri Ket"], metadata={"loyalty_counters": 4})
+    p1 = PlayerState(name="P1", battlefield=[masticore])
+    p2 = PlayerState(name="P2", battlefield=[walker])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    assert ("card_type", "planeswalker") in game._protection_qualities(masticore)

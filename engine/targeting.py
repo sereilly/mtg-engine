@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import re
 
+from .cast_costs import additional_costs
 from .enter_effects import copy_on_enter_type
 
 # "Enchant creature", "Enchant land", ... — but NOT "Enchant creature card in a
@@ -241,12 +242,11 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "arm_mirror_damage": {
         "kind": "permanent", "source_of_choice": True, "also_stack": True,
     },
-    # "As an additional cost to cast this spell, sacrifice a creature." The
-    # creature picked is the caster's own and is sacrificed as a cost, so the UI
-    # offers only their creatures and says "sacrifice" rather than "target".
-    "sacrifice_creature_for_mana": {
-        "kind": "creature", "own_only": True, "sacrifice_cost": True,
-    },
+    # "As an additional cost to cast this spell, sacrifice a creature" used to
+    # be keyed here, by the instruction Sacrifice and Metamorphosis compile to.
+    # It is a *cost*, so `derive_cast_spec` now reads it off `cast_costs` and
+    # every card printing the phrase gets the picker — Village Rites and
+    # Goremand buy nothing with it and were being offered no choice at all.
     # --- kinds that reach the picker through an activated ability -----------
     #
     # Each of these resolves through `resolve_target_permanent(game, context)` with
@@ -421,6 +421,15 @@ def derive_cast_spec(card, program) -> dict | None:
     activated ability — Royal Assassin picks its victim when the ability is
     activated, not when the creature is cast.
     """
+    # A printed additional cost is picked as the spell is cast, before any
+    # target — and unlike a target it belongs to the *cost*, so it is read from
+    # the cost table rather than from any instruction. `sacrifice_cost` is what
+    # tells the client to send it on the cost field and to say "sacrifice"
+    # rather than "target".
+    for cost in additional_costs(card):
+        if cost.sacrifice_type == "creature":
+            return {"kind": "creature", "own_only": True, "sacrifice_cost": True}
+
     graveyard_aura = _ENCHANT_GRAVEYARD_LINE.search(program.normalized_text or "")
     if graveyard_aura is not None:
         # Animate Dead. `_apply_aura_effect` reads the chosen index out of

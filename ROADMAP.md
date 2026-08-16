@@ -2074,3 +2074,82 @@ the opponent-scope) rather than what it changed.
   is the first of its kind in the pool.
 
 ---
+
+## Round 44: a cost that was never paid
+
+*(2026-08-15.)* M21 **207 → 209** (Goremand, Sparkhunter Masticore), and four
+more cards that already reported `supported` now do what they print. Round 43's
+first "next" item, and it was worse than a gap.
+
+**"As an additional cost to cast this spell, sacrifice a creature" lived in
+`SUPPORTED_SPELL_PATTERNS`** — a substring whitelist whose match produces a
+`spell_pattern` marker with no handler. So **Village Rites** compiled to "draw
+two cards" plus a no-op, reported supported, and cast for `{B}`: the cost was
+*claimed*, never paid, and nothing in the engine could tell the difference.
+**Thrill of Possibility**'s discard did not even get the marker. And because a
+creature's line loop has no whitelist, the identical sentence made **Goremand**
+and **Sparkhunter Masticore** come back "creature text too complex" naming line
+one — so nothing below it was ever read, and the Masticore's protection, both
+its abilities and its whole card went unsupported for a sentence about a cost.
+
+Alpha's **Sacrifice** and **Metamorphosis** escaped only because a *card hook*
+folded the cost into their effect and performed both at resolution. That is one
+sacrifice in the right place for the wrong reason, and it is why the general
+form had never been needed.
+
+**`engine/cast_costs.py`** is that general form — the same model as
+`cast_restrictions.py`, keyed by canonical phrase, matched on the whole line
+rather than as a substring, because a substring match is how the whitelist came
+to claim what it did not implement. The compiler asks it whether a line is a
+cost (which is what stops the line being an effect nothing implements) and
+`queue_from_hand` asks twice more: **before** any mana leaves the pool, because
+CR 601.2h says an unpayable cost can't be paid and the consequence is that the
+spell is not cast; and **after** the card leaves its zone, so the spell cannot
+be discarded to pay for itself and the creature is gone before the spell is on
+the stack.
+
+Three things followed:
+
+- **The two hooks were re-keyed onto the effect line each card alone prints.**
+  Keying them on the cost sentence was always the wrong address — four cards
+  print it and it says nothing about what either buys — and with the cost also
+  being paid it meant *two* creatures for one spell. `sacrifice_creature_for_mana`
+  now reads what the cost took off the stack item (CR 608.2h). Name-keyed
+  sentences in the parse-coverage report: **147 → 145**.
+- **The pick moved from the target field to the cost field.** What pays an
+  additional cost is not what the spell targets (CR 601.2b vs 601.2c), and a
+  card can have both. `derive_cast_spec` now reads the picker off the *cost*
+  rather than off `sacrifice_creature_for_mana`, so Village Rites and Goremand
+  are offered the choice they were never given.
+- **`each opponent sacrifices a creature`** (Goremand's entry trigger) is one
+  production and one payload key: the `Sacrifice` node has carried its player
+  since it was written, and only the bare imperative had a parse. Same prompt,
+  different seats — CR 701.21a already says the sacrificing player chooses.
+
+`default_sacrifice_pick` is now one rule with three callers. It was three
+near-copies of "keep the one whose death loses the game for last, then take the
+smallest", which is exactly the shape that drifts into three different answers.
+
+Suite **4,962** at 18.7s, every `--check` green, shipped pool 388/388, zero
+hooks on M21, zero ceiling raises. Twelve of the sixteen new tests were watched
+to fail on HEAD; two of the others pin what the split had to *avoid* breaking.
+Two regression tests changed the parameter they pass and nothing else — the bug
+each pins (the payer's choice is honoured) is unchanged; only the field it
+arrives on is, because a cost is not a target.
+
+**Next:**
+
+- **A trigger fired while paying a cost still lands under the ability.** Round
+  43's other finding, untouched: CR 602.2a puts an activated ability on the
+  stack at announcement and 601.2h pays afterwards, so Havoc Jester's ping
+  should resolve *before* Witch's Cauldron's draw. The cast path now has the
+  same shape — Goremand's cost is paid before the spell is pushed — so the two
+  are one fix, not two.
+- **The discard-cost family's other half.** `cast_costs.py` reads "discard a
+  card" and pays it, but the *picker* does not exist: a human seat discards
+  whatever is first in hand. `derive_cast_spec` returns None for it, because
+  the client has no hand-card cast prompt to return a spec *to*. Waker of
+  Waves, Niambi, Subira and Sanctum of Shattered Heights all want it, and so
+  does the "activate from hand" seam beside it.
+
+---

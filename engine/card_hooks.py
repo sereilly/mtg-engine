@@ -461,15 +461,18 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "whenever this creature attacks and isn't blocked, you gain 2 life":
             _line("target_gains_life", "spell_pattern", amount=2, recipient="caster"),
     },
-    # Metamorphosis and Sacrifice print the *same* additional-cost sentence and
-    # buy different mana with it, so the line alone cannot say what the card
-    # does — which is what makes the name load-bearing here rather than a
-    # shortcut. Both are keyed on that cost line because the handler performs
-    # both halves in one resolution, and the three ways they differ (colour,
-    # amount, spend restriction) are payload on the instruction rather than
-    # `in text` probes inside the handler.
+    # Metamorphosis and Sacrifice each print one bespoke sentence: mana bought
+    # with the mana value of the creature their additional cost ate. The cost
+    # itself is no longer theirs — it is the general CR 601.2b table
+    # (engine/cast_costs.py), paid while casting, and these two hooks were
+    # re-keyed off that shared cost line and onto the *effect* line each of them
+    # alone prints. That is the honest key: the cost sentence is identical on
+    # four cards and says nothing about what either buys, while these two
+    # sentences differ in the three ways the payload records (colour, amount,
+    # spend restriction) and no third card shares either shape.
     'Metamorphosis': {
-        "as an additional cost to cast this spell, sacrifice a creature":
+        "add x mana of any one color, where x is 1 plus the sacrificed creature's "
+        "mana value. spend this mana only to cast creature spells":
             _line("sacrifice_creature_for_mana", "spell_pattern",
                 color=None, bonus=1, spend_only="creature"),
     },
@@ -613,7 +616,7 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
     },
     # The other half of the pair; see the note on Metamorphosis above.
     'Sacrifice': {
-        "as an additional cost to cast this spell, sacrifice a creature":
+        "add an amount of {b} equal to the sacrificed creature's mana value":
             _line("sacrifice_creature_for_mana", "spell_pattern",
                 color="B", bonus=0, spend_only=None),
     },

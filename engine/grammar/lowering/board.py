@@ -504,8 +504,13 @@ def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
     # arms the forced-sacrifice prompt rather than acting on a known
     # permanent. Bare creature filters only — the prompt's candidate test
     # reads one type word, and a narrowing it cannot test must refuse.
+    # "Each opponent sacrifices a creature" (Goremand) is the same prompt owed
+    # by a different set of seats, so it is the same instruction with the
+    # payer named — never a second kind. CR 701.21a says the sacrificing
+    # player chooses, which is exactly what the prompt already does; the only
+    # thing that changes is who is asked.
     if (
-        node.player.kind == "you"
+        node.player.kind in ("you", "each_opponent")
         and isinstance(node.subject, ast.TargetSpec)
         and not node.subject.targeted
         and node.subject.count == 1
@@ -518,6 +523,8 @@ def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
         payload: dict[str, object] = {"filter": "creature"}
         if node.subject.filter.other_than_source:
             payload["exclude_self"] = True
+        if node.player.kind == "each_opponent":
+            payload["who"] = "each_opponent"
         return (OracleInstruction("sacrifice_matching_permanent", "", payload),)
     if not _is_source(node.subject):
         raise LoweringError("no handler for sacrificing a chosen permanent", node=node)

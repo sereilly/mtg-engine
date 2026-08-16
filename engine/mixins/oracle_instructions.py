@@ -58,6 +58,11 @@ class OracleInstructionsMixin:
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
         cast_from_zone: str = "hand",
+        # Everything else the stack item recorded (CHOICE_KEYS). The three
+        # spelled-out parameters above predate it and stay for their callers;
+        # anything a *cost* recorded arrives here, because a parameter per
+        # choice is the shape `CHOICE_KEYS` exists to avoid.
+        choices: dict | None = None,
     ) -> None:
         instruction = self._select_executable_instruction(card, mode_index)
         if instruction is None:
@@ -87,6 +92,7 @@ class OracleInstructionsMixin:
                 target_permanent_id=target_permanent_id,
                 x_value=x_value,
                 choices={
+                    **(choices or {}),
                     "divided_targets": divided_targets,
                     "new_color": new_color,
                     "old_color": old_color,

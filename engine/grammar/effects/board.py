@@ -9,11 +9,13 @@ one, because "search your library" needs the same fragment and neither family
 should own the other's vocabulary.
 """
 
+import dataclasses
+
 from .. import ast
 from ..nouns import (parse_recipient)
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES)
-from ..phrases import _parse_zone
+from ..phrases import _parse_mana_payment, _parse_zone
 
 
 def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:
@@ -180,3 +182,33 @@ def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
     if either_way:
         return ast.TapOrUntap(subject)
     return ast.Tap(subject) if verb == "tap" else ast.Untap(subject)
+
+
+def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
+    """"<player> sacrifices <noun>", with the verb already consumed.
+
+    Two spellings reach it: the bare imperative, whose player is you, and a
+    printed subject ("each opponent sacrifices a creature", Goremand). One
+    production for both, because who sacrifices is the node's field and the
+    sentence is otherwise word-for-word the same — the alternative was a second
+    copy that would have had to grow the "another" reading and the unless-pay
+    tail again.
+    """
+    # "Sacrifice **another** creature" (Dire Fleet Warmonger) — the same
+    # reading the cost parser gives the word: a restriction on what may be
+    # sacrificed, carried on the filter's existing field.
+    another = bool(stream.accept_word("another"))
+    subject = parse_recipient(stream)
+    if subject is None:
+        raise stream.error("expected something to sacrifice")
+    if another and isinstance(subject, ast.TargetSpec):
+        subject = dataclasses.replace(
+            subject, filter=dataclasses.replace(subject.filter, other_than_source=True)
+        )
+    # "… unless you pay {W}{W}" — a pay-or-else prompt, kept fused because
+    # that is the shape the upkeep dispatcher's handlers implement.
+    mark = stream.mark()
+    if stream.accept_phrase("unless", "you", "pay"):
+        return ast.SacrificeUnlessPay(subject, _parse_mana_payment(stream))
+    stream.reset(mark)
+    return ast.Sacrifice(player, subject)

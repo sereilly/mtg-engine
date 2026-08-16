@@ -48,6 +48,7 @@ from engine import card_hooks, load_cards  # noqa: E402
 from engine.card_loader import manifest_set_paths  # noqa: E402
 from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
 from engine.oracle_types import OracleInstruction  # noqa: E402
+from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
 from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import draw_step_bonus_for  # noqa: E402
@@ -171,6 +172,11 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("aura enchant noun (oracle_instructions attach)", lambda s: s.startswith("enchant ")),
     ("aura static (oracle_instructions/permanent_state)", lambda s: _matches_any(s, _AURA_STATIC_PATTERNS)),
     ("cast_restrictions.py", lambda s: any(r.phrase in s for r in CAST_RESTRICTIONS)),
+    # A printed additional cost (CR 601.2b). Not an instruction — a cost is not
+    # an effect — so the sentence would read as unclaimed without this, which
+    # is what it *should* have read while the phrase sat in the spell-pattern
+    # whitelist producing a marker nothing performed.
+    ("cast_costs.py", cast_cost_claims_line),
     ("untap_restrictions.py", lambda s: untap_restriction_for(s) is not None),
     # Extra land plays (Fastbond). This was a literal in _MIXIN_TEXT_SCANS
     # pointing at a name-keyed count, so the sentence read as claimed for every

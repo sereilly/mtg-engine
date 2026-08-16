@@ -57,6 +57,7 @@ from .effects import (
     _parse_remove_counter,
     _parse_return,
     _parse_reveal_top,
+    _parse_sacrifice,
     _parse_search_library,
     _parse_tap_untap,
     _parse_wins,
@@ -131,24 +132,7 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         return _parse_prevent(stream)
     if stream.at_word("sacrifice"):
         stream.advance()
-        # "Sacrifice **another** creature" (Dire Fleet Warmonger) — the same
-        # reading the cost parser gives the word: a restriction on what may be
-        # sacrificed, carried on the filter's existing field.
-        another = bool(stream.accept_word("another"))
-        subject = parse_recipient(stream)
-        if subject is None:
-            raise stream.error("expected something to sacrifice")
-        if another and isinstance(subject, ast.TargetSpec):
-            subject = dataclasses.replace(
-                subject, filter=dataclasses.replace(subject.filter, other_than_source=True)
-            )
-        # "… unless you pay {W}{W}" — a pay-or-else prompt, kept fused because
-        # that is the shape the upkeep dispatcher's handlers implement.
-        mark = stream.mark()
-        if stream.accept_phrase("unless", "you", "pay"):
-            return ast.SacrificeUnlessPay(subject, _parse_mana_payment(stream))
-        stream.reset(mark)
-        return ast.Sacrifice(ast.PlayerRef("you"), subject)
+        return _parse_sacrifice(stream, ast.PlayerRef("you"))
     if stream.at_word("regenerate"):
         stream.advance()
         subject = parse_recipient(stream)
@@ -273,6 +257,13 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
             return _parse_discard(stream, source_spec)
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
+        # "Each opponent sacrifices a creature" (Goremand). The AST node has
+        # carried its player since it was written; only the *bare* imperative
+        # ("Sacrifice a creature", which means you) had a production, so a
+        # printed subject was an unrecognized verb.
+        if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):
+            stream.advance()
+            return _parse_sacrifice(stream, source_spec)
         if token.text == "becomes":
             return _parse_become_color(stream, source_spec)
         if token.text in ("phases", "phase"):

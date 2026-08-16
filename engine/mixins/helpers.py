@@ -854,6 +854,30 @@ class GameHelpersMixin:
             self._renumber_combat_after_removal(vacated)
         return removed
 
+    @staticmethod
+    def default_sacrifice_pick(candidates: list[Permanent]) -> Permanent:
+        """Which of *candidates* a seat that did not choose gives up.
+
+        Every sacrifice a player owes has an interactive answer and a
+        deterministic one, and the deterministic one has to be the *same* rule
+        wherever it is reached — an AI paying an activation cost, a headless
+        script casting a spell, and the forced-sacrifice prompt's default were
+        three copies of "keep the one whose death loses the game for last, then
+        take the smallest", which is exactly the kind of near-duplicate that
+        drifts into three different answers.
+
+        ``permanent_id`` breaks the tie, so the pick is stable across a run and
+        the AI simulation stays seed-reproducible.
+        """
+        return min(
+            candidates,
+            key=lambda perm: (
+                "you lose the game" in perm.card.oracle_text.lower(),
+                perm.effective_power,
+                perm.permanent_id,
+            ),
+        )
+
     def sacrifice_permanent(self, permanent: Permanent) -> Permanent | None:
         """Sacrifice *permanent* — CR 701.21a, the one transition.
 

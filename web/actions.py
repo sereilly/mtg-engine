@@ -227,6 +227,13 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         divided_targets=divided,
         from_zone=req.from_zone or "hand",
         use_free_permission=req.use_free_permission,
+        # A printed additional cost's payment (CR 601.2b). Its own field, not
+        # the target one, for the reason `cost_permanent_id`'s comment in
+        # schemas.py gives about activation: a spell can have both a target and
+        # a cost, and overloading one field would make the cost eat the
+        # creature the spell was aimed at.
+        cost_permanent_index=req.cost_permanent_index,
+        cost_hand_index=req.cost_hand_index,
     )
 
 

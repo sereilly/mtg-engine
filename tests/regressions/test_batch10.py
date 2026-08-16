@@ -124,7 +124,8 @@ class TestSacrifice:
         giant = Permanent(card=cards["Hill Giant"])     # mana value 4
         p0 = PlayerState(name="P0", hand=[cards["Sacrifice"]], battlefield=[bear, giant])
         game = _game(p0, PlayerState(name="P1"))
-        game.cast_from_hand(0, "Sacrifice", target_player_index=0, target_permanent_index=1)
+        # See the note in test_batch08: the sacrifice is a cost, not a target.
+        game.cast_from_hand(0, "Sacrifice", target_player_index=0, cost_permanent_index=1)
         assert not any(p.card.name == "Hill Giant" for p in p0.battlefield)
         assert any(p.card.name == "Grizzly Bears" for p in p0.battlefield)
         assert p0.mana_pool["B"] == 4

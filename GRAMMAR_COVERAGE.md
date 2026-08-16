@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 68.4% | 65.0% | 42.5% | 171 |
+| M21 *(measured)* | 285 | 503 | 68.6% | 65.2% | 42.7% | 172 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,8 +33,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 252 | 121 | expected a subject |  |
-| 97 | 41 | unrecognized effect verb |  |
-| 56 | 37 | unconsumed text |  |
+| 95 | 39 | unrecognized effect verb |  |
+| 57 | 38 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 5 | expected a keyword ability |  |
@@ -489,6 +489,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Other Goblins get +1/+1 and have mountainwalk.`
 - **Goblin Wizardry**
   - `Create two 1/1 red Goblin Wizard creature tokens with prowess. (Whenever you cast a noncreature spell, they get +1/+1 until end of turn.)`
+- **Goremand**
+  - `When this creature enters, each opponent sacrifices a creature.`
 - **Granite Gargoyle**
   - `{R}: This creature gets +0/+1 until end of turn.`
   - `{R}: This creature gets +0/+1 until end of turn.`

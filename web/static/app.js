@@ -6523,17 +6523,25 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     return;
   }
 
+  // A "sacrifice a creature" additional cost (Sacrifice, Village Rites) picks a
+  // creature through this same prompt, but what was picked is a *cost payment*,
+  // not a target — so it rides the cost field. Sending it as the target made
+  // the engine treat it as one, which is how the cost came to be paid twice
+  // once the cost itself became general.
+  const paysCostWithPermanent = !!targetSpecOf(pending.card)?.sacrifice_cost;
   const actionBody = withPermanentId(
     {
       seat,
       action: pending.castAction || "cast",
       card_name: pending.cardName,
-      target_seat: selectedTarget,
-      permanent_index: selectedPermanentIndex,
+      ...(paysCostWithPermanent
+        ? { cost_permanent_index: selectedPermanentIndex }
+        : { target_seat: selectedTarget, permanent_index: selectedPermanentIndex }),
     },
     // The chosen target, captured now: this body can sit in `pendingManaColor`
     // through several polls before it is sent.
-    "target_permanent_id", selectedTarget, selectedPermanentIndex,
+    paysCostWithPermanent ? "cost_permanent_id" : "target_permanent_id",
+    selectedTarget, selectedPermanentIndex,
   );
 
   // Metamorphosis: "Add X mana of any one color..." — the caster picks the

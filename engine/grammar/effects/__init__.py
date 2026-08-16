@@ -49,6 +49,7 @@ from .characteristics import (
     _parse_become_color,
 )
 from .board import (
+    _parse_sacrifice,
     _parse_gain_control,
     _parse_return,
     _parse_destroy,
@@ -117,6 +118,7 @@ __all__ = [
     "_parse_that_object",
     "_parse_tap_untap",
     "_parse_draw",
+    "_parse_sacrifice",
     "_parse_discard",
     "_parse_mill",
     "_parse_scry",

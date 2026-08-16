@@ -45,6 +45,7 @@ from .oracle_types import (
 )
 from .characteristic_defining import dynamic_pt_for
 from .auras import unclaimed_aura_lines
+from .cast_costs import cast_cost_claims_line
 from .combat_restrictions import combat_restriction_for
 from .effect_labels import activated_label, triggered_label
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
@@ -122,7 +123,10 @@ SUPPORTED_SPELL_PATTERNS = (
     "each player shuffles their hand and graveyard into their library, then draws seven cards",
     "search your library for a card, put that card into your hand, then shuffle",
     "take an extra turn after this one",
-    "as an additional cost to cast this spell, sacrifice a creature",
+    # "as an additional cost to cast this spell, sacrifice a creature" was here.
+    # A marker instruction with no handler is the wrong shape for a *cost*: it
+    # made Village Rites report supported and cast for free. It is now read by
+    # engine/cast_costs.py and paid by queue_from_hand.
     "becomes red",
     "becomes black",
     "becomes blue",
@@ -1543,6 +1547,15 @@ def _parse_creature_program(
             normalized = normalize_creature_line(line)
             instructions.append(OracleInstruction("keyword_line", normalized))
             static_lines.append(normalized)
+            continue
+
+        # 1b. An additional cost to cast this spell (CR 601.2b). Not an effect
+        # and so not an instruction: it is collected and paid by
+        # `queue_from_hand`, which reads the same table this asks. A creature
+        # spell prints one as readily as an instant does (Goremand), and
+        # without this step the line was the reason the whole card came back
+        # "text too complex".
+        if cast_cost_claims_line(line):
             continue
 
         # 2. Triggered ability

@@ -508,7 +508,10 @@ class TestSacrificeChoice:
         giant = Permanent(card=cards["Hill Giant"])     # CMC 4 ({3}{R})
         p1 = PlayerState(name="P1", hand=[cards["Sacrifice"]], battlefield=[bear, giant])
         game = _game(p1, PlayerState(name="P2"))
-        game.cast_from_hand(0, "Sacrifice", target_player_index=0, target_permanent_index=1)  # the Giant
+        # The Giant. `cost_permanent_index`, not the target field: what pays an
+        # additional cost is not what the spell targets (CR 601.2b), and the two
+        # were the same parameter only while the cost was folded into the effect.
+        game.cast_from_hand(0, "Sacrifice", target_player_index=0, cost_permanent_index=1)
         assert not any(p.card.name == "Hill Giant" for p in p1.battlefield)
         assert any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
         assert p1.mana_pool["B"] == 4  # equal to the sacrificed creature's mana value

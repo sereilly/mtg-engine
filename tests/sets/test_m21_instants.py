@@ -477,3 +477,49 @@ def test_a_durationless_doubling_and_a_doubled_toughness_both_refuse(set_pool):
     production quietly claims another's."""
     assert not compile_line("Double the power of target creature.").lowered
     assert not compile_line("Double the toughness of target creature until end of turn.").parsed
+
+
+# --- The additional-cost round ----------------------------------------------
+
+
+def test_village_rites_eats_a_creature_and_draws_two(set_pool):
+    """"As an additional cost to cast this spell, sacrifice a creature." /
+    "Draw two cards."
+
+    Nothing in the effect refers back to the creature, which is why the cost
+    was never paid: the sentence matched a spell-pattern substring, the marker
+    it produced had no handler, and the card reported supported while casting
+    for its mana cost alone.
+    """
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", battlefield=[Permanent(card=pool["Alpine Watchdog"])],
+        hand=[pool["Village Rites"]], library=[pool["Swamp"]] * 4,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Village Rites")
+
+    assert [p.card.name for p in p1.battlefield] == []
+    assert len(p1.hand) == 2
+
+
+def test_thrill_of_possibility_discards_then_draws(set_pool):
+    """The other cost shape. The spell is on the stack while its cost is paid
+    (CR 601.2a), so with one other card in hand there is exactly one legal
+    payment — the spell can never discard itself."""
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", hand=[pool["Thrill of Possibility"], pool["Mountain"]],
+        library=[pool["Swamp"]] * 4,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Thrill of Possibility")
+
+    assert [c.name for c in p1.graveyard] == ["Mountain", "Thrill of Possibility"]
+    assert len(p1.hand) == 2

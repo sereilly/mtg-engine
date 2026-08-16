@@ -45,7 +45,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Channel | Sentences claimed |
 | --- | --- |
 | parse rule | 204 |
-| card_hooks bespoke (name-keyed) | 147 |
+| card_hooks bespoke (name-keyed) | 145 |
 | activation cost | 113 |
 | trigger table | 78 |
 | keyword table | 59 |
@@ -60,6 +60,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | modal machinery | 3 |
 | global_statics.py | 2 |
 | cost_modifiers.py | 2 |
+| cast_costs.py | 2 |
 | phases/draw_step.py (counter damage) | 1 |
 | x spend color (stack/activation) | 1 |
 | land_play_allowance.py | 1 |

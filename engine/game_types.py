@@ -35,7 +35,15 @@ class SimulationResult:
 #   chosen_source    "a source of your choice" (Jade Monolith, the source-of-
 #                    choice prevention spells): a battlefield Permanent or a
 #                    stack spell's CardDefinition
-CHOICE_KEYS = ("new_color", "old_color", "divided_targets", "chosen_source")
+CHOICE_KEYS = (
+    "new_color", "old_color", "divided_targets", "chosen_source",
+    # What a printed additional cost ate on the way to the stack (CR 601.2b) —
+    # not a choice about the *effect*, but the same shape: something decided
+    # while casting that the resolution has to be able to read back. It is a
+    # ``Permanent`` that is no longer on any battlefield, so this is the only
+    # place it survives (CR 608.2h last-known information).
+    "sacrificed_for_cost",
+)
 
 
 @dataclass
