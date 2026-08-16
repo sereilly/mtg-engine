@@ -15,14 +15,16 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from engine import load_cards
-from engine.card_loader import manifest_set_path
+from engine.card_loader import load_catalog, manifest_set_path
 from engine.models import Permanent
 from web.app import app, store
 from tests.helpers import LEA_PATH
 
 client = TestClient(app)
 
-_CARDS = {c.name: c for c in load_cards(LEA_PATH)}
+# The whole shipped pool, not just Alpha: Dwarven Weaponsmith — the one card
+# whose ability announces a target *and* a cost — is a Revised printing.
+_CARDS = {c.name: c for c in load_catalog()}
 
 
 def _session(*battlefield: str):
@@ -181,3 +183,67 @@ def test_naming_the_spell_itself_is_refused_over_the_wire():
 
     assert resp.status_code >= 400 or not resp.json().get("supported", True)
     assert len(game.players[0].hand) == 3 and not game.players[0].graveyard
+
+
+# ---------------------------------------------------------------------------
+# An ability with a target *and* a cost: two announcements, two fields
+# ---------------------------------------------------------------------------
+
+
+def _weaponsmith_session():
+    sid, session, game = _session(
+        "Dwarven Weaponsmith", "Black Lotus", "Grizzly Bears"
+    )
+    game.players[0].hand = []
+    for perm in game.players[0].battlefield:
+        perm.metadata["summoning_sickness_turn"] = -99
+    # "Activate only during your upkeep" is the Weaponsmith's own timing gate.
+    game.current_turn_phase = "beginning"
+    game.current_step = "upkeep"
+    return sid, session, game
+
+
+def test_the_two_pickers_are_reported_separately():
+    """CR 601.2c picks the creature that gets the counter, CR 601.2b picks the
+    artifact that pays. The client runs two prompts off these two lists — one
+    picker collecting both would have to send one of them as the other, which is
+    the mistake `cost_permanent_id` exists to prevent."""
+    sid, _sess, _game = _weaponsmith_session()
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    spec = state["players"][0]["battlefield"][0]["target_spec"]
+
+    assert [t["name"] for t in spec["valid_targets"]] == [
+        "Dwarven Weaponsmith", "Grizzly Bears"
+    ]
+    assert [t["name"] for t in spec["cost_spec"]["valid_targets"]] == ["Black Lotus"]
+
+
+def test_the_counter_lands_on_the_named_creature_and_the_named_artifact_pays():
+    """Both answers on the same action, each on its own field. The artifact
+    sits *before* the target in the battlefield list, so paying the cost
+    renumbers the slot the target was chosen from — which the permanent-id
+    round already fixed for activation, and which is why this test exists on
+    the wire rather than only in the engine."""
+    sid, _sess, game = _weaponsmith_session()
+    lotus = game.players[0].battlefield[1]
+    bears = game.players[0].battlefield[2]
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "activate",
+            "permanent_name": "Dwarven Weaponsmith",
+            "permanent_index": 0,
+            "target_permanent_id": bears.permanent_id,
+            "cost_permanent_id": lotus.permanent_id,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    game._settle()
+
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Dwarven Weaponsmith", "Grizzly Bears"
+    ]
+    assert [c.name for c in game.players[0].graveyard] == ["Black Lotus"]
+    assert (bears.effective_power, bears.effective_toughness) == (3, 3)

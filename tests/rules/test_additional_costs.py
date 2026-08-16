@@ -262,3 +262,29 @@ def test_naming_nothing_still_takes_the_deterministic_default():
     game.cast_from_hand(0, "Thrill of Possibility")
 
     assert [c.name for c in p1.graveyard] == ["Shock", "Thrill of Possibility"]
+
+
+# ---------------------------------------------------------------------------
+# A cost payment is not a target
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("601.2b", "601.2c", "702.16b")
+def test_a_creature_with_protection_can_still_pay_a_sacrifice_cost():
+    """CR 601.2b's payment is not CR 601.2c's target, and protection only stops
+    a permanent being *targeted* (CR 702.16b). Sacrifice is a black spell and a
+    White Knight has protection from black: the payment path has always taken
+    one happily, while the picker the UI runs refused to offer it. One question,
+    two answers, and which you got depended on whether you were a person or a
+    script — the round-48 disagreement arriving through the cost field."""
+    game, p1, _p2 = _duel([_CATALOG["Sacrifice"]])
+    p1.battlefield.append(Permanent(card=_LEA["White Knight"]))
+    p1.battlefield.append(Permanent(card=_LEA["Grizzly Bears"]))
+
+    offered = [t["name"] for t in game.cast_target_spec(0, _CATALOG["Sacrifice"])["valid_targets"]]
+    assert offered == ["White Knight", "Grizzly Bears"]
+
+    game.cast_from_hand(0, "Sacrifice", cost_permanent_index=0)
+
+    assert [p.card.name for p in p1.battlefield] == ["Grizzly Bears"]
+    assert p1.mana_pool["B"] == 2, "the White Knight's mana value"

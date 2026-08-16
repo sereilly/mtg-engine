@@ -309,6 +309,69 @@ _KIND_TO_SPEC: dict[str, dict] = {
 }
 
 
+def _cost_picker_spec(cost) -> dict | None:
+    """The picker a choosable cost needs, or None when the cost chooses nothing.
+
+    Shared by the cast and activation sides because the *choice* is the same on
+    both — CR 601.2b and CR 602.2b are the same announcement step — and only
+    what is withheld from the list differs. ``sacrifice_cost`` / ``discard_cost``
+    are what tell the client which field carries the answer and to say
+    "sacrifice" rather than "target"; the payment is not a target, and a card
+    can have both.
+
+    The sacrifice type is the kind, rather than a fixed "creature": Atog eats an
+    artifact, and a picker offering creatures for it would offer nothing it
+    could pay with.
+    """
+    if cost is None:
+        return None
+    if getattr(cost, "discard_cards", 0):
+        return {
+            "kind": "hand_card",
+            "own_only": True,
+            "discard_cost": True,
+            "count": cost.discard_cards,
+        }
+    sacrifice_type = getattr(cost, "sacrifice_type", None)
+    if sacrifice_type:
+        spec = {"kind": sacrifice_type, "own_only": True, "sacrifice_cost": True}
+        # "Sacrifice **another** creature" (Hobblefiend): the source is not a
+        # legal payment, so a lone Hobblefiend can offer nothing and cannot
+        # activate at all — which the payment path already enforces.
+        if getattr(cost, "sacrifice_excludes_source", False):
+            spec["exclude_source"] = True
+        return spec
+    return None
+
+
+def _life_gain_spec(payload: dict) -> dict | None:
+    """Who gains the life is what decides whether anything is chosen at all.
+
+    "Target player gains 3 life" picks a player; "you gain 3 life" picks
+    nothing, and **37 of the pool's 39 life gains are the second one**. One
+    instruction kind serves both because only the amount and the recipient
+    differ, so the kind alone could not tell them apart — and answering "any
+    target" for all of them put a picker in front of spells that target nothing
+    (Revitalize, Witch's Cauldron's ability). Whatever the player clicked was
+    sent as a target the handler then ignored, so the prompt was not merely
+    spurious: it was a question whose answer went nowhere.
+
+    An unrecognised recipient answers None, which is the safe direction: no
+    prompt in front of an effect that chooses nothing, rather than a prompt
+    whose answer is discarded.
+
+    Reading the payload here means this entry has to answer the *whole*
+    question, including the half it did not come to change: a payload-keyed spec
+    is authoritative in ``_from_instruction``, so returning a bare "any" for the
+    targeting case would have overridden the grammar's own targets description
+    and coarsened Healing Salve and Stream of Life from "target player" to
+    "any target".
+    """
+    if payload.get("recipient") != "target":
+        return None
+    return _from_targets_payload(payload.get("targets")) or {"kind": "player"}
+
+
 def _counter_spec(payload: dict) -> dict:
     """A counterspell, narrowed to the colour its payload names.
 
@@ -406,6 +469,7 @@ def _cast_permission_spec(payload: dict) -> dict | None:
 
 # One kind, several specs, decided by payload.
 _KIND_TO_SPEC_FROM_PAYLOAD = {
+    "target_gains_life": _life_gain_spec,
     "counter_top_stack_spell": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
     "grant_prevention_shield": _prevention_shield_spec,
@@ -427,20 +491,9 @@ def derive_cast_spec(card, program) -> dict | None:
     # tells the client to send it on the cost field and to say "sacrifice"
     # rather than "target".
     for cost in additional_costs(card):
-        if cost.sacrifice_type == "creature":
-            return {"kind": "creature", "own_only": True, "sacrifice_cost": True}
-        if cost.discard_cards:
-            # What pays this one is a card in the caster's own hand, so it is
-            # picked *there* — a different picker, not a narrowing of the
-            # permanent one, which is why this returned None and a human seat
-            # silently discarded whatever was first in hand. `discard_cost`
-            # tells the client the answer rides `cost_hand_index`.
-            return {
-                "kind": "hand_card",
-                "own_only": True,
-                "discard_cost": True,
-                "count": cost.discard_cards,
-            }
+        cost_spec = _cost_picker_spec(cost)
+        if cost_spec is not None:
+            return cost_spec
 
     graveyard_aura = _ENCHANT_GRAVEYARD_LINE.search(program.normalized_text or "")
     if graveyard_aura is not None:
@@ -624,21 +677,29 @@ def derive_activation_spec(ability) -> dict | None:
     instruction = getattr(ability, "instruction", None)
     if instruction is None:
         return None
-    # A "discard a card" cost is announced at CR 602.2b, before the ability's
-    # own targets, and the *instruction* cannot describe it — the instruction is
-    # the effect, and this payment comes out of a zone no effect here names. It
-    # is reported instead of the effect's spec rather than beside it: one
-    # announcement carries one prompt today, and no ability in the pool both
-    # pays from hand and targets. A card that does needs two, not a wider one.
-    cost = getattr(ability, "cost", None)
-    if cost is not None and getattr(cost, "discard_cards", 0):
-        return {
-            "kind": "hand_card",
-            "own_only": True,
-            "discard_cost": True,
-            "count": cost.discard_cards,
-        }
-    return _from_instructions((instruction,))
+    # A choosable cost is announced at CR 602.2b and the *instruction* cannot
+    # describe it: the instruction is the effect, and the payment comes from
+    # somewhere no effect here names. So it is derived from the cost and the two
+    # answers are combined rather than one shadowing the other.
+    cost_spec = _cost_picker_spec(getattr(ability, "cost", None))
+    target_spec = _from_instructions((instruction,))
+    if cost_spec is None:
+        return target_spec
+    # Diamond Valley's effect *is* its cost — the handler performs the sacrifice
+    # — so the instruction's own spec already is the cost picker, and adding a
+    # second would ask twice for one creature.
+    if target_spec is not None and (
+        target_spec.get("sacrifice_cost") or target_spec.get("discard_cost")
+    ):
+        return target_spec
+    if target_spec is None:
+        return cost_spec
+    # Dwarven Weaponsmith: a real target *and* a cost, which CR 601.2c and
+    # CR 601.2b make two separate announcements carrying two separate fields.
+    # One spec cannot be both, so the cost rides beside the target under its own
+    # key and the client runs two prompts — overloading one field is how the
+    # cost came to eat the creature the ability was aimed at.
+    return {**target_spec, "cost_spec": cost_spec}
 
 
 def usable_activated_abilities(program):

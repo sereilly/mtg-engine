@@ -2619,3 +2619,71 @@ Seasoned Hallowblade, which is the gap this round closed.
 - **The legend rule reads the printed name** (unchanged from round 49).
 
 ---
+
+## Round 52: the four sacrifice pickers, and the prompt in front of nothing
+
+*(2026-08-16.)* Round 51's pinned list is empty. The four gaps it recorded are
+closed, and getting there needed two things the list did not name — a spurious
+prompt on fifteen other cards, and a picker that disagreed with the payment path
+about what may legally pay.
+
+**A cost and a target are two announcements, so they are two specs.** CR 601.2b
+and CR 601.2c are separate steps carrying separate fields, which `web/actions.py`
+has said for three rounds; the spec had not caught up, so a cost picker could
+only be reported by *replacing* the target one. `derive_activation_spec` now
+composes them: the cost alone when the effect targets nothing (Atog, Hobblefiend,
+Witch's Cauldron), the target alone when the effect *is* the cost (Diamond
+Valley's handler performs the sacrifice, so a second picker would ask twice for
+one creature), and the cost under its own `cost_spec` key beside the target when
+a card needs both — Dwarven Weaponsmith, the pool's only one. `_cost_picker_spec`
+is one rule the cast and activation sides share, and the sacrifice *type* comes
+off the cost: Atog eats an artifact, and a picker fixed at "creature" would have
+offered it nothing.
+
+**The prompt in front of nothing.** Witch's Cauldron derived `{"kind": "any"}`
+from a caster-recipient life gain, and it was not alone: `target_gains_life`
+serves "target player gains 3 life" and "you gain 3 life" alike, because only the
+amount and the recipient differ — so the kind table answered "any target" for all
+39 of them, of which **37 target nothing**. Reading the payload removed a picker
+from fifteen cards, **eleven of them lands**: playing a Radiant Fountain or a
+Tranquil Cove asked the player to choose a target, and whatever they clicked was
+sent as a target the handler ignored. Two cards keep their picker, and keeping
+them is what the fix had to be careful about — a payload-keyed spec is
+authoritative, so a bare "any" would have *coarsened* Healing Salve and Stream of
+Life from "target player". Caught by diffing every derived spec in the pool
+before and after, which is the only reason the regression was visible at all.
+
+**And the picker disagreed with the payment path.** A cost payment is not a
+target, so protection, shroud and hexproof have nothing to say about it — but
+the enumerator ran every candidate through the targeting legality anyway. A
+**White Knight** (protection from black) is a legal sacrifice for **Sacrifice**
+(a black spell), the engine takes one happily, and the picker refused to offer
+it: one question, two answers, and which you got depended on whether you were a
+person or a script. That is round 48's disagreement arriving through the cost
+field, and it was in the shipped pool.
+
+**Driven in the browser**, which is why this was worth splitting from round 51.
+Atog's prompt reads "Choose an artifact to sacrifice for Atog" with both
+artifacts glowing and the Atog itself dark; picking the Mox left the Black Lotus
+alive and made the Atog 3/4 — the payment the *player* chose, where the default
+had been taking the Lotus. The Weaponsmith runs its two prompts in sequence
+(target, then cost, the shape Jade Monolith's damage-source stage already used)
+and both answers land on their own fields: Atog 2/3 from the counter, Black Lotus
+in the graveyard from the cost. The prompt's noun is read off the spec now, which
+is what one regression had to be rewritten for — it pinned the literal word
+"creature", and the word was the bug.
+
+Suite **5,032** at 21.1s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Eight of the ten new tests were
+watched to fail on HEAD.
+
+**Next:**
+
+- **The legend rule reads the printed name** (unchanged from round 49): a Clone
+  of Barrin is a second Barrin and CR 704.5j does not bin one. Wants a
+  `card.name` census first, and the `Legendary` supertype has to reach layer 1
+  before `has_type` can answer for it.
+- **Back to M21's unsupported tail**, which the support report still names card
+  by card — 76 left, led by the protection-quality and per-turn-tracker families.
+
+---

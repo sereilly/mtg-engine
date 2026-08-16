@@ -211,8 +211,16 @@ class TestDiamondValley:
             assert [derive_activation_spec(ab) for ab in abilities] == [None], name
 
     def test_client_labels_the_pick_as_a_sacrifice(self):
+        """The bug was the prompt calling a cost payment a *target*. It still
+        must not, and the noun is now read off the spec rather than fixed at
+        "creature": Atog sacrifices an artifact, so a hardcoded word told the
+        player to look for something the picker was not offering."""
         assert "sacrifice_cost" in APP_JS
-        assert "Click a creature you control on the battlefield to sacrifice it." in APP_JS
+        assert "you control on the battlefield to sacrifice it." in APP_JS
+        assert "Click a creature you control on the battlefield to sacrifice it." not in APP_JS, (
+            "the noun must come from the spec, not the word 'creature'"
+        )
+        assert "sacrificeNoun" in APP_JS
 
 
 # ---------------------------------------------------------------------------

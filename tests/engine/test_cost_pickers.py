@@ -41,36 +41,33 @@ for _path in manifest_set_paths(include_measured=True):
 # else.
 _COST_FLAGS = ("sacrifice_cost", "discard_cost")
 
-# The gaps this guard found the day it was written, pinned rather than exempted:
-# the test below asserts each one is *still* a gap, so the list can only shrink
-# and closing one is what removes it. Every entry is an activation whose
-# sacrifice cost the payer is never asked about — the same shape as the discard
-# cost, and found the same way, but its fix is a round of its own because two of
-# them need the client to run *two* prompts rather than one.
+# The gaps this guard found the day it was written are closed (round 52), so the
+# list is empty. The mechanism stays: the two tests below are what force an
+# entry back out again, and an empty list is the state to keep.
 #
-#   Atog                — no spec at all, so no prompt: the default eats the
-#                         smallest, which among equal-power artifacts is decided
-#                         by permanent id. On a board of Black Lotus and Mox Ruby
-#                         it takes the Lotus.
-#   Hobblefiend         — the same, with "another" excluding the source.
-#   Witch's Cauldron    — derives {"kind": "any"} off a caster-recipient life
-#                         gain, so the client opens a target picker for an
-#                         ability that targets nothing, and the sacrifice is
-#                         still taken by default. Asked the wrong question.
-#   Dwarven Weaponsmith — the hard one, and the reason the fix is not a
-#                         one-liner: its ability has a real target *and* a
-#                         sacrifice cost (CR 601.2c and 601.2b), so one spec
-#                         cannot carry both and the client needs a second prompt.
-_PICKERLESS_ACTIVATION_COSTS = {
-    ("Atog", 0),
-    ("Dwarven Weaponsmith", 0),
-    ("Hobblefiend", 0),
-    ("Witch's Cauldron", 0),
-}
+# What it caught, and why none of it looked like a missing feature: both payment
+# paths fall back to a deterministic pick for a seat that names nothing, which is
+# right for AI and headless play and indistinguishable from a human seat that was
+# never asked. Atog's default ate the *Black Lotus* on a board that also held a
+# Mox, because among equal-power permanents the tie breaks on permanent id.
+_PICKERLESS_ACTIVATION_COSTS: set[tuple[str, int]] = set()
 
 
 def _has_cost_picker(spec: dict | None) -> bool:
-    return spec is not None and any(spec.get(flag) for flag in _COST_FLAGS)
+    """Whether *spec* describes the cost pick, in either of its two positions.
+
+    A cost-only announcement reports the cost as the whole spec; an ability that
+    also targets (Dwarven Weaponsmith) reports it under ``cost_spec`` beside the
+    target, because CR 601.2b and CR 601.2c are two announcements carrying two
+    fields. Accepting only the first would have made the guard demand that the
+    target be dropped to make room for the cost.
+    """
+    if spec is None:
+        return False
+    if any(spec.get(flag) for flag in _COST_FLAGS):
+        return True
+    nested = spec.get("cost_spec")
+    return isinstance(nested, dict) and any(nested.get(flag) for flag in _COST_FLAGS)
 
 
 def _cast_cost_cards() -> list[str]:
@@ -112,7 +109,7 @@ def test_every_printed_cast_cost_derives_a_picker(card_name):
         f"{card_name} charges a printed additional cost and derives no picker — "
         "a human seat pays it with whatever the deterministic default picks"
     )
-    assert any(spec.get(flag) for flag in _COST_FLAGS), (
+    assert _has_cost_picker(spec), (
         f"{card_name}'s spec {spec!r} names no cost field, so the client would "
         "send the answer as a target"
     )

@@ -31,7 +31,7 @@ import re
 import pytest
 
 from engine import PlayerState
-from engine.card_loader import load_catalog
+from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.legality import _fallback_activation_spec
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -374,3 +374,93 @@ def test_a_narrowing_only_one_slot_names_does_not_narrow_the_picker():
         ],
     })
     assert both_slots["own_only"] is True, "a narrowing every slot names still applies"
+
+
+# ---------------------------------------------------------------------------
+# The cost half of an activation's announcement (CR 602.2b)
+# ---------------------------------------------------------------------------
+#
+# A choosable cost is not a target and cannot be read off the instruction: the
+# instruction is the *effect*, and the payment comes from somewhere no effect
+# names. Every one of these abilities charged a cost the payer was never asked
+# about — the deterministic default paid, which is right for a seat that names
+# nothing and indistinguishable from a seat that was never offered the choice.
+
+
+# The measured pool too: Hobblefiend and Witch's Cauldron are M21, and a cost
+# the payer is never asked about is missing whether or not the set ships.
+_COST_POOL = {}
+for _path in manifest_set_paths(include_measured=True):
+    for _card in load_cards(_path):
+        _COST_POOL.setdefault(_card.name, _card)
+
+
+def _cost_board(*names: str):
+    perms = [_nosick(Permanent(card=_COST_POOL[name])) for name in names]
+    p1 = PlayerState(name="P1", battlefield=perms)
+    return _game(p1, PlayerState(name="P2")), p1, perms
+
+
+def test_atog_is_asked_which_artifact_it_eats():
+    """No spec at all meant no prompt, so the default paid — and among
+    equal-power permanents it breaks the tie on ``permanent_id``, so a board of
+    Black Lotus and Mox Ruby lost **the Lotus**."""
+    game, _p1, _perms = _cost_board("Atog", "Black Lotus", "Mox Ruby")
+
+    spec = game.activation_target_spec(0, 0)
+
+    assert spec["kind"] == "artifact" and spec["sacrifice_cost"] is True
+    assert [t["name"] for t in spec["valid_targets"]] == ["Black Lotus", "Mox Ruby"]
+
+
+def test_hobblefiends_cost_withholds_the_source_it_cannot_pay_with():
+    """"Sacrifice **another** creature" — the word is payload on the cost, and
+    the picker has to honour it or it offers the one payment that is illegal."""
+    game, _p1, _perms = _cost_board("Hobblefiend", "Grizzly Bears")
+
+    spec = game.activation_target_spec(0, 0)
+
+    assert spec["exclude_source"] is True
+    assert [t["name"] for t in spec["valid_targets"]] == ["Grizzly Bears"]
+
+
+def test_witchs_cauldron_asks_about_the_sacrifice_and_not_a_target():
+    """It used to derive ``{"kind": "any"}`` off a caster-recipient life gain, so
+    the client opened a *target* picker in front of an ability that targets
+    nothing — and the sacrifice was still taken by default. The player was asked
+    the wrong question and their answer was discarded."""
+    game, _p1, _perms = _cost_board("Witch's Cauldron", "Grizzly Bears")
+
+    spec = game.activation_target_spec(0, 0)
+
+    assert spec["kind"] == "creature" and spec["sacrifice_cost"] is True
+    assert [t["name"] for t in spec["valid_targets"]] == ["Grizzly Bears"]
+
+
+def test_dwarven_weaponsmith_reports_both_announcements_separately():
+    """The one that needs two prompts: CR 601.2c picks the creature that gets
+    the counter, CR 601.2b picks the artifact that pays. Two fields on the wire,
+    so two specs — the target's own list still includes the Weaponsmith, which
+    is a legal recipient of its own counter and never a legal payment."""
+    game, _p1, _perms = _cost_board("Dwarven Weaponsmith", "Black Lotus", "Grizzly Bears")
+
+    spec = game.activation_target_spec(0, 0)
+
+    assert spec["kind"] == "creature"
+    assert [t["name"] for t in spec["valid_targets"]] == [
+        "Dwarven Weaponsmith", "Grizzly Bears"
+    ]
+    cost = spec["cost_spec"]
+    assert cost["kind"] == "artifact" and cost["sacrifice_cost"] is True
+    assert [t["name"] for t in cost["valid_targets"]] == ["Black Lotus"]
+
+
+def test_diamond_valley_is_not_asked_twice_for_one_creature():
+    """The control for the composition rule. Its handler performs the sacrifice
+    as the effect, so the instruction's own spec already *is* the cost picker —
+    adding a second would collect two creatures and eat one."""
+    game, _p1, _perms = _cost_board("Diamond Valley", "Grizzly Bears")
+
+    spec = game.activation_target_spec(0, 0)
+
+    assert spec["sacrifice_cost"] is True and "cost_spec" not in spec

@@ -5070,18 +5070,27 @@ function renderActivationPrompt() {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
-    // A "sacrifice a creature" cost (Diamond Valley, Metamorphosis) picks a
-    // creature the same way, but it is a cost being paid, not a target.
-    const isSacrificeCost = !!targetSpecOf(pendingCastTarget.card)?.sacrifice_cost;
+    // A "sacrifice a <type>" cost (Diamond Valley, Atog, Metamorphosis) picks a
+    // permanent the same way, but it is a cost being paid, not a target.
+    // **The type comes from the spec**, never the word "creature": Atog eats an
+    // artifact and Dwarven Weaponsmith's second prompt does too, so a fixed noun
+    // told the player to look for something the picker was not offering.
+    const pendingCostStage = !!(pendingCastTarget.__costOnly || pendingCastTarget.__costStage);
+    const pendingSpec = targetSpecOf(pendingCastTarget.card);
+    const costSpec = pendingCostStage
+      ? (pendingSpec?.cost_spec || pendingSpec)
+      : null;
+    const isSacrificeCost = !!(costSpec?.sacrifice_cost || pendingSpec?.sacrifice_cost);
+    const sacrificeNoun = costSpec?.kind || pendingSpec?.kind || "permanent";
     title.textContent = isSacrificeCost
-      ? `Choose a creature to sacrifice for ${pendingCastTarget.cardName}`
+      ? `Choose ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} to sacrifice for ${pendingCastTarget.cardName}`
       : `Choose target for ${pendingCastTarget.cardName}`;
     if (pendingCastTarget.targetKind === "land") {
       body.textContent = "Click a valid land on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "creature") {
       body.textContent = isSacrificeCost
-        ? "Click a creature you control on the battlefield to sacrifice it."
+        ? `Click ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} you control on the battlefield to sacrifice it.`
         : "Click a valid creature on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "artifact") {
@@ -5091,7 +5100,9 @@ function renderActivationPrompt() {
       const isEnchantEnchantment = String(pendingCastTarget.card?.oracle_text || "")
         .toLowerCase()
         .includes("enchant enchantment");
-      body.textContent = pendingCastTarget.alsoStack
+      body.textContent = isSacrificeCost
+        ? `Click ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} you control on the battlefield to sacrifice it.`
+        : pendingCastTarget.alsoStack
         ? "Click a permanent on the battlefield, or a glowing spell on the stack, to choose the target."
         : isEnchantEnchantment
         ? "Click a glowing enchantment on the battlefield to choose the target."
@@ -5602,10 +5613,36 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // hand, so it takes the same prompt the cast-side additional cost does. It
   // comes before the target cascades because CR 602.2b announces the cost
   // first, and because the ability whose spec reports it has no target of its
-  // own — a card needing both prompts needs two, not a wider one.
+  // own — a card needing both prompts runs them in sequence instead (below).
   if (cardRequiresDiscardCost(card) &&
       startActivationDiscardCostPrompt(card, cardName, permanentIndex, abilityIndex)) {
     return;
+  }
+
+  // A "Sacrifice a/an <type>" activation cost whose ability targets nothing
+  // else (Atog, Hobblefiend, Witch's Cauldron, Diamond Valley): the whole
+  // choice is which permanent pays, so it takes the ordinary permanent picker
+  // with the answer on the cost field. Without this the player was never asked
+  // and the deterministic default paid — with Atog on a board holding a Black
+  // Lotus and a Mox, it took the Lotus.
+  {
+    const spec = targetSpecOf(card);
+    if (spec.sacrifice_cost) {
+      const fields = pendingTargetFields(card);
+      if (fields.validKeys.size === 0) {
+        SFX.onError();
+        updateActionHint(`${cardName} has nothing it can sacrifice for its cost.`, true);
+        return;
+      }
+      pendingCastTarget = {
+        card, cardName, targetKind: "permanent", castAction: "activate",
+        sourcePermanentIndex: permanentIndex, abilityIndex,
+        __costOnly: true, ...fields,
+      };
+      renderActivationPrompt();
+      renderBoard(currentState);
+      return;
+    }
   }
 
   // Activated abilities that destroy a target creature (e.g. Royal Assassin)
@@ -6601,6 +6638,77 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
       );
       return;
     }
+    // Dwarven Weaponsmith: the target is chosen, now the cost. Two prompts
+    // because CR 601.2c and CR 601.2b are two announcements on two fields —
+    // one picker collecting both would have to send one of them as the other.
+    const costSpec = spec?.cost_spec;
+    if (costSpec && !pending.__costStage && !pending.__costOnly) {
+      const costTargets = costSpec.valid_targets || [];
+      if (!costTargets.length) {
+        updateActionHint(
+          `${pending.cardName} has nothing it can sacrifice for its cost.`, true,
+        );
+        return;
+      }
+      pendingCastTarget = {
+        card: pending.card,
+        cardName: pending.cardName,
+        targetKind: "permanent",
+        castAction: "activate",
+        sourcePermanentIndex: pending.sourcePermanentIndex,
+        abilityIndex: pending.abilityIndex,
+        __costStage: true,
+        chosenTargetSeat: selectedTarget,
+        chosenTargetIndex: selectedPermanentIndex,
+        ...pendingTargetFields(pending.card, costTargets),
+      };
+      renderActivationPrompt();
+      renderBoard(currentState);
+      updateActionHint(
+        `Now choose what ${pending.cardName} sacrifices to pay for it.`,
+      );
+      return;
+    }
+
+    // The cost pick — either the whole choice (__costOnly) or the second half
+    // of it (__costStage) — rides the cost field, never the target one.
+    if (pending.__costOnly || pending.__costStage) {
+      const costBody = withPermanentId(
+        {
+          seat,
+          action: "activate",
+          permanent_name: pending.cardName,
+          permanent_index: pending.sourcePermanentIndex,
+          cost_permanent_index: selectedPermanentIndex,
+          ...(pending.__costStage
+            ? {
+                target_seat: pending.chosenTargetSeat,
+                target_permanent_index: pending.chosenTargetIndex,
+              }
+            : {}),
+        },
+        "cost_permanent_id", selectedTarget, selectedPermanentIndex,
+      );
+      if (Number.isInteger(pending.abilityIndex)) costBody.ability_index = pending.abilityIndex;
+      updateActionHint(`Activating ${pending.cardName}...`);
+      sendAction(costBody)
+        .then(() => updateActionHint(`Activated ${pending.cardName}.`))
+        .catch((e) => {
+          if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+            pendingAutoTap = {
+              card: pending.card,
+              cardName: pending.cardName,
+              cost: getActivatedAbilityCost(pending.card),
+              actionBody: costBody,
+            };
+            renderActivationPrompt();
+            return;
+          }
+          updateActionHint(e.message, true);
+        });
+      return;
+    }
+
     const activateBody = pending.__sourceStage
       ? {
           seat,

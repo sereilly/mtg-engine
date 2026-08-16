@@ -357,6 +357,17 @@ class LegalityMixin:
             ability_instruction=ability_instruction,
             source_permanent=source_permanent,
         )
+        # Dwarven Weaponsmith: an ability with a target *and* a choosable cost
+        # carries two pickers, and each enumerates its own candidates — the cost
+        # over the payer's own permanents with no targeting legality, the target
+        # through everything above.
+        if spec.get("cost_spec"):
+            cost_spec = dict(spec["cost_spec"])
+            cost_spec["valid_targets"] = self._enumerate_targets(
+                controller_index, card, cost_spec, for_cast=False,
+                source_permanent=source_permanent,
+            )
+            spec["cost_spec"] = cost_spec
         # Jade Monolith's second choice — the damage source: any permanent on
         # either battlefield or any spell on the stack.
         if spec.get("requires_source"):
@@ -403,6 +414,16 @@ class LegalityMixin:
                 return targets
 
         casting_aura = "aura" in _type_line(card)
+        # **A cost payment is not a target** (CR 601.2b vs 601.2c), so none of
+        # the targeting legality below applies to it: protection, shroud and
+        # hexproof stop a permanent being *targeted*, and a player may always
+        # sacrifice their own. The payment paths have always known this — a
+        # White Knight (protection from black) is a legal payment for Sacrifice
+        # and the engine takes it happily — while this enumerator refused to
+        # offer one, so the answer depended on whether you were a person or a
+        # script. That is the picker/resolution disagreement the round-48 guard
+        # exists for, arriving through the cost field instead of the target one.
+        paying_a_cost = bool(spec.get("sacrifice_cost"))
         for seat, player in enumerate(self.players):
             # A sacrifice cost (Sacrifice) only offers the caster's own creatures.
             if spec.get("own_only") and seat != caster_index:
@@ -410,24 +431,29 @@ class LegalityMixin:
             for idx, perm in enumerate(player.battlefield):
                 if not self._permanent_matches_target_kind(perm, kind, spec, casting_aura):
                     continue
-                if for_cast:
-                    ok, _ = self._validate_cast_targets(
-                        card, caster_index, target_player_index=seat, target_permanent_index=idx
-                    )
-                    if not ok:
-                        continue
-                else:
-                    if not self._can_be_targeted(perm, card, caster_index=caster_index):
-                        continue
-                    # Apply the activated ability's own target restriction (e.g.
-                    # Royal Assassin's tapped-only, Nettling Imp's non-Wall) so it
-                    # offers only what it could legally affect at resolution.
-                    if ability_instruction is not None and not self._ability_target_legal(
-                        ability_instruction, perm,
-                        candidate_seat=seat, controller_index=caster_index,
-                        source_permanent=source_permanent,
-                    ):
-                        continue
+                # "Sacrifice **another** …" — the source cannot pay for itself.
+                if spec.get("exclude_source") and perm is source_permanent:
+                    continue
+                if not paying_a_cost:
+                    if for_cast:
+                        ok, _ = self._validate_cast_targets(
+                            card, caster_index,
+                            target_player_index=seat, target_permanent_index=idx,
+                        )
+                        if not ok:
+                            continue
+                    else:
+                        if not self._can_be_targeted(perm, card, caster_index=caster_index):
+                            continue
+                        # Apply the activated ability's own target restriction (e.g.
+                        # Royal Assassin's tapped-only, Nettling Imp's non-Wall) so it
+                        # offers only what it could legally affect at resolution.
+                        if ability_instruction is not None and not self._ability_target_legal(
+                            ability_instruction, perm,
+                            candidate_seat=seat, controller_index=caster_index,
+                            source_permanent=source_permanent,
+                        ):
+                            continue
                 targets.append({
                     "kind": "permanent",
                     "seat": seat,
