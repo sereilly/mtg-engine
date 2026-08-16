@@ -53,6 +53,11 @@ class GainKeyword:
     subject: Recipient
     keywords: tuple[str, ...]
     duration: Duration = field(default_factory=Duration)
+    # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift) — the
+    # keywords are *alternatives*, not a list. Same words as "gains deathtouch
+    # and lifelink" once the conjunction is read, so the difference has to be
+    # recorded here or the card grants both.
+    choose_one: bool = False
 
 
 @dataclass(frozen=True)

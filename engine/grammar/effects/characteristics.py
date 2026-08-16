@@ -55,14 +55,23 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     mark = stream.mark()
     if stream.accept_word("and") and stream.at_word("gains", "gain", "has", "have"):
         stream.advance()
+        # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift) —
+        # read here as well as in the bare `gains` production, because the pump
+        # conjunction is where the card actually prints it.
+        choose_one = bool(stream.accept_phrase("your", "choice", "of"))
         keywords = _parse_keywords(stream)
         keyword_duration = _parse_duration(stream)
+        if choose_one and len(keywords) < 2:
+            raise stream.error("a choice of keywords needs more than one")
         if duration.kind is None and keyword_duration.kind is not None:
             pump = ast.Pump(
                 subject, power, toughness, keyword_duration,
                 power_negative, toughness_negative,
             )
-        return ast.Conjunction((pump, ast.GainKeyword(subject, keywords, keyword_duration)))
+        return ast.Conjunction((
+            pump,
+            ast.GainKeyword(subject, keywords, keyword_duration, choose_one=choose_one),
+        ))
     stream.reset(mark)
     return pump
 
@@ -101,9 +110,17 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             pass
         stream.reset(mark)
 
+    # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift).
+    # CR 609.3: the choice is made as the effect resolves, and the keyword list
+    # behind it reads exactly like a conjunction — so the alternatives are
+    # marked here rather than inferred later, where "and" and "or" have already
+    # become the same tuple.
+    choose_one = bool(stream.accept_phrase("your", "choice", "of"))
     keywords = _parse_keywords(stream)
     duration = _parse_duration(stream)
-    grant = ast.GainKeyword(subject, keywords, duration)
+    if choose_one and len(keywords) < 2:
+        raise stream.error("a choice of keywords needs more than one")
+    grant = ast.GainKeyword(subject, keywords, duration, choose_one=choose_one)
 
     mark = stream.mark()
     if stream.accept_word("and") and stream.at_word("gets", "get"):

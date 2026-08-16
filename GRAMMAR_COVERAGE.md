@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 71.0% | 67.6% | 44.7% | 181 |
+| M21 *(measured)* | 285 | 503 | 71.2% | 67.8% | 44.9% | 182 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -37,10 +37,10 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 51 | 32 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
-| 8 | 5 | expected a keyword ability |  |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 4 | expected 'the number of' in a where-clause |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
+| 7 | 4 | expected a keyword ability |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 6 | 3 | expected a quantity |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
@@ -69,6 +69,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Aladdin's Ring**
   - `{8}, {T}: This artifact deals 4 damage to any target.`
   - `{8}, {T}: This artifact deals 4 damage to any target.`
+- **Alchemist's Gift**
+  - `Target creature gets +1/+1 and gains your choice of deathtouch or lifelink until end of turn. (Any amount of damage a creature with deathtouch deals to a creature is enough to destroy it. Damage dealt by a creature with lifelink also causes its controller to gain that much life.)`
 - **Ali Baba**
   - `{R}: Tap target Wall.`
 - **Ancestral Recall**

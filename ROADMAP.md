@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 218/285) to the full release line - **137 sets, 33,594
+M21 measured at 219/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–59 — lives in git history at and before
-commit `954d717`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–60 — lives in git history at and before
+commit `e59dbe6`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,81 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 60: one way to pay a cost
-
-*(2026-08-16.)* M21 **216 → 217** — Liliana's Devotee, and the reason it was
-refused rather than missing.
-
-**"You may pay {1}{B}" was not a parser gap.** The line parsed; the *lowering*
-refused it, and its message said why: "optional colored costs need a real
-cost-payment prompt". There are two questions about paying a mana cost, and the
-engine answered only one of them well. Casting and activating spend the **pool**
-— the right question there, because producing the mana is the player's own
-separate action, taken before the cost is collected. An effect that says "you
-may pay" gives its player no priority window at all, so it has to look at the
-untapped lands too — and that answer *counted to a number*: floating mana plus
-untapped mana-producing lands, against a generic cost. A {B} had nothing to
-collect it with, so the honest thing was to refuse the card, and the refusal
-would have stood forever.
-
-`engine/mana_payment.py` is the answer that replaced the number. It plans a
-payment rather than performing one, which is what lets "could this be paid?"
-(CR 601.2h) and "pay it" be the same code: pool first for the coloured pips —
-floating mana is already spent-in-advance and an untapped land is worth more
-than a tapped one — then the lands, then the generic part from whatever is left.
-
-**The matching is exact, and the reason is which way the error goes.** A
-one-pass picker gets a board wrong that can genuinely pay: a Swamp and an
-Underground Sea against {U}{B} is fine until the pass spends the Sea on the {B}
-and strands the {U}. That error *under*-reports — a cost the player could pay is
-never offered — and CR 601.2h is about what a player is **able** to do rather
-than about what an approximation could find. The numbers are a handful of pips
-against a handful of lands, so the exact answer is a dozen lines of
-augmenting-path matching and there is no reason to accept a heuristic.
-
-**One shape for a cost, at the cost of a migration.** The prompt's `cost` was an
-integer and four effects handed one over; it is now the symbol dict the rest of
-the engine already uses for a mana cost, and `generic_cost(n)` is the one line
-that says which cost a legacy number is. The non-interactive default is stated
-rather than derived: it spends mana it already has and never taps a land for an
-optional cost, because tapping is a real decision about the rest of the turn —
-and it is *not* the payability test, which belongs to the seat that was asked.
-
-**And the card found something on the way in.** With the cost payable, the
-trigger still did not fire: the end step enqueues a CR 603.4 intervening-if
-trigger from a list of **instruction kinds** holding exactly one entry
-(`draw_controller_cards`, for Barrin), and Liliana's Devotee lowers onto `may`.
-Round 45's lesson, and the fourth time it has been paid for — so the scan is
-keyed on the payload's *shape* now. The gate lives on the payload, so "does it
-have one" is the whole question, and a trigger with a gate is enqueued whatever
-its effect turned out to be. The three kind-keyed scans beside it stay: each
-needs a specific trigger context, and none of their kinds carries a gate — which
-is checked in code rather than asserted in a comment, because "today" is the
-part that expires.
-
-Suite **5,111** at 22.1s, every `--check` green, shipped pool 388/388, AI
-simulation byte-identical at 443 interactions. Two of the ten new tests were
-watched to fail on the round-59 engine — the payment module's tests cannot
-import against it at all — and the rest are controls: two Forests are two mana
-and still not {1}{B}, a land cannot pay two pips at once, and a Devotee with
-nothing dead is silent.
-
-**Next:**
-
-- **The Shrine cycle**, unchanged: Fruitful Harvest's colour choice at a
-  trigger's resolution, Shattered Heights' discard cost (whose "a land card or
-  **Shrine** card" is a noun-phrase *union* the parser has no production for),
-  Tranquil Light's per-Shrine cost reduction, Sanctum of All's two-zone search
-  and trigger-doubling static.
-- **A reflexive trigger** — "you may pay {1}. **When you do**, …" (Tolarian
-  Kraken). Deliberately not folded into this round: CR 603.11 puts a second
-  object on the stack, and the `may` machinery resolves its consequence inline,
-  so reading "when you do" as "if you do" would be claiming a distinction the
-  engine does not make.
-- **The draw debt** (three `player.draw` callers, with round 31's AST-guard
-  shape to copy), then **Experimental Overload's variable-P/T token and
-  Jolrael's team base-P/T**, then the legend rule from round 49.
-
 ## Round 61: the draw debt, paid
 
 *(2026-08-16.)* No new cards, and that is what the round is: a debt recorded
@@ -450,3 +375,69 @@ graveyard of *other* cards counts nothing.
   Kraken), deliberately refused in round 60: CR 603.11 puts a second object on
   the stack and the `may` machinery resolves inline.
 - **Jolrael's team base-P/T**, then the legend rule from round 49.
+
+## Round 63: the prompt that did not need building
+
+*(2026-08-16.)* M21 **218 → 219** — Alchemist's Gift. The round is mostly about
+what it did **not** add.
+
+**"Gains your choice of deathtouch or lifelink" reads as a choice at
+resolution** (CR 609.3), and the obvious shape for it is a new pending-choice
+kind: offer the keywords, take a default for a seat that is not asked, grant the
+answer. That is one registry entry, one resolver, one web renderer and one AI
+default — and every line of it already exists. **A choice between two effects is
+`choose_one`**, the composition seam in `engine/handlers/control_flow.py` that a
+modal triggered ability uses, and the two grants are just its two modes. The
+card needed no prompt, no handler and no `Game` field; it needed a lowering that
+says the keywords are *alternatives*.
+
+That distinction is the whole of the parse work, and it has to be recorded where
+the words still are. "Gains deathtouch **and** lifelink" and "gains your choice
+of deathtouch **or** lifelink" reach the keyword reader as the same tuple —
+`_parse_keyword_list` treats the conjunctions alike, correctly, because for a
+list they mean the same thing. One flag on the AST node is what stops the card
+granting both.
+
+Lowering each alternative back through the same function is the other half:
+a keyword the engine cannot grant refuses the whole line rather than being
+offered as an option that would do nothing. And the non-interactive default is
+*inherited* rather than invented — `choose_one` already states it as the first
+printed option, a policy and not a valuation.
+
+**Two things were checked and turned out not to be affordable**, which is worth
+recording so the next round does not re-derive them:
+
+- **Carrion Grub** looked like a small aggregate — "+X/+0, where X is the
+  **greatest power** among creature cards in your graveyard" is a maximum where
+  the where-clause admits only a count. It is not: the pump has no duration, so
+  the card wants a *static* layer-7 P/T contribution with a computed X, and the
+  aggregate is the small half.
+- **Sanctum of Fruitful Harvest** still wants more than the colour choice this
+  round could have given it. "Add X mana of any one color" reaches a legacy
+  text-keyed handler that adds exactly one mana and picks its colour from a
+  `preferred_color` the *activation* path injects; a counted, chosen-colour add
+  is a rewrite of that path rather than a prompt.
+
+`choose_one` also had to become a *wrapper* for the categories reader: its
+options are `{label, instruction}` pairs rather than a bare tuple, so the
+migration category of a choice is its options' — giving it one of its own would
+say the choosing is the effect.
+
+Suite **5,123** at 23.0s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Three of the four new tests were
+watched to fail on the round-62 engine; the fourth is the control that "your
+choice of" with one keyword refuses.
+
+**Next:**
+
+- **The Shrine cycle**, with Fruitful Harvest's real cost now measured (above):
+  Shattered Heights' discard cost (whose "a land card or **Shrine** card" is a
+  noun-phrase *union* the parser has no production for), Tranquil Light's
+  per-Shrine cost reduction, Sanctum of All's two-zone search and
+  trigger-doubling static.
+- **A static P/T contribution with a computed X** — Carrion Grub, Kinetic
+  Augur's characteristic-defining power, and Jolrael's team base-P/T are three
+  readings of the same missing shape.
+- **A reflexive trigger** — "you may pay {1}. **When you do**, …" (Tolarian
+  Kraken), deliberately refused in round 60.
+- The legend rule from round 49.

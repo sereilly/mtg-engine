@@ -644,3 +644,85 @@ def test_two_counts_cannot_share_one_x():
 
     assert result.parsed and not result.lowered
     assert result.failure_reason == "two counts cannot share one X"
+
+
+# --- Round 63: a choice made as the effect resolves -------------------------
+
+
+def _gift_board(set_pool, *, interactive: bool):
+    pool = set_pool("M21")
+    watchdog = Permanent(card=pool["Alpine Watchdog"])
+    p1 = PlayerState(
+        name="P1", battlefield=[watchdog], hand=[pool["Alchemist's Gift"]]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    if interactive:
+        game.interactive_seats = {0}
+    return game, p1, watchdog
+
+
+def test_alchemists_gift_offers_the_two_keywords(set_pool):
+    """"Target creature gets +1/+1 and gains **your choice of** deathtouch or
+    lifelink until end of turn."
+
+    A choice between two effects is what ``choose_one`` already is — the
+    composition seam a modal ability uses — so this needed no prompt of its own.
+    The labels are the keywords, and the seat that was asked picks."""
+    game, p1, watchdog = _gift_board(set_pool, interactive=True)
+
+    game.cast_from_hand(
+        0, "Alchemist's Gift", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+    pending = game.pending_choices_of("mode_choice", 0)
+    assert pending, "the choice should be offered"
+    assert pending[0].data["labels"] == ["deathtouch", "lifelink"]
+
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=1)
+
+    assert (watchdog.effective_power, watchdog.effective_toughness) == (3, 3)
+    assert game._has_keyword(watchdog, "lifelink")
+    assert not game._has_keyword(watchdog, "deathtouch"), "one keyword, not both"
+
+
+def test_a_seat_that_is_not_asked_takes_the_first_printed(set_pool):
+    """The stated policy `choose_one` already carries, inherited rather than
+    invented: the first printed option, which is a policy and not a valuation.
+    A card whose AI should pick otherwise needs one."""
+    game, p1, watchdog = _gift_board(set_pool, interactive=False)
+
+    game.cast_from_hand(
+        0, "Alchemist's Gift", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert game._has_keyword(watchdog, "deathtouch")
+    assert not game._has_keyword(watchdog, "lifelink")
+
+
+def test_a_choice_of_keywords_is_not_a_list_of_them():
+    """The distinction the AST has to carry. "gains deathtouch **and** lifelink"
+    and "gains your choice of deathtouch **or** lifelink" reach the keyword
+    reader as the same tuple, so the alternatives are marked where the words
+    are still there — otherwise the card grants both."""
+    both = compile_line("Target creature gains deathtouch and lifelink until end of turn.")
+    assert [i.kind for i in both.instructions] == ["grant_target_keyword_until_eot"]
+    assert both.instructions[0].payload["keywords"] == ("deathtouch", "lifelink")
+
+    either = compile_line(
+        "Target creature gains your choice of deathtouch or lifelink until end of turn."
+    )
+    assert [i.kind for i in either.instructions] == ["choose_one"]
+    assert [m["label"] for m in either.instructions[0].payload["modes"]] == [
+        "deathtouch", "lifelink"
+    ]
+
+
+def test_a_choice_of_one_keyword_refuses():
+    """"Your choice of" with nothing to choose between is a misread sentence,
+    not a grant."""
+    result = compile_line("Target creature gains your choice of flying until end of turn.")
+
+    assert not result.parsed

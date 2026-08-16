@@ -10,6 +10,8 @@ A continuous effect with no duration is refused here rather than lowered, and
 what is missing instead of producing an effect that never ends.
 """
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
@@ -133,6 +135,26 @@ _KEYWORD_GRANTS: dict[tuple[str, str], str] = {
 
 
 def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
+    # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift). A
+    # choice between two effects is `choose_one` — the composition seam
+    # (engine/handlers/control_flow.py) that a modal ability already uses — so
+    # there is no per-keyword prompt, no new pending-choice kind, and the
+    # non-interactive default is the one already stated for a mode: the first
+    # printed. Lowering each alternative through this same function is what
+    # keeps a keyword the engine cannot grant refusing the whole line rather
+    # than being offered as an option that does nothing.
+    if node.choose_one:
+        alternatives = tuple(
+            dataclasses.replace(node, keywords=(keyword,), choose_one=False)
+            for keyword in node.keywords
+        )
+        modes = []
+        for alternative in alternatives:
+            lowered = _lower_gain_keyword(alternative)
+            if len(lowered) != 1:
+                raise LoweringError("a keyword choice needs one instruction per option", node=node)
+            modes.append({"label": alternative.keywords[0], "instruction": lowered[0]})
+        return (OracleInstruction("choose_one", "", {"modes": tuple(modes)}),)
     if node.duration.kind is None:
         reason = _durationless_reason(node.subject)
         if reason.startswith("continuous pump"):

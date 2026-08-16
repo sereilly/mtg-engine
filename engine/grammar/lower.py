@@ -837,18 +837,37 @@ _WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
+    """The instructions a wrapper carries, or None if it is not one.
+
+    ``choose_one`` is a wrapper too, and its options are ``{label, instruction}``
+    pairs rather than a bare tuple — the modal shape the pending-choice prompt
+    reads. Its categories are its options', because that is what the card can
+    actually do; giving it a category of its own would say the *choosing* is the
+    effect.
+    """
+    if instruction.kind == "choose_one":
+        return tuple(
+            mode["instruction"] for mode in instruction.payload.get("modes") or ()
+        )
+    nested_keys = _WRAPPER_KINDS.get(instruction.kind)
+    if nested_keys is None:
+        return None
+    nested: tuple[OracleInstruction, ...] = ()
+    for key in nested_keys:
+        nested += tuple(instruction.payload.get(key) or ())
+    return nested
+
+
 def categories_of(instructions: tuple[OracleInstruction, ...]) -> frozenset[str]:
     """Migration categories covered by a lowered instruction sequence."""
     found: set[str] = set()
     for instruction in instructions:
-        nested_keys = _WRAPPER_KINDS.get(instruction.kind)
+        nested_keys = _nested_instructions(instruction)
         if nested_keys is not None:
-            nested: tuple[OracleInstruction, ...] = ()
-            for key in nested_keys:
-                nested += tuple(instruction.payload.get(key) or ())
-            if not nested:
+            if not nested_keys:
                 return frozenset({"__ungated__"})
-            inner = categories_of(nested)
+            inner = categories_of(nested_keys)
             if "__ungated__" in inner:
                 return frozenset({"__ungated__"})
             found |= inner
