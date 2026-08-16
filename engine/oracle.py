@@ -2108,22 +2108,48 @@ def _compile_card_oracle(
             for ability in (*activated_abilities, *triggered_abilities)
             if not ability.supported or ability.instruction is None
         ]
+        # **A line that fails earlier leaves less behind, not more.** This used
+        # to require an unreadable *ability*, which reads as "something failed"
+        # and is really "something failed late enough to become an object".
+        # Sanctum of Stone Fangs' whole text is one triggered line the parser
+        # refuses outright, so no ability was ever built, the list was empty and
+        # the gate did not fire: the card entered play, reported supported, and
+        # did nothing at all. Fiery Emancipation and Teferi's Ageless Insight
+        # are the same shape with a replacement effect. The condition is what is
+        # *absent* now — nothing supported, nothing static, only markers — and
+        # the line named is the first one printed when no ability exists to
+        # point at.
+        #
+        # Auras **and Equipment** are excluded by shape rather than by name, and
+        # for one reason: both work through engine/auras.py, which this cannot
+        # see and which is the stricter gate anyway (it names the first
+        # unclaimed effect line). Short Sword's "+1/+1" is an
+        # `aura_static_pt_grant` that leaves no instruction here, so without the
+        # equip exclusion the widening would refuse two Equipment that work.
+        attachment = any(
+            line.startswith("enchant ") or line.startswith("equip")
+            for line in aura_lines
+        )
         if (
             primary_type in ("artifact", "enchantment")
-            and not any(line.startswith("enchant ") for line in aura_lines)
+            and not attachment
             and instructions
             and all(instruction.kind == "spell_pattern" for instruction in instructions)
             and not modes
-            and unreadable
             and not any(
                 ability.supported and ability.instruction is not None
                 for ability in (*activated_abilities, *triggered_abilities)
             )
         ):
+            offending = (
+                unreadable[0].source_line
+                if unreadable
+                else next((line for line in oracle_text.split("\n") if line.strip()), "")
+            )
             return OracleProgram(
                 False,
                 "unsupported",
-                f"no ability of this permanent is implemented: {unreadable[0].source_line}",
+                f"no ability of this permanent is implemented: {offending}",
                 normalized_text,
             )
 

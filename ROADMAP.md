@@ -2687,3 +2687,65 @@ watched to fail on HEAD.
   by card — 76 left, led by the protection-quality and per-turn-tracker families.
 
 ---
+
+## Round 53: a line that fails earlier leaves less behind, not more
+
+*(2026-08-16.)* Back to the tail, and the census walked straight into three
+cards that were not in it. M21 **209 → 206**, and the drop is the point again:
+all three reported `supported` and did nothing at all.
+
+**The Shrine cycle is what surfaced it.** Sorting M21's 76 unsupported cards by
+first failing clause put five Shrines together, and the sixth — **Sanctum of
+Stone Fangs** — was on the *supported* side. Reading it to learn how it worked
+found that it doesn't: two `spell_pattern` markers, zero triggered abilities,
+zero static lines. Its whole text is one triggered line the parser refuses, and
+the card entered play and did nothing.
+
+**Round 16's gate has a blind spot, and it is the wrong way round.** It refuses
+a permanent whose card-level instructions are all whitelist markers *and* which
+has at least one **unreadable ability** — the second conjunct there to keep a
+permanent whose work lives somewhere the compiler cannot see. But an unreadable
+ability is an ability that failed *late enough to become an object*. A line the
+parser refuses outright leaves no ability behind, so the list is empty, so the
+gate does not fire: **the more completely a line fails, the more likely the card
+is to pass.** The condition is what is absent now — nothing supported, nothing
+static, only markers — and the reason names the first printed line when there is
+no ability to point at.
+
+**The guard could not have caught it, because it had the same blind spot.**
+`tests/engine/test_no_hollow_support.py` carries the identical `if not
+unreadable: continue`, written from the same thought in the same round. It also
+scanned `load_catalog()` alone — the shipped pool, the half held at 100% support
+and looked at constantly — while all three cards live in the measured set. Both
+are fixed: the scan is the whole pool, and the skip is gone.
+
+**Three cards, all M21, all doing nothing:** Sanctum of Stone Fangs (a
+first-main-phase trigger with no parse), **Fiery Emancipation** ("it deals triple
+that damage instead") and **Teferi's Ageless Insight** ("draw two cards
+instead") — the last two replacement effects that were never built.
+
+**Equipment had to join Auras in the exclusion**, and by shape rather than by
+name: both work through `engine/auras.py`, which this cannot see and which is
+the stricter gate anyway. Short Sword's "+1/+1" is an `aura_static_pt_grant`
+leaving no instruction here, so the widening would have refused two Equipment
+that work. That is the control test, and it is what stops the fix over-reaching.
+
+Suite **5,037** at 21.4s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Four of the six new tests were
+watched to fail on HEAD; the other two are the Equipment control and the proof
+that the scan now reaches the measured set.
+
+**Next — the Shrine cycle, and it is two subsystems, not one:**
+
+- **"…, where X is the number of <filter>"** as a *trailing clause on any
+  sentence*. It exists today only inside `_parse_gets`, so "gets -X/-X …, where
+  X is …" works and "each opponent loses X life …, where X is …" is unconsumed
+  text. Generalising it serves Stone Fangs, Calm Waters (draw), Fruitful Harvest
+  (mana), Shattered Heights (damage), Liliana's Standard Bearer, Experimental
+  Overload and Jolrael — one clause, seven cards.
+- **"At the beginning of your first main phase"**, which `AT_TRIGGER_PATTERNS`
+  does not have at all. Three Shrines want it.
+- Then the rest of the tail: the legend rule (unchanged from round 49) still
+  waits on a `card.name` census.
+
+---

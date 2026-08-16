@@ -33,9 +33,25 @@ import dataclasses
 
 import pytest
 
-from engine.card_loader import load_catalog
+from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.handlers import EFFECT_HANDLERS
 from engine.oracle import compile_card_oracle
+
+
+def _whole_pool():
+    """Every card the engine can read, **measured sets included**.
+
+    A permanent that does nothing does nothing whether or not a deck may hold
+    it, and the shipped pool is the half least likely to be wrong — it is held
+    at 100% support and looked at constantly. Scanning `load_catalog()` alone
+    left the measured set unwatched, which is where all three of the cards the
+    blind spot below was hiding turned out to live.
+    """
+    seen = {}
+    for path in manifest_set_paths(include_measured=True):
+        for card in load_cards(path):
+            seen.setdefault(card.name, card)
+    return list(seen.values())
 
 
 def _hollow_spells() -> list[tuple[str, list[str]]]:
@@ -98,12 +114,15 @@ def test_broad_whitelist_patterns_never_carry_a_card_alone(bare_pattern):
 
 def _hollow_permanents() -> list[tuple[str, list[str], list[str]]]:
     hollow: list[tuple[str, list[str], list[str]]] = []
-    for card in load_catalog():
+    for card in _whole_pool():
         if card.primary_type not in ("artifact", "enchantment"):
             continue
-        # Auras answer to engine/auras.py, which runs first and is stricter —
-        # see test_an_aura_is_left_to_its_own_gate below.
-        if "Aura" in card.type_line:
+        # Auras and Equipment answer to engine/auras.py, which runs first and is
+        # stricter — see test_an_aura_is_left_to_its_own_gate below. Equipment
+        # is here for the same reason and by the same shape: Short Sword's
+        # "+1/+1" is an `aura_static_pt_grant` that leaves no instruction for
+        # this scan to find.
+        if "Aura" in card.type_line or "Equipment" in card.type_line:
             continue
         program = compile_card_oracle(card)
         if not program.supported or program.modes:
@@ -115,10 +134,20 @@ def _hollow_permanents() -> list[tuple[str, list[str], list[str]]]:
         abilities = (*program.activated_abilities, *program.triggered_abilities)
         if any(a.supported and a.instruction is not None for a in abilities):
             continue
+        # **No `if not unreadable: continue` here.** The guard used to skip a
+        # card with no unreadable ability, which sounds like "nothing failed"
+        # and means "nothing failed *late enough to become an object*" — a line
+        # the parser refuses outright leaves no ability behind at all. The
+        # compiler's gate had the identical blind spot, written from the same
+        # thought at the same time, so this guard could not have found it: it
+        # hid Sanctum of Stone Fangs, Fiery Emancipation and Teferi's Ageless
+        # Insight, three permanents that entered play and did nothing.
         unreadable = [a.source_line for a in abilities if not a.supported or a.instruction is None]
-        if not unreadable:
-            continue
-        hollow.append((card.name, [f"{i.kind}:{i.value}" for i in program.instructions], unreadable))
+        hollow.append((
+            card.name,
+            [f"{i.kind}:{i.value}" for i in program.instructions],
+            unreadable or [ln for ln in card.oracle_text.splitlines() if ln.strip()],
+        ))
     return hollow
 
 
@@ -186,3 +215,54 @@ def test_an_aura_is_left_to_its_own_gate():
     assert all(
         a.instruction is None for a in program.triggered_abilities
     ), "the trigger still has no instruction — its behaviour is elsewhere"
+
+
+# ---------------------------------------------------------------------------
+# The blind spot both halves shared
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name,clause",
+    [
+        ("Sanctum of Stone Fangs", "at the beginning of your first main phase"),
+        ("Fiery Emancipation", "would deal damage"),
+        ("Teferi's Ageless Insight", "would draw a card"),
+    ],
+)
+def test_a_permanent_whose_line_never_became_an_ability_is_unsupported(name, clause):
+    """The three cards the blind spot hid, and the shape of it: each prints one
+    line, the parser refuses that line outright, and so **no ability object was
+    ever built**. The gate asked for an unreadable ability and found none, which
+    reads as "nothing failed" and means "nothing failed late enough to leave a
+    record". All three entered play, reported supported and did nothing."""
+    pool = {c.name: c for c in _whole_pool()}
+    program = compile_card_oracle(pool[name])
+
+    assert not program.supported
+    assert "no ability of this permanent is implemented" in program.reason
+    assert clause in program.reason.lower(), program.reason
+
+
+def test_equipment_is_left_to_its_own_gate_like_an_aura():
+    """The control for the widening, and the reason the exclusion is by shape
+    rather than by name. Short Sword's "+1/+1" is an ``aura_static_pt_grant``
+    read off the card's text by engine/auras.py, which leaves no instruction
+    here — so dropping the unreadable-ability requirement would have refused two
+    Equipment that work perfectly well."""
+    pool = {c.name: c for c in _whole_pool()}
+    for name in ("Short Sword", "Malefic Scythe"):
+        program = compile_card_oracle(pool[name])
+        assert program.supported, name
+        assert all(i.kind == "spell_pattern" for i in program.instructions), (
+            f"{name} is exactly the shape the gate refuses, minus the exclusion"
+        )
+
+
+def test_the_pool_scan_reaches_the_measured_set():
+    """The other half of why this was never found: the scan read the shipped
+    pool alone, which is the half held at 100% support and looked at constantly.
+    All three cards live in M21."""
+    names = {c.name for c in _whole_pool()}
+    assert "Sanctum of Stone Fangs" in names
+    assert names > {c.name for c in load_catalog()}
