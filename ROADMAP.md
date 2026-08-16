@@ -2221,3 +2221,71 @@ that already worked, which is what made the general case look covered.
   prompt to return a spec to.
 
 ---
+
+## Round 46: working through the nineteen nobody had looked at
+
+*(2026-08-15.)* Round 45's tracker fix turned "all 369 catalog cards, passing"
+into "388 total, **19 untested**" — the cards Revised added, which no manual
+pass had ever been asked for. Onulet was found in that list by accident. This
+round worked through the other eighteen by hand.
+
+**Two of the nineteen reported `supported` and did something else.** Both are
+shipped-pool cards, both are now fixed, and both bugs were in the engine rather
+than in the card.
+
+**Dwarven Weaponsmith** — "{T}, Sacrifice an artifact: Put a +1/+1 counter on
+target creature." CR 602.2b routes activation through the casting steps, so the
+target is chosen at CR 601.2c and the cost is paid at CR 601.2h — in that order.
+The engine recorded the target as a battlefield *index*, and paying the cost
+removes a permanent, which renumbers every slot after it. With the artifact
+sitting before the target, the counter landed on whatever slid into the index —
+the Weaponsmith itself, in the layout that ships. This is the index-instability
+class the engine closed everywhere else; activation now stamps the target's
+`permanent_id` at 601.2c, where the choice is made. **The bug was invisible in
+half the possible board layouts**, which is why a test written the obvious way
+(artifact last) would have passed.
+
+**Energy Flux** — "All artifacts have 'At the beginning of your upkeep,
+sacrifice this artifact unless you pay {2}.'" The two pay-or-sacrifice handlers
+decided payment with `all(pool[sym] >= n for sym, n in mana.items() if sym !=
+"generic")` — an `all()` over an *empty* sequence for a cost with no coloured
+pip. So every artifact on the board paid {2} for free and the enchantment did
+nothing at all; a mixed {1}{U} would have charged the {U} and waived the {1}.
+Both handlers now go through `can_pay_upkeep_mana` / `_spend_upkeep_mana`, the
+pair the wind-counter handler beside them already used — which also means the
+generic part can be paid by tapping a land during upkeep, which a pool read
+cannot see. Three near-copies became one rule.
+
+The other seventeen do what they print, checked behaviour by behaviour rather
+than by compiling: Armageddon Clock's counters and its shared `{4}` (both
+players may, upkeep only), Atog, Crumble and Shatterstorm ignoring regeneration
+shields, Dragon Engine, Hurkyl's Recall taking artifacts and leaving creatures,
+Ivory Tower's hand-size arithmetic, Millstone, Mishra's War Machine's banding
+and its discard-or-3, Ornithopter, Reconstruction returning an artifact (its
+instruction kind says `creature`, its behaviour does not), Reverse Polarity
+reading zero with no artifact damage, Rocket Launcher's delayed self-destruction
+and its controlled-since-your-turn gate, The Rack choosing its opponent on
+entry, and Titania's Song lingering after it leaves and stopping at end of turn.
+
+**The tracker still says nineteen untested, and that is correct.** A headless
+sweep is not a manual in-game pass, and `card_verification.json` records what a
+human checked. Writing results into it from here would be the same category
+error as the file that claimed zero untested.
+
+Suite **4,977** at 18.7s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Five of the eight new tests were
+watched to fail on HEAD; three are control cases that say *why* the bugs
+survived — the layout where the index happens to hold, and the coloured half of
+a mixed cost.
+
+**Next:**
+
+- **Primal Clay offers no choice.** "As this creature enters, it becomes your
+  choice of a 3/3, a 2/2 with flying, or a 1/6 Wall with defender." It enters a
+  3/3 every time. Not silent wrongness — the first mode is a legal outcome —
+  but it is a mode the player never picked, and it wants the pending-choice
+  machinery at entry plus a web prompt. The nineteenth card, and the only one
+  the sweep left undone.
+- **The discard cost's picker** (unchanged from round 44).
+
+---

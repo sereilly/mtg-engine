@@ -221,6 +221,23 @@ class AbilityActivationMixin:
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
         target_player = self.players[target_idx]
 
+        # CR 601.2c (reached through 602.2b) chooses targets **before** CR 601.2h
+        # pays the costs, and this ability's cost may remove a permanent — which
+        # renumbers every battlefield slot after it. Stamping the identity now is
+        # what keeps the two apart.
+        #
+        # Dwarven Weaponsmith is the card: "{T}, Sacrifice an artifact: Put a
+        # +1/+1 counter on target creature." With the artifact sitting before the
+        # target on its controller's battlefield, paying the cost slid the target
+        # down a slot, and the index the caller chose then named something else —
+        # the source itself, in the case that ships. A caller that already sends
+        # ids (the whole web layer does, which is why no game ever showed this)
+        # is left exactly as it was.
+        if target_permanent_ids is None and isinstance(target_permanent_index, int):
+            stable = self.permanent_at(target_player, target_permanent_index)
+            if stable is not None:
+                target_permanent_ids = [stable.permanent_id]
+
         # An explicitly chosen spell on the stack (e.g. Deathgrip: "{B}{B}: Counter
         # target green spell"). target_stack_index indexes self.stack (bottom-first).
         target_stack_item = None

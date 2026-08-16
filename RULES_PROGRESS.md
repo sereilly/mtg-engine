@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**243 / 585 tracked rules covered (41%)** — 1070 tests, 0 unannotated.
+**244 / 585 tracked rules covered (41%)** — 1075 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [104. Ending the Game](#104-ending-the-game) | 5/6 | 83% |
 | [105. Colors](#105-colors) | 0/5 | 0% |
 | [106. Mana](#106-mana) | 4/13 | 30% |
-| [107. Numbers and Symbols](#107-numbers-and-symbols) | 2/18 | 11% |
+| [107. Numbers and Symbols](#107-numbers-and-symbols) | 3/18 | 16% |
 | [108. Cards](#108-cards) | 1/6 | 16% |
 | [109. Objects](#109-objects) | 1/5 | 20% |
 | [110. Permanents](#110-permanents) | 0/5 | 0% |
@@ -170,7 +170,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **107.1** The only numbers the Magic game uses are integers.
 - [ ] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio...
 - [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(1 tests, subrules b)*
-- [ ] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ...
+- [x] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ... *(3 tests)*
 - [x] **107.5** The tap symbol is {T}. The tap symbol in an activation cost means “Tap this permanent.” A permane... *(2 tests)*
 - [ ] **107.6** The untap symbol is {Q}. The untap symbol in an activation cost means “Untap this permanent.” A p...
 - [ ] **107.7** Each activated ability of a planeswalker has a loyalty symbol in its cost. Positive loyalty symbo...
@@ -282,7 +282,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **118.1** A cost is an action or payment necessary to take another action or to stop another action from ta... *(1 tests)*
 - [x] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili... *(1 tests)*
-- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(5 tests, subrules ab)*
+- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(9 tests, subrules ab)*
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
@@ -646,7 +646,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(61 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(64 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -656,7 +656,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(7 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(9 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(11 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(7 tests, subrules ac)*

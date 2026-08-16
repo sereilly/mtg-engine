@@ -133,18 +133,27 @@ class UpkeepEffectsMixin:
         permanent = ctx.permanent
         trig = ctx.trig
         mana: dict[str, int] = trig.instruction.payload.get("mana", {})
+        # `can_pay_upkeep_mana` / `_spend_upkeep_mana`, the pair the wind-counter
+        # handler beside this one already uses — never a hand-rolled pool read.
+        # Both of these used to test the *coloured* pips alone:
+        #
+        #     paid = all(pool[sym] >= count for sym, count in mana.items()
+        #                if sym != "generic")
+        #
+        # which is vacuously True for a cost with no coloured pips at all. Energy
+        # Flux grants every artifact "sacrifice this artifact unless you pay
+        # {2}", a generic-only cost, so every artifact on the board paid it for
+        # free — and a partly generic {1}{U} charged the {U} and waived the {1}.
+        # The helpers know that generic mana can come from floating mana *or*
+        # from tapping a land during upkeep, which a pool read cannot see.
         if human_choices is not None and permanent.card.name in human_choices:
-            paid = human_choices[permanent.card.name]
-        else:
-            paid = all(
-                controller.mana_pool.get(sym, 0) >= count
-                for sym, count in mana.items()
-                if sym != "generic"
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
+                controller, mana
             )
+        else:
+            paid = self.can_pay_upkeep_mana(controller, mana)
         if paid:
-            for sym, count in mana.items():
-                if sym != "generic":
-                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+            self._spend_upkeep_mana(controller, mana)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
             self.sacrifice_permanent(permanent)
@@ -622,18 +631,27 @@ class UpkeepEffectsMixin:
         permanent = ctx.permanent
         trig = ctx.trig
         mana = trig.instruction.payload.get("mana", {})
+        # `can_pay_upkeep_mana` / `_spend_upkeep_mana`, the pair the wind-counter
+        # handler beside this one already uses — never a hand-rolled pool read.
+        # Both of these used to test the *coloured* pips alone:
+        #
+        #     paid = all(pool[sym] >= count for sym, count in mana.items()
+        #                if sym != "generic")
+        #
+        # which is vacuously True for a cost with no coloured pips at all. Energy
+        # Flux grants every artifact "sacrifice this artifact unless you pay
+        # {2}", a generic-only cost, so every artifact on the board paid it for
+        # free — and a partly generic {1}{U} charged the {U} and waived the {1}.
+        # The helpers know that generic mana can come from floating mana *or*
+        # from tapping a land during upkeep, which a pool read cannot see.
         if human_choices is not None and permanent.card.name in human_choices:
-            paid = human_choices[permanent.card.name]
-        else:
-            paid = all(
-                controller.mana_pool.get(sym, 0) >= count
-                for sym, count in mana.items()
-                if sym != "generic"
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
+                controller, mana
             )
+        else:
+            paid = self.can_pay_upkeep_mana(controller, mana)
         if paid:
-            for sym, count in mana.items():
-                if sym != "generic":
-                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+            self._spend_upkeep_mana(controller, mana)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
             self.sacrifice_permanent(permanent)

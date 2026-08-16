@@ -413,3 +413,84 @@ def test_atog_pays_an_artifact_for_its_pump(catalog):
 
     assert not second.supported
     assert atog.effective_power == base + 2
+
+
+# ---------------------------------------------------------------------------
+# The never-checked-cards round
+#
+# Revised added nineteen cards that no manual pass had ever looked at — the
+# verification tracker had no result for any of them and its generated file
+# claimed there were none missing (round 45). Working through them by hand
+# turned up two that reported `supported` and did something else. Both are here.
+# ---------------------------------------------------------------------------
+
+
+def test_dwarven_weaponsmith_counters_the_creature_it_targeted(catalog):
+    """"{T}, Sacrifice an artifact: Put a +1/+1 counter on target creature."
+
+    The artifact sits *before* the target on the battlefield, so paying the cost
+    slides the target down a slot. The counter has to land on the creature that
+    was chosen, not on whatever moved into its index — which was the source
+    itself, because index 2 no longer existed.
+    """
+    smith = Permanent(card=catalog["Dwarven Weaponsmith"])
+    smith.metadata["summoning_sickness_turn"] = -99
+    fuel = Permanent(card=catalog["Black Lotus"])
+    bear = Permanent(card=catalog["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[smith, fuel, bear])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase, game.current_step = "beginning", "upkeep"
+
+    result = game.activate_permanent_ability(
+        0, "Dwarven Weaponsmith", target_player_index=0, target_permanent_index=2
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (3, 3)
+    assert (smith.effective_power, smith.effective_toughness) == (1, 1), (
+        "the Weaponsmith kept nothing for itself"
+    )
+
+
+def test_energy_flux_makes_artifacts_pay_a_generic_upkeep(catalog):
+    """"All artifacts have 'At the beginning of your upkeep, sacrifice this
+    artifact unless you pay {2}.'"
+
+    A cost of pure generic mana. The pay-or-sacrifice handler tested the
+    *coloured* pips alone, so this one had nothing to test and every artifact on
+    the board paid it for free — the enchantment did nothing at all.
+    """
+    flux = Permanent(card=catalog["Energy Flux"])
+    stone = Permanent(card=catalog["Millstone"])
+    p1 = PlayerState(name="P1", battlefield=[flux])
+    p2 = PlayerState(name="P2", battlefield=[stone])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    game.active_player_index = 1
+    game._recompute_continuous_effects()
+
+    game.resolve_upkeep(1)
+
+    assert [perm.card.name for perm in p2.battlefield] == [], "no mana, no Millstone"
+
+
+def test_energy_flux_is_paid_off_with_two_floating_mana(catalog):
+    """The other half: the cost is payable, so paying it keeps the artifact and
+    actually spends the mana."""
+    flux = Permanent(card=catalog["Energy Flux"])
+    stone = Permanent(card=catalog["Millstone"])
+    p1 = PlayerState(name="P1", battlefield=[flux])
+    p2 = PlayerState(name="P2", battlefield=[stone])
+    p2.mana_pool["C"] = 2
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    game.active_player_index = 1
+    game._recompute_continuous_effects()
+
+    game.resolve_upkeep(1)
+
+    assert [perm.card.name for perm in p2.battlefield] == ["Millstone"]
+    assert p2.mana_pool["C"] == 0, "the {2} was actually spent"
