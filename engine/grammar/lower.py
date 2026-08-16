@@ -512,13 +512,12 @@ def _lower_may(
     if node.cost is not None:
         if not isinstance(node.cost, ast.ManaCost):
             raise LoweringError("only mana costs can be offered optionally", node=node)
-        generic = dict(node.cost.pips).get("generic", 0)
-        colored = {sym: n for sym, n in node.cost.pips if sym != "generic"}
-        if colored:
-            raise LoweringError(
-                "optional colored costs need a real cost-payment prompt", node=node
-            )
-        payload["cost"] = generic
+        # The whole cost, symbol by symbol. It used to be the generic part
+        # alone, with a coloured pip refusing the line — not a parser gap but a
+        # *payer* one: the prompt collected its cost by counting to a number, so
+        # a {B} had nothing to collect it with. `engine/mana_payment.py` is what
+        # made the refusal unnecessary.
+        payload["cost"] = dict(node.cost.pips)
     if action:
         payload["action"] = action
     if then:

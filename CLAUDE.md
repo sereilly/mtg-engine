@@ -264,6 +264,15 @@ adding entries, not editing dispatch**:
   resolver finishes it. Interactive seats queue on
   `game.pending_replacement_choices`; every other seat takes the default at
   once, through that same resolver. Two registrations, no new `Game` field.
+- `engine/mana_payment.py` — **whether a cost can be paid from the board, and
+  how**. Two different questions: casting and activating spend the *pool*
+  (`_pay_mana_cost`), because producing mana is the player's own prior action;
+  an effect that says "you may pay {1}{B}" gives its player no priority window,
+  so it must also tap lands. `plan_payment` answers the second, exactly (an
+  augmenting-path matching of coloured pips to lands, because a greedy pick
+  under-reports a board that could pay and CR 601.2h asks what a player is
+  *able* to do). A cost is a symbol dict everywhere — `generic_cost(n)` is the
+  one line that turns a legacy number into one.
 - `engine/pending_choices.py` — every *other* decision a seat owes part-way
   through a spell, an ability or a turn step (a discard, a library search,
   Balance's removals, Power Sink's payment). One `PendingChoice` queue on

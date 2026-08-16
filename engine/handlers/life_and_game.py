@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from ._common import resolve_amount
 from .registry import effect_handler
+from ..mana_payment import generic_cost
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -186,10 +187,10 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         life = int(tctx.get("life", 0))
         cost = tctx.get("optional_pay_cost")
         if cost is not None:
-            if game._player_can_pay_generic(controller, int(cost)):
+            entry = {"card_name": card.name, "cost": generic_cost(int(cost)), "life": life}
+            if game._player_can_pay_optional(controller, entry):
                 game.arm_pending_choice(
-                    "optional_pay", game.players.index(controller),
-                    card_name=card.name, cost=int(cost), life=life,
+                    "optional_pay", game.players.index(controller), **entry
                 )
             return True, "resolved"
         game._gain_life(controller, life, card.name)

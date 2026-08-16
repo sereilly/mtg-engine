@@ -2337,3 +2337,79 @@ def test_makeshift_battalion_must_be_attacking_itself(set_pool):
     game._settle()
 
     assert perms[0].metadata.get("plus_counters", 0) == 0
+
+
+# --- Round 60: an optional cost that is not generic -------------------------
+
+
+def _devotee_board(set_pool, lands):
+    pool = set_pool("M21")
+    devotee = Permanent(card=pool["Liliana's Devotee"])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[devotee] + [Permanent(card=pool[name]) for name in lands],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    victim = Permanent(card=pool["Alpine Watchdog"])
+    p1.battlefield.append(victim)
+    game._permanent_to_graveyard(p1, victim)
+    return game, p1, devotee
+
+
+def test_lilianas_devotee_offers_a_coloured_cost(set_pool):
+    """"At the beginning of your end step, if a creature died this turn, you may
+    pay {1}{B}. If you do, create a 2/2 black Zombie creature token."
+
+    The refusal it lifts was not a parser gap: the prompt collected its cost by
+    counting to a number, so a {B} had nothing to collect it with, and the
+    lowering refused rather than describe a payment that could not happen."""
+    game, p1, devotee = _devotee_board(set_pool, ["Swamp", "Forest"])
+
+    game.resolve_end_step(0)
+    game._settle()
+    pending = game.pending_choices_of("optional_pay", 0)
+    assert pending, "the offer should be made"
+    assert pending[0].data["prompt"] == "Pay {1}{B}?"
+
+    assert game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert [p.card.name for p in p1.battlefield if "Zombie" in p.card.name] == [
+        "Zombie Token"
+    ]
+    assert all(p.tapped for p in p1.battlefield if p.card.primary_type == "land")
+
+
+def test_lilianas_devotee_is_not_offered_a_cost_it_cannot_pay(set_pool):
+    """CR 601.2h: an offer the player could not take is never made. Two Forests
+    are two mana and still not {1}{B} — which is exactly the distinction a
+    payment that counted to a number could not draw."""
+    game, p1, devotee = _devotee_board(set_pool, ["Forest", "Forest"])
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert not game.pending_choices_of("optional_pay", 0)
+
+
+def test_lilianas_devotee_is_silent_with_no_death(set_pool):
+    """The intervening-if (CR 603.4). It is also what the trigger was found by:
+    the end step enqueued gated triggers from a list of *instruction kinds*
+    holding one entry, and this card lowers onto ``may`` — so it would have
+    compiled clean and never fired."""
+    pool = set_pool("M21")
+    devotee = Permanent(card=pool["Liliana's Devotee"])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[devotee, Permanent(card=pool["Swamp"]), Permanent(card=pool["Forest"])],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.interactive_seats = {0}
+    game.start_turn(0)
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert not game.pending_choices_of("optional_pay", 0)

@@ -301,7 +301,7 @@ class TestHasranOgress:
         assert len(game.pending_optional_pays) == 1
         entry = game.pending_optional_pays[0]
         assert entry["card_name"] == "Hasran Ogress"
-        assert entry["cost"] == 2
+        assert entry["cost"] == {"generic": 2}
         assert entry["damage"] == 3
 
     def test_declining_deals_three_damage_to_controller(self, arn_by_name):

@@ -30,6 +30,7 @@ from ...models import CardDefinition, Permanent
 from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
 from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer
+from ...mana_payment import plan_payment, untapped_mana_lands
 from ...search_filters import search_matches
 from ...subject_filters import subject_matches
 
@@ -1082,24 +1083,29 @@ class PendingChoicesMixin:
 
     # -- Optional "you may pay {N}" ------------------------------------------
 
-    def _player_can_pay_generic(self, player, amount: int) -> bool:
-        """Whether *player* can pay a generic cost of ``amount`` — counting both
-        floating mana and untapped mana-producing lands. (The "you may pay {1}"
-        rod/cup triggers fire on any player's spell, when the controller usually
-        has no floating mana and must tap a land.)"""
-        floating = sum(player.mana_pool.values())
-        if floating >= amount:
-            return True
-        untapped_land_mana = sum(
-            1
-            for perm in self.controlled_by(player)
-            if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana
+    def _optional_pay_plan(self, player, entry: dict):
+        """How *player* would pay this entry's cost, or None if they cannot.
+
+        The cost is the whole printed one — ``{1}{B}`` is a dict of symbols, not
+        the number 2 — and it is collected from the board rather than from the
+        pool alone, because an effect that says "you may pay" gives its player no
+        priority window in which to tap for mana. ``engine/mana_payment.py``
+        holds both halves of that question; asking it once here is what makes
+        "can they pay?" and "pay it" the same answer.
+        """
+        return plan_payment(
+            player.mana_pool,
+            untapped_mana_lands(self.controlled_by(player)),
+            entry.get("cost") or {},
         )
-        return floating + untapped_land_mana >= amount
+
+    def _player_can_pay_optional(self, player, entry: dict) -> bool:
+        """CR 601.2h, for an optional cost: whether it *could* be paid."""
+        return self._optional_pay_plan(player, entry) is not None
 
     def _pay_optional(self, player_index: int, entry: dict) -> None:
-        """Spend the entry's generic mana cost (floating mana first, then by tapping
-        untapped lands) from its player and gain the life if fully paid."""
+        """Collect the entry's mana cost from its player and run what accepting
+        buys. A cost that turns out to be unpayable buys nothing."""
         player = self.players[player_index]
         # A free optional "you may draw a card" rider (Verduran Enchantress): no
         # cost to pay, just draw on accept.
@@ -1107,21 +1113,13 @@ class PendingChoicesMixin:
             drawn = player.draw(int(entry["draw"]))
             self.log.append(f"{player.name} drew {drawn} card(s) from {entry['card_name']}")
             return
-        remaining = int(entry["cost"])
-        for sym in list(player.mana_pool):
-            while remaining > 0 and player.mana_pool.get(sym, 0) > 0:
-                player.mana_pool[sym] -= 1
-                remaining -= 1
-        # Tap untapped lands to cover any generic remainder ({1}).
-        if remaining > 0:
-            for perm in self.controlled_by(player):
-                if remaining <= 0:
-                    break
-                if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana:
-                    self.become_tapped(perm)
-                    remaining -= 1
-        if remaining != 0:
+        plan = self._optional_pay_plan(player, entry)
+        if plan is None:
             return
+        for symbol, amount in plan.from_pool.items():
+            player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
+        for land in plan.tapped:
+            self.become_tapped(land)
         # A grammar-lowered "may" carries its consequence as instructions rather
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.
@@ -1201,7 +1199,7 @@ class PendingChoicesMixin:
         player_index = choice.player_index
         entry = choice.data
         self.discard_pending_choice(choice)
-        if accept and self._player_can_pay_generic(self.players[player_index], int(entry["cost"])):
+        if accept and self._player_can_pay_optional(self.players[player_index], entry):
             self._pay_optional(player_index, entry)
         else:
             self._apply_optional_pay_decline(player_index, entry)
@@ -1212,12 +1210,18 @@ class PendingChoicesMixin:
 
     def _default_optional_pay(self, choice: PendingChoice) -> None:
         """Pay when the floating mana is already there; an unpayable "unless you
-        pay" entry applies its decline consequence (Hasran Ogress' damage)."""
+        pay" entry applies its decline consequence (Hasran Ogress' damage).
+
+        A *stated policy*, not the payability test: the non-interactive default
+        spends mana it already has and never taps a land for an optional cost,
+        because tapping is a real decision about the rest of the turn.
+        ``_player_can_pay_optional`` is the wider question and belongs to the
+        seat that was actually asked."""
         entry = choice.data
         player = self.players[choice.player_index]
-        available = sum(player.mana_pool.get(s, 0) for s in player.mana_pool)
+        floating = plan_payment(player.mana_pool, (), entry.get("cost") or {})
         self.discard_pending_choice(choice)
-        if available >= int(entry["cost"]):
+        if floating is not None:
             self._pay_optional(choice.player_index, entry)
         elif int(entry.get("damage", 0) or 0) > 0:
             self._apply_optional_pay_decline(choice.player_index, entry)

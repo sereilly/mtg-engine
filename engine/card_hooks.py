@@ -49,6 +49,7 @@ from .auras import attach_aura, detach_aura
 from .land_types import end_land_type_change
 from .models import next_permanent_id
 from .oracle_types import OracleInstruction
+from .mana_payment import generic_cost, total_pips
 
 if TYPE_CHECKING:
     from .game import Game
@@ -885,14 +886,16 @@ def _resolve_optional_pay_trigger(game: Game, item: StackItem) -> None:
     player_index = ev.get("player_index")
     if player_index is None or not (0 <= player_index < len(game.players)):
         return
-    cost = int(ev.get("cost", 0))
-    if cost > 0 and not game._player_can_pay_generic(game.players[player_index], cost):
-        return
+    cost = generic_cost(int(ev.get("cost", 0)))
     entry: dict = {
         "card_name": ev["card_name"],
         "cost": cost,
         "life": int(ev.get("life", 0)),
     }
+    if total_pips(cost) > 0 and not game._player_can_pay_optional(
+        game.players[player_index], entry
+    ):
+        return
     if "draw" in ev:
         entry["draw"] = ev["draw"]
     if "prompt" in ev:

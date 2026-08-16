@@ -27,20 +27,25 @@ END_STEP_DEATH_COUNTER_KINDS = frozenset({
 })
 END_STEP_EMPTY_BOARD_KINDS = frozenset({"sacrifice_if_no_creatures"})
 END_STEP_DID_NOT_ATTACK_KINDS = frozenset({"end_step_damage_if_not_attacked"})
-# Kinds fired only through a CR 603.4 intervening-if the grammar lowered onto
-# the payload (Barrin, Tolarian Archmage's "if a permanent was put into your
-# hand from the battlefield this turn, draw a card"). The gate is evaluated
-# here — a false condition keeps the trigger off the stack entirely — and
-# again at resolution by the payload reader in resolve_top_of_stack.
-END_STEP_INTERVENING_IF_KINDS = frozenset({"draw_controller_cards"})
 
-#: Every instruction kind an ``end_step`` trigger can be dispatched on.
+#: Every instruction kind an ``end_step`` trigger can be dispatched on *by kind*.
+#: The fourth scan below is keyed on a payload **shape** instead and so has no
+#: entry here — see ``END_STEP_INTERVENING_IF``.
 END_STEP_DISPATCHED_KINDS = (
     END_STEP_DEATH_COUNTER_KINDS
     | END_STEP_EMPTY_BOARD_KINDS
     | END_STEP_DID_NOT_ATTACK_KINDS
-    | END_STEP_INTERVENING_IF_KINDS
 )
+
+#: The payload key that makes a trigger fire through the CR 603.4 intervening-if
+#: scan, whatever its instruction kind. It used to be a list of kinds holding
+#: exactly ``draw_controller_cards`` (Barrin, Tolarian Archmage), and Liliana's
+#: Devotee is what that list cost: "at the beginning of your end step, **if a
+#: creature died this turn**, you may pay {1}{B}…" lowers onto ``may``, was in no
+#: list, and would have compiled clean and never fired. The gate lives on the
+#: payload, so "does it have one" is the whole question — and a list of kinds is
+#: only ever as complete as the last card that touched it (round 45).
+END_STEP_INTERVENING_IF = "intervening_if"
 
 
 class EndStepMixin:
@@ -146,22 +151,32 @@ class EndStepMixin:
             events.append(make_trigger_event(controller_index, permanent, trig))
 
         # A trigger whose whole gate is a CR 603.4 intervening-if (Barrin,
-        # Tolarian Archmage). Scoped like Erg Raiders to this end step's own
-        # player — the printed condition says "your". A kind in this set with
-        # no gate on its payload is not enqueued at all: this block exists
-        # *because* of the condition, and an unconditional trigger lowering to
-        # one of these kinds should be a new block, not a free ride.
+        # Tolarian Archmage; Liliana's Devotee). Scoped like Erg Raiders to this
+        # end step's own player — the printed condition says "your". Keyed on
+        # the payload's *shape* rather than on a list of instruction kinds: a
+        # trigger with no gate is not enqueued here at all, because this block
+        # exists because of the condition, and one that has a gate is enqueued
+        # whatever its effect turned out to be.
         from ..game_types import OracleExecutionContext
         from ..handlers.control_flow import evaluate_condition
 
+        # The three scans above are by kind, so a trigger they already enqueued
+        # must not be enqueued a second time by this one. None of their kinds
+        # carries a gate today; the check is here rather than as a comment
+        # because "today" is the part that expires.
+        already = {
+            (id(event["source_permanent"]), id(event["instruction"]))
+            for event in events
+        }
         for controller_index, permanent, trig in iter_triggered_abilities(
             self,
             condition_kinds={"end_step"},
-            instruction_kinds=END_STEP_INTERVENING_IF_KINDS,
             players=[self.players[player_index]],
         ):
-            gate = (trig.instruction.payload or {}).get("intervening_if")
-            if gate is None:
+            if trig.instruction is None:
+                continue
+            gate = (trig.instruction.payload or {}).get(END_STEP_INTERVENING_IF)
+            if gate is None or (id(permanent), id(trig.instruction)) in already:
                 continue
             fire_context = OracleExecutionContext(
                 caster=self.players[controller_index],

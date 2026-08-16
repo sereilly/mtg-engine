@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 from ..resumption import run_resumable
 from ._common import permanent_matches_filter
 from .registry import effect_handler
+from ..mana_payment import mana_cost_label
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -190,13 +191,16 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     actor = instruction.payload.get("actor", "you")
     player = context.caster if actor == "you" else context.target
     player_index = game.players.index(player)
-    cost = instruction.payload.get("cost")
+    # The whole printed cost, symbol by symbol — "you may pay {1}{B}" (Liliana's
+    # Devotee) is a dict, not the number 2, because a payment that counted to a
+    # number could only ever collect generic mana.
+    cost = dict(instruction.payload.get("cost") or {})
     on_accept = _steps(instruction, "action") + _steps(instruction, "then")
     on_decline = _steps(instruction, "otherwise")
 
     # An offer the player cannot afford is never made; its decline branch (a
     # "…unless you pay" penalty) still applies.
-    if cost is not None and not game._player_can_pay_generic(player, int(cost)):
+    if cost and not game._player_can_pay_optional(player, {"cost": cost}):
         return _run(game, on_decline, context) if on_decline else (True, "resolved")
 
     # The same rule for an *action* cost ("you may sacrifice another
@@ -214,7 +218,7 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
 
     entry = {
         "card_name": context.card.name,
-        "cost": int(cost or 0),
+        "cost": cost,
         "life": 0,
         "_source_permanent": context.source_permanent,
         # Instructions to run on accept/decline, with the resolution context
@@ -224,7 +228,7 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
         "_context": context,
     }
     if cost:
-        entry["prompt"] = f"Pay {{{int(cost)}}}?"
+        entry["prompt"] = f"Pay {mana_cost_label(cost)}?"
     # Mirror a plain "gain N life" consequence into the legacy `life` field so
     # the prompt UI keeps describing what accepting does. Display only —
     # _pay_optional runs the instruction branch and returns before reading it.

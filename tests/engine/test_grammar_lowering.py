@@ -261,7 +261,7 @@ def test_you_may_pay_carries_its_consequence_as_instructions():
             "may",
             {
                 "actor": "you",
-                "cost": 1,
+                "cost": {"generic": 1},
                 "then": (
                     OracleInstruction(
                         "target_gains_life", "", {"amount": 1, "recipient": "caster"}

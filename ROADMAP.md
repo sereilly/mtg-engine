@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 216/285) to the full release line - **137 sets, 33,594
+M21 measured at 217/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–56 — lives in git history at and before
-commit `0cd54e4`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–57 — lives in git history at and before
+commit `198ca7e`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -266,104 +266,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 57: a damage event that knows who dealt it
-
-*(2026-08-16.)* M21 **211 → 213** — Fiery Emancipation, which round 53 had to
-take away, and Chandra's Pyreling beside it. Two cards, one missing fact and one
-missing question.
-
-**The missing fact: a damage event carried its `source` and never its seat.**
-Every payload has held `source` since there were payloads, and reading it works
-right up until the source is a spell — at which point what the damage paths hold
-is the spell's `CardDefinition`, which is *the card as printed*. One object per
-card, shared by every copy in every deck in the process, controlled by nobody.
-So "a source **you** control" was not unimplemented, it was unanswerable, and
-the two cards that print it had been sitting behind that since M21 was ingested.
-
-`damage_source_seat` answers it in three, most specific first: the control seam
-for a permanent (so a stolen creature's damage is the thief's, CR 613 layer 2);
-`base_controller_index` for a permanent that has *left*, which is the case of a
-source sacrificed to pay for its own ability; and otherwise the seat whose spell
-or ability is resolving. The third is not a fallback — CR 109.5 says a spell's
-"you" is its controller — and it is the only one that needed anything new:
-`Game.resolving_seats`, pushed around `_execute_oracle_instruction`. **That is
-the one dispatch point**, the same seam round 54 used to hand a where-clause's X
-to every effect family at once, and the alternative was threading a seat through
-45 damage call sites, which is idiom 3 exactly: a list of sites is only ever as
-complete as the last card that touched one. The seat is derived *inside*
-`deal_damage` for the same reason.
-
-**Fiery Emancipation is a multiplier, and a multiplier has an order.** It sits
-at 700, after every prevention shield (10–600), and that is a rules decision
-rather than a numbering one: CR 616.1e gives the order to the affected player,
-and a shield spent first absorbs from the printed damage where a shield spent
-after absorbs from three times as much. "Prevent the next 3" against a tripled 3
-is 0 dealt one way round and 6 the other. The default should not be the one that
-costs the player six life. Flipping the constant fails the test that pins it.
-
-**Two Emancipations are ×9, and one interceptor has to say so.** An effect
-applies once per event (`engine/effect_ordering.py` drops the chosen candidate),
-so an interceptor returning a flat ×3 would silently ignore the second copy. It
-counts the sources and returns `3 ** n` instead — which is exact rather than
-approximate, because every copy is the same effect at the same order, so
-applying them together *is* the sequence the default choice produces.
-
-**The missing question: the support gate asked six text-keyed tables and not the
-seventh.** `_derived_static_claims` asks untap restrictions, land plays, global
-statics, draw-step bonuses, cost modifiers and entry effects — every table that
-reads a permanent's own text at the step that needs it and therefore needs no
-instruction. The CR 614 registry is exactly that shape and was not on the list,
-so a permanent whose *only* ability is a replacement effect produced nothing,
-claimed nothing, and reported unsupported however well the interceptor ran. The
-gap had no card behind it because every replacement in the shipped pool prints a
-second readable line — Lich, Ali from Cairo, Library of Leng and Conclave Mentor
-all do — and Fiery Emancipation prints one line and nothing else.
-
-The phrase table moved from `engine/grammar/registries.py` to
-`engine/replacements.py` with it. One reader could keep its list beside itself;
-two cannot, and a drifted copy claims a line nothing implements — which is the
-silence the whole registry module exists to remove. The guard is parametrized
-over the table rather than over a list of cards, so an interceptor added without
-a claim behind it fails on the day it is written.
-
-**Chandra's Pyreling needed only the question.** Its effect half — "gets +1/+0
-and gains double strike until end of turn" — already parsed and lowered; what
-was missing was the trigger condition, which landed on both sides of the
-pipeline (round 7's lesson) and became one more row in `_SEAT_SCOPED_EVENTS`,
-the set of events whose whole narrowing is the word "you". The seat it carries
-is the **source's** controller and not the damaged player's, which is what the
-"an opponent burns you" control test pins. "Noncombat" needed no flag at all:
-the fire site is `_deal_damage_to_player`, and the combat damage step reaches
-players by its own path because it applies prevention where the event is
-recorded — so noncombat is a property of *where* the announcement lives.
-
-Chandra's Incinerator prints the same trigger and stays unsupported, correctly:
-its cost line is the `{X}`-self-reduction that has been a deliberate refusal
-since round 25, and reading an unrecognized condition as satisfied makes a spell
-cheaper than it is.
-
-Suite **5,084** at 21.5s, every `--check` green, shipped pool 388/388, AI
-simulation byte-identical at 443 interactions. M21's parsed share moved 68.6% →
-70.2%. Four of the eight new card tests were watched to fail on the round-56
-engine, and the two new engine test files do not import against it; the rest are
-controls — an opponent's spell, combat damage, and the shield ordering.
-
-**Next:**
-
-- **Teferi's Ageless Insight**, the last of round 53's three. "If you would draw
-  a card except the first one you draw in each of your draw steps, draw two cards
-  instead" now has a support claim waiting for it, and wants two things:
-  `_draw_with_replacements` honouring a `count` a replacement *modified* (the
-  symmetry `place_plus1_counters` already has, and its absence is why a
-  modifying draw replacement could not be written), and the draw step's first
-  draw being distinguishable from the rest.
-- **The Shrine cycle**, unchanged: Fruitful Harvest's colour choice at a
-  trigger's resolution, Shattered Heights' discard cost from the hand-activation
-  block, Tranquil Light's per-Shrine cost reduction, Sanctum of All's two-zone
-  search and trigger-doubling static.
-- **Experimental Overload's variable-P/T token and Jolrael's team base-P/T**,
-  then the legend rule from round 49.
-
 ## Round 58: a replacement that changes the number, and a condition nothing said
 
 *(2026-08-16.)* M21 **213 → 214** in the count and **three more cards that
@@ -513,6 +415,81 @@ Battalion that stayed home.
   lands already tapped, the optional-pay prompt taps lands itself but only for
   generic, and the two disagree about what "can pay" means. One payer would
   serve every "you may pay" ever printed.
+- **The draw debt** (three `player.draw` callers, with round 31's AST-guard
+  shape to copy), then **Experimental Overload's variable-P/T token and
+  Jolrael's team base-P/T**, then the legend rule from round 49.
+
+## Round 60: one way to pay a cost
+
+*(2026-08-16.)* M21 **216 → 217** — Liliana's Devotee, and the reason it was
+refused rather than missing.
+
+**"You may pay {1}{B}" was not a parser gap.** The line parsed; the *lowering*
+refused it, and its message said why: "optional colored costs need a real
+cost-payment prompt". There are two questions about paying a mana cost, and the
+engine answered only one of them well. Casting and activating spend the **pool**
+— the right question there, because producing the mana is the player's own
+separate action, taken before the cost is collected. An effect that says "you
+may pay" gives its player no priority window at all, so it has to look at the
+untapped lands too — and that answer *counted to a number*: floating mana plus
+untapped mana-producing lands, against a generic cost. A {B} had nothing to
+collect it with, so the honest thing was to refuse the card, and the refusal
+would have stood forever.
+
+`engine/mana_payment.py` is the answer that replaced the number. It plans a
+payment rather than performing one, which is what lets "could this be paid?"
+(CR 601.2h) and "pay it" be the same code: pool first for the coloured pips —
+floating mana is already spent-in-advance and an untapped land is worth more
+than a tapped one — then the lands, then the generic part from whatever is left.
+
+**The matching is exact, and the reason is which way the error goes.** A
+one-pass picker gets a board wrong that can genuinely pay: a Swamp and an
+Underground Sea against {U}{B} is fine until the pass spends the Sea on the {B}
+and strands the {U}. That error *under*-reports — a cost the player could pay is
+never offered — and CR 601.2h is about what a player is **able** to do rather
+than about what an approximation could find. The numbers are a handful of pips
+against a handful of lands, so the exact answer is a dozen lines of
+augmenting-path matching and there is no reason to accept a heuristic.
+
+**One shape for a cost, at the cost of a migration.** The prompt's `cost` was an
+integer and four effects handed one over; it is now the symbol dict the rest of
+the engine already uses for a mana cost, and `generic_cost(n)` is the one line
+that says which cost a legacy number is. The non-interactive default is stated
+rather than derived: it spends mana it already has and never taps a land for an
+optional cost, because tapping is a real decision about the rest of the turn —
+and it is *not* the payability test, which belongs to the seat that was asked.
+
+**And the card found something on the way in.** With the cost payable, the
+trigger still did not fire: the end step enqueues a CR 603.4 intervening-if
+trigger from a list of **instruction kinds** holding exactly one entry
+(`draw_controller_cards`, for Barrin), and Liliana's Devotee lowers onto `may`.
+Round 45's lesson, and the fourth time it has been paid for — so the scan is
+keyed on the payload's *shape* now. The gate lives on the payload, so "does it
+have one" is the whole question, and a trigger with a gate is enqueued whatever
+its effect turned out to be. The three kind-keyed scans beside it stay: each
+needs a specific trigger context, and none of their kinds carries a gate — which
+is checked in code rather than asserted in a comment, because "today" is the
+part that expires.
+
+Suite **5,111** at 22.1s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Two of the ten new tests were
+watched to fail on the round-59 engine — the payment module's tests cannot
+import against it at all — and the rest are controls: two Forests are two mana
+and still not {1}{B}, a land cannot pay two pips at once, and a Devotee with
+nothing dead is silent.
+
+**Next:**
+
+- **The Shrine cycle**, unchanged: Fruitful Harvest's colour choice at a
+  trigger's resolution, Shattered Heights' discard cost (whose "a land card or
+  **Shrine** card" is a noun-phrase *union* the parser has no production for),
+  Tranquil Light's per-Shrine cost reduction, Sanctum of All's two-zone search
+  and trigger-doubling static.
+- **A reflexive trigger** — "you may pay {1}. **When you do**, …" (Tolarian
+  Kraken). Deliberately not folded into this round: CR 603.11 puts a second
+  object on the stack, and the `may` machinery resolves its consequence inline,
+  so reading "when you do" as "if you do" would be claiming a distinction the
+  engine does not make.
 - **The draw debt** (three `player.draw` callers, with round 31's AST-guard
   shape to copy), then **Experimental Overload's variable-P/T token and
   Jolrael's team base-P/T**, then the legend rule from round 49.

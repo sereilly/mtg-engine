@@ -9,6 +9,7 @@ from ._common import (
     resolve_target_permanent, resolve_target_permanents,
 )
 from .registry import effect_handler
+from ..mana_payment import generic_cost
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -417,7 +418,7 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
     cost = int(instruction.payload.get("cost", 0))
     game.arm_pending_choice(
         "optional_pay", game.players.index(caster),
-        card_name=card.name, cost=cost, life=0, damage=amount,
+        card_name=card.name, cost=generic_cost(cost), life=0, damage=amount,
         _source_permanent=context.source_permanent,
     )
     game.log.append(
