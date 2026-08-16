@@ -11,6 +11,7 @@ owner.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -490,6 +491,47 @@ def _lower_gain_control(node: ast.GainControl) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("steal_target_permanent_linked_to_self", "", {}),)
 
 
+# Who a sacrifice can be owed by. "You" is the absent value — a bare imperative
+# means the effect's own controller — so it is the one payer with no key.
+#
+# ``target_opponent`` and ``target_player`` stay apart even though the handler
+# resolves both to the seat the spell chose: CR 115.4 makes them different
+# spells, and collapsing them would offer the caster's own seat as a legal
+# target for "target **opponent** sacrifices".
+_SACRIFICE_PAYERS: frozenset[str] = frozenset(
+    {"you", "each_opponent", "target_opponent", "target_player"}
+)
+
+# Two keys the forced-sacrifice prompt performs rather than tests, so they are
+# lifted out of the filter instead of refusing the line:
+#
+# - ``exclude_self`` ("sacrifice **another** creature") rides beside the filter
+#   as the prompt's own ``exclude`` argument, which compares by identity — a
+#   look-alike on the same battlefield is a different permanent.
+# - ``their_choice`` ("a creature **of their choice**", Run Afoul) says the
+#   sacrificing player picks, which is what CR 701.21a already says and what the
+#   prompt already does. It is read and dropped *here*, at the one lowering whose
+#   rule puts the choice there; anywhere else the word refuses.
+_SACRIFICE_CARRIED = frozenset({"exclude_self", "their_choice"})
+
+
+def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
+    """The filter payload the forced-sacrifice prompt should list, or None when
+    the noun phrase says something the prompt cannot test.
+
+    Two shapes are refused before the key check, because both would reduce to an
+    *empty* payload — a prompt listing every permanent on the board:
+
+    - a self-referential or enchanted subject ("sacrifice **this** creature",
+      Sea Serpent), which is a different instruction entirely and is read below;
+    - a phrase with no card type at all, which no card in the pool prints as a
+      sacrifice and which would let the prompt eat a land.
+    """
+    if filt.is_source or filt.is_enchanted or not filt.card_types:
+        return None
+    return object_only_filter(filt.to_payload(), carried_separately=_SACRIFICE_CARRIED)
+
+
 def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
     """Only "sacrifice this <permanent>" has a handler.
 
@@ -502,29 +544,32 @@ def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
     # "Sacrifice a creature" / "sacrifice another creature" (Dire Fleet
     # Warmonger's optional cost): the *controller chooses* which, so this
     # arms the forced-sacrifice prompt rather than acting on a known
-    # permanent. Bare creature filters only — the prompt's candidate test
-    # reads one type word, and a narrowing it cannot test must refuse.
-    # "Each opponent sacrifices a creature" (Goremand) is the same prompt owed
-    # by a different set of seats, so it is the same instruction with the
-    # payer named — never a second kind. CR 701.21a says the sacrificing
-    # player chooses, which is exactly what the prompt already does; the only
-    # thing that changes is who is asked.
+    # permanent.
+    #
+    # "Each opponent sacrifices a creature" (Goremand) and "Target opponent
+    # sacrifices …" (Run Afoul) are the same prompt owed by a different set of
+    # seats, so they are the same instruction with the payer named — never a
+    # second kind. CR 701.21a says the sacrificing player chooses, which is
+    # exactly what the prompt already does; the only thing that changes is who
+    # is asked, and that is also what lets the printed "of their choice" be
+    # read and then dropped rather than refused.
     if (
-        node.player.kind in ("you", "each_opponent")
+        node.player.kind in _SACRIFICE_PAYERS
         and isinstance(node.subject, ast.TargetSpec)
         and not node.subject.targeted
         and node.subject.count == 1
-        and node.subject.filter.card_types == ("creature",)
-        and node.subject.filter == ast.ObjectFilter(
-            card_types=("creature",),
-            other_than_source=node.subject.filter.other_than_source,
-        )
+        and not _is_source(node.subject)
     ):
-        payload: dict[str, object] = {"filter": "creature"}
+        described = _forced_sacrifice_filter(node.subject.filter)
+        if described is None:
+            raise LoweringError(
+                "the sacrifice prompt cannot test this restriction", node=node
+            )
+        payload: dict[str, object] = {"filter": described}
         if node.subject.filter.other_than_source:
             payload["exclude_self"] = True
-        if node.player.kind == "each_opponent":
-            payload["who"] = "each_opponent"
+        if node.player.kind != "you":
+            payload["who"] = node.player.kind
         return (OracleInstruction("sacrifice_matching_permanent", "", payload),)
     if not _is_source(node.subject):
         raise LoweringError("no handler for sacrificing a chosen permanent", node=node)

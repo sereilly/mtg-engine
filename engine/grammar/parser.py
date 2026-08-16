@@ -36,6 +36,7 @@ diffed before and after.
 import re
 from dataclasses import replace
 
+from ..subject_filters import object_only_filter
 from . import ast
 from .amounts import parse_amount
 from .derived import derived_instruction_for_line
@@ -164,20 +165,27 @@ def _parse_cost_object(stream: TokenStream, verb: str) -> ast.ObjectFilter:
 def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     """Whether the payment path can actually collect this sacrifice cost.
 
-    ``queue_permanent_ability`` charges it with one card type (plus "another"),
-    which is everything the pool prints but "a creature **with defender**"
-    (Portcullis Vine). A rider the charger cannot express must refuse the line
-    rather than be dropped — dropped, the Vine sacrifices any creature at all
-    while still reporting supported, which is the dropped-rider bug class.
-    Compared for equality against the bare filter, so a field the AST grows
-    later is refused here instead of silently ignored.
+    A rider the charger cannot express must refuse the line rather than be
+    dropped — dropped, Portcullis Vine sacrifices any creature at all while
+    still reporting supported, which is the dropped-rider bug class.
+
+    Which riders those are is **not** decided here. This asks the charger's own
+    reader (``engine/oracle.py``'s ``_chargeable_sacrifice_filter``, through the
+    filter-key set it gates on), because two readers of one clause drift and the
+    direction they drift in is a cost nobody pays. The word "another" is left in
+    the filter: the charger has the ability's source and compares by identity.
     """
     if filt.is_source:
         return True
-    bare = ast.ObjectFilter(
-        card_types=filt.card_types, other_than_source=filt.other_than_source
-    )
-    return len(filt.card_types) == 1 and filt == bare
+    if not filt.card_types:
+        # A cost with no card type would let the charger eat a land. The
+        # charger's own reader says so too — this is the one narrowing the key
+        # set cannot express, because "which keys are set" and "is a type among
+        # them" are different questions.
+        return False
+    return object_only_filter(
+        filt.to_payload(), carried_separately=frozenset({"exclude_self"})
+    ) is not None
 
 
 def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:

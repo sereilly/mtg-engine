@@ -31,6 +31,7 @@ from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spe
 from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer
 from ...search_filters import search_matches
+from ...subject_filters import subject_matches
 
 class PendingChoicesMixin:
     # -- The queue ----------------------------------------------------------
@@ -1242,21 +1243,28 @@ class PendingChoicesMixin:
     # prompt (human seat) or resolves the sacrifice inline with a deterministic
     # heuristic (AI / headless). The choice's payload is
     #   {"count", "filter", "exclude", "reason", "on_short"}
-    # where ``filter`` is "nontoken" or "creature", ``exclude`` is a Permanent that
-    # can't be chosen (Lord of the Pit excludes itself), and ``on_short`` is the
-    # effect applied when the player owes more sacrifices than they can make
-    # (None, {"kind": "lose"}, or {"kind": "damage", "amount": N}).
+    # where ``filter`` is the printed noun phrase as a filter payload
+    # (``{"nontoken": True}`` for Lich, ``{"type_filter": "creature"}`` for Lord of
+    # the Pit, ``{"type_filter": "creature", "with_keywords": ["flying"]}`` for Run
+    # Afoul), ``exclude`` is a Permanent that can't be chosen (Lord of the Pit
+    # excludes itself), and ``on_short`` is the effect applied when the player owes
+    # more sacrifices than they can make (None, {"kind": "lose"}, or
+    # {"kind": "damage", "amount": N}).
+    #
+    # It used to be one of two words, "nontoken" or "creature", tested by two
+    # hand-written lines here. That is why a narrowed sacrifice had to be refused
+    # at compile time rather than charged: the noun phrase the card prints is a
+    # filter, and this was the one reader of it that could not read one.
 
-    def _sacrifice_candidate_indices(self, player, filter: str, exclude=None) -> list[int]:
+    def _sacrifice_candidate_indices(self, player, filter: dict | None, exclude=None) -> list[int]:
         """Battlefield indices of ``player``'s permanents eligible for a forced
-        sacrifice under ``filter`` (excluding ``exclude`` if given)."""
+        sacrifice under the filter payload ``filter`` (excluding ``exclude`` if
+        given)."""
         out: list[int] = []
         for i, perm in enumerate(player.battlefield):
             if exclude is not None and perm is exclude:
                 continue
-            if filter == "nontoken" and perm.metadata.get("is_token", False):
-                continue
-            if filter == "creature" and perm.card.primary_type != "creature":
+            if not subject_matches(self, perm, filter):
                 continue
             out.append(i)
         return out
@@ -1279,7 +1287,7 @@ class PendingChoicesMixin:
                 ),
             )
 
-    def _resolve_sacrifice_inline(self, player_index: int, count: int, filter: str, exclude, reason: str, on_short) -> None:
+    def _resolve_sacrifice_inline(self, player_index: int, count: int, filter: dict | None, exclude, reason: str, on_short) -> None:
         """Sacrifice ``count`` of the player's permanents with the deterministic
         heuristic (permanents whose death loses the game are kept for last)."""
         player = self.players[player_index]
@@ -1288,11 +1296,15 @@ class PendingChoicesMixin:
             if not valid:
                 self._apply_sacrifice_shortfall(player_index, 1, on_short, reason)
                 return
-            idx = min(
-                valid,
-                key=lambda i: "you lose the game" in player.battlefield[i].effective_card.oracle_text.lower(),
+            # `default_sacrifice_pick`'s docstring already named this as one of
+            # the three callers of the one rule; it was in fact a fourth copy,
+            # carrying the "keep the game-loser for last" half and neither the
+            # smallest-first half nor the id tiebreak. Two seats owing the same
+            # sacrifice through different paths would have given it up
+            # differently, which is what the shared rule exists to stop.
+            perm = self.default_sacrifice_pick(
+                [self.permanent_at(player, i) for i in valid]
             )
-            perm = self.permanent_at(player, idx)
             self.sacrifice_permanent(perm)
             self.log.append(f"{player.name} sacrificed {perm.card.name} ({reason})")
 
@@ -1301,15 +1313,21 @@ class PendingChoicesMixin:
         player_index: int,
         count: int,
         *,
-        filter: str = "nontoken",
+        filter: dict,
         exclude=None,
         reason: str = "Sacrifice",
         on_short=None,
     ) -> None:
-        """Force a player to sacrifice ``count`` permanents matching ``filter``.
-        A human seat is prompted to choose which; AI / headless play resolves it
-        inline. Multiple calls to the same player during one step accumulate onto
-        the existing prompt (e.g. two combat-damage events feeding Lich)."""
+        """Force a player to sacrifice ``count`` permanents matching the filter
+        payload ``filter``. A human seat is prompted to choose which; AI /
+        headless play resolves it inline. Multiple calls to the same player
+        during one step accumulate onto the existing prompt (e.g. two
+        combat-damage events feeding Lich).
+
+        ``filter`` has no default. An empty payload is a legal value meaning "any
+        permanent", but it has to be written down: a caller that simply forgot
+        the noun phrase would otherwise sacrifice more widely than the card
+        prints, and defaulting is how that stays invisible."""
         player = self.players[player_index]
         if not self._sacrifice_candidate_indices(player, filter, exclude):
             self._apply_sacrifice_shortfall(player_index, count, on_short, reason)

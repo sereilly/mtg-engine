@@ -39,6 +39,7 @@ from .handlers._common import permanent_matches_filter
 from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle, expand_modal_activated_lines
 from .static_bonuses import conditional_static_holds
+from .subject_filters import subject_matches
 from .targeting import (
     derive_activation_spec,
     derive_cast_spec,
@@ -433,6 +434,14 @@ class LegalityMixin:
                     continue
                 # "Sacrifice **another** …" — the source cannot pay for itself.
                 if spec.get("exclude_source") and perm is source_permanent:
+                    continue
+                # Whatever the printed noun phrase says beyond its head noun
+                # ("a creature **with defender**", Portcullis Vine). The same
+                # matcher the payment path runs, so the list offered here and
+                # the list accepted there are the same list — a picker offering
+                # an ineligible permanent would have its answer silently
+                # replaced by the deterministic pick.
+                if not subject_matches(self, perm, spec.get("filter")):
                     continue
                 if not paying_a_cost:
                     if for_cast:

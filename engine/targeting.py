@@ -45,6 +45,7 @@ import re
 
 from .cast_costs import additional_costs
 from .enter_effects import copy_on_enter_type
+from .subject_filters import filter_head_noun
 
 # "Enchant creature", "Enchant land", ... — but NOT "Enchant creature card in a
 # graveyard" (Animate Dead), which targets a graveyard card rather than a
@@ -319,9 +320,13 @@ def _cost_picker_spec(cost) -> dict | None:
     "sacrifice" rather than "target"; the payment is not a target, and a card
     can have both.
 
-    The sacrifice type is the kind, rather than a fixed "creature": Atog eats an
-    artifact, and a picker offering creatures for it would offer nothing it
-    could pay with.
+    The sacrifice's head noun is the kind, rather than a fixed "creature": Atog
+    eats an artifact, and a picker offering creatures for it would offer nothing
+    it could pay with. Anything the noun phrase says *beyond* its head noun rides
+    along as ``filter`` — "a creature with defender" (Portcullis Vine) is a
+    creature picker over a narrowed list, and the enumerator applies the
+    narrowing with the same matcher the charger does, so what is offered and
+    what is accepted cannot disagree.
     """
     if cost is None:
         return None
@@ -332,14 +337,32 @@ def _cost_picker_spec(cost) -> dict | None:
             "discard_cost": True,
             "count": cost.discard_cards,
         }
-    sacrifice_type = getattr(cost, "sacrifice_type", None)
-    if sacrifice_type:
-        spec = {"kind": sacrifice_type, "own_only": True, "sacrifice_cost": True}
+    described = getattr(cost, "sacrifice_filter", None)
+    if described is not None:
+        spec = {
+            "kind": filter_head_noun(described),
+            "own_only": True,
+            "sacrifice_cost": True,
+        }
         # "Sacrifice **another** creature" (Hobblefiend): the source is not a
         # legal payment, so a lone Hobblefiend can offer nothing and cannot
-        # activate at all — which the payment path already enforces.
-        if getattr(cost, "sacrifice_excludes_source", False):
+        # activate at all — which the payment path already enforces. It is
+        # lifted out of the carried filter rather than left in it, because the
+        # enumerator excludes by identity and a key nothing reads is a key
+        # silently dropped.
+        if described.get("exclude_self"):
             spec["exclude_source"] = True
+        # `kind` already *is* the head noun, so re-stating it in the carried
+        # filter would be the same restriction written twice. A type *union* has
+        # no head noun (`kind` falls back to "permanent"), so it rides along.
+        narrowing = {
+            key: value
+            for key, value in described.items()
+            if key != "exclude_self"
+            and not (key == "type_filter" and isinstance(value, str))
+        }
+        if narrowing:
+            spec["filter"] = narrowing
         return spec
     return None
 
@@ -467,8 +490,29 @@ def _cast_permission_spec(payload: dict) -> dict | None:
     return spec
 
 
+def _forced_sacrifice_spec(payload: dict) -> dict | None:
+    """Who a "sacrifices a creature" effect asks is what decides whether it
+    targets at all.
+
+    "Sacrifice a creature" (Dire Fleet Warmonger) and "each opponent sacrifices
+    a creature" (Goremand) choose nothing — the payers follow from the effect's
+    own controller. "Target opponent sacrifices a creature of their choice with
+    flying" (Run Afoul) chooses a player, and it may not choose the caster
+    (CR 115.4). One instruction kind serves all three, so only the payload can
+    tell them apart; answering "player" for every one of them would put a
+    picker in front of Goremand, whose answer nothing reads.
+    """
+    who = payload.get("who")
+    if who == "target_opponent":
+        return {"kind": "player", "opponents_only": True}
+    if who == "target_player":
+        return {"kind": "player"}
+    return None
+
+
 # One kind, several specs, decided by payload.
 _KIND_TO_SPEC_FROM_PAYLOAD = {
+    "sacrifice_matching_permanent": _forced_sacrifice_spec,
     "target_gains_life": _life_gain_spec,
     "counter_top_stack_spell": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,

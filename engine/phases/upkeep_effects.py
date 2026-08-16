@@ -618,7 +618,7 @@ class UpkeepEffectsMixin:
         self.arm_forced_sacrifice(
             self.players.index(controller),
             1,
-            filter="creature",
+            filter={"type_filter": "creature"},
             exclude=permanent,
             reason=permanent.card.name,
             on_short={"kind": "damage", "amount": int(trig.instruction.payload.get("damage", 0))},

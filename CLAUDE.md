@@ -233,6 +233,19 @@ adding entries, not editing dispatch**:
   instruction kind. Registered into `EFFECT_HANDLERS`, dispatched by dict lookup.
   `engine/handlers/_common.py` holds shared helpers (target resolution, filter
   matching, damage application).
+- `engine/subject_filters.py` — **what a printed noun phrase means, tested
+  against one permanent**. `handlers/_common.permanent_matches_filter` is the
+  pure half; three keys need the game (a keyword is layer 6, "you control" is a
+  seat, "another" is an identity), so `subject_matches` is the one answer and
+  `TESTABLE_SUBJECT_FILTER_KEYS` names exactly what it tests. A compiler admits
+  a narrowed line only when every payload key is in that set — outside it, the
+  line refuses, because a restriction the matcher cannot test is one the
+  dispatcher would silently ignore. `OBJECT_ONLY_FILTER_KEYS` is the subset a
+  caller with no observer and no source (a forced-sacrifice prompt, a cost
+  charger) may be handed. The key set is held to what
+  `tests/engine/test_subject_filters.py` *demonstrates*, one key at a time: a
+  key listed without a matcher behind it admits every card printing that phrase
+  and then drops the phrase.
 - `engine/pt.py` — the single write API for power/toughness (`set_base_pt`,
   `add_pt_modifier`, `switch_pt`). All P/T mutation goes through here, never
   direct metadata pokes; see "P/T channels" in `engine/ARCHITECTURE.md`.

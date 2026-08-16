@@ -148,7 +148,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # the honest floor — the alternative is an AI that eats its own board
         # every main phase for a pump that wears off. Derived from the compiled
         # cost, so it reaches every card printed this way and names none.
-        if ability.cost.sacrifice_type or ability.cost.discard_cards:
+        if ability.cost.sacrifice_filter is not None or ability.cost.discard_cards:
             continue
 
         target = _choose_target_for_instruction(ability.instruction, player_index, game)

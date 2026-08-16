@@ -207,6 +207,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     is_enchanted = False
     is_card = False
     with_plus1_counter = False
+    nontoken = False
+    their_choice = False
     zone = "battlefield"
     zone_owner: ast.PlayerRef | None = None
     saw_head = False
@@ -259,6 +261,15 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 continue
             if body in ALL_SUBTYPES:
                 excluded_subtypes.append(body)
+                stream.advance()
+                continue
+            # "nontoken" (Lich, Gadrak, Chrome Replicator). CR 111.1: a token is
+            # not a card and has no card type of its own, so it is neither an
+            # excluded type nor an excluded subtype — it is its own restriction,
+            # read off the permanent the same way the forced-sacrifice prompt has
+            # always read it.
+            if body == "token":
+                nontoken = True
                 stream.advance()
                 continue
 
@@ -525,6 +536,23 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             except Exception:
                 stream.reset(probe)
                 break
+        if stream.at_word("of"):
+            # "sacrifices a creature **of their choice** with flying" (Run
+            # Afoul) — who picks, printed between the head noun and the rest of
+            # the restrictions, which is why it cannot be handled by the verb's
+            # production: consuming the phrase there would strand "with flying"
+            # outside the noun phrase it narrows.
+            #
+            # Only "their" is read. "of your choice" would be a different card —
+            # the *effect's* controller choosing what someone else sacrifices —
+            # and no production wants that reading by accident.
+            probe = stream.mark()
+            stream.advance()
+            if stream.accept_phrase("their", "choice"):
+                their_choice = True
+                continue
+            stream.reset(probe)
+            break
         break
 
     # A creature subtype implies the creature type: "destroy target Wall" means
@@ -556,6 +584,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         zone_owner=zone_owner,
         is_card=is_card,
         with_plus1_counter=with_plus1_counter,
+        nontoken=nontoken,
+        their_choice=their_choice,
         other_than_source=other_than_source,
         is_source=is_source,
         is_enchanted=is_enchanted,

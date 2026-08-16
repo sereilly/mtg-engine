@@ -13,6 +13,7 @@ from ...cost_modifiers import ability_cost_tax
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
 from ...handlers._common import permanent_matches_filter
 from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
+from ...subject_filters import filter_head_noun, subject_matches
 
 # Instruction kinds whose handler performs the sacrifice its own cost clause
 # names. Diamond Valley's "{T}, Sacrifice a creature: You gain life equal to
@@ -559,26 +560,27 @@ class AbilityActivationMixin:
                 if card is not hand[named]:
                     discard_cost_cards.append(card)
 
-        # "Sacrifice another creature" (Hobblefiend). The victim is chosen by
-        # identity and never by index — an index held across the removals below
-        # names whichever permanent slid into the slot — and "another" excludes
-        # the source itself, so a lone Hobblefiend has no legal payment and
-        # cannot activate at all.
+        # "Sacrifice another creature" (Hobblefiend) / "Sacrifice a creature with
+        # defender" (Portcullis Vine). The victim is chosen by identity and never
+        # by index — an index held across the removals below names whichever
+        # permanent slid into the slot — and "another" excludes the source
+        # itself, so a lone Hobblefiend has no legal payment and cannot activate
+        # at all. That exclusion is `exclude_self` inside the filter, which is
+        # why the source is handed to the matcher rather than tested here.
         sacrifice_cost_permanent = None
-        if ability.cost.sacrifice_type and ability.instruction is not None and (
+        if ability.cost.sacrifice_filter is not None and ability.instruction is not None and (
             ability.instruction.kind not in COST_PERFORMING_KINDS
         ):
-            type_filter = {"type_filter": ability.cost.sacrifice_type}
+            described = ability.cost.sacrifice_filter
             candidates = [
                 perm
                 for perm in self.controlled_by(controller_index)
-                if permanent_matches_filter(perm, type_filter)
-                and not (ability.cost.sacrifice_excludes_source and perm is permanent)
+                if subject_matches(self, perm, described, source=permanent)
             ]
             if not candidates:
                 details = (
-                    f"{permanent.card.name}: no {ability.cost.sacrifice_type} "
-                    "available to sacrifice"
+                    f"{permanent.card.name}: no "
+                    f"{filter_head_noun(described)} available to sacrifice"
                 )
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)

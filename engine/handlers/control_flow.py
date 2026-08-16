@@ -208,7 +208,7 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
             continue
         exclude = context.source_permanent if step.payload.get("exclude_self") else None
         if not game._sacrifice_candidate_indices(
-            player, str(step.payload.get("filter", "creature")), exclude
+            player, dict(step.payload.get("filter") or {}), exclude
         ):
             return _run(game, on_decline, context) if on_decline else (True, "resolved")
 

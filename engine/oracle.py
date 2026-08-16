@@ -466,6 +466,36 @@ def _parse_loyalty_cost(cost_part: str) -> tuple[int | None, int | None]:
     return sign * int(magnitude), None
 
 
+def _chargeable_sacrifice_filter(phrase: str) -> dict | None:
+    """The filter payload a "Sacrifice <noun phrase>" cost charges, or None when
+    the payment path cannot collect it.
+
+    The two halves of a sacrifice cost — this reader, which charges it, and
+    ``engine/grammar``'s ``_is_chargeable_sacrifice``, which decides whether to
+    admit the line at all — must give the same answer or the pool grows a card
+    the grammar accepted and nothing paid for. They give it by asking the same
+    function: the noun parser for what the phrase names, and
+    ``object_only_filter`` for whether the charger can test it. ``exclude_self``
+    ("another") stays in the payload here, because the charger has the ability's
+    source and compares by identity.
+    """
+    from .grammar import subject_filter_payload
+    from .subject_filters import object_only_filter
+
+    described = subject_filter_payload(phrase)
+    if described is None:
+        return None
+    # A sacrifice cost is paid from the payer's own battlefield, so "you
+    # control" would be no narrowing at all — but nothing here checks it, and a
+    # phrase the charger silently agrees with is still a phrase it did not read.
+    carried = object_only_filter(described, carried_separately=frozenset({"exclude_self"}))
+    if carried is None:
+        return None
+    if "exclude_self" in described:
+        carried = {**carried, "exclude_self": True}
+    return carried
+
+
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
@@ -501,17 +531,23 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     sacrifice_self = bool(
         re.search(r"\bsacrifice this (artifact|creature|enchantment|permanent|land)\b", cost_lower)
     )
-    # "Sacrifice a creature" / "Sacrifice another creature" — a *chosen*
-    # permanent (Atog, Hobblefiend). Anchored to the end of its comma-separated
-    # cost segment, so "a creature with defender" matches nothing here: the
-    # grammar refuses that line outright (`_is_chargeable_sacrifice`) and this
-    # reader must not disagree by quietly charging the wider cost.
+    # "Sacrifice a creature" / "Sacrifice another creature" / "Sacrifice a
+    # creature with defender" — a *chosen* permanent (Atog, Hobblefiend,
+    # Portcullis Vine). The regex only **delimits** the noun phrase, to the end
+    # of its comma-separated cost segment; what the phrase names is read by the
+    # noun parser, exactly as a narrowed trigger condition's `_subject` group is
+    # (round 34). A regex approximating the noun parser is a second reader of
+    # one clause, and the direction those drift in is a cost charged more widely
+    # than the card prints.
     chosen_sacrifice = (
         None if sacrifice_self
-        else re.search(r"\bsacrifice (?:(another) |an? )([a-z]+)(?=,|$)", cost_lower)
+        else re.search(r"\bsacrifice ((?:another|an?) [^,:]+?)\s*(?=,|$)", cost_lower)
     )
-    sacrifice_type = chosen_sacrifice.group(2) if chosen_sacrifice else None
-    sacrifice_excludes_source = bool(chosen_sacrifice and chosen_sacrifice.group(1))
+    sacrifice_filter = (
+        _chargeable_sacrifice_filter(chosen_sacrifice.group(1))
+        if chosen_sacrifice
+        else None
+    )
     # "Discard a card" (Seasoned Hallowblade). Jandor's Ring's history-named
     # card is read above; counting it here too would charge the Ring twice.
     discard_cards = (
@@ -520,7 +556,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     )
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
-        sacrifice_type, sacrifice_excludes_source, discard_cards,
+        sacrifice_filter, discard_cards,
     )
 
 
@@ -565,8 +601,8 @@ def _match_trigger_patterns(
 def _resolve_subject_groups(payload: dict) -> dict | None:
     """Turn every ``<name>_subject`` phrase in *payload* into a ``<name>_filter``
     payload, or return None if one of them names a set the engine cannot test."""
-    from .events import TESTABLE_SUBJECT_FILTER_KEYS
     from .grammar import subject_filter_payload
+    from .subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 
     resolved = dict(payload)
     for key, phrase in payload.items():

@@ -632,7 +632,7 @@ class TestLichSacrifice:
         assert game.pending_sacrifice["player_index"] == 0
         assert game.pending_sacrifice["count"] == 2
         assert game.pending_sacrifice["reason"] == "Lich"
-        assert game.pending_sacrifice["filter"] == "nontoken"
+        assert game.pending_sacrifice["filter"] == {"nontoken": True}
 
     def test_player_choice_is_honored(self, cards):
         lich = Permanent(card=cards["Lich"])

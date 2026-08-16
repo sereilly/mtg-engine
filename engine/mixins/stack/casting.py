@@ -30,6 +30,7 @@ from ...handlers._common import permanent_matches_filter
 from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ...oracle_types import x_spend_color_from_text
+from ...subject_filters import filter_head_noun, subject_matches
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
 # "creature" uses Permanent.is_creature so animated lands (Kormus Bell / Living
@@ -469,13 +470,12 @@ class SpellCastingMixin:
         Never by index: an index would be held across the removal that paying
         performs, and would then name whichever permanent slid into the slot.
         """
-        if not cost.sacrifice_type:
+        if cost.sacrifice_filter is None:
             return []
-        type_filter = {"type_filter": cost.sacrifice_type}
         return [
             perm
             for perm in self.controlled_by(caster_index)
-            if permanent_matches_filter(perm, type_filter)
+            if subject_matches(self, perm, cost.sacrifice_filter)
         ]
 
     def _unpayable_additional_cost(
@@ -496,10 +496,11 @@ class SpellCastingMixin:
         """
         caster = self.players[caster_index]
         for cost in costs:
-            if cost.sacrifice_type:
+            if cost.sacrifice_filter is not None:
                 if not self._additional_cost_candidates(caster_index, cost):
                     return (
-                        f"{card.name} can't be cast: no {cost.sacrifice_type} to "
+                        f"{card.name} can't be cast: no "
+                        f"{filter_head_noun(cost.sacrifice_filter)} to "
                         f"sacrifice for its additional cost (CR 601.2h)"
                     )
             if cost.discard_cards:
@@ -577,7 +578,7 @@ class SpellCastingMixin:
         caster = self.players[caster_index]
         sacrificed: Permanent | None = None
         for cost in costs:
-            if cost.sacrifice_type:
+            if cost.sacrifice_filter is not None:
                 candidates = self._additional_cost_candidates(caster_index, cost)
                 if not candidates:
                     continue  # gated above; a board that changed since is a no-op

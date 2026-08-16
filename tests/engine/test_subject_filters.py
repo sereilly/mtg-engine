@@ -1,0 +1,162 @@
+"""One noun phrase, one matcher (engine/subject_filters.py).
+
+``TESTABLE_SUBJECT_FILTER_KEYS`` is a promise: a compiler that finds every key
+of a filter payload inside it admits the line, and the dispatcher then applies
+the restriction. A key listed there but not actually tested is therefore worse
+than a missing key — the card is admitted and its narrowing silently ignored,
+which is a trigger firing on more than it prints and a sacrifice eating more
+than it should.
+
+So the promise is checked by *behaviour*, one key at a time: for each key, a
+permanent that should fail it. Comparing the set against a list of key names is
+something a second copy of the list would also pass.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from engine import Game
+from engine.card_loader import load_cards, manifest_set_paths
+from engine.keywords import grant_keyword
+from engine.models import Permanent, PlayerState
+from engine.oracle import compile_card_oracle
+from engine.subject_filters import (
+    OBJECT_ONLY_FILTER_KEYS,
+    TESTABLE_SUBJECT_FILTER_KEYS,
+    subject_matches,
+)
+
+
+@pytest.fixture(scope="module")
+def pool():
+    return {c.name: c for c in load_cards(manifest_set_paths(include_measured=True))}
+
+
+# (key, a payload using it, the name of a card the payload must reject). Every
+# rejection is by the *one* restriction under test: each card matches the bare
+# "creature" filter, so a False can only come from the key.
+_REJECTIONS: tuple[tuple[str, dict, str], ...] = (
+    ("type_filter", {"type_filter": "artifact"}, "Grizzly Bears"),
+    ("subtype_filter", {"subtype_filter": "wall"}, "Grizzly Bears"),
+    ("color_filter", {"color_filter": "W"}, "Grizzly Bears"),
+    ("exclude_colors", {"exclude_colors": ["G"]}, "Grizzly Bears"),
+    ("exclude_types", {"exclude_types": ["creature"]}, "Grizzly Bears"),
+    ("exclude_subtypes", {"exclude_subtypes": ["bear"]}, "Grizzly Bears"),
+    ("tapped_only", {"tapped_only": True}, "Grizzly Bears"),
+    ("mana_value", {"mana_value": {"op": "le", "value": 1}}, "Grizzly Bears"),
+    ("power", {"power": {"op": "ge", "value": 4}}, "Grizzly Bears"),
+    ("toughness", {"toughness": {"op": "ge", "value": 4}}, "Grizzly Bears"),
+    ("with_plus1_counter", {"with_plus1_counter": True}, "Grizzly Bears"),
+    ("with_keywords", {"with_keywords": ["flying"]}, "Grizzly Bears"),
+)
+
+
+@pytest.mark.parametrize("key,payload,card_name", _REJECTIONS, ids=[r[0] for r in _REJECTIONS])
+def test_every_promised_key_actually_narrows(pool, key, payload, card_name):
+    perm = Permanent(card=pool[card_name])
+    game = Game(players=[PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2")])
+
+    assert subject_matches(game, perm, {"type_filter": "creature"}), (
+        "the control: the bare noun phrase must match, or the rejection below "
+        "proves nothing about the key"
+    )
+    assert not subject_matches(game, perm, {"type_filter": "creature", **payload})
+
+
+def test_nontoken_rejects_a_token(pool):
+    """The one key with no card type of its own (CR 111.1), and the restriction
+    Lich's sacrifice has always carried."""
+    token = Permanent(card=pool["Grizzly Bears"], metadata={"is_token": True})
+    game = Game(players=[PlayerState(name="P1", battlefield=[token]), PlayerState(name="P2")])
+
+    assert subject_matches(game, token, {"type_filter": "creature"})
+    assert not subject_matches(game, token, {"nontoken": True})
+
+
+def test_the_relative_keys_refuse_without_the_context_they_need(pool):
+    """"You control" and "another" are relative, which is why they are outside
+    ``OBJECT_ONLY_FILTER_KEYS``. A caller with no observer and no source must
+    get a refusal rather than a match — a match is the narrowing being dropped.
+    """
+    perm = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2")])
+
+    assert not subject_matches(game, perm, {"controller": "you"})
+    assert subject_matches(game, perm, {"controller": "you"}, observer=0)
+    assert not subject_matches(game, perm, {"controller": "you"}, observer=1)
+
+    assert subject_matches(game, perm, {"exclude_self": True})
+    assert not subject_matches(game, perm, {"exclude_self": True}, source=perm)
+
+
+def test_a_keyword_narrowing_is_asked_of_layer_six(pool):
+    """The reason the matcher needs the game at all. A creature *granted*
+    defender is a creature with defender (CR 613.1f), so it answers a
+    defender-narrowed sacrifice exactly as a printed one does — and reading
+    ``card.keywords`` instead would have said no."""
+    perm = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2")])
+    described = {"type_filter": "creature", "with_keywords": ["defender"]}
+
+    assert not subject_matches(game, perm, described)
+    grant_keyword(perm, "defender", until_eot=True)
+    assert subject_matches(game, perm, described)
+    assert "defender" not in (perm.card.keywords or ()), (
+        "the printed card still has no defender — a matcher reading it would "
+        "have answered no"
+    )
+
+
+def test_every_sacrifice_filter_in_the_pool_is_one_the_prompt_can_test():
+    """The ratchet on both halves of this round. A sacrifice's victim is named
+    by a printed noun phrase on three sides — the activation cost, the cast
+    additional cost, and the effect — and each hands its payload to a path with
+    no observer and no source. A key outside ``OBJECT_ONLY_FILTER_KEYS``
+    reaching one of them would be a restriction quietly not applied.
+    """
+    escaped: list[str] = []
+    for card in load_cards(manifest_set_paths(include_measured=True)):
+        program = compile_card_oracle(card)
+        if not program.supported:
+            continue
+        payloads = [
+            (f"{card.name} cost", ability.cost.sacrifice_filter)
+            for ability in program.activated_abilities
+            if ability.cost.sacrifice_filter is not None
+        ]
+        payloads += [
+            (f"{card.name} effect", instruction.payload.get("filter"))
+            for instruction in program.instructions
+            if instruction.kind == "sacrifice_matching_permanent"
+        ]
+        for label, described in payloads:
+            # `exclude_self` is the one key both paths carry out themselves, by
+            # identity, from an argument of their own.
+            extra = set(described or {}) - OBJECT_ONLY_FILTER_KEYS - {"exclude_self"}
+            if extra:
+                escaped.append(f"{label}: {sorted(extra)}")
+    assert not escaped, "sacrifice filters nothing tests: " + "; ".join(escaped)
+
+
+# The three keys the table above cannot express as "one payload, one card":
+# tokens have no card of their own, and the last two need a context argument
+# rather than a different permanent. Each names the test that exercises it, so
+# a key can only be listed here by someone who wrote one.
+_COVERED_ELSEWHERE = {
+    "nontoken": "test_nontoken_rejects_a_token",
+    "controller": "test_the_relative_keys_refuse_without_the_context_they_need",
+    "exclude_self": "test_the_relative_keys_refuse_without_the_context_they_need",
+}
+
+
+def test_no_key_is_promised_without_a_matcher_behind_it():
+    """The guard the whole file exists for. Adding a key to
+    ``TESTABLE_SUBJECT_FILTER_KEYS`` and forgetting the matcher behind it admits
+    every card printing that phrase and then ignores the phrase — silently, and
+    in the one direction an effect must never go. So the set is held equal to
+    what is *demonstrated* above rather than merely listed."""
+    demonstrated = {key for key, _, _ in _REJECTIONS} | set(_COVERED_ELSEWHERE)
+
+    assert demonstrated == TESTABLE_SUBJECT_FILTER_KEYS
+    assert OBJECT_ONLY_FILTER_KEYS < TESTABLE_SUBJECT_FILTER_KEYS

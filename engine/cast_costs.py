@@ -27,6 +27,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .subject_filters import filter_head_noun
+
 if TYPE_CHECKING:
     from .models import CardDefinition
 
@@ -35,18 +37,21 @@ if TYPE_CHECKING:
 class AdditionalCost:
     """One printed additional cost.
 
-    ``sacrifice_type`` is the noun the sacrifice must match — never ``None``
-    meaning "anything", the way ``ActivatedAbilityCost.sacrifice_type`` is not:
-    an empty filter would let the payment be a land.
+    ``sacrifice_filter`` is the noun phrase the sacrifice must match, in the same
+    payload vocabulary ``ActivatedAbilityCost.sacrifice_filter`` and the
+    forced-sacrifice prompt use — the *choice* is the same on all three sides
+    (CR 601.2b and CR 602.2b are the same announcement step), so what may pay
+    should not be described three ways. ``None`` means "no sacrifice", never
+    "anything": an empty filter would let the payment be a land.
     """
 
     phrase: str
-    sacrifice_type: str | None = None
+    sacrifice_filter: dict | None = None
     discard_cards: int = 0
 
     def describe(self) -> str:
-        if self.sacrifice_type:
-            return f"sacrifice a {self.sacrifice_type}"
+        if self.sacrifice_filter is not None:
+            return f"sacrifice a {filter_head_noun(self.sacrifice_filter)}"
         return f"discard {self.discard_cards} card(s)"
 
 
@@ -55,7 +60,7 @@ class AdditionalCost:
 ADDITIONAL_COSTS: tuple[AdditionalCost, ...] = (
     AdditionalCost(
         "as an additional cost to cast this spell, sacrifice a creature",
-        sacrifice_type="creature",
+        sacrifice_filter={"type_filter": "creature"},
     ),
     AdditionalCost(
         "as an additional cost to cast this spell, discard a card",

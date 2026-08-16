@@ -281,13 +281,60 @@ def test_seasoned_hallowblade_cannot_activate_with_an_empty_hand(set_pool):
     assert not blade.tapped
 
 
-def test_portcullis_vine_is_refused_rather_than_sacrificing_any_creature(set_pool):
-    """"Sacrifice a creature with defender" is a cost the charger cannot
-    express, so the card is unsupported with the clause named — dropping the
-    rider would let the Vine eat any creature and still read as supported."""
-    program = compile_card_oracle(set_pool("M21")["Portcullis Vine"])
-    assert not program.supported
-    assert "defender" in program.reason
+def test_portcullis_vine_charges_the_narrowed_sacrifice(set_pool):
+    """"{2}, {T}, Sacrifice a creature with defender: Draw a card." — the cost
+    the charger could not express until the noun phrase reached it whole.
+
+    The Vine itself has defender, so it can eat itself; the Cat beside it
+    cannot be chosen even though it is a creature. Naming the Cat is the case
+    that matters: the charger re-checks the answer, and before the filter
+    arrived there was nothing to re-check it against."""
+    pool = set_pool("M21")
+    vine = Permanent(card=pool["Portcullis Vine"])
+    cat = Permanent(card=pool["Pridemalkin"])
+    p1 = PlayerState(name="P1", battlefield=[vine, cat], library=[pool["Alpine Watchdog"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _nosick(vine)
+
+    result = game.activate_permanent_ability(
+        0, "Portcullis Vine", permanent_index=0, cost_permanent_index=1
+    )
+
+    assert result.supported
+    assert len(p1.hand) == 1
+    assert game.is_on_battlefield(cat), "the Cat has no defender and cannot pay"
+    assert not game.is_on_battlefield(vine)
+
+
+def test_portcullis_vine_offers_only_what_its_cost_can_take(set_pool):
+    """The picker's list and the charger's list are the same list.
+
+    A cost payment is not a target (CR 601.2b), so the enumerator has its own
+    path to what may pay — and a picker offering the Cat would have had its
+    answer silently swapped for the deterministic pick at payment time. Both
+    now read the printed noun phrase through one matcher."""
+    pool = set_pool("M21")
+    vine = Permanent(card=pool["Portcullis Vine"])
+    cat = Permanent(card=pool["Pridemalkin"])
+    p1 = PlayerState(name="P1", battlefield=[vine, cat])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    program = compile_card_oracle(vine.card)
+    ability = program.activated_abilities[0]
+    assert ability.cost.sacrifice_filter == {
+        "type_filter": "creature", "with_keywords": ["defender"]
+    }
+
+    from engine.targeting import derive_activation_spec
+
+    spec = derive_activation_spec(ability)
+    assert spec["sacrifice_cost"] and spec["kind"] == "creature"
+    offered = game._enumerate_targets(
+        0, vine.card, spec, for_cast=False,
+        ability_instruction=ability.instruction, source_permanent=vine,
+    )
+    assert [t.get("name") for t in offered] == ["Portcullis Vine"]
 
 
 # --- The scry round (CR 701.22), and mill's recipient -----------------------

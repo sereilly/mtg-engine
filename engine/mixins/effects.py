@@ -1002,7 +1002,7 @@ class EffectsMixin:
         self.arm_forced_sacrifice(
             self.players.index(target),
             damage,
-            filter="nontoken",
+            filter={"nontoken": True},
             reason="Lich",
             on_short={"kind": "lose"},
         )

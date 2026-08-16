@@ -513,20 +513,44 @@ def test_sacrificing_a_chosen_permanent_arms_the_choice():
     """"Sacrifice a creature" makes a *player* choose which one. It used to
     refuse for want of the pending-choice machinery; it now lowers onto it
     (Dire Fleet Warmonger's optional cost), with "another" carried as the
-    exclusion the prompt enforces. A narrowing the prompt cannot test still
-    refuses — the candidate check reads one type word."""
+    exclusion the prompt enforces rather than as part of the filter it tests."""
     result = compile_line("Sacrifice a creature.", card_name="Test")
     assert result.lowered, result.failure_reason
     assert [(i.kind, i.payload) for i in result.instructions] == [
-        ("sacrifice_matching_permanent", {"filter": "creature"})
+        ("sacrifice_matching_permanent", {"filter": {"type_filter": "creature"}})
     ]
 
     another = compile_line("Sacrifice another creature.", card_name="Test")
     assert another.lowered, another.failure_reason
-    assert another.instructions[0].payload == {"filter": "creature", "exclude_self": True}
+    assert another.instructions[0].payload == {
+        "filter": {"type_filter": "creature"}, "exclude_self": True
+    }
 
+
+def test_a_sacrifice_narrowing_the_prompt_can_test_rides_the_filter():
+    """The prompt lists whatever the printed noun phrase names, so a narrowing
+    it can test is carried rather than refused — "a creature with defender"
+    (Portcullis Vine's cost) and "a creature ... with flying" (Run Afoul)."""
     narrowed = compile_line("Sacrifice a black creature.", card_name="Test")
-    assert narrowed.parsed and not narrowed.lowered
+    assert narrowed.lowered, narrowed.failure_reason
+    assert narrowed.instructions[0].payload == {
+        "filter": {"type_filter": "creature", "color_filter": "B"}
+    }
+
+    keyworded = compile_line("Sacrifice a creature with defender.", card_name="Test")
+    assert keyworded.lowered, keyworded.failure_reason
+    assert keyworded.instructions[0].payload == {
+        "filter": {"type_filter": "creature", "with_keywords": ["defender"]}
+    }
+
+
+def test_a_sacrifice_narrowing_the_prompt_cannot_test_still_refuses():
+    """"An attacking creature" is a restriction no filter payload the prompt
+    reads can express, so the line refuses rather than sacrificing any creature
+    at all. That is the whole reason the payload is gated on a key set instead
+    of being handed over whole."""
+    result = compile_line("Sacrifice an attacking creature.", card_name="Test")
+    assert result.parsed and not result.lowered
 
 
 # ---------------------------------------------------------------------------

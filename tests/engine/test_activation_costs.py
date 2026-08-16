@@ -49,10 +49,19 @@ def test_every_admitted_cost_clause_is_charged(pool):
             charged = parse_activated_ability_cost(ability.source_line)
             for cost in node.costs:
                 if isinstance(cost, ast.SacrificeCost) and not cost.filter.is_source:
-                    if charged.sacrifice_type is None:
+                    if charged.sacrifice_filter is None:
                         unpaid.append(f"{card.name}: {ability.source_line}")
-                    elif cost.filter.other_than_source != charged.sacrifice_excludes_source:
-                        unpaid.append(f"{card.name}: 'another' dropped")
+                    elif charged.sacrifice_filter != cost.filter.to_payload():
+                        # Not "is something charged" but "is *this* charged".
+                        # The grammar admits the line on the strength of the
+                        # whole noun phrase, so a charger reading a smaller one
+                        # collects a smaller cost — "a creature with defender"
+                        # charged as "a creature" is the dropped-rider bug with
+                        # the card still reporting supported.
+                        unpaid.append(
+                            f"{card.name}: charged {charged.sacrifice_filter} for "
+                            f"{cost.filter.to_payload()}"
+                        )
                 if isinstance(cost, ast.DiscardCost) and not cost.last_drawn:
                     if not charged.discard_cards:
                         unpaid.append(f"{card.name}: {ability.source_line}")

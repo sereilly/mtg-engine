@@ -251,6 +251,10 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # reading the bonus as the counter would let it qualify.
     if payload.get("with_plus1_counter") and int(perm.metadata.get("plus_counters", 0)) <= 0:
         return False
+    # "nontoken permanent" (Lich). CR 111.1: not a card type, so it is its own
+    # key rather than an ``exclude_types`` entry.
+    if payload.get("nontoken") and perm.metadata.get("is_token", False):
+        return False
     return True
 
 

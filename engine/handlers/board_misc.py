@@ -546,25 +546,36 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
 def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Sacrifice a creature" / "sacrifice another creature" as an effect a
     player performs (Dire Fleet Warmonger's accepted cost; Goremand's entry
-    trigger). Routed through ``arm_forced_sacrifice``: a human seat picks which
-    through the standing prompt, everyone else takes the deterministic
-    heuristic.
+    trigger; Run Afoul's "a creature of their choice with flying"). Routed
+    through ``arm_forced_sacrifice``: a human seat picks which through the
+    standing prompt, everyone else takes the deterministic heuristic.
 
     ``who`` names the payers — absent means the effect's own controller, which
     is what a bare imperative means (CR 109.5). "Each opponent" arms the same
     prompt for each of them, still living, in seat order so the AI simulation
-    stays seed-reproducible.
+    stays seed-reproducible. The two targeted forms are the seat the spell
+    already chose; they stay apart in the payload because CR 115.4 makes "target
+    opponent" and "target player" different spells, and only the picker cares.
+
+    An unrecognized ``who`` fails the instruction rather than defaulting to the
+    controller: silently sacrificing the caster's own creature instead of the
+    named player's is the wrong direction to guess in.
     """
     caster_index = game.players.index(context.caster)
     exclude = context.source_permanent if instruction.payload.get("exclude_self") else None
-    if instruction.payload.get("who") == "each_opponent":
-        payers = list(game.opponents_of(caster_index))
-    else:
+    who = instruction.payload.get("who")
+    if who is None:
         payers = [caster_index]
+    elif who == "each_opponent":
+        payers = list(game.opponents_of(caster_index))
+    elif who in ("target_opponent", "target_player"):
+        payers = [game.players.index(context.target)]
+    else:
+        return False, f"unsupported sacrifice payer {who!r}"
     for seat in payers:
         game.arm_forced_sacrifice(
             seat, 1,
-            filter=str(instruction.payload.get("filter", "creature")),
+            filter=dict(instruction.payload.get("filter") or {}),
             exclude=exclude,
             reason=context.card.name,
         )

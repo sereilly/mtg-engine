@@ -32,7 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Iterable
 
-from .handlers._common import permanent_matches_filter
+from .subject_filters import subject_matches
 from .trigger_utils import iter_triggered_abilities, make_trigger_event
 
 if TYPE_CHECKING:
@@ -379,23 +379,6 @@ def _subject_led_filter(
     )
 
 
-# The filter-payload keys :func:`trigger_subject_matches` implements. A narrowed
-# trigger condition carrying anything outside this set is refused when it is
-# *compiled* (engine/oracle.py::_resolve_subject_groups), not silently ignored
-# here: a restriction the dispatcher cannot test would make the trigger fire on
-# a strictly larger set than the card prints, which is the one thing a trigger
-# must never do. Everything down to `with_plus1_counter` is delegated to
-# `permanent_matches_filter`, which every other filter reader already shares;
-# the last three need the game (layer-6 keywords, the observer's seat, the
-# source's identity) and are tested here.
-TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
-    "type_filter", "subtype_filter", "color_filter",
-    "exclude_colors", "exclude_types", "exclude_subtypes",
-    "tapped_only", "mana_value", "power", "toughness", "with_plus1_counter",
-    "with_keywords", "controller", "exclude_self",
-})
-
-
 def trigger_subject_matches(
     game: Game,
     trig: ParsedTriggeredAbility,
@@ -407,37 +390,21 @@ def trigger_subject_matches(
 ) -> bool:
     """Whether *obj* is in the set *trig*'s condition names under ``<key>_filter``.
 
-    An absent filter is no narrowing at all, so it matches — "whenever this
-    creature blocks" is the same event as "…blocks a creature" minus the
-    restriction, and CR 509.3c/509.3d say the difference is how often it fires,
-    which is the fire site's business rather than this predicate's.
+    The matching itself is :func:`engine.subject_filters.subject_matches`, shared
+    with every other reader of a printed noun phrase; this is only the part that
+    is about a *trigger* — which payload key the condition keeps its filter
+    under, and that an absent one is no narrowing at all. CR 509.3c/509.3d say
+    the difference between "whenever this creature blocks" and "…blocks a
+    creature" is how often it fires, which is the fire site's business rather
+    than this predicate's.
     """
-    described = trig.condition.payload.get(f"{key}_filter")
-    if not described:
-        return True
-    if obj is None:
-        return False
-    if not permanent_matches_filter(obj, described):
-        return False
-    # "You control" is the *observer's* seat — the controller of the permanent
-    # whose ability this is (CR 109.5), not the controller of the event.
-    controller = described.get("controller")
-    if controller is not None:
-        seat = game.controller_index_of(obj)
-        if seat is None or observer is None:
-            return False
-        if (seat == observer) != (controller == "you"):
-            return False
-    # Keywords are asked of layer 6, so a creature *granted* deathtouch answers
-    # a deathtouch-narrowed trigger exactly as a printed one does.
-    for keyword in described.get("with_keywords") or ():
-        if not game._has_keyword(obj, keyword):
-            return False
-    # "Another" (CR 109.5) excludes the ability's own source by identity — a
-    # look-alike on the same battlefield is a different permanent.
-    if described.get("exclude_self") and source is not None and obj is source:
-        return False
-    return True
+    return subject_matches(
+        game,
+        obj,
+        trig.condition.payload.get(f"{key}_filter"),
+        observer=observer,
+        source=source,
+    )
 
 
 def _controller_of(game: Game, permanent: Permanent) -> PlayerState:

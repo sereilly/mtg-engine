@@ -73,7 +73,7 @@ def _has_cost_picker(spec: dict | None) -> bool:
 def _cast_cost_cards() -> list[str]:
     return sorted(
         name for name, card in _POOL.items()
-        if any(c.sacrifice_type or c.discard_cards for c in additional_costs(card))
+        if any(c.sacrifice_filter is not None or c.discard_cards for c in additional_costs(card))
     )
 
 
@@ -85,7 +85,7 @@ def _activation_cost_abilities() -> list[tuple[str, int]]:
             if not (ability.supported and ability.instruction is not None):
                 continue
             cost = ability.cost
-            if cost.sacrifice_type or cost.discard_cards:
+            if cost.sacrifice_filter is not None or cost.discard_cards:
                 found.append((name, index))
     return found
 

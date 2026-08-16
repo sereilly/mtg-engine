@@ -172,6 +172,14 @@ class ObjectFilter:
     # least one +1/+1 counter, read off the ``plus_counters`` record the
     # placing handlers keep (CR 122).
     with_plus1_counter: bool = False
+    # "nontoken" (Lich's sacrifice). CR 111.1: a token is not a card, so this is
+    # neither an excluded card type nor an excluded subtype.
+    nontoken: bool = False
+    # "a creature **of their choice**" (Run Afoul) — the player performing the
+    # action picks. Recorded rather than dropped, because "of *your* choice" is a
+    # different sentence; a lowering accepts it only where the rule it lowers to
+    # already puts the choice there (CR 701.21a for a sacrifice).
+    their_choice: bool = False
     # "other than this creature" / "other Zombies" — excludes the source.
     other_than_source: bool = False
     # "this creature" / "this artifact" — the ability's own source.
@@ -228,6 +236,17 @@ class ObjectFilter:
             payload["blocking_only"] = True
         if self.other_than_source:
             payload["exclude_self"] = True
+        if self.nontoken:
+            payload["nontoken"] = True
+        # "of their choice" says *who picks*, which is not a property of the
+        # objects picked from — no matcher can test it, and it is deliberately
+        # absent from ``TESTABLE_SUBJECT_FILTER_KEYS`` for that reason. Emitting
+        # it anyway is what makes the absence load-bearing: every gate that asks
+        # "are all this payload's keys testable?" refuses the phrase, so the only
+        # way through is a lowering that reads the word and says why its rule
+        # already puts the choice there (``_lower_sacrifice``, CR 701.21a).
+        if self.their_choice:
+            payload["their_choice"] = True
         # "non-Spirit creature" (Roaming Ghostlight). Emitted only when set, so
         # every payload written before this key existed is byte-identical.
         if self.excluded_subtypes:

@@ -16,6 +16,7 @@ from engine import Game
 from engine.grammar import compile_line
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
+from engine.targeting import derive_cast_spec
 
 
 # --- The quantifier round: "up to N" is not one target ----------------------
@@ -523,3 +524,60 @@ def test_thrill_of_possibility_discards_then_draws(set_pool):
 
     assert [c.name for c in p1.graveyard] == ["Mountain", "Thrill of Possibility"]
     assert len(p1.hand) == 2
+
+
+# --- Round 56: the sacrifice's noun phrase, read by the noun parser ---------
+
+
+def _run_afoul_board(set_pool):
+    pool = set_pool("M21")
+    hound = Permanent(card=pool["Alpine Watchdog"])
+    singer = Permanent(card=pool["Mistral Singer"])  # flying
+    p1 = PlayerState(name="P1", hand=[pool["Run Afoul"]])
+    p2 = PlayerState(name="P2", battlefield=[hound, singer])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    return game, p1, p2, hound, singer
+
+
+def test_run_afoul_takes_a_flier_and_leaves_the_ground_creature(set_pool):
+    """"Target opponent sacrifices a creature of their choice with flying."
+
+    Three words the engine could not read until this round, in one sentence: the
+    payer is a *targeted* player rather than the caster, "of their choice" says
+    who picks, and "with flying" narrows what may be picked. The narrowing is the
+    load-bearing one — dropped, the Watchdog is a legal answer and the spell
+    reads as a strictly better card."""
+    game, p1, p2, hound, singer = _run_afoul_board(set_pool)
+
+    game.cast_from_hand(0, "Run Afoul", target_player_index=1)
+
+    assert game.is_on_battlefield(hound), "no flying, so not a legal sacrifice"
+    assert not game.is_on_battlefield(singer)
+
+
+def test_run_afoul_with_no_flier_takes_nothing(set_pool):
+    """The control. CR 701.21b: a player asked to sacrifice something they do
+    not control sacrifices nothing — the spell still resolves, and the ground
+    creature is not a consolation prize."""
+    game, p1, p2, hound, singer = _run_afoul_board(set_pool)
+    game.remove_from_battlefield(singer)
+
+    game.cast_from_hand(0, "Run Afoul", target_player_index=1)
+
+    assert game.is_on_battlefield(hound)
+
+
+def test_run_afoul_may_not_choose_its_own_caster(set_pool):
+    """"Target **opponent**" (CR 115.4). The payload keeps the two targeted
+    forms apart for exactly this: the handler resolves both to the seat the
+    spell chose, so only the picker can tell "target opponent" from "target
+    player", and collapsing them would offer the caster their own seat."""
+    game, p1, p2, hound, singer = _run_afoul_board(set_pool)
+    card = p1.hand[0]
+    spec = derive_cast_spec(card, compile_card_oracle(card))
+
+    assert spec == {"kind": "player", "opponents_only": True}
+    offered = game._enumerate_targets(0, card, spec, for_cast=True)
+    assert [t["seat"] for t in offered] == [1]
