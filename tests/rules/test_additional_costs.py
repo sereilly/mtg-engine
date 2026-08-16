@@ -178,3 +178,87 @@ def test_a_creature_spells_additional_cost_is_paid_before_it_enters():
     assert [p.card.name for p in p2.battlefield] == [], (
         "and its entry trigger made the opponent sacrifice too"
     )
+
+
+# ---------------------------------------------------------------------------
+# The payer chooses which card the discard eats, and the index means the hand
+# they were looking at
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("601.2b", "601.2a")
+def test_the_payer_chooses_which_card_the_discard_cost_eats():
+    """The other half of "the payer chooses". The sacrifice cost has taken a
+    named permanent since round 44; the discard cost accepted an index and then
+    read it *after* the spell had left the hand, so a caster naming the last
+    card in hand fell past the shortened end and discarded the **first** one —
+    the card a player is least likely to have meant."""
+    game, p1, _p2 = _duel(
+        [_M21["Shock"], _M21["Thrill of Possibility"], _M21["Alpine Watchdog"], _M21["Mountain"]]
+    )
+    p1.library = [_M21["Swamp"]] * 4
+
+    game.cast_from_hand(0, "Thrill of Possibility", cost_hand_index=3)
+
+    assert [c.name for c in p1.graveyard] == ["Mountain", "Thrill of Possibility"]
+    assert "Shock" in [c.name for c in p1.hand]
+
+
+@pytest.mark.cr("601.2b", "601.2a")
+def test_a_named_discard_is_not_the_card_that_slides_into_its_slot():
+    """The sharper half of the same bug, and the reason resolving the index
+    early is the fix rather than clamping it. With the pick still in range after
+    the spell left the hand, nothing looked wrong: the engine simply discarded
+    the card that had slid up into the named slot."""
+    game, p1, _p2 = _duel(
+        [_M21["Shock"], _M21["Thrill of Possibility"], _M21["Alpine Watchdog"], _M21["Mountain"]]
+    )
+    p1.library = [_M21["Swamp"]] * 4
+
+    game.cast_from_hand(0, "Thrill of Possibility", cost_hand_index=2)
+
+    assert [c.name for c in p1.graveyard] == ["Alpine Watchdog", "Thrill of Possibility"]
+
+
+@pytest.mark.cr("601.2a", "601.2b")
+def test_naming_the_spell_itself_refuses_the_cast():
+    """CR 601.2a puts the spell on the stack before its costs are paid, so it is
+    not in the hand to be discarded. Refused before any mana is spent, and the
+    whole announcement rewinds — the earlier test proves the *engine* never
+    picks the spell; this one proves a client that asks for it is told no rather
+    than quietly given something else."""
+    game, p1, _p2 = _duel([_M21["Shock"], _M21["Thrill of Possibility"], _M21["Mountain"]])
+    p1.library = [_M21["Swamp"]] * 4
+
+    result = game.cast_from_hand(0, "Thrill of Possibility", cost_hand_index=1)
+
+    assert not result.supported and "cannot be discarded to pay for itself" in result.details
+    assert len(p1.hand) == 3 and not p1.graveyard and not game.stack
+
+
+@pytest.mark.cr("601.2b")
+def test_a_pick_that_names_no_card_refuses_rather_than_repointing():
+    """The fallback that made the first bug invisible: an unusable index became
+    a bare ``0``. Naming nothing at all is still the deterministic default —
+    that is what keeps AI and headless play unblocked — but naming a card that
+    is not there is an error, not a request for a different one."""
+    game, p1, _p2 = _duel([_M21["Shock"], _M21["Thrill of Possibility"], _M21["Mountain"]])
+    p1.library = [_M21["Swamp"]] * 4
+
+    result = game.cast_from_hand(0, "Thrill of Possibility", cost_hand_index=9)
+
+    assert not result.supported and "hand position 9" in result.details
+    assert len(p1.hand) == 3 and not game.stack
+
+
+@pytest.mark.cr("601.2b")
+def test_naming_nothing_still_takes_the_deterministic_default():
+    """The control for the two refusals above: a seat that names nothing — every
+    AI and headless cast — keeps discarding the lowest-index card, which is the
+    convention the pending-discard queue already uses."""
+    game, p1, _p2 = _duel([_M21["Shock"], _M21["Thrill of Possibility"], _M21["Mountain"]])
+    p1.library = [_M21["Swamp"]] * 4
+
+    game.cast_from_hand(0, "Thrill of Possibility")
+
+    assert [c.name for c in p1.graveyard] == ["Shock", "Thrill of Possibility"]

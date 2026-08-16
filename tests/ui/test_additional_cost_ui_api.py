@@ -15,6 +15,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from engine import load_cards
+from engine.card_loader import manifest_set_path
 from engine.models import Permanent
 from web.app import app, store
 from tests.helpers import LEA_PATH
@@ -98,3 +99,85 @@ def test_the_spell_is_refused_when_no_creature_can_pay():
 
     assert resp.status_code >= 400 or not resp.json().get("supported", True)
     assert [c.name for c in game.players[0].hand] == ["Sacrifice"]
+
+
+# ---------------------------------------------------------------------------
+# The discard cost's picker — the other half, and a different picker
+# ---------------------------------------------------------------------------
+#
+# What pays "discard a card" is a card in the caster's own hand, so it is not
+# chosen on the battlefield and the permanent picker above cannot carry it.
+# `derive_cast_spec` returned None for it, so the client was never told to ask
+# and a human seat silently discarded whatever was first in hand.
+#
+# M21 is measured, not shipped, so no deck can hold Thrill of Possibility and
+# the flow is exercised here at the API layer — the same place the cast-from-zone
+# suite meets its measured cards.
+
+_M21 = {
+    c.name: c
+    for c in load_cards(manifest_set_path("M21", include_measured=True))
+}
+
+
+def _discard_cost_session():
+    sid, session, game = _session()
+    game.players[0].hand = [
+        _M21["Shock"], _M21["Thrill of Possibility"], _M21["Alpine Watchdog"]
+    ]
+    game.players[0].library = [_M21["Swamp"]] * 4
+    return sid, session, game
+
+
+def _hand_card(state: dict, name: str) -> dict:
+    return next(c for c in state["players"][0]["hand"] if c["name"] == name)
+
+
+def test_the_client_is_offered_every_card_but_the_one_being_cast():
+    """The spec the picker is built from. CR 601.2a has already put the spell on
+    the stack by the time costs are paid, so it is not among the payments."""
+    sid, _sess, _game = _discard_cost_session()
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    spec = _hand_card(state, "Thrill of Possibility")["target_spec"]
+
+    assert spec["kind"] == "hand_card" and spec["discard_cost"] is True
+    assert [(t["hand_index"], t["name"]) for t in spec["valid_targets"]] == [
+        (0, "Shock"), (2, "Alpine Watchdog")
+    ]
+
+
+def test_the_chosen_card_travels_on_the_cost_field():
+    """`cost_hand_index` indexes the hand the client is looking at — the one
+    that still holds the spell — because that is the hand the player saw when
+    they clicked."""
+    sid, _sess, game = _discard_cost_session()
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "cast", "card_name": "Thrill of Possibility",
+            "cost_hand_index": 2,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    assert [c.name for c in game.players[0].graveyard] == ["Alpine Watchdog"]
+    assert [item.card.name for item in game.stack] == ["Thrill of Possibility"]
+
+
+def test_naming_the_spell_itself_is_refused_over_the_wire():
+    """The client should never offer it — the enumeration above withholds it —
+    and the server does not trust that it didn't."""
+    sid, _sess, game = _discard_cost_session()
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "cast", "card_name": "Thrill of Possibility",
+            "cost_hand_index": 1,
+        },
+    )
+
+    assert resp.status_code >= 400 or not resp.json().get("supported", True)
+    assert len(game.players[0].hand) == 3 and not game.players[0].graveyard

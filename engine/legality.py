@@ -374,6 +374,8 @@ class LegalityMixin:
         kind = spec["kind"]
         if kind in ("none", "modal"):
             return []
+        if kind == "hand_card":
+            return self._enumerate_cost_hand_cards(caster_index, card)
         if kind == "graveyard_creature":
             return self._enumerate_graveyard_creatures(caster_index, spec)
         if kind == "stack":
@@ -563,6 +565,29 @@ class LegalityMixin:
                 return "enchantment" in type_line
             return True
         return False
+
+    def _enumerate_cost_hand_cards(self, caster_index: int, card: CardDefinition) -> list[dict]:
+        """The cards that may pay a printed "discard a card" additional cost.
+
+        Every card in the caster's hand except the one about to be cast: CR
+        601.2a puts the spell on the stack before its costs are paid, so it is
+        not there to be discarded. With two copies in hand the *other* one is a
+        legal payment, so exactly one occurrence is withheld — the one the hand
+        lookup will cast.
+
+        A hint, not the authority: ``_resolve_discard_cost_card`` re-checks the
+        answer on the way back in, so a client that offers a whole hand cannot
+        turn this into "discard nothing".
+        """
+        hand = self.players[caster_index].hand
+        spell_index = next(
+            (i for i, held in enumerate(hand) if held.name == card.name), None
+        )
+        return [
+            {"kind": "hand_card", "seat": caster_index, "hand_index": index, "name": held.name}
+            for index, held in enumerate(hand)
+            if index != spell_index
+        ]
 
     def _enumerate_graveyard_creatures(self, caster_index: int, spec: dict) -> list[dict]:
         targets: list[dict] = []

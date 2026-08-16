@@ -271,6 +271,22 @@ class SpellCastingMixin:
             self.log.append(unpayable)
             return SimulationResult(card.name, False, classification.effect_kind, unpayable)
 
+        # Resolve the named discard **here**, while `cost_hand_index` still
+        # indexes the hand the caster was looking at. The spell leaves that hand
+        # further down, and every card after it slides up a slot — so an index
+        # read afterwards names the neighbour, and one past the shortened end
+        # fell through to a bare `0` and discarded the *first* card in hand. A
+        # cast that names a card it cannot pay with is refused rather than
+        # silently repointed, before any mana is spent.
+        cost_hand_card, cost_denial = self._resolve_discard_cost_card(
+            caster_index, card, cast_costs,
+            cost_hand_index=cost_hand_index,
+            spell_hand_index=hand_index if from_zone == "hand" else None,
+        )
+        if cost_denial is not None:
+            self.log.append(cost_denial)
+            return SimulationResult(card.name, False, classification.effect_kind, cost_denial)
+
         # Resolve an explicitly chosen target spell on the stack (Counterspell,
         # Fork). target_stack_index indexes into self.stack (bottom-first).
         target_stack_item = None
@@ -375,7 +391,7 @@ class SpellCastingMixin:
         sacrificed_for_cost = self._pay_additional_costs(
             caster_index, card, cast_costs,
             cost_permanent_index=cost_permanent_index,
-            cost_hand_index=cost_hand_index,
+            cost_hand_card=cost_hand_card,
         )
         if permission is not None:
             consume_permission(self, permission, card)
@@ -500,6 +516,45 @@ class SpellCastingMixin:
                     )
         return None
 
+    def _resolve_discard_cost_card(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        costs: tuple[AdditionalCost, ...],
+        *,
+        cost_hand_index: int | None,
+        spell_hand_index: int | None,
+    ) -> tuple["CardDefinition | None", str | None]:
+        """The card a named ``cost_hand_index`` picks, or why it picks none.
+
+        CR 601.2b's choices are announced while the spell is still being cast,
+        so the index is into the hand the caster can see — the one that still
+        holds the spell. Resolving it to a *card* here is what makes the answer
+        survive the spell leaving that hand: an index is only meaningful
+        alongside the list it was read from, which is the instability this
+        engine addresses with ids on the battlefield and cannot here, because a
+        hand holds ``CardDefinition``s and two copies of a card are one object.
+
+        The spell itself is refused: CR 601.2a puts it on the stack before its
+        costs are paid, so it is not in the hand to be discarded. Nothing named
+        means the deterministic default, which keeps AI and headless play
+        unblocked.
+        """
+        if cost_hand_index is None or not any(cost.discard_cards for cost in costs):
+            return None, None
+        hand = self.players[caster_index].hand
+        if not 0 <= cost_hand_index < len(hand):
+            return None, (
+                f"{card.name} can't be cast: no card at hand position "
+                f"{cost_hand_index} to discard for its additional cost"
+            )
+        if cost_hand_index == spell_hand_index:
+            return None, (
+                f"{card.name} can't be cast: it is on the stack (CR 601.2a) and "
+                "cannot be discarded to pay for itself"
+            )
+        return hand[cost_hand_index], None
+
     def _pay_additional_costs(
         self,
         caster_index: int,
@@ -507,7 +562,7 @@ class SpellCastingMixin:
         costs: tuple[AdditionalCost, ...],
         *,
         cost_permanent_index: int | None,
-        cost_hand_index: int | None,
+        cost_hand_card: "CardDefinition | None",
     ) -> Permanent | None:
         """Perform *card*'s printed additional costs, returning what was
         sacrificed (for the spell whose effect asks about it).
@@ -548,12 +603,20 @@ class SpellCastingMixin:
                 for _ in range(cost.discard_cards):
                     if not caster.hand:
                         break
-                    index = (
-                        cost_hand_index
-                        if isinstance(cost_hand_index, int)
-                        and 0 <= cost_hand_index < len(caster.hand)
-                        else 0
-                    )
+                    # The chosen card was resolved before the spell left the
+                    # hand; find it by identity now. Two copies of one card are
+                    # the same object, which is fine — either pays the cost, and
+                    # discarding "the first equal one" is the whole choice.
+                    index = 0
+                    if cost_hand_card is not None:
+                        index = next(
+                            (
+                                i for i, held in enumerate(caster.hand)
+                                if held is cost_hand_card
+                            ),
+                            0,
+                        )
+                        cost_hand_card = None  # one named card pays once
                     discarded = caster.hand.pop(index)
                     self._discard_card(caster, discarded)
                     self.log.append(

@@ -2495,3 +2495,63 @@ all.
 - **The discard cost's picker** (unchanged from round 44).
 
 ---
+
+## Round 50: the discard cost's picker, and the index that outlived its list
+
+*(2026-08-16.)* The item deferred since round 44, and it was hiding a bug that
+only the missing half kept invisible. M21 stays at 209; the deliverable is a
+choice the payer never got and an answer the engine read against the wrong list.
+
+**The engine took `cost_hand_index` and read it after the spell had left the
+hand.** `_cast_onto_stack` pops the spell at CR 601.2a and pays additional costs
+at 601.2h — in that order, deliberately, so the spell cannot be discarded to pay
+for itself. But the index a caster names is into the hand they are *looking at*,
+which still holds the spell, so every slot after it slides up by one. Naming
+"the third card" discarded the second. And an index past the shortened end fell
+through to a bare `0` and discarded the **first card in hand** — the one a player
+is least likely to have meant. Nobody had hit it because `derive_cast_spec`
+returned None for this cost, so no client could send an index at all: the
+missing picker was what kept the picker's bug quiet.
+
+This is the index-instability class the engine closed on the battlefield with
+`permanent_id`, arriving where ids do not exist — a hand holds
+`CardDefinition`s, and two copies of a card are literally one object. The fix is
+the same shape as `web/actions.py` resolving an id once at the top: the named
+index is resolved **to a card** before the pop, while it still means what the
+player saw, and paid by identity afterwards. An index that names the spell
+itself, or names nothing, is now refused before a single mana is spent (CR
+601.2h's rewind) rather than silently repointed. Naming nothing at all is still
+the deterministic lowest-index default — that is what keeps AI and headless play
+unblocked, and it is the convention the pending-discard queue already uses.
+
+**Then the picker.** What pays this cost is a card in the caster's own hand, so
+it is not chosen on the battlefield and cannot ride the permanent picker round
+44 built for the sacrifice cost — a different picker, not a narrowing of that
+one. `derive_cast_spec` answers `hand_card` with a `discard_cost` flag naming
+the field, `legality.py` enumerates the hand withholding the copy about to be
+cast, and the client gets its own prompt beside the modal-choice one it is
+modelled on. The enumeration is a hint and says so: the engine re-checks the
+answer on the way in, so a client offering a whole hand cannot turn the cost
+into nothing — the discipline round 11 established for search.
+
+**Not driven in the browser.** Both cards printing this cost (Thrill of
+Possibility, Sparkhunter Masticore) are M21, which is measured rather than
+shipped, so no deck can hold one and the Debug Menu cannot inject one. The flow
+is exercised at the API layer, the way round 19's cast-from-zone client was, and
+becomes browser-reachable the day the set ships. `node --check` is the only
+verification the client half gets today, and that is worth saying rather than
+implying more.
+
+Suite **5,008** at 21.0s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Seven of the eight new tests were
+watched to fail on HEAD; the eighth is the control that pins the default a seat
+naming nothing still gets.
+
+**Next:**
+
+- **The legend rule reads the printed name** (unchanged from round 49).
+- **The "activate from hand" seam** round 44 named beside this one. An activated
+  ability whose cost is paid from the hand has the same missing picker, and now
+  has a worked shape to copy.
+
+---

@@ -429,6 +429,18 @@ def derive_cast_spec(card, program) -> dict | None:
     for cost in additional_costs(card):
         if cost.sacrifice_type == "creature":
             return {"kind": "creature", "own_only": True, "sacrifice_cost": True}
+        if cost.discard_cards:
+            # What pays this one is a card in the caster's own hand, so it is
+            # picked *there* — a different picker, not a narrowing of the
+            # permanent one, which is why this returned None and a human seat
+            # silently discarded whatever was first in hand. `discard_cost`
+            # tells the client the answer rides `cost_hand_index`.
+            return {
+                "kind": "hand_card",
+                "own_only": True,
+                "discard_cost": True,
+                "count": cost.discard_cards,
+            }
 
     graveyard_aura = _ENCHANT_GRAVEYARD_LINE.search(program.normalized_text or "")
     if graveyard_aura is not None:

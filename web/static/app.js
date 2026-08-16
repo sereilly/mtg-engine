@@ -10,6 +10,12 @@ let pendingManaColor = null;
 let pendingAutoTap = null;
 // "Choose one —" modal spell awaiting the caster's mode selection.
 let pendingModalChoice = null;
+// A printed "as an additional cost to cast this spell, discard a card"
+// (Thrill of Possibility, Sparkhunter Masticore). The payment is a card in
+// hand, not a permanent, so it gets its own prompt rather than riding the
+// battlefield picker the sacrifice cost uses — and it rides `cost_hand_index`,
+// because a cost is not a target (CR 601.2b vs 601.2c).
+let pendingDiscardCost = null;
 // A permanent with more than one activated ability (Rock Hydra, Basalt Monolith)
 // awaiting the player's choice of which ability to activate.
 let pendingAbilityChoice = null;
@@ -959,7 +965,7 @@ function combatDamageAssignmentPending(state = currentState) {
 
 function hasBlockingPromptForAutoPass(state = currentState) {
   if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
-  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
+  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
 function shouldAutoPassUntilTurnEnd(state = currentState) {
@@ -2548,7 +2554,7 @@ function isAnyPromptActive(state = currentState) {
   if (getRagingRiverInfo(state)) return true;
   if (getCamouflageInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return true;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(state).length > 0;
@@ -2719,7 +2725,7 @@ async function confirmPendingAttackTarget(targetSeat) {
 
 async function handlePriorityPromptOk() {
   if (!currentState || seat === null) return false;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return false;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return false;
   if (!shouldShowPriorityPrompt(currentState)) return false;
   await sendAction({ seat, action: "pass_priority" });
   updateActionHint("Passed priority.");
@@ -4968,6 +4974,27 @@ function renderActivationPrompt() {
     return;
   }
 
+  if (pendingDiscardCost) {
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Additional cost — ${pendingDiscardCost.cardName}`;
+    body.textContent = "Discard a card to cast it. Choose which.";
+    const cardButtons = pendingDiscardCost.options
+      .map(
+        (option) =>
+          `<button type="button" class="prompt-choice-btn" data-discard-cost="${option.hand_index}">` +
+          `${escapeHtml(option.name)}</button>`,
+      )
+      .join("");
+    steps.innerHTML = `<div class="prompt-choice-column">${cardButtons}</div>`;
+    okBtn.disabled = true;
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
+
   if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor && !pendingAbilityChoice && !pendingChannel) {
     const shouldShowPriority = shouldShowPriorityPrompt(currentState);
     const opponentHasPriority =
@@ -5866,6 +5893,57 @@ function cardModeOptions(card) {
 
 function cardIsModal(card) {
   return cardModeOptions(card).length >= 2;
+}
+
+// A printed "discard a card" additional cost, and the cards that may pay it.
+// The engine enumerates them (it withholds the copy about to be cast, which
+// CR 601.2a has already put on the stack) and re-checks the answer, so this is
+// a hint rather than the authority.
+function cardRequiresDiscardCost(card) {
+  return !!targetSpecOf(card)?.discard_cost;
+}
+
+function discardCostOptions(card) {
+  const spec = targetSpecOf(card);
+  return (spec?.valid_targets || []).filter((option) => Number.isInteger(option?.hand_index));
+}
+
+// Open the discard-cost prompt. With nothing legal to discard the cast is left
+// to the engine, which refuses it under CR 601.2h and says why — a client-side
+// refusal here would be a second opinion about payability.
+function startCastDiscardCostPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return false;
+  const options = discardCostOptions(card);
+  if (!options.length) return false;
+  pendingDiscardCost = { card, cardName, castAction, options };
+  renderActivationPrompt();
+  return true;
+}
+
+// Send the cast with the chosen payment on the cost field. `cost_hand_index`
+// indexes the hand as it stands now — the one that still holds the spell —
+// which is the hand the engine resolves it against before the card leaves it.
+function payDiscardCost(handIndex) {
+  if (!pendingDiscardCost) return;
+  const choice = pendingDiscardCost;
+  pendingDiscardCost = null;
+  renderActivationPrompt();
+  updateActionHint(`Casting ${choice.cardName}...`);
+  sendAction({
+    seat,
+    action: choice.castAction || "cast",
+    card_name: choice.cardName,
+    cost_hand_index: handIndex,
+  })
+    .then(() => {
+      updateActionHint(`Cast ${choice.cardName}.`);
+      clearPendingHandCast();
+    })
+    .catch((e) => {
+      clearPendingHandCast();
+      updateActionHint(e.message, true);
+    });
 }
 
 // Show the generic mode-choice prompt for a modal spell. Returns true when the
@@ -7711,6 +7789,13 @@ function createCardElement(card, options = {}) {
           return;
         }
 
+        // A printed additional cost is announced before any target (CR 601.2b
+        // precedes 601.2c), and none of the cards printing this one also
+        // targets, so it comes first among the target cascades below.
+        if (cardRequiresDiscardCost(card) && startCastDiscardCostPrompt(card)) {
+          return;
+        }
+
         if (cardRequiresTargetGraveyardCreature(card)) {
           startCastGraveyardCreatureTargetPrompt(card);
           return;
@@ -8100,6 +8185,7 @@ async function beginZoneCast(card, zone) {
   pendingCastFromZone = zone;
   try {
     if (cardIsModal(card) && startModalChoicePrompt(card)) return;
+    if (cardRequiresDiscardCost(card) && startCastDiscardCostPrompt(card)) return;
     if (cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
     if (cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
     if (cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
@@ -10273,6 +10359,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       const card = findCardInCurrentHand(payload.name);
       beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
       if (card && cardIsModal(card) && startModalChoicePrompt(card)) { return; }
+      if (card && cardRequiresDiscardCost(card) && startCastDiscardCostPrompt(card)) { return; }
       if (card && cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
       if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
@@ -11319,13 +11406,14 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
 
 q("promptCancelBtn").addEventListener("click", () => {
   SFX.onMenuCancel();
-  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingAutoTap || pendingModalChoice);
+  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingAutoTap || pendingModalChoice || pendingDiscardCost);
   pendingActivation = null;
   pendingCastTarget = null;
   pendingCastX = null;
   pendingManaColor = null;
   pendingAutoTap = null;
   pendingModalChoice = null;
+  pendingDiscardCost = null;
   pendingAbilityChoice = null;
   pendingChannel = null;
   const wasPickingAttackTarget = !!pendingAttackTarget;
@@ -11393,6 +11481,12 @@ q("promptSteps").addEventListener("click", (event) => {
   const modeChoice = target.dataset.modeChoice;
   if (modeChoice !== undefined && pendingModalChoice) {
     chooseModalMode(Number(modeChoice));
+    return;
+  }
+
+  const discardCost = target.dataset.discardCost;
+  if (discardCost !== undefined && pendingDiscardCost) {
+    payDiscardCost(Number(discardCost));
     return;
   }
 
