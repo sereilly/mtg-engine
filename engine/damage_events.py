@@ -39,8 +39,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from .control import base_controller
 from .effect_ordering import Candidate, affected_seat, apply_in_order
-from .models import PlayerState
+from .models import Permanent, PlayerState
 from .prevention import shield_candidates, spent
 from .replacements import (
     apply_replacements,
@@ -123,6 +124,45 @@ def lifelink_life_gained(source, dealt: int) -> int:
     return dealt if has_keyword(LIFELINK) else 0
 
 
+def damage_source_seat(game, source) -> int | None:
+    """The seat that controls a damage event's *source* (CR 109.5), or None.
+
+    Every damage payload has carried its ``source`` and none of them carried
+    this, which made "a source **you** control" — Fiery Emancipation, Chandra's
+    Pyreling — unwritable rather than unimplemented. The reason is worth being
+    precise about, because it is not an oversight: ``source`` is a ``Permanent``
+    for a permanent and a bare ``CardDefinition`` for a spell, and a
+    ``CardDefinition`` is *the card as printed*. It is shared by every copy in
+    every deck in the process and no player controls it, so no amount of reading
+    it answers the question.
+
+    Three answers, most specific first:
+
+    - a permanent on the battlefield: the control seam, so a stolen creature's
+      damage is the thief's (CR 613 layer 2);
+    - a permanent that has left (a source sacrificed to pay for its own
+      ability): the seat it entered under, which ``base_controller_index`` keeps
+      precisely because it is never rewritten;
+    - anything else: whoever is resolving. That is the same rule, not a
+      fallback — CR 109.5 makes a spell's source its controller — and it is
+      recorded at the one dispatch point that knows it.
+
+    None outside all three: a turn-based action with no controller at all, where
+    "you control it" has no answer and every predicate reading this must
+    therefore say no rather than guess a seat.
+    """
+    if source is None:
+        return None
+    seat = game.controller_index_of(source)
+    if seat is not None:
+        return seat
+    if isinstance(source, Permanent):
+        base = base_controller(source)
+        if base is not None:
+            return base
+    return game.resolving_seats[-1] if game.resolving_seats else None
+
+
 def damage_candidates(recipient) -> list[Candidate]:
     """Every effect attempting to modify a damage event with this recipient
     before it is dealt (CR 120.4b) — shields and replacements together, in
@@ -171,6 +211,12 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     """
     if event["amount"] <= 0:
         return DamageOutcome(consumed=False, dealt=0, result=0)
+    # Derived here rather than at each entry point, for the same reason the
+    # amount check is: this is the one place every damage event passes through,
+    # so an effect keyed on who dealt it cannot be missed by a path that forgot
+    # to fill the key in. `setdefault`, so a caller that genuinely knows better
+    # can say so.
+    event.setdefault("source_seat", damage_source_seat(game, event.get("source")))
     kind = damage_kind(event["recipient"])
     trace = apply_in_order(
         game,
@@ -210,6 +256,7 @@ def _process_results(game, event: dict, dealt: int) -> int:
         "amount": dealt,
         "dealt": dealt,
         "source": event.get("source"),
+        "source_seat": event.get("source_seat"),
         "combat": bool(event.get("combat")),
     }
     consumed, _ = apply_replacements(game, RESULT_KINDS[damage_kind(event["recipient"])], results)

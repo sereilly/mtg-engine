@@ -33,12 +33,7 @@ from ..cost_modifiers import cost_modifier_claims_line
 from ..draw_step_modifiers import draw_step_bonus_for
 from ..enter_effects import enter_effect_line
 from ..land_play_allowance import land_play_line
-from ..replacements import (
-    DAMAGE_LIFE_FLOOR_TEXT,
-    EXTRA_PLUS1_COUNTER_TEXT,
-    LIFE_GAIN_TO_DRAW_TEXT,
-    TOP_OF_LIBRARY_DISCARD_TEXT,
-)
+from ..replacements import replacement_claims_line
 from ..targeting import enchant_line_subject
 from ..untap_restrictions import self_untap_line, untap_restriction_for
 
@@ -52,28 +47,6 @@ def _normalized(line: str) -> str:
     against it is comparing against what the engine really tests.
     """
     return line.strip().lower().rstrip(".")
-
-
-# CR 614 replacement interceptors, engine/replacements.py. Each entry is
-# (phrase the interceptor self-selects on, trailing clause that same interceptor
-# also implements). The tail is spelled out in full rather than being an
-# open-ended "and whatever follows" — it is the one place a claim here could
-# otherwise swallow text nothing implements.
-_REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
-    # _draw_instead_of_life_gain (Lich): the phrase is the whole line.
-    (LIFE_GAIN_TO_DRAW_TEXT, ""),
-    # _floor_life_at_one (Ali from Cairo): the phrase is the whole line.
-    (DAMAGE_LIFE_FLOOR_TEXT, ""),
-    # _top_of_library_instead_of_graveyard (Library of Leng). The constant the
-    # interceptor probes for stops at "...on top of your library instead"; the
-    # ReplacementChoice it raises offers exactly the two destinations the tail
-    # names ("top of library", "graveyard"), so the interceptor implements the
-    # tail as well.
-    (TOP_OF_LIBRARY_DISCARD_TEXT, " of into your graveyard"),
-    # _one_more_plus1_counter (Conclave Mentor): the phrase is the whole line,
-    # matched against the counter-placing seam in mixins/effects.py.
-    (EXTRA_PLUS1_COUNTER_TEXT, ""),
-)
 
 
 def registry_for_line(line: str) -> str | None:
@@ -165,7 +138,11 @@ def registry_for_line(line: str) -> str | None:
     if land_play_line(line) is not None:
         return "land_play_allowance"
 
-    if any(normalized == phrase + tail for phrase, tail in _REPLACEMENT_LINES):
+    # engine/replacements.py — CR 614 interceptors. The phrase table lives there
+    # rather than here, because the support gate reads it too: what the engine
+    # implements and what it claims to have read cannot drift while both
+    # readers ask the implementer.
+    if replacement_claims_line(line):
         return "replacements"
 
     # engine/enter_effects.py — CR 614.1c entry state ("This artifact enters

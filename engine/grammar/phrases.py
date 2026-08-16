@@ -83,6 +83,13 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # the pool narrows it — a "…sacrifice a creature" entry would go above this
     # one, and does not collide with it.
     ("you_sacrifice_permanent", ("you", "sacrifice", "a", "permanent")),
+    # "Whenever a source you control deals noncombat damage to an opponent …"
+    # (Chandra's Pyreling). The amount is the event's, not the phrase's, so a
+    # "that much" in the effect reads it out of the trigger's captured context —
+    # which is what Chandra's Incinerator's second line wants.
+    ("source_you_control_damages_opponent",
+     ("a", "source", "you", "control", "deals", "noncombat", "damage",
+      "to", "an", "opponent")),
 )
 
 # Events whose subject is an object *filter* the trigger carries, keyed by the

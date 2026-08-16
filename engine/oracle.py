@@ -319,6 +319,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # brings it (the specific-before-generic rule), and "creature" is not a
     # prefix of "permanent", so neither shadows the other.
     ("you_sacrifice_permanent",     r"whenever you sacrifice a permanent"),
+    # "Whenever a source you control deals noncombat damage to an opponent …"
+    # (Chandra's Pyreling, Chandra's Incinerator). "A source you control" is the
+    # seat that controls the damage's source (CR 109.5), which a damage event
+    # could not answer until it started carrying one: what the damage paths hold
+    # for a spell is its printed card, and no player controls a printed card.
+    # Announced from `_deal_damage_to_player`, which is the noncombat seam —
+    # the combat damage step reaches players by its own path, so "noncombat" is
+    # a property of the fire site rather than a flag it has to remember.
+    ("source_you_control_damages_opponent",
+     r"whenever a source you control deals noncombat damage to an opponent"),
     ("draws_card",                  r"whenever you draw a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
     # turn, announced by the draw sweep in check_state_based_actions off the
@@ -1888,6 +1898,7 @@ def _derived_static_claims(
     from .enter_effects import enter_effect_line
     from .global_statics import global_static_for
     from .land_play_allowance import land_play_allowance_for
+    from .replacements import replacement_claims_line
     from .untap_restrictions import untap_restriction_for
 
     claims: list[str] = []
@@ -1929,6 +1940,16 @@ def _derived_static_claims(
     # naming a subset here is the same partial-list mistake one level down.
     if any(enter_effect_line(line) for line in oracle_text.splitlines()):
         claims.append("enter_effects")
+    # CR 614 replacement interceptors — **the seventh table, and the one this
+    # list did not ask.** An interceptor self-selects off the card's own text at
+    # the event it modifies, so like the six above it needs no instruction to
+    # work; unlike them it was not a claim, so a permanent whose *only* ability
+    # is a replacement reported unsupported however well the interceptor ran.
+    # Every such card in the pool happened to print a second readable line
+    # (Lich, Ali from Cairo, Library of Leng, Conclave Mentor), which is why the
+    # gap waited for a card whose whole text is one replacement.
+    if any(replacement_claims_line(line) for line in oracle_text.splitlines()):
+        claims.append("replacements")
     return claims
 
 

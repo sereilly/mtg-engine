@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 211/285) to the full release line - **137 sets, 33,594
+M21 measured at 213/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–53 — lives in git history at and before
-commit `b3f46cc`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–54 — lives in git history at and before
+commit `23cb6c5`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -112,18 +112,8 @@ needs two rounds is worth splitting only if neither half ships a card alone
   buys one card at the cost of a ceiling raise, so the linkage wants deriving
   first. The shape is `cast_permissions.py`'s — a collection on `Game`, granted
   by an effect, swept when its source leaves.
-- **The Shrine cycle and the where-clause cards**: see round 56's *Next* below,
+- **The Shrine cycle and the where-clause cards**: see round 57's *Next* below,
   which is current.
-- **A damage event does not know who dealt it** (round 56). The payload carries
-  `source`, which is a `Permanent` for a permanent and a bare `CardDefinition`
-  for a spell — and a printed card has no controller, so "a source **you
-  control**" is unanswerable. Fiery Emancipation and Chandra's Pyreling both
-  want it, and neither can be written honestly without it: a Permanent-only
-  reading tripled a creature's damage and silently not a burn spell's, which is
-  the Nine Lives class again. Threading a seat through the 45 call sites is the
-  wrong shape (idiom 3); the seat is known at
-  `_execute_oracle_instruction`, the single dispatch point round 54 used for the
-  same reason.
 
 ### Recorded, measured, and not yet fixed
 
@@ -135,8 +125,10 @@ needs two rounds is worth splitting only if neither half ships a card alone
   gate closes the modal shape; the general class is still open and has been
   found one card at a time — Return to Nature's third mode (round 12), Read the
   Tides' second (17), Garruk's Uprising' third line (34), Sanctum of Stone
-  Fangs, Fiery Emancipation and Teferi's Ageless Insight (53). It wants a census
-  of its own, in the shape Phase 2 uses for a set.
+  Fangs, Fiery Emancipation and Teferi's Ageless Insight (53). Two of those
+  three are implemented (rounds 54 and 57) and Teferi's is still open — which
+  closes three cards and not the class. It wants a census of its own, in the
+  shape Phase 2 uses for a set.
 - **Fabled Passage** is hollow and stays supported: a land with no mana ability
   whose only ability is unreadable, kept by the separate "a land is always at
   least playable" rule in the compiler. That rule is right for a land that taps
@@ -265,77 +257,6 @@ Not gaps to close on sight — each was measured and left refusing:
 13. **Obey a size guard rather than raising it.** `parser.py` at 1,000 lines
     (round 31) and the per-set test files (round 33) were both split instead;
     the guard is the signal that a family stopped absorbing new work.
-
----
-
-## Round 54: a clause that defines X, and the one place X is read
-
-*(2026-08-16.)* Both subsystems round 53 sized, built. M21 **206 → 208** —
-Sanctum of Stone Fangs, which round 53 had to take away, and Sanctum of Calm
-Waters beside it.
-
-**"…, where X is the number of <filter>" is a statement-level clause now.** It
-existed only inside `_parse_gets`, which is why exactly one sentence shape in
-the pool could carry one. `parse_statement` became a thin wrapper whose whole
-body is the rule: the clause binds the *whole* sentence, so it is read once
-around the body rather than wherever the body happens to stop — and the body
-returns early from `if`, from `you may`, and from a cast permission, so asking
-each of them to remember the clause is how one of them forgets.
-
-**Two binding mistakes, both found by execution rather than by reading**, and
-both the same shape:
-
-- The first version let the *recursive* call take the clause, so "each opponent
-  loses X life and you gain X life, where X is …" gave the definition to the
-  gain and the loss silently lost nothing. The life total moved, which is what
-  makes it a bad bug: the card looked like it worked. `top_level=False` on
-  every nested call is the fix.
-- `_attach_if_you_do` then stopped finding its `May`, because the sentence is
-  now a `WhereX` wrapping one. It lifts the clause off, folds, and puts it back
-  outside — the definition binds the branch as well as the offer.
-
-**X is resolved at one place, and that is what makes the clause general.** The
-count is stamped onto the lowered instructions (and into the steps nested inside
-a `sequence`, `if_then` or `may` — stamping the top level alone would leave the
-inner ones reading the cast's X, which for a triggered ability is None), and
-`_execute_oracle_instruction` turns it into `context.x_value` before dispatch.
-Every amount path already resolves the string `"x"` against that, so one
-substitution at the single dispatch point hands the clause to every effect
-family at once.
-
-**Except that not every amount path did.** The first end-to-end run died on
-`int('x')`: **nineteen handlers read `int(payload["amount"])` directly** instead
-of `resolve_amount`, so they could never have honoured an X at all. They all go
-through the one rule now — which is the difference between a clause that works
-for the four handlers this round happened to touch and one that works.
-
-A count refuses rather than guesses in two places worth naming: a filter
-narrowed to *another player's* permanents ("the number of Mountains **they**
-control"), because `permanent_matches_filter` does not test a controller and the
-key would have been handed over and ignored; and a where-clause defining an X no
-instruction reads, which means one of the two was misread.
-
-**"At the beginning of your first main phase"** landed on both sides of the
-pipeline — the oracle regex table and the grammar's phrase table — because round
-7's lesson is that a condition narrowed on one side only compiles the card
-supported and fires it on the wrong event. Its fire site takes **no whitelist of
-instruction kinds**: round 45 is the record of what that costs, and Onulet never
-gained a point of life because its kind was not in a list.
-
-Suite **5,040** at 21.4s, every `--check` green, shipped pool 388/388, AI
-simulation byte-identical at 443 interactions.
-
-**Next:**
-
-- **The rest of the Shrine cycle**, now that both subsystems exist: Fruitful
-  Harvest wants "add X mana **of any one color**" (a colour choice, not a
-  count), Shattered Heights the filtered discard cost from round 51's family,
-  Tranquil Light a per-Shrine cost reduction, Sanctum of All a two-zone search
-  plus a trigger-doubling static.
-- **The seven other cards the clause was built for** — Liliana's Standard
-  Bearer, Experimental Overload, Jolrael and the rest — each of which now needs
-  only its own second half.
-- **The legend rule reads the printed name** (unchanged from round 49).
 
 ---
 
@@ -477,5 +398,103 @@ behind it admits every card printing that phrase and then ignores it.
   but not the seat that controls it, and "a source **you control**" is
   unanswerable from a bare `CardDefinition`. That seat would also buy Chandra's
   Pyreling.
+- **Experimental Overload's variable-P/T token and Jolrael's team base-P/T**,
+  then the legend rule from round 49.
+
+## Round 57: a damage event that knows who dealt it
+
+*(2026-08-16.)* M21 **211 → 213** — Fiery Emancipation, which round 53 had to
+take away, and Chandra's Pyreling beside it. Two cards, one missing fact and one
+missing question.
+
+**The missing fact: a damage event carried its `source` and never its seat.**
+Every payload has held `source` since there were payloads, and reading it works
+right up until the source is a spell — at which point what the damage paths hold
+is the spell's `CardDefinition`, which is *the card as printed*. One object per
+card, shared by every copy in every deck in the process, controlled by nobody.
+So "a source **you** control" was not unimplemented, it was unanswerable, and
+the two cards that print it had been sitting behind that since M21 was ingested.
+
+`damage_source_seat` answers it in three, most specific first: the control seam
+for a permanent (so a stolen creature's damage is the thief's, CR 613 layer 2);
+`base_controller_index` for a permanent that has *left*, which is the case of a
+source sacrificed to pay for its own ability; and otherwise the seat whose spell
+or ability is resolving. The third is not a fallback — CR 109.5 says a spell's
+"you" is its controller — and it is the only one that needed anything new:
+`Game.resolving_seats`, pushed around `_execute_oracle_instruction`. **That is
+the one dispatch point**, the same seam round 54 used to hand a where-clause's X
+to every effect family at once, and the alternative was threading a seat through
+45 damage call sites, which is idiom 3 exactly: a list of sites is only ever as
+complete as the last card that touched one. The seat is derived *inside*
+`deal_damage` for the same reason.
+
+**Fiery Emancipation is a multiplier, and a multiplier has an order.** It sits
+at 700, after every prevention shield (10–600), and that is a rules decision
+rather than a numbering one: CR 616.1e gives the order to the affected player,
+and a shield spent first absorbs from the printed damage where a shield spent
+after absorbs from three times as much. "Prevent the next 3" against a tripled 3
+is 0 dealt one way round and 6 the other. The default should not be the one that
+costs the player six life. Flipping the constant fails the test that pins it.
+
+**Two Emancipations are ×9, and one interceptor has to say so.** An effect
+applies once per event (`engine/effect_ordering.py` drops the chosen candidate),
+so an interceptor returning a flat ×3 would silently ignore the second copy. It
+counts the sources and returns `3 ** n` instead — which is exact rather than
+approximate, because every copy is the same effect at the same order, so
+applying them together *is* the sequence the default choice produces.
+
+**The missing question: the support gate asked six text-keyed tables and not the
+seventh.** `_derived_static_claims` asks untap restrictions, land plays, global
+statics, draw-step bonuses, cost modifiers and entry effects — every table that
+reads a permanent's own text at the step that needs it and therefore needs no
+instruction. The CR 614 registry is exactly that shape and was not on the list,
+so a permanent whose *only* ability is a replacement effect produced nothing,
+claimed nothing, and reported unsupported however well the interceptor ran. The
+gap had no card behind it because every replacement in the shipped pool prints a
+second readable line — Lich, Ali from Cairo, Library of Leng and Conclave Mentor
+all do — and Fiery Emancipation prints one line and nothing else.
+
+The phrase table moved from `engine/grammar/registries.py` to
+`engine/replacements.py` with it. One reader could keep its list beside itself;
+two cannot, and a drifted copy claims a line nothing implements — which is the
+silence the whole registry module exists to remove. The guard is parametrized
+over the table rather than over a list of cards, so an interceptor added without
+a claim behind it fails on the day it is written.
+
+**Chandra's Pyreling needed only the question.** Its effect half — "gets +1/+0
+and gains double strike until end of turn" — already parsed and lowered; what
+was missing was the trigger condition, which landed on both sides of the
+pipeline (round 7's lesson) and became one more row in `_SEAT_SCOPED_EVENTS`,
+the set of events whose whole narrowing is the word "you". The seat it carries
+is the **source's** controller and not the damaged player's, which is what the
+"an opponent burns you" control test pins. "Noncombat" needed no flag at all:
+the fire site is `_deal_damage_to_player`, and the combat damage step reaches
+players by its own path because it applies prevention where the event is
+recorded — so noncombat is a property of *where* the announcement lives.
+
+Chandra's Incinerator prints the same trigger and stays unsupported, correctly:
+its cost line is the `{X}`-self-reduction that has been a deliberate refusal
+since round 25, and reading an unrecognized condition as satisfied makes a spell
+cheaper than it is.
+
+Suite **5,084** at 21.5s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. M21's parsed share moved 68.6% →
+70.2%. Four of the eight new card tests were watched to fail on the round-56
+engine, and the two new engine test files do not import against it; the rest are
+controls — an opponent's spell, combat damage, and the shield ordering.
+
+**Next:**
+
+- **Teferi's Ageless Insight**, the last of round 53's three. "If you would draw
+  a card except the first one you draw in each of your draw steps, draw two cards
+  instead" now has a support claim waiting for it, and wants two things:
+  `_draw_with_replacements` honouring a `count` a replacement *modified* (the
+  symmetry `place_plus1_counters` already has, and its absence is why a
+  modifying draw replacement could not be written), and the draw step's first
+  draw being distinguishable from the rest.
+- **The Shrine cycle**, unchanged: Fruitful Harvest's colour choice at a
+  trigger's resolution, Shattered Heights' discard cost from the hand-activation
+  block, Tranquil Light's per-Shrine cost reduction, Sanctum of All's two-zone
+  search and trigger-doubling static.
 - **Experimental Overload's variable-P/T token and Jolrael's team base-P/T**,
   then the legend rule from round 49.

@@ -222,20 +222,23 @@ def test_an_aura_is_left_to_its_own_gate():
 # ---------------------------------------------------------------------------
 
 
-# Sanctum of Stone Fangs was the third of these and is gone from the list
-# because round 54 implemented it — which is the only way an entry may leave.
-# The two that remain are replacement effects nobody has built.
+# The list started at three and shrinks only one way — by the card being
+# implemented. Sanctum of Stone Fangs went in round 54; Fiery Emancipation went
+# in round 57, along with the reason all three were *reported* unsupported once
+# the gate could see them but only two could ever have been fixed by a parse
+# rule: a CR 614 replacement produces no instruction at all, and the support
+# gate had to learn to ask that registry (`_derived_static_claims`) before an
+# interceptor could hold a card up on its own.
 @pytest.mark.parametrize(
     "name,clause",
     [
-        ("Fiery Emancipation", "would deal damage"),
         ("Teferi's Ageless Insight", "would draw a card"),
     ],
 )
 def test_a_permanent_whose_line_never_became_an_ability_is_unsupported(name, clause):
-    """The three cards the blind spot hid, and the shape of it: each prints one
-    line, the parser refuses that line outright, and so **no ability object was
-    ever built**. The gate asked for an unreadable ability and found none, which
+    """The cards the blind spot hid, and the shape of it: each prints one line,
+    the parser refuses that line outright, and so **no ability object was ever
+    built**. The gate asked for an unreadable ability and found none, which
     reads as "nothing failed" and means "nothing failed late enough to leave a
     record". All three entered play, reported supported and did nothing."""
     pool = {c.name: c for c in _whole_pool()}

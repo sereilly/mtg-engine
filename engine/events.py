@@ -331,6 +331,12 @@ _SEAT_SCOPED_EVENTS = frozenset({
     "you_gain_life",
     "draws_second_card",
     "you_sacrifice_permanent",
+    # "a source **you** control deals noncombat damage to an opponent"
+    # (Chandra's Pyreling). The seat here is the *source's* controller, not the
+    # damaged player's — an opponent burning you leaves the Pyreling silent —
+    # which is the same "you" the three above carry and the reason this is a row
+    # rather than a fourth predicate.
+    "source_you_control_damages_opponent",
 })
 
 

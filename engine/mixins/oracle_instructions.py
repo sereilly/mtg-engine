@@ -52,10 +52,23 @@ class OracleInstructionsMixin:
                 context, x_value=count_from_payload(self, context, count_spec)
             )
         handler = EFFECT_HANDLERS.get(instruction.kind)
-        if handler is not None:
+        if handler is None:
+            self.log.append(
+                f"Resolved supported pattern for {context.card.name} without state mutation"
+            )
+            return True, "resolved"
+        # CR 109.5: while this instruction runs, the object doing things is
+        # controlled by the caster. That is knowable *here* and nowhere
+        # downstream — a spell reaches the damage paths as a bare
+        # `CardDefinition`, which no seat controls — so the seat is recorded for
+        # the duration rather than threaded through the 45 call sites that would
+        # each have to remember it. Idiom 3: a list of sites is only ever as
+        # complete as the last card that touched it.
+        self.resolving_seats.append(self.players.index(context.caster))
+        try:
             return handler(self, instruction, context)
-        self.log.append(f"Resolved supported pattern for {context.card.name} without state mutation")
-        return True, "resolved"
+        finally:
+            self.resolving_seats.pop()
 
     def _apply_spell_text(
         self,

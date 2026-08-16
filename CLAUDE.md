@@ -252,7 +252,12 @@ adding entries, not editing dispatch**:
 - `engine/replacements.py` — CR 614 "if X would happen, Y instead" interceptors,
   registered by event kind (`life_gain`, `damage_to_creature`, `would_die`).
   Each registration is a pure `applies` predicate plus the effect, and an
-  explicit `order` — see `engine/effect_ordering.py`.
+  explicit `order` — see `engine/effect_ordering.py`. An interceptor produces no
+  instruction, so a permanent whose *only* ability is one is held up by
+  `REPLACEMENT_LINES`: the phrases this file implements in full, read both by
+  the grammar's parse claim (`engine/grammar/registries.py`) and by the support
+  gate (`_derived_static_claims`). Adding an interceptor means adding its line
+  there, or the card is unsupported however well the interceptor works.
 - `engine/replacement_choices.py` — for a replacement that is optional or offers
   a choice: the interceptor offers a `ReplacementChoice` (seat, option labels,
   default) instead of applying the effect, and a `@replacement_choice(kind)`
@@ -303,6 +308,14 @@ adding entries, not editing dispatch**:
   the life lost without capping the damage dealt, and lifelink reads the latter.
   Every damage path calls it; there is no half-event entry point, and order is
   compared across both registries so a collision raises at import.
+  **The event also carries who dealt it** — `damage_source_seat`, derived inside
+  `deal_damage` so no call site has to remember it. `source` alone cannot
+  answer: for a spell it is a `CardDefinition`, the card as printed, shared by
+  every copy and controlled by nobody. So the seat is the control seam's for a
+  permanent, `base_controller_index` for one that has left, and otherwise
+  `Game.resolving_seats[-1]` — CR 109.5's answer, pushed around
+  `_execute_oracle_instruction`. "A source you control" (Fiery Emancipation,
+  Chandra's Pyreling) reads it.
 - `engine/tokens.py` — `make_token_card(...)`, paired with the generic
   `create_token` instruction kind. A token-making card is one parse rule, never
   a bespoke handler.

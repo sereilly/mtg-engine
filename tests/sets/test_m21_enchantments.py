@@ -219,3 +219,109 @@ def test_sanctum_of_calm_waters_is_supported(set_pool):
     trigger = program.triggered_abilities[0]
     assert trigger.condition.kind == "main_phase_first"
     assert trigger.instruction is not None
+
+
+# --- Round 57: a damage event that knows who dealt it -----------------------
+
+
+def _emancipation_board(set_pool, *, opposing: bool = False):
+    """Fiery Emancipation on one battlefield, a Shock in the other player's
+    hand when *opposing*. The Emancipation is P1's either way, so the opposing
+    case is the same board with the burn on the wrong side of it."""
+    pool = set_pool("M21")
+    emancipation = Permanent(card=pool["Fiery Emancipation"])
+    p1 = PlayerState(name="P1", battlefield=[emancipation])
+    p2 = PlayerState(name="P2")
+    (p2 if opposing else p1).hand = [pool["Shock"]]
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 1 if opposing else 0
+    return game, p1, p2, pool
+
+
+def test_fiery_emancipation_triples_a_spell_you_control(set_pool):
+    """The card round 53 found doing nothing, and the reason it could not be
+    written before: a Shock reaches the damage paths as its printed
+    ``CardDefinition``, which no player controls, so "a source **you** control"
+    had no answer. Two damage becomes six."""
+    game, p1, p2, pool = _emancipation_board(set_pool)
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+
+    assert p2.life == 14
+
+
+def test_fiery_emancipation_leaves_an_opponents_spell_alone(set_pool):
+    """The control, and the half a Permanent-only reading would have got
+    right by accident. P2 casts the Shock; P1 owns the Emancipation."""
+    game, p1, p2, pool = _emancipation_board(set_pool, opposing=True)
+
+    game.cast_from_hand(1, "Shock", target_player_index=0)
+
+    assert p1.life == 18
+
+
+def test_fiery_emancipation_triples_a_creature_you_control(set_pool):
+    """The other kind of source. A permanent's controller is a layer-2 question
+    the control seam already answered, so this half is the one that would have
+    worked without the seat — which is exactly why it is worth pinning
+    alongside the spell."""
+    pool = set_pool("M21")
+    emancipation = Permanent(card=pool["Fiery Emancipation"])
+    pinger = Permanent(card=pool["Chandra's Magmutt"])
+    p1 = PlayerState(name="P1", battlefield=[emancipation, pinger])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _nosick(pinger)
+
+    game.activate_permanent_ability(
+        0, "Chandra's Magmutt", permanent_index=1, target_player_index=1
+    )
+    game._settle()
+
+    assert p2.life == 17, "1 damage tripled"
+
+
+def test_two_emancipations_multiply_rather_than_replace_each_other(set_pool):
+    """CR 616.1 would apply them one at a time; every copy is the same effect at
+    the same order, so applying them together is the sequence the default choice
+    produces. One registered interceptor that returned a flat ×3 would drop the
+    second copy entirely — an effect applies once per event."""
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[
+            Permanent(card=pool["Fiery Emancipation"]),
+            Permanent(card=pool["Fiery Emancipation"]),
+        ],
+        hand=[pool["Shock"]],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+
+    assert p2.life == 2, "2 damage, tripled twice"
+
+
+def test_a_prevention_shield_is_spent_before_the_multiplier(set_pool):
+    """CR 616.1e gives the order to the affected player, and this is the one
+    they would pick: the shield absorbs from the printed damage rather than from
+    three times as much. The default order is the difference between 0 dealt and
+    6, so it is not a detail of the registry's numbering."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pool["Fiery Emancipation"])],
+                     hand=[pool["Shock"]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    p2.damage_prevention_pool = 3
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+
+    assert p2.life == 20, "the shield ate the 2 before it could become 6"

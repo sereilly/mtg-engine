@@ -8,7 +8,7 @@ from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..auras import aura_restriction_active
 from ..auras import aura_enchants
-from ..damage_events import deal_damage, lifelink_life_gained
+from ..damage_events import damage_source_seat, deal_damage, lifelink_life_gained
 from ..events import Event, collect, emit
 from ..land_play_allowance import LandPlayAllowance, land_play_allowance_for
 from ..models import CardDefinition, Permanent, PlayerState
@@ -912,6 +912,7 @@ class EffectsMixin:
         if outcome.dealt > 0:
             target.life -= outcome.result
             self._on_player_dealt_damage(target, outcome.dealt, source)
+            self._announce_noncombat_damage_to_opponent(target, outcome.dealt, source)
             self._apply_mirror_damage(target, outcome.dealt, source)
             # CR 702.15b. No combat guard here, unlike the creature seam: the
             # combat damage step deals to players directly rather than through
@@ -922,6 +923,38 @@ class EffectsMixin:
         if then is not None:
             then(outcome.dealt)
         return outcome.dealt
+
+    def _announce_noncombat_damage_to_opponent(
+        self, target: PlayerState, dealt: int, source
+    ) -> None:
+        """CR 109.5's "a source you control", announced (Chandra's Pyreling).
+
+        Every damage event this method runs is noncombat by construction — the
+        combat damage step reaches players by its own path, because it applies
+        prevention where the event is recorded — so "noncombat" is a property of
+        the fire site and not a flag anything has to remember to set.
+
+        The seat carried is the **source's** controller, and it is derived by
+        the same function the replacements read, so "you control" means one
+        thing across the event. A source with no controller at all (a turn-based
+        action) announces nothing: there is no "you" for the trigger's "you" to
+        be, and guessing the active player would fire it on an opponent's turn.
+
+        The amount rides along as ``amount`` so a "that much" in the effect has a
+        producer to name (round 33) — it is the damage *dealt* (CR 120.4b), not
+        what the life total lost, which is the same number every other reader of
+        this outcome takes.
+        """
+        seat = damage_source_seat(self, source)
+        if seat is None or self.players[seat] is target:
+            return
+        emit(
+            self,
+            "source_you_control_damages_opponent",
+            seat=seat,
+            amount=dealt,
+            damaged_seat=self.players.index(target),
+        )
 
     def _apply_mirror_damage(self, target: PlayerState, damage: int, source) -> None:
         """Eye for an Eye: the damage still happens, and its source's controller

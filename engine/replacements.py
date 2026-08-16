@@ -111,6 +111,15 @@ REDIRECT_WHOLE_EVENT = 1  # Jade Monolith, Veteran Bodyguard
 REDIRECT_ONE_POINT = 2  # Personal Incarnation
 SOURCE_TYPE_SHIELD = 3  # Desert Nomads / Camel
 
+# …and multipliers go *after* the shields, at the far end of the shared space.
+# CR 616.1e gives the choice to the affected player, and this is the order they
+# would pick: a shield spent first absorbs its points from the printed damage,
+# where a shield spent after the multiplier absorbs them from three times as
+# much. "Prevent the next 3" against a tripled 3 is 0 dealt one way round and 6
+# the other. The rule permits either; the default should not be the one that
+# costs the player six life.
+DAMAGE_MULTIPLIER = 700  # Fiery Emancipation
+
 # The results kinds (CR 120.4c) have a space of their own. No shield lives there:
 # prevention stops damage being *dealt*, and by 120.4c it already has been.
 LIFE_FLOOR = 10  # Ali from Cairo
@@ -314,6 +323,10 @@ DAMAGE_LIFE_FLOOR_TEXT = (
 EXTRA_PLUS1_COUNTER_TEXT = (
     "if one or more +1/+1 counters would be put on a creature you control, "
     "that many plus one +1/+1 counters are put on that creature instead"
+)
+TRIPLE_DAMAGE_TEXT = (
+    "if a source you control would deal damage to a permanent or player, "
+    "it deals triple that damage to that permanent or player instead"
 )
 
 
@@ -606,6 +619,64 @@ def _prevent_desert_damage(game, payload: dict) -> ReplacementOutcome | None:
     return ReplacementOutcome(replaced=True)
 
 
+def _damage_multiplier(game, payload: dict) -> int:
+    """How much this event's damage is multiplied by, or 1 for not at all.
+
+    Read off the seat that controls the *source* (CR 109.5), which is the whole
+    reason a damage event carries one — the payload's ``source`` is a bare
+    ``CardDefinition`` for a spell, so a Permanent-only reading would triple a
+    creature's damage and silently not a burn spell's.
+
+    **One candidate stands in for every copy.** CR 616.1 would apply two Fiery
+    Emancipations one at a time, and the affected player would choose where the
+    shields go among them — but every copy is the same effect at the same order,
+    so applying them together is exactly the sequence the default choice
+    produces. Registering one interceptor and counting the sources is therefore
+    the same game, where returning ``3`` and being asked once would be a
+    different one: an effect applies once per event
+    (``engine/effect_ordering.py``), so the second Emancipation would be
+    dropped rather than deferred.
+    """
+    seat = payload.get("source_seat")
+    if payload["amount"] <= 0 or seat is None:
+        return 1
+    sources = sum(
+        1
+        for perm in game.controlled_by(seat)
+        if TRIPLE_DAMAGE_TEXT in (perm.effective_card.oracle_text or "").lower()
+    )
+    return 3 ** sources
+
+
+def _applies_damage_multiplier(game, payload: dict) -> bool:
+    return _damage_multiplier(game, payload) > 1
+
+
+@replacement_effect(
+    "damage_to_creature", DAMAGE_MULTIPLIER, applies=_applies_damage_multiplier
+)
+@replacement_effect(
+    "damage_to_player", DAMAGE_MULTIPLIER, applies=_applies_damage_multiplier
+)
+def _multiply_damage_dealt(game, payload: dict) -> ReplacementOutcome | None:
+    """Fiery Emancipation: "If a source you control would deal damage to a
+    permanent or player, it deals triple that damage to that permanent or player
+    instead."
+
+    A CR 120.4b effect, so the bigger number is the damage *dealt*: lifelink
+    gains it (CR 120.3f), a "deals damage to a player" trigger sees it, and
+    deathtouch and trample read it. One body for both recipients because the
+    card makes no distinction — "a permanent or player" is the whole of its
+    scope — and the two kinds differ only in which list they are registered in.
+    """
+    multiplier = _damage_multiplier(game, payload)
+    amount = payload["amount"]
+    game.log.append(
+        f"{amount} damage becomes {amount * multiplier} (Fiery Emancipation)"
+    )
+    return ReplacementOutcome(new_amount=amount * multiplier)
+
+
 def _applies_exile_instead_of_dying(game, payload: dict) -> bool:
     return bool(payload["permanent"].metadata.get("exile_if_dies_this_turn"))
 
@@ -787,3 +858,62 @@ def _resolve_lamp_draw(game, choice: ReplacementChoice, option_index: int) -> in
     if remaining > 0:
         drawn += game._draw_with_replacements(player, remaining)
     return drawn
+
+
+# ---------------------------------------------------------------------------
+# Which printed lines this registry implements, for the two readers that ask
+# ---------------------------------------------------------------------------
+
+#: Each entry is ``(the phrase an interceptor above self-selects on, the
+#: trailing clause that same interceptor also performs)``. The tail is spelled
+#: out in full rather than left as an open-ended "and whatever follows" — it is
+#: the one place an entry could otherwise claim text nothing implements.
+#:
+#: **Both readers ask here rather than keeping their own copy.**
+#: ``engine/grammar/registries.py`` asks to account for the line's *parse*:
+#: nothing the grammar could lower would run these, because the interceptor
+#: already does, from the card's text, on every relevant event.
+#: ``engine/oracle.py``'s support gate asks to account for the card's
+#: *support* — and until this round it did not. It asked the other six
+#: text-keyed tables (untap restrictions, land plays, global statics, draw-step
+#: bonuses, cost modifiers, entry effects) and not the CR 614 one, so a
+#: permanent whose *only* ability is a replacement effect produced no
+#: instruction, claimed nothing, and reported unsupported however well the
+#: interceptor worked. Every card in the pool that reaches an interceptor here
+#: happened to print a second, readable line — Lich, Ali from Cairo, Library of
+#: Leng, Conclave Mentor all do — so the gap had no card behind it until Fiery
+#: Emancipation, whose whole text is one replacement.
+#:
+#: A list in either caller would be free to drift from the interceptors. Here it
+#: cannot: the phrases *are* the constants the interceptors probe for.
+REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
+    # _draw_instead_of_life_gain (Lich): the phrase is the whole line.
+    (LIFE_GAIN_TO_DRAW_TEXT, ""),
+    # _floor_life_at_one (Ali from Cairo): the phrase is the whole line.
+    (DAMAGE_LIFE_FLOOR_TEXT, ""),
+    # _top_of_library_instead_of_graveyard (Library of Leng). The constant the
+    # interceptor probes for stops at "...on top of your library instead"; the
+    # ReplacementChoice it raises offers exactly the two destinations the tail
+    # names ("top of library", "graveyard"), so the interceptor implements the
+    # tail as well.
+    (TOP_OF_LIBRARY_DISCARD_TEXT, " of into your graveyard"),
+    # _one_more_plus1_counter (Conclave Mentor): the phrase is the whole line,
+    # matched against the counter-placing seam in mixins/effects.py.
+    (EXTRA_PLUS1_COUNTER_TEXT, ""),
+    # _multiply_damage_dealt (Fiery Emancipation): the phrase is the whole line,
+    # and this is the entry that made the support gate's omission visible — the
+    # card prints nothing else.
+    (TRIPLE_DAMAGE_TEXT, ""),
+)
+
+
+def replacement_claims_line(line: str) -> bool:
+    """Whether one printed line is, in full, a replacement effect implemented
+    above.
+
+    The reduction matches what the interceptors really see: they probe the
+    card's lowercased oracle text, and a line differs from it only by its
+    trailing full stop.
+    """
+    normalized = line.strip().lower().rstrip(".")
+    return any(normalized == phrase + tail for phrase, tail in REPLACEMENT_LINES)

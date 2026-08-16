@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 68.6% | 65.2% | 42.7% | 172 |
+| M21 *(measured)* | 285 | 503 | 70.2% | 66.6% | 43.9% | 178 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,17 +32,17 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 252 | 121 | expected a subject |  |
+| 246 | 115 | expected a subject |  |
 | 95 | 39 | unrecognized effect verb |  |
-| 57 | 38 | unconsumed text |  |
+| 52 | 33 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 5 | expected a keyword ability |  |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
+| 7 | 4 | expected 'the number of' in a where-clause |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 6 | 3 | expected a quantity |  |
-| 5 | 2 | expected 'the number of' in a where-clause |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
 | 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
@@ -51,12 +51,12 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | no tap-or-untap handler honours this restriction |  |
+| 3 | 2 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 1 | expected a permanent to put counters on |  |
-| 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
+| 2 | 2 | a variable count of any-colour mana has no representation |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
 | 2 | 2 | expected 'unless defending player controls' |  |
-| 2 | 2 | expected a power/toughness value |  |
 
 ## Cards executing through the grammar
 
@@ -202,6 +202,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `When this creature enters, you may search your library and/or graveyard for a card named Chandra, Flame's Catalyst, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Chandra's Magmutt**
   - `{T}: This creature deals 1 damage to target player or planeswalker.`
+- **Chandra's Pyreling**
+  - `Whenever a source you control deals noncombat damage to an opponent, this creature gets +1/+0 and gains double strike until end of turn. (It deals both first-strike and regular combat damage.)`
 - **Chaoslace**
   - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
   - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
@@ -683,6 +685,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Zombies you control get +1/+0.`
 - **Liliana's Scorn**
   - `Destroy target creature. You may search your library and/or graveyard for a card named Liliana, Death Mage, reveal it, and put it into your hand. If you search your library this way, shuffle.`
+- **Liliana's Standard Bearer**
+  - `When this creature enters, draw X cards, where X is the number of creatures that died under your control this turn.`
 - **Liliana's Steward**
   - `{T}, Sacrifice this creature: Target opponent discards a card. Activate only as a sorcery.`
 - **Living Lands**
@@ -846,6 +850,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `When you control no Islands, sacrifice this creature.`
 - **Pitchburn Devils**
   - `When this creature dies, it deals 3 damage to any target.`
+- **Portcullis Vine**
+  - `{2}, {T}, Sacrifice a creature with defender: Draw a card.`
 - **Power Sink**
   - `Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.`
   - `Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.`
@@ -971,6 +977,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Rugged Highlands**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {R} or {G}.`
+- **Run Afoul**
+  - `Target opponent sacrifices a creature of their choice with flying.`
 - **Sabertooth Mauler**
   - `At the beginning of your end step, if a creature died this turn, put a +1/+1 counter on this creature and untap it.`
 - **Samite Healer**
@@ -978,6 +986,10 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
+- **Sanctum of Calm Waters**
+  - `At the beginning of your first main phase, you may draw X cards, where X is the number of Shrines you control. If you do, discard a card.`
+- **Sanctum of Stone Fangs**
+  - `At the beginning of your first main phase, each opponent loses X life and you gain X life, where X is the number of Shrines you control.`
 - **Sandstorm**
   - `Sandstorm deals 1 damage to each attacking creature.`
 - **Scavenging Ghoul**

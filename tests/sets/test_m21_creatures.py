@@ -2131,3 +2131,65 @@ def test_a_variable_count_of_any_colour_mana_refuses(set_pool):
 
     assert not result.parsed
     assert "variable count of any-colour mana" in (result.failure_reason or "")
+
+
+# --- Round 57: a damage event that knows who dealt it -----------------------
+
+
+def _pyreling_board(set_pool):
+    pool = set_pool("M21")
+    pyreling = Permanent(card=pool["Chandra's Pyreling"])
+    p1 = PlayerState(name="P1", battlefield=[pyreling], hand=[pool["Shock"]])
+    p2 = PlayerState(name="P2", hand=[pool["Shock"]])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    return game, p1, p2, pyreling
+
+
+def test_chandras_pyreling_grows_when_your_spell_burns_an_opponent(set_pool):
+    """"Whenever a source you control deals noncombat damage to an opponent…"
+    The trigger reads the *source's* controller (CR 109.5), which is what a
+    damage event could not answer until it carried a seat: a Shock arrives at
+    the damage paths as its printed card."""
+    game, p1, p2, pyreling = _pyreling_board(set_pool)
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game._settle()
+
+    assert pyreling.effective_power == 2  # 1/3 printed, +1/+0
+    assert game._has_keyword(pyreling, "double strike")
+
+
+def test_chandras_pyreling_is_silent_when_the_opponent_burns_you(set_pool):
+    """The control the seat exists for. Reading the *damaged* player's seat
+    instead of the source's would fire on exactly this."""
+    game, p1, p2, pyreling = _pyreling_board(set_pool)
+    game.active_player_index = 1
+
+    game.cast_from_hand(1, "Shock", target_player_index=0)
+    game._settle()
+
+    assert pyreling.effective_power == 1
+    assert not game._has_keyword(pyreling, "double strike")
+
+
+def test_chandras_pyreling_is_silent_on_combat_damage(set_pool):
+    """"Noncombat" is a property of the fire site rather than a flag: the combat
+    damage step reaches players by its own path, because it applies prevention
+    where the event is recorded. Attacking with the Pyreling must not pump it."""
+    game, p1, p2, pyreling = _pyreling_board(set_pool)
+    game.start_turn(0)
+    _nosick(pyreling)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    game.advance_combat_phase()  # combat_damage
+    game._settle()
+
+    assert p2.life == 19, "the 1/3 connected"
+    assert pyreling.effective_power == 1
+    assert not game._has_keyword(pyreling, "double strike")

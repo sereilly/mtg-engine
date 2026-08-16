@@ -24,6 +24,7 @@ import pytest
 
 from engine.card_loader import load_catalog
 from engine.oracle import compile_card_oracle
+from engine.replacements import REPLACEMENT_LINES, replacement_claims_line
 from engine.untap_restrictions import untap_restriction_for
 
 
@@ -153,3 +154,53 @@ def test_no_permanent_is_supported_by_a_whitelist_substring_alone():
         "instruction, ability or rule table behind them:\n"
         + "\n".join(f"  {name}: {kinds}" for name, kinds in sorted(hollow))
     )
+
+
+# ---------------------------------------------------------------------------
+# The seventh table (CR 614)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "phrase,tail", [(p, t) for p, t in REPLACEMENT_LINES], ids=lambda v: v[:28]
+)
+def test_a_permanent_whose_only_ability_is_a_replacement_is_supported(
+    artifact_card, phrase, tail
+):
+    """The gate asked six text-keyed tables and not the CR 614 one.
+
+    An interceptor self-selects off the card's own text at the event it
+    modifies, so like the other six it needs no instruction to work — and unlike
+    them it was not a claim, so a permanent whose *only* ability is a
+    replacement produced nothing, claimed nothing, and reported unsupported
+    however well the interceptor ran. Every such card in the pool happened to
+    print a second readable line (Lich, Ali from Cairo, Library of Leng,
+    Conclave Mentor), which is why the gap waited for Fiery Emancipation.
+
+    Parametrized over the registry rather than over a list of cards: an
+    interceptor added without a claim behind it fails here on the day it is
+    written, not on the day a card prints it alone.
+    """
+    program = _probe(artifact_card, (phrase + tail).capitalize() + ".")
+
+    assert program.supported, program.reason
+    assert any(
+        i.kind == "derived_static_rule" and i.value == "replacements"
+        for i in program.instructions
+    ), [f"{i.kind}:{i.value}" for i in program.instructions]
+
+
+def test_the_support_gate_and_the_grammar_read_one_table():
+    """Both readers of ``REPLACEMENT_LINES`` ask the implementer.
+
+    The phrases used to live in ``engine/grammar/registries.py``, next to the
+    parse claim and away from the interceptors — which was survivable while
+    there was one reader. A second copy for the support gate would have been
+    free to drift, and a drifted copy claims a line nothing implements.
+    """
+    from engine.grammar.registries import registry_for_line
+
+    for phrase, tail in REPLACEMENT_LINES:
+        line = phrase + tail
+        assert replacement_claims_line(line), line
+        assert registry_for_line(line) == "replacements", line

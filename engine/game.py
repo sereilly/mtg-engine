@@ -281,6 +281,17 @@ class Game(
     # until end of turn (Titania's Song). Cleared at cleanup.
     lingering_global_statics: list = field(default_factory=list)
     _global_static_sources_last: list = field(default_factory=list)
+    # CR 109.5's answer for an object that is not on the battlefield: the seat
+    # whose spell or ability is resolving right now, innermost first. A
+    # permanent's controller is a layer-2 question the control seam answers, but
+    # what a damage path carries for a *spell* is its ``CardDefinition`` — the
+    # card as printed, shared by every copy in every deck and controlled by
+    # nobody — so "a source **you** control" is unanswerable from the object
+    # alone. Pushed around the one dispatch point (`_execute_oracle_instruction`)
+    # and read by ``damage_events.damage_source_seat``; a list because a
+    # `sequence` or a replacement nests resolutions inside one another. Empty
+    # outside a resolution, which is the honest answer for a turn-based action.
+    resolving_seats: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

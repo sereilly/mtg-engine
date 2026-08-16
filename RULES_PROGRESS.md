@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**244 / 585 tracked rules covered (41%)** — 1098 tests, 0 unannotated.
+**244 / 585 tracked rules covered (41%)** — 1102 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -201,7 +201,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d...
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [ ] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th...
-- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(2 tests)*
+- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(6 tests)*
 
 ### 110. Permanents
 
@@ -769,7 +769,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(26 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(27 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*

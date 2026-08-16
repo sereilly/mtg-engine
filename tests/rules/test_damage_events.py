@@ -19,7 +19,13 @@ from dataclasses import replace
 import pytest
 
 from engine import PlayerState
-from engine.damage_events import _assert_one_order_space, damage_candidates, deal_damage
+from engine.control import change_control
+from engine.damage_events import (
+    _assert_one_order_space,
+    damage_candidates,
+    damage_source_seat,
+    deal_damage,
+)
 from engine.game import Game
 from engine.models import CardDefinition, Permanent
 from engine.prevention import POOL
@@ -419,3 +425,65 @@ def test_701_14d_the_damage_a_fight_deals_is_not_combat_damage():
     game._settle()
 
     assert theirs.damage_marked == 3
+
+
+# ---------------------------------------------------------------------------
+# Who dealt it (CR 109.5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("109.5")
+def test_a_permanents_damage_is_its_controllers():
+    """The easy half, and the only one that ever worked: a permanent has a
+    controller, and the control seam answers CR 613 layer 2 — so a stolen
+    creature's damage belongs to the thief, not to the seat it entered under."""
+    creature = Permanent(card=_mk_creature_card("Pinger", 1, 1))
+    p1, p2 = PlayerState(name="P1", battlefield=[creature]), PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    assert damage_source_seat(game, creature) == 0
+
+    change_control(creature, 1, source=creature)
+    game._sync_control()
+    assert damage_source_seat(game, creature) == 1
+
+
+@pytest.mark.cr("109.5")
+def test_a_spells_damage_is_the_resolving_seats():
+    """The half that had no answer. A spell reaches the damage paths as its
+    printed ``CardDefinition`` — one object per *card*, shared by every copy in
+    every deck and controlled by nobody — so reading the source cannot work
+    however carefully it is done. CR 109.5 says a spell's "you" is its
+    controller, and the seat currently resolving is that player.
+    """
+    card = replace(_mk_creature_card("Bolt", 0, 0), type_line="Instant")
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+
+    assert damage_source_seat(game, card) is None, "nothing is resolving"
+
+    game.resolving_seats.append(1)
+    assert damage_source_seat(game, card) == 1
+
+
+@pytest.mark.cr("109.5")
+def test_a_source_with_no_controller_at_all_answers_none():
+    """None, not the active player. Every predicate reading this asks "do *you*
+    control it", and a guessed seat answers yes for somebody."""
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+
+    assert damage_source_seat(game, None) is None
+
+
+@pytest.mark.cr("109.5", "614.1a")
+def test_every_damage_event_carries_the_seat_without_its_caller_filling_it_in():
+    """Derived inside the event rather than at each entry point: there are 45
+    damage call sites and a list of them is only ever as complete as the last
+    card that touched one."""
+    creature = Permanent(card=_mk_creature_card("Pinger", 1, 1))
+    p1, p2 = PlayerState(name="P1", battlefield=[creature]), PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    event = {"recipient": p2, "amount": 1, "source": creature, "combat": False}
+
+    deal_damage(game, event)
+
+    assert event["source_seat"] == 0
