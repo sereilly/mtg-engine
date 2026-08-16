@@ -15,7 +15,8 @@ from ..oracle_types import X_FROM_COUNT
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
-    from ..models import Permanent, PlayerState
+from ..models import Permanent, PlayerState
+from ..search_filters import name_key
 
 
 def resolve_amount(raw: object, x_value: int | None) -> int:
@@ -60,11 +61,21 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
         return 0
     # A card in a zone is not a permanent, so the shared matcher — which asks
     # `has_type` of a battlefield object — cannot answer here. Only the printed
-    # type union is testable off a card, which is exactly what the graveyard
-    # counts in this pool ask for.
+    # type union and the card's own name are testable off a card, which is what
+    # the graveyard counts in this pool ask for.
     wanted = filt.get("type_filter")
     wanted_types = tuple(wanted) if isinstance(wanted, (list, tuple)) else ((wanted,) if wanted else ())
-    return sum(1 for card in cards if not wanted_types or card.primary_type in wanted_types)
+    named = filt.get("named")
+    # Through `name_key`, so the parser's rendering of a legendary name
+    # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —
+    # the same reduction a search's named restriction already uses.
+    wanted_name = name_key(str(named)) if named else None
+    return sum(
+        1
+        for card in cards
+        if (not wanted_types or card.primary_type in wanted_types)
+        and (wanted_name is None or name_key(card.name) == wanted_name)
+    )
 
 
 def flip_coin(win_probability: float = 0.5) -> bool:
@@ -254,6 +265,12 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # "nontoken permanent" (Lich). CR 111.1: not a card type, so it is its own
     # key rather than an ``exclude_types`` entry.
     if payload.get("nontoken") and perm.metadata.get("is_token", False):
+        return False
+    # "named <card>" — through `name_key`, so the parser's rendering of the name
+    # and Oracle's spelling of it compare equal. The *effective* card, because a
+    # Clone's name is the name it copied (CR 707.2).
+    named = payload.get("named")
+    if named and name_key(perm.effective_card.name) != name_key(str(named)):
         return False
     return True
 

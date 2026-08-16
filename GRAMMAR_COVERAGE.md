@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 70.8% | 67.4% | 44.5% | 180 |
+| M21 *(measured)* | 285 | 503 | 71.0% | 67.6% | 44.7% | 181 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,7 +34,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | ---: | ---: | --- | --- |
 | 243 | 112 | expected a subject |  |
 | 95 | 39 | unrecognized effect verb |  |
-| 52 | 33 | unconsumed text |  |
+| 51 | 32 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 5 | expected a keyword ability |  |
@@ -436,6 +436,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `At the beginning of your upkeep, this creature deals 8 damage to you unless you pay {G}{G}{G}{G}.`
   - `At the beginning of your upkeep, this creature deals 8 damage to you unless you pay {G}{G}{G}{G}.`
   - `At the beginning of your upkeep, this creature deals 8 damage to you unless you pay {G}{G}{G}{G}.`
+- **Frantic Inventory**
+  - `Draw a card, then draw cards equal to the number of cards named Frantic Inventory in your graveyard.`
 - **Frozen Shade**
   - `{B}: This creature gets +1/+1 until end of turn.`
   - `{B}: This creature gets +1/+1 until end of turn.`

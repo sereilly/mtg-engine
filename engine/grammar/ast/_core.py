@@ -238,6 +238,11 @@ class ObjectFilter:
             payload["exclude_self"] = True
         if self.nontoken:
             payload["nontoken"] = True
+        # "a card **named** Frantic Inventory". Emitted like every other
+        # restriction, and tested like one — a key a matcher dropped would be a
+        # count over every card in the graveyard.
+        if self.named:
+            payload["named"] = self.named
         # "of their choice" says *who picks*, which is not a property of the
         # objects picked from — no matcher can test it, and it is deliberately
         # absent from ``TESTABLE_SUBJECT_FILTER_KEYS`` for that reason. Emitting

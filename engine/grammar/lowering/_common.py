@@ -324,3 +324,48 @@ def _full_mana_payload(cost: ast.ManaCost) -> dict[str, int]:
 # in the cleanup step — so these two wordings are the same effect, and any other
 # duration (or none) is not.
 _REST_OF_TURN = ("this_turn", "until_end_of_turn")
+
+
+# The zones a count can be taken over, and what may narrow it there. On the
+# battlefield the ordinary object filter applies, because the counter asks
+# `permanent_matches_filter` — the same question every target of the same words
+# asks. In any other zone the objects are *cards*, which have no computed
+# characteristics at all, so only the printed type union and a card's name are
+# testable and anything else refuses rather than being counted as if it were
+# not there.
+_COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile")
+_CARD_ZONE_KEYS = frozenset({"type_filter", "named"})
+
+
+def count_spec(filt: "ast.ObjectFilter", node) -> dict:
+    """What ``count_from_payload`` needs to take this count at resolution.
+
+    One reader for both callers — the where-clause that *defines* an X and the
+    amount that *is* one ("draw cards equal to the number of …"). They ask the
+    same question of the same noun phrase, so a restriction one of them refused
+    and the other silently dropped would be the same count meaning two things.
+    """
+    if filt.zone not in _COUNTABLE_ZONES:
+        raise LoweringError(f"no count reads the {filt.zone}", node=node)
+    payload = dict(filt.to_payload())
+    if filt.zone != "battlefield" and set(payload) - _CARD_ZONE_KEYS:
+        raise LoweringError(
+            f"a {filt.zone} count cannot test {sorted(set(payload) - _CARD_ZONE_KEYS)}",
+            node=node,
+        )
+    # Whose objects are counted is the *zone owner*, and the counter reads it
+    # off there. A filter narrowing by controller as well ("the number of
+    # Mountains **they** control") is asking a question the count cannot answer
+    # — `permanent_matches_filter` does not test a controller, so the key would
+    # be handed over and silently ignored, and the count taken on the wrong
+    # player's battlefield. Refused rather than dropped.
+    controller = payload.pop("controller", None)
+    if controller not in (None, "you"):
+        raise LoweringError(
+            f"a count cannot be narrowed to the {controller}'s permanents", node=node
+        )
+    return {
+        "zone": filt.zone,
+        "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
+        "filter": payload,
+    }

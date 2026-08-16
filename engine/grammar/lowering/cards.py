@@ -6,7 +6,7 @@ search filter fields the search flow can actually honour, which is a closed set
 because a filter it cannot honour must refuse rather than be dropped.
 """
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import X_FROM_COUNT, OracleInstruction
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from .. import ast
 from ..errors import LoweringError
@@ -16,6 +16,7 @@ from ._common import (
     _is_you,
     _restrictions_beyond,
     _targets_only,
+    count_spec,
 )
 
 
@@ -166,7 +167,19 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
     effect's controller, ``draw_target_cards`` for the chosen player. Picking by
     the drawer keeps each one's existing contract intact."""
     kind = "draw_controller_cards" if node.player.kind == "you" else "draw_target_cards"
-    payload: dict[str, object] = {"amount": _amount_payload(node.count)}
+    if isinstance(node.count, ast.CountOf):
+        # "Draw cards equal to the number of …" (Frantic Inventory). The count
+        # is taken at *resolution* (CR 608.2), so it travels as the same
+        # ``x_from_count`` spec a where-clause defines and the amount is the
+        # string the single dispatch point already resolves. Stamped on this
+        # instruction alone rather than over the sentence: the count belongs to
+        # this draw, and "draw a card, then draw cards equal to …" has a
+        # literal 1 in front of it that must stay one.
+        payload: dict[str, object] = {
+            "amount": "x", X_FROM_COUNT: count_spec(node.count.filter, node),
+        }
+    else:
+        payload = {"amount": _amount_payload(node.count)}
     _describe_targets(payload, node.player)
     return (OracleInstruction(kind, "", payload),)
 

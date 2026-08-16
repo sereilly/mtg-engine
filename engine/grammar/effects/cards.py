@@ -13,7 +13,7 @@ Mana is here rather than in its own module because adding mana is what a card
 import dataclasses
 
 from .. import ast
-from ..amounts import parse_amount
+from ..amounts import parse_amount, parse_equal_to
 from ..lexer import (MANA, render)
 from ..nouns import (parse_object_filter, parse_player_ref, parse_target_spec)
 from ..stream import TokenStream
@@ -22,6 +22,17 @@ from ..phrases import _parse_zone
 
 def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     stream.expect_word("draws", "draw")
+    # "draw cards **equal to** the number of …" (Frantic Inventory) puts the
+    # noun in front of the count, where every other draw puts it behind. Read
+    # first, and reset if the words turn out to be the ordinary "draw cards" of
+    # a phrase like "draw two cards" — there is no number to have skipped,
+    # because "cards" cannot start one.
+    mark = stream.mark()
+    if stream.accept_word("cards"):
+        counted = parse_equal_to(stream)
+        if counted is not None:
+            return ast.Draw(player, counted)
+        stream.reset(mark)
     count = parse_amount(stream)
     stream.expect_word("card", "cards")
     return ast.Draw(player, count)
@@ -253,41 +264,6 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     return ast.LookAtHand(player)
 
 
-# Words that cannot be part of a card's name here because they start the next
-# clause of the printed template. A name scan running past one of them would
-# swallow "and/or a card named Igneous Cur" into the first name and report
-# Alpine Houndmaster as a card that finds one card — so the scan stops, and the
-# production then refuses the line at "put".
-_SEARCHED_NAME_STOPS = ("reveal", "put", "then", "and", "or")
-
-
-def _parse_searched_name(stream: TokenStream) -> str:
-    """The card name in ``for a card named <name>``.
-
-    Read token by token rather than as one word, because a legendary name
-    carries the same punctuation the sentence does — "Chandra, Flame's
-    Catalyst, reveal it," holds two commas and only the second ends the name. A
-    comma is taken as part of the name only when a name word follows it, and
-    the rendered text is compared through ``search_filters.name_key``, which
-    ignores punctuation and case on both sides.
-    """
-    start = stream.mark()
-    while not stream.exhausted:
-        if stream.at_punct(".") or stream.at_word(*_SEARCHED_NAME_STOPS):
-            break
-        if stream.at_punct(","):
-            mark = stream.mark()
-            stream.advance()
-            if stream.exhausted or stream.at_punct(".") or stream.at_word(*_SEARCHED_NAME_STOPS):
-                stream.reset(mark)
-                break
-            continue
-        stream.advance()
-    if stream.mark() == start:
-        raise stream.error("expected the name the search is for")
-    return render(stream.tokens[start:stream.mark()])
-
-
 def _parse_search_library(stream: TokenStream) -> ast.Statement:
     """``Search your library for a <object>, put that card into your hand, then
     shuffle.`` (Demonic Tutor, CR 701.19.)
@@ -347,12 +323,9 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     stream.expect_word("for")
     if not stream.accept_word("a", "an"):
         raise stream.error("a search for more than one card has no representation")
+    # "a card named X" is read by the noun parser, like every other restriction
+    # on what may be found — `_restrictions_beyond` sees it on the filter.
     filt = parse_object_filter(stream)
-    # "a card named X" — the noun phrase stops at "named", so the name is read
-    # here and put back on the filter, where every other restriction on what may
-    # be found already lives and where `_restrictions_beyond` can see it.
-    if stream.accept_word("named"):
-        filt = dataclasses.replace(filt, named=_parse_searched_name(stream))
     stream.accept_punct(",")
     # "reveal it," — honoured rather than dropped: the search flow's log names
     # the found card publicly ("searched library and put X into hand"), which

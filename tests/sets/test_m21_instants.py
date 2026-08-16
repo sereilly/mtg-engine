@@ -581,3 +581,66 @@ def test_run_afoul_may_not_choose_its_own_caster(set_pool):
     assert spec == {"kind": "player", "opponents_only": True}
     offered = game._enumerate_targets(0, card, spec, for_cast=True)
     assert [t["seat"] for t in offered] == [1]
+
+
+# --- Round 62: a count as an amount -----------------------------------------
+
+
+def test_frantic_inventory_counts_its_own_copies(set_pool):
+    """"Draw a card, then draw cards equal to the number of cards named Frantic
+    Inventory in your graveyard."
+
+    Three things met here, and none of them was the draw: the noun before the
+    count ("draw **cards** equal to…", where every other draw puts it behind),
+    a card *name* as a restriction on a noun phrase, and a count that **is** an
+    amount rather than one that defines an X for the sentence around it."""
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1",
+        library=[pool["Island"]] * 10,
+        hand=[pool["Frantic Inventory"]],
+        graveyard=[pool["Frantic Inventory"], pool["Frantic Inventory"], pool["Island"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Frantic Inventory")
+    game._settle()
+
+    assert len(p1.hand) == 3, "one, then one per copy already in the graveyard"
+
+
+def test_frantic_inventory_ignores_a_graveyard_of_other_cards(set_pool):
+    """The narrowing. Dropping the name would count the whole graveyard, which
+    is the direction that makes the card better than it is — and the count is
+    taken at *resolution* (CR 608.2), so it is the graveyard as it stands."""
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1",
+        library=[pool["Island"]] * 10,
+        hand=[pool["Frantic Inventory"]],
+        graveyard=[pool["Island"], pool["Shock"], pool["Alpine Watchdog"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Frantic Inventory")
+    game._settle()
+
+    assert len(p1.hand) == 1
+
+
+def test_two_counts_cannot_share_one_x():
+    """The constraint the round had to design around. One resolution has one
+    ``context.x_value``, so a sentence with a where-clause *and* a counted
+    amount would have the two overwrite each other silently. Neither reading is
+    the card."""
+    result = compile_line(
+        "Draw cards equal to the number of Islands you control, "
+        "where x is the number of Swamps you control."
+    )
+
+    assert result.parsed and not result.lowered
+    assert result.failure_reason == "two counts cannot share one X"

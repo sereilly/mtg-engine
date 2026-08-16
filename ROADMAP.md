@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 217/285) to the full release line - **137 sets, 33,594
+M21 measured at 218/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–58 — lives in git history at and before
-commit `24fcf38`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–59 — lives in git history at and before
+commit `954d717`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,79 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 59: how many creatures attacked
-
-*(2026-08-16.)* M21 **214 → 216** — Tide Skimmer and Makeshift Battalion, two
-cards that ask a question no announcement in the engine could answer.
-
-**Three attack-trigger shapes existed and none of them was about the group.**
-`_fire_attack_triggers` fires once per declaration for one card's own ability
-(Raging River), `_fire_creature_attacks_triggers` fires each attacker's own
-ability, and `_fire_matching_creature_attacks_triggers` announces each attacker
-to the whole board. "Whenever you attack with **two or more** creatures with
-flying" and "whenever this creature and **at least two other** creatures attack"
-are neither per-card nor per-creature: they are about the declaration (CR 508.1),
-and the count is only knowable while the whole declaration is in hand.
-`attackers_declared` is the fourth shape, announced once, carrying the attackers
-themselves — not the `combat_attackers` map, because that is index-keyed and a
-later removal renumbers it.
-
-**One kind, two rows, and the difference is payload.** The two printed spellings
-could have been two condition kinds; they are one, because what differs is not
-the event but what the card asks about it — a count and a noun phrase for the
-Skimmer, a count of *others* plus "the source is one of them" for the Battalion.
-That is round 34's rule (a narrowing is data on the condition) applied to the
-count as well as the filter, and the count needed its own delimiter suffix:
-`<name>_count` is a printed number word, read by the same table every other
-text-keyed count uses, and a word that table does not know refuses the whole
-condition rather than defaulting to one.
-
-**The noun parser needed a plural reading, and it is worth being exact about
-why.** `parse_subject_filter` admits only "a creature you control …", refusing a
-bare plural because everywhere else that is the *sweep* quantifier and a trigger
-claiming to fire on "each creature" would be a different card. In "two or more
-**creatures with flying**" the phrase is counted rather than quantified: it names
-a kind and the number in front says how many. So the plural is admitted in that
-one position, and which position it is comes from the pattern's own group name —
-`_subjects` rather than `_subject`.
-
-**Ability words are gone, by rule rather than by card.** CR 207.2c: an ability
-word is italic flavour with no rules meaning at all, so "Battalion —" is dropped
-before either front end reads the line, from **one** function both call — a word
-stripped on one side only is a line whose two halves disagree about what was
-printed. The list is the printed vocabulary rather than the one word this pool
-has, because a word left out is a card whose whole line fails for a reason the
-parser is allowed to ignore. The control test is that a dash *without* an ability
-word in front of it is left alone: the strip is keyed on the vocabulary, not on
-the punctuation.
-
-A test had to change its mind rather than its expectation, which is the honest
-form: `test_an_ability_word_is_no_longer_filed_under_modal` pinned "Battalion —"
-failing on the trigger rather than on the dash, and that was right when the
-trigger genuinely could not be read. It now pins the line parsing.
-
-Suite **5,101** at 22.1s, every `--check` green, shipped pool 388/388, AI
-simulation byte-identical at 443 interactions. M21's parsed share moved 70.2% →
-70.6%. Three of the six new tests were watched to fail on the round-58 engine;
-the rest are controls — a grounded attacker, a two-creature attack, and a
-Battalion that stayed home.
-
-**Next:**
-
-- **The Shrine cycle**, unchanged: Fruitful Harvest's colour choice at a
-  trigger's resolution, Shattered Heights' discard cost from the
-  hand-activation block, Tranquil Light's per-Shrine cost reduction, Sanctum of
-  All's two-zone search and trigger-doubling static.
-- **An optional cost that is not generic.** "You may pay {1}{B}. If you do, …"
-  (Liliana's Devotee) refuses, and the reason is that there is no one way to pay
-  a mana cost here: the activation path spends from the pool and expects the
-  lands already tapped, the optional-pay prompt taps lands itself but only for
-  generic, and the two disagree about what "can pay" means. One payer would
-  serve every "you may pay" ever printed.
-- **The draw debt** (three `player.draw` callers, with round 31's AST-guard
-  shape to copy), then **Experimental Overload's variable-P/T token and
-  Jolrael's team base-P/T**, then the legend rule from round 49.
-
 ## Round 60: one way to pay a cost
 
 *(2026-08-16.)* M21 **216 → 217** — Liliana's Devotee, and the reason it was
@@ -465,3 +392,61 @@ round-60 engine; the fourth is the allow-list's own sanity check.
   the stack and the `may` machinery resolves inline.
 - **Experimental Overload's variable-P/T token and Jolrael's team base-P/T**,
   then the legend rule from round 49.
+
+## Round 62: a count that is the amount
+
+*(2026-08-16.)* M21 **217 → 218** — Frantic Inventory, and three things met in
+it, none of which was the draw.
+
+**The noun comes before the count.** "Draw **cards** equal to the number of …"
+is the one draw in Magic that puts the noun in front, where every other one puts
+it behind ("draw two cards"). The production reads it first and resets if the
+words turn out to be an ordinary draw, which is safe because "cards" cannot
+start a number.
+
+**A card name is a restriction on a noun phrase.** "named X" was read by the
+*search* production alone, which is why a count of cards by name had nowhere to
+say so. It is a restriction on what the object *is*, so it moved to the noun
+parser beside every other one — and the name reader moved down a layer with it,
+which is the rule the layering guard states: a fragment two productions need is
+not one of their private business. `named` is emitted by `to_payload` and tested
+by `permanent_matches_filter` (through `search_filters.name_key`, so the
+parser's rendering and Oracle's spelling compare equal, and off the *effective*
+card, because a Clone's name is the one it copied). Emitting it without testing
+it would have been a count over every card in the graveyard.
+
+**A count can *be* an amount, not only define an X.** Round 54's where-clause
+stamps `x_from_count` over a whole sentence; here the count belongs to one draw,
+so it is stamped on that instruction alone — which matters immediately, because
+"draw a card, **then** draw cards equal to…" has a literal 1 in front of it that
+must stay one. Both readers now build the spec through one function
+(`count_spec`): they ask the same question of the same noun phrase, and a
+restriction one refused while the other dropped would be the same count meaning
+two things.
+
+**One resolution has one X, and the round had to say so.** A sentence carrying a
+where-clause *and* a counted amount would have the two overwrite each other in
+`context.x_value`. Neither reading is the card, so the stamp refuses on
+collision rather than picking. No card in the pool prints that shape — which is
+the point of writing the guard now rather than when one does.
+
+Suite **5,119** at 22.9s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Four of the five new tests were
+watched to fail on the round-61 engine; the fifth is the control that a
+graveyard of *other* cards counts nothing.
+
+**Next:**
+
+- **The Shrine cycle**: Fruitful Harvest's colour choice at a trigger's
+  resolution, Shattered Heights' discard cost (whose "a land card or **Shrine**
+  card" is a noun-phrase *union* the parser has no production for), Tranquil
+  Light's per-Shrine cost reduction, Sanctum of All's two-zone search and
+  trigger-doubling static.
+- **The rest of the counted amounts.** `count_spec` now serves any production
+  that wants one, and three cards are waiting on the *other* half of their
+  sentence rather than on the count: Kinetic Augur's characteristic-defining
+  power, Experimental Overload's X/X token, Rin and Seri's counted damage.
+- **A reflexive trigger** — "you may pay {1}. **When you do**, …" (Tolarian
+  Kraken), deliberately refused in round 60: CR 603.11 puts a second object on
+  the stack and the `may` machinery resolves inline.
+- **Jolrael's team base-P/T**, then the legend rule from round 49.

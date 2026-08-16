@@ -49,6 +49,7 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     ("toughness", {"toughness": {"op": "ge", "value": 4}}, "Grizzly Bears"),
     ("with_plus1_counter", {"with_plus1_counter": True}, "Grizzly Bears"),
     ("with_keywords", {"with_keywords": ["flying"]}, "Grizzly Bears"),
+    ("named", {"named": "Hill Giant"}, "Grizzly Bears"),
 )
 
 

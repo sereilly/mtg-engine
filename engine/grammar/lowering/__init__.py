@@ -42,6 +42,7 @@ from ._common import (
     _MANA_KEYS,
     _full_mana_payload,
     _REST_OF_TURN,
+    count_spec,
 )
 from .damage import (
     _fused_prepare_then_interact,
@@ -247,4 +248,5 @@ __all__ = [
     "_lower_lose_game",
     "_lower_win_game",
     "_lower_lose_life",
+    "count_spec",
 ]

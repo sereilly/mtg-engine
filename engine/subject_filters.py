@@ -51,7 +51,7 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "type_filter", "subtype_filter", "color_filter",
     "exclude_colors", "exclude_types", "exclude_subtypes",
     "tapped_only", "mana_value", "power", "toughness", "with_plus1_counter",
-    "nontoken",
+    "nontoken", "named",
     "with_keywords", "controller", "exclude_self",
 })
 

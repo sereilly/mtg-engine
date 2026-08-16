@@ -38,6 +38,7 @@ from . import ast
 from .derived import derived_instruction_for_line
 from .errors import LoweringError
 from .lowering import (
+    count_spec,
     # Re-exported, not used here: callers outside the package import these two
     # from `engine.grammar.lower` (`grammar/__init__.py`,
     # `tests/engine/test_grammar_categories.py`, `test_grammar_lowering.py`).
@@ -361,16 +362,6 @@ def lower_statement(
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
 
 
-# The zones a count can be taken over, and what may narrow it there. On the
-# battlefield the ordinary object filter applies, because the counter asks
-# `permanent_matches_filter` — the same question every target of the same words
-# asks. In any other zone the objects are *cards*, which have no computed
-# characteristics at all, so only the printed type union is testable and
-# anything else refuses rather than being counted as if it were not there.
-_COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile")
-_CARD_ZONE_KEYS = frozenset({"type_filter"})
-
-
 def _stamp_x_from_count(
     instructions: tuple[OracleInstruction, ...], spec: dict
 ) -> tuple[OracleInstruction, ...]:
@@ -384,6 +375,13 @@ def _stamp_x_from_count(
     stamped = []
     for instruction in instructions:
         payload = dict(instruction.payload)
+        if X_FROM_COUNT in payload and payload[X_FROM_COUNT] != spec:
+            # One resolution has one X (`context.x_value`), so a sentence whose
+            # where-clause defines one *and* whose amount is a count of its own
+            # ("draw cards equal to the number of …, where X is …") would have
+            # the two silently overwrite each other. Neither reading is the
+            # card, so the line refuses.
+            raise LoweringError("two counts cannot share one X")
         payload[X_FROM_COUNT] = spec
         for key in ("steps", "then", "else", "otherwise", "action"):
             nested = payload.get(key)
@@ -421,38 +419,14 @@ def _lower_where_x(
         return _lower_where_x_deaths(node, produced, event)
     if not isinstance(node.definition, ast.CountOf):
         raise LoweringError("only a count can define X in a where-clause", node=node)
-    filt = node.definition.filter
-    if filt.zone not in _COUNTABLE_ZONES:
-        raise LoweringError(f"no count reads the {filt.zone}", node=node)
-    payload = dict(filt.to_payload())
-    if filt.zone != "battlefield" and set(payload) - _CARD_ZONE_KEYS:
-        raise LoweringError(
-            f"a {filt.zone} count cannot test {sorted(set(payload) - _CARD_ZONE_KEYS)}",
-            node=node,
-        )
-    # Whose permanents are counted is the *zone owner*, and the counter reads it
-    # off there. A filter narrowing by controller as well ("the number of
-    # Mountains **they** control") is asking a question the count cannot answer
-    # — `permanent_matches_filter` does not test a controller, so the key would
-    # be handed over and silently ignored, and the count taken on the wrong
-    # player's battlefield. Refused rather than dropped.
-    controller = payload.pop("controller", None)
-    if controller not in (None, "you"):
-        raise LoweringError(
-            f"a count cannot be narrowed to the {controller}'s permanents", node=node
-        )
-
+    spec = count_spec(node.definition.filter, node)
     inner = lower_statement(node.statement, produced, event=event, whole_effect=False)
     if not _mentions_x(inner):
         # The clause defined an X the sentence never used, which means one of
         # them was misread. Refusing keeps that loud instead of executing the
         # sentence with the definition quietly discarded.
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    return _stamp_x_from_count(inner, {
-        "zone": filt.zone,
-        "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
-        "filter": payload,
-    })
+    return _stamp_x_from_count(inner, spec)
 
 
 def _lower_where_x_deaths(

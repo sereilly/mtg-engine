@@ -18,7 +18,8 @@ import dataclasses
 
 from . import ast
 from .amounts import parse_amount
-from .lexer import NUMBER, PT, WORD
+from .errors import GrammarError
+from .lexer import NUMBER, PT, WORD, render
 from .stream import TokenStream
 from .vocabulary import (
     ALL_SUBTYPES,
@@ -209,6 +210,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     with_plus1_counter = False
     nontoken = False
     their_choice = False
+    named: str | None = None
     zone = "battlefield"
     zone_owner: ast.PlayerRef | None = None
     saw_head = False
@@ -536,6 +538,19 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             except Exception:
                 stream.reset(probe)
                 break
+        if stream.at_word("named"):
+            # "a card **named** Frantic Inventory" — a restriction on what the
+            # object *is*, so it belongs on the filter beside every other one.
+            # The search production used to read it alone, which is why a count
+            # of cards by name had nowhere to say so.
+            probe = stream.mark()
+            stream.advance()
+            try:
+                named = parse_card_name(stream)
+            except GrammarError:
+                stream.reset(probe)
+                break
+            continue
         if stream.at_word("of"):
             # "sacrifices a creature **of their choice** with flying" (Run
             # Afoul) — who picks, printed between the head noun and the rest of
@@ -586,6 +601,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         with_plus1_counter=with_plus1_counter,
         nontoken=nontoken,
         their_choice=their_choice,
+        named=named,
         other_than_source=other_than_source,
         is_source=is_source,
         is_enchanted=is_enchanted,
@@ -707,3 +723,38 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
 __all__ = [
     "parse_object_filter", "parse_player_ref", "parse_recipient", "parse_target_spec",
 ]
+
+
+# Words that cannot be part of a card's name here because they start the next
+# clause of the printed template. A name scan running past one of them would
+# swallow "and/or a card named Igneous Cur" into the first name and report
+# Alpine Houndmaster as a card that finds one card — so the scan stops, and the
+# production then refuses the line at "put".
+_NAME_STOPS = ("reveal", "put", "then", "and", "or", "in")
+
+
+def parse_card_name(stream: TokenStream) -> str:
+    """The card name after ``named``, wherever a noun phrase carries one.
+
+    Read token by token rather than as one word, because a legendary name
+    carries the same punctuation the sentence does — "Chandra, Flame's
+    Catalyst, reveal it," holds two commas and only the second ends the name. A
+    comma is taken as part of the name only when a name word follows it, and
+    the rendered text is compared through ``search_filters.name_key``, which
+    ignores punctuation and case on both sides.
+    """
+    start = stream.mark()
+    while not stream.exhausted:
+        if stream.at_punct(".") or stream.at_word(*_NAME_STOPS):
+            break
+        if stream.at_punct(","):
+            mark = stream.mark()
+            stream.advance()
+            if stream.exhausted or stream.at_punct(".") or stream.at_word(*_NAME_STOPS):
+                stream.reset(mark)
+                break
+            continue
+        stream.advance()
+    if stream.mark() == start:
+        raise stream.error("expected the name the search is for")
+    return render(stream.tokens[start:stream.mark()])
