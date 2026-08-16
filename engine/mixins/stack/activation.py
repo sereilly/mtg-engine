@@ -539,11 +539,19 @@ class AbilityActivationMixin:
                 details = f"{permanent.card.name}: not enough cards in hand to discard"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
-            named = (
-                cost_hand_index
-                if isinstance(cost_hand_index, int) and 0 <= cost_hand_index < len(hand)
-                else 0
-            )
+            # An index that names no card is an error, not a request for a
+            # different one. It used to become a bare `0`, so a stale click
+            # discarded the first card in hand — the same silent repointing the
+            # cast side did, and the reason both now refuse instead. Naming
+            # nothing at all is still the deterministic default.
+            if cost_hand_index is not None and not 0 <= cost_hand_index < len(hand):
+                details = (
+                    f"{permanent.card.name}: no card at hand position "
+                    f"{cost_hand_index} to discard for its cost"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            named = cost_hand_index if isinstance(cost_hand_index, int) else 0
             discard_cost_cards = [hand[named]]
             for card in hand:
                 if len(discard_cost_cards) >= ability.cost.discard_cards:

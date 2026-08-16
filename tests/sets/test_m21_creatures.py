@@ -224,6 +224,50 @@ def test_seasoned_hallowblade_discards_the_named_card_and_taps(set_pool):
     assert blade.has_keyword("indestructible")
 
 
+def test_seasoned_hallowblade_refuses_a_pick_that_names_no_card(set_pool):
+    """The activation twin of the cast side's repointing bug. An index that
+    named no card became a bare ``0``, so a stale click discarded whatever was
+    first in hand instead of saying it could not be honoured."""
+    pool = set_pool("M21")
+    blade = Permanent(card=pool["Seasoned Hallowblade"])
+    keep = pool["Opt"]
+    p1 = PlayerState(name="P1", battlefield=[blade], hand=[keep])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Seasoned Hallowblade", permanent_index=0, cost_hand_index=7,
+    )
+
+    assert not result.supported and "hand position 7" in result.details
+    assert [c.name for c in p1.hand] == [keep.name]
+    assert not blade.tapped and not p1.graveyard
+
+
+def test_seasoned_hallowblades_cost_is_offered_as_a_hand_picker(set_pool):
+    """The prompt the ability never had. Its spec is the *cost*'s, not the
+    effect's — the effect targets nothing — and unlike the cast side nothing is
+    withheld from the hand: the source is a permanent, so a second copy of the
+    Hallowblade sitting in hand is an ordinary card to pitch."""
+    pool = set_pool("M21")
+    blade = Permanent(card=pool["Seasoned Hallowblade"])
+    p1 = PlayerState(
+        name="P1", battlefield=[blade],
+        hand=[pool["Opt"], pool["Seasoned Hallowblade"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    spec = game.activation_target_spec(0, 0)
+
+    assert spec["kind"] == "hand_card" and spec["discard_cost"] is True
+    assert [(t["hand_index"], t["name"]) for t in spec["valid_targets"]] == [
+        (0, "Opt"), (1, "Seasoned Hallowblade")
+    ]
+
+
 def test_seasoned_hallowblade_cannot_activate_with_an_empty_hand(set_pool):
     blade = Permanent(card=set_pool("M21")["Seasoned Hallowblade"])
     p1 = PlayerState(name="P1", battlefield=[blade])

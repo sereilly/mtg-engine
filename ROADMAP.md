@@ -2555,3 +2555,67 @@ naming nothing still gets.
   has a worked shape to copy.
 
 ---
+
+## Round 51: the same cost on the other side, and the guard that counted them
+
+*(2026-08-16.)* The activation half of round 50, and then a guard that turned
+one closed gap into five known ones.
+
+**Seasoned Hallowblade's "Discard a card:" had the same two faults**, one of
+them milder than the cast side's and one identical. Milder: activation removes
+no card from the hand before paying, so an index does not shift — the payment
+was already resolved to card objects for exactly that reason. Identical: an
+index naming no card became a bare `0`, so a stale click discarded the first
+card in hand instead of saying it could not be honoured. It refuses now, like
+the cast side, and naming nothing at all is still the deterministic default.
+
+`derive_activation_spec` reports the cost picker, and the enumeration learned
+the one thing that differs between the callers: **casting withholds the spell**
+(CR 601.2a has already put it on the stack), **activating withholds nothing** —
+the source is a permanent, so a second copy of it sitting in hand is an ordinary
+card to pitch. That is one `for_cast` flag, and writing it down is what stops
+the cast side's rule being copied onto a path it is wrong for.
+
+**Then the guard, and it is the point of the round.** A missing picker does not
+look like a missing feature: both payment paths have a deterministic fallback
+for a seat that names nothing, which is right for AI and headless play and
+indistinguishable from a human seat that was never asked. So
+`tests/engine/test_cost_pickers.py` derives the question from the pool — every
+card whose compiled program charges a *choosable* cost must answer with a spec
+naming the field the answer rides — and it found **four more**, all of them
+sacrifice costs, all of them cards the payer has never been asked about:
+
+- **Atog** derives no spec at all, so no prompt opens and the default eats the
+  smallest artifact — which among equal-power permanents is decided by
+  `permanent_id`. On a board of Black Lotus and Mox Ruby it takes **the Lotus**.
+  Shipped since Alpha.
+- **Hobblefiend** is the same shape with "another" excluding the source.
+- **Witch's Cauldron** is worse than silent: it derives `{"kind": "any"}` off a
+  caster-recipient life gain, so the client opens a *target* picker for an
+  ability that targets nothing, and the sacrifice is still taken by default. The
+  player is asked the wrong question and their answer is discarded.
+- **Dwarven Weaponsmith** is the hard one, and the reason this is not a
+  one-line fix: its ability has a real target **and** a sacrifice cost
+  (CR 601.2c and 601.2b), so one spec cannot carry both and the client needs a
+  second prompt. `web/actions.py` has said for two rounds that a spell can have
+  both and that overloading one field would make the cost eat what the spell was
+  aimed at; the spec had not caught up.
+
+The four are **pinned, not exempted**: a second test asserts each is still a
+gap, so closing one is what removes it from the list, and a third fails if a
+pinned card stops charging the cost at all. That is the shape round 18 used for
+the Chandras — a recorded gap that cannot quietly become a permanent one.
+
+Suite **5,024** at 24.2s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. The guard fails on HEAD naming
+Seasoned Hallowblade, which is the gap this round closed.
+
+**Next:**
+
+- **The four sacrifice pickers.** Their own round, and unlike the discard ones
+  three of the four cards are *shipped* — Atog and Dwarven Weaponsmith can be
+  decked and driven in the browser, so this one gets the verification round 50's
+  client half could not have.
+- **The legend rule reads the printed name** (unchanged from round 49).
+
+---

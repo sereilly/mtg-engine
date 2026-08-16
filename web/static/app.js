@@ -4979,7 +4979,9 @@ function renderActivationPrompt() {
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     title.textContent = `Additional cost — ${pendingDiscardCost.cardName}`;
-    body.textContent = "Discard a card to cast it. Choose which.";
+    body.textContent = pendingDiscardCost.activation
+      ? "Discard a card to activate this ability. Choose which."
+      : "Discard a card to cast it. Choose which.";
     const cardButtons = pendingDiscardCost.options
       .map(
         (option) =>
@@ -5596,6 +5598,16 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     }
   }
 
+  // A "Discard a card:" activation cost (Seasoned Hallowblade) is paid from
+  // hand, so it takes the same prompt the cast-side additional cost does. It
+  // comes before the target cascades because CR 602.2b announces the cost
+  // first, and because the ability whose spec reports it has no target of its
+  // own — a card needing both prompts needs two, not a wider one.
+  if (cardRequiresDiscardCost(card) &&
+      startActivationDiscardCostPrompt(card, cardName, permanentIndex, abilityIndex)) {
+    return;
+  }
+
   // Activated abilities that destroy a target creature (e.g. Royal Assassin)
   // must let the player choose which creature before the ability is activated.
   // The permanent's activation target_spec supplies the kind and legal targets.
@@ -5929,6 +5941,26 @@ function payDiscardCost(handIndex) {
   const choice = pendingDiscardCost;
   pendingDiscardCost = null;
   renderActivationPrompt();
+  const activation = choice.activation;
+  if (activation) {
+    const body = withPermanentId(
+      {
+        seat,
+        action: "activate",
+        permanent_name: choice.cardName,
+        permanent_index: activation.permanentIndex,
+        cost_hand_index: handIndex,
+      },
+      "permanent_id", seat, activation.permanentIndex,
+    );
+    if (Number.isInteger(activation.abilityIndex)) body.ability_index = activation.abilityIndex;
+    updateActionHint(`Activating ${choice.cardName}...`);
+    sendAction(body)
+      .then(() => updateActionHint(`Activated ${choice.cardName}.`))
+      .catch((e) => updateActionHint(e.message, true));
+    return;
+  }
+
   updateActionHint(`Casting ${choice.cardName}...`);
   sendAction({
     seat,
@@ -5944,6 +5976,23 @@ function payDiscardCost(handIndex) {
       clearPendingHandCast();
       updateActionHint(e.message, true);
     });
+}
+
+// The activation twin of startCastDiscardCostPrompt. Nothing is withheld from
+// the hand here — the source is a permanent, so a copy of it in hand is an
+// ordinary card — and the answer rides the same `cost_hand_index` field.
+function startActivationDiscardCostPrompt(card, cardName, permanentIndex, abilityIndex) {
+  const options = discardCostOptions(card);
+  if (!options.length) return false;
+  pendingDiscardCost = {
+    card,
+    cardName,
+    castAction: "activate",
+    options,
+    activation: { permanentIndex, abilityIndex },
+  };
+  renderActivationPrompt();
+  return true;
 }
 
 // Show the generic mode-choice prompt for a modal spell. Returns true when the

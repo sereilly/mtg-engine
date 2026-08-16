@@ -624,6 +624,20 @@ def derive_activation_spec(ability) -> dict | None:
     instruction = getattr(ability, "instruction", None)
     if instruction is None:
         return None
+    # A "discard a card" cost is announced at CR 602.2b, before the ability's
+    # own targets, and the *instruction* cannot describe it — the instruction is
+    # the effect, and this payment comes out of a zone no effect here names. It
+    # is reported instead of the effect's spec rather than beside it: one
+    # announcement carries one prompt today, and no ability in the pool both
+    # pays from hand and targets. A card that does needs two, not a wider one.
+    cost = getattr(ability, "cost", None)
+    if cost is not None and getattr(cost, "discard_cards", 0):
+        return {
+            "kind": "hand_card",
+            "own_only": True,
+            "discard_cost": True,
+            "count": cost.discard_cards,
+        }
     return _from_instructions((instruction,))
 
 

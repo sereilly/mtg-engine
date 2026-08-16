@@ -375,7 +375,7 @@ class LegalityMixin:
         if kind in ("none", "modal"):
             return []
         if kind == "hand_card":
-            return self._enumerate_cost_hand_cards(caster_index, card)
+            return self._enumerate_cost_hand_cards(caster_index, card, for_cast=for_cast)
         if kind == "graveyard_creature":
             return self._enumerate_graveyard_creatures(caster_index, spec)
         if kind == "stack":
@@ -566,22 +566,28 @@ class LegalityMixin:
             return True
         return False
 
-    def _enumerate_cost_hand_cards(self, caster_index: int, card: CardDefinition) -> list[dict]:
-        """The cards that may pay a printed "discard a card" additional cost.
+    def _enumerate_cost_hand_cards(
+        self, caster_index: int, card: CardDefinition, *, for_cast: bool
+    ) -> list[dict]:
+        """The cards that may pay a "discard a card" cost.
 
-        Every card in the caster's hand except the one about to be cast: CR
-        601.2a puts the spell on the stack before its costs are paid, so it is
-        not there to be discarded. With two copies in hand the *other* one is a
-        legal payment, so exactly one occurrence is withheld — the one the hand
-        lookup will cast.
+        **What is withheld is the whole difference between the two callers.**
+        Casting withholds the spell: CR 601.2a puts it on the stack before its
+        costs are paid, so it is not in the hand to be discarded (with two
+        copies in hand the *other* is a legal payment, so exactly one occurrence
+        goes — the one the hand lookup will cast). Activating withholds nothing:
+        the source is a permanent, and a copy of it sitting in hand is an
+        ordinary card like any other.
 
-        A hint, not the authority: ``_resolve_discard_cost_card`` re-checks the
-        answer on the way back in, so a client that offers a whole hand cannot
-        turn this into "discard nothing".
+        A hint, not the authority: both payment paths re-check the answer on the
+        way back in, so a client that offers a whole hand cannot turn the cost
+        into "discard nothing".
         """
         hand = self.players[caster_index].hand
-        spell_index = next(
-            (i for i, held in enumerate(hand) if held.name == card.name), None
+        spell_index = (
+            next((i for i, held in enumerate(hand) if held.name == card.name), None)
+            if for_cast
+            else None
         )
         return [
             {"kind": "hand_card", "seat": caster_index, "hand_index": index, "name": held.name}
