@@ -1686,18 +1686,27 @@ def test_power_surge_binds_x_to_the_turn_start_land_count():
     ) == [("deal_damage", {"amount": "x"})]
 
 
-def test_an_unknown_where_x_is_count_refuses_the_whole_line():
-    """The failure mode this production exists to prevent: consuming "where X
-    is ..." generically would let any count reach whichever handler the caller
-    assumed. An unlisted count leaves its tokens unconsumed instead, so the line
-    fails full-token consumption and the card falls back visibly."""
+def test_a_where_x_count_on_another_players_permanents_refuses_the_line():
+    """The failure mode the where-clause has to keep preventing, at the layer
+    that can now name it.
+
+    "Where X is …" used to be readable only inside the pump production, so this
+    line died on full-token consumption — an unconsumed trailing clause. The
+    clause is general now (it defines X for any sentence), so the line parses,
+    and the refusal moved to lowering where it says what is wrong: the count is
+    narrowed to **their** permanents, and the counter reads only the zone's
+    owner. ``permanent_matches_filter`` does not test a controller, so admitting
+    it would hand the key over to be silently ignored and count the wrong
+    player's Mountains. Either way the card falls back visibly; only now it
+    explains itself."""
     result = compile_line(
         "At the beginning of each player's upkeep, this enchantment deals X damage to "
         "that player, where X is the number of Mountains they control.",
         card_name="Test",
     )
 
-    assert not result.parsed
+    assert not result.usable
+    assert result.lowering_error == "a count cannot be narrowed to the that_player's permanents"
 
 
 def test_karma_counts_swamps_through_the_dedicated_handler():

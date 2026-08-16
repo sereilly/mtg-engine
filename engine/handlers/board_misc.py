@@ -165,7 +165,7 @@ def end_step_damage_if_not_attacked(game: Game, instruction: OracleInstruction, 
         return True, "resolved"
     if source.metadata.get("summoning_sickness_turn") == game.turn:
         return True, "resolved"
-    amount = int(instruction.payload.get("amount", 0))
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     game._deal_damage_to_player(
         caster, amount, source=source,
         then=lambda dealt: game.log.append(
@@ -500,7 +500,7 @@ def remove_loyalty_from_each_planeswalker(game: Game, instruction: OracleInstruc
     second mode.) Loyalty is its counters (CR 306.5c); the walkers this
     empties are collected by the state-based sweep (CR 704.5i) after the
     spell finishes, not here."""
-    amount = int(instruction.payload.get("amount", 0))
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     touched = 0
     for permanent in game.all_permanents():
         if not permanent.has_type("planeswalker"):

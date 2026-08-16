@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import permanent_matches_filter, resolve_target_permanent
+from ._common import permanent_matches_filter, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -174,7 +174,7 @@ def untap_up_to_matching(game: Game, instruction: OracleInstruction, context: Or
     caster_index = game.players.index(context.caster)
     game.arm_pending_choice(
         "untap_up_to", caster_index,
-        amount=int(instruction.payload.get("amount", 0)),
+        amount=resolve_amount(instruction.payload.get("amount", 0), context.x_value),
         filter=dict(instruction.payload.get("filter") or {}),
         card_name=context.card.name,
     )

@@ -181,7 +181,28 @@ class ForEach:
     effect: "Statement"
 
 
-Statement = Union[Sequence, Conjunction, Conditional, May, ForEach, Effect]
+@dataclass(frozen=True)
+class WhereX:
+    """"<sentence>, where X is the number of <filter>" — the clause that says
+    what the X in the sentence means.
+
+    A *wrapper* rather than a field on each effect, because the clause is
+    printed once at the end of a whole sentence and binds every X in it: Sanctum
+    of Stone Fangs' "each opponent loses X life and you gain X life, where X is
+    the number of Shrines you control" is two effects and one definition. It
+    lived inside the pump production for as long as it existed, which is why
+    exactly one sentence shape in the pool could carry one.
+
+    An undefined X is not the same thing and must not become one: without this
+    the trailing clause is unconsumed text and the line fails loudly, which is
+    the right outcome — a dropped definition would silently read the *cast's* X
+    instead, and for a permanent's triggered ability there is no cast.
+    """
+    statement: "Statement"
+    definition: Amount
+
+
+Statement = Union[Sequence, Conjunction, Conditional, May, ForEach, WhereX, Effect]
 
 
 # ---------------------------------------------------------------------------

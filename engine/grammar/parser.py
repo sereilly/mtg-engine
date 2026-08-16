@@ -574,7 +574,15 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     Parsing them as separate sentences would make the life gain unconditional —
     the same class of mistake as treating "you may pay {2}" as a plain cost.
     """
-    if not isinstance(steps[-1], ast.May):
+    # "You may draw X cards, where X is …. If you do, discard a card."
+    # (Sanctum of Calm Waters.) The where-clause wraps the whole sentence, so
+    # the May is one level down — lifted off here and put back on outside the
+    # fold, because the definition binds the branch as well as the offer.
+    target = steps[-1]
+    definition = target.definition if isinstance(target, ast.WhereX) else None
+    if definition is not None:
+        target = target.statement
+    if not isinstance(target, ast.May):
         return False
     mark = stream.mark()
     if not stream.accept_word("if"):
@@ -598,14 +606,15 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         stream.reset(mark)
         return False
 
-    may = steps[-1]
-    steps[-1] = ast.May(
+    may = target
+    folded = ast.May(
         actor=may.actor,
         cost=may.cost,
         action=may.action,
         then=branch if not declined else may.then,
         otherwise=branch if declined else may.otherwise,
     )
+    steps[-1] = ast.WhereX(folded, definition) if definition is not None else folded
     return True
 
 

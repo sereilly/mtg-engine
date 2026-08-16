@@ -89,7 +89,7 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
     if from_trigger is not None:
         amount = max(0, int((context.trigger_context or {}).get(from_trigger, 0)))
     else:
-        amount = int(instruction.payload.get("amount", 0))
+        amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     # The same recipient key deal_damage reads: absent means the spell's
     # target, "caster" the controller ("You lose 3 life"), "each_opponent"
     # every living opponent. Life loss is not damage (CR 120.3), so no shield
@@ -154,7 +154,7 @@ def opponents_who_could_not_discard_lose_life(game: Game, instruction: OracleIns
     """"Each opponent who can't loses 3 life." (Liliana, Waker of the Dead's
     +1.) Reads the seats the preceding each-player discard recorded as unable
     to pay; only the caster's opponents lose life."""
-    amount = int(instruction.payload.get("amount", 0))
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     caster_index = game.players.index(context.caster)
     could_not = context.results.get("players_who_could_not_discard") or []
     for seat in could_not:
@@ -263,7 +263,7 @@ def arm_draw_step_life_loss_unless_pay(game: Game, instruction: OracleInstructio
         return True, "resolved"
     game.pending_draw_step_life_loss.append({
         "player_index": idx,
-        "amount": int(instruction.payload.get("amount", 1)),
+        "amount": resolve_amount(instruction.payload.get("amount", 1), context.x_value),
         "cost": int(instruction.payload.get("cost", 1)),
         "source_name": card.name,
     })

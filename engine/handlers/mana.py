@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .registry import effect_handler
+from ._common import resolve_amount
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -119,7 +120,9 @@ def sacrifice_self_for_mana(game: Game, instruction: OracleInstruction, context:
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    caster.mana_pool[str(instruction.payload.get("color", "G"))] += int(instruction.payload.get("amount", 0))
+    caster.mana_pool[str(instruction.payload.get("color", "G"))] += resolve_amount(
+        instruction.payload.get("amount", 0), context.x_value
+    )
     # Belt and braces for callers that reach this handler without going through
     # the cost path (direct handler invocation in tests/scripts). Still on the
     # battlefield means the cost path did not run, and the seam's own None

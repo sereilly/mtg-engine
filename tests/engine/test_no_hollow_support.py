@@ -222,10 +222,12 @@ def test_an_aura_is_left_to_its_own_gate():
 # ---------------------------------------------------------------------------
 
 
+# Sanctum of Stone Fangs was the third of these and is gone from the list
+# because round 54 implemented it — which is the only way an entry may leave.
+# The two that remain are replacement effects nobody has built.
 @pytest.mark.parametrize(
     "name,clause",
     [
-        ("Sanctum of Stone Fangs", "at the beginning of your first main phase"),
         ("Fiery Emancipation", "would deal damage"),
         ("Teferi's Ageless Insight", "would draw a card"),
     ],

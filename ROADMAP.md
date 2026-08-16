@@ -2749,3 +2749,74 @@ that the scan now reaches the measured set.
   waits on a `card.name` census.
 
 ---
+
+## Round 54: a clause that defines X, and the one place X is read
+
+*(2026-08-16.)* Both subsystems round 53 sized, built. M21 **206 → 208** —
+Sanctum of Stone Fangs, which round 53 had to take away, and Sanctum of Calm
+Waters beside it.
+
+**"…, where X is the number of <filter>" is a statement-level clause now.** It
+existed only inside `_parse_gets`, which is why exactly one sentence shape in
+the pool could carry one. `parse_statement` became a thin wrapper whose whole
+body is the rule: the clause binds the *whole* sentence, so it is read once
+around the body rather than wherever the body happens to stop — and the body
+returns early from `if`, from `you may`, and from a cast permission, so asking
+each of them to remember the clause is how one of them forgets.
+
+**Two binding mistakes, both found by execution rather than by reading**, and
+both the same shape:
+
+- The first version let the *recursive* call take the clause, so "each opponent
+  loses X life and you gain X life, where X is …" gave the definition to the
+  gain and the loss silently lost nothing. The life total moved, which is what
+  makes it a bad bug: the card looked like it worked. `top_level=False` on
+  every nested call is the fix.
+- `_attach_if_you_do` then stopped finding its `May`, because the sentence is
+  now a `WhereX` wrapping one. It lifts the clause off, folds, and puts it back
+  outside — the definition binds the branch as well as the offer.
+
+**X is resolved at one place, and that is what makes the clause general.** The
+count is stamped onto the lowered instructions (and into the steps nested inside
+a `sequence`, `if_then` or `may` — stamping the top level alone would leave the
+inner ones reading the cast's X, which for a triggered ability is None), and
+`_execute_oracle_instruction` turns it into `context.x_value` before dispatch.
+Every amount path already resolves the string `"x"` against that, so one
+substitution at the single dispatch point hands the clause to every effect
+family at once.
+
+**Except that not every amount path did.** The first end-to-end run died on
+`int('x')`: **nineteen handlers read `int(payload["amount"])` directly** instead
+of `resolve_amount`, so they could never have honoured an X at all. They all go
+through the one rule now — which is the difference between a clause that works
+for the four handlers this round happened to touch and one that works.
+
+A count refuses rather than guesses in two places worth naming: a filter
+narrowed to *another player's* permanents ("the number of Mountains **they**
+control"), because `permanent_matches_filter` does not test a controller and the
+key would have been handed over and ignored; and a where-clause defining an X no
+instruction reads, which means one of the two was misread.
+
+**"At the beginning of your first main phase"** landed on both sides of the
+pipeline — the oracle regex table and the grammar's phrase table — because round
+7's lesson is that a condition narrowed on one side only compiles the card
+supported and fires it on the wrong event. Its fire site takes **no whitelist of
+instruction kinds**: round 45 is the record of what that costs, and Onulet never
+gained a point of life because its kind was not in a list.
+
+Suite **5,040** at 21.4s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions.
+
+**Next:**
+
+- **The rest of the Shrine cycle**, now that both subsystems exist: Fruitful
+  Harvest wants "add X mana **of any one color**" (a colour choice, not a
+  count), Shattered Heights the filtered discard cost from round 51's family,
+  Tranquil Light a per-Shrine cost reduction, Sanctum of All a two-zone search
+  plus a trigger-doubling static.
+- **The seven other cards the clause was built for** — Liliana's Standard
+  Bearer, Experimental Overload, Jolrael and the rest — each of which now needs
+  only its own second half.
+- **The legend rule reads the printed name** (unchanged from round 49).
+
+---

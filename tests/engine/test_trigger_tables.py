@@ -102,6 +102,12 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "upkeep_chosen": "at the beginning of the chosen player's upkeep",
     "draw_step_each": "at the beginning of each player's draw step",
     "end_step": "at the beginning of the end step",
+    # Both spellings, because both tables carry both: the M21 Shrines print
+    # "first" and modern templating prints "precombat".
+    "main_phase_first": (
+        "at the beginning of your first main phase",
+        "at the beginning of your precombat main phase",
+    ),
     "combat_your_turn": "at the beginning of combat on your turn",
     "combat": "at the beginning of combat",
 }

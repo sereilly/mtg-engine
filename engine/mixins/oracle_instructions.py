@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import re
 
 from ..card_hooks import ON_SELF_RESOLVED
@@ -7,6 +8,7 @@ from ..control import BASE_CONTROLLER, CONTROL_EFFECTS
 from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
+from ..handlers._common import X_FROM_COUNT, count_from_payload
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import attach_aura, aura_animates_artifact, aura_keyword_grants
 from ..auras import aura_enchants
@@ -38,6 +40,17 @@ class OracleInstructionsMixin:
         instruction: OracleInstruction,
         context: OracleExecutionContext,
     ) -> tuple[bool, str]:
+        # "…, where X is the number of Shrines you control." The clause *defines
+        # X*, so it is resolved into the context's X here rather than by each
+        # handler: every amount path already resolves the string "x" against
+        # `context.x_value`, so one substitution at the single dispatch point
+        # gives the clause to every effect family at once. Doing it per handler
+        # is how the pump ended up the only sentence that could carry one.
+        count_spec = instruction.payload.get(X_FROM_COUNT)
+        if count_spec:
+            context = dataclasses.replace(
+                context, x_value=count_from_payload(self, context, count_spec)
+            )
         handler = EFFECT_HANDLERS.get(instruction.kind)
         if handler is not None:
             return handler(self, instruction, context)

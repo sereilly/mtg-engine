@@ -141,3 +141,81 @@ def test_an_invented_creature_type_refuses_the_whole_line(set_pool):
     assert aura_type_grants(real) == ("demon",)
     assert aura_effect_claim(invented) is None
     assert aura_type_grants(invented) == ()
+
+
+# --- Round 54: the Shrine cycle's first two ---------------------------------
+#
+# "At the beginning of your first main phase, … where X is the number of Shrines
+# you control." Two subsystems meet on one line: a trigger condition the tables
+# did not have, and a where-clause that could only be read inside the pump
+# production. Sanctum of Stone Fangs reported `supported` and did nothing until
+# round 53 caught it; this is the round that makes the report true.
+
+
+def _shrine_board(set_pool, *names: str):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pool[n]) for n in names])
+    p1.library = [pool["Swamp"]] * 10
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    return game, p1, game.players[1]
+
+
+def test_sanctum_of_stone_fangs_drains_for_each_shrine(set_pool):
+    """Both halves of the sentence read the same X. The clause used to be
+    consumed by the *inner* parse of "and you gain X life", so the gain got the
+    definition and the loss silently lost nothing — which is why this asserts
+    both numbers rather than the one that moved."""
+    game, p1, p2 = _shrine_board(
+        set_pool, "Sanctum of Stone Fangs", "Sanctum of All", "Sanctum of Tranquil Light"
+    )
+
+    game._enter_main_phase(precombat=True)
+    game._settle()
+
+    assert (p1.life, p2.life) == (23, 17)
+
+
+def test_the_shrine_count_is_taken_at_resolution(set_pool):
+    """CR 608.2: a where-clause is counted when the effect happens, not when the
+    trigger is put on the stack — so the same permanent drains a different
+    amount on a later turn. That is the reason the count travels as a
+    description rather than a number."""
+    game, p1, p2 = _shrine_board(
+        set_pool, "Sanctum of Stone Fangs", "Sanctum of All", "Sanctum of Tranquil Light"
+    )
+    game._enter_main_phase(precombat=True)
+    game._settle()
+    assert (p1.life, p2.life) == (23, 17)
+
+    game.remove_from_battlefield(p1.battlefield[-1])
+    game._enter_main_phase(precombat=True)
+    game._settle()
+
+    assert (p1.life, p2.life) == (25, 15), "two Shrines now, not three"
+
+
+def test_the_second_main_phase_is_not_a_first_one(set_pool):
+    """The control for the trigger, and the reason the fire site is in the
+    precombat entry rather than in the shared ``_enter_main_phase``: both main
+    phases run through that method."""
+    game, p1, p2 = _shrine_board(set_pool, "Sanctum of Stone Fangs")
+    before = (p1.life, p2.life)
+
+    game._enter_main_phase(precombat=False)
+    game._settle()
+
+    assert (p1.life, p2.life) == before
+
+
+def test_sanctum_of_calm_waters_is_supported(set_pool):
+    """The second Shrine the pair of subsystems buys: "you may draw X cards …
+    If you do, discard a card." The may wrapper and the discard were already
+    there; only the trigger and the count were missing."""
+    program = compile_card_oracle(set_pool("M21")["Sanctum of Calm Waters"])
+
+    assert program.supported
+    trigger = program.triggered_abilities[0]
+    assert trigger.condition.kind == "main_phase_first"
+    assert trigger.instruction is not None

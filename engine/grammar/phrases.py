@@ -127,6 +127,13 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
      ("the", "beginning", "of", "the", "upkeep", "of", "enchanted", "enchantment", "'s", "controller")),
     ("upkeep_chosen", ("the", "beginning", "of", "the", "chosen", "player", "'s", "upkeep")),
     ("draw_step_each", ("the", "beginning", "of", "each", "player", "'s", "draw", "step")),
+    # CR 505.1a — the precombat main phase, the only one that is "first". Both
+    # printed spellings; the M21 Shrines say "first" and modern templating says
+    # "precombat". The oracle regex table carries the same pair, because a
+    # condition narrowed on one side of the pipeline and not the other compiles
+    # the card supported and fires it on the wrong event (round 7).
+    ("main_phase_first", ("the", "beginning", "of", "your", "first", "main", "phase")),
+    ("main_phase_first", ("the", "beginning", "of", "your", "precombat", "main", "phase")),
     ("end_step", ("the", "beginning", "of", "the", "end", "step")),
     ("end_step", ("the", "beginning", "of", "each", "end", "step")),
     ("end_step", ("the", "beginning", "of", "your", "end", "step")),

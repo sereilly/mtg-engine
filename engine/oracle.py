@@ -353,6 +353,10 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("upkeep_enchanted_controller", r"at the beginning of the upkeep of enchanted (?:creature|artifact|enchantment)'s controller"),
     ("upkeep_chosen",       r"at the beginning of the chosen player's upkeep"),
     ("draw_step_each",      r"at the beginning of each player's draw step"),
+    # "At the beginning of your first main phase" (the M21 Shrine cycle) —
+    # CR 505.1a's precombat main phase, which is the only one that is "first".
+    # Both printed spellings, because the modern templating says "precombat".
+    ("main_phase_first",    r"at the beginning of your (?:first|precombat) main phase"),
     ("end_step",            r"at the beginning of (?:the |each |your )?end(?: step)?"),
     # "…of combat on your turn" narrows the bare form to the active player's
     # combat (Adherent of Hope); must precede its own prefix below.

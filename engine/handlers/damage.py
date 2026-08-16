@@ -276,7 +276,7 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
 @effect_handler("deal_damage_each_creature_and_player")
 def deal_damage_each_creature_and_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
-    amount = int(instruction.payload.get("amount", 1))
+    amount = resolve_amount(instruction.payload.get("amount", 1), context.x_value)
     _mass_damage_players_and_creatures(game, card, amount, lambda perm: True)
     game.log.append(f"{card.name} dealt {amount} damage to each creature and each player")
     return True, "resolved"
@@ -287,7 +287,7 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
     caster = context.caster
     target = context.target
     card = context.card
-    amount = int(instruction.payload.get("amount", 0))
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     self_damage = int(instruction.payload.get("self_damage", 0))
     target_perm_idx = context.target_permanent_index
     target_perm = game.chosen_permanent(
@@ -413,7 +413,7 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
     auto_resolve_pending_optional_pays."""
     caster = context.caster
     card = context.card
-    amount = int(instruction.payload.get("amount", 0))
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     cost = int(instruction.payload.get("cost", 0))
     game.arm_pending_choice(
         "optional_pay", game.players.index(caster),

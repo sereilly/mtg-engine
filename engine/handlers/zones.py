@@ -33,7 +33,9 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
 def draw_controller_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     card = context.card
-    drawn = game._draw_with_replacements(caster, int(instruction.payload.get("amount", 0)))
+    drawn = game._draw_with_replacements(
+        caster, resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    )
     game.log.append(f"{card.name} drew {drawn} card")
     return True, "resolved"
 
@@ -292,7 +294,9 @@ def reorder_target_library_top(game: Game, instruction: OracleInstruction, conte
 @effect_handler("discard_target_cards")
 def discard_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
-    actual = min(int(instruction.payload.get("amount", 0)), len(target.hand))
+    actual = min(
+        resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(target.hand)
+    )
     if actual <= 0:
         game.log.append(f"{target.name} has no cards to discard")
         return True, "resolved"
@@ -314,7 +318,7 @@ def each_opponent_discards_cards(game: Game, instruction: OracleInstruction, con
     """"Each opponent discards two cards." (Bad Deal.) A chosen discard per
     opponent, so each gets their own pending choice; an AI seat answers with
     the discard default the moment it is armed, a human's queues."""
-    amount = int(instruction.payload.get("amount", 0))
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     caster_index = game.players.index(context.caster)
     any_pending = False
     for seat in game.opponents_of(caster_index):
@@ -815,7 +819,7 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     "each_opponent" every living opponent. Each miller mills their own library,
     which is why the loop is per victim rather than a shared count.
     """
-    amount = int(instruction.payload.get("amount", 1) or 1)
+    amount = resolve_amount(instruction.payload.get("amount", 1) or 1, context.x_value)
     recipient = instruction.payload.get("recipient")
     if recipient == "caster":
         victims = [context.caster]
@@ -856,7 +860,7 @@ def scry(game: Game, instruction: OracleInstruction, context: OracleExecutionCon
     fires.
     """
     caster = context.caster
-    amount = int(instruction.payload.get("amount", 1) or 1)
+    amount = resolve_amount(instruction.payload.get("amount", 1) or 1, context.x_value)
     top_count = min(amount, len(caster.library))
     if top_count <= 0:
         game.log.append(f"{caster.name} scries {amount} with nothing to look at")
@@ -1117,7 +1121,7 @@ def exile_top_of_library(game: Game, instruction: OracleInstruction, context: Or
     resolution's "you may play cards exiled this way" to read — the exile is
     what makes that sentence mean anything."""
     caster = context.caster
-    amount = int(instruction.payload.get("amount", 0))
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     exiled = []
     for _ in range(min(amount, len(caster.library))):
         card = caster.library.pop(0)
@@ -1246,7 +1250,7 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
     there is nothing to choose. ``context.cast_from_zone`` is the field the
     permission-seam round added for exactly this sentence."""
     caster = context.caster
-    amount = int(instruction.payload.get("amount", 0))
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     top_count = min(amount, len(caster.library))
     if top_count <= 0:
         game.log.append(f"{caster.name} has no cards to look at")
@@ -1275,7 +1279,9 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     The same pending choice the targeted discard arms, pointed at the caster —
     who picks the cards, exactly as the printed sentence leaves it to them."""
     caster = context.caster
-    amount = min(int(instruction.payload.get("amount", 0)), len(caster.hand))
+    amount = min(
+        resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(caster.hand)
+    )
     if amount <= 0:
         game.log.append(f"{caster.name} has no cards to discard")
         return True, "resolved"

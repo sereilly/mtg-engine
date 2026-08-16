@@ -33,7 +33,7 @@ the table did not move its address.
 """
 
 from ..lord_buffs import (LORD_BUFF_KIND, LordBuff, LordBuffFilter, QUALIFIER_FIELDS, grantable_keywords, lord_buff_payload)
-from ..oracle_types import OracleInstruction
+from ..oracle_types import X_FROM_COUNT, OracleInstruction
 from . import ast
 from .derived import derived_instruction_for_line
 from .errors import LoweringError
@@ -313,6 +313,9 @@ def lower_statement(
     if isinstance(statement, ast.CantBe):
         return _lower_cant_be(statement)
 
+    if isinstance(statement, ast.WhereX):
+        return _lower_where_x(statement, produced, event)
+
     if isinstance(statement, ast.ForEach):
         return _lower_for_each(statement)
 
@@ -356,6 +359,98 @@ def lower_statement(
         return (OracleInstruction("grant_team_assign_unblocked_until_eot", "", {}),)
 
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
+
+
+# The zones a count can be taken over, and what may narrow it there. On the
+# battlefield the ordinary object filter applies, because the counter asks
+# `permanent_matches_filter` — the same question every target of the same words
+# asks. In any other zone the objects are *cards*, which have no computed
+# characteristics at all, so only the printed type union is testable and
+# anything else refuses rather than being counted as if it were not there.
+_COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile")
+_CARD_ZONE_KEYS = frozenset({"type_filter"})
+
+
+def _stamp_x_from_count(
+    instructions: tuple[OracleInstruction, ...], spec: dict
+) -> tuple[OracleInstruction, ...]:
+    """Put *spec* on every instruction, including the steps nested inside one.
+
+    A sentence lowers to a tuple, and a wrapper (`sequence`, `if_then`, `may`)
+    carries its own steps in its payload — so stamping the top level alone would
+    define X for the outer instruction and leave the inner ones reading the
+    cast's X, which for a triggered ability is None.
+    """
+    stamped = []
+    for instruction in instructions:
+        payload = dict(instruction.payload)
+        payload[X_FROM_COUNT] = spec
+        for key in ("steps", "then", "else", "otherwise", "action"):
+            nested = payload.get(key)
+            if isinstance(nested, tuple) and nested and isinstance(nested[0], OracleInstruction):
+                payload[key] = _stamp_x_from_count(nested, spec)
+        stamped.append(OracleInstruction(instruction.kind, instruction.value, payload))
+    return tuple(stamped)
+
+
+def _mentions_x(instructions: tuple[OracleInstruction, ...]) -> bool:
+    """Whether anything in *instructions* actually reads an X."""
+    for instruction in instructions:
+        for key, value in instruction.payload.items():
+            if value == "x":
+                return True
+            if isinstance(value, tuple) and value and isinstance(value[0], OracleInstruction):
+                if _mentions_x(value):
+                    return True
+    return False
+
+
+def _lower_where_x(
+    node: ast.WhereX, produced: frozenset[str], event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
+    """"…, where X is the number of <filter>" over a whole sentence.
+
+    The definition is stamped onto the lowered instructions rather than folded
+    into their amounts, because the count is taken **at resolution** (CR 608.2):
+    a Shrine entering between the trigger and its resolution changes the answer,
+    so lowering cannot know it. ``engine/mixins/oracle_instructions.py``
+    resolves it into the context's X at the single dispatch point, which is what
+    lets one clause serve every effect family instead of one.
+    """
+    if not isinstance(node.definition, ast.CountOf):
+        raise LoweringError("only a count can define X in a where-clause", node=node)
+    filt = node.definition.filter
+    if filt.zone not in _COUNTABLE_ZONES:
+        raise LoweringError(f"no count reads the {filt.zone}", node=node)
+    payload = dict(filt.to_payload())
+    if filt.zone != "battlefield" and set(payload) - _CARD_ZONE_KEYS:
+        raise LoweringError(
+            f"a {filt.zone} count cannot test {sorted(set(payload) - _CARD_ZONE_KEYS)}",
+            node=node,
+        )
+    # Whose permanents are counted is the *zone owner*, and the counter reads it
+    # off there. A filter narrowing by controller as well ("the number of
+    # Mountains **they** control") is asking a question the count cannot answer
+    # — `permanent_matches_filter` does not test a controller, so the key would
+    # be handed over and silently ignored, and the count taken on the wrong
+    # player's battlefield. Refused rather than dropped.
+    controller = payload.pop("controller", None)
+    if controller not in (None, "you"):
+        raise LoweringError(
+            f"a count cannot be narrowed to the {controller}'s permanents", node=node
+        )
+
+    inner = lower_statement(node.statement, produced, event=event, whole_effect=False)
+    if not _mentions_x(inner):
+        # The clause defined an X the sentence never used, which means one of
+        # them was misread. Refusing keeps that loud instead of executing the
+        # sentence with the definition quietly discarded.
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    return _stamp_x_from_count(inner, {
+        "zone": filt.zone,
+        "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
+        "filter": payload,
+    })
 
 
 def _lower_may(

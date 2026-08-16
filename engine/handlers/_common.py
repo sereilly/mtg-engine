@@ -10,6 +10,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING, Callable, Sequence
 
+from ..oracle_types import X_FROM_COUNT
+
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
@@ -20,6 +22,40 @@ def resolve_amount(raw: object, x_value: int | None) -> int:
     """Numeric value of a parsed amount payload; ``"x"`` resolves to the cast's
     X (never negative)."""
     return max(0, x_value or 0) if raw == "x" else int(raw)
+
+
+
+
+def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: dict) -> int:
+    """Evaluate a ``x_from_count`` spec against the board **at resolution**.
+
+    CR 613/608.2: a where-clause is not announced with the spell, it is counted
+    when the effect happens, so this runs at resolution and re-counts every
+    time. ``owner`` names whose zone is read — "you" is the effect's controller,
+    "target" the player it points at — and ``filter`` is the ordinary object
+    filter every other consumer already agrees on
+    (``permanent_matches_filter``), which is what stops a count meaning
+    something different from a target of the same words.
+    """
+    owner = context.caster if spec.get("owner", "you") == "you" else (context.target or context.caster)
+    filt = dict(spec.get("filter") or {})
+    zone = spec.get("zone", "battlefield")
+    if zone == "battlefield":
+        seat = game.players.index(owner)
+        return sum(
+            1 for perm in game.controlled_by(seat)
+            if permanent_matches_filter(perm, filt)
+        )
+    cards = getattr(owner, zone, None)
+    if cards is None:
+        return 0
+    # A card in a zone is not a permanent, so the shared matcher — which asks
+    # `has_type` of a battlefield object — cannot answer here. Only the printed
+    # type union is testable off a card, which is exactly what the graveyard
+    # counts in this pool ask for.
+    wanted = filt.get("type_filter")
+    wanted_types = tuple(wanted) if isinstance(wanted, (list, tuple)) else ((wanted,) if wanted else ())
+    return sum(1 for card in cards if not wanted_types or card.primary_type in wanted_types)
 
 
 def flip_coin(win_probability: float = 0.5) -> bool:

@@ -294,7 +294,28 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
     raise stream.error("unrecognized effect verb")
 
 
-def parse_statement(stream: TokenStream) -> ast.Statement:
+def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.Statement:
+    """One sentence's worth of effect, plus the clause that defines its X.
+
+    A thin wrapper, and the wrapper *is* the rule: "…, where X is the number of
+    …" binds the whole sentence, so it is read once around the body rather than
+    wherever the body happens to stop. The body returns early from several
+    branches (`if`, `you may`, a cast permission), and asking each of them to
+    remember the clause is how one of them forgets.
+
+    ``top_level`` is False for the body's own recursive calls. A nested call
+    taking the clause would define X for its half and leave the other half's X
+    undefined — "each opponent loses X life and you gain X life, where X is …"
+    gave the definition to the gain, and the loss silently lost nothing.
+    """
+    statement = _parse_statement_body(stream)
+    if not top_level:
+        return statement
+    definition = _parse_where_x(stream)
+    return ast.WhereX(statement, definition) if definition is not None else statement
+
+
+def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     """One sentence's worth of effect, including ``if``/``may`` wrappers."""
     # "Target opponent reveals their hand. You choose … from it. That player
     # discards that card." (Duress.) Read before anything else, because it
@@ -320,7 +341,7 @@ def parse_statement(stream: TokenStream) -> ast.Statement:
         try:
             condition = _parse_condition(stream)
             stream.accept_punct(",")
-            then = parse_statement(stream)
+            then = parse_statement(stream, top_level=False)
             return ast.Conditional(condition, then)
         except GrammarError:
             stream.reset(mark)
@@ -341,7 +362,7 @@ def parse_statement(stream: TokenStream) -> ast.Statement:
             # consuming "have" is the whole difference.
             stream.accept_word("have")
             try:
-                action = parse_statement(stream)
+                action = parse_statement(stream, top_level=False)
                 return ast.May(ast.PlayerRef("you"), action=action)
             except GrammarError:
                 stream.reset(mark)
@@ -369,12 +390,40 @@ def parse_statement(stream: TokenStream) -> ast.Statement:
         if not joined and stream.mark() == mark:
             break
         try:
-            follow = parse_statement(stream)
+            follow = parse_statement(stream, top_level=False)
         except GrammarError:
             stream.reset(mark)
             break
         statement = ast.Sequence((statement, follow))
+
+    # "…, where X is the number of <filter>." The one trailing modifier the
+    # loop above deliberately refuses to join, read here instead: it is not
+    # another statement, it *defines* a value the statement already used. Read
+    # after the join so it binds the whole sentence — "each opponent loses X
+    # life and you gain X life, where X is …" is two effects and one
+    # definition, and consuming it inside the first would leave the second's X
+    # undefined.
     return statement
+
+
+def _parse_where_x(stream: TokenStream) -> ast.Amount | None:
+    """``[,] where X is the number of <filter>`` — or None when absent.
+
+    Refuses anything else after "where X is" rather than skipping the clause:
+    an undefined X silently reads as the *cast's* X, and a permanent's
+    triggered ability has no cast at all.
+    """
+    mark = stream.mark()
+    stream.accept_punct(",")
+    if not stream.accept_word("where"):
+        stream.reset(mark)
+        return None
+    if not (stream.accept_word("x") and stream.accept_word("is")):
+        raise stream.error("expected 'X is' after 'where'")
+    stream.accept_word("the")
+    if not stream.accept_phrase("number", "of"):
+        raise stream.error("expected 'the number of' in a where-clause")
+    return ast.CountOf(parse_object_filter(stream))
 
 
 def _parse_condition(stream: TokenStream) -> ast.Condition:

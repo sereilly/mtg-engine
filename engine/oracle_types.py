@@ -12,6 +12,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+# The payload key a "…, where X is the number of <filter>" clause travels on.
+# Here rather than beside either of its two users, because the grammar writes it
+# and the dispatcher reads it and this module is the one both may import: a
+# string agreed in two places is exactly the second copy that drifts.
+X_FROM_COUNT = "x_from_count"
+
 _COLOR_WORD_TO_SYMBOL: dict[str, str] = {
     "white": "W",
     "blue": "U",
