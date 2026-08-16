@@ -644,9 +644,12 @@ class EffectsMixin:
             )
         return placed
 
-    def _draw_with_replacements(self, player: PlayerState, count: int) -> int:
+    def _draw_with_replacements(
+        self, player: PlayerState, count: int, *, turn_based: bool = False
+    ) -> int:
         """Draw ``count`` cards for *player*, letting an armed draw replacement
-        take the first of them (CR 614) — Aladdin's Lamp, Ring of Ma'rûf.
+        take the first of them (CR 614) — Aladdin's Lamp, Ring of Ma'rûf — or
+        change how many there are (Teferi's Ageless Insight).
 
         A replacement that needs the player to choose suspends the draw and
         reports 0 drawn; the cards arrive when the choice is answered, along
@@ -660,22 +663,37 @@ class EffectsMixin:
         *creates* (Lich turning a life gain into one, CR 616.2) is a draw like
         any other. `player.draw` is the library operation underneath; reaching
         for it directly is how a second armed replacement gets skipped.
+
+        ``turn_based`` marks CR 504.1's draw-step draw. Only the draw step
+        passes it, and it exists for the rider on every draw-doubler ever
+        printed — "except the first one you draw in each of your draw steps".
+        The engine cannot derive it: any later draw in the same step is also
+        made by the active player during their draw step, and it is not the
+        first one.
         """
         if count <= 0:
             return player.draw(count)
         consumed, payload = apply_replacements(
             self,
             "draw",
-            {"player": player, "count": count, "drawn": 0},
+            {"player": player, "count": count, "drawn": 0, "turn_based": turn_based},
             # A draw can suspend: "the replacement took it, the cards arrive
             # when you answer" is already this method's contract, so CR 616.1e's
             # choice can be put to the player here. Re-running this call is what
             # the answer resumes, which is why the thunk is the call itself.
-            restart=lambda: self._draw_with_replacements(player, count),
+            restart=lambda: self._draw_with_replacements(
+                player, count, turn_based=turn_based
+            ),
         )
         if consumed:
             return int(payload["drawn"])
-        return player.draw(count)
+        # `payload["count"]`, not `count`: a replacement may have changed how
+        # many draws this event is (Teferi's Ageless Insight) without consuming
+        # it, exactly as `place_plus1_counters` reads back a raised counter
+        # count. Reading the local instead is why a *modifying* draw
+        # replacement could not be written at all — the interceptor would run,
+        # the number would change, and the draw would take the old one.
+        return player.draw(max(0, int(payload.get("count", count))))
 
     def _finish_lamp_draw(self, player_index: int, chosen_index: int, x: int) -> int:
         """Complete a lamp-replaced draw: the chosen card of the top ``x`` goes

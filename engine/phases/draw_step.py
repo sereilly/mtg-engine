@@ -153,7 +153,13 @@ class DrawStepMixin:
             if extra.requires_untapped and permanent.tapped:
                 continue
             bonus += extra.count
-        drawn = self._draw_with_replacements(player, 1 + bonus)
+        # CR 504.1's turn-based draw, marked as such: "the first one you draw in
+        # each of your draw steps" (Teferi's Ageless Insight) is exempt from a
+        # draw-doubling rider, and this is the only call in the engine that can
+        # say which draw that is. The bonus draws that ride along (Howling Mine)
+        # are *not* the first one, which the flag gets right for free — the
+        # exemption is one draw, not one event.
+        drawn = self._draw_with_replacements(player, 1 + bonus, turn_based=True)
         self.log.append(f"{player.name} drew {drawn} card(s) in draw step")
         self._close_or_defer_step(phase, step, defer_priority)
         return drawn

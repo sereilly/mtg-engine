@@ -222,31 +222,31 @@ def test_an_aura_is_left_to_its_own_gate():
 # ---------------------------------------------------------------------------
 
 
-# The list started at three and shrinks only one way — by the card being
-# implemented. Sanctum of Stone Fangs went in round 54; Fiery Emancipation went
-# in round 57, along with the reason all three were *reported* unsupported once
-# the gate could see them but only two could ever have been fixed by a parse
-# rule: a CR 614 replacement produces no instruction at all, and the support
-# gate had to learn to ask that registry (`_derived_static_claims`) before an
-# interceptor could hold a card up on its own.
-@pytest.mark.parametrize(
-    "name,clause",
-    [
-        ("Teferi's Ageless Insight", "would draw a card"),
-    ],
-)
-def test_a_permanent_whose_line_never_became_an_ability_is_unsupported(name, clause):
-    """The cards the blind spot hid, and the shape of it: each prints one line,
-    the parser refuses that line outright, and so **no ability object was ever
-    built**. The gate asked for an unreadable ability and found none, which
-    reads as "nothing failed" and means "nothing failed late enough to leave a
-    record". All three entered play, reported supported and did nothing."""
+# Round 53 found the blind spot with three cards and this test named all three.
+# All three are implemented now — Sanctum of Stone Fangs in round 54, Fiery
+# Emancipation and Teferi's Ageless Insight in 57 and 58 — so a card list here
+# would be empty, and an empty list is a guard that passes because it asks
+# nothing. The *property* is what survives, probed with text no card prints:
+# a permanent whose one line the parser refuses outright leaves no ability
+# object behind, and "no ability failed" is not the same as "nothing failed".
+def test_a_permanent_whose_line_never_became_an_ability_is_unsupported():
+    """The shape of the blind spot. The gate asked for an unreadable *ability*,
+    which is an ability that failed late enough to become an object; a line the
+    parser refuses outright leaves the list empty, so the more completely a line
+    failed the more likely the card was to pass. All three cards entered play,
+    reported supported and did nothing."""
     pool = {c.name: c for c in _whole_pool()}
-    program = compile_card_oracle(pool[name])
+    program = compile_card_oracle(
+        dataclasses.replace(
+            pool["Fiery Emancipation"],
+            name="Probe Enchantment",
+            oracle_text="Whenever the sky is green, you win the game.",
+        )
+    )
 
     assert not program.supported
     assert "no ability of this permanent is implemented" in program.reason
-    assert clause in program.reason.lower(), program.reason
+    assert "sky is green" in program.reason
 
 
 def test_equipment_is_left_to_its_own_gate_like_an_aura():

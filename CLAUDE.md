@@ -461,6 +461,18 @@ adding entries, not editing dispatch**:
   for the interactive pay-or-consequence upkeep triggers, keyed by the
   `(trigger condition, instruction kind)` pair the compiler produces. Everything
   a handler reads arrives on `UpkeepContext`. A duplicate pair raises at import.
+- **A trigger condition needs a dispatcher, and parsing is not one.** A
+  condition can be in `engine/oracle.py`'s pattern table *and* the grammar's
+  phrase table and still have nothing that announces it: `draws_card` was, with
+  two supported cards compiling real instructions and doing nothing.
+  `tests/engine/test_trigger_dispatchers.py` asks of every condition the pool
+  produces whether the engine names that kind anywhere outside the declaration
+  tables — the weak question deliberately, because a trigger is announced by
+  `emit`, by an `iter_triggered_abilities` scan, by the upkeep registry or by a
+  phase-step comparison, and a list of mechanisms goes stale like a list of fire
+  sites. Where a draw, a life gain or a sacrifice has no single call site, the
+  announcement goes on the **state-based sweep** over the record every path
+  already feeds (`mixins/game_ending.py`), not on the call sites.
 - `engine/phases/` — one mixin per turn phase and per step within a phase
   (CR 500–514): beginning phase (untap/upkeep/draw steps), the two main phases,
   combat phase (its five steps), and the ending phase (end/cleanup steps). Each is

@@ -157,8 +157,13 @@ class TurnManagementMixin:
         self.lamp_draw_replacements = {}
         # Ring of Ma'rûf's armed replacement likewise lasts only "this turn".
         self.outside_game_draw_replacements = set()
-        # The second-draw sweep's once-per-turn memory (Mystic Skyfish).
+        # The second-draw sweep's once-per-turn memory (Mystic Skyfish), and the
+        # per-draw sweep's (Lorescale Coatl). Both read
+        # ``cards_drawn_this_turn``, which is emptied in the loop below, so both
+        # have to forget in the same breath — a memory that outlived the record
+        # would announce every card of the new turn's first draw all over again.
         self.second_draw_fired_this_turn = set()
+        self.draws_announced_this_turn = {}
         for player in self.players:
             player.damage_taken_this_turn = 0
             player.artifact_damage_taken_this_turn = 0

@@ -2193,3 +2193,62 @@ def test_chandras_pyreling_is_silent_on_combat_damage(set_pool):
     assert p2.life == 19, "the 1/3 connected"
     assert pyreling.effective_power == 1
     assert not game._has_keyword(pyreling, "double strike")
+
+
+# --- Round 58: the condition that parsed on both sides and fired nowhere ----
+
+
+def _draw_trigger_board(set_pool):
+    pool = set_pool("M21")
+    oak = Permanent(card=pool["Burlfist Oak"])
+    coatl = Permanent(card=pool["Lorescale Coatl"])
+    p1 = PlayerState(
+        name="P1", battlefield=[oak, coatl], library=[pool["Island"]] * 8
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    return game, p1, oak, coatl, pool
+
+
+def test_a_draw_trigger_fires_at_all(set_pool):
+    """Two cards that compiled supported, entered play and did nothing.
+
+    "Whenever you draw a card" parsed in the oracle table *and* in the grammar's
+    phrase table and had no dispatcher anywhere, so both cards produced a real
+    instruction under a condition the game never announced. The support report
+    counted them as working the whole time — the compiler can see that a
+    condition parsed and cannot see whether anything says it happened."""
+    game, p1, oak, coatl, pool = _draw_trigger_board(set_pool)
+
+    game._draw_with_replacements(p1, 1)
+    game._settle()
+
+    assert (oak.effective_power, oak.effective_toughness) == (4, 5)
+    assert coatl.metadata["plus_counters"] == 1
+
+
+def test_a_draw_trigger_fires_once_per_card(set_pool):
+    """CR 121.2: drawing N cards is N individual draws, so the sweep counts
+    rather than flags — which is the whole difference between this and the
+    "your second card each turn" trigger it sits beside."""
+    game, p1, oak, coatl, pool = _draw_trigger_board(set_pool)
+
+    game._draw_with_replacements(p1, 3)
+    game._settle()
+
+    assert coatl.metadata["plus_counters"] == 3
+    assert oak.effective_power == 2 + 2 * 3
+
+
+def test_an_opponents_draw_does_not_fire_your_trigger(set_pool):
+    """"Whenever **you** draw a card" — the seat is the drawing player's, and
+    the sweep is game-wide, so this is the narrowing that has to hold."""
+    game, p1, oak, coatl, pool = _draw_trigger_board(set_pool)
+    p2 = game.players[1]
+    p2.library = [pool["Island"]] * 4
+
+    game._draw_with_replacements(p2, 2)
+    game._settle()
+
+    assert coatl.metadata.get("plus_counters", 0) == 0
+    assert oak.effective_power == 2

@@ -325,3 +325,86 @@ def test_a_prevention_shield_is_spent_before_the_multiplier(set_pool):
     game.cast_from_hand(0, "Shock", target_player_index=1)
 
     assert p2.life == 20, "the shield ate the 2 before it could become 6"
+
+
+# --- Round 58: a draw replacement that changes how many ---------------------
+
+
+def _insight_board(set_pool, *, library: int = 12):
+    pool = set_pool("M21")
+    insight = Permanent(card=pool["Teferi's Ageless Insight"])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[insight],
+        library=[pool["Island"]] * library,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    return game, p1, insight, pool
+
+
+def test_teferis_ageless_insight_doubles_an_ordinary_draw(set_pool):
+    """The last of round 53's three, and the one that needed the seam to change
+    rather than the gate: every other draw replacement *consumes* the event, so
+    ``_draw_with_replacements`` took its local ``count`` at the end and a
+    replacement that only changed the number could not be written at all."""
+    game, p1, insight, pool = _insight_board(set_pool)
+
+    game._draw_with_replacements(p1, 1)
+
+    assert len(p1.hand) == 2
+
+
+def test_the_first_draw_of_your_draw_step_is_exempt(set_pool):
+    """The rider, and it is one *draw* rather than one event. The draw step
+    draws once here, and that once is the one the card exempts."""
+    game, p1, insight, pool = _insight_board(set_pool)
+    game.turn = 3
+
+    game.resolve_draw_step(0)
+
+    assert len(p1.hand) == 1
+
+
+def test_only_the_first_draw_of_the_draw_step_is_exempt(set_pool):
+    """A Howling Mine makes the draw step draw 1 + 1 in **one call**. CR 121.2
+    makes that two individual draws, and the exemption covers the first — so the
+    second doubles and three cards arrive. An implementation exempting the
+    *event* rather than the draw would have drawn two.
+
+    The Mine is LEA's, which is the point of ``set_pool`` taking a code: the
+    card under test is M21's and the Mine is a prop for the shape of its
+    event."""
+    game, p1, insight, pool = _insight_board(set_pool)
+    p1.battlefield.append(Permanent(card=set_pool("LEA")["Howling Mine"]))
+    game.turn = 3
+
+    game.resolve_draw_step(0)
+
+    assert len(p1.hand) == 3
+
+
+def test_a_draw_later_in_your_own_draw_step_is_not_the_first_one(set_pool):
+    """The control the flag exists for: "the first one you draw in each of your
+    draw steps" is not "any draw during your draw step", and the engine cannot
+    tell them apart from the phase alone — both are made by the active player
+    while the step is the draw step."""
+    game, p1, insight, pool = _insight_board(set_pool)
+    game.turn = 3
+    game.resolve_draw_step(0)
+
+    game._draw_with_replacements(p1, 1)
+
+    assert len(p1.hand) == 3, "one from the step, two from the instant-speed draw"
+
+
+def test_an_opponents_draw_is_not_yours(set_pool):
+    """"If **you** would draw a card" — the doubler is found on the drawing
+    player's own battlefield (CR 109.5)."""
+    game, p1, insight, pool = _insight_board(set_pool)
+    p2 = game.players[1]
+    p2.library = [pool["Island"]] * 4
+
+    game._draw_with_replacements(p2, 1)
+
+    assert len(p2.hand) == 1

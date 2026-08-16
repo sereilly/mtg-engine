@@ -277,6 +277,11 @@ class Game(
     # the sweep that watches ``cards_drawn_this_turn`` needs to remember who it
     # already announced. Reset with the other per-turn counters.
     second_draw_fired_this_turn: set = field(default_factory=set)
+    # How many of each seat's draws the per-draw sweep has already announced
+    # (Lorescale Coatl, Burlfist Oak). A count rather than a flag, because
+    # "whenever you draw a card" fires once per card (CR 121.2) where the
+    # second-card trigger above fires once per turn. Reset with it.
+    draws_announced_this_turn: dict = field(default_factory=dict)
     # Global statics whose source has left but whose effect continues
     # until end of turn (Titania's Song). Cleared at cleanup.
     lingering_global_statics: list = field(default_factory=list)

@@ -129,6 +129,12 @@ LIFE_FLOOR = 10  # Ali from Cairo
 LIFE_GAIN_TO_DRAW = 10  # Lich
 EXILE_INSTEAD_OF_DYING = 10  # Disintegrate's "exile it instead"
 DISCARD_DESTINATION = 10  # Library of Leng
+# Before the two draw replacements that *consume* the event, and for the
+# player's benefit: a doubler applied first turns one draw into two, and the
+# Lamp then replaces one of them, so the player gets both effects. The other
+# way round the Lamp consumes the only draw there was and the doubler never
+# applies — which CR 616.1e permits, and which is a card fewer.
+DRAW_DOUBLED = 5  # Teferi's Ageless Insight
 DRAW_FROM_OUTSIDE = 10  # Ring of Ma'rûf
 DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
 EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
@@ -327,6 +333,10 @@ EXTRA_PLUS1_COUNTER_TEXT = (
 TRIPLE_DAMAGE_TEXT = (
     "if a source you control would deal damage to a permanent or player, "
     "it deals triple that damage to that permanent or player instead"
+)
+DOUBLE_DRAW_TEXT = (
+    "if you would draw a card except the first one you draw in each of your "
+    "draw steps, draw two cards instead"
 )
 
 
@@ -754,6 +764,60 @@ def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) ->
     return 0
 
 
+def _doubled_draw_count(game, payload: dict) -> int:
+    """How many cards this draw event should take, once the doublers have had
+    it — the same number back when none apply.
+
+    Two things the arithmetic has to keep apart. CR 121.2 makes an event of
+    ``count`` draws *that many individual draws*, and the rider exempts **one
+    draw**, not one event: a draw step with a Howling Mine out draws 1 + 1, and
+    only the first of those two is the one you drew first in your draw step. And
+    CR 614.5 stops a doubler applying to the draws it created, so each affected
+    draw becomes two rather than dividing forever.
+
+    Copies multiply, for the reason ``_damage_multiplier`` records: an effect
+    applies once per event, so counting the sources is the only way a second
+    doubler is not silently dropped. Teferi's Ageless Insight is legendary and
+    Alhammarret's Archive is not in this pool, so today the count is one — the
+    legend rule is round 49's open block, and "there can only be one" is exactly
+    the kind of claim about the pool that expires without anyone editing it.
+    """
+    count = int(payload.get("count", 0))
+    exempt = 1 if payload.get("turn_based") else 0
+    doublers = sum(
+        1
+        for perm in game.controlled_by(payload["player"])
+        if DOUBLE_DRAW_TEXT in (perm.effective_card.oracle_text or "").lower()
+    )
+    affected = max(0, count - exempt)
+    return exempt + affected * (2 ** doublers)
+
+
+def _applies_double_draw(game, payload: dict) -> bool:
+    return _doubled_draw_count(game, payload) > int(payload.get("count", 0))
+
+
+@replacement_effect("draw", DRAW_DOUBLED, applies=_applies_double_draw)
+def _draw_two_cards_instead(game, payload: dict) -> ReplacementOutcome | None:
+    """Teferi's Ageless Insight: "If you would draw a card except the first one
+    you draw in each of your draw steps, draw two cards instead."
+
+    A *modifying* replacement, like Conclave Mentor's extra counter and unlike
+    the two below it: the event still happens, with a bigger number, so nothing
+    is consumed and the draws stay ordinary draws — a Ring of Ma'rûf or an
+    Aladdin's Lamp armed alongside still gets one of them (CR 616.1f re-asks
+    against the raised count).
+    """
+    player = payload["player"]
+    before = int(payload["count"])
+    payload["count"] = _doubled_draw_count(game, payload)
+    game.log.append(
+        f"{player.name} draws {payload['count']} instead of {before} "
+        "(Teferi's Ageless Insight)"
+    )
+    return ReplacementOutcome()
+
+
 def _applies_outside_game_draw(game, payload: dict) -> bool:
     return game.players.index(payload["player"]) in game.outside_game_draw_replacements
 
@@ -904,6 +968,10 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # and this is the entry that made the support gate's omission visible — the
     # card prints nothing else.
     (TRIPLE_DAMAGE_TEXT, ""),
+    # _draw_two_cards_instead (Teferi's Ageless Insight): the phrase is the whole
+    # line, rider included — the exemption is implemented, not ignored, so the
+    # claim covers the words that state it.
+    (DOUBLE_DRAW_TEXT, ""),
 )
 
 

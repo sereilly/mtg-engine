@@ -598,4 +598,27 @@ class GameEndingMixin:
             self.second_draw_fired_this_turn.add(seat)
             emit(self, "draws_second_card", seat=seat)
 
+        # "Whenever you draw a card" (Lorescale Coatl, Burlfist Oak) — the same
+        # sweep off the same record, counting instead of flagging, because
+        # CR 121.2 makes drawing N cards N individual draws and this one fires
+        # per card.
+        #
+        # It belongs here for a reason the second-card trigger only half shows:
+        # the condition parsed on **both** sides of the pipeline and had no
+        # dispatcher at all, so two cards compiled supported, entered play and
+        # did nothing. A per-draw-site announcement would have had the same fate
+        # as the replacements do — three handlers reach ``player.draw``
+        # directly, and a list of fire sites is only ever as complete as the
+        # last card that touched it.
+        for seat, player in enumerate(self.players):
+            if player.lost:
+                continue
+            announced = int(self.draws_announced_this_turn.get(seat, 0))
+            drawn = len(player.cards_drawn_this_turn)
+            if drawn <= announced:
+                continue
+            self.draws_announced_this_turn[seat] = drawn
+            for _ in range(drawn - announced):
+                emit(self, "draws_card", seat=seat)
+
         return any_changed

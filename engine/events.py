@@ -331,6 +331,9 @@ _SEAT_SCOPED_EVENTS = frozenset({
     "you_gain_life",
     "draws_second_card",
     "you_sacrifice_permanent",
+    # "whenever **you** draw a card" (Lorescale Coatl, Burlfist Oak) — announced
+    # game-wide by the draw sweep, matching only the drawing seat's permanents.
+    "draws_card",
     # "a source **you** control deals noncombat damage to an opponent"
     # (Chandra's Pyreling). The seat here is the *source's* controller, not the
     # damaged player's — an opponent burning you leaves the Pyreling silent —
