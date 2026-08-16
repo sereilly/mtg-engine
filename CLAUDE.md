@@ -264,6 +264,13 @@ adding entries, not editing dispatch**:
   resolver finishes it. Interactive seats queue on
   `game.pending_replacement_choices`; every other seat takes the default at
   once, through that same resolver. Two registrations, no new `Game` field.
+- **Drawing is one seam.** `Game._draw_with_replacements` is where a draw
+  becomes a CR 614 event; `PlayerState.draw` is the library operation
+  underneath. Reaching for the latter skips every armed draw replacement, which
+  five handlers did until round 61 — so it is banned outside the seam by
+  `tests/engine/test_draw_seam.py`, whose allow-list holds only the pregame
+  draws (CR 103.4: no battlefield, so no replacement can exist) and names them
+  with that reason.
 - `engine/mana_payment.py` — **whether a cost can be paid from the board, and
   how**. Two different questions: casting and activating spend the *pool*
   (`_pay_mana_cost`), because producing mana is the player's own prior action;

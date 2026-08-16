@@ -78,11 +78,17 @@ def draw_reveal_discard_unless_land(game: Game, instruction: OracleInstruction, 
     if not caster.library:
         # 120.3: the draw is still attempted; drawing from an empty library
         # marks the loss the same way every other draw does.
-        caster.draw(1)
+        game._draw_with_replacements(caster, 1)
         game.log.append(f"{card.name}: {caster.name} has no cards to draw")
         return True, "resolved"
-    drawn = caster.library[0]
-    caster.draw(1)
+    # Through the seam, and *then* read what arrived: a replacement may have
+    # taken this draw (Aladdin's Lamp) or doubled it (Teferi's Ageless
+    # Insight), so the top of the library before the draw is not reliably the
+    # card that gets revealed.
+    if not game._draw_with_replacements(caster, 1) or not caster.cards_drawn_this_turn:
+        game.log.append(f"{card.name}: {caster.name} drew nothing to reveal")
+        return True, "resolved"
+    drawn = caster.cards_drawn_this_turn[-1]
     game.log.append(f"{card.name}: {caster.name} drew and revealed {drawn.name}")
     if drawn.primary_type != "land":
         caster.hand.remove(drawn)
@@ -100,7 +106,7 @@ def draw_then_discard_self(game: Game, instruction: OracleInstruction, context: 
     card = context.card
     draw_count = int(instruction.payload.get("draw", 0))
     discard_count = int(instruction.payload.get("discard", 0))
-    drawn = caster.draw(draw_count)
+    drawn = game._draw_with_replacements(caster, draw_count)
     game.log.append(f"{card.name}: {caster.name} drew {drawn} card(s)")
 
     actual_discard = min(discard_count, len(caster.hand))
@@ -129,7 +135,7 @@ def discard_hand_ante_then_draw_seven(game: Game, instruction: OracleInstruction
         # CR 407.4: the caster owns the cards in their own library, so they are
         # the player who can ante the top one.
         game.ante_object(game.players.index(caster), caster.library.pop(0))
-    drawn = caster.draw(7)
+    drawn = game._draw_with_replacements(caster, 7)
     game.log.append(f"{card.name} resolved: discarded hand and drew {drawn} cards")
     return True, "resolved"
 
@@ -234,7 +240,7 @@ def wheel_of_fortune(game: Game, instruction: OracleInstruction, context: Oracle
     for player in game.players:
         while player.hand:
             player.graveyard.append(player.hand.pop(0))
-        player.draw(7)
+        game._draw_with_replacements(player, 7)
     game.log.append("Wheel effect resolved for all players")
     return True, "resolved"
 
@@ -246,7 +252,7 @@ def timetwister(game: Game, instruction: OracleInstruction, context: OracleExecu
         player.library = list(pool)
         player.hand = []
         player.graveyard = []
-        player.draw(7)
+        game._draw_with_replacements(player, 7)
     game.log.append("Timetwister effect resolved for all players")
     return True, "resolved"
 

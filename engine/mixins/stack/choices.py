@@ -1110,7 +1110,7 @@ class PendingChoicesMixin:
         # A free optional "you may draw a card" rider (Verduran Enchantress): no
         # cost to pay, just draw on accept.
         if entry.get("draw"):
-            drawn = player.draw(int(entry["draw"]))
+            drawn = self._draw_with_replacements(player, int(entry["draw"]))
             self.log.append(f"{player.name} drew {drawn} card(s) from {entry['card_name']}")
             return
         plan = self._optional_pay_plan(player, entry)

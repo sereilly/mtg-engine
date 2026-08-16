@@ -48,6 +48,11 @@ class TurnManagementMixin:
         self.place_starting_ante(order)
         for i in order:
             player = self.players[i]
+            # CR 103.4's opening hand, and one of the three draws that stay off
+            # the replacement seam by rule rather than by oversight: the game has
+            # not begun, so there is no permanent on any battlefield for a
+            # CR 614 replacement to come from. `tests/engine/test_draw_seam.py`
+            # names these three and why.
             drawn = player.draw(7)
             self.log.append(f"{player.name} drew opening hand of {drawn} card(s)")
 

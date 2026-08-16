@@ -7,8 +7,8 @@ printings, 26,113 unique cards** per `set_progress.json`.
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–57 — lives in git history at and before
-commit `198ca7e`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–58 — lives in git history at and before
+commit `24fcf38`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -141,16 +141,6 @@ needs two rounds is worth splitting only if neither half ships a card alone
   damage path. So the automatic half is the Nine Lives class hiding behind a
   verified-sounding acknowledgement. Round 26's counter record is the
   prerequisite for fixing it honestly.
-- **Three zones handlers call `player.draw` directly**, skipping any armed draw
-  replacement, which is `_draw_with_replacements`' own docstring's warning.
-  Round 31 banned the equivalent shortcut for counter placement by AST guard
-  while the debt was still cheap to prevent; the draw debt is still owed — and
-  since round 58 it has a card behind it. Teferi's Ageless Insight does not
-  double a Wheel of Fortune, a Timetwister or a Bazaar of Baghdad, because those
-  three take their cards off the library themselves. The *trigger* half is safe:
-  "whenever you draw a card" is announced by a sweep over
-  ``cards_drawn_this_turn``, which every path feeds, so the shortcut costs the
-  replacements and nothing else.
 - **The verification tracker holds 19 untested cards** (the ones Revised added).
   Rounds 46–47 checked all nineteen behaviour by behaviour and fixed three real
   bugs in them, but a headless sweep is not a manual in-game pass and
@@ -265,86 +255,6 @@ Not gaps to close on sight — each was measured and left refusing:
     the guard is the signal that a family stopped absorbing new work.
 
 ---
-
-## Round 58: a replacement that changes the number, and a condition nothing said
-
-*(2026-08-16.)* M21 **213 → 214** in the count and **three more cards that
-actually work** — which is the whole shape of this round. Teferi's Ageless
-Insight is the +1. Lorescale Coatl and Burlfist Oak were already counted as
-supported and had never once done anything.
-
-**Teferi's needed the draw seam to change, not the gate.** Round 57's seventh
-registry meant a claim was waiting for it, but "If you would draw a card except
-the first one you draw in each of your draw steps, draw two cards instead" is a
-*modifying* replacement, and every draw replacement before it **consumed** the
-event — Aladdin's Lamp and Ring of Ma'rûf both take the draw and report what
-they did. So `_draw_with_replacements` took its own local `count` at the end and
-never read the payload's, which meant a replacement that only changed the number
-could not be written at all: the interceptor would run, the number would change,
-and the draw would take the old one. `place_plus1_counters` has read its count
-back since Conclave Mentor; the draw seam is the same rule and did not.
-
-**The rider is one draw, not one event.** CR 121.2 makes an event of N draws
-that many individual draws, and "the first one you draw in each of your draw
-steps" exempts one of them — so a draw step with a Howling Mine out draws 1 + 1
-in one call and three cards arrive, not two. The exemption is a flag the draw
-step passes (`turn_based=True`), because the engine genuinely cannot derive it:
-a later draw during your own draw step is also made by the active player while
-the step is the draw step, and it is not the first one.
-
-**Then the round found something.** Checking that a doubled draw fires "whenever
-you draw a card" the right number of times turned up the fact that it fires it
-**no** times: `draws_card` parsed in the oracle table *and* in the grammar's
-phrase table and had no dispatcher anywhere. Two supported M21 cards compiled a
-real instruction under a condition the game never announced — Lorescale Coatl
-("put a +1/+1 counter on this creature") and Burlfist Oak ("gets +2/+2 until end
-of turn") — and both entered play and did nothing, invisibly, because the
-support report can see that a condition parsed and cannot see whether anything
-says it happened. That is idiom 4's fifth instance and its first with cards
-behind it.
-
-**It goes on the sweep, not on the draw sites**, beside the "your second card
-each turn" trigger and off the same record. That choice is what makes it
-complete rather than nearly complete: three zones handlers reach `player.draw`
-directly, and a per-site announcement would have missed exactly those three the
-way the replacements already do. Counting rather than flagging is the only
-difference from its neighbour — CR 121.2 again.
-
-**And the guard that should have caught it now exists.**
-`tests/engine/test_trigger_dispatchers.py` takes every condition a *supported*
-card compiles with a real instruction and asks whether the engine names that
-kind anywhere at all. Deliberately the weak question: a trigger can be
-dispatched by `emit`, by an `iter_triggered_abilities` scan, by the upkeep
-registry's `(condition, kind)` pair or by a plain comparison in a phase step, and
-enumerating those mechanisms is a list that goes stale exactly like a list of
-fire sites. Docstrings are excluded — `engine/events.py`'s own docstring names
-`draws_card`, as an example of this very failure — and so are the parse tables
-and the event-filter rows, because a filter with no announcement behind it
-narrows an event that never happens.
-
-The recorded draw debt got a card, too: Teferi's does **not** double a Wheel of
-Fortune, a Timetwister or a Bazaar of Baghdad, because those three take their
-cards off the library themselves. The trigger half is safe — the sweep sees
-them — so the shortcut now costs exactly the replacements and nothing else,
-which is a sharper statement of the debt than "still owed".
-
-Suite **5,095** at 21.9s, every `--check` green, shipped pool 388/388, AI
-simulation byte-identical at 443 interactions. Five of the eight new card tests
-were watched to fail on the round-57 engine; the rest are controls — an
-opponent's draw, and the draw-step exemption, which passed before only because
-nothing happened at all.
-
-**Next:**
-
-- **The Shrine cycle**, unchanged: Fruitful Harvest's colour choice at a
-  trigger's resolution, Shattered Heights' discard cost from the
-  hand-activation block, Tranquil Light's per-Shrine cost reduction, Sanctum of
-  All's two-zone search and trigger-doubling static.
-- **The draw debt itself** now has both a card and a guard's shape to copy:
-  round 31 banned the counter-placement shortcut by AST guard, and the three
-  `player.draw` callers are a smaller list than that one was.
-- **Experimental Overload's variable-P/T token and Jolrael's team base-P/T**,
-  then the legend rule from round 49.
 
 ## Round 59: how many creatures attacked
 
@@ -493,3 +403,65 @@ nothing dead is silent.
 - **The draw debt** (three `player.draw` callers, with round 31's AST-guard
   shape to copy), then **Experimental Overload's variable-P/T token and
   Jolrael's team base-P/T**, then the legend rule from round 49.
+
+## Round 61: the draw debt, paid
+
+*(2026-08-16.)* No new cards, and that is what the round is: a debt recorded
+since round 28, prevented from spreading in round 31, given a card in round 58,
+and paid here.
+
+**Five handlers took their cards off the library themselves.** `player.draw` is
+the library operation; `Game._draw_with_replacements` is where drawing becomes
+an *event* — CR 614 lets a replacement take it (Aladdin's Lamp, Ring of Ma'rûf)
+or change how many cards it is (Teferi's Ageless Insight), and CR 121.2 makes a
+multi-card instruction that many individual draws. Wheel of Fortune, Timetwister,
+Bazaar of Baghdad, Sindbad and Verduran Enchantress all walked past it. Round 31
+banned the equivalent shortcut for counter placement *by AST guard, while that
+debt was still cheap to prevent*, and its docstring names this one as the reason;
+`tests/engine/test_draw_seam.py` is the same guard on the seam that already had
+the debt.
+
+**This is a shipped-pool fix, not an M21 one.** Every card in the failing
+interaction is LEA's: an armed Lamp and a Bazaar of Baghdad are both in the
+shipped 388, and the Lamp's charge sat unspent while the Bazaar drew two cards
+around it. The M21 doubler is what made the debt *visible* — a card that reads
+"draw two cards instead" and demonstrably did not — but the interaction has been
+wrong the whole time.
+
+**Sindbad needed more than a substitution.** "Draw a card and reveal it" read the
+top of the library *before* drawing, which is only the card drawn while nothing
+replaces the draw. It draws through the seam and then reads what actually
+arrived, which is also the honest reading of the card.
+
+**Three calls remain and all three are pregame** — CR 103.4's opening hand and
+the two mulligan redraws. Nothing is on any battlefield then, so there is no
+permanent for a CR 614 replacement to come from; routing them through the seam
+would announce a draw event to an empty board, which is not more correct, only
+more machinery. They are named in the guard's allow-list with that reason, and a
+second test fails if a name in that list stops existing — a stale exemption is
+an unguarded call site that looks guarded.
+
+Suite **5,115** at 22.9s, every `--check` green, shipped pool 388/388, M21 still
+217, AI simulation byte-identical at 443 interactions. The sim being unchanged is
+luck rather than evidence: no game in it happened to arm a draw replacement in
+the same turn as a Wheel. Three of the four new tests were watched to fail on the
+round-60 engine; the fourth is the allow-list's own sanity check.
+
+**Next:**
+
+- **A count as an amount.** "Draw cards **equal to the number of** cards named
+  Frantic Inventory in your graveyard" is three small things: the amount
+  production, "cards *named* X" in the noun parser, and a `named` restriction on
+  the zone count `count_from_payload` already does. The constraint to design
+  around is that round 54's machinery resolves one X per resolution, so a
+  sentence carrying two counts must refuse rather than let them collide.
+- **The Shrine cycle**, unchanged: Fruitful Harvest's colour choice at a
+  trigger's resolution, Shattered Heights' discard cost (whose "a land card or
+  **Shrine** card" is a noun-phrase *union* the parser has no production for),
+  Tranquil Light's per-Shrine cost reduction, Sanctum of All's two-zone search
+  and trigger-doubling static.
+- **A reflexive trigger** — "you may pay {1}. **When you do**, …" (Tolarian
+  Kraken), deliberately refused in round 60: CR 603.11 puts a second object on
+  the stack and the `may` machinery resolves inline.
+- **Experimental Overload's variable-P/T token and Jolrael's team base-P/T**,
+  then the legend rule from round 49.
