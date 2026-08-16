@@ -448,7 +448,7 @@ class LegalityMixin:
         if instruction.kind == "destroy_target_permanent":
             return self._destroy_target_legal(instruction.payload, perm)
         if instruction.kind == "mark_non_wall_target_to_attack":
-            return perm.is_creature and "wall" not in perm.card.type_line.lower()
+            return perm.is_creature and not perm.has_type("wall")
         if instruction.kind == "grant_unblockable_to_low_power_target":
             # Dwarven Warriors: "Target creature with power 2 or less can't be
             # blocked this turn." Only creatures with effective power ≤ 2 are legal,

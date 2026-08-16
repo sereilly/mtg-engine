@@ -2289,3 +2289,64 @@ a mixed cost.
 - **The discard cost's picker** (unchanged from round 44).
 
 ---
+
+## Round 47: the third body was never a Wall
+
+*(2026-08-15.)* The nineteenth card, and a correction to what round 46 said
+about it.
+
+**Primal Clay's choice was never missing.** Round 46 probed it headlessly, got a
+3/3, and wrote it up as "the mode the player never picked". It was the
+*documented default* — the first printed body is applied at once so headless and
+AI play never block, and an interactive seat is armed with a `body_choice`
+prompt that replaces it. With `interactive_seats` set, all three bodies apply.
+The probe answered a question about the test rig and it was recorded as a
+question about the card.
+
+**What is real is narrower and worse.** The card offers "a 1/6 **Wall** artifact
+creature with defender", and the body applied the P/T (layer 7b) and the keyword
+(layer 6) and dropped the creature **type**, which is layer 4. So the thing
+sitting on the battlefield as a 1/6 with defender was not a Wall — and twelve
+shipped cards ask exactly that question: Juggernaut can't be blocked by one,
+Invisibility can only be blocked by one, Tunnel and Dwarven Demolition Team
+destroy one, Ali Baba taps one, Animate Wall enchants one, Keldon Warlord counts
+the ones that aren't, and Cockatrice, Thicket Basilisk, Nettling Imp, Erhnam
+Djinn and Siren's Call each narrow to non-Walls.
+
+`choosable_bodies` now reads the body's subtypes against the creature-type
+vocabulary (never a literal, so the template covers any tribe), the chosen body
+is recorded on the permanent, and `collect_type_effects` contributes it at
+layer 4. Derived rather than stamped, so swapping bodies needs nothing undone —
+which is the reason it is stored as *the choice* and not as a type.
+
+**And then the four readers who were not asking the layer system.** With the
+Clay actually a Wall, half the cards above still ignored it, because they tested
+`"wall" in perm.card.type_line` — the text as printed, which no effect can
+change. The sharpest instance is inside one function: `_can_block_attacker`
+tested Juggernaut's restriction against the printed line and Invisibility's
+mirror restriction against `has_type`, **three lines apart**. A creature that
+became a Wall could block the Juggernaut it is supposed to stop and could also
+block the Invisible creature only Walls may block. All four now ask `has_type`.
+
+This is the bug class `tests/engine/test_layer_reads.py` exists for, arriving
+through the one door that guard does not watch: it pins the *storage* of land
+types and text changes, and these were reads of the printed type line, which is
+not storage anybody writes.
+
+Suite **4,983** at 18.7s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Four of the six new tests were
+watched to fail on HEAD; two are controls — the body that is *not* a Wall, which
+is what makes the first test about the type rather than about Primal Clay being
+unable to block at all.
+
+**Next:**
+
+- **Widen the layer-read guard to the printed type line.** Four sites is what
+  one afternoon's grep found; the guard should be the thing that finds the
+  fifth. `perm.card.type_line` has legitimate readers (the Aura/Equipment
+  shapes in `game_ending.py` are about the *card*, not the permanent), so this
+  is a ratchet with an exempt list rather than a ban — the same shape
+  `test_control_reads.py` already uses for positional subscripting.
+- **The discard cost's picker** (unchanged from round 44).
+
+---

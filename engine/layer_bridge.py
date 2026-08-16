@@ -403,6 +403,17 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 add_types(only, card_types=["creature"], timestamp=0, label=static.name)
             )
 
+    # "…it becomes your choice of … a 1/6 **Wall** artifact creature with
+    # defender" (Primal Clay). The body's P/T is layer 7b and its keyword is
+    # layer 6; its creature type is here, added rather than replacing, and
+    # derived from the recorded choice so swapping bodies needs nothing undone.
+    chosen_body = meta.get("chosen_body") or {}
+    body_subtypes = list(chosen_body.get("subtypes") or ())
+    if body_subtypes:
+        effects.append(
+            add_types(only, subtypes=body_subtypes, timestamp=0, label="chosen body")
+        )
+
     # "…and is a Knight in addition to its other types" (Dub, Demonic Embrace).
     # *Added*, not replacing — which is the whole difference from the land-type
     # change below, and why the two cannot share a call. Derived from the Aura's

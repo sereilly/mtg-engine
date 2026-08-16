@@ -188,7 +188,7 @@ def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, c
         (
             perm
             for perm in game.controlled_by(target)
-            if perm.is_creature and "wall" not in perm.card.type_line.lower()
+            if perm.is_creature and not perm.has_type("wall")
         ),
         None,
     )
@@ -208,7 +208,7 @@ def force_active_player_creatures_to_attack(game: Game, instruction: OracleInstr
         if not permanent.is_creature:
             continue
         permanent.metadata["must_attack_until_eot"] = True
-        is_wall = "wall" in permanent.card.type_line.lower()
+        is_wall = permanent.has_type("wall")
         # "Ignore this effect for each creature the player didn't control
         # continuously since the beginning of the turn."
         entered_this_turn = permanent.metadata.get("summoning_sickness_turn") == game.turn

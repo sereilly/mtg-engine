@@ -418,7 +418,12 @@ class DeclareBlockersStepMixin:
         if self._is_protected_from(attacker, blocker):
             return False
 
-        if "cant_be_blocked_by_walls" in attacker_kinds and "wall" in blocker.card.type_line.lower():
+        # `has_type`, not the printed line. Three lines below, Invisibility's
+        # mirror restriction already asked it that way — so the same question
+        # about the same creature had two answers in one function, and they
+        # disagreed for anything that *became* a Wall (Primal Clay's third
+        # body) or stopped being one.
+        if "cant_be_blocked_by_walls" in attacker_kinds and blocker.has_type("wall"):
             return False
 
         # Invisibility: attacker can only be blocked by Walls

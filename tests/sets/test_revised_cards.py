@@ -332,13 +332,18 @@ def _clay(catalog):
 
 def test_primal_clay_bodies_are_parsed_from_the_text(catalog):
     """A template, not a card: any "your choice of <body>, <body>, or <body>"
-    creature reads the same way."""
+    creature reads the same way.
+
+    ``subtypes`` is read against the creature-type vocabulary rather than a
+    literal, which is what makes "a 1/6 **Wall** artifact creature" a Wall for
+    the twelve shipped cards that ask.
+    """
     from engine.enter_effects import choosable_bodies
 
     assert choosable_bodies(_clay(catalog).oracle_text) == (
-        {"power": 3, "toughness": 3, "keyword": ""},
-        {"power": 2, "toughness": 2, "keyword": "flying"},
-        {"power": 1, "toughness": 6, "keyword": "defender"},
+        {"power": 3, "toughness": 3, "keyword": "", "subtypes": ()},
+        {"power": 2, "toughness": 2, "keyword": "flying", "subtypes": ()},
+        {"power": 1, "toughness": 6, "keyword": "defender", "subtypes": ("wall",)},
     )
 
 
@@ -494,3 +499,48 @@ def test_energy_flux_is_paid_off_with_two_floating_mana(catalog):
 
     assert [perm.card.name for perm in p2.battlefield] == ["Millstone"]
     assert p2.mana_pool["C"] == 0, "the {2} was actually spent"
+
+
+def test_primal_clays_wall_body_is_actually_a_wall(catalog):
+    """"…or a 1/6 **Wall** artifact creature with defender in addition to its
+    other types."
+
+    The body granted the P/T (layer 7b) and the keyword (layer 6) and dropped
+    the creature type, which is layer 4 — so the thing sitting there as a 1/6
+    with defender answered "no" to every one of the twelve shipped cards that
+    ask whether a creature is a Wall.
+    """
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.players[0].hand = [_clay(catalog)]
+    game.active_player_index = 0
+
+    game.queue_from_hand(0, "Primal Clay")
+    game.resolve_top_of_stack()
+    clay = game.players[0].battlefield[0]
+    assert game.confirm_enter_body_choice(0, 2)
+
+    assert (clay.effective_power, clay.effective_toughness) == (1, 6)
+    assert game._has_keyword(clay, "defender")
+    assert clay.has_type("wall")
+
+
+def test_a_different_body_leaves_no_wall_behind(catalog):
+    """Layer 4 is *derived* from the recorded choice rather than written onto
+    the permanent, so replacing one body with another needs nothing undone —
+    which is the reason the subtype is stored as the choice and not stamped."""
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.players[0].hand = [_clay(catalog)]
+    game.active_player_index = 0
+
+    game.queue_from_hand(0, "Primal Clay")
+    game.resolve_top_of_stack()
+    clay = game.players[0].battlefield[0]
+    assert game.confirm_enter_body_choice(0, 1)
+
+    assert (clay.effective_power, clay.effective_toughness) == (2, 2)
+    assert game._has_keyword(clay, "flying")
+    assert not clay.has_type("wall")

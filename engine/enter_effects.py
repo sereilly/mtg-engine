@@ -186,10 +186,21 @@ _BODY_RE = re.compile(
 def choosable_bodies(oracle_text: str) -> tuple[dict, ...]:
     """The bodies a "your choice of" creature may enter as.
 
-    Each is ``{"power", "toughness", "keyword"}``. The keyword is whatever the
-    body grants ("with flying", "with defender"); a body granting none has an
-    empty string, which is a body, not a missing one.
+    Each is ``{"power", "toughness", "keyword", "subtypes"}``. The keyword is
+    whatever the body grants ("with flying", "with defender"); a body granting
+    none has an empty string, which is a body, not a missing one.
+
+    ``subtypes`` is every creature type the body names — "a 1/6 **Wall**
+    artifact creature with defender". It was missing, and the omission is not
+    cosmetic: twelve shipped cards ask whether a creature is a Wall (Juggernaut
+    can't be blocked by one, Tunnel destroys one, Animate Wall enchants one,
+    Keldon Warlord counts the ones that aren't), and a Primal Clay that chose
+    that body answered "no" to all of them while sitting there as a 1/6 with
+    defender. Read against ``CREATURE_TYPES`` rather than a literal, so the
+    template covers any body naming any tribe.
     """
+    from .grammar.vocabulary import CREATURE_TYPES
+
     lowered = " ".join(oracle_text.lower().split())
     if CHOOSE_BODY_ON_ENTER not in lowered:
         return ()
@@ -205,5 +216,8 @@ def choosable_bodies(oracle_text: str) -> tuple[dict, ...]:
             "power": int(match.group("power")),
             "toughness": int(match.group("toughness")),
             "keyword": keyword,
+            "subtypes": tuple(
+                word for word in re.findall(r"[a-z']+", rest) if word in CREATURE_TYPES
+            ),
         })
     return tuple(bodies)

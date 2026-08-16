@@ -494,13 +494,18 @@ class PermanentStateMixin:
                     permanent, "conditional_static", holds, cs_power, cs_toughness
                 )
 
-    @staticmethod
-    def _apply_chosen_body(permanent: Permanent, body: dict) -> None:
-        """Set a "your choice of" creature's P/T and granted keyword.
+    def _apply_chosen_body(self, permanent: Permanent, body: dict) -> None:
+        """Set a "your choice of" creature's P/T, granted keyword and subtypes.
 
         Base P/T through engine/pt.py (layer 7b) and the keyword through the
         layer-6 grant API, so the body is the object's characteristics rather
         than a rewritten card — the mistake Animate Artifact used to make.
+
+        The **subtypes** are neither: they are layer 4, and layer 4 is derived
+        on every recompute rather than written. So the chosen body is recorded
+        and `collect_type_effects` reads it — which is also what makes replacing
+        one body with another free, since the previous body's types were never
+        stored anywhere to undo.
         """
         from ..keywords import grant_keyword, remove_keyword
 
@@ -510,6 +515,8 @@ class PermanentStateMixin:
         set_base_pt(permanent, int(body["power"]), int(body["toughness"]))
         if body.get("keyword"):
             grant_keyword(permanent, body["keyword"])
+        permanent.metadata["chosen_body"] = dict(body)
+        self._recompute_continuous_effects()
 
     def confirm_enter_body_choice(self, player_index: int, option_index: int) -> bool:
         """Answer a pending "your choice of <body>" prompt."""
