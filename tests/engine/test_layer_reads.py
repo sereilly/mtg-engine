@@ -24,8 +24,10 @@ stamped value has to be un-stamped by whoever wrote it, and only ever
 with it.
 """
 
+import io
 import pathlib
 import re
+import tokenize
 
 import pytest
 
@@ -63,14 +65,43 @@ def _engine_files() -> list[pathlib.Path]:
     return sorted(ENGINE.rglob("*.py"))
 
 
+def _code_only(source: str) -> list[str]:
+    """*source*'s lines with comments and string literals blanked out.
+
+    These guards are about what the engine *does*, and this repo explains
+    itself in prose: a docstring naming ``permanent.card.oracle_text`` to say
+    why a node is not normalized is a description of the rule, not a breach of
+    it. Matching it would leave the only fix available being to stop writing
+    the sentence down. Line numbers are preserved so a real hit still points at
+    its line.
+    """
+    lines = source.splitlines()
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return lines  # unparseable: report everything rather than nothing
+    for token in tokens:
+        if token.type not in (tokenize.COMMENT, tokenize.STRING):
+            continue
+        (start_row, start_col), (end_row, end_col) = token.start, token.end
+        for row in range(start_row, end_row + 1):
+            line = lines[row - 1]
+            head = line[:start_col] if row == start_row else ""
+            tail = line[end_col:] if row == end_row else ""
+            lines[row - 1] = head + " " * (len(line) - len(head) - len(tail)) + tail
+    return lines
+
+
 def _hits(pattern: re.Pattern, skip: set[str]) -> list[tuple[str, int, str]]:
     found = []
     for path in _engine_files():
         if path.name in skip:
             continue
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        source = path.read_text(encoding="utf-8")
+        raw = source.splitlines()
+        for number, line in enumerate(_code_only(source), 1):
             if pattern.search(line):
-                found.append((str(path.relative_to(ENGINE)), number, line.strip()))
+                found.append((str(path.relative_to(ENGINE)), number, raw[number - 1].strip()))
     return found
 
 
@@ -214,4 +245,73 @@ def test_no_printed_read_exemption_has_gone_stale():
     assert not stale, (
         f"exemptions with no printed read left: {stale} — drop them from "
         "PRINTED_READ_EXEMPTIONS"
+    )
+
+
+# ---------------------------------------------------------------------------
+# What a permanent says, and the keywords parsed off it
+# ---------------------------------------------------------------------------
+#
+# The same ratchet one layer over. ``perm.card.oracle_text`` and
+# ``perm.card.keywords`` are the card as it left the printer, and three separate
+# effects change what a permanent actually says before anything should read it:
+# layer 1 (a copy takes the copied object's rules text, CR 707.2), layer 3 (a
+# text change rewrites words, CR 612.1), and the ability a board-wide static
+# grants, which ``Permanent.effective_card`` appends after both.
+#
+# Round 48 gave the *type and colour* accessors this guard and wrote down that
+# the text had none. The census that followed found reads in seventeen files,
+# and they were not theoretical:
+#
+#   * a Clone of Wall of Stone could attack, because the defender gate scanned
+#     the printed keyword list — and so could a Primal Clay on its 1/6 Wall
+#     body, whose defender is a layer-6 grant that is in *neither* card;
+#   * a Clone of Veteran Bodyguard let its controller take the damage, a Copy
+#     Artifact of Time Vault untapped every turn, a Clone of Old Man of the Sea
+#     was never offered its keep-tapped choice;
+#   * Sleight of Mind on a Ward and Magical Hack on Burrowing rewrote the word
+#     and changed nothing, which is a text-changing effect doing the one thing
+#     it exists to do.
+#
+# So the accessor is ``permanent.effective_card`` — or, for a keyword, the
+# ``_has_keyword`` that asks layer 6 as well.
+
+_PRINTED_TEXT_READS = re.compile(r"\.card\.(oracle_text|keywords)\b")
+
+# file -> why its printed text reads are the right question.
+PRINTED_TEXT_EXEMPTIONS: dict[str, str] = {
+    # A cycle, not a preference: ``effective_card`` appends the abilities these
+    # statics grant, so asking the effective text which permanents grant them
+    # would make the answer depend on itself. Both readers live here for that
+    # reason — ``_refresh_global_statics`` calls in rather than keeping its own.
+    "global_statics.py": "the text that defines a static cannot be read through it",
+    # The resolving spell's own card, reached through the execution context.
+    # A spell is not a permanent and has no layers applied to it here.
+    "handlers/zones.py": "the resolving spell's card, not a permanent",
+}
+
+
+def test_printed_text_and_keyword_reads_stay_where_they_belong():
+    """"What does this permanent say?" has one answer, and it is the computed
+    one."""
+    offenders = [
+        hit for hit in _hits(_PRINTED_TEXT_READS, skip=set())
+        if hit[0].replace("\\", "/") not in PRINTED_TEXT_EXEMPTIONS
+    ]
+    assert not offenders, (
+        "printed oracle_text/keywords read outside the exempt list — ask "
+        "permanent.effective_card (or _has_keyword, which also asks layer 6), "
+        "or add the file to PRINTED_TEXT_EXEMPTIONS with the reason it really "
+        "means the card:\n"
+        + "\n".join(f"  {f}:{n}: {t}" for f, n, t in offenders)
+    )
+
+
+def test_no_printed_text_exemption_has_gone_stale():
+    """The list may only shrink, for the same reason as the one above."""
+    live = {hit[0].replace("\\", "/") for hit in _hits(_PRINTED_TEXT_READS, skip=set())}
+    stale = sorted(set(PRINTED_TEXT_EXEMPTIONS) - live)
+    assert not stale, (
+        f"exemptions with no printed text read left: {stale} — drop them from "
+        "PRINTED_TEXT_EXEMPTIONS"
     )

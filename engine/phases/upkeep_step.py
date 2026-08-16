@@ -149,7 +149,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         victim = self.players[player_index]
         triggers: list[dict] = []
         for permanent in self.all_permanents():
-            if "prevent x of that damage" not in permanent.card.oracle_text.lower():
+            if "prevent x of that damage" not in permanent.effective_card.oracle_text.lower():
                 continue
             attached = permanent.metadata.get("attached_to")
             if attached is None or not self.controls(victim, attached):
@@ -254,7 +254,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # Living Artifact: "At the beginning of your upkeep, you may remove a
         # vitality counter from this Aura. If you do, you gain 1 life."
         for perm in self.controlled_by(player_index):
-            if "you may remove a vitality counter" not in perm.card.oracle_text.lower():
+            if "you may remove a vitality counter" not in perm.effective_card.oracle_text.lower():
                 continue
             if int(perm.metadata.get("vitality_counters", 0)) <= 0:
                 continue

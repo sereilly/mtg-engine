@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**244 / 585 tracked rules covered (41%)** — 1082 tests, 0 unannotated.
+**244 / 585 tracked rules covered (41%)** — 1092 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -560,7 +560,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p... *(1 tests)*
 - [ ] **502.2** Second, if it’s day and the previous turn’s active player didn’t cast any spells during that turn...
-- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(11 tests)*
+- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(12 tests)*
 - [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(1 tests)*
 
 ### 503. Upkeep Step
@@ -610,7 +610,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(26 tests, subrules abcghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(28 tests, subrules abcghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(9 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -742,7 +742,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 612. Text-Changing Effects
 
-- [x] **612.1** Some continuous effects change an object’s text. This can apply to any words or symbols printed o... *(5 tests)*
+- [x] **612.1** Some continuous effects change an object’s text. This can apply to any words or symbols printed o... *(8 tests)*
 - [x] **612.2** A text-changing effect changes only those words that are used in the correct way (for example, a ... *(1 tests)*
 - [x] **612.3** Effects that add or remove abilities don’t change the text of the objects they affect, so any abi... *(1 tests)*
 - [ ] **612.4** A token’s subtypes and rules text are defined by the spell or ability that created the token. A t...
@@ -755,8 +755,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(56 tests, subrules bcdefg)*
-- [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(7 tests, subrules ac)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(60 tests, subrules bcdefg)*
+- [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(13 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(56 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
@@ -850,7 +850,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **702.1** Most abilities describe exactly what they do in the card’s rules text. Some, though, are very com... *(1 tests)*
 - [x] **702.2** Deathtouch *(4 tests, subrules bc)*
-- [x] **702.3** Defender *(3 tests, subrules b)*
+- [x] **702.3** Defender *(5 tests, subrules b)*
 - [x] **702.4** Double Strike *(3 tests, subrules b)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.8** Flash *(2 tests, subrules ab)*
@@ -858,9 +858,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.10** Haste *(3 tests, subrules bc)*
 - [x] **702.11** Hexproof *(2 tests, subrules bd)*
 - [x] **702.12** Indestructible *(2 tests, subrules b)*
-- [x] **702.14** Landwalk *(6 tests, subrules bc)*
+- [x] **702.14** Landwalk *(7 tests, subrules abc)*
 - [x] **702.15** Lifelink *(6 tests, subrules b)*
-- [x] **702.16** Protection *(39 tests, subrules abcdefghjkmn)*
+- [x] **702.16** Protection *(40 tests, subrules abcdefghjkmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(3 tests, subrules a)*
 - [x] **702.19** Trample *(9 tests, subrules bf)*
@@ -899,7 +899,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 707. Copying Objects
 
 - [ ] **707.1** Some objects become or turn another object into a “copy” of a spell, permanent, or card. Some eff...
-- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(13 tests, subrules ab)*
+- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(19 tests, subrules ab)*
 - [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(2 tests)*
 - [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(2 tests)*

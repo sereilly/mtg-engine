@@ -428,7 +428,7 @@ def _protecting_bodyguard(game, payload: dict):
             permanent
             for permanent in game.controlled_by(payload["recipient"])
             if not permanent.tapped
-            and VETERAN_BODYGUARD_TEXT in (permanent.card.oracle_text or "").lower()
+            and VETERAN_BODYGUARD_TEXT in (permanent.effective_card.oracle_text or "").lower()
         ),
         None,
     )
@@ -574,7 +574,7 @@ def _banded_desert_shield(game, permanent) -> bool:
             if other == index or not (0 <= other < len(player.battlefield)):
                 continue
             mate = player.battlefield[other]
-            if mate.attacking and _CAMEL_SHIELD_TEXT in (mate.card.oracle_text or "").lower():
+            if mate.attacking and _CAMEL_SHIELD_TEXT in (mate.effective_card.oracle_text or "").lower():
                 return True
         return False
     return False
@@ -587,7 +587,7 @@ def _applies_desert_shield(game, payload: dict) -> bool:
     permanent = payload["recipient"]
     if not _is_desert(payload.get("source")):
         return False
-    text = (permanent.card.oracle_text or "").lower()
+    text = (permanent.effective_card.oracle_text or "").lower()
     return (
         "prevent all damage that would be dealt to this creature by deserts" in text
         or (_CAMEL_SHIELD_TEXT in text and permanent.attacking)

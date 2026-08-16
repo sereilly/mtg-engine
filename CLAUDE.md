@@ -316,6 +316,14 @@ adding entries, not editing dispatch**:
   accessors — reading `card.type_line` or a metadata flag instead is how the
   same question ends up with several disagreeing answers, which is the bug
   class `tests/engine/test_layer_reads.py` guards.
+  **"What does it say?" is the same question**, and its accessor is
+  `Permanent.effective_card`: layer 1 folds in what the permanent copies
+  (CR 707.2), layer 3 folds in a text change (CR 612.1), and a board-wide
+  static's granted ability is appended after both. `perm.card.oracle_text` and
+  `perm.card.keywords` are the card as printed, so a Clone of a Wall had no
+  defender and a Magical Hack rewrote a word nothing then read; that guard
+  ratchets both fields too, and a keyword additionally wants `_has_keyword`,
+  which asks layer 6 as well.
 - `engine/control.py` — CR 613 layer 2. A control change is a **contribution**
   (`change_control(permanent, seat, source=…)`) with a timestamp, not a move;
   ending one is `end_control_change(permanent, source=…)`, and whatever

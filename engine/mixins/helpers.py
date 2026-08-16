@@ -563,7 +563,7 @@ class GameHelpersMixin:
                     trigger_context={"dead_power": max(0, permanent.effective_power)},
                 )
                 self.log.append(f"{permanent.card.name} triggered (died)")
-        text = permanent.card.oracle_text.lower()
+        text = permanent.effective_card.oracle_text.lower()
         if (
             "when this enchantment is put into a graveyard from the battlefield, you lose the game"
             in text
@@ -877,7 +877,7 @@ class GameHelpersMixin:
         return min(
             candidates,
             key=lambda perm: (
-                "you lose the game" in perm.card.oracle_text.lower(),
+                "you lose the game" in perm.effective_card.oracle_text.lower(),
                 perm.effective_power,
                 perm.permanent_id,
             ),
@@ -1263,7 +1263,7 @@ class GameHelpersMixin:
                     # Legacy shape: the optional cost lives in the card's
                     # text rather than the instruction, so it has to be
                     # re-read here and passed along as context.
-                    obs_text = observer.card.oracle_text.lower()
+                    obs_text = observer.effective_card.oracle_text.lower()
                     pay_match = re.search(r"you may pay \{(\d+)\}", obs_text)
                     amount = int(instr.payload.get("amount", 1))
                     ctx: dict = {"life": amount, "dead_name": dead_permanent.card.name}

@@ -40,7 +40,7 @@ class DeclareBlockersStepMixin:
         modeled as effectively unlimited."""
         if blocker.metadata.get("can_block_any_number_until_eot"):
             return 1_000_000
-        text = blocker.card.oracle_text.lower()
+        text = blocker.effective_card.oracle_text.lower()
         return 1 + text.count("can block an additional creature")
 
     def declare_blockers(
@@ -808,12 +808,13 @@ class DeclareBlockersStepMixin:
 
     def _rampage_value(self, permanent: Permanent) -> int:
         """The N of "Rampage N" on this creature, or 0 if it has no rampage."""
+        card = permanent.effective_card
         if not self._has_keyword(permanent, "rampage"):
             # Keyword may be printed as "Rampage 2"; _has_keyword won't match that
             # against the bare word, so also scan the keyword list directly.
-            if not any("rampage" in kw.lower() for kw in permanent.card.keywords):
+            if not any("rampage" in kw.lower() for kw in card.keywords):
                 return 0
-        for source in (*permanent.card.keywords, permanent.card.oracle_text or ""):
+        for source in (*card.keywords, card.oracle_text or ""):
             match = re.search(r"rampage (\d+)", source.lower())
             if match:
                 return int(match.group(1))

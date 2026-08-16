@@ -29,7 +29,7 @@ class EffectsMixin:
             return
         prog = compile_card_oracle(aura.card)
         text = prog.normalized_text
-        if not aura_enchants(aura.card.oracle_text, "creature"):
+        if not aura_enchants(aura.effective_card.oracle_text, "creature"):
             return
         controller_index = self.players.index(controller)
         for trig in prog.triggered_abilities:
@@ -592,7 +592,7 @@ class EffectsMixin:
 
     def _player_controls_text(self, player: PlayerState, phrase: str) -> bool:
         return any(
-            phrase in perm.card.oracle_text.lower() for perm in self.controlled_by(player)
+            phrase in perm.effective_card.oracle_text.lower() for perm in self.controlled_by(player)
         )
 
     def place_plus1_counters(self, permanent: Permanent, count: int = 1) -> int:
@@ -986,7 +986,7 @@ class EffectsMixin:
         # upkeep ability can later trade them for life (and the UI can show them).
         if damage > 0:
             for perm in self.controlled_by(target):
-                if "put that many vitality counters" in perm.card.oracle_text.lower():
+                if "put that many vitality counters" in perm.effective_card.oracle_text.lower():
                     perm.metadata["vitality_counters"] = int(perm.metadata.get("vitality_counters", 0)) + damage
                     self.log.append(
                         f"{perm.card.name} got {damage} vitality counter(s) "

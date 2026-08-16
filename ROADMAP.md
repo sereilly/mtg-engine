@@ -2413,3 +2413,85 @@ the fixes are reverted, which is the check that it would have caught round 47.
 - **The discard cost's picker** (unchanged from round 44).
 
 ---
+
+## Round 49: what a permanent says, asked of the card that printed it
+
+*(2026-08-16.)* No support-count change — M21 stays at 209 — and **fifteen
+cards in the shipped pool stopped playing as their printed text alone**. Round
+48's census, done: forty printed-text reads across seventeen engine files, and
+the ones that mattered were not subtle once anything actually copied or
+rewrote a card.
+
+**Three layers reach the same question, and the reads answered none of them.**
+`Permanent.effective_card` folds layer 1 (a copy takes the copied object's
+rules text, CR 707.2), then layer 3 (a text change rewrites words, CR 612.1),
+then appends the ability a board-wide static grants. `perm.card.oracle_text` is
+the card as it left the printer, which no effect can change — so:
+
+- **A Clone of Wall of Stone could attack.** The defender gate read
+  `attacker.card.keywords`, the copier's own empty list. Three lines below it a
+  comment says Island Sanctuary's two keywords are asked through layer 6
+  "because reading the printed keyword list missed every other route to the
+  ability, which is the bug class `tests/engine/test_layer_reads.py` guards" —
+  the round-47 shape exactly, one wrong read directly above the paragraph
+  explaining why it is wrong.
+- **And so could a Primal Clay on its 1/6 Wall body**, which is the same site
+  reached by a *third* layer: that defender is a layer-6 grant, so it is in
+  neither card and only `_has_keyword` knows. Round 47 made that body a real
+  Wall; it could still attack. The fix is `_has_keyword`, not `effective_card`.
+- **A Clone of Veteran Bodyguard** let its controller take the damage, **a Copy
+  Artifact of Time Vault** untapped every turn, **a Clone of Old Man of the
+  Sea** was never offered its keep-tapped choice, a Clone of Two-Headed Giant
+  blocked one, and Ali from Cairo's life floor, Library of Leng's discard, Soul
+  Net, Armageddon Clock, Personal Incarnation, Camel and Desert Nomads all
+  stopped at the printed card.
+- **Sleight of Mind on a Ward, and Magical Hack on Burrowing or Fishliver Oil,
+  changed the word and nothing else** — a text-changing effect declining to do
+  the one thing it exists for. `engine/text_changes.py` already rewrites inside
+  the landwalk compound ("there is no word boundary after 'swamp'"); the reader
+  simply never asked it.
+
+**Aspect of Wolf needed more than the accessor, and that is the round's one
+real design change.** "+X/+Y, where X is half the number of **Forests** you
+control" matched a printed sentence *and* counted a hardcoded type — the same
+mistake made twice, so swapping in `effective_card` made the sentence stop
+matching and the bonus quietly became +0/+0 rather than following the word. The
+land type is a capture now, and the count follows it.
+
+**One read stays printed, and the reason is a cycle rather than a preference.**
+`effective_card` appends the abilities a global static grants, so asking the
+effective text *which permanents grant them* would make the answer depend on
+itself; it terminates today only because no static in this pool applies to a
+static. Both readers moved into `engine/global_statics.py` behind one
+`global_static_sources` — the exemption is a file, so the derivation had to
+stop being a second copy in `permanent_state.py` to earn it. The other
+exemption is `handlers/zones.py`, where the read is the resolving *spell's*
+card.
+
+**The guard learned to read code rather than prose.** `_hits` blanks comments
+and string literals through `tokenize` before matching, because this repo
+explains itself in docstrings and one of them names
+`permanent.card.oracle_text` verbatim to say why a grammar node is not
+normalized. Matching that would have left "stop writing the sentence down" as
+the only available fix. Reverted, the guard names all forty offenders and not
+the docstring.
+
+Suite **5,000** at 21.3s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Eight of the ten new tests were
+watched to fail on HEAD; the other two are the controls that make the first two
+about *defender* rather than about a Clone or a Clay being unable to attack at
+all.
+
+**Next:**
+
+- **The legend rule reads the printed name, and the copy has the copied one.**
+  CR 707.2 copies the name, so a Clone of Barrin is a second Barrin and 704.5j
+  should bin one — verified, and it does not. Two reads are wrong, not one:
+  `perm.card.name`, and the `Legendary` supertype, which `has_type` does not
+  cover at all (round 48 exempted `game_ending.py` for exactly that). All
+  eleven legendary creatures in the pool are M21, so nothing can hit this until
+  the set ships — which makes it worth doing before it does. A ratchet on
+  `card.name` needs its own census first: hundreds of reads are log lines.
+- **The discard cost's picker** (unchanged from round 44).
+
+---

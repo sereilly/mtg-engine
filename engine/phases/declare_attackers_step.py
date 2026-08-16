@@ -261,8 +261,13 @@ class DeclareAttackersStepMixin:
         if "cant_attack" in instr_kinds:
             return False
 
-        # Animate Wall grants this while attached (auras.aura_restrictions).
-        if "Defender" in attacker.card.keywords and not aura_restriction_active(
+        # Defender is asked of layer 6, not of the printed keyword list: a Clone
+        # copying a Wall has the ability through layer 1 and a Primal Clay that
+        # entered on its 1/6 Wall body has it through a layer-6 grant, and
+        # neither prints the word. Both could attack while this read the card.
+        # Animate Wall grants the exemption while attached
+        # (auras.aura_restrictions).
+        if self._has_keyword(attacker, "defender") and not aura_restriction_active(
             attacker, "ignores_defender"
         ):
             return False

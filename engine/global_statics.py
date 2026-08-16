@@ -120,15 +120,32 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
     return None
 
 
+def global_static_sources(permanents) -> list[tuple]:
+    """Which of *permanents* are themselves board-wide statics, paired with it.
+
+    **This family is the one place a permanent's text is read as printed**, and
+    the reason is a cycle rather than a preference: ``Permanent.effective_card``
+    appends the abilities these statics grant, so asking the effective text
+    which permanents grant them would make the answer depend on itself. It
+    terminates today only because no static in the pool applies to a static.
+
+    Nothing needs the other reading. Both producers (Energy Flux, Titania's
+    Song) are enchantments, which nothing in this pool copies, and neither
+    prints a colour word or a basic land type for a text change to rewrite.
+    """
+    return [
+        (perm, static)
+        for perm in permanents
+        if (static := global_static_for(perm.card.oracle_text)) is not None
+    ]
+
+
 def global_statics_applying_to(permanent) -> list[GlobalStatic]:
     """Every global static currently applying to *permanent*.
 
     Read from the source permanents recorded on it, so a source that has left
     the battlefield contributes nothing the moment the refresh drops it.
     """
-    found: list[GlobalStatic] = []
-    for source in permanent.metadata.get("global_static_sources") or ():
-        static = global_static_for(source.card.oracle_text)
-        if static is not None:
-            found.append(static)
-    return found
+    return [static for _source, static in global_static_sources(
+        permanent.metadata.get("global_static_sources") or ()
+    )]

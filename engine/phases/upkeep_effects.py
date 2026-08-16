@@ -327,7 +327,7 @@ class UpkeepEffectsMixin:
         # Prevent X of that damage, where X is the amount of mana
         # that player paid this way." The controller may pay up to
         # `amount` mana to prevent that much damage.
-        if "prevent x of that damage" in permanent.card.oracle_text.lower():
+        if "prevent x of that damage" in permanent.effective_card.oracle_text.lower():
             requested = 0
             if mana_prevention is not None and permanent.card.name in mana_prevention:
                 requested = max(0, int(mana_prevention[permanent.card.name]))

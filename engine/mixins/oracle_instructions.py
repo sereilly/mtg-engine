@@ -195,11 +195,11 @@ class OracleInstructionsMixin:
         so it is the case where a battlefield slot is most likely to have been
         renumbered underneath the index by the time this runs.
         """
-        program = compile_card_oracle(aura_permanent.card)
+        program = compile_card_oracle(aura_permanent.effective_card)
         text = program.normalized_text
         # The enchant clause is asked of the *printed* text: it is a line,
         # and `normalized_text` has already joined the lines into one blob.
-        printed = aura_permanent.card.oracle_text
+        printed = aura_permanent.effective_card.oracle_text
         if not any(
             instr.kind == "spell_pattern" and instr.value.startswith("enchant")
             for instr in program.instructions
@@ -321,10 +321,10 @@ class OracleInstructionsMixin:
             # write a `has_<walk>` flag straight onto the creature, which meant
             # the grant lived outside the layer system and had to be undone by
             # name when the Aura left.
-            if aura_keyword_grants(aura_permanent.card.oracle_text):
+            if aura_keyword_grants(aura_permanent.effective_card.oracle_text):
                 self.log.append(
                     f"{target_creature.card.name} gains "
-                    f"{', '.join(aura_keyword_grants(aura_permanent.card.oracle_text))}"
+                    f"{', '.join(aura_keyword_grants(aura_permanent.effective_card.oracle_text))}"
                     f" from {aura_permanent.card.name}"
                 )
 
@@ -519,7 +519,7 @@ class OracleInstructionsMixin:
             # to restore on removal — remember-and-undo applied to the object's
             # identity, and it clamped a mana value of 0 up to 1/1 so an
             # animated Mox never died to CR 704.5f.
-            if aura_animates_artifact(aura_permanent.card.oracle_text):
+            if aura_animates_artifact(aura_permanent.effective_card.oracle_text):
                 self.log.append(
                     f"{aura_permanent.card.name} animated {target_artifact.card.name} "
                     "into an artifact creature"

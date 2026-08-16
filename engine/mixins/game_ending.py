@@ -423,7 +423,7 @@ class GameEndingMixin:
                         "Aura" in perm.card.type_line
                         and attached_to is not None
                         and self._cant_be_enchanted(attached_to)
-                        and "can't be enchanted by other auras" not in perm.card.oracle_text.lower()
+                        and "can't be enchanted by other auras" not in perm.effective_card.oracle_text.lower()
                     ):
                         self._permanent_to_graveyard(player, perm)
                         self.log.append(f"{perm.card.name} put into graveyard (enchanted land can't be enchanted by other Auras)")
@@ -442,7 +442,7 @@ class GameEndingMixin:
                     if "Aura" in perm.card.type_line and attached_to is not None:
                         protection = self._protection_colors(attached_to)
                         if protection and (protection & self._effective_colors(perm)):
-                            text = perm.card.oracle_text.lower()
+                            text = perm.effective_card.oracle_text.lower()
                             exempt = "remove this aura" in text or "remove all auras" in text
                             if not exempt:
                                 self._permanent_to_graveyard(player, perm)
@@ -503,7 +503,7 @@ class GameEndingMixin:
 
             # 704.5r: counter cap enforcement
             for perm in self.all_permanents():
-                cap_info = _parse_counter_cap(perm.card.oracle_text)
+                cap_info = _parse_counter_cap(perm.effective_card.oracle_text)
                 if cap_info is None:
                     continue
                 cap, counter_type = cap_info

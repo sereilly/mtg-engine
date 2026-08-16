@@ -39,7 +39,16 @@ from ..lord_buffs import (
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..pt import clear_base_pt, set_base_pt
-from ..static_bonuses import conditional_static_holds
+from ..static_bonuses import (
+    BASIC_LAND_WORDS,
+    conditional_static_holds,
+    singular_land_type,
+)
+
+# "half the number of <land type>s you control" (Aspect of Wolf). The type is a
+# capture rather than a literal, so a Magical Hack rewriting the word moves the
+# count with it.
+_HALF_LAND_COUNT_RE = re.compile(r"half the number of ([a-z]+) you control")
 
 
 # Characteristic-defining P/T (CR 604.3 / layer 7a). There is no registry to
@@ -385,26 +394,38 @@ class PermanentStateMixin:
 
     def _refresh_aspect_of_wolf(self) -> None:
         """Aspect of Wolf: enchanted creature gets +X/+Y where X/Y are half the
-        aura controller's Forest count (down/up). Recomputed continuously so it
-        tracks Forests entering and leaving the battlefield (CR 611.3a).
+        aura controller's count of a basic land type (down/up). Recomputed
+        continuously so it tracks lands entering and leaving (CR 611.3a).
+
+        **The land type is read out of the Aura's own effective text**, not
+        fixed at "forest". Magical Hack rewrites that word (CR 612.1), and
+        matching a printed sentence while counting a hardcoded type is the same
+        mistake made twice: after the change the sentence stopped matching at
+        all, so the bonus quietly became +0/+0 rather than following the word.
 
         Contributed to the derived buff channel, so several Aspects on one
         creature simply add up and nothing needs unwinding.
         """
         for controller in self.players:
-            forests = sum(
-                1
-                for perm in self.controlled_by(controller)
-                if perm.card.primary_type == "land" and perm.has_type("forest")
-            )
-            x, y = forests // 2, (forests + 1) // 2
-            for aura in self.controlled_by(controller):
-                if "half the number of forests you control" not in aura.card.oracle_text.lower():
+            controlled = list(self.controlled_by(controller))
+            for aura in controlled:
+                match = _HALF_LAND_COUNT_RE.search(
+                    aura.effective_card.oracle_text.lower()
+                )
+                if match is None:
+                    continue
+                land_type = singular_land_type(match.group(1))
+                if land_type not in BASIC_LAND_WORDS:
                     continue
                 creature = aura.metadata.get("attached_to")
                 if creature is None or creature.card.primary_type != "creature":
                     continue
-                _add_static_pt(creature, x, y)
+                lands = sum(
+                    1
+                    for perm in controlled
+                    if perm.card.primary_type == "land" and perm.has_type(land_type)
+                )
+                _add_static_pt(creature, lands // 2, (lands + 1) // 2)
 
     def _refresh_dynamic_creatures(self) -> None:
         all_permanents = list(self.all_permanents())
@@ -550,13 +571,9 @@ class PermanentStateMixin:
         recorded on `_add_static_pt`: an adjustment that does not exactly match
         what it undid compounds, and CR 611.3a means this runs constantly.
         """
-        from ..global_statics import global_static_for
+        from ..global_statics import global_static_sources
 
-        sources = [
-            (perm, static)
-            for perm in all_permanents
-            if (static := global_static_for(perm.card.oracle_text)) is not None
-        ]
+        sources = global_static_sources(all_permanents)
 
         # A static that outlives its source (Titania's Song: "if this
         # enchantment leaves the battlefield, this effect continues until end of
@@ -759,7 +776,7 @@ class PermanentStateMixin:
         # nothing having to remove it. That grant used to be stamped into the
         # metadata channel below and cleaned up by name on removal.
         for aura in auras_attached_to(permanent):
-            for word in aura_protection_colors(aura.card.oracle_text):
+            for word in aura_protection_colors(aura.effective_card.oracle_text):
                 symbol = _COLOR_WORD_TO_SYMBOL.get(word)
                 if symbol:
                     qualities.add(("color", symbol))

@@ -271,7 +271,7 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # delta to subtract, and two Auras sort by when each started applying
     # rather than sharing one derived timestamp.
     for aura in auras_attached_to(perm):
-        grant = aura_static_pt_grant(aura.card.oracle_text)
+        grant = aura_static_pt_grant(aura.effective_card.oracle_text)
         if grant is None:
             continue
         effects.append(
@@ -340,7 +340,7 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
     # (CR 613.7b) — derived every recompute, so the grant ends when the Aura
     # leaves without anything having to find and undo it.
     for aura in auras_attached_to(perm):
-        granted = aura_keyword_grants(aura.card.oracle_text)
+        granted = aura_keyword_grants(aura.effective_card.oracle_text)
         if not granted:
             continue
         effects.append(
@@ -420,7 +420,7 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # own text on every recompute and stamped with the moment it attached
     # (CR 613.7b), so detaching one simply stops contributing the type.
     for aura in auras_attached_to(perm):
-        added = aura_type_grants(aura.card.oracle_text)
+        added = aura_type_grants(aura.effective_card.oracle_text)
         if not added:
             continue
         effects.append(

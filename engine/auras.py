@@ -598,7 +598,7 @@ def aura_restriction_active(permanent, name: str) -> bool:
     nothing has to be cleaned up.
     """
     return any(
-        name in aura_restrictions(aura.card.oracle_text)
+        name in aura_restrictions(aura.effective_card.oracle_text)
         for aura in auras_attached_to(permanent)
     )
 
@@ -692,5 +692,5 @@ def animating_auras(permanent) -> list:
     return [
         aura
         for aura in auras_attached_to(permanent)
-        if aura_animates_artifact(aura.card.oracle_text)
+        if aura_animates_artifact(aura.effective_card.oracle_text)
     ]

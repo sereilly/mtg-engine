@@ -1290,7 +1290,7 @@ class PendingChoicesMixin:
                 return
             idx = min(
                 valid,
-                key=lambda i: "you lose the game" in player.battlefield[i].card.oracle_text.lower(),
+                key=lambda i: "you lose the game" in player.battlefield[i].effective_card.oracle_text.lower(),
             )
             perm = self.permanent_at(player, idx)
             self.sacrifice_permanent(perm)

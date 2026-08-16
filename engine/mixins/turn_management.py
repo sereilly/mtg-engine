@@ -288,7 +288,7 @@ class TurnManagementMixin:
             # Wild Growth: "Whenever enchanted land is tapped for mana, its controller
             # adds an additional {G}." The "for mana" phrasing isn't compiled as a
             # generic trigger, so read the produced mana from the Aura's text here.
-            aura_text = attached_aura.card.oracle_text.lower()
+            aura_text = attached_aura.effective_card.oracle_text.lower()
             mana_match = re.search(
                 r"enchanted land is tapped for mana, its controller adds an additional \{([wubrgc])\}",
                 aura_text,

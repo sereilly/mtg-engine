@@ -174,13 +174,13 @@ class AbilityActivationMixin:
         # ability." grants the owner activation rights even while an opponent
         # controls the creature (CR 118.9a-style permission override).
         owner_may_activate = (
-            "only this creatures owner may activate this ability" in permanent.card.oracle_text.lower()
+            "only this creatures owner may activate this ability" in permanent.effective_card.oracle_text.lower()
             and self.owner_index_of(permanent) == controller_index
         )
         if (
             source_owner is not controller
             and not owner_may_activate
-            and "any player may activate this ability" not in permanent.card.oracle_text.lower()
+            and "any player may activate this ability" not in permanent.effective_card.oracle_text.lower()
         ):
             details = f"{permanent.card.name}'s abilities can only be activated by its controller"
             self.log.append(details)
@@ -357,7 +357,7 @@ class AbilityActivationMixin:
         # own clause, not the whole card. Rock Hydra's "Activate only during your
         # upkeep" sits on its {R}{R}{R} pump line only, so its {R} prevention
         # ability (ability_index 0) must stay usable at any time.
-        ability_lower = (ability.source_line or permanent.card.oracle_text).lower()
+        ability_lower = (ability.source_line or permanent.effective_card.oracle_text).lower()
 
         # CR 606.3: a loyalty ability may be activated only during a main phase
         # of its controller's own turn with the stack empty — unless the

@@ -115,7 +115,7 @@ class UntapStepMixin:
             {"index": idx, "name": permanent.card.name}
             for idx, permanent in enumerate(player.battlefield)
             if permanent.tapped
-            and "you may choose not to untap" in permanent.card.oracle_text.lower()
+            and "you may choose not to untap" in permanent.effective_card.oracle_text.lower()
         ]
 
     def resolve_untap_step(
@@ -199,14 +199,14 @@ class UntapStepMixin:
 
             # Permanents that read "doesn't untap during your untap step" (e.g.
             # Time Vault, Basalt Monolith) stay tapped (Rule 502.4, 702 self-text).
-            if SELF_DOESNT_UNTAP_PHRASE in permanent.card.oracle_text.lower():
+            if SELF_DOESNT_UNTAP_PHRASE in permanent.effective_card.oracle_text.lower():
                 continue
 
             # Old Man of the Sea: "You may choose not to untap this creature
             # during your untap step." A human's explicit keep-tapped choice is
             # honored; AI/headless play keeps it tapped while its linked steal
             # is alive (untapping would end the control effect).
-            if SELF_MAY_KEEP_TAPPED_PHRASE in permanent.card.oracle_text.lower():
+            if SELF_MAY_KEEP_TAPPED_PHRASE in permanent.effective_card.oracle_text.lower():
                 if keep_tapped_indices is not None:
                     if idx in keep_tapped_indices:
                         continue

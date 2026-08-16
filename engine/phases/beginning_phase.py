@@ -20,7 +20,7 @@ class BeginningPhaseMixin:
         """
         options: list[str] = []
         for permanent in self.controlled_by(player_index):
-            text = permanent.card.oracle_text.lower()
+            text = permanent.effective_card.oracle_text.lower()
             if (
                 permanent.tapped
                 and "skip that turn instead" in text
