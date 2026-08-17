@@ -12,6 +12,7 @@ from .ai_valuation import (
     is_mana_ability,
     mana_ability_amount,
     returns_creature_to_hand,
+    several_target_slot_sides,
 )
 from .cost_modifiers import cost_reduction_for_cast, reduce_cost, spell_cost_tax
 from .classifier import classify_card
@@ -40,6 +41,12 @@ class CastAction:
     # objects. The same shape ``queue_from_hand`` and the stack already speak, so
     # the executors in web/game_flow.py forward it unchanged.
     target_permanent_index: int | list[int] | None = None
+    # The same choices as stable ids, when the slots do not all sit on one
+    # battlefield. ``target_permanent_index`` is positional on
+    # ``target_player_index``, so a two-board pick (Rookie Mistake's "target
+    # creature … another target creature") cannot be expressed by it — the gap
+    # round 40 closed on the wire, arriving here through the AI.
+    target_permanent_ids: list[int] | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +92,7 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
             continue
         target = _choose_target_for_spell(card, player_index, game, x_value)
         target_permanent_index: int | list[int] | None = None
+        target_permanent_ids: list[int] | None = None
         if aura_enchant_noun(card) is not None:
             aura_choice = _choose_aura_target(game, player_index, card)
             if aura_choice is None:
@@ -93,7 +101,7 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
         else:
             several = _choose_several_targets(game, player_index, card)
             if several is not None:
-                target, target_permanent_index = several
+                target, target_permanent_index, target_permanent_ids = several
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs and card.primary_type != "land":
@@ -112,6 +120,7 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
             score=score,
             hand_index=hand_index,
             target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
         )
         if _is_better_cast(candidate, best):
             best = candidate
@@ -734,9 +743,9 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
 
 def _choose_several_targets(
     game: Game, caster_index: int, card: CardDefinition
-) -> tuple[int, list[int]] | None:
-    """Pick ``(seat, [permanent_index, …])`` for a spell naming "up to N target"
-    objects, or None when the card names no such choice.
+) -> tuple[int, list[int], list[int] | None] | None:
+    """Pick ``(seat, [permanent_index, …], [permanent_id, …] | None)`` for a spell
+    naming several targets, or None when the card names no such choice.
 
     Which cards this reaches is *derived*, never a list of names: the compiled
     program carries the maximum (``engine/targeting.py``'s ``max_targets``), so a
@@ -749,15 +758,12 @@ def _choose_several_targets(
     this template gives a benefit per target, so more is better. A card that
     ever wants fewer needs a valuation, not a special case here.
     """
-    spec = derive_cast_spec(card, compile_card_oracle(card))
+    program = compile_card_oracle(card)
+    spec = derive_cast_spec(card, program)
     maximum = (spec or {}).get("max_targets")
     if not isinstance(maximum, int) or maximum <= 1:
         return None
     legal = game.cast_target_spec(caster_index, card).get("valid_targets") or []
-    # One seat's worth: the index list is positional on a single battlefield
-    # (`target_player_index` names whose), so a cross-seat spread would need the
-    # divided carrier instead. Prefer the caster's own seat, which is what every
-    # card carrying this template so far targets.
     by_seat: dict[int, list[int]] = {}
     for entry in legal:
         if entry.get("kind") != "permanent":
@@ -765,8 +771,51 @@ def _choose_several_targets(
         by_seat.setdefault(int(entry["seat"]), []).append(int(entry["index"]))
     if not by_seat:
         return None
+
+    # Which board each slot wants, derived from the compiled program rather than
+    # from the card's name. A card whose slots all want the same thing — every
+    # one printed before Rookie Mistake — takes the single-seat path below
+    # unchanged, so this is byte-identical for Basri's Acolyte and Basri's Aegis.
+    sides = several_target_slot_sides(program)
+    if sides and len(set(sides)) > 1:
+        picks: list[tuple[int, int]] = []
+        for index in range(maximum):
+            want = sides[index] if index < len(sides) else None
+            if want == "you":
+                order = [caster_index]
+            elif want == "opponent":
+                order = sorted(s for s in by_seat if s != caster_index)
+            else:
+                order = [caster_index] + sorted(s for s in by_seat if s != caster_index)
+            chosen = next(
+                (
+                    (seat, slot)
+                    for seat in order
+                    for slot in by_seat.get(seat, [])
+                    if (seat, slot) not in picks
+                ),
+                None,
+            )
+            if chosen is not None:
+                picks.append(chosen)
+        if picks:
+            ids = []
+            for seat, slot in picks:
+                permanent = game.permanent_at(game.players[seat], slot)
+                ids.append(None if permanent is None else permanent.permanent_id)
+            if all(isinstance(value, int) for value in ids):
+                # `target_player_index` still has to be a seat; the ids are what
+                # actually address the two boards (CR 400.7), and `_stack_push`
+                # respects supplied ids over a re-derivation from one seat.
+                return picks[0][0], [slot for _, slot in picks], ids
+
+    # One seat's worth: the index list is positional on a single battlefield
+    # (`target_player_index` names whose), so a cross-seat spread needs the ids
+    # above. Taking the maximum from the caster's own board is the whole policy
+    # where no slot names a side: "up to N" may legally choose fewer, but every
+    # card carrying that template gives a benefit per target, so more is better.
     seat = caster_index if caster_index in by_seat else min(by_seat)
-    return seat, by_seat[seat][:maximum]
+    return seat, by_seat[seat][:maximum], None
 
 
 def _choose_target_for_spell(

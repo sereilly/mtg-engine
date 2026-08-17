@@ -164,6 +164,16 @@ def _narrowing_flags(source: dict) -> dict:
         # that offered an opponent's creature would let a player choose a target
         # the effect then declines to affect, with nothing on screen saying why.
         flags["own_only"] = True
+    if source.get("exclude_self"):
+        # "up to two **other** target creatures you control" (Basri's Acolyte),
+        # "**another** target creature" as a fight's opponent (Brash Taunter).
+        # Same argument as `own_only` directly above, and it had the same gap in
+        # the other direction: every handler carrying this key already refuses
+        # the source at resolution (pump.py, zones.py, damage.py), so a picker
+        # that omitted it offered a target the effect then declined to affect.
+        # `legality.py` has honoured `exclude_source` all along — nothing read
+        # the filter key into it.
+        flags["exclude_source"] = True
     return flags
 
 

@@ -6293,13 +6293,13 @@ function toggleSeveralTarget(targetSeat, permanentIndex) {
       updateActionHint(`${p.cardName} names at most ${p.maxTargets} targets — click one to deselect it.`, true);
       return;
     }
-    // One seat's worth: the request carries a single `target_seat` beside the
-    // list, so a pick on another side replaces the selection rather than
-    // building a cross-seat list the wire cannot express. Every card printed
-    // with this template so far restricts itself to one side anyway.
-    if (p.severalTargets.length && p.severalTargets[0].seat !== targetSeat) {
-      p.severalTargets.length = 0;
-    }
+    // A cross-seat selection is legal and the wire carries it: `confirm` sends
+    // `target_permanent_ids`, and web/actions.py keeps those ids rather than
+    // collapsing them onto one `target_seat`. Rookie Mistake's two slots are
+    // both a bare "target creature", so pumping one of yours and shrinking one
+    // of theirs is the ordinary play — the old reset-on-other-seat made it
+    // unreachable. A pick with no resolvable id is refused at confirm rather
+    // than silently sent as an index on the wrong board.
     p.severalTargets.push({ seat: targetSeat, idx: permanentIndex });
   }
   renderActivationPrompt();
@@ -6319,11 +6319,18 @@ function confirmSeveralTargets() {
   const ids = severalTargets
     .map((t) => permanentIdAt(t.seat, t.idx))
     .filter((pid) => Number.isInteger(pid));
+  const oneSeat = severalTargets.every((t) => t.seat === targetSeat);
   const body = { seat, action: castAction || "cast", card_name: cardName, target_seat: targetSeat };
   if (ids.length === severalTargets.length && ids.length > 0) {
     body.target_permanent_ids = ids;
-  } else if (severalTargets.length) {
+  } else if (severalTargets.length && oneSeat) {
     body.target_permanent_indices = severalTargets.map((t) => t.idx);
+  } else if (severalTargets.length) {
+    // Indices are positional on one `target_seat`, so a cross-seat selection
+    // whose ids did not resolve cannot be sent at all. Refusing beats sending
+    // the second pick as a slot on the first pick's board.
+    updateActionHint("One of the chosen permanents has left the battlefield — pick again.", true);
+    return;
   }
   clearPendingCastTargeting();
   updateActionHint(`Casting ${cardName}...`);

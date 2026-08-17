@@ -2473,3 +2473,21 @@ def test_a_static_computed_bonus_cannot_be_negative():
 
     assert result.parsed and not result.lowered
     assert result.failure_reason == "a static computed bonus cannot be negative"
+
+
+def test_selfless_savior_refuses_rather_than_dropping_its_another(set_pool):
+    """"Sacrifice this creature: **Another** target creature you control gains
+    indestructible until end of turn."
+
+    The word was demonstrably ignored â€” ``scripts/parse_coverage.py``'s deletion
+    probe reports ``('another',)`` for this line, and the emitted filter carried
+    nothing excluding the source, so the picker offered the Savior itself: an
+    illegal target the player could announce, whose cost then sacrificed it and
+    whose ability then fizzled. CR 601.2c is why the word has to be said at all.
+
+    A one-recipient description has nowhere to record which *other* choice this
+    one must differ from, so the line refuses. Supported-and-wider is the one
+    outcome this engine does not allow (invariant 1)."""
+    program = compile_card_oracle(set_pool("M21")["Selfless Savior"])
+
+    assert not program.supported

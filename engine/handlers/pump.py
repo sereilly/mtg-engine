@@ -10,6 +10,7 @@ from ._common import (
     resolve_amount,
     resolve_target_permanent,
     resolve_target_permanents,
+    resolve_target_slots,
     count_from_payload,
 )
 from .registry import effect_handler
@@ -124,6 +125,69 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     if target_perm is not None:
         apply_temp_pt_boost(target_perm, power_delta, toughness_delta)
         game.log.append(f"{card.name} gives {target_perm.card.name} +{power_delta}/+{toughness_delta} until end of turn")
+    return True, "resolved"
+
+
+@effect_handler("pump_targets_until_eot")
+def pump_targets_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, target creature gets +0/+2 and **another** target
+    creature gets -2/-0." (Rookie Mistake.)
+
+    One instruction rather than two pumps in a `sequence`, for the reason
+    `_fused_prepare_then_interact` gives: the two clauses name *different* chosen
+    objects, and every single-target handler in the engine resolves through
+    `_one_choice`, which reads the first entry of the target list. Lowered as a
+    sequence the card would compile cleanly and pump one creature twice.
+
+    How many slots there are, and how big each boost is, is payload — the effect
+    is one pump per slot and only the numbers differ.
+
+    The slots are resolved **positionally** and each is checked against its own
+    filter, because "target creature" and "another target creature" may
+    legitimately sit on two battlefields. A slot that no longer answers is
+    dropped and the rest of the effect still happens (CR 608.2b); a slot naming a
+    permanent an earlier slot already took is dropped too, which is the
+    resolution-time half of the printed "another" (the picker enforces the
+    announcement half, CR 601.2c).
+    """
+    card = context.card
+    slots = tuple(instruction.payload.get("slots") or ())
+    targets = instruction.payload.get("targets") or {}
+    slot_filters = targets.get("filters") or [targets.get("filter") or {}] * len(slots)
+    distinct = bool(targets.get("distinct"))
+    caster_index = game.players.index(context.caster)
+    chosen = resolve_target_slots(game, context, len(slots))
+
+    taken: list[Permanent] = []
+    for index, permanent in enumerate(chosen):
+        wanted = slot_filters[index] if index < len(slot_filters) else {}
+        if permanent is None or not game.is_on_battlefield(permanent):
+            game.log.append(f"{card.name}: nothing legal in slot {index + 1}")
+            continue
+        if not permanent.is_creature or not permanent_matches_filter(permanent, wanted):
+            game.log.append(f"{card.name}: slot {index + 1} is no longer a legal target")
+            continue
+        # "you control" / "you don't control" are seat tests, which
+        # permanent_matches_filter deliberately does not answer — the same split
+        # prepare_then_interact makes.
+        controller = wanted.get("controller")
+        if controller == "you" and not game.controls(caster_index, permanent):
+            continue
+        if controller == "not_you" and game.controls(caster_index, permanent):
+            continue
+        if distinct and any(permanent is seen for seen in taken):
+            game.log.append(
+                f"{card.name}: slot {index + 1} named a creature an earlier slot already took"
+            )
+            continue
+        taken.append(permanent)
+        spec = slots[index]
+        power = resolve_amount(spec.get("power", 0), context.x_value)
+        toughness = resolve_amount(spec.get("toughness", 0), context.x_value)
+        apply_temp_pt_boost(permanent, power, toughness)
+        game.log.append(
+            f"{card.name} gives {permanent.card.name} {power:+}/{toughness:+} until end of turn"
+        )
     return True, "resolved"
 
 

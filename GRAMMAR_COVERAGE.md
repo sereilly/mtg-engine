@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 71.4% | 68.0% | 45.1% | 182 |
+| M21 *(measured)* | 285 | 503 | 71.8% | 68.0% | 45.1% | 182 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 243 | 112 | expected a subject |  |
+| 241 | 110 | expected a subject |  |
 | 95 | 39 | unrecognized effect verb |  |
 | 51 | 32 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -975,6 +975,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{3}, {T}: This artifact deals 1 damage to any target.`
   - `{3}, {T}: This artifact deals 1 damage to any target.`
   - `{3}, {T}: This artifact deals 1 damage to any target.`
+- **Rookie Mistake**
+  - `Until end of turn, target creature gets +0/+2 and another target creature gets -2/-0.`
 - **Rousing Read**
   - `When this Aura enters, draw two cards, then discard a card.`
 - **Royal Assassin**
@@ -1034,8 +1036,6 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{B}: Regenerate this creature.`
 - **See the Truth**
   - `Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. If this spell was cast from anywhere other than your hand, put each of those cards into your hand instead.`
-- **Selfless Savior**
-  - `Sacrifice this creature: Another target creature you control gains indestructible until end of turn. (Damage and effects that say "destroy" don't destroy it.)`
 - **Sengir Vampire**
   - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
   - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`

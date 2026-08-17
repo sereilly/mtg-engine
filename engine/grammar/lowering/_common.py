@@ -153,6 +153,25 @@ def _targets_payload(recipient: ast.Recipient) -> dict[str, object] | None:
         return None
     if recipient.quantifier == "any_target":
         return {"quantifier": "any_target", "kind": "any"}
+    if recipient.distinct_from_prior:
+        # "**Another** target creature" names a distinctness between two chosen
+        # objects — and it has to be said, because CR 601.2c lets two instances
+        # of the word "target" name the same object unless something forbids it.
+        # This description carries one recipient, so it has nowhere to record
+        # which other choice this one must differ from, and no single-target
+        # handler resolves a prior slot to compare against. Emitted here the word
+        # is simply dropped, which is the wider-than-printed outcome idiom #2
+        # exists to prevent: Selfless Savior offered its own source as the
+        # target of "another target creature you control".
+        #
+        # The two-target lowerings that *can* honour it (`_fused_two_target_pump`,
+        # `target_bites_target`) build their own description carrying `filters`
+        # per slot plus `distinct`, and never call this.
+        raise LoweringError(
+            '"another target" names a distinctness a one-target description '
+            "cannot carry",
+            node=recipient,
+        )
     if not _is_target(recipient):
         return None
     # The quantifier is carried rather than written as the constant "target":

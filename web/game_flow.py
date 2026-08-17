@@ -139,6 +139,7 @@ def _ai_step(session: Session) -> bool:
                 card_to_cast.name,
                 target_player_index=cast_action.target_player_index,
                 target_permanent_index=cast_action.target_permanent_index,
+                target_permanent_ids=cast_action.target_permanent_ids,
                 x_value=cast_action.x_value,
             )
             if result.supported:
@@ -158,6 +159,7 @@ def _ai_step(session: Session) -> bool:
                 card_to_cast.name,
                 target_player_index=cast_action.target_player_index,
                 target_permanent_index=cast_action.target_permanent_index,
+                target_permanent_ids=cast_action.target_permanent_ids,
                 x_value=cast_action.x_value,
             )
             _auto_resolve_ai_pending(session)

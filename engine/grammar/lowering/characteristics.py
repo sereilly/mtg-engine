@@ -21,6 +21,7 @@ from ._common import (
     _describe_several_targets,
     _describe_targets,
     _durationless_reason,
+    _filter_payload,
     _is_enchanted,
     _is_source,
     _is_target,
@@ -147,6 +148,91 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         return (OracleInstruction("buff_creatures_global", "", payload),)
 
     raise LoweringError("unsupported pump subject", node=node)
+
+
+def _fused_two_target_pump(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"<target A> gets +P/+T and **another target** B gets +P/+T", one sentence,
+    two chosen creatures. (Rookie Mistake.)
+
+    One instruction, because the second clause names a *second* target: lowered
+    as two steps, both pumps resolve through `_one_choice`, which takes the first
+    entry of the target list — so the card would compile supported and put both
+    boosts on one creature.
+
+    The distinctness is the trigger for fusing rather than a detail of it. Two
+    targeted pumps in one sentence *without* the printed "another" are refused
+    outright: CR 601.2c lets two instances of the word "target" name the same
+    object, so that shape needs a picker told about two slots, and falling
+    through to the ordinary step lowering is the silent double pump above. No
+    card in the pool prints it, so the refusal costs nothing and closes the near
+    miss.
+    """
+    if len(steps) != 2:
+        return None
+    first, second = steps
+    if not isinstance(first, ast.Pump) or not isinstance(second, ast.Pump):
+        return None
+    if not _is_target(first.subject) or not _is_target(second.subject):
+        return None
+    assert isinstance(first.subject, ast.TargetSpec)
+    assert isinstance(second.subject, ast.TargetSpec)
+    if first.subject.distinct_from_prior:
+        # "Another target creature … and target creature …" — the first clause
+        # of a sentence has no prior choice to differ from.
+        raise LoweringError(
+            'the first clause of a sentence cannot name "another" target',
+            node=first,
+        )
+    if not second.subject.distinct_from_prior:
+        raise LoweringError(
+            "two targeted pumps in one sentence name two targets only when the "
+            'second prints "another"',
+            node=second,
+        )
+    if first.duration.kind != "until_end_of_turn" or second.duration.kind != "until_end_of_turn":
+        # A durationless half is a continuous effect (`_durationless_reason`);
+        # a mismatched pair is two different effects sharing a sentence.
+        raise LoweringError(
+            "a two-target pump needs an until-end-of-turn duration on both clauses",
+            node=second,
+        )
+    if first.x_definition is not None or second.x_definition is not None:
+        raise LoweringError(
+            "a where-clause defines one X, which two pumped targets would share",
+            node=second,
+        )
+    slots = tuple(
+        {
+            "power": _signed(node.power, node.power_negative),
+            "toughness": _signed(node.toughness, node.toughness_negative),
+        }
+        for node in (first, second)
+    )
+    return (
+        OracleInstruction("pump_targets_until_eot", "", {
+            "slots": slots,
+            "targets": {
+                "quantifier": "target",
+                "kind": "object",
+                # `filter` is the shape every one-slot reader expects; `filters`
+                # is what the picker and the handler read per slot. Both are
+                # emitted for the same reason `target_bites_target` emits both.
+                "filter": _filter_payload(first.subject.filter),
+                "filters": [
+                    _filter_payload(first.subject.filter),
+                    _filter_payload(second.subject.filter),
+                ],
+                "count": 2,
+                # The printed "another" (CR 601.2c), carried rather than folded
+                # into a filter: it is a relation between two slots, not a
+                # property of one permanent, so `permanent_matches_filter` could
+                # never test it.
+                "distinct": True,
+            },
+        }),
+    )
 
 
 def _lower_set_base_pt(node: ast.SetBasePT) -> tuple[OracleInstruction, ...]:

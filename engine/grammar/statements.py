@@ -315,6 +315,42 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     return ast.WhereX(statement, definition) if definition is not None else statement
 
 
+def _distribute_duration(
+    statement: ast.Statement, duration: ast.Duration, stream: TokenStream
+) -> ast.Statement:
+    """Attach a *leading* duration to every effect of the sentence behind it.
+
+    "Until end of turn, A gets +0/+2 and another target creature gets -2/-0"
+    (Rookie Mistake) prints one duration in front of two effects, where the
+    trailing spelling attaches to the clause it follows. So the leading one is
+    distributed rather than stored on a wrapper node: every consumer already
+    reads a duration off the effect it belongs to, and a node above them all
+    would be a second place to ask.
+
+    Refuses rather than dropping, in three shapes — a statement with no duration
+    field at all (the prefix would silently vanish), a statement already printing
+    a *different* duration, and, through the recursion, a sequence with any such
+    step. A dropped "until end of turn" is a permanent effect the card never
+    printed.
+    """
+    if isinstance(statement, ast.Sequence):
+        return dataclasses.replace(
+            statement,
+            steps=tuple(
+                _distribute_duration(step, duration, stream) for step in statement.steps
+            ),
+        )
+    fields = {field.name for field in dataclasses.fields(statement)}
+    if "duration" not in fields:
+        raise stream.error(
+            f"a leading duration has nothing to attach to in {type(statement).__name__}"
+        )
+    existing = getattr(statement, "duration")
+    if existing.kind is not None and existing.kind != duration.kind:
+        raise stream.error("this sentence prints two different durations")
+    return dataclasses.replace(statement, duration=duration)
+
+
 def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     """One sentence's worth of effect, including ``if``/``may`` wrappers."""
     # "Target opponent reveals their hand. You choose … from it. That player
@@ -333,6 +369,25 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         permission = _parse_cast_permission(stream)
         if permission is not None:
             return permission
+
+    # "Until end of turn, <sentence>" — a duration in the *leading* printed
+    # position (Rookie Mistake). Read **after** the cast permission above, which
+    # prints the same prefix and reads it itself: taking it first turns both
+    # Chandras unsupported. On any failure the mark is restored and the ordinary
+    # readings continue, so this production can only add a reading, never remove
+    # one — a line it cannot finish keeps the refusal it has today rather than
+    # gaining a new and more confident one.
+    if stream.at_word("until"):
+        mark = stream.mark()
+        try:
+            duration = _parse_duration(stream)
+            if duration.kind is not None and stream.accept_punct(","):
+                return _distribute_duration(
+                    parse_statement(stream, top_level=False), duration, stream
+                )
+        except GrammarError:
+            pass
+        stream.reset(mark)
 
     # "if <condition>, <statement>"
     if stream.at_word("if"):

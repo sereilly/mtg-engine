@@ -181,6 +181,75 @@ def mana_ability_amount(card: CardDefinition) -> int | None:
     return None
 
 
+def _several_target_instruction(program):
+    """The one instruction in *program* whose description names several targets."""
+
+    def walk(instructions):
+        for instruction in instructions:
+            targets = instruction.payload.get("targets")
+            if (
+                isinstance(targets, dict)
+                and isinstance(targets.get("count"), int)
+                and targets["count"] > 1
+            ):
+                return instruction
+            for key in ("steps", "then", "else", "action"):
+                nested = instruction.payload.get(key)
+                if isinstance(nested, (list, tuple)):
+                    found = walk(nested)
+                    if found is not None:
+                        return found
+        return None
+
+    return walk(program.instructions)
+
+
+def several_target_slot_sides(program) -> tuple[str | None, ...]:
+    """Which board each slot of a several-target spell should be picked from.
+
+    Derived, never named: the compiled program says which slots are restricted by
+    controller and, where they are not, whether the slot's own effect is a
+    benefit or a penalty. Rookie Mistake's two slots are both a bare "target
+    creature", so only the sign of the P/T delta distinguishes "the one I pump"
+    from "the one I shrink" — and a chooser reading neither puts both on the
+    caster's own board.
+
+    Returns one entry per slot: "you", "opponent", or None for no preference. A
+    uniform answer means the existing single-seat policy is exactly right, and
+    `_choose_several_targets` keeps it.
+    """
+    instruction = _several_target_instruction(program)
+    if instruction is None:
+        return ()
+    targets = instruction.payload.get("targets") or {}
+    count = targets.get("count")
+    if not isinstance(count, int) or count <= 1:
+        return ()
+    filters = targets.get("filters") or [targets.get("filter") or {}] * count
+    slots = tuple(instruction.payload.get("slots") or ())
+    sides: list[str | None] = []
+    for index in range(count):
+        described = filters[index] if index < len(filters) else {}
+        controller = described.get("controller")
+        if controller == "you":
+            sides.append("you")
+            continue
+        if controller in ("not_you", "opponent"):
+            sides.append("opponent")
+            continue
+        if index < len(slots):
+            slot = slots[index]
+            delta = sum(
+                value
+                for value in (slot.get("power"), slot.get("toughness"))
+                if isinstance(value, int)
+            )
+            sides.append("opponent" if delta < 0 else ("you" if delta > 0 else None))
+            continue
+        sides.append(None)
+    return tuple(sides)
+
+
 __all__ = [
     "MANA_ABILITY_KINDS",
     "SPELL_TYPES",
@@ -192,4 +261,5 @@ __all__ = [
     "is_mana_ability",
     "mana_ability_amount",
     "returns_creature_to_hand",
+    "several_target_slot_sides",
 ]

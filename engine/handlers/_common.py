@@ -493,6 +493,49 @@ def resolve_target_permanents(
     return found
 
 
+def resolve_target_slots(
+    game: Game,
+    context: OracleExecutionContext,
+    count: int,
+    *,
+    player: PlayerState | None = None,
+) -> list[Permanent | None]:
+    """The permanent each of *count* chosen slots names, **positionally**.
+
+    The difference from :func:`resolve_target_permanents` is the whole reason
+    this exists: that one *compacts*. It drops a slot that no longer answers and
+    dedupes by identity, so a caller reading ``chosen[0]`` and ``chosen[1]``
+    reads the wrong slot the moment the first target has left — slot 1's
+    permanent slides into position 0. That is safe only where the two slots are
+    disjointly filtered (Primal Might's "you control" / "you don't control"
+    reject the impostor) and unsafe wherever they are not: Rookie Mistake's slots
+    are both a bare "target creature", so a decayed first slot would hand the
+    *second* creature the first slot's +0/+2.
+
+    So this pads: slot k is index k, or None. Nothing is deduped here either —
+    "another" is a *printed* restriction, and a caller that has one enforces it
+    where it can say which of the two slots to drop (the later one, CR 608.2b).
+    No fallback scan, for the reason `resolve_target_permanents` documents.
+    """
+    ids = _as_slots(context.target_permanent_id)
+    indices = _as_slots(context.target_permanent_index)
+    owner = player if player is not None else context.target
+    found: list[Permanent | None] = []
+    for slot in range(count):
+        permanent_id = ids[slot] if slot < len(ids) else None
+        chosen = None
+        if isinstance(permanent_id, int):
+            # No seat check: an id *is* the identity (CR 400.7), and a pair of
+            # slots may sit on two battlefields.
+            chosen = game.permanent_by_id(permanent_id)
+        if chosen is None:
+            index = indices[slot] if slot < len(indices) else None
+            if isinstance(index, int) and owner is not None:
+                chosen = game.permanent_at(owner, index)
+        found.append(chosen)
+    return found
+
+
 def _as_slots(chosen: object) -> list:
     """A chosen-target field as a list of slots, whatever shape it arrived in."""
     if isinstance(chosen, list):

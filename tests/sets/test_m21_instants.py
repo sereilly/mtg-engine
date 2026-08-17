@@ -726,3 +726,223 @@ def test_a_choice_of_one_keyword_refuses():
     result = compile_line("Target creature gains your choice of flying until end of turn.")
 
     assert not result.parsed
+
+
+# --- The two-target round: a leading duration and a second chosen creature ---
+
+
+def test_rookie_mistake_compiles_to_one_two_slot_pump(set_pool):
+    """Two things were missing and only one of them was the second target.
+
+    The printed duration is in the *leading* position, which no production read
+    â€” "Until end of turn, target creature gets +0/+2." refused on its own â€” and
+    the two clauses name two different creatures, which two ``sequence`` steps
+    cannot express because every single-target handler resolves through
+    ``_one_choice`` and reads the first entry of the target list."""
+    program = compile_card_oracle(set_pool("M21")["Rookie Mistake"])
+
+    assert program.supported, program.reason
+    instruction = program.instructions[0]
+    assert instruction.kind == "pump_targets_until_eot"
+    assert instruction.payload["slots"] == (
+        {"power": 0, "toughness": 2},
+        {"power": -2, "toughness": 0},
+    )
+    targets = instruction.payload["targets"]
+    assert targets["count"] == 2
+    assert targets["distinct"] is True, "the printed 'another' (CR 601.2c)"
+    assert targets["filters"] == [
+        {"type_filter": "creature"},
+        {"type_filter": "creature"},
+    ]
+
+
+def test_rookie_mistake_names_two_targets_to_the_picker(set_pool):
+    """Both slots are a bare "target creature", so neither narrows the prompt
+    and both battlefields are offered."""
+    pool = set_pool("M21")
+    card = pool["Rookie Mistake"]
+    pegasus = pool["Concordia Pegasus"]
+    p1 = PlayerState(name="P1", hand=[card], battlefield=[Permanent(card=pegasus)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=pegasus)])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    spec = game.cast_target_spec(0, card)
+
+    assert spec["max_targets"] == 2
+    assert "own_only" not in spec
+    assert {t["seat"] for t in spec["valid_targets"]} == {0, 1}
+
+
+def test_rookie_mistake_pumps_one_creature_and_shrinks_another(set_pool):
+    """The two slots are resolved positionally and may sit on two battlefields
+    â€” the ids are what address them, because an index is positional on one
+    seat."""
+    pool = set_pool("M21")
+    pegasus = pool["Concordia Pegasus"]          # 1/3
+    mine = Permanent(card=pegasus)
+    theirs = Permanent(card=pegasus)
+    p1 = PlayerState(name="P1", hand=[pool["Rookie Mistake"]], battlefield=[mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(
+        0, "Rookie Mistake",
+        target_player_index=0,
+        target_permanent_index=[0, 0],
+        target_permanent_ids=[mine.permanent_id, theirs.permanent_id],
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert (mine.effective_power, mine.effective_toughness) == (1, 5)
+    assert (theirs.effective_power, theirs.effective_toughness) == (-1, 3)
+
+
+def test_rookie_mistake_drops_a_slot_that_stopped_answering(set_pool):
+    """Why the handler resolves its slots positionally rather than through
+    ``resolve_target_permanents``.
+
+    That resolver *compacts* â€” it drops a decayed slot without padding â€” so a
+    positional reader would hand the surviving second creature the first slot's
+    +0/+2. Here the first target leaves while the spell is on the stack: the
+    second must still shrink, and must not grow (CR 608.2b)."""
+    pool = set_pool("M21")
+    pegasus = pool["Concordia Pegasus"]
+    mine = Permanent(card=pegasus)
+    theirs = Permanent(card=pegasus)
+    p1 = PlayerState(name="P1", hand=[pool["Rookie Mistake"]], battlefield=[mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.queue_from_hand(
+        0, "Rookie Mistake",
+        target_player_index=0,
+        target_permanent_index=[0, 0],
+        target_permanent_ids=[mine.permanent_id, theirs.permanent_id],
+    )
+    game.remove_from_battlefield(mine)
+    game._settle()
+
+    assert (theirs.effective_power, theirs.effective_toughness) == (-1, 3)
+
+
+def test_rookie_mistake_never_boosts_and_shrinks_the_same_creature(set_pool):
+    """The printed "another" at resolution (CR 601.2c/608.2b).
+
+    The picker cannot select one permanent twice, but the enumeration is a hint
+    and the engine re-checks the answer: a client sending the same id in both
+    slots gets the first slot only, never both effects on one creature."""
+    pool = set_pool("M21")
+    only = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", hand=[pool["Rookie Mistake"]], battlefield=[only])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(
+        0, "Rookie Mistake",
+        target_player_index=0,
+        target_permanent_index=[0, 0],
+        target_permanent_ids=[only.permanent_id, only.permanent_id],
+    )
+    game._settle()
+
+    assert (only.effective_power, only.effective_toughness) == (1, 5), \
+        "the +0/+2 alone; the second slot named a creature the first already took"
+
+
+def test_two_targeted_pumps_without_another_refuse():
+    """The near miss, which must keep failing loudly.
+
+    CR 601.2c lets two instances of the word "target" name the same object, so
+    without the printed "another" the sentence needs a picker told about two
+    slots. The ordinary step lowering would emit two single-target pumps that
+    both read the first chosen id, so a card printed that way is refused by name
+    rather than silently double-pumping one creature."""
+    compiled = compile_line(
+        "Until end of turn, target creature gets +0/+2 and target creature gets -2/-0.",
+        card_name="Not A Real Card",
+    )
+
+    assert compiled.instructions == ()
+    assert compiled.lowering_error is not None
+    assert "another" in compiled.lowering_error
+
+
+def test_a_leading_duration_reaches_both_clauses():
+    """A leading "Until end of turn," in front of a conjunction has to reach
+    both halves. The trailing spelling attaches to the clause it follows, which
+    is why that spelling of the same sentence keeps refusing: its first pump has
+    no duration at all, and a durationless pump is a continuous effect."""
+    leading = compile_line(
+        "Until end of turn, target creature gets +0/+2 and another target creature gets -2/-0.",
+        card_name="Not A Real Card",
+    )
+    trailing = compile_line(
+        "Target creature gets +0/+2 and another target creature gets -2/-0 until end of turn.",
+        card_name="Not A Real Card",
+    )
+
+    assert leading.instructions and leading.instructions[0].kind == "pump_targets_until_eot"
+    assert trailing.instructions == ()
+    assert trailing.lowering_error is not None
+
+
+def test_a_leading_duration_does_not_take_the_cast_permissions(set_pool):
+    """The production that nearly cost two cards.
+
+    Placed before ``_parse_cast_permission``, the leading-duration branch
+    consumes "Until end of turn," and then fails on "you may play cards exiled
+    this way", which has no duration field to attach to. The branch belongs
+    after it."""
+    pool = set_pool("M21")
+    for name in ("Chandra, Heart of Fire", "Chandra, Flame's Catalyst"):
+        assert compile_card_oracle(pool[name]).supported, name
+
+
+def test_the_ai_shrinks_the_opponents_creature_not_its_own(set_pool):
+    """``_choose_several_targets`` takes the maximum from one battlefield,
+    preferring the caster's. That is right for every card printed with the
+    template before this one, because each gives a benefit per target; Rookie
+    Mistake's second slot is a penalty, so the one-seat policy made the AI
+    shrink its own creature. Which slot wants which board is *derived* from the
+    compiled program (the sign of the slot's P/T delta), never from the name."""
+    from engine.ai_policy import choose_cast_action
+
+    pool = set_pool("M21")
+    pegasus = pool["Concordia Pegasus"]
+    mine = Permanent(card=pegasus)
+    theirs = Permanent(card=pegasus)
+    p1 = PlayerState(name="P1", hand=[pool["Rookie Mistake"]], battlefield=[mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None and action.card_name == "Rookie Mistake"
+    assert action.target_permanent_ids == [mine.permanent_id, theirs.permanent_id]
+
+
+def test_the_several_target_policy_is_unchanged_where_every_slot_agrees(set_pool):
+    """The AI change must be invisible to every card that existed before it.
+    Basri's Acolyte's two slots are both "you control", so the single-seat path
+    still answers and the ids stay absent."""
+    from engine.ai_policy import choose_cast_action
+
+    pool = set_pool("M21")
+    pegasus = pool["Concordia Pegasus"]
+    p1 = PlayerState(
+        name="P1", hand=[pool["Basri's Acolyte"]],
+        battlefield=[Permanent(card=pegasus) for _ in range(3)],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None
+    assert action.target_permanent_ids is None

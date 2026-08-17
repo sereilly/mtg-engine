@@ -7,8 +7,8 @@ printings, 26,113 unique cards** per `set_progress.json`.
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–61 — lives in git history at and before
-commit `0d55a33`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–62 — lives in git history at and before
+commit `0801c4c`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,64 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 62: a count that is the amount
-
-*(2026-08-16.)* M21 **217 → 218** — Frantic Inventory, and three things met in
-it, none of which was the draw.
-
-**The noun comes before the count.** "Draw **cards** equal to the number of …"
-is the one draw in Magic that puts the noun in front, where every other one puts
-it behind ("draw two cards"). The production reads it first and resets if the
-words turn out to be an ordinary draw, which is safe because "cards" cannot
-start a number.
-
-**A card name is a restriction on a noun phrase.** "named X" was read by the
-*search* production alone, which is why a count of cards by name had nowhere to
-say so. It is a restriction on what the object *is*, so it moved to the noun
-parser beside every other one — and the name reader moved down a layer with it,
-which is the rule the layering guard states: a fragment two productions need is
-not one of their private business. `named` is emitted by `to_payload` and tested
-by `permanent_matches_filter` (through `search_filters.name_key`, so the
-parser's rendering and Oracle's spelling compare equal, and off the *effective*
-card, because a Clone's name is the one it copied). Emitting it without testing
-it would have been a count over every card in the graveyard.
-
-**A count can *be* an amount, not only define an X.** Round 54's where-clause
-stamps `x_from_count` over a whole sentence; here the count belongs to one draw,
-so it is stamped on that instruction alone — which matters immediately, because
-"draw a card, **then** draw cards equal to…" has a literal 1 in front of it that
-must stay one. Both readers now build the spec through one function
-(`count_spec`): they ask the same question of the same noun phrase, and a
-restriction one refused while the other dropped would be the same count meaning
-two things.
-
-**One resolution has one X, and the round had to say so.** A sentence carrying a
-where-clause *and* a counted amount would have the two overwrite each other in
-`context.x_value`. Neither reading is the card, so the stamp refuses on
-collision rather than picking. No card in the pool prints that shape — which is
-the point of writing the guard now rather than when one does.
-
-Suite **5,119** at 22.9s, every `--check` green, shipped pool 388/388, AI
-simulation byte-identical at 443 interactions. Four of the five new tests were
-watched to fail on the round-61 engine; the fifth is the control that a
-graveyard of *other* cards counts nothing.
-
-**Next:**
-
-- **The Shrine cycle**: Fruitful Harvest's colour choice at a trigger's
-  resolution, Shattered Heights' discard cost (whose "a land card or **Shrine**
-  card" is a noun-phrase *union* the parser has no production for), Tranquil
-  Light's per-Shrine cost reduction, Sanctum of All's two-zone search and
-  trigger-doubling static.
-- **The rest of the counted amounts.** `count_spec` now serves any production
-  that wants one, and three cards are waiting on the *other* half of their
-  sentence rather than on the count: Kinetic Augur's characteristic-defining
-  power, Experimental Overload's X/X token, Rin and Seri's counted damage.
-- **A reflexive trigger** — "you may pay {1}. **When you do**, …" (Tolarian
-  Kraken), deliberately refused in round 60: CR 603.11 puts a second object on
-  the stack and the `may` machinery resolves inline.
-- **Jolrael's team base-P/T**, then the legend rule from round 49.
-
 ## Round 63: the prompt that did not need building
 
 *(2026-08-16.)* M21 **218 → 219** — Alchemist's Gift. The round is mostly about
@@ -441,3 +383,96 @@ unsupported *while* its mill line worked, which was true and is not.
   and trigger-doubling static, and Fruitful Harvest's counted any-colour mana
   (round 63 measured it: a legacy text-keyed handler that adds exactly one).
 - **A reflexive trigger** (Tolarian Kraken), then the legend rule from round 49.
+
+## Round 65: the duration in front, and a word that was being dropped
+
+*(2026-08-16.)* M21 **220 â†’ 220** â€” Rookie Mistake in, Selfless Savior out. The
+flat number is the round, in the sense rounds 12â€“14 and 16 established: a card
+left because it was playing wider than it prints.
+
+**The card was scheduled for the wrong reason, and the fix was one probe away.**
+"Until end of turn, target creature gets +0/+2 and **another target** creature
+gets -2/-0" was ranked as a multi-targeting gap. It is not: the second target has
+parsed since round 40 (`TargetSpec.distinct_from_prior`), and the sentence join
+already builds two statements. The actual first refusal is the **leading duration
+adverbial** â€” `Until end of turn, target creature gets +0/+2.` refuses on its own
+with the identical message, and it is card-independent. Sorting the backlog by
+the *reason string* would have had the fuser written first and the real blocker
+discovered underneath it.
+
+**A leading duration is distributed, not stored.** The trailing spelling attaches
+to the clause it follows, so the front-position one has to reach every effect
+behind it; a wrapper node holding it would be a second place to ask what a
+statement's duration is. It refuses rather than dropping in three shapes â€” a
+statement with no duration field, a statement already printing a different one,
+and any sequence containing either â€” because a dropped "until end of turn" is a
+permanent effect the card never printed. The production is placed **after**
+`_parse_cast_permission`, which prints the same prefix and reads it itself:
+ahead of it, both Chandras go unsupported. That ordering has its own test.
+
+**Two chosen creatures in one sentence cannot be two steps.** Every single-target
+handler resolves through `_one_choice`, which reads the first entry of the target
+list â€” so lowered as a `sequence` the card would compile supported and put both
+boosts on one creature. It fuses to one `pump_targets_until_eot` carrying a slot
+per clause, the third member of the family `target_bites_target` and
+`prepare_then_interact` opened. The printed "another" rides as `distinct` beside
+per-slot `filters`, not folded into a filter: it is a relation between two slots,
+and `permanent_matches_filter` tests one permanent, so it could never answer.
+
+**The slots are resolved positionally, and that needed a third resolver.**
+`resolve_target_permanents` *compacts* â€” it drops a decayed slot without padding
+â€” so `chosen[1]` becomes `chosen[0]` the moment the first target leaves. Primal
+Might and Hunter's Edge survive that only because their slot filters are
+disjoint and the impostor is rejected; Rookie Mistake's two slots are both a bare
+"target creature", where the surviving creature would take the other slot's
+effect. `resolve_target_slots` pads instead. (`prepare_then_interact` still reads
+the compacting one. It is correct today by that accident of the pool and wants
+moving over with a regression test of its own.)
+
+**And the word that was being dropped.** `parse_coverage.py`'s deletion probe
+reports `('another',)` on Selfless Savior â€” the emitted filter excluded nothing,
+so the picker offered the Savior as the target of "another target creature you
+control", an illegal choice a player could announce, whose cost then sacrificed
+it and whose ability then fizzled. CR 601.2c is why the word has to be said at
+all: two instances of "target" may otherwise name the same object. A
+one-recipient description has nowhere to record which *other* choice this one
+must differ from, so it now refuses. The alternative â€” reading a sole target's
+"another" as CR's source exclusion â€” is a larger change that conflates two
+meanings the AST deliberately separates, and it is the next round's, written up
+in the spec.
+
+Landed in dependency order with the grammar **last**, so at no intermediate point
+was the card castable with half its targets collected. That order was load-
+bearing twice: without the AI's per-slot side the AI put both targets on its own
+board (measured `[0, 1]`, seat 0 â€” it shrank its own creature), and the browser
+picker reset the selection on a click on the second board, so a human could never
+pump one of theirs and shrink one of the opponent's. Which slot wants which board
+is *derived* â€” the sign of the slot's P/T delta â€” never a name.
+
+One finding taken from the same measurement and fixed here, because it is
+unambiguous where the above is not: **`exclude_self` was honoured at resolution
+and ignored by every picker.** Basri's Acolyte's "up to two **other** target
+creatures you control" offered the Acolyte; so did Barrin and Brash Taunter. All
+three handlers already refuse the source. `legality.py` has honoured
+`exclude_source` all along â€” nothing read the filter key into it. One line.
+
+Suite **5,138** green, every `--check` gate green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Ten of the eleven new tests were
+watched to fail on the round-64 engine; the eleventh is the control that both
+Chandras keep their cast permissions.
+
+**Next:**
+
+- **"Another" as a source exclusion**, the alternative above: translate
+  `distinct_from_prior` on a sole target to `exclude_self` rather than refusing,
+  which returns Selfless Savior and covers Subira's and Niambi's same drop. It
+  needs a guard separating it from the two-slot meaning first.
+- **The headless AI simulator throws its chosen permanent target away.**
+  `grep target_permanent engine/ai_simulator.py` returns nothing, so every
+  targeted-permanent spell in a seeded run resolves through a handler fallback,
+  and a several-target spell resolves to *nothing at all*. Latent for the shipped
+  pool, live for M21, and live for the shipped pool the day M21 promotes. Fixing
+  it moves the 443-interaction baseline, which is why it is recorded rather than
+  folded in here.
+- The Shrine cycle, a static P/T contribution with a computed X (Kinetic Augur,
+  Jolrael), a reflexive trigger (Tolarian Kraken), then the legend rule.
