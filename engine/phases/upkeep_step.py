@@ -207,10 +207,21 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         self.mire_cleanup_obligations = surviving
 
     def _graveyard_return_candidates(self, player_index: int) -> list:
-        """Graveyard cards whose 'return during your upkeep' trigger condition is
-        currently met for ``player_index`` (e.g. Nether Shadow with enough creature
-        cards above it). Shared by the prompt query and the upkeep resolver so both
-        agree on which cards are eligible.
+        """``(graveyard index, card)`` for each card whose "return during your
+        upkeep" condition is currently met for ``player_index`` (Nether Shadow
+        with enough creature cards above it). Shared by the prompt query and the
+        upkeep resolver so both agree on which cards are eligible.
+
+        **The index is part of the answer, not scaffolding.** A graveyard holds
+        ``CardDefinition`` objects and ``load_cards`` dedupes by ``oracle_id``, so
+        two copies of one card in one graveyard are the *same object* — which
+        means a caller handed only the card cannot say which copy was eligible.
+        This used to return the card alone and the resolver removed it with
+        ``[c for c in graveyard if c is not card]``, which removes **every** copy:
+        with one Nether Shadow deep enough to return and a second one on top, five
+        cards went in and four came out. That is the look-alike bug class
+        ``tests/engine/test_control_reads.py`` bans on the battlefield, and it is
+        worse here, because on the battlefield the copies are distinct objects.
         """
         owner = self.players[player_index]
         candidates = []
@@ -229,7 +240,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 if above.primary_type == "creature"
             )
             if creatures_above >= int(instr.payload.get("min_creatures_above", 3)):
-                candidates.append(card)
+                candidates.append((grave_index, card))
         return candidates
 
     def get_optional_upkeep_triggers(self, player_index: int) -> list[dict]:
@@ -242,7 +253,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         """
         triggers: list[dict] = []
         seen: set[str] = set()
-        for card in self._graveyard_return_candidates(player_index):
+        for _grave_index, card in self._graveyard_return_candidates(player_index):
             if card.name in seen:
                 continue
             seen.add(card.name)
@@ -635,14 +646,21 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # is None (AI turns, scripted/test runs) the beneficial default is taken;
         # when provided, the card returns only on an explicit yes.
         owner = self.players[player_index]
-        for card in self._graveyard_return_candidates(player_index):
-            if optional_choices is None:
-                accepted = True
-            else:
-                accepted = optional_choices.get(card.name, False)
-            if not accepted:
-                continue
-            owner.graveyard = [c for c in owner.graveyard if c is not card]
+        accepted_returns = [
+            (grave_index, card)
+            for grave_index, card in self._graveyard_return_candidates(player_index)
+            if optional_choices is None or optional_choices.get(card.name, False)
+        ]
+        # Remove highest index first, so popping one does not renumber the slots
+        # of the ones still to come — the same ordering rule the several-card
+        # graveyard return follows. Removing by identity instead would take every
+        # copy of the card (see `_graveyard_return_candidates`).
+        for grave_index, _card in sorted(accepted_returns, reverse=True):
+            if 0 <= grave_index < len(owner.graveyard):
+                owner.graveyard.pop(grave_index)
+        # Then onto the battlefield in printed graveyard order, so the log reads
+        # bottom-up as it always has.
+        for _grave_index, card in accepted_returns:
             self._put_permanent_onto_battlefield(player_index, Permanent(card=card), None)
             self.log.append(
                 f"{owner.name} returned {card.name} to the battlefield from the graveyard"

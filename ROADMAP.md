@@ -7,8 +7,8 @@ printings, 26,113 unique cards** per `set_progress.json`.
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–75 — lives in git history at and before
-commit `7876c06`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–76 — lives in git history at and before
+commit `a0f36b6`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,63 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 76: a trigger that fires from a graveyard
-
-*(2026-08-16.)* M21 **227 → 228** — Silversmote Ghoul, and the round is worth
-taking for the seam rather than the card.
-
-**"Every trigger this engine dispatches is on a permanent" was wrong, twice.**
-Emblems already fire from the command zone, and **Nether Shadow already fires
-from a graveyard** — name-keyed in `card_hooks.py` since long before this
-effort. So this is not a new seam, it is the second card of a shape, which is
-what turns a special case into a rule.
-
-**The gate is derived, not declared.** CR 113.6 says an object's abilities
-function only on the battlefield *unless the ability says otherwise*, and
-CR 113.6m is the clause that says otherwise — for an ability whose effect moves
-its own source out of a zone. So the zone the sentence names as the source *is*
-the zone the ability functions from, stamped by the lowering as `functions_from`
-and read by the scan. No card name, and no list of instruction kinds: a list is
-only ever as complete as the last card that touched it.
-
-**Two of my three framings were wrong**, both corrected against the rules file.
-`_SELF_CONDITIONS` is not the reader for this card's condition — that maps the
-*contraction* ("you've gained"), Sanguine Indulgence's cast-cost gate; the Ghoul
-prints an intervening-if whose reader was already complete, and Griffin Aerie and
-Indulging Patrician print the identical clause and work today. And
-`enter_effects.py` is the wrong home for "tapped": it answers for a permanent's
-own printed entry line, which CR 603.6d makes a static ability, where this is
-CR 110.5b — a rider on the *move*. Putting it there would have made the Ghoul
-enter tapped when somebody else's reanimation returned it.
-
-**The look-alike trap, in the zone where it is worst.** A graveyard holds
-`CardDefinition` objects, and two copies of one card are *the same immutable
-object* — so the filter-by-identity rebuild this codebase bans on `battlefield`
-is worse here: it removes **all** copies, not merely the wrong one. Measured:
-`[c for c in gy if c is not card]` on a graveyard holding two Ghouls leaves
-neither. The handler pops at an identity-found index instead, and a test puts two
-in one graveyard and asserts both come back with distinct ids.
-
-**The guard that had to come with it.** Measured while building this: with the
-grammar, the lowering and the handler in place but the scan omitted, the card
-**compiled supported, the whole suite passed, and all five `--check` gates
-passed, while the ability never once fired.** `test_trigger_dispatchers.py`
-cannot see it — it asks per condition kind, and `end_step_self` has had a
-dispatcher since round 68, over battlefields. That is round 58's `draws_card`
-failure on a new axis, so the round adds a behavioural guard: put the card in a
-graveyard, arm its condition, run the step, look at the battlefield. Verified by
-neutering the scan and watching it fail.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical, **zero hooks added**. Whole-pool compile diff: exactly one card.
-
-**Recorded, not fixed** (its own round — it changes shipped, manually-verified
-behaviour): **Nether Shadow deletes cards from the game** by that same
-filter-by-identity rebuild, its trigger never touches the stack (applied inline,
-so CR 603.4's second check is unobservable rather than skipped), and its prompt
-is name-keyed and deduped so two eligible copies get one prompt whose answer
-decides both.
-
 ## Round 77: a graveyard slot is not an identity either
 
 *(2026-08-16.)* No card — the fix the last three rounds kept pointing at, and it
@@ -406,4 +349,44 @@ Whole-pool compile diff: exactly one card.
   browser-unreachable second mode and Fungal Rebirth's dropped "permanent"
   (round 69); `parse_coverage.py` blind to measured sets; the Shrine cycle; a
   reflexive trigger; the legend rule.
+
+## Round 79: a card deleted from the game
+
+*(2026-08-16.)* No card — round 76 recorded this and recommended its own round;
+this is that round, and the deletion half turned out to be small and safe on its
+own.
+
+Nether Shadow's upkeep return removed its card with
+`[c for c in graveyard if c is not card]`. A graveyard holds `CardDefinition`
+objects and `load_cards` dedupes by `oracle_id`, so two copies of one card in one
+graveyard are **the same object** — and that comprehension therefore removes
+*every* copy while putting only the eligible one onto the battlefield.
+
+Measured: one Shadow deep enough to return, a second on top of the pile,
+**five cards in and four out**. One was deleted from the game.
+
+It is the look-alike bug class `tests/engine/test_control_reads.py` bans on the
+battlefield, and it is **worse here**: there, two copies are distinct `Permanent`
+objects and the removal takes the wrong *one*; in a graveyard it takes all of
+them. Round 77 met the same shared-object problem on the targeting side and
+answered it with a card-plus-ordinal identity. This site did not need that — the
+candidate scan **already knew the index**, having computed it to count the cards
+above, and threw it away. So the fix is to keep it and pop, removing
+highest-index-first so one removal does not renumber the next.
+
+The tests assert **conservation** — what goes in comes out, somewhere — because
+that is the property the bug broke, and it holds for one eligible copy, for two,
+and for none. Only the asymmetric case failed before the fix; the symmetric ones
+were right by coincidence, which is exactly why a card-count assertion is the
+right one.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+**byte-identical at 443 interactions** — the change is unreachable from the
+seeded decks, which is why it survived this long.
+
+**Still open from round 76**, and deliberately not folded in: Nether Shadow's
+trigger never touches the stack (applied inline, so CR 603.4's second check is
+unobservable rather than skipped) and its prompt is name-keyed and deduped, so
+two eligible copies get one prompt whose answer decides both. Both change
+manually-verified behaviour and want the migration round.
 
