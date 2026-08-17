@@ -256,6 +256,48 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
+## Measured and not built: Siege Striker
+
+*(2026-08-17.)* Scoped, part-built, and **reverted** — the same call as Peer into
+the Abyss two rounds ago, and for the same reason: what was working changed no
+card, and shipping it would have been machinery nothing reaches.
+
+> Whenever this creature attacks, you may tap any number of untapped creatures
+> you control. This creature gets +1/+1 until end of turn for each creature
+> tapped this way.
+
+**Done and thrown away** (small, and the design held under execution): "any
+number of" as a **quantifier** — its own rather than an "up to" with a large
+count, because an "up to" prints a maximum a picker shows and a re-check
+enforces, and here the bound is the set itself. Untargeted by construction, like
+Rewind's "up to four lands": nothing is chosen until the effect resolves. With it
+the tap lowers to a resolution-time multi-pick and the line's refusal moves from
+"unrecognized effect verb" to "unconsumed text" — measured, **zero cards
+changed**, which is exactly why it did not land.
+
+**What it still needs, and why it is a whole round:**
+
+- **The count crosses a step boundary.** "For each creature tapped **this way**"
+  reads how many the *previous* sentence tapped. Rewind's `untap_up_to` choice
+  is the obvious precedent and says in its own registration that it deliberately
+  does not suspend, "because the untap is the last step of the effect that armed
+  it". Here it is not. Either the choice suspends the resolution — the machinery
+  exists, and nothing has used it — or the two sentences **fuse into one
+  instruction** whose choice resolver taps *and* pumps, which is the cheaper
+  reading and matches what rounds 81 and 65 did with two clauses that are one
+  effect.
+- **A pending choice is four registrations plus two front ends**: resolver,
+  non-interactive default, `register_choice`, confirm method, a `web/prompts.py`
+  renderer and an action. Round 75's lesson is that the browser half is not
+  optional — a prompt with no renderer is armed and invisible.
+- **A dropped rider is already waiting there.** `ObjectFilter.to_payload` emits
+  `tapped_only` when `tapped` is True and **nothing at all** when it is False, so
+  "untapped creatures you control" reduces to "creatures you control". For a tap
+  that is nearly harmless — tapping a tapped creature does nothing — but the
+  *count* is the card, and it would count creatures that were already tapped.
+  Whoever builds this must carry the restriction explicitly or refuse the line;
+  it is the dropped-rider class in a place the effect makes load-bearing.
+
 ## Round 81: one counter, two amounts
 
 *(2026-08-17.)* M21 **230 → 231** — Lofty Denial.
