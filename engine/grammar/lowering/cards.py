@@ -11,6 +11,7 @@ from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    chargeable_card_filter,
     _amount_payload,
     halved_count_spec,
     _describe_targets,
@@ -56,6 +57,13 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
     # "Discard your hand" (Chandra, Heart of Fire) — the effect's controller
     # discards every card. Checked before the targeted forms: the subject is
     # the implied "you", which they refuse.
+    # Only the controller's own discard carries a narrowing today; every other
+    # handler below arms a prompt that takes the whole hand, so a filter reaching
+    # them would be silently dropped.
+    if node.filter is not None and node.player.kind != "you":
+        raise LoweringError(
+            f"no {node.player.kind!r} discard handler carries a narrowing", node=node
+        )
     if node.whole_hand:
         if node.player.kind != "you":
             raise LoweringError(
@@ -79,7 +87,21 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
             raise LoweringError(
                 "the controller discard is chosen and fixed-count", node=node
             )
-        return (OracleInstruction("discard_controller_cards", "", {"amount": amount}),)
+        payload: dict[str, object] = {"amount": amount}
+        # "Discard a **creature** card" (Crypt Lurker). Gated by the same reader
+        # the discard *cost* is (round 87): the prompt and its re-check ask
+        # ``_card_matches_filter``, so a phrase reaching past what that can
+        # answer would be dropped where it is applied — and a dropped narrowing
+        # here is a discard that takes any card at all while the card still
+        # reports supported.
+        if node.filter is not None:
+            described = chargeable_card_filter(node.filter)
+            if not described:
+                raise LoweringError(
+                    "no discard prompt can test this narrowing", node=node
+                )
+            payload["filter"] = described
+        return (OracleInstruction("discard_controller_cards", "", payload),)
     # "Each opponent discards two cards." (Bad Deal.) Chosen discards, one
     # pending choice per opponent — the random and variable forms stay with the
     # targeted handlers below, whose contracts they are.

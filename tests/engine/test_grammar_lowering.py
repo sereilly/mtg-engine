@@ -3751,3 +3751,41 @@ def test_a_shared_name_relation_without_its_threshold_is_refused():
 
     with pytest.raises(LoweringError):
         lower_ability(gate(None))
+
+
+# ---------------------------------------------------------------------------
+# "A or B" — one action, two ways to take it
+# ---------------------------------------------------------------------------
+
+
+def test_an_alternative_that_is_not_one_instruction_has_no_mode():
+    """A mode payload carries a single instruction, so an option that lowers to
+    several would be silently truncated — a branch the player picks and then only
+    half gets."""
+    from engine.grammar import ast
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_statement
+
+    node = ast.OneOf(
+        (
+            ast.Draw(ast.PlayerRef("you"), ast.Fixed(1)),
+            ast.Sequence((
+                ast.Draw(ast.PlayerRef("you"), ast.Fixed(1)),
+                ast.Draw(ast.PlayerRef("you"), ast.Fixed(1)),
+            )),
+        ),
+        ("draw a card", "draw two cards one at a time"),
+    )
+    with pytest.raises(LoweringError):
+        lower_statement(node)
+
+
+def test_a_narrowed_discard_the_prompt_cannot_test_is_refused():
+    """"Discard a **legendary** card" — a supertype has no payload key, so it
+    would reduce to "discard a card" and the effect would take anything. The
+    same gate the discard *cost* runs through."""
+    assert compile_line("Discard a creature card.").instructions[0].payload["filter"] == {
+        "type_filter": "creature"
+    }
+    result = compile_line("Discard a legendary card.")
+    assert result.parsed and not result.lowered

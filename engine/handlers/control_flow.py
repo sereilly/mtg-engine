@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..oracle_types import OracleInstruction
 from ..resumption import run_resumable
 from ._common import flip_coin, permanent_matches_filter
 from .registry import effect_handler
@@ -256,6 +257,58 @@ def if_then(game: Game, instruction: OracleInstruction, context: OracleExecution
     return _run(game, _steps(instruction, "else"), context)
 
 
+def _action_is_takeable(game: Game, player, instruction: OracleInstruction, source) -> bool:
+    """Whether *player* could actually perform this instruction right now.
+
+    Two kinds are asked, because two kinds are the ones an optional action gives
+    something up for; everything else answers True, which is what the engine did
+    for all of them before this existed. A kind added here has to be one whose
+    "nothing to give" case is real and checkable — not a guess, because a
+    wrongly-False answer withdraws an offer the card makes.
+    """
+    from ._common import _card_matches_filter
+
+    if instruction.kind == "sacrifice_matching_permanent":
+        exclude = source if instruction.payload.get("exclude_self") else None
+        return bool(game._sacrifice_candidate_indices(
+            player, dict(instruction.payload.get("filter") or {}), exclude
+        ))
+    if instruction.kind == "discard_controller_cards":
+        described = dict(instruction.payload.get("filter") or {})
+        return any(_card_matches_filter(card, described) for card in player.hand)
+    return True
+
+
+def _narrow_to_takeable_actions(
+    game: Game, player, steps: tuple, context: OracleExecutionContext
+) -> tuple[tuple, bool]:
+    """*steps* with any unofferable alternative removed, and whether an offer
+    remains to make at all.
+
+    A bare step that cannot be taken makes the whole offer unmakeable, as it
+    always has. A ``choose_one`` loses just the modes that cannot be taken, and
+    becomes unmakeable only when it has none left.
+    """
+    source = context.source_permanent
+    narrowed = []
+    for step in steps:
+        if step.kind == "choose_one":
+            modes = tuple(
+                mode for mode in (step.payload.get("modes") or ())
+                if _action_is_takeable(game, player, mode["instruction"], source)
+            )
+            if not modes:
+                return (), False
+            narrowed.append(
+                OracleInstruction(step.kind, step.value, {**step.payload, "modes": modes})
+            )
+            continue
+        if not _action_is_takeable(game, player, step, source):
+            return (), False
+        narrowed.append(step)
+    return tuple(narrowed), True
+
+
 @effect_handler("may")
 def may(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"You may pay {N}. If you do, …" / "You may <action>."
@@ -294,14 +347,16 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     # creature", Dire Fleet Warmonger): with nothing legal to sacrifice, the
     # offer is never made — otherwise accepting would run the if-you-do branch
     # against a cost that never happens.
-    for step in on_accept:
-        if step.kind != "sacrifice_matching_permanent":
-            continue
-        exclude = context.source_permanent if step.payload.get("exclude_self") else None
-        if not game._sacrifice_candidate_indices(
-            player, dict(step.payload.get("filter") or {}), exclude
-        ):
-            return _run(game, on_decline, context) if on_decline else (True, "resolved")
+    #
+    # "…sacrifice a creature **or** discard a creature card" (Crypt Lurker) is
+    # the same question asked of each alternative: a mode the player cannot take
+    # is dropped from the offer, and only when *none* of them is takeable does
+    # the whole offer go unmade. Rebuilding the accept branch is what carries
+    # that through to the prompt — an unofferable mode left in the list is one
+    # the player can pick and then not get.
+    on_accept, offerable = _narrow_to_takeable_actions(game, player, on_accept, context)
+    if not offerable:
+        return _run(game, on_decline, context) if on_decline else (True, "resolved")
 
     entry = {
         "card_name": context.card.name,

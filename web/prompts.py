@@ -391,6 +391,15 @@ def _revealed_hand_pick(ctx: PromptContext, choices: list) -> dict:
 
 @prompt_renderer("discard")
 def _discard(ctx: PromptContext, choices: list) -> dict:
+    """The whole hand, with the positions that may actually be chosen.
+
+    "Discard a **creature** card" (Crypt Lurker) narrows what pays, so the
+    eligible positions ride alongside — the whole hand is still sent, because
+    the client draws it and greys out what the phrase does not name. The list
+    comes from ``live_discard_candidates``, which is the same rule the engine
+    re-checks an answer against: a prompt that offers what the resolution then
+    refuses is the mismatch every picker here is arranged to prevent.
+    """
     choice = choices[0]
     discarder = ctx.game.players[choice.player_index]
     return {
@@ -398,6 +407,7 @@ def _discard(ctx: PromptContext, choices: list) -> dict:
         "count": choice.data["count"],
         "allow_top_of_library": bool(choice.data.get("allow_top_of_library")),
         "cards": [ctx.serialize_card(card) for card in discarder.hand],
+        "eligible": ctx.game.live_discard_candidates(choice),
     }
 
 

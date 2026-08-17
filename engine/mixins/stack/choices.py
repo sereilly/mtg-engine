@@ -676,12 +676,36 @@ class PendingChoicesMixin:
             "discard", player_index, hand_indices=hand_indices, to_library=to_library
         )
 
+    def live_discard_candidates(self, choice: PendingChoice) -> list[int]:
+        """The hand positions this seat may still discard, in hand order.
+
+        Public because the prompt renderer is the second legitimate caller: the
+        list offered and the list an answer is checked against have to be one
+        rule rather than two copies of it — the same arrangement
+        ``live_tap_any_number`` makes, and the same failure it prevents.
+        """
+        from ...subject_filters import card_matches_any
+
+        described = dict(choice.data.get("filter") or {})
+        hand = self.players[choice.player_index].hand
+        alternatives = (described,) if described else ()
+        return [
+            index for index, card in enumerate(hand)
+            if card_matches_any(card, alternatives)
+        ]
+
     def _resolve_discard(self, choice: PendingChoice, hand_indices: list[int], to_library: bool) -> bool:
         from ...handlers.zones import _resolve_one_discard
 
         count = int(choice.data["count"])
         chosen = [i for i in dict.fromkeys(hand_indices)][:count]
         if len(chosen) != count:
+            return False
+        # "Discard a **creature** card": a card the phrase does not name is not
+        # a legal answer, and is refused rather than slid onto one that is — a
+        # stale click must not throw away a card the player meant to keep.
+        eligible = set(self.live_discard_candidates(choice))
+        if any(index not in eligible for index in chosen):
             return False
         # Remove in descending order so earlier indices stay valid as we pop.
         for hand_index in sorted(chosen, reverse=True):
@@ -740,11 +764,23 @@ class PendingChoicesMixin:
         return _resolve_one_discard(self, victim_index, hand_index, to_library=False)
 
     def _default_discard(self, choice: PendingChoice) -> None:
-        """Discard the lowest-index cards, keeping them in the graveyard."""
+        """Discard the lowest-index *eligible* cards, keeping them in the
+        graveyard.
+
+        Lowest-index is the stated policy; which cards are candidates at all is
+        not policy but the card's printed phrase, so it is read from the same
+        list the interactive seat is offered. Re-read each time round, because
+        each discard renumbers the hand behind it.
+        """
         from ...handlers.zones import _resolve_one_discard
 
         for _ in range(int(choice.data["count"])):
-            if not _resolve_one_discard(self, choice.player_index, 0, to_library=False):
+            eligible = self.live_discard_candidates(choice)
+            if not eligible:
+                break
+            if not _resolve_one_discard(
+                self, choice.player_index, eligible[0], to_library=False
+            ):
                 break
         self.discard_pending_choice(choice)
 

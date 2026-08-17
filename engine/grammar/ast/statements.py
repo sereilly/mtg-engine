@@ -180,6 +180,23 @@ class May:
 
 
 @dataclass(frozen=True)
+class OneOf:
+    """"sacrifice a creature **or** discard a creature card" (Crypt Lurker).
+
+    Two ways to take one action, the player choosing which. Not a
+    :class:`Sequence` (that does both) and not a :class:`ModalNode` (that is a
+    spell's printed "Choose one —" with bulleted lines, chosen as the spell is
+    cast under CR 601.2b); this is a choice made where the effect is performed.
+
+    *labels* is each option as printed, sliced back out of the line, so the
+    prompt shows the player the words on the card rather than a rendering of the
+    instruction behind them.
+    """
+    options: tuple["Statement", ...]
+    labels: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ForEach:
     """"for each creature you control, …" — one repetition per member of a set.
 

@@ -786,3 +786,127 @@ def test_the_kraken_is_always_a_legal_target_for_its_own_trigger(set_pool):
     assert game.permanent_id_of(kraken) in {
         target["permanent_id"] for target in choice.data["targets"]
     }
+
+
+# --- Round 89: one action, two ways to take it ------------------------------
+
+
+def _lurker_board(set_pool, *, mine=(), hand=()):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=pool[name]) for name in mine],
+        hand=[pool["Crypt Lurker"]] + [pool[name] for name in hand],
+        library=[pool["Island"], pool["Island"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.cast_from_hand(0, "Crypt Lurker")
+    game._settle()
+    return game, p1
+
+
+def _mode_labels(game):
+    for choice in game.pending_choices:
+        if choice.kind == "mode_choice":
+            return list(choice.data["labels"])
+    return None
+
+
+def test_crypt_lurker_compiles_supported(set_pool):
+    """"Sacrifice a creature **or** discard a creature card" is one action with
+    two ways to take it, so it lowers onto the modal handler a printed
+    "Choose one —" already uses: the same question is being asked, and inventing
+    a second mechanism would mean two prompts and two defaults.
+
+    The labels are the card's own words, sliced back out of the line."""
+    program = compile_card_oracle(set_pool("M21")["Crypt Lurker"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    payload = trigger.instruction.payload
+    (choice,) = payload["action"]
+    assert choice.kind == "choose_one"
+    assert [mode["label"] for mode in choice.payload["modes"]] == [
+        "sacrifice a creature", "discard a creature card",
+    ]
+    assert payload["then"][0].kind == "draw_controller_cards"
+
+
+def test_both_ways_are_offered_when_both_are_open(set_pool):
+    game, _p1 = _lurker_board(
+        set_pool, mine=["Gale Swooper"], hand=["Alpine Watchdog", "Shock"]
+    )
+
+    game.confirm_optional_pay(0, accept=True)
+
+    assert _mode_labels(game) == ["sacrifice a creature", "discard a creature card"]
+
+
+def test_a_way_the_player_cannot_take_is_not_offered(set_pool):
+    """With no creature card in hand the discard is not something the player
+    *could* do, and a mode offered but not performable is one they can pick and
+    then not get. (The Lurker itself is a creature, so the sacrifice is always
+    open — which is why the reverse case cannot be built.)"""
+    game, _p1 = _lurker_board(set_pool, hand=["Shock"])
+
+    game.confirm_optional_pay(0, accept=True)
+
+    assert _mode_labels(game) == ["sacrifice a creature"]
+
+
+def test_the_discard_takes_a_creature_card_and_draws(set_pool):
+    game, p1 = _lurker_board(set_pool, hand=["Alpine Watchdog", "Shock"])
+
+    game.confirm_optional_pay(0, accept=True)
+    game.resolve_pending_choice("mode_choice", 0, mode_index=1)
+    (prompt,) = game.pending_choices
+    assert prompt.kind == "discard"
+    # Narrowed to the cards the phrase names — the Shock is in hand and is not
+    # one of them.
+    assert game.live_discard_candidates(prompt) == [0]
+    assert game.confirm_discard(0, [0])
+
+    assert [c.name for c in p1.graveyard] == ["Alpine Watchdog"]
+    assert [c.name for c in p1.hand] == ["Shock", "Island"], "the draw happened"
+
+
+def test_a_card_the_phrase_does_not_name_cannot_pay_the_discard(set_pool):
+    """Refused rather than slid onto a card that would do — a stale click must
+    not throw away the card the player meant to keep."""
+    game, p1 = _lurker_board(set_pool, hand=["Alpine Watchdog", "Shock"])
+
+    game.confirm_optional_pay(0, accept=True)
+    game.resolve_pending_choice("mode_choice", 0, mode_index=1)
+
+    assert not game.confirm_discard(0, [1])
+    assert [c.name for c in p1.graveyard] == []
+    assert game.pending_choices, "the prompt is still owed"
+
+
+def test_the_sacrifice_takes_a_creature_and_draws(set_pool):
+    game, p1 = _lurker_board(set_pool, mine=["Gale Swooper"], hand=["Shock"])
+
+    game.confirm_optional_pay(0, accept=True)
+    game.resolve_pending_choice("mode_choice", 0, mode_index=0)
+    assert game.resolve_pending_choice("sacrifice", 0, indices=[0])
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Crypt Lurker"]
+    assert [c.name for c in p1.graveyard] == ["Gale Swooper"]
+    assert [c.name for c in p1.hand] == ["Shock", "Island"]
+
+
+def test_declining_gives_up_nothing_and_draws_nothing(set_pool):
+    """"If you do" — the draw is the consequence of taking the action, so
+    declining is not a free card."""
+    game, p1 = _lurker_board(
+        set_pool, mine=["Gale Swooper"], hand=["Alpine Watchdog"]
+    )
+
+    game.confirm_optional_pay(0, accept=False)
+
+    assert game.pending_choices == []
+    assert [c.name for c in p1.hand] == ["Alpine Watchdog"]
+    assert p1.graveyard == []
+    assert [p.card.name for p in game.controlled_by(0)] == ["Gale Swooper", "Crypt Lurker"]

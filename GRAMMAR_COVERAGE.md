@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 74.6% | 71.4% | 48.5% | 197 |
+| M21 *(measured)* | 285 | 503 | 74.8% | 71.6% | 48.7% | 198 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,7 +34,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | ---: | ---: | --- | --- |
 | 232 | 102 | expected a subject |  |
 | 94 | 38 | unrecognized effect verb |  |
-| 48 | 29 | unconsumed text |  |
+| 47 | 28 | unconsumed text |  |
 | 32 | 32 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
@@ -284,6 +284,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `White creatures get +1/+1.`
   - `White creatures get +1/+1.`
   - `White creatures get +1/+1.`
+- **Crypt Lurker**
+  - `When this creature enters, you may sacrifice a creature or discard a creature card. If you do, draw a card.`
 - **Crystal Rod**
   - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`

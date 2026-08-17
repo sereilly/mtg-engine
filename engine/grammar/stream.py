@@ -68,6 +68,18 @@ class TokenStream:
         self.pos += 1
         return token
 
+    def text_between(self, start: int, end: int) -> str:
+        """The printed source of tokens ``[start, end)``, as the card spells it.
+
+        Sliced out of the original line through the tokens' own offsets rather
+        than rebuilt from them, so a prompt label reads like the card and not
+        like the lexer — the same trick the registry-claimed sentence rider uses
+        to hand a text-keyed table its own words back.
+        """
+        if not 0 <= start < end <= len(self.tokens):
+            return ""
+        return self.line[self.tokens[start].start:self.tokens[end - 1].end].strip(" ,.")
+
     def mark(self) -> int:
         return self.pos
 

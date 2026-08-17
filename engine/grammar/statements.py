@@ -468,7 +468,7 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             # consuming "have" is the whole difference.
             stream.accept_word("have")
             try:
-                action = parse_statement(stream, top_level=False)
+                action = _parse_optional_action(stream)
                 return ast.May(ast.PlayerRef("you"), action=action)
             except GrammarError:
                 stream.reset(mark)
@@ -619,6 +619,33 @@ def _parse_where_x(stream: TokenStream) -> ast.Amount | None:
         _parse_duration(stream)
         return ast.CountOfDeaths(filt)
     return ast.CountOf(filt)
+
+
+def _parse_optional_action(stream: TokenStream) -> ast.Statement:
+    """The action behind "you may …", which may be printed as a choice of two.
+
+    "You may sacrifice a creature **or** discard a creature card" (Crypt Lurker)
+    is one action with two ways to take it, so it parses to a single
+    :class:`ast.OneOf` the player picks from — not two steps, which would do
+    both, and not the first half with the rest dropped, which is what the
+    unconsumed-token invariant was refusing the whole line for.
+
+    Read here rather than in ``parse_statement`` at large. A statement-level
+    "or" is rare and this is the one position the pool prints it in; claiming it
+    everywhere would put a production in front of every sentence in the game on
+    the strength of one card.
+    """
+    first_at = stream.pos
+    first = parse_statement(stream, top_level=False)
+    if not stream.at_word("or"):
+        return first
+    options = [first]
+    spans = [(first_at, stream.pos)]
+    while stream.accept_word("or"):
+        start = stream.pos
+        options.append(parse_statement(stream, top_level=False))
+        spans.append((start, stream.pos))
+    return ast.OneOf(tuple(options), tuple(stream.text_between(a, b) for a, b in spans))
 
 
 def _parse_condition(stream: TokenStream) -> ast.Condition:

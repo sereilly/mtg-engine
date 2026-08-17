@@ -14,6 +14,7 @@ import dataclasses
 
 from .. import ast
 from ..amounts import parse_amount, parse_equal_to
+from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import (parse_object_filter, parse_player_ref, parse_target_spec)
 from ..stream import TokenStream
@@ -46,9 +47,25 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     if stream.accept_phrase("your", "hand"):
         return ast.Discard(player, ast.AllOf(), whole_hand=True)
     count = parse_amount(stream)
-    stream.expect_word("card", "cards")
+    # "Discard a **creature** card" (Crypt Lurker). The noun parser reads the
+    # whole phrase including its "card", so it is tried before the bare
+    # template and reset when the phrase is just "card(s)". What the narrowing
+    # may say is lowering's question, not this one: parsing it here and refusing
+    # it there is how an unreadable phrase becomes a card reported unsupported
+    # rather than a discard that quietly takes anything.
+    narrowed = None
+    mark = stream.mark()
+    try:
+        candidate = parse_object_filter(stream)
+    except GrammarError:
+        candidate = None
+    if candidate is not None and candidate.is_card and candidate != ast.ObjectFilter(is_card=True):
+        narrowed = candidate
+    else:
+        stream.reset(mark)
+        stream.expect_word("card", "cards")
     at_random = stream.accept_phrase("at", "random")
-    return ast.Discard(player, count, at_random)
+    return ast.Discard(player, count, at_random, filter=narrowed)
 
 
 def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:

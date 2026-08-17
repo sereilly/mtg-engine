@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 238/285) to the full release line - **137 sets, 33,594
+M21 measured at 239/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–85 — lives in git history at and before
-commit `64ecea9`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–86 — lives in git history at and before
+commit `3794c8b`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,53 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 86: a condition about two permanents at once
-
-*(2026-08-17.)* M21 **235 → 236** — Chrome Replicator.
-
-> When this creature enters, if you control two or more nonland, nontoken
-> permanents with the same name as one another, create a 4/4 colorless Construct
-> artifact creature token.
-
-**The token half already worked** and so did the trigger; the whole card was its
-intervening-if, and the parser was failing the line on it.
-
-**Two things were missing, and only one of them is ordinary.** The threshold —
-"two or more" in front of the noun phrase — is a `Comparison("ge", …)` the
-`controls` condition has always been able to carry; it is read only when "or
-more" follows the number, because a bare number would be a different condition
-("exactly two") that no card in the pool prints, and guessing between them is the
-silent widening a threshold must never take.
-
-**The other is a relation, and that is the round.** "With the same name as one
-another" is not a property of a permanent: an `ObjectFilter` is tested against one
-permanent at a time by `permanent_matches_filter`, and *no single permanent can
-answer whether something else shares its name*. Put on the filter it would be a
-key the matcher cannot test — the exact shape `TESTABLE_SUBJECT_FILTER_KEYS`
-exists to refuse, where the phrase is then dropped and the card silently reads as
-"two or more nonland, nontoken permanents", which two different creatures already
-satisfy. So it rides the **condition**, as `Controls.shared_name`, and what it
-changes is what the threshold counts: the largest same-name group inside the
-matching set rather than the set. Three permanents with three different names
-satisfy nothing; three with one pair among them satisfy it.
-
-**The relation needs the threshold, so it refuses without one.** Lowered bare,
-`shared_name` would meet a payload with no `count` and the evaluator's
-"count > 0" default, which one permanent satisfies — the opposite of what the
-words say. No card prints it that way, so lowering raises rather than inventing
-the number the text did not print.
-
-The name is read off `effective_card`, so a Clone counts under the name it
-copied (CR 707.2) — the name printed on the board a player is looking at.
-"Nontoken" also does real work here beyond CR 111.1 tidiness: without it the
-Construct the card makes would help satisfy the next copy's condition.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Eight new tests, four watched to fail on the round-85 engine —
-the four negative ones pass there too, because an unsupported card also makes no
-token, which is why the positive cases are the ones that carry the round.
-
 ## Round 87: a cost paid with a card the phrase names
 
 *(2026-08-17.)* M21 **236 → 237** — Sanctum of Shattered Heights.
@@ -424,3 +377,59 @@ Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added** (and Twiddle's kept alive rather than shadowed). Nine new tests,
 all nine watched to fail on the round-87 engine.
+
+## Round 89: one action, two ways to take it
+
+*(2026-08-17.)* M21 **238 → 239** — Crypt Lurker, closing the batch.
+
+> When this creature enters, you may sacrifice a creature or discard a creature
+> card. If you do, draw a card.
+
+**Two gaps, and the smaller one had already been half-built.** Round 87 taught
+the engine a discard the printed phrase narrows — as a *cost*. This is the same
+phrase as an *effect*, so it runs through the same gate
+(`chargeable_card_filter`) and refuses the same things: "Discard a **legendary**
+card" has no payload key for its supertype, would reduce to "discard a card", and
+so is not admitted rather than quietly taking anything. The prompt carries the
+filter, and `live_discard_candidates` is the one rule the offer, the re-check and
+the non-interactive default all read — the arrangement `live_tap_any_number`
+already makes, for the failure it already prevents.
+
+**The larger gap is the "or", and it is not a sequence.** "Sacrifice a creature
+or discard a creature card" is one action with two ways to take it. Read as two
+steps it would do both; read as the first half it would drop the rest, which is
+what the unconsumed-token invariant was loudly refusing the whole line for.
+
+It lowers onto **`choose_one`** — the handler a printed "Choose one —" already
+uses. That is not a shortcut but the observation that the same question is being
+asked: which of these does the controller pick? A second mechanism would mean two
+prompts, two non-interactive defaults, and two places for a mode to go unoffered.
+What differs is only where the alternatives were printed, and the labels are the
+card's own words, sliced back out of the line through the tokens' offsets so the
+prompt reads like the card rather than like the lexer.
+
+**A mode you cannot take is not offered.** The `may` handler has always withheld
+an offer whose action cannot be performed — "you may sacrifice another creature"
+with nothing to sacrifice would otherwise run the if-you-do branch off a cost that
+never happened. That check is now asked *per alternative*: the accept branch is
+rebuilt with the unofferable modes removed, and only when none is left does the
+whole offer go unmade. With no creature card in hand, Crypt Lurker offers the
+sacrifice alone. (The reverse case cannot be built — the Lurker is itself a
+creature, so the sacrifice is always open.)
+
+`_action_is_takeable` answers for two instruction kinds and True for everything
+else, which is what the engine already did for all of them. A kind added there
+has to be one whose "nothing to give" case is real and checkable: a wrongly-False
+answer *withdraws an offer the card makes*, which is the opposite error and just
+as wrong.
+
+**`lower.py` crossed 1,000 lines**, so the static-ability lowering moved to
+`engine/grammar/statics.py`, between `lowering/` and `lower` in the layer order.
+A family: everything in it answers "what does this permanent do while it sits
+there?", which has no resolution, no targets and no order of steps — and its
+correctness is a *round trip*, the lord-buff filter handed to the derivation
+table and rebuilt and compared, which is easier to see in one file.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Nine new tests, all nine watched to fail on the round-88 engine.

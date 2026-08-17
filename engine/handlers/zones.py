@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
+    _card_matches_filter,
     graveyard_card_matches,
     permanent_matches_filter,
     resolve_amount,
@@ -1414,8 +1415,15 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     The same pending choice the targeted discard arms, pointed at the caster —
     who picks the cards, exactly as the printed sentence leaves it to them."""
     caster = context.caster
+    # "Discard a **creature** card" (Crypt Lurker): the payment comes from the
+    # cards the printed phrase names, so the count is bounded by *those* rather
+    # than by the hand. The filter rides the prompt so what is offered, what the
+    # answer is checked against and what a non-interactive seat takes are one
+    # rule (see ``live_discard_candidates``).
+    described = dict(instruction.payload.get("filter") or {})
+    eligible = [card for card in caster.hand if _card_matches_filter(card, described)]
     amount = min(
-        resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(caster.hand)
+        resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(eligible)
     )
     if amount <= 0:
         game.log.append(f"{caster.name} has no cards to discard")
@@ -1424,6 +1432,7 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     game.arm_pending_choice(
         "discard", player_index,
         count=amount,
+        filter=described,
         allow_top_of_library=game._controls_top_of_library_discard(caster),
     )
     game.log.append(f"{caster.name} must choose {amount} card(s) to discard")
