@@ -47,6 +47,23 @@ def _filter_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     return payload
 
 
+#: The ``ObjectFilter`` fields ``to_payload`` actually reads. A narrowing
+#: outside this set has no payload form at all, so it does not survive the trip
+#: to the dispatcher — and the caller's "are all these keys testable?" check
+#: cannot see the difference, because what is missing left no key behind.
+#: Round 68 hit the same thing on the lowering side and paired the payload gate
+#: with ``_restrictions_beyond`` over the AST; this is that pairing on the
+#: *trigger* side, where the consequence is a condition that announces itself on
+#: a strictly larger set than the card prints.
+_PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
+    "card_types", "type_match", "subtypes", "colors", "excluded_colors",
+    "excluded_types", "excluded_subtypes", "with_keywords", "without_keywords",
+    "controller", "tapped", "attacking", "blocking", "other_than_source",
+    "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
+    "colored", "with_plus1_counter",
+})
+
+
 def _restrictions_beyond(
     filt: ast.ObjectFilter, honoured: frozenset[str]
 ) -> tuple[str, ...]:
@@ -65,6 +82,41 @@ def _restrictions_beyond(
         if field.name not in honoured
         and getattr(filt, field.name) != getattr(default, field.name)
     )
+
+
+def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:
+    """The payload a printed **card** noun phrase means, or None to refuse it.
+
+    The one gate both readers of a card phrase run through — the grammar, which
+    decides whether to admit "Discard a land card or Shrine card" as a cost, and
+    ``engine/oracle.py``, which reads the same clause into the cost that is
+    actually charged. Two readers of one phrase drift, and the direction a cost
+    drifts in is a cost charged more widely than the card prints; they do not
+    drift when the answer comes from here.
+
+    Three refusals, and each is a way the phrase could otherwise be silently
+    widened:
+
+    * no printed "card" — "discard a land" is a phrase about permanents, and the
+      card matcher answers a different question about a different kind of object;
+    * a restriction with no payload key at all, so it would leave nothing behind
+      for the key check to see ("a **legendary** card" reduces to "a card");
+    * a payload key ``_card_matches_filter`` cannot answer, which would be
+      dropped where it is tested.
+
+    ``to_payload`` directly rather than ``_filter_payload``: that wrapper refuses
+    a card-scoped filter on purpose, because every handler it feeds searches the
+    battlefield. Here the card scope is the point.
+    """
+    from ...subject_filters import card_only_filter
+
+    if not filt.is_card:
+        return None
+    # ``is_card`` is read on the line above rather than dropped, so it counts as
+    # honoured in the sense this check means.
+    if _restrictions_beyond(filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card"}):
+        return None
+    return card_only_filter(filt.to_payload())
 
 
 # Payload keys no EFFECT_HANDLERS entry reads. They are additive *descriptions*

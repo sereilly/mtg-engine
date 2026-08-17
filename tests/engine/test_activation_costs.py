@@ -65,6 +65,18 @@ def test_every_admitted_cost_clause_is_charged(pool):
                 if isinstance(cost, ast.DiscardCost) and not cost.last_drawn:
                     if not charged.discard_cards:
                         unpaid.append(f"{card.name}: {ability.source_line}")
+                    # Not "is a discard charged" but "is *this* discard charged",
+                    # the same tightening the sacrifice branch above makes and
+                    # for the same reason: "a land card or Shrine card" collected
+                    # as "a card" is an ability payable with anything in hand,
+                    # still reporting supported.
+                    elif tuple(charged.discard_filters) != tuple(
+                        f.to_payload() for f in cost.filters
+                    ):
+                        unpaid.append(
+                            f"{card.name}: charged {charged.discard_filters} for "
+                            f"{tuple(f.to_payload() for f in cost.filters)}"
+                        )
                 if isinstance(cost, ast.PayLife):
                     # Not "is life charged" but "is *this much* charged". The
                     # amount is printed, and a charger reading a smaller one is

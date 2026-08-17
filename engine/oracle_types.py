@@ -70,6 +70,15 @@ class ActivatedAbilityCost:
     # payer no choice at all. Two fields because they are two costs: a card
     # could print both.
     discard_cards: int = 0
+    # Sanctum of Shattered Heights: "Discard a land card or Shrine card: …" —
+    # what the discarded card must be, one payload per printed alternative, OR'd.
+    # A tuple because the "or" unions two *different* characteristics and a
+    # single filter AND's its keys; empty is the unrestricted "Discard a card",
+    # which `discard_cards` above already says exists. A phrase the card matcher
+    # cannot test never reaches here — the grammar refuses the line and
+    # `_chargeable_discard_filters` refuses to read one, the same pairing
+    # `sacrifice_filter` describes.
+    discard_filters: tuple[dict, ...] = ()
     # Tavern Swindler: "{T}, Pay 3 life: …" — a life payment as an activation
     # cost (CR 118.3b, 119.4). A count rather than a flag, because the amount is
     # printed; 0 is the honest "no such cost", since CR 119.4b makes paying 0

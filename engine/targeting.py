@@ -341,12 +341,21 @@ def _cost_picker_spec(cost) -> dict | None:
     if cost is None:
         return None
     if getattr(cost, "discard_cards", 0):
-        return {
+        spec = {
             "kind": "hand_card",
             "own_only": True,
             "discard_cost": True,
             "count": cost.discard_cards,
         }
+        # "Discard a **land card or Shrine card**" (Sanctum of Shattered
+        # Heights) — the printed alternatives ride along so the enumerator
+        # narrows the offered hand with the same reader the charger accepts by.
+        # Emitted only when there is a narrowing: an empty key would read as one
+        # to anything that tests for its presence.
+        alternatives = getattr(cost, "discard_filters", ()) or ()
+        if alternatives:
+            spec["filters"] = [dict(alt) for alt in alternatives]
+        return spec
     described = getattr(cost, "sacrifice_filter", None)
     if described is not None:
         spec = {

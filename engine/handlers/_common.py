@@ -15,6 +15,7 @@ from ..oracle_types import X_FROM_COUNT
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
+from ..layer_bridge import printed_shape
 from ..models import Permanent, PlayerState
 from ..search_filters import name_key
 
@@ -126,13 +127,34 @@ def _card_matches_filter(card, filt: dict) -> bool:
 
     A card in a zone has no computed characteristics, so the shared matcher
     (which asks ``has_type`` of a battlefield object) cannot answer here. Only
-    the printed type union and the card's own name are testable, which is what
-    every zone count in this pool asks for; the lowerings refuse anything else
-    rather than counting it as if it were not there.
+    what is printed on the card is testable — its type line and its name — and
+    ``engine/subject_filters.py``'s ``CARD_ONLY_FILTER_KEYS`` is the list of
+    exactly which keys that comes to. The lowerings refuse anything else rather
+    than counting it as if it were not there.
+
+    Types and subtypes both come off the printed line through the *same* reader
+    the layer seed uses. The type test used to ask ``primary_type``, which
+    collapses a multi-type line to one word — so "Artifact Creature — Construct"
+    is a creature there but not an artifact, and "discard an artifact card"
+    would have refused a card printed as one. CR 205.2a: a card has **every**
+    type printed on it. No card in the pool asks the question the difference
+    changes, which is why this is a widening of the reader rather than a fix
+    with a card behind it.
     """
+    types, subtypes = printed_shape(card)
     wanted = filt.get("type_filter")
     wanted_types = tuple(wanted) if isinstance(wanted, (list, tuple)) else ((wanted,) if wanted else ())
-    if wanted_types and card.primary_type not in wanted_types:
+    if wanted_types and not any(t in types for t in wanted_types):
+        return False
+    # "Discard a **Shrine** card" (Sanctum of Shattered Heights). A subtype is
+    # its own key, OR'd across alternatives exactly as the permanent matcher
+    # OR's them, because "Djinn or Efreet" is one phrase either way.
+    wanted_sub = filt.get("subtype_filter")
+    wanted_subtypes = (
+        tuple(wanted_sub) if isinstance(wanted_sub, (list, tuple))
+        else ((wanted_sub,) if wanted_sub else ())
+    )
+    if wanted_subtypes and not any(s in subtypes for s in wanted_subtypes):
         return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name

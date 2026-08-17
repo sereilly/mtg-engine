@@ -105,6 +105,18 @@ def _printed_shape(
     return card_types, subtypes
 
 
+def printed_shape(card) -> tuple[frozenset[str], frozenset[str]]:
+    """The card types and subtypes *card* is printed with.
+
+    The answer for an object **outside** the battlefield — a card in a hand, a
+    graveyard or a library — where CR 613 does not apply at all and there is no
+    permanent to ask ``has_type``. On the battlefield this is only the seed;
+    layers 4 and 6 may have moved it since, so a caller holding a ``Permanent``
+    wants ``has_type`` and never this.
+    """
+    return _printed_shape(card.type_line, card.name, card.oracle_text, card.keywords)
+
+
 def seed_characteristics(perm: Permanent) -> Characteristics:
     """An object's copiable values — where layer application starts (613.2c).
 

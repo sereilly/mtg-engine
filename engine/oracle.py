@@ -546,6 +546,32 @@ def _chargeable_sacrifice_filter(phrase: str) -> dict | None:
     return carried
 
 
+def _chargeable_discard_filters(phrase: str) -> tuple[dict, ...] | None:
+    """The alternatives a "Discard <noun phrase>" cost may be paid with, or None
+    when the payment path cannot collect it.
+
+    The card twin of :func:`_chargeable_sacrifice_filter`, in the same
+    two-halves arrangement and for the same reason: this reader charges the
+    cost, ``engine/grammar``'s ``_parse_discard_cost_alternatives`` decides
+    whether to admit the line at all, and they cannot disagree because both ask
+    ``chargeable_card_filter`` what the phrase names.
+
+    An empty tuple is the unrestricted "Discard a card" — a real answer, not a
+    refusal — which is why None is the refusal and why the caller reads the
+    *count* off this rather than off a second regex of its own.
+    """
+    from .grammar import card_filter_payload
+
+    alternatives: list[dict] = []
+    for side in phrase.split(" or "):
+        described = card_filter_payload(side)
+        if described is None:
+            return None
+        if described:
+            alternatives.append(described)
+    return tuple(alternatives)
+
+
 def _life_payment_cost(cost_lower: str) -> int:
     """The life a "Pay N life" activation cost charges, or 0 for no such cost.
 
@@ -617,15 +643,29 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         if chosen_sacrifice
         else None
     )
-    # "Discard a card" (Seasoned Hallowblade). Jandor's Ring's history-named
-    # card is read above; counting it here too would charge the Ring twice.
-    discard_cards = (
-        0 if discard_last_drawn
-        else (1 if re.search(r"\bdiscard an? card\b", cost_lower) else 0)
+    # "Discard a card" (Seasoned Hallowblade), "Discard a land card or Shrine
+    # card" (Sanctum of Shattered Heights). Jandor's Ring's history-named card is
+    # read above; counting it here too would charge the Ring twice.
+    #
+    # The regex only **delimits** the noun phrase, to the end of its
+    # comma-separated cost segment, exactly as the sacrifice one above does; what
+    # the phrase names is read by the noun parser through
+    # `_chargeable_discard_filters`. The count comes off that reader rather than
+    # off a second regex, so a phrase it refuses charges no discard at all
+    # instead of charging the unnarrowed one.
+    discarded = (
+        None if discard_last_drawn
+        else re.search(r"\bdiscard (an? [^,:]+?)\s*(?=,|$)", cost_lower)
+    )
+    discard_filters = (
+        _chargeable_discard_filters(discarded.group(1)) if discarded else None
     )
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
-        sacrifice_filter, discard_cards, _life_payment_cost(cost_lower),
+        sacrifice_filter,
+        discard_cards=0 if discard_filters is None else 1,
+        discard_filters=discard_filters or (),
+        pay_life=_life_payment_cost(cost_lower),
     )
 
 

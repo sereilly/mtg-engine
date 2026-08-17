@@ -39,7 +39,7 @@ from .handlers._common import graveyard_card_matches, permanent_matches_filter
 from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle, expand_modal_activated_lines
 from .static_bonuses import conditional_static_holds
-from .subject_filters import subject_matches
+from .subject_filters import card_matches_any, subject_matches
 from .targeting import (
     derive_activation_spec,
     derive_cast_spec,
@@ -387,7 +387,9 @@ class LegalityMixin:
         if kind in ("none", "modal"):
             return []
         if kind == "hand_card":
-            return self._enumerate_cost_hand_cards(caster_index, card, for_cast=for_cast)
+            return self._enumerate_cost_hand_cards(
+                caster_index, card, spec, for_cast=for_cast
+            )
         if kind == "graveyard_creature":
             return self._enumerate_graveyard_creatures(caster_index, spec)
         if kind == "stack":
@@ -602,7 +604,8 @@ class LegalityMixin:
         return False
 
     def _enumerate_cost_hand_cards(
-        self, caster_index: int, card: CardDefinition, *, for_cast: bool
+        self, caster_index: int, card: CardDefinition, spec: dict | None = None,
+        *, for_cast: bool,
     ) -> list[dict]:
         """The cards that may pay a "discard a card" cost.
 
@@ -624,10 +627,16 @@ class LegalityMixin:
             if for_cast
             else None
         )
+        # "Discard a **land card or Shrine card**" (Sanctum of Shattered
+        # Heights). The narrowing is applied with the same reader the charger
+        # uses, so the picker cannot offer a card the payment then refuses —
+        # which is the failure this enumerator exists to prevent, and which the
+        # graveyard picker below already had to be fixed for.
+        alternatives = (spec or {}).get("filters") or ()
         return [
             {"kind": "hand_card", "seat": caster_index, "hand_index": index, "name": held.name}
             for index, held in enumerate(hand)
-            if index != spell_index
+            if index != spell_index and card_matches_any(held, alternatives)
         ]
 
     def _enumerate_graveyard_creatures(self, caster_index: int, spec: dict) -> list[dict]:

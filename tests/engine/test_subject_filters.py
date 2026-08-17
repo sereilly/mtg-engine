@@ -161,3 +161,55 @@ def test_no_key_is_promised_without_a_matcher_behind_it():
 
     assert demonstrated == TESTABLE_SUBJECT_FILTER_KEYS
     assert OBJECT_ONLY_FILTER_KEYS < TESTABLE_SUBJECT_FILTER_KEYS
+
+
+# ---------------------------------------------------------------------------
+# What a printed noun phrase means when the object is a *card*
+# ---------------------------------------------------------------------------
+
+
+def test_a_card_filter_answers_only_what_is_printed_on_the_face():
+    """CR 613.1 applies the layer system to permanents, so a card in a hand or a
+    graveyard has no computed characteristics at all. The key set is small for
+    that reason rather than for want of code, and a phrase reaching outside it
+    refuses — charging a wider cost is the direction a cost must never drift."""
+    from engine.grammar import card_filter_payload
+
+    assert card_filter_payload("a land card") == {"type_filter": "land"}
+    assert card_filter_payload("a Shrine card") == {"subtype_filter": "shrine"}
+    assert card_filter_payload("a card") == {}
+
+    # A supertype has no payload key at all, so it would leave nothing behind
+    # for the key check to see: "a legendary card" reduces to "a card", and the
+    # cost would be payable with anything. Refused instead.
+    assert card_filter_payload("a legendary card") is None
+    # A key the card matcher cannot answer.
+    assert card_filter_payload("a tapped creature card") is None
+    # The word "card" has to be printed — "a land" is a phrase about permanents,
+    # and the card matcher answers a different question about a different object.
+    assert card_filter_payload("a land") is None
+
+
+def test_a_card_matches_every_type_printed_on_it(catalog_by_name):
+    """CR 205.2a: a card has all the types on its line. The matcher used to ask
+    ``primary_type``, which collapses "Artifact Creature — Construct" to one
+    word and would have refused it as an artifact card."""
+    from engine.handlers._common import _card_matches_filter
+
+    juggernaut = catalog_by_name["Juggernaut"]
+    assert _card_matches_filter(juggernaut, {"type_filter": "artifact"})
+    assert _card_matches_filter(juggernaut, {"type_filter": "creature"})
+    assert not _card_matches_filter(juggernaut, {"type_filter": "land"})
+
+
+def test_alternatives_are_ord_not_anded(catalog_by_name, set_pool):
+    """"A land card or Shrine card" holds across two characteristics no single
+    filter can combine — AND'd, they name a card that is both."""
+    from engine.subject_filters import card_matches_any
+
+    printed = ({"type_filter": "land"}, {"subtype_filter": "shrine"})
+    assert card_matches_any(catalog_by_name["Mountain"], printed)
+    assert card_matches_any(set_pool("M21")["Sanctum of Calm Waters"], printed)
+    assert not card_matches_any(catalog_by_name["Juggernaut"], printed)
+    # No alternatives is no narrowing — the honest reading of "Discard a card".
+    assert card_matches_any(catalog_by_name["Juggernaut"], ())

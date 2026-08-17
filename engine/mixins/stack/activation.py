@@ -14,7 +14,7 @@ from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
 from ...handlers._common import permanent_matches_filter
 from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
-from ...subject_filters import filter_head_noun, subject_matches
+from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 
 # Instruction kinds whose handler performs the sacrifice its own cost clause
 # names. Diamond Valley's "{T}, Sacrifice a creature: You gain life equal to
@@ -537,7 +537,17 @@ class AbilityActivationMixin:
         discard_cost_cards: list = []
         if ability.cost.discard_cards:
             hand = controller.hand
-            if len(hand) < ability.cost.discard_cards:
+            # "Discard a **land card or Shrine card**" (Sanctum of Shattered
+            # Heights): the payment is drawn from the cards the printed phrase
+            # names, not from the hand. Matched through the same reader the
+            # picker in `engine/legality.py` offers from, so what is offered and
+            # what is accepted cannot disagree — and an empty filter list means
+            # the unrestricted "Discard a card", where the whole hand pays.
+            payable = [
+                card for card in hand
+                if card_matches_any(card, ability.cost.discard_filters)
+            ]
+            if len(payable) < ability.cost.discard_cards:
                 details = f"{permanent.card.name}: not enough cards in hand to discard"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
@@ -546,19 +556,27 @@ class AbilityActivationMixin:
             # discarded the first card in hand — the same silent repointing the
             # cast side did, and the reason both now refuse instead. Naming
             # nothing at all is still the deterministic default.
-            if cost_hand_index is not None and not 0 <= cost_hand_index < len(hand):
+            #
+            # A named card that does not answer the phrase is the same error, not
+            # a cheaper cost: it is refused rather than quietly slid onto a legal
+            # one, so a stale click cannot discard the land the player meant to
+            # keep.
+            if cost_hand_index is not None and (
+                not 0 <= cost_hand_index < len(hand)
+                or hand[cost_hand_index] not in payable
+            ):
                 details = (
                     f"{permanent.card.name}: no card at hand position "
                     f"{cost_hand_index} to discard for its cost"
                 )
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
-            named = cost_hand_index if isinstance(cost_hand_index, int) else 0
-            discard_cost_cards = [hand[named]]
-            for card in hand:
+            named = hand[cost_hand_index] if isinstance(cost_hand_index, int) else payable[0]
+            discard_cost_cards = [named]
+            for card in payable:
                 if len(discard_cost_cards) >= ability.cost.discard_cards:
                     break
-                if card is not hand[named]:
+                if card is not named:
                     discard_cost_cards.append(card)
 
         # "Pay 3 life" (Tavern Swindler). CR 119.4: a player may pay life only

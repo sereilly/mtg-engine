@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 236/285) to the full release line - **137 sets, 33,594
+M21 measured at 237/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–83 — lives in git history at and before
-commit `1d9dd56`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–84 — lives in git history at and before
+commit `49b251c`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,54 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 84: a count that never leaves its own decision
-
-*(2026-08-17.)* M21 **233 → 234** — Siege Striker, scoped and reverted last
-round, built now from the measurement that revert wrote down.
-
-> Whenever this creature attacks, you may tap any number of untapped creatures
-> you control. This creature gets +1/+1 until end of turn for each creature
-> tapped this way.
-
-**Two printed sentences, one instruction, and the reason is the count.** "For
-each creature tapped **this way**" is sized by what the sentence in front of it
-tapped — and that sentence is a choice made at *resolution*. As two steps the
-pump runs before the seat has answered and there is nothing to count. Rewind's
-`untap_up_to` says in its own registration that it deliberately does not suspend
-the resolution "because the untap is the last step of the effect that armed it";
-here it is not. Of the two available answers — suspend, or fuse — fusing is the
-cheaper: the choice's own resolver taps **and** pumps, so no value has to survive
-a resumption. The new registration says so where the next reader will look.
-
-**"Any number of" is its own quantifier**, not an "up to" with a large count. An
-"up to" prints a maximum a picker shows and a re-check enforces; here the bound
-*is* the set, so there is no number to send and none to validate against.
-Untargeted by construction, like Rewind's "up to four lands".
-
-**The dropped rider I predicted, and the one I did not.** Last round's note
-warned that `ObjectFilter.to_payload` emits `tapped_only` when `tapped` is True
-and **nothing** when it is False — so "untapped creatures you control" reduces to
-"creatures you control". Harmless for the tap, load-bearing for a count of what
-was tapped, so it is carried explicitly. The one I missed was my own: a bare
-"…gets +1/+1 for each creature tapped this way" lowered to a plain `pump_self`
-with the flag **silently dropped** — a supported card whose pump is a +0/+0. Its
-test failed on the first run and it now refuses by name.
-
-**Two guards did their job.** The pending-choice completeness guard rejected the
-round until the browser had a renderer *and* an `ActionKind` — round 75's lesson
-enforced by construction rather than remembered. And the size guard fired at 2,604
-lines, resolved by the second axis `tests/sets/README.md` gained in round 73: two
-early round sections moved to the file that already holds them.
-
-The non-interactive default is a stated policy — **tap everything eligible that
-is not already attacking**: every creature tapped is a permanent boost to an
-attacker, so the only cost is a blocker, and a creature already attacking was
-never going to block.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions, **zero hooks added**. Seven new tests, six
-watched to fail on the round-83 engine.
-
 ## Round 85: an activation cost that shrinks with the board
 
 *(2026-08-17.)* M21 **234 → 235** — Sanctum of Tranquil Light, the first of the
@@ -398,3 +350,63 @@ shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Eight new tests, four watched to fail on the round-85 engine —
 the four negative ones pass there too, because an unsupported card also makes no
 token, which is why the positive cases are the ones that carry the round.
+
+## Round 87: a cost paid with a card the phrase names
+
+*(2026-08-17.)* M21 **236 → 237** — Sanctum of Shattered Heights.
+
+> {1}, Discard a land card or Shrine card: Sanctum of Shattered Heights deals X
+> damage to target creature or planeswalker, where X is the number of Shrines you
+> control.
+
+**Everything to the right of the colon already worked** — X off a board count, a
+target that may be a creature or a planeswalker. The whole card was its *cost*:
+a discard the printed phrase narrows, which the engine could neither admit nor
+charge. `_parse_costs` read exactly the four words "discard a card" and refused
+anything else; the charger's regex was `discard an? card`.
+
+**A card is not a permanent, and that is the round.** CR 613.1 applies the layer
+system to permanents, so a card in a hand, a graveyard or a library has no
+computed characteristics at all — it is not tapped, it has no controller, and
+nothing can have changed its colour or its P/T. `_card_matches_filter` has always
+known this in its docstring; what it did not have was a *named* set of what it can
+answer, the way `TESTABLE_SUBJECT_FILTER_KEYS` and `OBJECT_ONLY_FILTER_KEYS` name
+theirs. `CARD_ONLY_FILTER_KEYS` is that set — three keys — and a phrase reaching
+outside it refuses the cost rather than charging the wider one. So "Discard a
+**legendary** card" (Niambi, Esteemed Speaker) is still unsupported, and now for
+a stated reason: a supertype has no payload key at all, so it would leave nothing
+behind for the key check to see and the cost would quietly become "discard a
+card".
+
+**Two readers, one gate.** A cost clause is read twice in this engine — the
+grammar decides whether to admit the line, `engine/oracle.py` reads what is
+actually charged — and the standing rule since round 56 is that the two must ask
+the same function, because the direction they drift in is a cost nobody pays.
+They ask `chargeable_card_filter`. The tightened whole-pool guard now compares
+the two *filters* rather than just "is a discard charged at all", the same
+sharpening the sacrifice branch beside it already had.
+
+**The "or" is a union across two different characteristics** — a card type and a
+subtype — and no single `ObjectFilter` can say it: its fields are AND'd, so
+"land" and "shrine" folded together would name a card that is both, which is
+nothing in the pool and a strictly harder cost than the card prints. So the
+disjunction lives in the *shape* of what is carried, a tuple of filters, read by
+`card_matches_any`.
+
+The picker narrows with the same reader the charger accepts by, so a hand of
+Shock and Gale Swooper offers nothing and the ability cannot be activated at all
+(CR 602.5c: an unpayable cost is an unactivatable ability, not a free one). A
+named hand index that does not answer the phrase is refused rather than slid onto
+a card that does — a stale click must not discard the land the player meant to
+keep.
+
+One widening with no card behind it, stated as such: the card matcher's type test
+asked `primary_type`, which collapses a multi-type line to one word, so "Artifact
+Creature — Construct" was a creature there but not an artifact (CR 205.2a says it
+is both). It reads the printed type set now. No card in the pool asks the question
+the difference changes.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Ten new or tightened tests, nine watched to fail on the round-86
+engine.

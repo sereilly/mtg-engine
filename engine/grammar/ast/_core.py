@@ -379,6 +379,13 @@ class DiscardCost:
     # (``ActivatedAbilityCost.discard_last_drawn``). Folding it into ``count=1``
     # would say "discard any one card" — a strictly cheaper cost.
     last_drawn: bool = False
+    # "Discard **a land card or Shrine card**" (Sanctum of Shattered Heights) —
+    # the alternatives the payer may choose between, as printed. A tuple rather
+    # than one filter because the "or" is a union across two *different*
+    # characteristics (a card type and a subtype), which no single ObjectFilter
+    # can say: its fields are AND'd, so "land" and "shrine" together would name
+    # a card that is both. Empty is the unrestricted "Discard a card".
+    filters: tuple[ObjectFilter, ...] = ()
 
 
 @dataclass(frozen=True)

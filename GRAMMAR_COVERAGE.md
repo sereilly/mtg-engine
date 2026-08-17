@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 74.2% | 71.0% | 48.1% | 195 |
+| M21 *(measured)* | 285 | 503 | 74.4% | 71.2% | 48.3% | 196 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -47,11 +47,11 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 5 | 2 | expected a quantity |  |
 | 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 4 | 1 | expected 'mana' |  |
-| 4 | 4 | unrecognized discard cost |  |
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | no tap-or-untap handler honours this restriction |  |
 | 3 | 2 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
+| 3 | 3 | unrecognized discard cost |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 2 | a variable count of any-colour mana has no representation |  |
 | 2 | 1 | expected something to shield |  |
@@ -1014,6 +1014,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
 - **Sanctum of Calm Waters**
   - `At the beginning of your first main phase, you may draw X cards, where X is the number of Shrines you control. If you do, discard a card.`
+- **Sanctum of Shattered Heights**
+  - `{1}, Discard a land card or Shrine card: Sanctum of Shattered Heights deals X damage to target creature or planeswalker, where X is the number of Shrines you control.`
 - **Sanctum of Stone Fangs**
   - `At the beginning of your first main phase, each opponent loses X life and you gain X life, where X is the number of Shrines you control.`
 - **Sanctum of Tranquil Light**

@@ -546,3 +546,120 @@ def test_a_reduction_over_an_untestable_noun_phrase_is_not_claimed():
     assert ability_self_reduction(
         "This ability costs {1} less to activate for each wumpus you control."
     ) is None
+
+
+# --- Round 87: a cost paid with a card the phrase names ---------------------
+
+
+def _heights_board(set_pool, hand, shrines=("Sanctum of Shattered Heights",)):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=pool[name]) for name in shrines],
+        hand=[pool[name] for name in hand],
+    )
+    victim = Permanent(card=pool["Gale Swooper"])
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, victim
+
+
+def _activate_heights(game, cost_hand_index=None):
+    return game.activate_permanent_ability(
+        0, "Sanctum of Shattered Heights", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+        cost_hand_index=cost_hand_index,
+    )
+
+
+def test_sanctum_of_shattered_heights_compiles_supported(set_pool):
+    """The damage half already worked — X off a board count, a target that may be
+    a creature or a planeswalker. The whole card was its *cost*: a discard the
+    printed phrase narrows, which nothing in the engine could either admit or
+    charge."""
+    program = compile_card_oracle(set_pool("M21")["Sanctum of Shattered Heights"])
+    assert program.supported, program.reason
+
+    (ability,) = program.activated_abilities
+    assert ability.cost.discard_cards == 1
+    assert ability.cost.discard_filters == (
+        {"type_filter": "land"}, {"subtype_filter": "shrine"},
+    )
+
+
+def test_a_land_card_pays_the_cost(set_pool):
+    game, p1, victim = _heights_board(set_pool, ["Mountain", "Shock"])
+
+    result = _activate_heights(game)
+    assert result.supported, result.details
+    game._settle()
+
+    assert [c.name for c in p1.graveyard] == ["Mountain"]
+    assert [c.name for c in p1.hand] == ["Shock"]
+    assert victim.damage_marked == 1
+
+
+def test_a_shrine_card_pays_it_too(set_pool):
+    """The other side of the printed "or", and the reason the cost carries a
+    *tuple* of filters: "land" and "Shrine" narrow different characteristics — a
+    card type and a subtype — so one filter holding both would name a card that
+    is a land *and* a Shrine, which is nothing at all."""
+    game, p1, _ = _heights_board(set_pool, ["Sanctum of Calm Waters", "Shock"])
+
+    result = _activate_heights(game)
+    assert result.supported, result.details
+
+    assert [c.name for c in p1.graveyard] == ["Sanctum of Calm Waters"]
+
+
+def test_a_hand_of_neither_cannot_activate_it(set_pool):
+    """CR 602.5c: an unpayable cost makes the ability unactivatable, not free.
+    A full hand is not a payable one here — which is the whole difference the
+    narrowing makes, since the charger used to take the first card in hand."""
+    game, p1, victim = _heights_board(set_pool, ["Shock", "Gale Swooper"])
+
+    result = _activate_heights(game)
+    assert not result.supported
+
+    assert [c.name for c in p1.hand] == ["Shock", "Gale Swooper"]
+    assert victim.damage_marked == 0
+
+
+def test_naming_a_card_the_phrase_does_not_name_is_refused(set_pool):
+    """Not slid onto a legal card. A stale click that discarded whatever was
+    payable would throw away the land the player meant to keep — the same silent
+    repointing the bare index fallback was fixed for."""
+    game, p1, _ = _heights_board(set_pool, ["Mountain", "Shock"])
+
+    result = _activate_heights(game, cost_hand_index=1)
+    assert not result.supported
+
+    assert [c.name for c in p1.hand] == ["Mountain", "Shock"]
+
+
+def test_x_counts_the_shrines_on_the_battlefield(set_pool):
+    game, _p1, victim = _heights_board(
+        set_pool, ["Mountain"],
+        ("Sanctum of Shattered Heights", "Sanctum of Calm Waters", "Sanctum of Stone Fangs"),
+    )
+
+    assert _activate_heights(game).supported
+    game._settle()
+
+    assert victim.damage_marked == 3
+
+
+def test_the_picker_offers_only_what_the_charger_accepts(set_pool):
+    """A picker that offers a card the payment then refuses is the failure the
+    enumerator exists to prevent, so both sides read the printed alternatives
+    through the same matcher."""
+    game, _p1, _victim = _heights_board(
+        set_pool, ["Shock", "Mountain", "Sanctum of Calm Waters", "Gale Swooper"]
+    )
+
+    cost_spec = game.activation_target_spec(0, 0)["cost_spec"]
+
+    assert [t["name"] for t in cost_spec["valid_targets"]] == [
+        "Mountain", "Sanctum of Calm Waters",
+    ]

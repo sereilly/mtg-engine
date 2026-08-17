@@ -64,6 +64,20 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
 #: quietly ignored.
 OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {"controller", "exclude_self"}
 
+#: The keys ``_card_matches_filter`` answers about a **card** — an object in a
+#: hand, a graveyard or a library. A far smaller set than the two above, and
+#: smaller for a reason rather than for want of code: CR 613.1 applies the layer
+#: system to permanents, so a card in a zone has no computed characteristics at
+#: all. It is not tapped, it has no controller, its colour and P/T are whatever
+#: is printed and nothing can have changed them. What is printed on the face is
+#: the whole of what is testable.
+#:
+#: "Discard a land card or Shrine card" (Sanctum of Shattered Heights) is read
+#: through this set, and a phrase reaching outside it refuses the cost rather
+#: than charging the wider one — the same rule ``object_only_filter`` states for
+#: a sacrifice, in the same direction.
+CARD_ONLY_FILTER_KEYS = frozenset({"type_filter", "subtype_filter", "named"})
+
 
 def filter_head_noun(payload: dict | None) -> str:
     """The one word a filter payload's head noun is, for a log line and for the
@@ -94,6 +108,38 @@ def object_only_filter(
     if set(remaining) - OBJECT_ONLY_FILTER_KEYS:
         return None
     return remaining
+
+
+def card_only_filter(payload: dict) -> dict | None:
+    """*payload* as a filter ``_card_matches_filter`` can answer about a card in
+    a zone, or ``None`` when it names something outside that.
+
+    The card twin of :func:`object_only_filter`, and separate from it because
+    the two answer about different kinds of object: a permanent's colour and
+    tapped state are live questions, a card's are not questions at all.
+    """
+    if set(payload) - CARD_ONLY_FILTER_KEYS:
+        return None
+    return dict(payload)
+
+
+def card_matches_any(card, alternatives) -> bool:
+    """Whether *card* answers any one of the printed alternatives.
+
+    "Discard a land card **or** Shrine card" is a union across two different
+    characteristics, and a single filter cannot say it: an ObjectFilter's keys
+    are AND'd, so "land" and "shrine" folded together would name a card that is
+    both. The disjunction therefore lives in the *shape* of what is carried — a
+    tuple of filters — and this is where it is read.
+
+    No alternatives is no narrowing, which is the honest reading of "Discard a
+    card": every card in hand pays it.
+    """
+    from .handlers._common import _card_matches_filter
+
+    if not alternatives:
+        return True
+    return any(_card_matches_filter(card, dict(alt)) for alt in alternatives)
 
 
 def subject_matches(
@@ -145,8 +191,11 @@ def subject_matches(
 
 
 __all__ = [
+    "CARD_ONLY_FILTER_KEYS",
     "OBJECT_ONLY_FILTER_KEYS",
     "TESTABLE_SUBJECT_FILTER_KEYS",
+    "card_matches_any",
+    "card_only_filter",
     "filter_head_noun",
     "object_only_filter",
     "subject_matches",

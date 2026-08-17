@@ -31,9 +31,15 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import GrammarError, LoweringError
 from .lower import GRAMMAR_ONLY_PAYLOAD_KEYS, categories_of, lower_ability
-from .lowering._common import _filter_payload, _restrictions_beyond
+from .lexer import tokenize
+from .lowering._common import (
+    _PAYLOAD_HONOURED_FILTER_FIELDS, _filter_payload, chargeable_card_filter,
+    _restrictions_beyond,
+)
+from .nouns import parse_object_filter
 from .parser import parse_line
 from .phrases import parse_subject_filter
+from .stream import TokenStream
 
 # Categories whose grammar output is executed. Held equal to every category
 # lower.py can emit, by tests/engine/test_grammar_categories.py — see the module
@@ -250,23 +256,6 @@ def behavioural_payload(payload: dict) -> dict:
     return {k: v for k, v in payload.items() if k not in GRAMMAR_ONLY_PAYLOAD_KEYS}
 
 
-#: The ``ObjectFilter`` fields ``to_payload`` actually reads. A narrowing
-#: outside this set has no payload form at all, so it does not survive the trip
-#: to the dispatcher — and the caller's "are all these keys testable?" check
-#: cannot see the difference, because what is missing left no key behind.
-#: Round 68 hit the same thing on the lowering side and paired the payload gate
-#: with ``_restrictions_beyond`` over the AST; this is that pairing on the
-#: *trigger* side, where the consequence is a condition that announces itself on
-#: a strictly larger set than the card prints.
-_PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
-    "card_types", "type_match", "subtypes", "colors", "excluded_colors",
-    "excluded_types", "excluded_subtypes", "with_keywords", "without_keywords",
-    "controller", "tapped", "attacking", "blocking", "other_than_source",
-    "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
-    "colored", "with_plus1_counter",
-})
-
-
 def subject_filter_payload(phrase: str, *, plural: bool = False) -> dict | None:
     """The payload form of the set of objects a narrowed trigger names.
 
@@ -301,9 +290,44 @@ def subject_filter_payload(phrase: str, *, plural: bool = False) -> dict | None:
         return None
 
 
+def card_filter_payload(phrase: str) -> dict | None:
+    """The payload form of a printed **card** noun phrase — "a land card".
+
+    The card twin of :func:`subject_filter_payload`, for a cost or an effect that
+    names an object in a hand, a graveyard or a library rather than on the
+    battlefield, and gated on ``CARD_ONLY_FILTER_KEYS`` because that is the whole
+    of what ``_card_matches_filter`` can answer there.
+
+    The word "card" has to be printed. "Discard a land" is not a phrase Magic
+    prints for a hand object, and admitting it would let a phrase about
+    permanents be charged against cards — where the matcher answers a strictly
+    different question and every restriction beyond the type line is silently
+    absent rather than false.
+
+    None means refuse, in all three of its ways: the phrase is not one the noun
+    parser reads; it is one carrying a restriction with no payload key at all
+    (a "**legendary** card" reduces to "a card" and the key check downstream sees
+    a clean, unnarrowed filter — round 68's trap); or it is one whose payload
+    names a key a card cannot answer.
+    """
+    lexed = tokenize(phrase.strip())
+    if not lexed.tokens:
+        return None
+    stream = TokenStream(lexed.tokens, phrase)
+    stream.accept_word("a", "an")
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    return chargeable_card_filter(filt)
+
+
 __all__ = [
     "GRAMMAR_ONLY_PAYLOAD_KEYS",
     "behavioural_payload",
     "CompiledLine", "GRAMMAR_CATEGORIES", "GrammarError", "LoweringError",
-    "ast", "compile_line", "parse_line", "subject_filter_payload",
+    "ast", "card_filter_payload", "compile_line", "parse_line",
+    "subject_filter_payload",
 ]
