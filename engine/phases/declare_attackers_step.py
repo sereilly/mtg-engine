@@ -254,10 +254,21 @@ class DeclareAttackersStepMixin:
             # a land turned into the named type counts, matching the upkeep
             # "no_islands" check. Scoped to lands so a creature subtype like
             # "Island Fish" never satisfies the restriction.
-            return any(
+            #
+            # CR 508.1c makes restrictions cumulative — "if any restrictions are
+            # being disobeyed, the declaration is illegal" — so satisfying this
+            # one answers only this one. This used to `return` the answer, which
+            # let a Sea Serpent attack a player under Island Sanctuary the moment
+            # they controlled an Island; Sea Serpent's own clause *requires* that
+            # Island, so the two cards contradict each other on exactly the board
+            # where both are played, and they have shipped together since Alpha.
+            # It also skipped the defender check below, so a Wall printed with
+            # this clause could attack at all.
+            if not any(
                 perm.card.primary_type == "land" and perm.has_type(required)
                 for perm in self.controlled_by(defending_player_index)
-            )
+            ):
+                return False
 
         if "cant_attack" in instr_kinds:
             return False

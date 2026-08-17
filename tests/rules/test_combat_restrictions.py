@@ -156,3 +156,43 @@ def test_506_3_an_unrecognized_restriction_rider_is_unsupported_not_silently_dro
     ):
         program = compile_card_oracle(_orc(text))
         assert not program.supported, f"silently admitted: {text}"
+
+
+# ---------------------------------------------------------------------------
+# Restrictions are cumulative (CR 508.1c)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("508.1c")
+def test_508_1c_a_satisfied_restriction_does_not_answer_the_others():
+    """"If **any** restrictions are being disobeyed, the declaration of
+    attackers is illegal" â€” so restrictions are cumulative and satisfying one
+    settles only that one.
+
+    The attack check used to *return* the land-type restriction's answer, which
+    skipped every check after it. Sea Serpent and Island Sanctuary have shipped
+    together since Alpha, and they meet on exactly the board where both are
+    played: the Serpent's own clause requires the defender to control an Island,
+    which is the board an Island Sanctuary player has. So the Serpent â€” no
+    flying, no islandwalk â€” attacked straight through it. The same return also
+    skipped the defender check below, so a creature printed with both that clause
+    and defender would have attacked with no permission at all.
+
+    Nothing in the suite noticed, because every other restriction is checked
+    after this one.
+    """
+    from engine.card_loader import load_catalog
+
+    catalog = {c.name: c for c in load_catalog()}
+    serpent = _nosick(Permanent(card=_fish("Island")))
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=catalog["Island"])])
+    game = Game(players=[PlayerState(name="P1", battlefield=[serpent]), p2])
+    game.enforce_mana_costs = False
+
+    assert game.can_attack(serpent, 1) is True
+
+    p2.island_sanctuary_protected = True
+
+    assert game.can_attack(serpent, 1) is False, (
+        "no flying and no islandwalk, so Island Sanctuary still applies"
+    )

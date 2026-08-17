@@ -7,8 +7,8 @@ printings, 26,113 unique cards** per `set_progress.json`.
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–67 — lives in git history at and before
-commit `40e81df`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–68 — lives in git history at and before
+commit `7cc3edc`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,81 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 68: a counter on a permanent the controller chooses
-
-*(2026-08-16.)* M21 **221 â†’ 222** â€” Liliana's Scrounger, whose one sentence the
-grammar had already read in full. What refused was the lowering, and what the
-round actually cost was a fourth thing nobody had listed.
-
-> At the beginning of each end step, if a creature died this turn, you may put a
-> loyalty counter on a Liliana planeswalker you control.
-
-**The restriction was lifted, not deleted.** "Loyalty counters only land on the
-ability's own source" was true of every card in the pool until this one:
-`_is_source` still routes to `add_loyalty_counters`, and a non-source noun phrase
-now gets `add_loyalty_counters_to_chosen` beside it. One write function under
-both, because there is now more than one way a loyalty counter arrives and CR
-306.5c makes it the key damage and loyalty costs read.
-
-**"Liliana" is a planeswalker subtype and never a card name** â€”
-`planeswalker_types.json` â†’ `PLANESWALKER_TYPES` â†’ `SUBTYPE_INDEX` â†’
-`subtype_filter`, with the `named` key absent. All three payload keys were
-already in `TESTABLE_SUBJECT_FILTER_KEYS`, so the card needed no vocabulary work
-and no new filter. That mattered: had it compiled to a name match it would have
-been dispatch on a card name outside `card_hooks.py`.
-
-**No "target" is printed, so nothing is chosen when the ability goes on the
-stack** (CR 115.1b). The controller picks at resolution out of what the phrase
-names *then* â€” the `untap_up_to` shape, not the targeted one. Reading it as a
-target would move the choice to announcement and let the ability do nothing on
-resolution when the walker it named has left, where the printed card simply picks
-another. One candidate is applied inline, none does nothing, several arm a
-`loyalty_recipient` prompt: one `register_choice`, one renderer, one AI default,
-no new `Game` field. The default is a stated policy â€” **fewest loyalty counters,
-ties by scan order** â€” because loyalty is a planeswalker's life total and
-CR 704.5i bins one at zero.
-
-**The fourth thing, which was the actual work.** `engine/oracle.py` collapsed
-"the"/"each"/"your" end step into one condition kind, and the CR 603.4 scan this
-card lands in is scoped to the *active player*. So without splitting the
-condition (`end_step_self`, mirroring `upkeep_self`/`combat_your_turn`) the card
-would have compiled supported and **never fired on an opponent's end step** â€”
-the same silent-wrongness shape as round 67, arrived at from the other side. Eight
-cards move to the new kind with no behaviour change. Two guards had to follow the
-split or quietly stop covering things: `test_trigger_tables.py` fails loudly,
-`test_grammar_lowering.py` fails *silently*, dropping Erg Raiders â€” the only
-shipped card with a "your end step" trigger.
-
-**And a rule about the payload gate that is worth keeping.**
-`TESTABLE_SUBJECT_FILTER_KEYS` alone is **not sufficient**, because
-`ObjectFilter.to_payload` does not emit `zone`, `is_enchanted`, `supertypes` or
-`colored` at all â€” so "a planeswalker card **in your graveyard**" reduces to the
-same payload as the plain phrase and would have compiled a graveyard clause into
-a battlefield picker. The gate has to be the payload keys *paired with*
-`_restrictions_beyond` over the AST. That is now three refusal tests.
-
-**The size guard again, one round after last time.** The block landed
-`test_m21_creatures.py` at 2,692 against a 2,600 cap. Every assertion in it reads
-a *planeswalker's* loyalty â€” the Scrounger is only the source of the counter â€” so
-it lives in `test_m21_planeswalkers.py`, which keeps loyalty behaviour in one
-place. Worth recording plainly: **M21 has 149 creatures and the printed-type axis
-is nearly exhausted**, so the next round that adds creature tests has to split the
-file for real rather than find it another home.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions, **zero hooks added**. Nine of the thirteen new
-tests were watched to fail on the round-67 engine; the four that pass vacuously
-are the negative controls, which earn their keep only now the card works.
-
-**Next:**
-
-- The counter-removal activation cost from round 66's *Next*, still open and
-  still a free ability.
-- "Another" as a source exclusion (round 65), the headless simulator's discarded
-  permanent target (round 65), the Shrine cycle, a static P/T contribution with a
-  computed X, a reflexive trigger, the legend rule.
-- Split `tests/sets/test_m21_creatures.py`.
-
 ## Round 69: several cards in a graveyard, where a slot is all there is
 
 *(2026-08-16.)* M21 **222 â†’ 223** â€” Sanguine Indulgence. Its cost-reduction line
@@ -484,3 +409,35 @@ controls that earn their keep only now the card works.
 - Round 66's counter-removal cost, round 65's "another"-as-source-exclusion and
   the headless simulator's discarded target, the Shrine cycle, a computed static
   P/T, a reflexive trigger, the legend rule.
+
+## Round 71: attack restrictions were not cumulative
+
+*(2026-08-16.)* No card — a **shipped-pool** bug, found while scoping Drowsing
+Tyrannodon and fixed ahead of it because it is not that card's.
+
+CR 508.1c: "if **any** restrictions are being disobeyed, the declaration of
+attackers is illegal." Restrictions are cumulative, so satisfying one settles
+only that one. The `cant_attack_without_land_type` branch **`return`ed** its own
+answer, so a satisfied land condition short-circuited every later restriction in
+the function.
+
+**Sea Serpent attacks straight through Island Sanctuary**, measured. The two
+cards meet on exactly the board where both are played — the Serpent's own clause
+*requires* the defending player to control an Island, which is the board an
+Island Sanctuary player has — and they have shipped together since Alpha, in
+LEA, LEB, 2ED and 3ED. The Serpent has neither flying nor islandwalk. Five cards
+carry the instruction: Sea Serpent, Pirate Ship, Dandân, Island Fish Jasconius,
+Merchant Ship.
+
+The same `return` also skipped the **defender** check three lines below, so a
+creature printed with both that clause and defender would attack with no
+permission at all. Latent — no such card exists yet, and Drowsing Tyrannodon is
+the card that would have met it.
+
+Nothing in the suite covered this, because every other restriction is checked
+*after* the one that returned. That is the shape worth remembering: a guard
+placed before a short-circuit tests the short-circuit, not the guard.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions. CR 508.1 gains subrule c.
+
