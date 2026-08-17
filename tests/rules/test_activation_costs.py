@@ -152,3 +152,92 @@ def test_a_partly_generic_upkeep_cost_checks_both_halves():
     assert [perm.card.name for perm in p1.battlefield] == [], (
         "the {1} is unpaid, so the whole cost is"
     )
+
+
+# ---------------------------------------------------------------------------
+# Paying life is a cost like any other (CR 118.3b, 119.4)
+# ---------------------------------------------------------------------------
+
+
+def _pay_life_card(amount: int):
+    """A shipped creature reprinted with a life-payment activation cost.
+
+    Invented rather than printed because the rule is not about the pool. The
+    pool's one such card is Tavern Swindler, which is measured and not shipped,
+    so ``load_catalog`` cannot see it â€” and a rule test that could only run once
+    a particular set ships is testing the set.
+    """
+    import dataclasses
+
+    return dataclasses.replace(
+        _CATALOG["Grizzly Bears"],
+        name="Test Bloodletter",
+        # The effect is a pump rather than a life gain on purpose: an effect
+        # that moves life would make "how much did the cost take?" unreadable
+        # from the life total afterwards.
+        oracle_text=f"{{T}}, Pay {amount} life: This creature gets +1/+1 until end of turn.",
+    )
+
+
+def _bloodletter(life: int, amount: int = 3):
+    game, p1, _p2 = _duel()
+    perm = Permanent(card=_pay_life_card(amount))
+    perm.metadata["summoning_sickness_turn"] = -99
+    p1.battlefield.append(perm)
+    p1.life = life
+    game.current_turn_phase, game.current_step = "precombat_main", "precombat_main"
+    return game, p1, perm
+
+
+@pytest.mark.cr("119.4", "118.3b")
+def test_life_may_be_paid_down_to_exactly_zero():
+    """"the player may do so only if their life total is greater than or equal
+    to the amount of the payment" (CR 119.4) â€” greater **or equal**, so a player
+    at exactly the cost can pay it. Refusing at equality is the off-by-one this
+    pins: it would make every life cost one point more expensive than printed."""
+    game, p1, _perm = _bloodletter(life=3)
+
+    result = game.activate_permanent_ability(0, "Test Bloodletter", permanent_index=0)
+
+    assert result.supported, result.details
+    assert p1.life == 0
+
+
+@pytest.mark.cr("119.4", "602.5c")
+def test_life_below_the_payment_makes_the_ability_unactivatable():
+    """One point short is not a partial payment (CR 601.2h) and not a free
+    ability (CR 602.5c): it is an ability that cannot be activated at all."""
+    game, p1, perm = _bloodletter(life=2)
+
+    result = game.activate_permanent_ability(0, "Test Bloodletter", permanent_index=0)
+
+    assert not result.supported
+    assert "life" in result.details, "refused for the cost, not for being unreadable"
+    assert p1.life == 2, "an unpayable cost is not partly paid"
+    assert perm.tapped is False, "and no other cost of the same ability is paid either"
+
+
+@pytest.mark.cr("119.4", "704.5a")
+def test_paying_the_last_life_loses_the_game_to_a_state_based_action():
+    """CR 119.4 permits the payment; CR 704.5a is what then happens. The two are
+    separate rules, and an engine that refused the payment to protect the player
+    would be enforcing neither."""
+    game, p1, _perm = _bloodletter(life=3)
+
+    game.activate_permanent_ability(0, "Test Bloodletter", permanent_index=0)
+
+    assert p1.life == 0
+    assert p1.lost is True
+
+
+@pytest.mark.cr("119.4b")
+def test_a_zero_life_payment_is_not_a_cost_the_parser_admits():
+    """"Players can always pay 0 life, no matter what their life total is"
+    (CR 119.4b) â€” so a printed 0 restricts nothing, and admitting it would put a
+    cost in the ability that no life total can fail."""
+    from engine.grammar import compile_line
+
+    result = compile_line("{T}, Pay 0 life: You gain 1 life.")
+
+    assert not result.parsed
+    assert result.failure_reason == "only a fixed, positive life payment is charged"

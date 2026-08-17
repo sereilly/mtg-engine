@@ -73,6 +73,17 @@ class CreateEmblem:
 
 
 @dataclass(frozen=True)
+class FlipCoin:
+    """"Flip a coin." (CR 705.1.)
+
+    The flip and nothing else. Its consequences are the ordinary conditional
+    sentences that follow it, because how many there are is a property of the
+    card and not of the flip: Tavern Swindler reads only the win, Mijae Djinn
+    only the loss, Bottle of Suleiman both.
+    """
+
+
+@dataclass(frozen=True)
 class ExtraTurn:
     player: PlayerRef
     # "Take two extra turns after this one." (Teferi, Master of Time.)

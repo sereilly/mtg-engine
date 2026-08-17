@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**244 / 585 tracked rules covered (41%)** — 1109 tests, 0 unannotated.
+**247 / 585 tracked rules covered (42%)** — 1116 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [116. Special Actions](#116-special-actions) | 0/3 | 0% |
 | [117. Timing and Priority](#117-timing-and-priority) | 6/7 | 85% |
 | [118. Costs](#118-costs) | 9/14 | 64% |
-| [119. Life](#119-life) | 1/10 | 10% |
+| [119. Life](#119-life) | 2/10 | 20% |
 | [120. Damage](#120-damage) | 4/10 | 40% |
 | [121. Drawing a Card](#121-drawing-a-card) | 3/9 | 33% |
 | [122. Counters](#122-counters) | 0/9 | 0% |
@@ -89,7 +89,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [702. Keyword Abilities](#702-keyword-abilities) | 23/23 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 4/8 | 50% |
-| [705. Flipping a Coin](#705-flipping-a-coin) | 0/3 | 0% |
+| [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
 | [707. Copying Objects](#707-copying-objects) | 5/14 | 35% |
 | [800. General](#800-general) | 2/7 | 28% |
 | [802. Attack Multiple Players Option](#802-attack-multiple-players-option) | 4/5 | 80% |
@@ -282,7 +282,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **118.1** A cost is an action or payment necessary to take another action or to stop another action from ta... *(1 tests)*
 - [x] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili... *(1 tests)*
-- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(9 tests, subrules ab)*
+- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(10 tests, subrules ab)*
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
@@ -300,7 +300,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **119.1** Each player begins the game with a starting life total of 20. Some variant games have different s...
 - [ ] **119.2** Damage dealt to a player normally causes that player to lose that much life. See rule 120.3.
 - [ ] **119.3** If an effect causes a player to gain life or lose life, that player’s life total is adjusted acco...
-- [ ] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so...
+- [x] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so... *(4 tests, subrules b)*
 - [ ] **119.5** If an effect sets a player’s life total to a specific number, the player gains or loses the neces...
 - [ ] **119.6** If a player has 0 or less life, that player loses the game as a state-based action. See rule 704.
 - [ ] **119.7** If an effect says that a player can’t gain life, that player can’t make an exchange such that the...
@@ -659,7 +659,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(11 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(7 tests, subrules ac)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(8 tests, subrules ac)*
 
 ### 603. Handling Triggered Abilities
 
@@ -885,15 +885,15 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(1 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(73 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(74 tests, subrules abcdefghijkmnpqrsy)*
 - [ ] **704.6** Some variant games include additional state-based actions that aren’t normally applicable:
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*
 
 ### 705. Flipping a Coin
 
-- [ ] **705.1** Some cards refer to flipping a coin. A coin used in a flip must be a two-sided object with easily...
-- [ ] **705.2** Some effects that instruct a player to flip a coin care only about whether the coin comes up head...
+- [x] **705.1** Some cards refer to flipping a coin. A coin used in a flip must be a two-sided object with easily... *(1 tests)*
+- [x] **705.2** Some effects that instruct a player to flip a coin care only about whether the coin comes up head... *(2 tests)*
 - [ ] **705.3** An effect may state that a coin flip has a certain result and/or that a certain player wins a coi...
 
 ### 707. Copying Objects

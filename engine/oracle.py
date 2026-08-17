@@ -528,6 +528,25 @@ def _chargeable_sacrifice_filter(phrase: str) -> dict | None:
     return carried
 
 
+def _life_payment_cost(cost_lower: str) -> int:
+    """The life a "Pay N life" activation cost charges, or 0 for no such cost.
+
+    The regex only **delimits** the number; ``_NUMBER_WORDS`` and ``int`` read
+    it — the same split round 34 drew for a narrowed trigger's noun phrase and
+    round 56 for a sacrifice cost's, and for the same reason: a second reader
+    approximating the first drifts, and the direction a cost drifts in is a cost
+    nobody pays. The grammar admits only a fixed positive amount, and
+    ``tests/engine/test_activation_costs.py`` compares the two over the whole
+    pool, so a clause the grammar admitted and this read as 0 fails there rather
+    than shipping a free ability.
+    """
+    match = re.search(r"\bpay (\w+) life\b", cost_lower)
+    if match is None:
+        return 0
+    word = match.group(1)
+    return int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+
+
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
@@ -588,7 +607,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     )
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
-        sacrifice_filter, discard_cards,
+        sacrifice_filter, discard_cards, _life_payment_cost(cost_lower),
     )
 
 

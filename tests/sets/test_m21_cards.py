@@ -345,3 +345,65 @@ def test_vito_and_heroic_intervention_compile_supported(set_pool):
     for name in ("Vito, Thorn of the Dusk Rose", "Heroic Intervention"):
         program = compile_card_oracle(pool[name])
         assert program.supported, f"{name}: {program.reason}"
+
+# --- Grammar probes that name no card ---------------------------------------
+#
+# Moved here from test_m21_creatures.py when it hit the size guard. They were
+# never per-card tests: each compiles a sentence and asserts a refusal, which is
+# what this file is for. Obeying the guard by splitting rather than raising it is
+# the rule; what the split showed is that the misfiling was the real growth.
+
+
+def test_a_fight_that_is_not_the_whole_effect_still_refuses():
+    """Round 39's refusal, kept now that the card that motivated it has landed.
+
+    "Then **it** fights…" after another sentence names that sentence's target —
+    the fused pair is what reads it — so a bare `Fight` nested in a sequence
+    must not lower onto the source-fights instruction, which would fight
+    whichever creature the single picker offered. Primal Might proved it;
+    this pins the rule after Primal Might stopped being the example.
+    """
+    from engine.grammar import compile_line
+
+    whole = compile_line("This creature fights another target creature.")
+    assert whole.lowered, whole.failure_reason
+
+    nested = compile_line("Draw a card. Then it fights another target creature.")
+    assert not nested.lowered
+
+
+def test_a_static_computed_bonus_cannot_be_negative():
+    """The refresh resolves the amount against the computed value and nothing
+    carries a sign for it, so "-X/-0" would apply the bonus the wrong way —
+    making a creature bigger where the card shrinks it."""
+    result = compile_line(
+        "This creature gets -X/-0, where X is the greatest power among "
+        "creature cards in your graveyard."
+    )
+
+    assert result.parsed and not result.lowered
+    assert result.failure_reason == "a static computed bonus cannot be negative"
+
+
+def test_a_flip_condition_with_no_flip_before_it_refuses():
+    """The control, and the rule round 33 wrote down: a back-reference names its
+    producer or refuses. "the flip" is one â€” with no ``Flip a coin`` earlier in
+    the same effect there is no result to read, and a condition that answered
+    False instead would give the card a branch that never runs."""
+    result = compile_line("If you win the flip, you gain 6 life.")
+
+    assert result.parsed and not result.lowered
+    assert result.failure_reason == (
+        "'the flip' with no coin flip before it in this effect"
+    )
+
+
+def test_a_variable_life_payment_is_not_admitted_as_a_cost():
+    """The second control. ``ActivatedAbilityCost.pay_life`` is a number the
+    activation path subtracts, so an X would be admitted by the parser and
+    charged as nothing â€” a free ability reporting supported, which is the bug
+    class the two-reader guard exists for."""
+    result = compile_line("{T}, Pay X life: You gain 6 life.")
+
+    assert not result.parsed
+    assert result.failure_reason == "only a fixed, positive life payment is charged"

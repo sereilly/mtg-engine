@@ -560,6 +560,20 @@ class AbilityActivationMixin:
                 if card is not hand[named]:
                     discard_cost_cards.append(card)
 
+        # "Pay 3 life" (Tavern Swindler). CR 119.4: a player may pay life only
+        # if their life total is at least the amount — so exactly 3 life pays a
+        # 3-life cost and 2 does not, and paying down to 0 is legal. CR 602.5c
+        # then makes an unpayable cost an *unactivatable* ability rather than a
+        # free one, which is why this refuses here instead of clamping at the
+        # payment below. Checked before anything is spent, like every other cost.
+        if ability.cost.pay_life and controller.life < ability.cost.pay_life:
+            details = (
+                f"{permanent.card.name}: {controller.name} cannot pay "
+                f"{ability.cost.pay_life} life with {controller.life} remaining"
+            )
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         # "Sacrifice another creature" (Hobblefiend) / "Sacrifice a creature with
         # defender" (Portcullis Vine). The victim is chosen by identity and never
         # by index — an index held across the removals below names whichever
@@ -671,6 +685,20 @@ class AbilityActivationMixin:
             self.log.append(
                 f"{controller.name} discarded {cost_card.name} "
                 f"to activate {permanent.card.name}"
+            )
+
+        # Pay the life (CR 118.3b: the payment is subtracted from the life total,
+        # which CR 119.4 also makes a loss of that much life). Sufficiency was
+        # checked above. No `check_state_based_actions()` call: activation's
+        # `_settle()` already sweeps, CR 704.3 puts the sweep at the next
+        # priority rather than mid-cost, and every other cost payment here omits
+        # it — measured, a card activated at exactly 3 life ends at life 0 and
+        # lost either way.
+        if ability.cost.pay_life:
+            controller.life -= ability.cost.pay_life
+            self.log.append(
+                f"{controller.name} paid {ability.cost.pay_life} life to activate "
+                f"{permanent.card.name}"
             )
 
         # Pay the chosen sacrifice (CR 601.2h) — the creature is gone before the

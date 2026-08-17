@@ -41,6 +41,20 @@ def _parse_game_is_a_draw(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_flip_coin(stream: TokenStream) -> ast.Statement | None:
+    """``Flip a coin.`` (CR 705.1.)
+
+    Returns None without consuming anything for any other sentence starting
+    "flip" — Chaos Orb's "flip it onto the battlefield from a height of at least
+    one foot" is a different action, and its card hook must keep getting it.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("flip", "a", "coin"):
+        return ast.FlipCoin()
+    stream.reset(mark)
+    return None
+
+
 def _parse_token_keywords(stream: TokenStream) -> tuple[str, ...]:
     """The ``with <keyword>[, <keyword>][ and <keyword>]`` tail of a token spec."""
     keywords: list[str] = []

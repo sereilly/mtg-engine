@@ -165,17 +165,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'able':
             _line('grant_unlimited_blocking', 'spell_pattern'),
     },
-    'Bottle of Suleiman': {
-        "{1}, sacrifice this artifact: flip a coin. if you win the flip, create a "
-        "5/5 colorless djinn artifact creature token with flying. if you lose the "
-        "flip, this artifact deals 5 damage to you":
-            _line(
-                "coin_flip_token_or_self_damage", "activated_token",
-                name="Djinn", power=5, toughness=5,
-                type_line="Artifact Creature — Djinn",
-                colors=(), keywords=("Flying",), damage=5,
-            ),
-    },
     'Camouflage': {
         "this turn, instead of declaring blockers, each defending player chooses "
         "any number of creatures they control and divides them into a number of "

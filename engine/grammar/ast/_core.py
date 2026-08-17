@@ -459,6 +459,17 @@ class ReturnedToHandThisTurn:
 
 
 @dataclass(frozen=True)
+class CoinFlipResult:
+    """"you win the flip" / "you lose the flip" (CR 705.2).
+
+    A back-reference to a flip made earlier in the same resolution, never a
+    board state — which is why lowering refuses one with no ``FlipCoin`` in
+    front of it (the rule round 33 wrote down for "that much").
+    """
+    won: bool = True
+
+
+@dataclass(frozen=True)
 class HadPlus1Counter:
     """"if it had a +1/+1 counter on it" (Basri's Lieutenant, CR 603.4).
 
@@ -469,8 +480,8 @@ class HadPlus1Counter:
 
 
 Condition = Union[
-    Controls, IsState, DiedThisTurn, HadPlus1Counter, LifeGainedThisTurn,
-    PaidCost, RawCondition, ReturnedToHandThisTurn,
+    CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter,
+    LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
 ]
 
 

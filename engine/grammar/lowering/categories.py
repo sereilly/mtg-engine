@@ -204,6 +204,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # stack, because CR 605.4a says a triggered mana ability never uses it.
     "add_mana_for_tapped_land": "mana",
     "create_token": "tokens",
+    # Flipping a coin (CR 705). Its own category rather than sharing one with
+    # the effect it gates: the flip is a randomiser, and every branch behind it
+    # keeps the category of whatever that branch does — a coin flip over a
+    # damage effect must not be able to turn "damage" on.
+    "flip_coin": "coin_flips",
     "create_emblem": "tokens",
     # Optional actions. Parsed and lowered, not switched on — see _WRAPPER_KINDS.
     "may": "optional",

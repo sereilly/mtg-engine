@@ -147,13 +147,33 @@ class TestAbuJafar:
 
 class TestBottleOfSuleiman:
     def test_compiles_to_the_coin_flip_not_a_bare_damage_effect(self, arn_by_name):
+        """The original bug was the *winning* branch dealing damage. That is
+        still what this pins; what changed is the shape it is pinned through.
+
+        The card was a name-keyed hook compiling to one fused
+        ``coin_flip_token_or_self_damage``. It is now the general production —
+        one ``flip_coin`` recording its result, then two ordinary ``if_then``s
+        reading that one record (CR 705.2: only the player who flipped wins or
+        loses that flip, so asking twice would let a card win *and* lose). The
+        assertion is on which branch does what, which is the regression."""
         program = compile_card_oracle(arn_by_name["Bottle of Suleiman"])
         (ability,) = program.activated_abilities
-        assert ability.instruction.kind == "coin_flip_token_or_self_damage"
-        payload = ability.instruction.payload
-        assert (payload["power"], payload["toughness"]) == (5, 5)
-        assert payload["keywords"] == ("Flying",)
-        assert payload["damage"] == 5
+        assert ability.instruction.kind == "sequence"
+        flip, won, lost = ability.instruction.payload["steps"]
+
+        assert flip.kind == "flip_coin"
+        assert won.payload["condition"] == {"kind": "coin_flip", "won": True}
+        (token,) = won.payload["then"]
+        assert token.kind == "create_token"
+        assert (token.payload["power"], token.payload["toughness"]) == (5, 5)
+        assert token.payload["keywords"] == ("Flying",)
+
+        assert lost.payload["condition"] == {"kind": "coin_flip", "won": False}
+        (damage,) = lost.payload["then"]
+        assert damage.kind == "deal_damage"
+        assert damage.payload["amount"] == 5
+        assert damage.payload["recipient"] == "caster"
+
         assert ability.cost.sacrifice_self is True
 
     def _bottle_game(self, arn_by_name):
@@ -178,7 +198,10 @@ class TestBottleOfSuleiman:
         game, p1, p2 = self._bottle_game(arn_by_name)
         self._activate(game, win=True)
         (token,) = [p for p in p1.battlefield if p.metadata.get("is_token")]
-        assert token.card.name == "Djinn"
+        # "Djinn Token", not "Djinn": CR 111.4 names a token for its subtypes,
+        # and the retired hook was the one place in the file that spelled a
+        # token name by hand instead of going through `tokens.default_token_name`.
+        assert token.card.name == "Djinn Token"
         assert (token.effective_power, token.effective_toughness) == (5, 5)
         assert "Flying" in token.card.keywords
         assert "Artifact Creature" in token.card.type_line

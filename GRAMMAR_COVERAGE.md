@@ -10,7 +10,7 @@ How much of the card pool the oracle-text parser (`engine/grammar/`) reads. It i
 | Lowered | That AST mapped onto instructions, a sidecar registry, or a keyword line |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `combat_restrictions, control, counters, counterspells, damage, destruction, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
+Categories currently switched on: `coin_flips, combat_restrictions, control, counters, counterspells, damage, destruction, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 
@@ -19,10 +19,10 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | LEA | 290 | 388 | 78.9% | 77.3% | 41.5% | 148 |
 | LEB | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
-| ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
-| 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 71.8% | 68.0% | 45.1% | 182 |
-| **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
+| ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
+| 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
+| M21 *(measured)* | 285 | 503 | 72.0% | 68.2% | 45.3% | 183 |
+| **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -32,10 +32,10 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 241 | 110 | expected a subject |  |
+| 239 | 109 | expected a subject |  |
 | 95 | 39 | unrecognized effect verb |  |
 | 51 | 32 | unconsumed text |  |
-| 33 | 33 | unrecognized activation cost |  |
+| 32 | 32 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
@@ -60,7 +60,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 ## Cards executing through the grammar
 
-629 cards, 690 lines.
+631 cards, 692 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -167,6 +167,9 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Whenever this creature attacks, other creatures you control get +1/+0 until end of turn.`
 - **Bone Pit Brute**
   - `When this creature enters, target creature gets +4/+0 until end of turn.`
+- **Bottle of Suleiman**
+  - `{1}, Sacrifice this artifact: Flip a coin. If you win the flip, create a 5/5 colorless Djinn artifact creature token with flying. If you lose the flip, this artifact deals 5 damage to you.`
+  - `{1}, Sacrifice this artifact: Flip a coin. If you win the flip, create a 5/5 colorless Djinn artifact creature token with flying. If you lose the flip, this artifact deals 5 damage to you.`
 - **Braingeyser**
   - `Target player draws X cards.`
   - `Target player draws X cards.`
@@ -1158,6 +1161,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Exile target creature. Its controller gains life equal to its power.`
   - `Exile target creature. Its controller gains life equal to its power.`
   - `Exile target creature. Its controller gains life equal to its power.`
+- **Tavern Swindler**
+  - `{T}, Pay 3 life: Flip a coin. If you win the flip, you gain 6 life.`
 - **Teferi's Protege**
   - `{1}{U}, {T}: Draw a card, then discard a card.`
 - **Teferi's Tutelage**

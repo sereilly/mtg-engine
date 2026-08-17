@@ -70,6 +70,11 @@ class ActivatedAbilityCost:
     # payer no choice at all. Two fields because they are two costs: a card
     # could print both.
     discard_cards: int = 0
+    # Tavern Swindler: "{T}, Pay 3 life: …" — a life payment as an activation
+    # cost (CR 118.3b, 119.4). A count rather than a flag, because the amount is
+    # printed; 0 is the honest "no such cost", since CR 119.4b makes paying 0
+    # life always legal and therefore never a restriction on activating.
+    pay_life: int = 0
     # CR 606.4: a loyalty ability's cost is putting on or removing loyalty
     # counters. ``loyalty`` is the signed delta ("+1" → 1, "−2" → -2, "0" → 0);
     # ``loyalty_x_sign`` is set instead for a variable cost ("−X" → -1), whose

@@ -41,6 +41,7 @@ from .effects import (
     _parse_extra_turn,
     _parse_gain_control,
     _parse_gains,
+    _parse_flip_coin,
     _parse_game_is_a_draw,
     _parse_gets,
     _parse_has,
@@ -105,6 +106,13 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         modal = _parse_modal_head(stream)
         if modal is not None:
             return modal
+    # "Flip a coin." (CR 705.1) — a bare imperative like the ones below, and
+    # the only production that reads the word, so any other "flip …" sentence
+    # (Chaos Orb's) falls through untouched.
+    if stream.at_word("flip"):
+        flip = _parse_flip_coin(stream)
+        if flip is not None:
+            return flip
     # A bare imperative verb has an implied "you"/the source as subject.
     if stream.at_word("destroy"):
         return _parse_destroy(stream)
@@ -494,6 +502,18 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
     falls back rather than silently losing the condition — the legacy compiler
     dropped intervening-ifs entirely, making conditional triggers always fire."""
     mark = stream.mark()
+
+    # "you win the flip" / "you lose the flip" (CR 705.2). Read before the
+    # player reference below, which would consume the "you" and then reset — and
+    # read as a *back-reference* rather than a board state, because the answer is
+    # the value an earlier sentence of this same resolution recorded. Lowering
+    # refuses one with no flip in front of it.
+    if stream.accept_word("you"):
+        if stream.accept_phrase("win", "the", "flip"):
+            return ast.CoinFlipResult(won=True)
+        if stream.accept_phrase("lose", "the", "flip"):
+            return ast.CoinFlipResult(won=False)
+    stream.reset(mark)
 
     player = parse_player_ref(stream)
     if player is not None:

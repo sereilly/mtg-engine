@@ -251,6 +251,24 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             costs.append(ast.ExileSelf())
             stream.accept_punct(",")
             continue
+        if stream.at_word("pay"):
+            # "Pay 3 life" (Tavern Swindler) — CR 118.3b, charged by
+            # ``ActivatedAbilityCost.pay_life``. Only a fixed positive amount is
+            # admitted: the charger reads the printed number out of the same
+            # clause, and a variable or zero payment is a shape it would read as
+            # "no such cost", which is an ability activated for free.
+            mark = stream.mark()
+            stream.advance()
+            amount = parse_amount(stream)
+            if not isinstance(amount, ast.Fixed) or amount.value <= 0:
+                stream.reset(mark)
+                raise stream.error("only a fixed, positive life payment is charged")
+            if not stream.accept_word("life"):
+                stream.reset(mark)
+                raise stream.error("unrecognized activation cost")
+            costs.append(ast.PayLife(amount))
+            stream.accept_punct(",")
+            continue
         if stream.at_word("remove"):
             costs.append(_parse_counter_removal_cost(stream))
             stream.accept_punct(",")

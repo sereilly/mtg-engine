@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..resumption import run_resumable
-from ._common import permanent_matches_filter
+from ._common import flip_coin, permanent_matches_filter
 from .registry import effect_handler
 from ..mana_payment import mana_cost_label
 
@@ -122,6 +122,16 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return count >= wanted
         return False
 
+    if kind == "coin_flip":
+        # CR 705.2. The flip recorded its result; asking again would flip a
+        # second coin, so a card printing both branches could win *and* lose.
+        # An absent record is False for either branch rather than a guess — the
+        # grammar refuses to lower a flip condition with no flip in front of it,
+        # so this is unreachable from a compiled card.
+        if "coin_flip" not in context.results:
+            return False
+        return bool(context.results["coin_flip"]) is bool(payload.get("won", True))
+
     if kind == "is_state":
         source = context.source_permanent
         if source is None:
@@ -163,6 +173,29 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         )
 
     return False
+
+
+@effect_handler("flip_coin")
+def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Flip a coin." (CR 705.1.)
+
+    One draw from the RNG, recorded in this resolution's scratchpad. The
+    sentences after it read that record through ``if_then``'s ``coin_flip``
+    condition, which is what makes "If you win the flip, … If you lose the flip,
+    …" (Bottle of Suleiman) *one* coin rather than two: CR 705.2 says only the
+    player who flipped wins or loses that flip, so there is one result and both
+    sentences read it.
+
+    A control-flow handler rather than a board one because the flip has no
+    effect of its own — it is the randomiser the conditionals branch on, and it
+    lives beside ``if_then`` for the same reason ``sequence`` does.
+    """
+    won = flip_coin()
+    context.results["coin_flip"] = won
+    game.log.append(
+        f"{context.card.name}: {'won' if won else 'lost'} the coin flip"
+    )
+    return True, "resolved"
 
 
 @effect_handler("if_then")

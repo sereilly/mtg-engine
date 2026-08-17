@@ -133,6 +133,12 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         # one — so "the grammar agrees with the table" is an identity, not a
         # comparison the differential has to make.
         "land_statics",
+        # Flipping a coin (CR 705). Switched on with the production, because
+        # with nothing underneath the grammar a category left off is a card
+        # reported unsupported rather than a card read by something else. The
+        # branches behind a flip carry their own categories, so this switch
+        # gates the randomiser and nothing more.
+        "coin_flips",
     }
 )
 

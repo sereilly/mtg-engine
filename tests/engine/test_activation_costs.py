@@ -65,4 +65,14 @@ def test_every_admitted_cost_clause_is_charged(pool):
                 if isinstance(cost, ast.DiscardCost) and not cost.last_drawn:
                     if not charged.discard_cards:
                         unpaid.append(f"{card.name}: {ability.source_line}")
+                if isinstance(cost, ast.PayLife):
+                    # Not "is life charged" but "is *this much* charged". The
+                    # amount is printed, and a charger reading a smaller one is
+                    # the same dropped-rider shape a narrowed sacrifice is —
+                    # here it would be an ability cheaper than the card.
+                    wanted = cost.amount.value if isinstance(cost.amount, ast.Fixed) else None
+                    if charged.pay_life != wanted:
+                        unpaid.append(
+                            f"{card.name}: charged {charged.pay_life} life for {wanted}"
+                        )
     assert not unpaid, "cost clauses parsed but never charged: " + "; ".join(unpaid)

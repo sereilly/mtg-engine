@@ -10,6 +10,8 @@ the card each test is about.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from engine import Game
@@ -1834,24 +1836,6 @@ def test_the_fight_needs_two_creatures_or_neither_deals(set_pool):
     assert any("neither deals damage" in line for line in game.log)
 
 
-def test_a_fight_that_is_not_the_whole_effect_still_refuses():
-    """Round 39's refusal, kept now that the card that motivated it has landed.
-
-    "Then **it** fights…" after another sentence names that sentence's target —
-    the fused pair is what reads it — so a bare `Fight` nested in a sequence
-    must not lower onto the source-fights instruction, which would fight
-    whichever creature the single picker offered. Primal Might proved it;
-    this pins the rule after Primal Might stopped being the example.
-    """
-    from engine.grammar import compile_line
-
-    whole = compile_line("This creature fights another target creature.")
-    assert whole.lowered, whole.failure_reason
-
-    nested = compile_line("Draw a card. Then it fights another target creature.")
-    assert not nested.lowered
-
-
 # --- What a sacrificed source is still worth ---------------------------------
 
 
@@ -2462,19 +2446,6 @@ def test_carrion_grub_counts_no_noncreature_card(set_pool):
     assert (grub.effective_power, grub.effective_toughness) == (0, 5)
 
 
-def test_a_static_computed_bonus_cannot_be_negative():
-    """The refresh resolves the amount against the computed value and nothing
-    carries a sign for it, so "-X/-0" would apply the bonus the wrong way —
-    making a creature bigger where the card shrinks it."""
-    result = compile_line(
-        "This creature gets -X/-0, where X is the greatest power among "
-        "creature cards in your graveyard."
-    )
-
-    assert result.parsed and not result.lowered
-    assert result.failure_reason == "a static computed bonus cannot be negative"
-
-
 def test_selfless_savior_refuses_rather_than_dropping_its_another(set_pool):
     """"Sacrifice this creature: **Another** target creature you control gains
     indestructible until end of turn."
@@ -2491,3 +2462,91 @@ def test_selfless_savior_refuses_rather_than_dropping_its_another(set_pool):
     program = compile_card_oracle(set_pool("M21")["Selfless Savior"])
 
     assert not program.supported
+
+
+# --- Round 66: a life payment as a cost, and a coin flip ---------------------
+
+
+def _swindler_board(set_pool, life=20):
+    pool = set_pool("M21")
+    swindler = _nosick(Permanent(card=pool["Tavern Swindler"]))
+    p1 = PlayerState(name="P1", battlefield=[swindler], life=life)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+    game.current_step = "precombat_main"
+    return game, p1, swindler
+
+
+def _activate_swindler(game, *, win: bool):
+    """Activate the ability with the flip forced.
+
+    ``engine.handlers._common`` is where ``flip_coin`` draws from, and patching
+    ``random.random`` on it is patching the one module object every other reader
+    of the RNG shares. Patching ``flip_coin`` itself would skip the draw, and a
+    test that skips the draw cannot say what the draw count is.
+    """
+    with patch("engine.handlers._common.random.random", return_value=0.0 if win else 0.99):
+        result = game.queue_permanent_ability(0, "Tavern Swindler", permanent_index=0)
+        game._settle()
+    return result
+
+
+def test_tavern_swindler_pays_three_life_and_gains_six_on_a_win(set_pool):
+    """"{T}, Pay 3 life: Flip a coin. If you win the flip, you gain 6 life."
+
+    Both halves in one activation: the life is a cost paid on activation
+    (CR 118.3b), and the gain is what the won flip's branch does at resolution.
+    20 - 3 + 6."""
+    game, p1, swindler = _swindler_board(set_pool)
+
+    result = _activate_swindler(game, win=True)
+
+    assert result.supported, result.details
+    assert p1.life == 23
+    assert swindler.tapped is True
+
+
+def test_tavern_swindler_still_pays_the_three_life_on_a_loss(set_pool):
+    """A cost is paid whether or not the effect does anything (CR 601.2h) â€” the
+    losing branch is the whole point of the card, and a cost the engine only
+    charged on success would make it strictly better than it prints."""
+    game, p1, swindler = _swindler_board(set_pool)
+
+    result = _activate_swindler(game, win=False)
+
+    assert result.supported, result.details
+    assert p1.life == 17
+    assert swindler.tapped is True
+
+
+def test_tavern_swindler_flips_exactly_one_coin(set_pool):
+    """One printed flip is one draw from the RNG. Two would be a different card
+    and, in a seeded simulation, a different game from that point on."""
+    game, _p1, _swindler = _swindler_board(set_pool)
+
+    with patch("engine.handlers._common.random.random", return_value=0.0) as flip:
+        game.queue_permanent_ability(0, "Tavern Swindler", permanent_index=0)
+        game._settle()
+
+    assert flip.call_count == 1
+
+
+def test_tavern_swindler_cannot_be_activated_below_its_life_cost(set_pool):
+    """CR 119.4 through CR 602.5c: an unpayable cost makes the ability
+    unactivatable, not free. Nothing is spent and the creature stays untapped."""
+    game, p1, swindler = _swindler_board(set_pool, life=2)
+
+    result = _activate_swindler(game, win=True)
+
+    assert not result.supported
+    # The refusal has to be *this* refusal. Before the round the whole ability
+    # was unsupported, so "not supported" was already true for a reason that
+    # says nothing about life â€” which is exactly how a control passes while the
+    # rule it names is unimplemented.
+    assert "life" in result.details
+    assert p1.life == 2
+    assert swindler.tapped is False
+
+

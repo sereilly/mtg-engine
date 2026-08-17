@@ -120,6 +120,11 @@ from .lowering import (
 # back-reference ("that much") can verify it has a producer.
 _PRODUCES: dict[str, str] = {
     "deal_damage": "damage_dealt",
+    # CR 705.2: only the player who flipped wins or loses that flip, and both
+    # "if you win" and "if you lose" read the one result — so the flip records
+    # it and the conditionals after it read the record, rather than each
+    # sentence flipping a coin of its own.
+    "flip_coin": "coin_flip",
     # The exile records whose permanent it removed, which is what "Its
     # controller creates a token" reads (Angelic Ascension, Secure the Scene).
     "exile_target_permanent": "exiled_permanent_controller",
@@ -303,6 +308,12 @@ def lower_statement(
     if isinstance(statement, ast.WinGame):
         return _lower_win_game(statement)
 
+    if isinstance(statement, ast.FlipCoin):
+        # CR 705.1: the flip is the whole sentence, and it takes no payload. What
+        # happens next is the conditional sentences after it, which read the
+        # result this one records (`_PRODUCES`).
+        return (OracleInstruction("flip_coin", "", {}),)
+
     if isinstance(statement, ast.DrawGame):
         # "The game is a draw." (CR 104.4c.) `game_is_draw` takes an empty
         # payload and the sentence carries nothing else, so there is nothing to
@@ -346,7 +357,7 @@ def lower_statement(
             OracleInstruction(
                 "if_then", "",
                 {
-                    "condition": _lower_condition(statement.condition),
+                    "condition": _lower_condition(statement.condition, produced),
                     "then": then,
                     "else": otherwise,
                 },
@@ -522,7 +533,24 @@ def _lower_steps(
     return instructions
 
 
-def _lower_condition(condition: ast.Condition) -> dict[str, object]:
+def _lower_condition(
+    condition: ast.Condition, produced: frozenset[str] = frozenset()
+) -> dict[str, object]:
+    """*produced* names the scratchpad values earlier steps of this same effect
+    recorded. It defaults to empty, which is what refuses a coin-flip condition
+    on an intervening-if (CR 603.4): that condition is checked when the trigger
+    would fire, where no flip of this resolution can have happened yet."""
+    if isinstance(condition, ast.CoinFlipResult):
+        # A back-reference names its producer or refuses (round 33). Without a
+        # flip earlier in the same effect there is nothing to read, and
+        # `evaluate_condition` would quietly answer False — so a card printing
+        # only "If you win the flip, …" would compile supported and do nothing.
+        if "coin_flip" not in produced:
+            raise LoweringError(
+                "'the flip' with no coin flip before it in this effect",
+                node=condition,
+            )
+        return {"kind": "coin_flip", "won": condition.won}
     if isinstance(condition, ast.Controls):
         payload = {
             "kind": "controls",

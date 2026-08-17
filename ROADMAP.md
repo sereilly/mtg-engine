@@ -7,8 +7,8 @@ printings, 26,113 unique cards** per `set_progress.json`.
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–62 — lives in git history at and before
-commit `0801c4c`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–63 — lives in git history at and before
+commit `31cb660`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,72 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 63: the prompt that did not need building
-
-*(2026-08-16.)* M21 **218 → 219** — Alchemist's Gift. The round is mostly about
-what it did **not** add.
-
-**"Gains your choice of deathtouch or lifelink" reads as a choice at
-resolution** (CR 609.3), and the obvious shape for it is a new pending-choice
-kind: offer the keywords, take a default for a seat that is not asked, grant the
-answer. That is one registry entry, one resolver, one web renderer and one AI
-default — and every line of it already exists. **A choice between two effects is
-`choose_one`**, the composition seam in `engine/handlers/control_flow.py` that a
-modal triggered ability uses, and the two grants are just its two modes. The
-card needed no prompt, no handler and no `Game` field; it needed a lowering that
-says the keywords are *alternatives*.
-
-That distinction is the whole of the parse work, and it has to be recorded where
-the words still are. "Gains deathtouch **and** lifelink" and "gains your choice
-of deathtouch **or** lifelink" reach the keyword reader as the same tuple —
-`_parse_keyword_list` treats the conjunctions alike, correctly, because for a
-list they mean the same thing. One flag on the AST node is what stops the card
-granting both.
-
-Lowering each alternative back through the same function is the other half:
-a keyword the engine cannot grant refuses the whole line rather than being
-offered as an option that would do nothing. And the non-interactive default is
-*inherited* rather than invented — `choose_one` already states it as the first
-printed option, a policy and not a valuation.
-
-**Two things were checked and turned out not to be affordable**, which is worth
-recording so the next round does not re-derive them:
-
-- **Carrion Grub** looked like a small aggregate — "+X/+0, where X is the
-  **greatest power** among creature cards in your graveyard" is a maximum where
-  the where-clause admits only a count. It is not: the pump has no duration, so
-  the card wants a *static* layer-7 P/T contribution with a computed X, and the
-  aggregate is the small half.
-- **Sanctum of Fruitful Harvest** still wants more than the colour choice this
-  round could have given it. "Add X mana of any one color" reaches a legacy
-  text-keyed handler that adds exactly one mana and picks its colour from a
-  `preferred_color` the *activation* path injects; a counted, chosen-colour add
-  is a rewrite of that path rather than a prompt.
-
-`choose_one` also had to become a *wrapper* for the categories reader: its
-options are `{label, instruction}` pairs rather than a bare tuple, so the
-migration category of a choice is its options' — giving it one of its own would
-say the choosing is the effect.
-
-Suite **5,123** at 23.0s, every `--check` green, shipped pool 388/388, AI
-simulation byte-identical at 443 interactions. Three of the four new tests were
-watched to fail on the round-62 engine; the fourth is the control that "your
-choice of" with one keyword refuses.
-
-**Next:**
-
-- **The Shrine cycle**, with Fruitful Harvest's real cost now measured (above):
-  Shattered Heights' discard cost (whose "a land card or **Shrine** card" is a
-  noun-phrase *union* the parser has no production for), Tranquil Light's
-  per-Shrine cost reduction, Sanctum of All's two-zone search and
-  trigger-doubling static.
-- **A static P/T contribution with a computed X** — Carrion Grub, Kinetic
-  Augur's characteristic-defining power, and Jolrael's team base-P/T are three
-  readings of the same missing shape.
-- **A reflexive trigger** — "you may pay {1}. **When you do**, …" (Tolarian
-  Kraken), deliberately refused in round 60.
-- The legend rule from round 49.
-
 ## Round 64: one evaluator for a computed amount
 
 *(2026-08-16.)* M21 **219 → 220** — Carrion Grub, whose one line needed two
@@ -476,3 +410,85 @@ Chandras keep their cast permissions.
   folded in here.
 - The Shrine cycle, a static P/T contribution with a computed X (Kinetic Augur,
   Jolrael), a reflexive trigger (Tolarian Kraken), then the legend rule.
+
+## Round 66: a cost the engine had never charged, and a coin it had only ever flipped by name
+
+*(2026-08-16.)* M21 **220 â†’ 221** â€” Tavern Swindler, whose one line needed two
+things, and the second of them **retired a hook** rather than adding one.
+
+**"Pay 3 life" is an activation cost with no seam to join.** There is no generic
+non-mana additional-cost mechanism here: `ActivatedAbilityCost` is a record of
+named fields and `_activate_onto_stack` a straight-line sequence of per-field
+blocks. Adding a seventh field is the shape the file already has, and inventing
+an abstraction for one card would be a bigger change than the card. `ast.PayLife`
+turned out to **already exist with no producer** â€” declared, exported, never
+wired â€” so the parse side was a branch, not a node.
+
+**The rule is off by one from where you would put it.** CR 119.4 is "greater than
+**or equal to**", so exactly 3 life pays a 3-life cost; illegal starts at 2. And
+CR 602.5c makes an unpayable cost an *unactivatable ability*, not a free one â€”
+so the check refuses before anything is spent rather than clamping at the
+payment. Paying the last of your life is legal and CR 704.5a then ends the game;
+an engine that refused the payment to protect the player would be enforcing
+neither rule. Each of those is a test in `tests/rules/` with its citation.
+
+**The two readers, again.** The grammar's cost nodes are *discarded* â€”
+`lower_ability` never reads `node.costs` â€” and the real charger is the regex
+reader in `engine/oracle.py`. That split is why `tests/engine/test_activation_costs.py`
+exists at all ("Atog sacrificed nothing for its +2/+2 for as long as both readers
+existed and only one was consulted"), so the new cost joins the comparison, and
+the comparison is on the **amount**, not on the presence: a charger reading a
+smaller number is an ability cheaper than the card.
+
+**The coin flip is where the round pays for itself.** `flip_coin()` has existed
+for a long time and every card reaching it did so through a *name-keyed hook*.
+The general shape is not a fused `flip_coin(won=â€¦, lost=â€¦)` wrapper â€” it is
+**one `flip_coin` instruction recording its result, and ordinary `if_then`s
+reading the record**. Two reasons, one of them measured: a wrapper's payload keys
+have to be added to four separate nested-key enumerations and forgetting one is
+silent; and composing gives CR 705.2 for free â€” one flip, both branches reading
+the one result, where a design that re-asked would let a card win *and* lose its
+own flip. It also gets round 33's rule for nothing: "the flip" is a
+back-reference, so `_PRODUCES` makes a card printing only "If you win the flip, â€¦"
+refuse at lowering instead of compiling supported and doing nothing.
+
+**Bottle of Suleiman retires its hook.** Its whole line â€” both branches â€” now
+goes through the production, so `card_hooks.py` loses an entry and
+`hook_reliance.py`'s **ceilings come down**: ALL 26.3 â†’ 26.0 entries per 100
+supported cards and 24.5% â†’ 24.2% hooked, ARN 46.2 â†’ 44.9, 3ED 19.9 â†’ 19.6. The
+grammar floors go up in the same commit (ALL parsed 78.0 â†’ 78.1, ARN 64.8 â†’
+65.7). Both ratchets tightening at once is the shape a round should have.
+Retiring it also fixed something nobody had asked about: the hook named its token
+`"Djinn"`, the one hand-spelled token name in the file, where CR 111.4 and
+`tokens.default_token_name` say `"Djinn Token"`.
+
+Mijae Djinn and Ydwen Efreet **cannot** retire: both are blocked on the verb
+`remove` ("Remove this creature from combatâ€¦"), which routes only to
+`_parse_remove_counter`. Named here so the next attempt starts from the token
+rather than from the card.
+
+**The size guard fired, and obeying it found a misfiling.**
+`test_m21_creatures.py` crossed 2,600 lines, and the four tests moved out were
+not creature tests at all â€” each compiles a sentence and asserts a refusal, which
+is what `test_m21_cards.py` is for. The growth that broke the guard was tests in
+the wrong file, which is exactly what idiom #13 predicts a split will show.
+
+Suite **5,152** green, every `--check` gate green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions (one printed flip is one RNG draw,
+asserted). CR 705 goes 0/3 â†’ 2/3 and CR 119 1/10 â†’ 2/10.
+
+**Next:**
+
+- **A counter-removal activation cost is admitted by the grammar and charged by
+  nobody.** `_parse_counter_removal_cost` admits any counter kind for any
+  effect; `ActivatedAbilityCost` has no field for it, and the only charge is a
+  branch gated on one instruction kind *and* a literal substring of the card's
+  normalized text. An invented card printing "Remove a +1/+1 counter from this
+  creature: This creature gets +1/+1 until end of turn." compiles supported and
+  activates for free with zero counters. It is invisible because the two-reader
+  guard branches only on `SacrificeCost`, `DiscardCost` and now `PayLife` â€”
+  adding the `RemoveCounterCost` branch fails immediately, which is the fix's
+  own test.
+- The rest of round 65's *Next*, unchanged: "another" as a source exclusion, the
+  headless simulator's discarded permanent target, the Shrine cycle, a static
+  P/T contribution with a computed X, a reflexive trigger, the legend rule.
