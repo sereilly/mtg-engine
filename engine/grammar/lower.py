@@ -106,6 +106,7 @@ from .lowering import (
     _lower_search_and_exile,
     _lower_search_library,
     _lower_set_base_pt,
+    _lower_doesnt_untap_next_step,
     _lower_tap,
     _lower_tap_or_untap,
     _lower_win_game,
@@ -134,6 +135,12 @@ _PRODUCES: dict[str, str] = {
     # exiled this way" / "you may cast them this turn" read.
     "exile_top_of_library": "exiled_cards",
     "search_and_exile_matching": "exiled_cards",
+    # "Tap up to two target creatures. **Those creatures** don't untap…"
+    # (Frost Breath.) The tap records which permanents it affected, by id, and
+    # the sentence after it reads that record rather than re-resolving the slots
+    # — by then a target may have left, and CR 611.2c fixed the set when the
+    # effect began.
+    "tap_target_permanent": "tapped_permanents",
 }
 
 
@@ -193,6 +200,10 @@ def lower_statement(
         return _lower_lose_life(statement, event, produced)
     if isinstance(statement, ast.Destroy):
         return _lower_destroy(statement, dispatch_event)
+    if isinstance(statement, ast.DoesntUntapNextStep):
+        # `produced` is the whole gate: this sentence acts on what an earlier
+        # step of the same effect recorded, so it refuses when nothing did.
+        return _lower_doesnt_untap_next_step(statement, produced)
     if isinstance(statement, (ast.Tap, ast.Untap)):
         return _lower_tap(statement)
     if isinstance(statement, ast.TapOrUntap):

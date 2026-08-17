@@ -203,10 +203,30 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
             ),
         )
     if _names_several_targets(spec):
-        # "Tap up to two target creatures" (Frost Breath), "Untap up to four
-        # lands" (Rewind). Both tap handlers resolve exactly one permanent, so
-        # this used to tap one and call the card supported. What a lowering may
-        # accept is "one target", and `_is_target` is the one place that says
+        # "Tap up to two target creatures." (Frost Breath.) The same instruction
+        # as the one-target tap — the effect per permanent is identical — with
+        # the several-targets opt-in, which is what says the handler resolves a
+        # list and the picker collects up to N.
+        #
+        # Gated to exactly what that handler reads: a *targeted* "up to N" over
+        # creatures. `_describe_several_targets` refuses the untargeted spelling
+        # itself ("up to four lands", Rewind, is chosen on resolution), and the
+        # filter equality keeps a narrowing the handler's
+        # `permanent_matches_filter` plus its two seat tests cannot answer from
+        # compiling into a wider tap.
+        if (
+            isinstance(node, ast.Tap)
+            and spec.filter.card_types == ("creature",)
+            and not _restrictions_beyond(
+                spec.filter, frozenset({"card_types", "controller", "other_than_source"})
+            )
+        ):
+            several = _filter_payload(spec.filter)
+            _describe_several_targets(several, spec)
+            return (OracleInstruction("tap_target_permanent", "", several),)
+        # Untap is untouched. Both untap handlers resolve exactly one permanent,
+        # so this used to untap one and call the card supported. What a lowering
+        # may accept is "one target", and `_is_target` is the one place that says
         # so — the literal quantifier tuple that admitted this is gone.
         raise LoweringError("no handler taps or untaps several targets", node=node)
     if not _is_target(spec):
@@ -227,6 +247,58 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
     if payload == {"type_filter": "land"}:
         return (OracleInstruction("untap_target_land", "", _targets_only(spec)),)
     raise LoweringError("no untap handler honors this restriction", node=node)
+
+
+# The scratchpad key the tap records and this sentence reads. One name, in one
+# place, because ``engine/grammar/lower.py``'s ``_PRODUCES`` writes it and the
+# refusal below is what proves a producer ran — two spellings would make the
+# refusal vacuous while the handler read an empty record and marked nothing.
+_TAPPED_PERMANENTS = "tapped_permanents"
+
+
+def _lower_doesnt_untap_next_step(
+    node: ast.DoesntUntapNextStep, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """"Those creatures don't untap during their controller's next untap step."
+    (Frost Breath.)
+
+    Three refusals, and each is a way the sentence could otherwise mean more than
+    it says:
+
+    * The subject must be the **bound plural** ("those creatures"). A chosen
+      target would be a second, independent choice the card never offered; the
+      quantifier is what tells them apart.
+    * The subject may carry no restriction beyond its card type. "Those
+      creatures" restates what the previous sentence already chose, so there is
+      nothing here for an adjective to narrow — a filter carrying one would be
+      dropped, and the effect would reach permanents the printed adjective
+      excludes.
+    * A **producer must have run** in this same effect. The handler reads the
+      list out of the resolution scratchpad, and with nothing recorded it marks
+      nothing while the card compiles clean. This is the same discipline
+      ``_back_reference_payload`` applies to "that much".
+    """
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "those":
+        raise LoweringError(
+            "this sentence acts on the objects the previous one chose, and its "
+            "subject does not name them",
+            node=node,
+        )
+    if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+        raise LoweringError(
+            "a bound plural carries no narrowing the marker could honour", node=node
+        )
+    if _TAPPED_PERMANENTS not in produced:
+        raise LoweringError(
+            f"back-reference to {_TAPPED_PERMANENTS!r} with no producer in this effect",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "skip_next_untap", "", {"permanents_from": _TAPPED_PERMANENTS}
+        ),
+    )
 
 
 def _reads_no_return_restriction(filt: ast.ObjectFilter) -> bool:

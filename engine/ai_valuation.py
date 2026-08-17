@@ -204,6 +204,22 @@ def _several_target_instruction(program):
     return walk(program.instructions)
 
 
+# Which board a slot wants when the slot's own payload carries no number to read
+# the answer off. Keyed by *instruction kind* — a claim about what the effect
+# does, derived from the compiled program exactly as the P/T-delta branch below
+# is, and never about which card printed it. A kind absent here keeps "no
+# preference", which is the answer every card before this one gave.
+#
+# Tapping is the first entry: it is a denial, so every slot of a several-target
+# tap wants an opponent's permanent, and the caster's own board is the one place
+# the effect is never worth casting. Without this, `_choose_several_targets`'s
+# single-seat fallback taps the caster's own creatures — round 65's bug arriving
+# through a different effect family.
+_SLOT_DISPOSITION: dict[str, str] = {
+    "tap_target_permanent": "opponent",
+}
+
+
 def several_target_slot_sides(program) -> tuple[str | None, ...]:
     """Which board each slot of a several-target spell should be picked from.
 
@@ -236,6 +252,10 @@ def several_target_slot_sides(program) -> tuple[str | None, ...]:
             continue
         if controller in ("not_you", "opponent"):
             sides.append("opponent")
+            continue
+        disposition = _SLOT_DISPOSITION.get(instruction.kind)
+        if disposition is not None:
+            sides.append(disposition)
             continue
         if index < len(slots):
             slot = slots[index]

@@ -81,6 +81,26 @@ class Untap:
 
 
 @dataclass(frozen=True)
+class DoesntUntapNextStep:
+    """``<subject> don't untap during their controller's next untap step.``
+    (Frost Breath.)
+
+    Its own node rather than ``Untap`` with a negation flag, because it is not an
+    untap that fails to happen: it is a continuous effect with a stated duration
+    (CR 611.2a) whose one observable moment is the turn-based action of CR 502.3.
+    Nor is it :class:`Tap` with a rider — the two sentences may name creatures on
+    two battlefields, and each waits for *its own* controller's step.
+
+    The "next" is part of what the node means, not a decoration. Without it the
+    printed sentence is the permanent restriction ``engine/auras.py`` already
+    derives for Paralyze, so a production that would still match with the word
+    deleted implements a strictly larger effect than the card prints.
+    """
+
+    subject: Recipient
+
+
+@dataclass(frozen=True)
 class TapOrUntap:
     """"Tap or untap target artifact, creature, or land." (Twiddle.)
 

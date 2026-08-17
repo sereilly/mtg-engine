@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 226/285) to the full release line - **137 sets, 33,594
+M21 measured at 227/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–71 — lives in git history at and before
-commit `36ecf1c`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–72 — lives in git history at and before
+commit `0ac1855`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,55 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 72: a permission, not a removal
-
-*(2026-08-16.)* M21 **224 → 225** — Drowsing Tyrannodon.
-
-> Defender
-> As long as you control a creature with power 4 or greater, this creature can
-> attack as though it didn't have defender.
-
-**Both seams I proposed for it were wrong**, and the spec said so with evidence.
-`engine/combat_restrictions.py` is a *restriction* table with no condition
-vocabulary and this line is a **permission**; and `engine/static_bonuses.py` has
-stopped being about P/T — it already carries a general `conditional_static` kind
-that parses both printed word orders, already carries a non-P/T combat effect
-(`cant_be_blocked`), and already has a live re-asked predicate. So the card is
-two table rows and a reader, not a new mechanism.
-
-**The condition already had a reader, one layer away.** "You control a creature
-with power 4 or greater" is what Turret Ogre's intervening-if lowers to, and the
-grammar already produces `{"kind": "controls", … "power": {"op": "ge", "value":
-4}}` for it. The new row emits *that exact payload* and the evaluator gains one
-`controls` branch delegating to `subject_matches` — so the phrase has **one**
-meaning in the engine rather than a second regex that happens to agree today.
-That is idiom #1's rule (a narrowing read by two readers drifts) applied before
-the drift rather than after it.
-
-**"As though" is not losing the keyword — CR 609.4**, and my brief cited the
-wrong section (701 is keyword *actions*). The distinction is not academic and it
-is asserted two ways: the Tyrannodon attacks while `_has_keyword(…, "defender")`
-stays True, and a defender-narrowed noun phrase — Portcullis Vine's real
-sacrifice-cost filter — still matches it. A layer-6 removal would have passed an
-attack test and been wrong everywhere else the keyword is read.
-
-**No grammar production, and that is a measurement rather than a shortcut.**
-Across all 668 pool cards, ten lines print the leading "as long as" order, eight
-refuse, and exactly one has a condition the grammar's `_parse_condition` models.
-A `StaticAbilityNode` never lowers anyway, so a production would cost a whole-line
-shape, an AST node, a production and a `_looks_static` extension to move one line
-and execute nothing. Recorded in the backlog with that number.
-
-Whole-pool compile diff: **exactly one card changes**. Suite green, every
-`--check` gate green, shipped pool 388/388, AI simulation byte-identical at 443
-interactions, **zero hooks added**, no ratchet touched. Seven new tests, all seven
-watched to fail on the round-71 engine.
-
-The size guard again, and again it named a misfiling rather than bulk: two Vito
-tests were sitting in the creature file when Vito is a Legendary Creature and
-`test_m21_legendary_creatures.py` already held four others. Round 70's own axis,
-applied to tests that were on the wrong side of it.
-
 ## Round 73: one word, two meanings, and four cards that were reading neither
 
 *(2026-08-16.)* M21 **225 → 226** — Selfless Savior returns, and the round is
@@ -383,4 +334,61 @@ cast reaches both boards, and a stale id is a 404 rather than a silent fallback
 to a slot number.
 
 Suite green, every `--check` gate green, shipped pool 388/388.
+
+## Round 75: two targets tapped, and a marker that waits per controller
+
+*(2026-08-16.)* M21 **226 → 227** — Frost Breath. Two sentences, and **three**
+independent refusals under the one error message the census reports.
+
+> Tap up to two target creatures. Those creatures don't untap during their
+> controller's next untap step.
+
+The reported `expected a subject` is the *second* sentence, and it hides two
+problems: `those` is a determiner nothing read (the noun parser knows `up to /
+target / another / each / all / this / a`, and the bound-subject reader knew only
+the singular `that <card type>`), and `don't` is not an effect verb. The first
+sentence parses and dies at lowering — `no handler taps or untaps several
+targets` — which the joined line never even reaches. Sorting the backlog by the
+reported reason would have fixed the wrong one.
+
+**`untap_restrictions.py` is not the home**, though the name fits. That table is
+keyed on *a permanent's own oracle text*, of which a frozen creature has none,
+and it has no concept of a lifetime. The real precedent is `phased_out`: CR 502's
+*other* per-controller turn-based action, already a `Permanent.metadata` marker
+that the untap step both honours and consumes.
+
+**Per controller is exact, and it is exact by carrying no seat at all.** The
+untap step runs for the active player and looks only at permanents that player
+controls, so two creatures under two controllers each wait for their own step
+with nothing recording whose step it is. Measured across four untap steps. The
+sweep sits *after* the skip-the-whole-step return, which gets Stasis right for
+free: a skipped untap step is a step that does not happen (CR 500.11), so it is
+not yet the "next untap step" the spell named.
+
+**Composed, not fused.** The tap records which permanents it affected — by id,
+because the next instruction runs after it and a permanent may have left (CR
+400.7) — and the marker reads that record through `_PRODUCES`. So "those
+creatures" names what the *effect* chose rather than re-resolving the slots, and
+CR 611.2c fixed that set when the effect began. A creature that was already
+tapped is still one of those creatures, so it is recorded whether or not
+`become_tapped` had anything to do.
+
+**Two refusals that are the production's whole safety.** "Next" is required —
+drop it and the sentence is the *permanent* restriction `engine/auras.py` already
+derives for Paralyze, a strictly larger effect. And "their controller's" is
+required while "your" is refused: that is exert's wording (CR 701.43a) and means
+the effect controller's step, which this marker carries no seat to express.
+
+**Two things found by measuring rather than reasoning.** The verb dispatch needed
+a `peek_word(1) == "untap"` guard: without it the whole-pool line diff was two
+lines, the second being Lich's "You don't lose the game…" having its *failure
+message* regressed. And the arity re-check had to go above the per-kind arms
+rather than in one — Frost Breath's primary instruction is a `sequence` wrapper,
+so none of the existing arms sees the tap at all, and a cast naming three targets
+was accepted with the handler silently capping at two. That fix also closes the
+same hole for Basri's Aegis and Read the Tides.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions, **zero hooks added**, no ratchet touched.
+Whole-pool line diff: exactly one line changed, Frost Breath's.
 

@@ -159,6 +159,39 @@ def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:
     return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
 
 
+def _parse_doesnt_untap_next_step(
+    stream: TokenStream, subject: ast.Recipient
+) -> ast.Statement:
+    """``<subject> don't untap during their controller's next untap step.``
+
+    The verb is already at the cursor; the subject was read by the sentence's
+    subject position and is passed in.
+
+    Every word of the duration is consumed literally, and two of them are the
+    production's whole safety:
+
+    * **"next"** is required. Drop it and the sentence is "…don't untap during
+      their controller's untap step", which is the *permanent* restriction
+      ``engine/auras.py`` derives for Paralyze and Capture Sphere — a strictly
+      larger effect. Refusing the wording without "next" is what makes the
+      deletion probe's rider check pass honestly rather than by accident.
+    * **"their/its controller's"** is required, and "your" is refused. They are
+      different effects: this one is per-creature, and "your next untap step"
+      (exert's wording, CR 701.43a) is the *controller of the effect's* step,
+      which the marker this lowers to carries no seat to express.
+    """
+    stream.expect_word("don't", "doesn't")
+    stream.expect_word("untap")
+    stream.expect_word("during")
+    stream.expect_word("their", "its")
+    stream.expect_word("controller")
+    stream.expect_word("'s")
+    stream.expect_word("next")
+    stream.expect_word("untap")
+    stream.expect_word("step")
+    return ast.DoesntUntapNextStep(subject)
+
+
 def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
     """``tap <objects>`` / ``untap <objects>`` / ``tap or untap <objects>``.
 

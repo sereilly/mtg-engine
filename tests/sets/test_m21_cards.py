@@ -56,16 +56,23 @@ def test_each_opponent_round_cards_compile_supported(set_pool, name):
     assert compile_card_oracle(set_pool("M21")[name]).supported
 
 
-def test_targeted_several_taps_are_still_refused_rather_than_halved():
-    """The *targeted* family stays refused: "tap up to two target creatures"
-    names cast-time targets no tap handler resolves as a list. Rewind's
-    untargeted spelling is the one that got a lowering, and the ``targeted``
-    flag on the spec is what keeps the two apart."""
-    result = compile_line("Tap up to two target creatures.", card_name="Test")
+def test_a_targeted_several_tap_lowers_and_an_untargeted_one_still_refuses():
+    """The two spellings are different mechanisms, and only one got a handler.
 
-    assert result.parsed
-    assert not result.lowered
-    assert result.failure_reason == "no handler taps or untaps several targets"
+    "Tap up to two **target** creatures" (Frost Breath) names cast-time targets,
+    which the tap handler now resolves as a list. Rewind's "untap up to four
+    lands" prints no "target" at all — it is chosen on resolution, through the
+    pending-choice queue — so the ``targeted`` flag on the spec is still what
+    keeps them apart, and untap has no several-target handler either way."""
+    tapped = compile_line("Tap up to two target creatures.", card_name="Test")
+    assert tapped.lowered, tapped.failure_reason
+    (instruction,) = tapped.instructions
+    assert instruction.kind == "tap_target_permanent"
+    assert instruction.payload["targets"]["count"] == 2
+
+    untapped = compile_line("Untap up to two target creatures.", card_name="Test")
+    assert untapped.parsed and not untapped.lowered
+    assert untapped.failure_reason == "no handler taps or untaps several targets"
 
 
 # --- The multi-target round: "each of up to N target ..." -------------------

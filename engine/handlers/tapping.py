@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import permanent_matches_filter, resolve_amount, resolve_target_permanent
+from ._common import (
+    permanent_matches_filter,
+    resolve_amount,
+    resolve_target_permanent,
+    resolve_target_permanents,
+)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -108,6 +113,10 @@ def untap_enchanted_creature(game: Game, instruction: OracleInstruction, context
 
 @effect_handler("tap_target_permanent")
 def tap_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    targets_desc = instruction.payload.get("targets") or {}
+    maximum = targets_desc.get("count") if isinstance(targets_desc, dict) else None
+    if isinstance(maximum, int) and maximum > 1:
+        return _tap_several_targets(game, instruction, context, targets_desc, maximum)
     target = context.target
     # Ali Baba: "Tap target Wall." — the parsed noun-phrase filter restricts
     # what the ability may tap; an explicitly chosen non-matching permanent
@@ -132,6 +141,107 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
         target, make_tapped=True, target_permanent_index=context.target_permanent_index
     )
     game.log.append("Tapped target permanent" if tapped else "No valid permanent to tap")
+    return True, "resolved"
+
+
+def _tap_several_targets(
+    game: Game,
+    instruction: OracleInstruction,
+    context: OracleExecutionContext,
+    targets_desc: dict,
+    maximum: int,
+) -> tuple[bool, str]:
+    """"Tap up to two target creatures." (Frost Breath.)
+
+    The same effect per permanent as the one-target tap, so it is the same
+    instruction kind with a several-targets description rather than a second kind
+    — the identical argument ``bounce_target_creature`` and
+    ``add_counter_to_target`` make.
+
+    Each slot resolves strictly: a target that has left or stopped matching is
+    dropped and the rest still happens (CR 608.2b). No fallback scan, because a
+    fallback per slot would tap whichever permanent the scan reached first, twice
+    over, for a choice the player made once.
+
+    What it records is what the *next* sentence means. "Those creatures" names
+    every creature this instruction affected, which is not the same as every
+    creature it changed: one that was already tapped is still one of those
+    creatures (CR 611.2c fixes the set when the effect begins), so it is recorded
+    whether or not ``become_tapped`` had anything to do.
+    """
+    card = context.card
+    filters = targets_desc.get("filter") or {}
+    source = context.source_permanent
+    caster_index = game.players.index(context.caster)
+
+    def eligible(perm) -> bool:
+        if not permanent_matches_filter(perm, filters):
+            return False
+        # "other" and "you control" are outside permanent_matches_filter's
+        # vocabulary — it answers about a permanent alone and these two need the
+        # source and the board — so they are asked here, the same split
+        # add_counter_to_target makes.
+        if filters.get("exclude_self") and perm is source:
+            return False
+        if filters.get("controller") == "you" and not game.controls(caster_index, perm):
+            return False
+        if filters.get("controller") == "not_you" and game.controls(caster_index, perm):
+            return False
+        return True
+
+    chosen = resolve_target_permanents(game, context, predicate=eligible)[:maximum]
+    for perm in chosen:
+        if not perm.tapped:
+            game.become_tapped(perm)
+            game._turn_face_up(perm)
+        game.log.append(f"{card.name} tapped {perm.card.name}")
+    if not chosen:
+        game.log.append(f"{card.name}: nothing was tapped")
+    # By id, never by object or slot: the next instruction runs after this one,
+    # and a permanent may have left in between (idiom #11, CR 400.7).
+    context.results["tapped_permanents"] = tuple(perm.permanent_id for perm in chosen)
+    return True, "resolved"
+
+
+@effect_handler("skip_next_untap")
+def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Those creatures don't untap during their controller's next untap step."
+    (Frost Breath.)
+
+    A continuous effect with a stated duration (CR 611.2a) whose only observable
+    moment is one turn-based action (CR 502.3, "effects can keep one or more of a
+    player's permanents from untapping"). So it is a marker on each affected
+    permanent rather than a registered continuous effect: nothing between now and
+    that untap step can read it, and the untap step both honours it and ends it —
+    the same shape ``phased_out`` uses for the other thing CR 502 does per
+    controller.
+
+    **Per creature, not per caster.** The marker carries no seat. The untap step
+    runs for the active player and looks only at permanents that player controls,
+    so two creatures under two controllers each wait for their own controller's
+    step with nothing recording whose step it is.
+
+    Which permanents "those creatures" names comes from the scratchpad, keyed by
+    the producing instruction's recorded result (``engine/grammar/lower.py``'s
+    ``_PRODUCES``). An empty record is a legal outcome — "up to two" may name
+    none — and is not an error.
+    """
+    key = instruction.payload.get("permanents_from")
+    recorded = context.results.get(key) or ()
+    marked = 0
+    for permanent_id in recorded:
+        permanent = game.permanent_by_id(permanent_id)
+        if permanent is None:
+            # It left the battlefield between the two steps. A new object comes
+            # back (CR 400.7), and this effect never applied to it.
+            continue
+        permanent.metadata["skip_next_untap"] = True
+        game.log.append(
+            f"{permanent.card.name} won't untap during its controller's next untap step"
+        )
+        marked += 1
+    if not marked:
+        game.log.append(f"{context.card.name}: nothing was held down")
     return True, "resolved"
 
 

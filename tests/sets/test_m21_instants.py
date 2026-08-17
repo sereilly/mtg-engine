@@ -978,3 +978,137 @@ def test_rangers_guile_grants_hexproof_only_to_a_creature_you_control(set_pool):
 
     assert not theirs.has_keyword("hexproof")
     assert not mine.has_keyword("hexproof")
+
+
+# --- Round 75: two targets tapped, and a marker that waits per controller ----
+
+
+def _frost_board(set_pool):
+    """The caster's creature and an opponent's, both untapped."""
+    pool = set_pool("M21")
+    mine = Permanent(card=pool["Alpine Watchdog"])
+    theirs = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", hand=[pool["Frost Breath"]], battlefield=[mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, mine, theirs
+
+
+def _cast_frost_breath(game, *targets):
+    return game.cast_from_hand(
+        0, "Frost Breath",
+        target_player_index=0,
+        target_permanent_index=[0] * len(targets),
+        target_permanent_ids=[t.permanent_id for t in targets],
+    )
+
+
+def test_frost_breath_compiles_to_a_tap_and_a_marker(set_pool):
+    """Two sentences, two instructions, composed rather than fused: the second
+    acts on whatever the first chose, which is what the scratchpad record is
+    for."""
+    program = compile_card_oracle(set_pool("M21")["Frost Breath"])
+
+    assert program.supported, program.reason
+    (sequence,) = program.instructions
+    tap, marker = sequence.payload["steps"]
+    assert tap.kind == "tap_target_permanent"
+    assert tap.payload["targets"]["count"] == 2
+    assert marker.kind == "skip_next_untap"
+    assert marker.payload["permanents_from"] == "tapped_permanents"
+
+
+def test_frost_breath_taps_both_and_holds_each_through_its_own_untap_step(set_pool):
+    """"â€¦during **their controller's** next untap step" is per creature, not per
+    caster (CR 502.3). Two creatures under two controllers each wait for their
+    own controller's step, and the marker expires there whether or not it kept
+    anything tapped (CR 611.2a; CR 701.43b says the same of exert)."""
+    game, mine, theirs = _frost_board(set_pool)
+
+    result = _cast_frost_breath(game, mine, theirs)
+    assert result.supported, result.details
+    game._settle()
+    assert (mine.tapped, theirs.tapped) == (True, True)
+
+    game.resolve_untap_step(0)
+    assert mine.tapped, "held through its controller's next untap step"
+    game.resolve_untap_step(1)
+    assert theirs.tapped, "and so is the one on the other board"
+
+    game.resolve_untap_step(0)
+    assert not mine.tapped, "the marker lasted exactly one untap step"
+    game.resolve_untap_step(1)
+    assert not theirs.tapped
+
+
+def test_frost_breath_may_name_one_creature(set_pool):
+    """"Up to two" may legally name fewer (CR 601.2c), and the marker follows
+    the tap rather than the printed maximum."""
+    game, mine, theirs = _frost_board(set_pool)
+
+    _cast_frost_breath(game, theirs)
+    game._settle()
+
+    assert (mine.tapped, theirs.tapped) == (False, True)
+    game.resolve_untap_step(1)
+    assert theirs.tapped
+    assert not mine.metadata.get("skip_next_untap")
+
+
+def test_frost_breath_refuses_more_targets_than_it_prints(set_pool):
+    """CR 601.2c: the number of targets is what the card printed. The picker and
+    the AI both cap themselves, so this is the re-check of a number they were
+    told â€” and before it, a cast naming three was accepted and the handler
+    silently capped at two."""
+    pool = set_pool("M21")
+    game, mine, theirs = _frost_board(set_pool)
+    third = Permanent(card=pool["Alpine Watchdog"])
+    game.players[1].battlefield.append(third)
+
+    result = _cast_frost_breath(game, mine, theirs, third)
+
+    assert not result.supported
+    assert "too many targets" in result.details
+    assert (mine.tapped, theirs.tapped, third.tapped) == (False, False, False)
+
+
+def test_the_marker_sentence_refuses_with_no_tap_before_it():
+    """A back-reference names its producer or refuses (idiom #7). The handler
+    reads the affected permanents out of the resolution scratchpad, so with
+    nothing recorded it would mark nothing while the card compiled clean."""
+    result = compile_line(
+        "Those creatures don't untap during their controller's next untap step.",
+        card_name="Test",
+    )
+
+    assert result.parsed and not result.lowered
+    assert "no producer in this effect" in result.failure_reason
+
+
+def test_the_permanent_wording_is_not_the_same_effect():
+    """Dropping "next" turns the sentence into the *permanent* restriction
+    ``engine/auras.py`` derives for Paralyze â€” a strictly larger effect â€” so the
+    word is required rather than decorative."""
+    result = compile_line(
+        "Tap up to two target creatures. Those creatures don't untap during "
+        "their controller's untap step.",
+        card_name="Test",
+    )
+
+    assert not result.usable
+
+
+def test_the_ai_taps_the_opponents_creatures_not_its_own(set_pool):
+    """A several-target tap is a denial, so every slot wants an opponent's
+    permanent. The single-seat fallback prefers the caster's own board, which is
+    round 65's bug arriving through a different effect family â€” and the reach is
+    derived from the instruction kind, never from the card's name."""
+    from engine.ai_policy import choose_cast_action
+
+    game, _mine, _theirs = _frost_board(set_pool)
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None and action.card_name == "Frost Breath"
+    assert action.target_player_index == 1

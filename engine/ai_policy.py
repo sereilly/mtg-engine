@@ -816,6 +816,17 @@ def _choose_several_targets(
                 # respects supplied ids over a re-derivation from one seat.
                 return picks[0][0], [slot for _, slot in picks], ids
 
+    # A side every slot agrees on is still an answer, and the fallback below has
+    # always assumed the caster's own board. Rookie Mistake needed slots that
+    # *disagree*; a several-target tap has slots that agree on the opponent, and
+    # reading only the disagreement left the AI tapping its own creatures. Still
+    # one seat, so the ids stay unnecessary and every card whose slots agree on
+    # "you" is byte-identical.
+    if sides and set(sides) == {"opponent"}:
+        opponents = sorted(seat for seat in by_seat if seat != caster_index)
+        if opponents:
+            return opponents[0], by_seat[opponents[0]][:maximum], None
+
     # One seat's worth: the index list is positional on a single battlefield
     # (`target_player_index` names whose), so a cross-seat spread needs the ids
     # above. Taking the maximum from the caster's own board is the whole policy

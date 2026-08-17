@@ -31,6 +31,7 @@ from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ...oracle_types import x_spend_color_from_text
 from ...subject_filters import filter_head_noun, subject_matches
+from ...targeting import derive_cast_spec
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
 # "creature" uses Permanent.is_creature so animated lands (Kormus Bell / Living
@@ -718,6 +719,30 @@ class SpellCastingMixin:
             )
         if primary is None:
             return True, "valid"
+
+        # CR 601.2c: the caster announces how many targets a variable-target
+        # spell will have, and the maximum is what the card printed. The picker
+        # and the AI both cap themselves, so this is the re-check of a number
+        # they were *told* (idiom #9) — read from `derive_cast_spec`, the same
+        # derivation that told them, so the cap and the prompt cannot disagree.
+        # Fewer is legal, including none. Which permanents were named is not
+        # checkable here: the slots are indices on one seat and a several-target
+        # description may legitimately span two battlefields, so the identities
+        # only exist as the ids on the stack item and the handler enforces them
+        # there.
+        #
+        # Placed above the per-kind arms rather than in one: a card whose
+        # `primary` is a `sequence` wrapper (Frost Breath) reaches none of them,
+        # so a cast naming three targets was accepted and the handler silently
+        # capped at two.
+        announced = (
+            len(target_permanent_index)
+            if isinstance(target_permanent_index, list)
+            else None
+        )
+        maximum = (derive_cast_spec(card, program) or {}).get("max_targets")
+        if isinstance(maximum, int) and announced is not None and announced > maximum:
+            return False, f"too many targets for {card.name}"
 
         target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
         if target_idx < 0 or target_idx >= len(self.players):

@@ -187,6 +187,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "cant_block_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     "tap_or_untap_target": "tapping",
+    # "Those creatures don't untap during their controller's next untap step."
+    # (Frost Breath.) The same category as the tap that names them: what the
+    # sentence does is hold a permanent through one untap step, which is the
+    # tapping family's business either way.
+    "skip_next_untap": "tapping",
     "draw_target_cards": "zones",
     "draw_controller_cards": "zones",
     "mill_target_player": "zones",

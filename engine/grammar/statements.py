@@ -60,6 +60,7 @@ from .effects import (
     _parse_reveal_top,
     _parse_sacrifice,
     _parse_search_library,
+    _parse_doesnt_untap_next_step,
     _parse_tap_untap,
     _parse_wins,
 )
@@ -71,9 +72,30 @@ from .effects import (
 
 
 def _parse_bound_subject(stream: TokenStream) -> ast.TargetSpec | None:
-    """``that <card type>`` as a sentence's subject, or None if that is not
-    what is at the cursor."""
+    """``that <card type>`` / ``those <card type>s`` as a sentence's subject, or
+    None if that is not what is at the cursor.
+
+    The plural is a *different quantifier*, not the singular with a count: "that
+    creature" is the one object the previous sentence chose and "those creatures"
+    is however many it chose — which for an "up to N" may be two, one or none.
+    Keeping them apart is what stops a lowering written for one bound object
+    receiving a list.
+
+    Both are refused by default everywhere, which is what makes reading them in
+    the shared subject position safe: no lowering accepts "that" or "those"
+    unless it says so (``_is_target`` and ``_names_several_targets`` both answer
+    False), so a sentence reaching one fails **by name** rather than failing to
+    parse. A parse error would blame the subject for a missing production.
+    """
     mark = stream.mark()
+    if stream.accept_word("those"):
+        noun = stream.peek_word()
+        singular = noun[:-1] if noun and noun.endswith("s") else noun
+        if singular is None or singular not in CARD_TYPES:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        return ast.TargetSpec("those", ast.ObjectFilter(card_types=(singular,)))
     if not stream.accept_word("that"):
         return None
     noun = stream.peek_word()
@@ -297,6 +319,15 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
             return ast.PhaseOut(source_spec, cant_phase_in_until_your_next_turn=blocked)
         if token.text in ("can't", "cannot"):
             return _parse_cant_attack_or_block(stream, source_spec)
+        # "Those creatures **don't untap** during their controller's next untap
+        # step." (Frost Breath.) The verb is checked before dispatching, not
+        # inside the production: "You don't lose the game for having 0 or less
+        # life" (Lich) is the same auxiliary, and a dispatch on the auxiliary
+        # alone replaced its "unrecognized effect verb" with a refusal naming a
+        # word Lich never prints. A line this branch cannot finish keeps the
+        # refusal it already had.
+        if token.text in ("don't", "doesn't") and stream.peek_word(1) == "untap":
+            return _parse_doesnt_untap_next_step(stream, source_spec)
 
     stream.reset(mark)
     raise stream.error("unrecognized effect verb")

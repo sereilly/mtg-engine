@@ -202,6 +202,15 @@ class UntapStepMixin:
             if SELF_DOESNT_UNTAP_PHRASE in permanent.effective_card.oracle_text.lower():
                 continue
 
+            # "…don't untap during their controller's next untap step" (Frost
+            # Breath): a marker left by a resolved spell rather than a restriction
+            # read off this permanent's own text, which is why it is here and not
+            # in engine/untap_restrictions.py. CR 502.3 — "effects can keep one or
+            # more of a player's permanents from untapping". Cleared below, for
+            # this step whether or not it kept anything tapped.
+            if permanent.metadata.get("skip_next_untap"):
+                continue
+
             # Old Man of the Sea: "You may choose not to untap this creature
             # during your untap step." A human's explicit keep-tapped choice is
             # honored; AI/headless play keeps it tapped while its linked steal
@@ -242,6 +251,22 @@ class UntapStepMixin:
 
             permanent.tapped = False
             untapped += 1
+
+        # The marker's whole lifetime ends here (CR 611.2a: the effect lasts as
+        # long as the spell said, and it said "next untap step"). Swept rather
+        # than cleared inside the loop above, for two reasons the loop cannot
+        # serve: it skips permanents that are already untapped, and a marked
+        # permanent untapped by something else in between would keep its marker
+        # forever. CR 701.43b says the same of exert, the keyworded form of this
+        # effect — "each effect causing it not to untap expires during the same
+        # untap step".
+        #
+        # After the skip-the-whole-step return above, deliberately: a skipped
+        # untap step (Stasis) is a step that does not happen (CR 500.11), so it is
+        # not yet the "next untap step" the spell named and the marker waits for
+        # one that does.
+        for permanent in self.controlled_by(player_index):
+            permanent.metadata.pop("skip_next_untap", None)
 
         self.log.append(f"{player.name} untapped {untapped} permanent(s)")
         self._on_step_or_phase_end(phase, step)

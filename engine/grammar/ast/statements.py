@@ -62,6 +62,7 @@ from .board import (
     SacrificeUnlessPay,
     Tap,
     TapOrUntap,
+    DoesntUntapNextStep,
     Untap,
 )
 from .cards import (
@@ -107,7 +108,7 @@ Effect = Union[
     DealDamage, Pump, SetBasePT, GainKeyword, LoseKeyword, PutCounter, RemoveCounter,
     DoublePower,
     GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice, Exile, Tap, Untap,
-    TapOrUntap,
+    TapOrUntap, DoesntUntapNextStep,
     Regenerate, CounterSpell, ModalNode, ReturnToZone, CreateToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     PhaseOut,
