@@ -440,3 +440,109 @@ def test_garruks_uprising_third_line_is_no_longer_dropped(set_pool):
     game.cast_from_hand(0, "Elder Gargaroth")   # 6/6
     game._settle()
     assert len(p1.hand) == 1, "cast one, drew one"
+
+
+# --- Round 85: an activation cost that shrinks with the board ---------------
+
+_OTHER_SHRINES = (
+    "Sanctum of Calm Waters",
+    "Sanctum of Stone Fangs",
+    "Sanctum of Shattered Heights",
+    "Sanctum of Fruitful Harvest",
+    "Sanctum of All",
+)
+
+
+def _tranquil_board(set_pool, *, other_shrines=0, generic=5):
+    """Tranquil Light with *other_shrines* distinct Shrines beside it.
+
+    Distinct on purpose: two copies of one legendary Shrine is a different
+    question (CR 704.5j, still an open block here) and would make the count the
+    test asserts depend on it.
+    """
+    pool = set_pool("M21")
+    light = Permanent(card=pool["Sanctum of Tranquil Light"])
+    battlefield = [light] + [
+        Permanent(card=pool[name]) for name in _OTHER_SHRINES[:other_shrines]
+    ]
+    victim = Permanent(card=pool["Alpine Watchdog"])
+    p1 = PlayerState(name="P1", battlefield=battlefield)
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    p1.mana_pool = {"W": 1, "U": 0, "B": 0, "R": 0, "G": 0, "C": generic, "generic": 0}
+    return game, victim
+
+
+def _activate(game):
+    return game.activate_permanent_ability(
+        0, "Sanctum of Tranquil Light", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+
+
+def test_sanctum_of_tranquil_light_compiles_supported(set_pool):
+    """Two sentences on one printed line, and only one of them is an effect. The
+    reduction is run by ``engine/cost_modifiers.py`` while the cost is paid, so
+    the parser accounts for it by asking that registry whether it claims the
+    sentence â€” never by restating its words, which would be free to drift."""
+    program = compile_card_oracle(set_pool("M21")["Sanctum of Tranquil Light"])
+
+    assert program.supported, program.reason
+    (ability,) = program.activated_abilities
+    assert ability.instruction.kind == "tap_target_permanent"
+
+
+def test_the_ability_costs_one_less_for_each_shrine(set_pool):
+    """One Shrine (itself) discounts {1}, so {5}{W} is payable with four
+    generic."""
+    game, victim = _tranquil_board(set_pool, other_shrines=0, generic=4)
+
+    assert _activate(game).supported
+    game._settle()
+    assert victim.tapped
+
+
+def test_three_shrines_take_three_off(set_pool):
+    game, victim = _tranquil_board(set_pool, other_shrines=2, generic=2)
+
+    assert _activate(game).supported
+    game._settle()
+    assert victim.tapped
+
+
+def test_the_discount_does_not_make_it_free_by_accident(set_pool):
+    """One short is still one short. The reduction is counted, not assumed â€”
+    reading an unrecognized narrowing as satisfied is the one direction a cost
+    error must never go, which is why an untestable noun phrase records no
+    reduction at all."""
+    game, victim = _tranquil_board(set_pool, other_shrines=2, generic=1)
+
+    assert not _activate(game).supported
+    assert not victim.tapped
+
+
+def test_the_cost_clamps_at_zero(set_pool):
+    """Six Shrines is more discount than the ability costs, and a cost cannot go
+    below {0} â€” the same clamp a spell's own reduction makes."""
+    game, victim = _tranquil_board(set_pool, other_shrines=5, generic=0)
+
+    assert _activate(game).supported
+    game._settle()
+    assert victim.tapped
+
+
+def test_a_reduction_over_an_untestable_noun_phrase_is_not_claimed():
+    """The gate that keeps the discount honest. The count asks
+    ``permanent_matches_filter``, so a phrase carrying a key that matcher cannot
+    answer would be counted over a wider set than the card names â€” a bigger
+    discount than the card gives. It records no reduction, and the line is then
+    not claimed at all."""
+    from engine.cost_modifiers import ability_self_reduction
+
+    assert ability_self_reduction(
+        "This ability costs {1} less to activate for each Shrine you control."
+    ) is not None
+    assert ability_self_reduction(
+        "This ability costs {1} less to activate for each wumpus you control."
+    ) is None

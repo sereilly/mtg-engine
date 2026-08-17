@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 73.8% | 70.6% | 47.7% | 193 |
+| M21 *(measured)* | 285 | 503 | 74.0% | 70.8% | 47.9% | 194 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 235 | 105 | expected a subject |  |
+| 234 | 104 | expected a subject |  |
 | 94 | 38 | unrecognized effect verb |  |
 | 48 | 29 | unconsumed text |  |
 | 32 | 32 | unrecognized activation cost |  |
@@ -1014,6 +1014,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `At the beginning of your first main phase, you may draw X cards, where X is the number of Shrines you control. If you do, discard a card.`
 - **Sanctum of Stone Fangs**
   - `At the beginning of your first main phase, each opponent loses X life and you gain X life, where X is the number of Shrines you control.`
+- **Sanctum of Tranquil Light**
+  - `{5}{W}: Tap target creature. This ability costs {1} less to activate for each Shrine you control.`
 - **Sandstorm**
   - `Sandstorm deals 1 damage to each attacking creature.`
 - **Sanguine Indulgence**

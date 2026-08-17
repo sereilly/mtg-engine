@@ -9,7 +9,7 @@ ability or (for a mana ability, CR 605.1a) performs it without using the stack.
 
 from __future__ import annotations
 
-from ...cost_modifiers import ability_cost_tax
+from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
 from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
 from ...handlers._common import permanent_matches_filter
@@ -631,6 +631,18 @@ class AbilityActivationMixin:
         if extra_ability_tax:
             required_cost["generic"] = required_cost.get("generic", 0) + extra_ability_tax
             self.log.append(f"{permanent.card.name}'s ability is taxed by {', '.join(taxing_names)}")
+        # "This ability costs {1} less to activate for each Shrine you control."
+        # (Sanctum of Tranquil Light.) After the tax, because CR 601.2f applies
+        # increases before reductions, and clamped at zero because a cost cannot
+        # go below {0} — the same clamp `reduce_cost` makes for a spell.
+        discount = ability_self_reduction_amount(self, controller_index, permanent)
+        if discount:
+            before = required_cost.get("generic", 0)
+            required_cost["generic"] = max(0, before - discount)
+            self.log.append(
+                f"{permanent.card.name}'s ability costs "
+                f"{{{before - required_cost['generic']}}} less to activate"
+            )
         if self.enforce_mana_costs and any(required_cost.values()):
             if not self._pay_mana_cost(controller, required_cost):
                 details = f"insufficient mana to activate {permanent.card.name}"

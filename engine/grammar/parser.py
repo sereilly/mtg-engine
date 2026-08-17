@@ -536,6 +536,45 @@ def _parse_who_cant_rider(
     return ast.LoseLife(ast.PlayerRef("each_opponent"), amount, who_could_not="discard")
 
 
+def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
+    """Consume a trailing sentence a text-keyed registry implements end to end.
+
+    "{5}{W}: Tap target creature. **This ability costs {1} less to activate for
+    each Shrine you control.**" (Sanctum of Tranquil Light.) The reduction is a
+    whole sentence inside an activated ability's printed line, and it is not an
+    effect — `engine/cost_modifiers.py` applies it while the cost is being paid,
+    so there is nothing here for a production to lower.
+
+    The claim **delegates to the implementing code** rather than restating its
+    words, which is the rule `engine/grammar/registries.py` states for the
+    whole-line case: a copy of the phrase here would be free to drift, and a
+    drifted copy would consume a sentence nothing runs. The sentence's own source
+    text is sliced back out of the line through the tokens' offsets and handed to
+    the registry's matcher.
+    """
+    from ..cost_modifiers import cost_modifier_claims_line
+
+    mark = stream.mark()
+    start_token = stream.peek()
+    if start_token is None:
+        return False
+    end = start_token.end
+    while not stream.exhausted:
+        token = stream.peek()
+        if token is None:
+            break
+        if token.kind == PUNCT and token.text == ".":
+            break
+        end = token.end
+        stream.advance()
+    text = stream.line[start_token.start:end]
+    if cost_modifier_claims_line(text):
+        stream.accept_punct(".")
+        return True
+    stream.reset(mark)
+    return False
+
+
 def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     """Parse the remaining tokens as one or more sentences, joining them into a
     ``Sequence``. A rider sentence folds into the effect it modifies instead of
@@ -551,6 +590,11 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             continue
 
         if steps:
+            # A sentence a text-keyed registry runs, rather than an effect. It
+            # contributes no step, which is the point: the words are accounted
+            # for and the table does the work.
+            if _parse_registry_claimed_sentence(stream):
+                continue
             riders = _parse_damage_rider_sentence(stream)
             if riders is not None:
                 steps[-1] = _attach_riders(steps[-1], riders)

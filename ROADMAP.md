@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 234/285) to the full release line - **137 sets, 33,594
+M21 measured at 235/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–81 — lives in git history at and before
-commit `45617c9`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–82 — lives in git history at and before
+commit `9cff89e`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,46 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 82: a blanket prevention narrowed to a printed noun phrase
-
-*(2026-08-17.)* M21 **231 → 232** — Pack Leader.
-
-> Whenever this creature attacks, prevent all combat damage that would be dealt
-> this turn to Dogs you control.
-
-**A turn-wide record, not a shield per Dog** — and that is the whole design
-decision. `engine/shields.py` hands a `Shield` to a *recipient*, which fixes the
-set at resolution. "Dogs you control" is not fixed: CR 611.2c fixes an effect's
-set only where the effect says so, and this one says a phrase. So a Dog that
-enters **after** the trigger resolves is protected too, and a shield handed to
-each Dog present would have been a strictly narrower card than the one printed.
-That case is a test, and it is the one that decides the shape.
-
-The record therefore sits beside the existing blanket flag, with the same
-lifetime and cleared in the same two places, and the interceptor re-matches the
-phrase when damage would be dealt. Its ordering constant sits next to the
-unscoped blanket's for the reason that file already gives: neither has charges,
-so applying one costs its recipient nothing and neither can be spent on damage
-that was never going to be dealt.
-
-**The refusal it replaces stays for everything else.** "…dealt this turn to you"
-is a shield on one recipient and still refuses — the record covers whoever
-*matches*, which is a different thing from whoever was named.
-
-**And a word-order fix that is not cosmetic.** The production read the recipient
-only *before* the duration; Pack Leader prints it after. Both orders are the same
-sentence, so the recipient is now read on either side rather than the card
-failing on where the words sit.
-
-Measured five ways: the controller's Dog and a Dog that arrived later are both
-prevented; a non-Dog, an opponent's Dog, and noncombat damage all go through.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions, **zero hooks added**. Seven new tests, six
-watched to fail on the round-81 engine. One of them pins round 73's "other" fix
-on this card's lord line, so a later change to one half cannot quietly undo the
-other.
-
 ## Round 83: a subject printed once and meant twice
 
 *(2026-08-17.)* M21 **232 → 233** — Peer into the Abyss, and the general gap it
@@ -394,4 +354,52 @@ never going to block.
 Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
 byte-identical at 443 interactions, **zero hooks added**. Seven new tests, six
 watched to fail on the round-83 engine.
+
+## Round 85: an activation cost that shrinks with the board
+
+*(2026-08-17.)* M21 **234 → 235** — Sanctum of Tranquil Light, the first of the
+Shrine cycle.
+
+> {5}{W}: Tap target creature. This ability costs {1} less to activate for each
+> Shrine you control.
+
+**The tap already worked.** The whole card was the second sentence — and it is
+not an effect at all: `engine/cost_modifiers.py` applies it while the cost is
+being paid, so there is nothing for a production to lower.
+
+**A registry-claimed sentence *inside* a line.** Until now a text-keyed registry
+claimed a whole printed line; here the reduction is one sentence of an activated
+ability's line, and the parser was failing on it as trailing text. So the
+sentence loop gained a rider that hands the sentence's **own source text** — cut
+back out of the line through the tokens' offsets — to the registry's matcher.
+The claim delegates to the implementing code rather than restating its words,
+which is the rule `engine/grammar/registries.py` states for the whole-line case
+and for the reason it gives: a copy of the phrase here would be free to drift,
+and a drifted copy would consume a sentence nothing runs.
+
+**The reduction is a reduction, so the gate is stricter than usual.** The
+ROADMAP has carried "cost reductions that cannot be computed" as a deliberate
+refusal since round 57, with the reason that reading an unrecognized condition as
+satisfied makes a spell cheaper than it is — the one direction a cost error must
+never go. This one *is* computable, and the honesty is kept by construction: the
+printed noun phrase is read by the grammar's own subject reader, and if any key
+it produces is outside `TESTABLE_SUBJECT_FILTER_KEYS` the reduction is not
+recorded at all, so the line is then not claimed and the card stays unsupported.
+A phrase the matcher cannot test would otherwise be counted over a wider set than
+the card names, which is a bigger discount than the card gives.
+
+Applied **after** the tax (CR 601.2f puts increases before reductions) and
+clamped at zero, the same clamp a spell's own reduction makes.
+
+**One thing the first cut got wrong, caught by executing rather than reading.**
+The amount function scanned the card's *lines*, and this reduction lives inside a
+line that begins with its cost symbols — so it matched nothing and the discount
+was silently zero while every gate stayed green. It scans sentences now; the
+claim predicate stays anchored and whole-sentence, which is the same split
+`cost_modifiers_for` and `cost_modifier_claims_line` already make one screen
+apart.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Six new tests, five watched to fail on the round-84 engine.
 

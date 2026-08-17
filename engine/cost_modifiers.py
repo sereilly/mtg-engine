@@ -141,6 +141,8 @@ def cost_modifier_claims_line(line: str) -> bool:
     tables live in this module.
     """
     text = line.strip().lower().rstrip(".")
+    if ability_self_reduction(line) is not None:
+        return True
     if any(
         (match := pattern.match(text)) is not None and match.end() == len(text)
         for pattern in (_SPELL_TAX, _ABILITY_TAX)
@@ -248,6 +250,83 @@ _SELF_CONDITIONS: dict[str, str] = {
     "you've cast an instant or sorcery spell this turn": "cast_instant_or_sorcery",
     "you've gained 3 or more life this turn": "gained_three_life",
 }
+
+
+# "This ability costs {N} less to activate for each <noun phrase>."
+# (Sanctum of Tranquil Light.) A *self* reduction on an activated ability, sized
+# by a board count rather than printed flat — which is the whole reason it is a
+# separate template from the flat taxes above: the number is not in the text.
+_ABILITY_SELF_REDUCTION = re.compile(
+    r"this ability costs \{(?P<generic>\d+)\} less to activate for each "
+    r"(?P<subject>.+?)\.?$"
+)
+
+
+@dataclass(frozen=True)
+class AbilitySelfReduction:
+    """"This ability costs {1} less to activate for each Shrine you control."
+
+    *per_each* is the ``permanent_matches_filter`` payload of the printed noun
+    phrase, so the count asks the same question of a permanent that every other
+    reader of those words asks. A phrase the matcher cannot test is not recorded
+    at all — the reduction refuses rather than counting a set it cannot describe,
+    because reading a narrowing as satisfied makes the ability cheaper than it
+    is, and cheaper is the one direction a cost error must never go.
+    """
+
+    generic: int
+    per_each: dict
+
+
+@lru_cache(maxsize=None)
+def ability_self_reduction(line: str) -> "AbilitySelfReduction | None":
+    """The per-object activation reduction *line* states, if it is one."""
+    from .grammar import subject_filter_payload
+    from .subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+
+    match = _ABILITY_SELF_REDUCTION.match(line.strip().lower())
+    if match is None:
+        return None
+    described = subject_filter_payload(match.group("subject"), plural=True)
+    if described is None:
+        return None
+    if set(described) - set(TESTABLE_SUBJECT_FILTER_KEYS):
+        # A key the matcher cannot answer would be dropped, and the count would
+        # then be taken over a wider set than the card names — a bigger discount
+        # than the card gives.
+        return None
+    return AbilitySelfReduction(int(match.group("generic")), described)
+
+
+def ability_self_reduction_amount(game, controller_index: int, source) -> int:
+    """How much generic mana comes off *source*'s activation cost right now.
+
+    Counted through the control seam and the shared matcher, and read off the
+    permanent's *effective* card so an animated or copied permanent is discounted
+    on what it currently is — the same rule ``ability_cost_tax`` follows one
+    function above.
+    """
+    from .handlers._common import permanent_matches_filter
+
+    total = 0
+    # Split into *sentences*, not lines: the reduction is printed inside an
+    # activated ability's own line ("{5}{W}: Tap target creature. This ability
+    # costs …"), so a line-wise scan only ever sees text beginning with the cost
+    # symbols and matches nothing. The claim predicate stays anchored and
+    # whole-sentence — the two questions differ exactly as ``cost_modifiers_for``
+    # and ``cost_modifier_claims_line`` already differ above.
+    text = (source.effective_card.oracle_text or "").replace("\n", ". ")
+    for sentence in text.split("."):
+        reduction = ability_self_reduction(sentence)
+        if reduction is None:
+            continue
+        matched = sum(
+            1
+            for perm in game.controlled_by(controller_index)
+            if permanent_matches_filter(perm, reduction.per_each)
+        )
+        total += reduction.generic * matched
+    return total
 
 
 @dataclass(frozen=True)
