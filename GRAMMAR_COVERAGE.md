@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 72.2% | 68.8% | 45.9% | 186 |
+| M21 *(measured)* | 285 | 503 | 72.2% | 69.0% | 46.1% | 187 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -1045,6 +1045,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{B}: Regenerate this creature.`
 - **See the Truth**
   - `Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. If this spell was cast from anywhere other than your hand, put each of those cards into your hand instead.`
+- **Selfless Savior**
+  - `Sacrifice this creature: Another target creature you control gains indestructible until end of turn. (Damage and effects that say "destroy" don't destroy it.)`
 - **Sengir Vampire**
   - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
   - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`

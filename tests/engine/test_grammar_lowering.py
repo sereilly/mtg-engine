@@ -3591,3 +3591,89 @@ def test_a_supertype_narrowed_trigger_refuses_rather_than_firing_on_everything()
         "the word 'legendary' has no payload key, so admitting this line gains "
         "life off any attacker its controller has"
     )
+
+
+# ---------------------------------------------------------------------------
+# "Another target": the two meanings of one printed word
+# ---------------------------------------------------------------------------
+
+
+def test_a_sentences_only_target_reads_another_as_the_source_exclusion():
+    """"**Another** target creature you control gains indestructible until end
+    of turn." (Selfless Savior.)
+
+    CR 601.2c lets two instances of the word "target" name the same object
+    unless something forbids it, and "another" is that forbidding — it points at
+    whatever the sentence already chose. When the sentence chooses nothing else,
+    the only object left to point at is the ability's source (CR 109.5), which
+    is the restriction ``exclude_self`` already names. So the word survives into
+    the payload as the *same* key the postmodifier spelling ("target creature
+    other than this creature") produces, and one picker and one handler read
+    both."""
+    (_kind, payload), = _full_payloads(
+        "Another target creature you control gains indestructible until end of turn.",
+        "Selfless Savior",
+    )
+
+    assert payload["targets"] == {
+        "quantifier": "target",
+        "kind": "object",
+        "filter": {
+            "type_filter": "creature", "controller": "you", "exclude_self": True,
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        # The word behind the first choice ...
+        "Target creature gets +1/+1 until end of turn. Another target creature "
+        "gains flying until end of turn.",
+        # ... and in front of it: the order does not change what is missing.
+        "Target creature gains flying until end of turn. Another target creature "
+        "gets +1/+1 until end of turn.",
+        # Two of them, neither with a slot to differ from.
+        "Another target creature gains flying until end of turn and another "
+        "target creature gains trample until end of turn.",
+    ],
+)
+def test_another_target_refuses_when_no_lowering_has_a_slot_per_clause(line):
+    """The other meaning, and why the translation above may not be applied
+    blindly. Two clauses naming two chosen objects need an instruction with a
+    slot each — every other handler resolves through ``_one_choice``, which
+    reads the *first* entry of the target list, so both clauses would land on
+    one permanent. Read as the source exclusion instead, the word would name a
+    restriction the card never printed.
+
+    The first of these compiled **supported** on the round-70 engine, with the
+    word dropped entirely and both clauses on one creature."""
+    result = compile_line(line, card_name="Test")
+
+    assert result.parsed
+    assert not result.lowered
+    assert "slot per clause" in (result.failure_reason or "")
+
+
+def test_the_two_slot_lowerings_keep_the_distinctness_they_can_carry():
+    """The refusal above is positioned *after* the fusers, so the two lowerings
+    that do have a slot per clause are untouched — and neither of them turns the
+    word into a source exclusion, because a spell has no source permanent and
+    the restriction is between the two slots."""
+    (_kind, rookie), = _full_payloads(
+        "Until end of turn, target creature gets +0/+2 and another target "
+        "creature gets -2/-0.",
+        "Rookie Mistake",
+    )
+    assert rookie["targets"]["distinct"] is True
+    assert all("exclude_self" not in f for f in rookie["targets"]["filters"])
+
+    (_kind, garruk), = _full_payloads(
+        "Target creature you control deals damage equal to its power to another "
+        "target creature.",
+        "Garruk, Savage Herald",
+    )
+    assert garruk["targets"]["filters"] == [
+        {"type_filter": "creature", "controller": "you"},
+        {"type_filter": "creature"},
+    ]

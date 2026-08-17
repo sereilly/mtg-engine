@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 225/285) to the full release line - **137 sets, 33,594
+M21 measured at 226/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–69 — lives in git history at and before
-commit `9d20058`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–70 — lives in git history at and before
+commit `5249f66`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,89 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 70: a trigger on the activation, not on what it resolves into
-
-*(2026-08-16.)* M21 **223 â†’ 224** â€” Keral Keep Disciples. The effect half was
-already finished; the whole round is the trigger, and the most valuable edit in
-it is not the card's.
-
-> Whenever you activate a loyalty ability of a Chandra planeswalker, this
-> creature deals 1 damage to each opponent.
-
-**A trigger subject was dropping any restriction the payload has no key for, and
-that is a bug this round found rather than a feature it needed.**
-`ObjectFilter.to_payload` emits nothing for `supertypes`, `is_enchanted` or
-`blocked` â€” so "a **legendary** creature you control" reduced to *exactly* the
-payload of "a creature you control", and the `TESTABLE_SUBJECT_FILTER_KEYS` gate
-downstream saw a clean, unnarrowed filter, because what was missing left no key
-behind. Measured on the round-69 engine: an invented "Whenever a legendary
-creature you control attacks, you gain 1 life" compiled **supported**, and a
-plain Dog attacking alone took its controller to 21. Round 68 found the same hole
-one layer down and paired the payload gate with `_restrictions_beyond` over the
-AST; this is that pairing on the trigger side, where the consequence is a
-condition announcing itself on a strictly larger set than the card prints. The
-honoured set is *derived* from the fields `to_payload` reads, so a restriction
-added to `ObjectFilter` later refuses instead of silently vanishing.
-
-**One condition, two narrowings, failing in opposite directions.** The *actor* is
-CR 109.5's "you" â€” drop it and an opponent ticking up their own Chandra pings
-them on your behalf. The *object* is a printed noun phrase â€” drop it and every
-planeswalker in the format is a Chandra. Neither existing table can express both:
-`event_filter` raises on duplicate registration, so a kind can be seat-scoped
-**or** subject-led, never both, and the three subject-led events carry their whole
-narrowing inside the noun phrase where this card's "you" sits outside it. One
-predicate, because there is one card; a second one makes the pair a row.
-
-**"Chandra" is a subtype and never a card name** â€” four cards in this pool alone
-are called Chandra-something, and a name match would have been dispatch on a card
-name outside `card_hooks.py`. The regex only delimits the phrase; the noun parser
-reads it, and both front ends produce a byte-identical filter, which the existing
-whole-pool guard checks with no new test needed.
-
-**The fire site is CR 606.4's payment**, and its position is load-bearing in two
-directions. Below the legality gate, because that gate returns early and
-announcing above it would fire the trigger on activations the rules refused â€”
-tested for both CR 606.3 (one loyalty ability per turn) and CR 606.6 (a minus
-larger than the loyalty). And while the walker is still on the battlefield, so a
-minus that bins it (CR 704.5i) is still something the trigger saw. CR 603.3's
-ordering is *not* settled by the fire site: this engine pays costs before it
-pushes, so `queue_permanent_ability`'s existing `deferring_triggers` wrapper is
-what puts the trigger above the ability. Asserted off the stack, not the log.
-
-**The size guard, third round running â€” and this time it was a real split.**
-`test_m21_creatures.py` went 2,550 â†’ 2,315 by five moves, three of them
-misfilings the split turned up: Garruk's Uprising (an Enchantment), two artifact
-creatures, a per-turn record naming an Instant, and a grammar probe naming no
-card. The rest is a new `test_m21_legendary_creatures.py` â€” `Legendary` is part
-of the printed type line (CR 205.4a), M21 prints eleven and only four are
-supported, so seven future rounds land there rather than back in the file that
-just overflowed, and the standing "legend rule reads the printed name" work
-(round 49) has a home when it is done.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions, **zero hooks added**. Eight of the eleven new
-tests were watched to fail on the round-69 engine; the three that pass are
-controls that earn their keep only now the card works.
-
-**Next:**
-
-- **The graveyard-slot staleness from round 69** â€” still the largest open item,
-  and it must precede promotion.
-- **A planeswalker with a non-loyalty activated ability cannot compile at all**,
-  so this round's `is_loyalty` narrowing has no representable counter-example in
-  the pool. Said in the test docstring rather than pretended away.
-- **`mana_like_kinds` does not exclude loyalty abilities** (CR 605.1a) â€” latent,
-  nothing in the pool reaches it.
-- **Every triggered `deal_damage` in the pool reports
-  `effect_kind="spell_pattern"`**, so `is_triggered` is false on the wire for all
-  21 of them. Carried vocabulary from the parser migration, deliberately not
-  touched here.
-- **`tests/sets/test_lea_cards.py` is at 2,598 of 2,600** â€” the next LEA test of
-  any kind trips the guard with two lines of warning.
-- Round 66's counter-removal cost, round 65's "another"-as-source-exclusion and
-  the headless simulator's discarded target, the Shrine cycle, a computed static
-  P/T, a reflexive trigger, the legend rule.
-
 ## Round 71: attack restrictions were not cumulative
 
 *(2026-08-16.)* No card — a **shipped-pool** bug, found while scoping Drowsing
@@ -418,4 +335,57 @@ The size guard again, and again it named a misfiling rather than bulk: two Vito
 tests were sitting in the creature file when Vito is a Legendary Creature and
 `test_m21_legendary_creatures.py` already held four others. Round 70's own axis,
 applied to tests that were on the wrong side of it.
+
+## Round 73: one word, two meanings, and four cards that were reading neither
+
+*(2026-08-16.)* M21 **225 → 226** — Selfless Savior returns, and the round is
+mostly about what its absence was hiding.
+
+**The word now has somewhere to go.** Round 65 withdrew the card rather than keep
+dropping its printed "another". The AST separates two meanings —
+`ObjectFilter.other_than_source` (CR 109.5, "other than the source") and
+`TargetSpec.distinct_from_prior` ("different from the sentence's earlier choice")
+— and CR 601.2c is why the difference matters at all, since two instances of
+"target" may otherwise name the same object. For a sentence whose *only* chosen
+object prints "another", the sole available referent is the source, so it lowers
+to `other_than_source`, which the picker and every handler already read.
+
+**The separation is structural, not a comment.** The genuinely two-slot meaning
+is claimed above by the fusers; everything else refuses through a new guard in
+the sequence lowering. That guard sits **after** the fusers on purpose — a shape
+that grows a fused lowering later is claimed above it and never reaches it, so
+the refusal can only shrink as the engine learns more. Its cost is zero cards,
+and the one synthetic shape it newly refuses compiled *supported* before it, with
+the word dropped and both clauses landing on one creature.
+
+**Four handlers were dropping the noun phrase they were given**, and those cards
+were worse than the one that prompted the round:
+
+| card | printed | what it did |
+| --- | --- | --- |
+| Ranger's Guile | "target creature **you control**" | +1/+1 **and** hexproof to an opponent's creature |
+| Invigorating Surge, Pridemalkin, Basri's Lieutenant | "+1/+1 counter on target creature **you control**" | counter on an opponent's creature |
+| Bolt Hound | "**Other** creatures you control get +1/+0" | buffed itself too |
+
+Three causes, each its own kind of drift. `grant_target_keyword_until_eot`
+resolved with the default "is it a creature?" predicate and read no filter at
+all. `pump_target_creature_until_eot`'s `_eligible` asked only
+`is_creature`/`blocking_only`. `add_counter_to_target`'s **single**-target branch
+asked two of the three questions **its own several-target branch fifty lines
+above** already asked — two branches of one handler disagreeing about one card's
+sentence. And the global buff read five filter fields and dropped the rest, where
+the keyword branch fifteen lines away uses `_restrictions_beyond`. All four now
+ask the same three questions: the filter, the source exclusion, and the seat.
+
+**The size guard fired for the third time in four rounds, and this time there was
+nothing left to move.** 149 of M21's cards are creatures, `Legendary Creature`
+already split off, and an audit found one non-creature name left in the file — a
+prop. So `tests/sets/README.md` gains a second axis, a **round boundary**, with
+the rule written beside it: reach for it only after the misfiling audit comes
+back empty, and never by raising the cap. Every previous firing surfaced a
+misfiling rather than bulk, which is why the audit comes first.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions, **zero hooks added**. Eleven new tests, all
+eleven watched to fail on the round-72 engine.
 

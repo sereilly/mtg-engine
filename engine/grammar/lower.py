@@ -32,6 +32,8 @@ callers outside the package import them from this module
 the table did not move its address.
 """
 
+import dataclasses
+
 from ..lord_buffs import (LORD_BUFF_KIND, LordBuff, LordBuffFilter, QUALIFIER_FIELDS, grantable_keywords, lord_buff_payload)
 from ..oracle_types import X_FROM_COUNT, OracleInstruction
 from . import ast
@@ -345,6 +347,7 @@ def lower_statement(
             fused = fuse(statement.steps)
             if fused is not None:
                 return fused
+        _refuse_unfused_distinctness(statement.steps)
         return _lower_steps(statement.steps, produced, event)
 
     if isinstance(statement, ast.Conditional):
@@ -373,6 +376,59 @@ def lower_statement(
         return (OracleInstruction("grant_team_assign_unblocked_until_eot", "", {}),)
 
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
+
+
+def _targeted_specs(node: object) -> tuple[ast.TargetSpec, ...]:
+    """Every ``TargetSpec`` in *node*'s subtree that prints the word "target".
+
+    Written against the dataclass fields rather than a per-node list, for the
+    reason ``_restrictions_beyond`` gives: a statement class added later is then
+    covered by default instead of silently answering "no targets here".
+    """
+    found: list[ast.TargetSpec] = []
+    if isinstance(node, ast.TargetSpec):
+        if node.targeted:
+            found.append(node)
+        # A filter carries no recipients, so there is nothing below this.
+        return tuple(found)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        for field in dataclasses.fields(node):
+            found.extend(_targeted_specs(getattr(node, field.name)))
+    elif isinstance(node, (tuple, list)):
+        for item in node:
+            found.extend(_targeted_specs(item))
+    return tuple(found)
+
+
+def _refuse_unfused_distinctness(steps: tuple[ast.Statement, ...]) -> None:
+    """Refuse a multi-clause sentence whose printed "another target" no fuser claimed.
+
+    CR 601.2c lets two instances of the word "target" name the same object unless
+    something forbids it, and ``TargetSpec.distinct_from_prior`` is that
+    forbidding: "**another** target creature" must differ from the choice the
+    sentence already made. Honouring it needs an instruction with a slot per
+    clause — ``_fused_two_target_pump`` and ``target_bites_target`` are the two
+    that have one — because every other handler resolves through ``_one_choice``
+    and would read the *first* chosen permanent for both clauses.
+
+    Reaching ``_lower_steps`` with the word still on a step therefore means two
+    things at once: the clauses would land on one permanent, and
+    ``_targets_payload`` would read the word as CR 109.5's source exclusion,
+    which is a different restriction. Both are the wider-than-printed outcome, so
+    the sentence refuses.
+
+    Positioned **after** the fusers on purpose: a shape that grows a fused
+    lowering later is claimed above this and never reaches it, so this refusal
+    can only shrink as the engine learns more, never has to be edited.
+    """
+    for step in steps:
+        for spec in _targeted_specs(step):
+            if spec.distinct_from_prior:
+                raise LoweringError(
+                    'a printed "another target" in a multi-clause sentence needs '
+                    "a lowering with a slot per clause",
+                    node=spec,
+                )
 
 
 def _stamp_x_from_count(

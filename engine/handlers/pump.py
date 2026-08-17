@@ -111,11 +111,25 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         toughness_delta = -toughness_delta
     blocking_only = bool(instruction.payload.get("blocking_only"))
 
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+
     def _eligible(perm: Permanent) -> bool:
         if not perm.is_creature:
             return False
         # Righteousness: the target must be a creature that is currently blocking.
         if blocking_only and not game._is_blocking_creature(perm):
+            return False
+        # The rest of the printed noun phrase. This asked only "is it a
+        # creature?", so Ranger's Guile's "target creature **you control**"
+        # pumped an opponent's creature — the pump half of the same card whose
+        # keyword half had the identical hole.
+        if not permanent_matches_filter(perm, filters):
+            return False
+        if filters.get("exclude_self") and perm is context.source_permanent:
+            return False
+        if filters.get("controller") == "you" and not game.controls(
+            game.players.index(caster), perm
+        ):
             return False
         return True
 
@@ -203,6 +217,12 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     toughness_delta = int(instruction.payload.get("toughness", 0))
     attacking_only = bool(instruction.payload.get("attacking_only"))
     blocking_only = bool(instruction.payload.get("blocking_only"))
+    # "**Other** creatures you control" (Bolt Hound) — CR 109.5's exclusion of
+    # the ability's own source, which no per-permanent filter can test.
+    exclude_self = (
+        context.source_permanent
+        if instruction.payload.get("exclude_self") else None
+    )
     if instruction.payload.get("opponents_only"):
         # "Creatures your opponents control get -2/-2 until end of turn"
         # (Massacre Wurm): every opponent's board and none of the caster's.
@@ -214,6 +234,8 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     for player in target_players:
         for perm in list(player.battlefield):
             if not perm.is_creature:
+                continue
+            if exclude_self is not None and perm is exclude_self:
                 continue
             # Army of Allah: only creatures attacking at resolution are buffed.
             if attacking_only and not perm.attacking:
@@ -463,11 +485,27 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
 
     filters = instruction.payload.get("targets", {}).get("filter") or {}
 
+    source = context.source_permanent
+
     def counter_target_legal(perm) -> bool:
         # "target creature with a +1/+1 counter on it" (Tempered Veteran): the
         # counter restriction is enforced at resolution too, so the fallback
         # scan can never land on a counterless creature.
-        return perm.is_creature and permanent_matches_filter(perm, filters)
+        #
+        # The seat and identity questions are asked here too, which they were
+        # not — the several-target branch fifty lines above asks all three, and
+        # the two branches of one handler disagreeing is how Pridemalkin,
+        # Invigorating Surge and Basri's Lieutenant all put their "+1/+1 counter
+        # on target creature **you control**" onto an opponent's creature.
+        if not perm.is_creature or not permanent_matches_filter(perm, filters):
+            return False
+        if filters.get("exclude_self") and perm is source:
+            return False
+        if filters.get("controller") == "you" and not game.controls(
+            game.players.index(context.caster), perm
+        ):
+            return False
+        return True
 
     target_creature = resolve_target_permanent(game, context, predicate=counter_target_legal)
     if target_creature is None:
@@ -561,9 +599,38 @@ def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, co
 def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target creature gains <keyword(s)> until end of turn." The payload
     carries the words; the lowering admits only implemented keywords, so a
-    grant here always grants behaviour that exists."""
+    grant here always grants behaviour that exists.
+
+    The printed noun phrase is enforced here as well as at announcement. It was
+    not: this handler resolved with the default "is it a creature?" predicate and
+    read no filter at all, so Ranger's Guile's "target creature **you control**"
+    handed +1/+1 and hexproof to an opponent's creature, and Selfless Savior's
+    "**another**" excluded nothing. The same three questions
+    ``add_counter_to_target``'s several-target branch already asks, for the same
+    reason — a picker and a resolution that disagree are a target the player may
+    announce and the effect then declines to affect.
+    """
     card = context.card
-    target_creature = resolve_target_permanent(game, context)
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    source = context.source_permanent
+
+    def grant_target_legal(perm) -> bool:
+        if not perm.is_creature or not permanent_matches_filter(perm, filters):
+            return False
+        # "another" (CR 109.5's source exclusion) and "you control" are identity
+        # and seat questions, which permanent_matches_filter deliberately does
+        # not answer — it is about one permanent alone.
+        if filters.get("exclude_self") and perm is source:
+            return False
+        if filters.get("controller") == "you" and not game.controls(
+            game.players.index(context.caster), perm
+        ):
+            return False
+        return True
+
+    target_creature = resolve_target_permanent(
+        game, context, predicate=grant_target_legal
+    )
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"

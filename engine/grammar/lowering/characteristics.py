@@ -131,10 +131,27 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         filt = node.subject.filter
         if filt.card_types != ("creature",):
             raise LoweringError("global buff on a non-creature scope", node=node)
+        leftover = _restrictions_beyond(
+            filt,
+            frozenset({
+                "card_types", "colors", "controller", "attacking", "blocking",
+                "other_than_source",
+            }),
+        )
+        if leftover:
+            raise LoweringError(
+                "the global buff cannot narrow by: " + ", ".join(leftover), node=node
+            )
         payload = {"power": power, "toughness": toughness}
         if filt.colors:
             payload["color"] = filt.colors[0]
         payload["all"] = filt.controller != "you"
+        # "**Other** creatures you control get +1/+0" (Bolt Hound). Dropped, the
+        # Hound buffed itself as well: a strictly better card than the one
+        # printed. Emitted only when set, so every payload written before this
+        # key existed is byte-identical.
+        if filt.other_than_source:
+            payload["exclude_self"] = True
         # "Creatures your opponents control get -2/-2 until end of turn"
         # (Massacre Wurm's entry). `all` cannot say this: it means "every
         # player's", which would debuff the caster's own board too. Emitted

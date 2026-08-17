@@ -13,6 +13,25 @@ names**. A set starts as a single `test_<set>_cards.py` and splits by type when
 it outgrows one file; LEA reached 9,402 lines before it did, which is what this
 convention exists to prevent happening again.
 
+**When one printed type outgrows a file too.** The type axis has a floor, and
+M21 reached it: 149 of the set's cards are creatures, so
+`test_m21_creatures.py` hit the size guard three times in four rounds even after
+`Legendary Creature` split off (`Legendary` is part of the printed type line,
+CR 205.4a) and after every misfiled test had been moved out. Past that point the
+next division is **a round boundary** — `test_m21_creatures_early_rounds.py`.
+These files are written as a sequence of self-contained round sections, each one
+written up in ROADMAP.md under the round that bought its cards, so cutting at a
+section boundary keeps every section whole and keeps a test findable from the
+round it belongs to. That is what the guard is protecting; the type is only the
+first axis that delivers it.
+
+Do this **only after** auditing the file for misfilings, which is what the guard
+has actually surfaced every time so far: a Garruk's Uprising test among the
+creatures, two artifact creatures, a per-turn record naming an Instant, four
+grammar probes naming no card, and six Vito tests belonging with the other
+legendary ones. Reach for a new axis when there is nothing left to move, not
+before — and never raise the cap.
+
 **Is it about the whole pool?** It is not a per-set test, whatever set it was
 written against. Pool-wide sweeps and guards go in `tests/engine/` and
 parametrize over `cards/manifest.json`. The catalog sweep lived in

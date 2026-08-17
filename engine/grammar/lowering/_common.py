@@ -190,27 +190,29 @@ def _targets_payload(recipient: ast.Recipient) -> dict[str, object] | None:
         return None
     if recipient.quantifier == "any_target":
         return {"quantifier": "any_target", "kind": "any"}
-    if recipient.distinct_from_prior:
-        # "**Another** target creature" names a distinctness between two chosen
-        # objects — and it has to be said, because CR 601.2c lets two instances
-        # of the word "target" name the same object unless something forbids it.
-        # This description carries one recipient, so it has nowhere to record
-        # which other choice this one must differ from, and no single-target
-        # handler resolves a prior slot to compare against. Emitted here the word
-        # is simply dropped, which is the wider-than-printed outcome idiom #2
-        # exists to prevent: Selfless Savior offered its own source as the
-        # target of "another target creature you control".
-        #
-        # The two-target lowerings that *can* honour it (`_fused_two_target_pump`,
-        # `target_bites_target`) build their own description carrying `filters`
-        # per slot plus `distinct`, and never call this.
-        raise LoweringError(
-            '"another target" names a distinctness a one-target description '
-            "cannot carry",
-            node=recipient,
-        )
     if not _is_target(recipient):
         return None
+    filt = recipient.filter
+    if recipient.distinct_from_prior:
+        # "**Another** target creature" as the *only* chosen object of its
+        # sentence (Selfless Savior). The word names a distinctness — CR 601.2c
+        # lets two instances of "target" name the same object unless something
+        # forbids it — and the referent it must differ from is whatever the
+        # sentence chose earlier. Here nothing did: this description is reached
+        # only from a statement whose targets are this one, because the
+        # multi-clause case is refused above it (`_refuse_unfused_distinctness`)
+        # and the two lowerings that can honour a per-clause distinctness
+        # (`_fused_two_target_pump`, `target_bites_target`) build their own
+        # description and never call this. So the only object left in the
+        # sentence for "another" to exclude is the ability's source (CR 109.5),
+        # which is exactly what `other_than_source` says — the same restriction
+        # printed a second way, and the spelling `parse_target_spec` already
+        # produces for "up to two **other** target creatures".
+        #
+        # Written as a filter rewrite rather than a payload key so it goes
+        # through `_filter_payload` like every other narrowing, and so the picker
+        # (`_narrowing_flags` -> `exclude_source`) and the handlers read one key.
+        filt = dataclasses.replace(filt, other_than_source=True)
     # The quantifier is carried rather than written as the constant "target":
     # "up to one target creature" may legally choose nothing (CR 601.2c) while
     # a plain "target" must be answered, and a picker reading this key can tell
@@ -218,7 +220,7 @@ def _targets_payload(recipient: ast.Recipient) -> dict[str, object] | None:
     return {
         "quantifier": recipient.quantifier,
         "kind": "object",
-        "filter": _filter_payload(recipient.filter),
+        "filter": _filter_payload(filt),
     }
 
 
