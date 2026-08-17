@@ -255,8 +255,15 @@ def test_you_may_pay_carries_its_consequence_as_instructions():
     """The old ``optional_pay`` hook could only express a fixed vocabulary —
     gain N life, draw N cards, take N damage — so any card outside it needed a
     name-keyed entry. Here the consequence is an ordinary instruction
-    sequence."""
-    assert _instructions("You may pay {1}. If you do, you gain 1 life.") == [
+    sequence.
+
+    Read as a trigger remainder, which is the only place a ``may`` is executable:
+    the prompt outlives the resolution that armed it, and only a triggered
+    ability's resolution path holds the queue open. A spell's whole effect
+    refuses for that reason (``test_a_spell_whose_whole_effect_is_optional_refuses``)."""
+    assert _instructions(
+        "When this creature enters, you may pay {1}. If you do, you gain 1 life."
+    ) == [
         (
             "may",
             {
@@ -294,7 +301,9 @@ def test_colour_narrowed_cast_trigger_carries_the_colour():
 def test_optional_actions_are_switched_on():
     """Optional actions are authoritative: the six cards that used to be
     name-keyed for "you may pay {N}" now run off this lowering."""
-    result = compile_line("You may pay {1}. If you do, you gain 1 life.")
+    result = compile_line(
+        "When this creature enters, you may pay {1}. If you do, you gain 1 life."
+    )
     assert result.usable
     assert result.categories == frozenset({"optional"})
 
@@ -302,11 +311,27 @@ def test_optional_actions_are_switched_on():
 def test_a_free_optional_action_lowers_to_its_own_handler():
     """"You may draw a card" — no cost, so the offer is unconditional but the
     draw still is not."""
-    assert _instructions("You may draw a card.") == [
+    assert _instructions("Whenever this creature attacks, you may draw a card.") == [
         ("may", {"actor": "you", "action": (
             OracleInstruction("draw_controller_cards", "", {"amount": 1}),
         )})
     ]
+
+
+def test_a_spell_whose_whole_effect_is_optional_refuses():
+    """The limit ``_lower_may`` has documented since it was written, now
+    enforced. The prompt rides the pending-choice queue and only a triggered
+    ability's resolution holds that queue open; a spell leaves the stack the
+    instant it resolves, so its effect would be queued and never performed.
+    Measured on Twiddle, which is why Twiddle keeps its card hook.
+
+    Only the *whole* line: a ``may`` that is one sentence of a longer spell has
+    steps in front of it that run.
+    """
+    result = compile_line("You may tap or untap target creature.", card_name="Test")
+
+    assert result.parsed and not result.lowered
+    assert "whole effect is optional" in result.failure_reason
 
 
 def test_you_draw_and_target_player_draws_use_different_handlers():
@@ -1233,13 +1258,28 @@ def test_tap_or_untap_is_one_effect_with_one_target():
         "Tap or untap target artifact, creature, or land.",
     ],
 )
-def test_tap_or_untap_refuses_a_restriction_it_cannot_honour(line):
-    """``tap_or_untap_target`` toggles whatever it is handed
-    (``predicate=lambda p: True``) and falls back to the first permanent when no
-    choice was made, so a restricted form lowered to it could untap a land for
-    "target creature". The filtered handler is ``tap_target_permanent``; there
-    is no filtered toggle, so the restricted shapes refuse."""
+def test_tap_or_untap_carries_the_noun_phrase_it_is_printed_with(line):
+    """The toggle used to honour no restriction at all, so a narrowed form had to
+    refuse: lowered onto it, "target **creature**" could have untapped a land.
+    It reads the filter now (Tolarian Kraken), and an explicitly chosen
+    non-matching permanent fizzles rather than sliding onto a legal one."""
     result = compile_line(line, card_name="Test")
+
+    assert result.lowered, result.failure_reason
+    (instruction,) = result.instructions
+    assert instruction.kind == "tap_or_untap_target"
+    assert instruction.payload["type_filter"] == (
+        "creature" if "creature." in line else ["artifact", "creature", "land"]
+    )
+
+
+def test_tap_or_untap_still_refuses_a_restriction_the_matcher_cannot_test():
+    """The filter is handed to ``permanent_matches_filter``, which answers about
+    a permanent alone. A phrase reaching past it would be dropped where it is
+    applied, so the line refuses instead."""
+    result = compile_line(
+        "Tap or untap target creature you control.", card_name="Test"
+    )
 
     assert result.parsed and not result.lowered
 

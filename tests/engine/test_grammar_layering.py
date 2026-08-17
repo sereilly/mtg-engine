@@ -8,8 +8,8 @@ not at all.
 
 Two properties, and they fail differently.
 
-**The layers are ordered.** `phrases -> effects -> statements -> parser` on the
-parsing side, `_common/categories -> the families -> lower` on the lowering
+**The layers are ordered.** `phrases -> effects -> statements -> costs ->
+parser` on the parsing side, `_common/categories -> the families -> lower` on the lowering
 side, `_core -> the families -> statements` inside the AST. An import that
 reaches back up would compile fine and would make the three files three files
 again with extra steps.
@@ -39,7 +39,7 @@ import pytest
 GRAMMAR = Path(__file__).resolve().parent.parent.parent / "engine" / "grammar"
 
 # Bottom to top. A module may import from any layer *below* it and none above.
-PARSE_LAYERS = ["phrases", "effects", "statements", "parser"]
+PARSE_LAYERS = ["phrases", "effects", "statements", "costs", "parser"]
 LOWER_LAYERS = ["lowering", "lower"]
 
 EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game"]

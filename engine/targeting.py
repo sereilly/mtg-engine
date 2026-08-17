@@ -614,6 +614,18 @@ def derive_cast_target(card, program) -> str | None:
     return spec["kind"] if spec is not None else None
 
 
+def derive_instruction_spec(instructions) -> dict | None:
+    """The target spec a bare instruction sequence describes, or None for none.
+
+    The entry point for a sequence that is nobody's ability line: CR 603.12's
+    reflexive triggered ability is created mid-resolution and chooses its own
+    targets then, so there is no `ability` object to hand
+    :func:`derive_activation_spec`. Same reader underneath, so what a reflexive
+    ability offers and what an activated one offers cannot disagree.
+    """
+    return _from_instructions(instructions)
+
+
 def _from_instructions(instructions) -> dict | None:
     """The first spec any instruction in *instructions* describes.
 
@@ -626,6 +638,23 @@ def _from_instructions(instructions) -> dict | None:
     for instruction in instructions:
         if instruction.kind == "sequence":
             nested = _from_instructions(instruction.payload.get("steps") or ())
+            if nested is not None:
+                return nested
+            continue
+        if instruction.kind == "may":
+            # An optional action still targets — "you may tap or untap target
+            # creature" names a creature whether or not the offer is taken.
+            #
+            # `action` and `then` only. `otherwise` is the *declined* branch and
+            # `reflexive` is a separate ability (CR 603.12) that chooses its own
+            # targets when the payment creates it; reading either here would
+            # report this instruction as targeting something it never picks —
+            # and for the reflexive branch, at a moment when the choice has not
+            # been offered yet.
+            nested = _from_instructions(
+                tuple(instruction.payload.get("action") or ())
+                + tuple(instruction.payload.get("then") or ())
+            )
             if nested is not None:
                 return nested
             continue

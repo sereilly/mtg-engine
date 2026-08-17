@@ -278,6 +278,12 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     cost = dict(instruction.payload.get("cost") or {})
     on_accept = _steps(instruction, "action") + _steps(instruction, "then")
     on_decline = _steps(instruction, "otherwise")
+    # CR 603.12: a *separate* ability the payment creates, so it is carried
+    # separately and never folded into the accept branch. The difference is its
+    # targets: it chooses them when it is created, where the accept branch has
+    # only the ones this resolution already has — and this trigger fired on a
+    # card being drawn, which named nothing at all.
+    on_reflexive = _steps(instruction, "reflexive")
 
     # An offer the player cannot afford is never made; its decline branch (a
     # "…unless you pay" penalty) still applies.
@@ -306,6 +312,7 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
         # they belong to. _pay_optional executes these when present.
         "_on_accept": on_accept,
         "_on_decline": on_decline,
+        "_on_reflexive": on_reflexive,
         "_context": context,
     }
     if cost:

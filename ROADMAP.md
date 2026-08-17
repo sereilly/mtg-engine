@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 237/285) to the full release line - **137 sets, 33,594
+M21 measured at 238/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–84 — lives in git history at and before
-commit `49b251c`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–85 — lives in git history at and before
+commit `64ecea9`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,54 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 85: an activation cost that shrinks with the board
-
-*(2026-08-17.)* M21 **234 → 235** — Sanctum of Tranquil Light, the first of the
-Shrine cycle.
-
-> {5}{W}: Tap target creature. This ability costs {1} less to activate for each
-> Shrine you control.
-
-**The tap already worked.** The whole card was the second sentence — and it is
-not an effect at all: `engine/cost_modifiers.py` applies it while the cost is
-being paid, so there is nothing for a production to lower.
-
-**A registry-claimed sentence *inside* a line.** Until now a text-keyed registry
-claimed a whole printed line; here the reduction is one sentence of an activated
-ability's line, and the parser was failing on it as trailing text. So the
-sentence loop gained a rider that hands the sentence's **own source text** — cut
-back out of the line through the tokens' offsets — to the registry's matcher.
-The claim delegates to the implementing code rather than restating its words,
-which is the rule `engine/grammar/registries.py` states for the whole-line case
-and for the reason it gives: a copy of the phrase here would be free to drift,
-and a drifted copy would consume a sentence nothing runs.
-
-**The reduction is a reduction, so the gate is stricter than usual.** The
-ROADMAP has carried "cost reductions that cannot be computed" as a deliberate
-refusal since round 57, with the reason that reading an unrecognized condition as
-satisfied makes a spell cheaper than it is — the one direction a cost error must
-never go. This one *is* computable, and the honesty is kept by construction: the
-printed noun phrase is read by the grammar's own subject reader, and if any key
-it produces is outside `TESTABLE_SUBJECT_FILTER_KEYS` the reduction is not
-recorded at all, so the line is then not claimed and the card stays unsupported.
-A phrase the matcher cannot test would otherwise be counted over a wider set than
-the card names, which is a bigger discount than the card gives.
-
-Applied **after** the tax (CR 601.2f puts increases before reductions) and
-clamped at zero, the same clamp a spell's own reduction makes.
-
-**One thing the first cut got wrong, caught by executing rather than reading.**
-The amount function scanned the card's *lines*, and this reduction lives inside a
-line that begins with its cost symbols — so it matched nothing and the discount
-was silently zero while every gate stayed green. It scans sentences now; the
-claim predicate stays anchored and whole-sentence, which is the same split
-`cost_modifiers_for` and `cost_modifier_claims_line` already make one screen
-apart.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Six new tests, five watched to fail on the round-84 engine.
-
 ## Round 86: a condition about two permanents at once
 
 *(2026-08-17.)* M21 **235 → 236** — Chrome Replicator.
@@ -410,3 +362,65 @@ Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Ten new or tightened tests, nine watched to fail on the round-86
 engine.
+
+## Round 88: an ability the payment creates
+
+*(2026-08-17.)* M21 **237 → 238** — Tolarian Kraken.
+
+> Whenever you draw a card, you may pay {1}. When you do, you may tap or untap
+> target creature.
+
+**One word from a shape that already worked.** "*If* you do" has parsed since
+the `may` production was written; "*when* you do" is CR 603.12's **reflexive
+triggered ability**, and the difference is not stylistic. An if-you-do branch is
+the rest of this same resolution and has only the targets that resolution already
+picked. A reflexive ability is a *new* ability the action creates, and it chooses
+its own targets as it is created — which is the whole of this card, because the
+resolution that creates it fired on **a card being drawn** and named no permanent
+at all. Folded onto `then`, "target creature" would have run against whatever
+`resolve_target_permanent` fell back to: the first permanent on the board.
+
+So it is its own AST field, its own payload key, and its own production — three
+places where a later edit would have to *choose* to conflate them.
+
+**What the payment creates is a prompt.** `_create_reflexive_ability` derives what
+the branch targets from the branch itself (`derive_instruction_spec`, the same
+reader an activated ability's prompt uses), enumerates the legal targets, and
+arms a `reflexive_target` choice. Each offered slot is resolved to a
+`permanent_id` *there* — at the moment the ability is created — because the
+prompt outlives the resolution that armed it and a slot stops naming the same
+permanent as soon as anything ahead of it leaves. The answer is checked against
+the list that was offered, not against the board: a creature that became legal
+afterwards is not a legal answer, because targets are chosen once.
+
+**Two things this uncovered, both of them things the engine already said about
+itself.**
+
+*The toggle honoured nothing.* `tap_or_untap_target` ran
+`predicate=lambda p: True`, so any narrowing had to refuse at lowering — "tap or
+untap target **creature**" lowered onto it could have untapped a land. It reads
+the filter now, the same way the plain tap beside it does, and what still refuses
+is a phrase `permanent_matches_filter` cannot test.
+
+*A spell whose whole effect is optional never performs it.* `_lower_may` has
+documented this since it was written, **measured on Twiddle** — the prompt rides
+the pending-choice queue and only a triggered ability's resolution holds that
+queue open, so a spell, which leaves the stack the instant it resolves, queues its
+effect and walks away. It went unenforced because no line reached the shape.
+Teaching the toggle its filter made one reachable *immediately*: Twiddle's card
+hook was silently shadowed by a `may` that did nothing, and four of its pinned
+regression tests said so. The documented limit is now a `LoweringError`, scoped
+exactly as the docstring scopes it — a spell's **whole** line, not a `may` that is
+one sentence of a longer one (Basri's Aegis, Liliana's Scorn) and not a trigger
+remainder.
+
+**`parser.py` crossed 1,000 lines again**, so the cost clause — everything left of
+an activated ability's colon — moved to `engine/grammar/costs.py` and into the
+layer order between `statements` and `parser`. A family rather than an arbitrary
+cut: every production in it is paired with a reader in `engine/oracle.py` that
+collects the same cost, and that pairing is easier to keep honest in one file.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added** (and Twiddle's kept alive rather than shadowed). Nine new tests,
+all nine watched to fail on the round-87 engine.

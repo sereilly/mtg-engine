@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 74.4% | 71.2% | 48.3% | 196 |
+| M21 *(measured)* | 285 | 503 | 74.6% | 71.4% | 48.5% | 197 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 233 | 103 | expected a subject |  |
+| 232 | 102 | expected a subject |  |
 | 94 | 38 | unrecognized effect verb |  |
 | 48 | 29 | unconsumed text |  |
 | 32 | 32 | unrecognized activation cost |  |
@@ -49,7 +49,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 4 | 1 | expected 'mana' |  |
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | expected 'your' |  |
-| 3 | 1 | no tap-or-untap handler honours this restriction |  |
+| 3 | 1 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 3 | 2 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 3 | 3 | unrecognized discard cost |  |
 | 2 | 1 | expected a permanent to put counters on |  |
@@ -1257,6 +1257,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Take an extra turn after this one.`
 - **Titanic Growth**
   - `Target creature gets +4/+4 until end of turn.`
+- **Tolarian Kraken**
+  - `Whenever you draw a card, you may pay {1}. When you do, you may tap or untap target creature.`
 - **Tormod's Crypt**
   - `{T}, Sacrifice this artifact: Exile target player's graveyard.`
 - **Track Down**

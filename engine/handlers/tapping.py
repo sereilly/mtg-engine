@@ -250,7 +250,24 @@ def tap_or_untap_target(game: Game, instruction: OracleInstruction, context: Ora
     # Twiddle: toggle the chosen permanent's tapped state (tap an untapped one,
     # untap a tapped one). Honor the explicitly chosen permanent on either
     # battlefield; fall back to the first permanent for AI/headless play.
-    perm = resolve_target_permanent(game, context, predicate=lambda p: True)
+    #
+    # "Tap or untap target **creature**" (Tolarian Kraken) narrows what may be
+    # chosen, so the printed noun phrase is applied here rather than refused at
+    # lowering. An explicitly chosen non-matching permanent fizzles instead of
+    # sliding onto an arbitrary legal one — the same rule the filtered tap above
+    # follows, and for the same reason.
+    narrowed = any(
+        key in instruction.payload
+        for key in ("type_filter", "subtype_filter", "color_filter")
+    )
+    perm = resolve_target_permanent(
+        game, context,
+        predicate=(
+            (lambda p: permanent_matches_filter(p, instruction.payload))
+            if narrowed else (lambda p: True)
+        ),
+        fallback_on_invalid_choice=not narrowed,
+    )
     if perm is None:
         game.log.append("No valid permanent to tap or untap")
         return True, "resolved"

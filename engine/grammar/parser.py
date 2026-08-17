@@ -22,6 +22,7 @@ in strict dependency order, none importing back:
     phrases      word tables, and productions that read a fragment
     effects/     one production per thing a card can do, in seven families
     statements   one whole sentence
+    costs        the clause left of an activated ability's colon
     parser       one printed line          <- you are here
 
 The split follows the banners the file already carried. Two corrections came
@@ -37,14 +38,13 @@ import re
 from dataclasses import replace
 
 from ..oracle_types import strip_ability_word
-from ..subject_filters import object_only_filter
 from . import ast
 from .amounts import parse_amount
 from .derived import derived_instruction_for_line
 from .errors import GrammarError
 from .lexer import (BULLET, MANA, PT, PUNCT, QUOTE, SELF, tokenize)
-from .lowering._common import chargeable_card_filter
-from .nouns import (parse_object_filter, parse_target_spec)
+from .costs import _parse_costs
+from .nouns import (parse_target_spec)
 from .registries import registry_for_line
 from .stream import TokenStream
 from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, match_longest)
@@ -52,7 +52,6 @@ from .phrases import (
     _parse_trigger_event,
 )
 from .effects import (
-    _expect_counter_kind,
     _parse_activation_restriction,
     _parse_create_token,
     _parse_damage_rider_sentence,
@@ -130,214 +129,6 @@ def _parse_registry_line(stream: TokenStream, line: str) -> ast.RegistryLine | N
         return None
     stream.advance(len(stream) - stream.pos)
     return ast.RegistryLine(registry, line)
-
-
-def _parse_cost_object(stream: TokenStream, verb: str) -> ast.ObjectFilter:
-    """The noun phrase naming what a cost gives up, after *verb*.
-
-    Delegates to the noun parser rather than skipping a token, so "Sacrifice
-    this artifact" and "Sacrifice a creature" end up as *different* filters —
-    one flagged ``is_source``, one carrying a card type. The old
-    ``accept_phrase("sacrifice", "this")`` + ``advance()`` read any word at all
-    as the noun and produced the same empty filter either way, which reads as
-    "sacrifice any object" to anyone who later lowers these.
-
-    Only the two quantifiers the pool prints are admitted. "Sacrifice two
-    creatures" or "Sacrifice target creature" would parse here and mean
-    something the rest of the cost machinery has no way to express, so they
-    raise instead.
-    """
-    # "Sacrifice **another** creature" (Hobblefiend). The word sits where the
-    # article does, so the noun behind it parses bare — `parse_target_spec`
-    # returns quantifier "all" for "creature" and None for "another creature".
-    # Teaching the noun parser an "another" quantifier would change every
-    # targeted line in the pool, so the exclusion is read here and carried on
-    # the filter's existing `other_than_source` field: CR 602.5c's "another" is
-    # a restriction on what may pay, not a different kind of cost.
-    another = bool(stream.accept_word("another"))
-    spec = parse_target_spec(stream)
-    if spec is None:
-        raise stream.error(f"expected what to {verb} as a cost")
-    allowed = ("all",) if another else ("this", "a")
-    if spec.quantifier not in allowed or spec.count != 1:
-        raise stream.error(f"unsupported {verb} cost quantifier {spec.quantifier!r}")
-    return replace(spec.filter, other_than_source=True) if another else spec.filter
-
-
-def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
-    """Whether the payment path can actually collect this sacrifice cost.
-
-    A rider the charger cannot express must refuse the line rather than be
-    dropped — dropped, Portcullis Vine sacrifices any creature at all while
-    still reporting supported, which is the dropped-rider bug class.
-
-    Which riders those are is **not** decided here. This asks the charger's own
-    reader (``engine/oracle.py``'s ``_chargeable_sacrifice_filter``, through the
-    filter-key set it gates on), because two readers of one clause drift and the
-    direction they drift in is a cost nobody pays. The word "another" is left in
-    the filter: the charger has the ability's source and compares by identity.
-    """
-    if filt.is_source:
-        return True
-    if not filt.card_types:
-        # A cost with no card type would let the charger eat a land. The
-        # charger's own reader says so too — this is the one narrowing the key
-        # set cannot express, because "which keys are set" and "is a type among
-        # them" are different questions.
-        return False
-    return object_only_filter(
-        filt.to_payload(), carried_separately=frozenset({"exclude_self"})
-    ) is not None
-
-
-def _parse_discard_cost_alternatives(
-    stream: TokenStream,
-) -> tuple[ast.ObjectFilter, ...] | None:
-    """The card a "Discard …" cost may be paid with, as printed alternatives.
-
-    "Discard a card" is the whole hand and returns ``()``; "Discard a land card
-    or Shrine card" (Sanctum of Shattered Heights) returns one filter per side
-    of the "or". A union rather than one narrowed filter because the two sides
-    restrict *different* characteristics — a card type and a subtype — and an
-    ObjectFilter AND's its fields, so folding them together would name a card
-    that is both a land and a Shrine, which is nothing in the pool and a strictly
-    harder cost than the card prints.
-
-    None refuses the line, which is what a phrase the charger cannot test has to
-    do: dropped instead, the cost would be payable with any card at all. What
-    "cannot test" means is not decided here — ``chargeable_card_filter`` decides
-    it, and ``engine/oracle.py``'s reader of the same clause asks the same
-    function.
-    """
-    alternatives: list[ast.ObjectFilter] = []
-    while True:
-        stream.accept_word("a", "an")
-        mark = stream.mark()
-        try:
-            filt = parse_object_filter(stream)
-        except GrammarError:
-            stream.reset(mark)
-            return None
-        if chargeable_card_filter(filt) is None:
-            stream.reset(mark)
-            return None
-        alternatives.append(filt)
-        if not stream.accept_word("or"):
-            break
-    # A bare "Discard a card" narrows nothing, and an empty tuple is how the
-    # charger is told so — never a filter with no keys set, which would read as
-    # a narrowing the charger then ignores.
-    if len(alternatives) == 1 and not chargeable_card_filter(alternatives[0]):
-        return ()
-    return tuple(alternatives)
-
-
-def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
-    """``Remove a <kind> counter from this <permanent>`` (Scavenging Ghoul).
-
-    The counter's name is read as free text, where ``_parse_put_counter``
-    additionally rejects a P/T-shaped kind outside the four the engine knows.
-    The difference is what happens downstream: a *put* is lowered onto a
-    handler, so a P/T counter nothing implements would be silently
-    mis-executed, while a cost is recorded and never lowered — the name is
-    carried verbatim (CR 122.1 lets a counter have any name) and the
-    surrounding words pin the structure.
-
-    The subject must be the ability's own source: :class:`ast.RemoveCounterCost`
-    has no subject field, so "remove a counter from target creature" would be
-    consumed and then read as the source's counter. That refuses instead.
-    """
-    stream.expect_word("remove")
-    count = ast.Fixed(1) if stream.accept_word("a", "an") else parse_amount(stream)
-    counter = _expect_counter_kind(stream, " to remove").text
-    stream.expect_word("counter", "counters")
-    stream.expect_word("from")
-    subject = _parse_cost_object(stream, "remove a counter from")
-    if not subject.is_source:
-        raise stream.error("a counter-removal cost only reads the ability's own source")
-    return ast.RemoveCounterCost(counter, count)
-
-
-def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
-    """Parse the cost clause left of an activated ability's colon."""
-    costs: list[ast.Cost] = []
-    pips: dict[str, int] = {}
-    while True:
-        token = stream.accept_kind(MANA)
-        if token is not None:
-            symbol = token.text.strip("{}")
-            if symbol == "T":
-                costs.append(ast.TapSelf())
-            elif symbol.isdigit():
-                pips["generic"] = pips.get("generic", 0) + int(symbol)
-            elif symbol in ("W", "U", "B", "R", "G", "C"):
-                pips[symbol] = pips.get(symbol, 0) + 1
-            elif symbol == "X":
-                pips["X"] = pips.get("X", 0) + 1
-            else:
-                raise stream.error(f"unsupported mana symbol {token.text!r}")
-            stream.accept_punct(",")
-            continue
-        if stream.accept_word("sacrifice"):
-            sacrificed = _parse_cost_object(stream, "sacrifice")
-            if not _is_chargeable_sacrifice(sacrificed):
-                raise stream.error("no cost path charges a narrowed sacrifice")
-            costs.append(ast.SacrificeCost(sacrificed))
-            stream.accept_punct(",")
-            continue
-        if stream.accept_word("exile"):
-            # ``ExileSelf`` names no object, so exiling anything else would be
-            # consumed and then read as the source leaving the battlefield.
-            exiled = _parse_cost_object(stream, "exile")
-            if not exiled.is_source:
-                raise stream.error("only exiling the ability's own source is a known cost")
-            costs.append(ast.ExileSelf())
-            stream.accept_punct(",")
-            continue
-        if stream.at_word("pay"):
-            # "Pay 3 life" (Tavern Swindler) — CR 118.3b, charged by
-            # ``ActivatedAbilityCost.pay_life``. Only a fixed positive amount is
-            # admitted: the charger reads the printed number out of the same
-            # clause, and a variable or zero payment is a shape it would read as
-            # "no such cost", which is an ability activated for free.
-            mark = stream.mark()
-            stream.advance()
-            amount = parse_amount(stream)
-            if not isinstance(amount, ast.Fixed) or amount.value <= 0:
-                stream.reset(mark)
-                raise stream.error("only a fixed, positive life payment is charged")
-            if not stream.accept_word("life"):
-                stream.reset(mark)
-                raise stream.error("unrecognized activation cost")
-            costs.append(ast.PayLife(amount))
-            stream.accept_punct(",")
-            continue
-        if stream.at_word("remove"):
-            costs.append(_parse_counter_removal_cost(stream))
-            stream.accept_punct(",")
-            continue
-        if stream.at_word("discard"):
-            stream.advance()
-            if stream.accept_phrase("the", "last", "card", "you", "drew", "this", "turn"):
-                costs.append(ast.DiscardCost(ast.Fixed(1), last_drawn=True))
-            else:
-                # "Discard a card" (Seasoned Hallowblade) — the payer picks, and
-                # ``ActivatedAbilityCost.discard_cards`` is what collects it.
-                # Only the singular is admitted: a counted "discard two cards"
-                # is a shape nothing charges, and admitting it would describe a
-                # payment that never happens.
-                narrowed = _parse_discard_cost_alternatives(stream)
-                if narrowed is None:
-                    raise stream.error("unrecognized discard cost")
-                costs.append(ast.DiscardCost(ast.Fixed(1), filters=narrowed))
-            stream.accept_punct(",")
-            continue
-        break
-    if pips:
-        costs.insert(0, ast.ManaCost(tuple(sorted(pips.items()))))
-    if not stream.exhausted:
-        raise stream.error("unrecognized activation cost")
-    return tuple(costs)
 
 
 def _split_on_colon(tokens: tuple) -> int | None:
@@ -649,6 +440,8 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
                 continue
             if _attach_if_you_do(stream, steps):
                 continue
+            if _attach_when_you_do(stream, steps):
+                continue
             pronoun_grant = _parse_pronoun_grant_rider(stream, steps)
             if pronoun_grant is not None:
                 if pronoun_grant is not _RIDER_FOLDED:
@@ -728,6 +521,49 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         action=may.action,
         then=branch if not declined else may.then,
         otherwise=branch if declined else may.otherwise,
+    )
+    steps[-1] = ast.WhereX(folded, definition) if definition is not None else folded
+    return True
+
+
+def _attach_when_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """Fold "When you do, …" into the preceding ``May`` as its reflexive branch.
+
+    One word apart from ``_attach_if_you_do`` and a different rule (CR 603.12):
+    "if you do" is the rest of this resolution, "when you do" is a *new*
+    triggered ability the payment creates, which chooses its own targets as it is
+    created. Tolarian Kraken is the difference — "you may tap or untap target
+    creature" has a target the drawing of a card never named, so folded onto the
+    ``then`` branch it would run against whatever the producing action happened
+    to point at.
+
+    Read as its own production rather than as a flag on the other so that the
+    two cannot be conflated by a later edit to either.
+    """
+    target = steps[-1]
+    definition = target.definition if isinstance(target, ast.WhereX) else None
+    if definition is not None:
+        target = target.statement
+    if not isinstance(target, ast.May):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("when", "you", "do"):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    try:
+        branch = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+
+    folded = ast.May(
+        actor=target.actor,
+        cost=target.cost,
+        action=target.action,
+        then=target.then,
+        otherwise=target.otherwise,
+        reflexive=branch,
     )
     steps[-1] = ast.WhereX(folded, definition) if definition is not None else folded
     return True

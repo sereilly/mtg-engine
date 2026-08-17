@@ -1068,6 +1068,23 @@ def do_action(session_id: str, req: GameActionRequest):
         if not ok:
             raise HTTPException(status_code=400, detail="invalid card index")
 
+    elif req.action == "reflexive_target_confirm":
+        pending = next(
+            (c for c in session.game.pending_choices_of("reflexive_target")),
+            None,
+        )
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no reflexive target pending")
+        if req.seat != pending.player_index:
+            raise HTTPException(status_code=400, detail="not your choice")
+        if req.target_permanent_id is None:
+            raise HTTPException(status_code=400, detail="target_permanent_id is required")
+        # Checked against the list the prompt offered, not against the board:
+        # CR 603.12's ability chose its targets when it was created.
+        ok = session.game.confirm_reflexive_target(req.seat, req.target_permanent_id)
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid target")
+
     elif req.action == "tap_any_number_confirm":
         pending = next(
             (c for c in session.game.pending_choices_of("tap_any_number")),

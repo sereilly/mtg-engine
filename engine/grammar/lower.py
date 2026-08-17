@@ -579,6 +579,10 @@ def _lower_may(
     action = lower_statement(node.action, produced, event=event, whole_effect=False) if node.action else ()
     then = lower_statement(node.then, produced, event=event, whole_effect=False) if node.then else ()
     otherwise = lower_statement(node.otherwise, produced, event=event, whole_effect=False) if node.otherwise else ()
+    reflexive = (
+        lower_statement(node.reflexive, produced, event=event, whole_effect=False)
+        if node.reflexive else ()
+    )
 
     payload: dict[str, object] = {"actor": node.actor.kind}
     if node.cost is not None:
@@ -596,7 +600,12 @@ def _lower_may(
         payload["then"] = then
     if otherwise:
         payload["otherwise"] = otherwise
-    if not (action or then or otherwise):
+    # CR 603.12: a separate key, never merged into `then`, because the handler
+    # has to treat it as a separate ability — it chooses its own targets when the
+    # payment creates it, and the ``then`` branch has none of its own to choose.
+    if reflexive:
+        payload["reflexive"] = reflexive
+    if not (action or then or otherwise or reflexive):
         raise LoweringError("an optional action with no consequence", node=node)
     return (OracleInstruction("may", "", payload),)
 
@@ -685,6 +694,26 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
     instructions of their own — they are recorded by the compiler as keyword or
     static lines instead."""
     if isinstance(node, ast.SpellEffectLine):
+        # A spell whose **whole** effect is optional. `_lower_may` has carried
+        # this as a known limit since it was written, measured on this exact card
+        # (Twiddle): the prompt rides `pending_optional_pays`, and only the
+        # triggered-ability resolution path holds that queue open and drains it,
+        # so a spell — which leaves the stack the instant it resolves — would
+        # queue its effect and never perform it. It went unenforced because no
+        # line reached the shape; round 88 made one reachable by teaching the
+        # tap-or-untap toggle to read its noun phrase, and Twiddle's hook was
+        # silently shadowed by a `may` that did nothing.
+        #
+        # Only the *whole* line, and only a spell's: a `may` that is one sentence
+        # of a longer spell (Basri's Aegis, Liliana's Scorn) has steps in front
+        # of it that run, and a trigger remainder is the shape the queue was
+        # built for.
+        if isinstance(node.statement, ast.May):
+            raise LoweringError(
+                "a spell whose whole effect is optional has no prompt that "
+                "outlives its resolution",
+                node=node.statement,
+            )
         return _lower_line_statement(node.statement)
     if isinstance(node, ast.TriggeredAbilityNode):
         fused = _fused_upkeep_pay_to_untap(node)

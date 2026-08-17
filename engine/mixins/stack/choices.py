@@ -22,6 +22,7 @@ Command's borrowed turn, Kudzu's reattachment, and reordering a library.
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 
 from ...auras import attach_aura
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
@@ -1202,10 +1203,133 @@ class PendingChoicesMixin:
         # A grammar-lowered "may" carries its consequence as instructions rather
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.
-        if self._run_optional_branch(entry, "_on_accept"):
+        ran = self._run_optional_branch(entry, "_on_accept")
+        # CR 603.12, and it runs whether or not there was an accept branch: the
+        # reflexive ability is created *by the payment*, not by the consequence.
+        self._create_reflexive_ability(player_index, entry)
+        if ran:
             return
         if int(entry.get("life", 0) or 0) > 0:
             self._gain_life(player, int(entry["life"]), entry["card_name"])
+
+    def _create_reflexive_ability(self, player_index: int, entry: dict) -> None:
+        """"When you do, …" — the ability the payment just created (CR 603.12).
+
+        It chooses its targets now, as it is created, which is the whole reason
+        it is not an "if you do" branch: the resolution that armed this prompt
+        may name no permanent at all (Tolarian Kraken's fired on a card being
+        drawn), so running the instructions against its context would point them
+        at whatever ``resolve_target_permanent`` fell back to.
+
+        With no legal target the ability is not created — CR 603.7's rule for a
+        delayed trigger, which 603.12 defers to. With no target to choose at all
+        it simply runs, because then there is nothing to ask.
+        """
+        from ...targeting import derive_instruction_spec
+
+        steps = entry.get("_on_reflexive") or ()
+        context = entry.get("_context")
+        if not steps or context is None:
+            return
+        spec = derive_instruction_spec(steps)
+        if spec is None:
+            for step in steps:
+                self._execute_oracle_instruction(step, context)
+            return
+        card = getattr(context, "card", None)
+        candidates = self._enumerate_targets(
+            player_index, card, spec, for_cast=False,
+            source_permanent=getattr(context, "source_permanent", None),
+        )
+        # The enumerator addresses a permanent by its slot, which is unstable —
+        # anything leaving the battlefield renumbers every later one, and this
+        # prompt sits on the queue across a priority window. So each offered slot
+        # is resolved to a stable id *here*, at the moment the ability is created
+        # and its targets chosen, and the id is what the answer is checked
+        # against.
+        offered = []
+        for target in candidates:
+            seat, index = target.get("seat"), target.get("index")
+            perm = self.permanent_at(seat, index)
+            if perm is None:
+                continue
+            offered.append({
+                "seat": seat,
+                "permanent_index": index,
+                "permanent_id": self.permanent_id_of(perm),
+                "name": perm.card.name,
+            })
+        if not offered:
+            self.log.append(
+                f"{entry.get('card_name', 'Ability')}: no legal target for its "
+                "reflexive trigger"
+            )
+            return
+        self.arm_pending_choice(
+            "reflexive_target", player_index,
+            card_name=entry.get("card_name", ""),
+            targets=offered,
+            _steps=tuple(steps),
+            _context=context,
+        )
+
+    def confirm_reflexive_target(self, player_index: int, permanent_id: int) -> bool:
+        """Answer a reflexive trigger's target choice with a permanent's id."""
+        return self.resolve_pending_choice(
+            "reflexive_target", player_index, permanent_id=permanent_id
+        )
+
+    def _resolve_reflexive_target(self, choice: PendingChoice, permanent_id: int) -> bool:
+        """Run the reflexive ability against the chosen permanent.
+
+        The id is checked against the list that was offered rather than against
+        the board, so a permanent that became legal after the prompt was armed is
+        still not a legal answer — targets are chosen once, when the ability is
+        created.
+        """
+        offered = {
+            target.get("permanent_id")
+            for target in (choice.data.get("targets") or ())
+            if target.get("permanent_id") is not None
+        }
+        if permanent_id not in offered:
+            return False
+        perm = self.permanent_by_id(permanent_id)
+        if perm is None:
+            return False
+        seat = self.controller_index_of(perm)
+        if seat is None:
+            return False
+        context = choice.data["_context"]
+        aimed = replace(
+            context,
+            target=self.players[seat],
+            target_permanent_index=self.battlefield_index_of(perm),
+            target_permanent_id=permanent_id,
+        )
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{choice.data.get('card_name', 'Ability')}: reflexive trigger targets "
+            f"{perm.card.name}"
+        )
+        for step in choice.data["_steps"]:
+            self._execute_oracle_instruction(step, aimed)
+        self.check_state_based_actions()
+        return True
+
+    def _default_reflexive_target(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** target offered.
+
+        Not a valuation — the enumerator's order is the board's order and is
+        seed-deterministic. A card whose reflexive ability should be aimed
+        cleverly needs a valuation in `engine/ai_valuation.py`, not a branch
+        here.
+        """
+        for target in choice.data.get("targets") or ():
+            pid = target.get("permanent_id")
+            if pid is not None and self._resolve_reflexive_target(choice, pid):
+                return
+        self.discard_pending_choice(choice)
 
     def _run_optional_branch(self, entry: dict, key: str) -> bool:
         """Execute an optional-pay entry's instruction branch, if it has one.
@@ -1817,6 +1941,17 @@ register_choice(
     action="resolve_optional_pay",
     prompt_key="optional_pay",
     blocked_detail="resolve the pay-for-life trigger before other actions",
+)
+
+register_choice(
+    "reflexive_target",
+    resolve=lambda game, choice, r: game._resolve_reflexive_target(
+        choice, r["permanent_id"]
+    ),
+    default=lambda game, choice: game._default_reflexive_target(choice),
+    action="reflexive_target_confirm",
+    prompt_key="reflexive_target",
+    blocked_detail="choose the reflexive trigger's target before other actions",
 )
 
 register_choice(

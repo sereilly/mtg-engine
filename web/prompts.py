@@ -222,6 +222,32 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("reflexive_target")
+def _reflexive_target(ctx: PromptContext, choices: list) -> dict:
+    """"When you do, you may tap or untap target creature." (Tolarian Kraken.)
+
+    CR 603.12: the payment created a *new* triggered ability, and this is that
+    ability choosing its targets — which is why the candidates were enumerated
+    when it was created and are replayed here rather than recomputed. A
+    permanent that became legal since is not a legal answer; targets are chosen
+    once.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "candidates": [
+            {
+                "seat": target.get("seat"),
+                "index": target.get("permanent_index"),
+                "id": target.get("permanent_id"),
+                "name": target.get("name"),
+            }
+            for target in choice.data.get("targets") or ()
+        ],
+    }
+
+
 @prompt_renderer("tap_any_number")
 def _tap_any_number(ctx: PromptContext, choices: list) -> dict:
     """"Tap any number of untapped creatures you control." (Siege Striker.)

@@ -168,6 +168,15 @@ class May:
     action: "Statement | None" = None
     then: "Statement | None" = None
     otherwise: "Statement | None" = None
+    #: "You may pay {1}. **When you do**, you may tap or untap target creature."
+    #: (Tolarian Kraken.) CR 603.12's reflexive triggered ability, and a separate
+    #: field from ``then`` because it is a separate *ability*: it is created by
+    #: the payment and chooses its own targets when it is created, where a
+    #: "if you do" branch is the rest of this same resolution and has only the
+    #: targets this one already chose. Reading one as the other is how a trigger
+    #: with a target of its own ends up pointed at whatever the producing action
+    #: happened to name.
+    reflexive: "Statement | None" = None
 
 
 @dataclass(frozen=True)

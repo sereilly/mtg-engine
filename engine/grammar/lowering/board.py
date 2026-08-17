@@ -544,19 +544,26 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
 def _lower_tap_or_untap(node: ast.TapOrUntap) -> tuple[OracleInstruction, ...]:
     """"Tap or untap target <objects>." (Twiddle.)
 
-    ``tap_or_untap_target`` toggles whatever permanent was chosen —
-    ``predicate=lambda p: True`` — so it honours no restriction at all. Any
-    filter therefore has to refuse: lowering "tap or untap target creature" to
-    this kind would let it untap a land, and the card would still report as
-    supported. The plain ``tap_target_permanent`` handler is the one that
-    filters; there is no filtered toggle.
+    The toggle used to honour no restriction at all — ``predicate=lambda p:
+    True`` — so any filter had to refuse: "tap or untap target **creature**"
+    lowered onto it would have let the card untap a land while still reporting
+    supported. It reads the filter now (Tolarian Kraken), the same way the plain
+    ``tap_target_permanent`` beside it does, so the narrowing is carried rather
+    than refused.
+
+    What still refuses is a narrowing the *matcher* cannot test — the payload is
+    handed to ``permanent_matches_filter``, which answers about a permanent alone,
+    so a phrase reaching past it would be dropped where it is applied.
     """
     spec = node.subject
     if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":
         raise LoweringError("no handler for a non-targeted tap-or-untap", node=node)
-    if _filter_payload(spec.filter):
+    described = _filter_payload(spec.filter)
+    if described and object_only_filter(described) is None:
         raise LoweringError("no tap-or-untap handler honours this restriction", node=node)
-    return (OracleInstruction("tap_or_untap_target", "", _targets_only(spec)),)
+    payload = _targets_only(spec)
+    payload.update(described)
+    return (OracleInstruction("tap_or_untap_target", "", payload),)
 
 
 def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:

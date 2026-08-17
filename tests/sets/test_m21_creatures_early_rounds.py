@@ -662,3 +662,127 @@ def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool
     # And the colour half of her line still reads: nothing here is a Demon or
     # Dragon spell, so an ordinary removal spell may still target her.
     assert game._can_be_targeted(angel, pool["Shock"])
+
+
+# --- Round 88: an ability the payment creates -------------------------------
+
+
+def _kraken_board(set_pool, *, victim_tapped=False, mana=2):
+    pool = set_pool("M21")
+    kraken = Permanent(card=pool["Tolarian Kraken"])
+    p1 = PlayerState(
+        name="P1", battlefield=[kraken],
+        library=[pool["Island"], pool["Shock"]],
+    )
+    victim = Permanent(card=pool["Gale Swooper"], tapped=victim_tapped)
+    land = Permanent(card=pool["Mountain"])
+    p2 = PlayerState(name="P2", battlefield=[victim, land])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    p1.mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": mana, "generic": 0}
+    return game, p1, kraken, victim, land
+
+
+def _draw_and_pay(game, player, accept=True):
+    game._draw_with_replacements(player, 1)
+    game._settle()
+    game.confirm_optional_pay(0, accept=accept)
+
+
+def test_tolarian_kraken_compiles_supported(set_pool):
+    """"When you do" is CR 603.12's reflexive triggered ability, and it is a
+    different field from "if you do" because it is a different *ability*: it
+    chooses its own targets when the payment creates it, where an if-you-do
+    branch has only the ones this resolution already picked. This trigger fired
+    on a card being drawn, which named nothing at all."""
+    program = compile_card_oracle(set_pool("M21")["Tolarian Kraken"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "draws_card"
+    payload = trigger.instruction.payload
+    assert payload["cost"] == {"generic": 1}
+    assert "then" not in payload, "the branch is reflexive, not an if-you-do"
+    (reflexive,) = payload["reflexive"]
+    assert reflexive.kind == "may"
+
+
+def test_paying_creates_an_ability_that_picks_its_own_target(set_pool):
+    game, p1, kraken, victim, _land = _kraken_board(set_pool)
+
+    _draw_and_pay(game, p1)
+
+    (choice,) = game.pending_choices
+    assert choice.kind == "reflexive_target"
+    # Addressed by stable id, resolved as the ability is created: the prompt
+    # outlives the resolution that armed it, and a slot stops naming the same
+    # permanent the moment anything ahead of it leaves.
+    assert {t["name"] for t in choice.data["targets"]} == {
+        "Tolarian Kraken", "Gale Swooper",
+    }
+    assert all(t["permanent_id"] is not None for t in choice.data["targets"])
+
+
+def test_the_chosen_creature_is_tapped(set_pool):
+    game, p1, _kraken, victim, land = _kraken_board(set_pool)
+
+    _draw_and_pay(game, p1)
+    assert game.confirm_reflexive_target(0, game.permanent_id_of(victim))
+    game.confirm_optional_pay(0, accept=True)
+
+    assert victim.tapped
+    assert not land.tapped
+    assert p1.mana_pool["C"] == 1, "the {1} was collected"
+
+
+def test_a_tapped_creature_is_untapped_instead(set_pool):
+    """"Tap **or** untap" — one toggle, and which way it goes is read off the
+    creature rather than chosen."""
+    game, p1, _kraken, victim, _land = _kraken_board(set_pool, victim_tapped=True)
+
+    _draw_and_pay(game, p1)
+    game.confirm_reflexive_target(0, game.permanent_id_of(victim))
+    game.confirm_optional_pay(0, accept=True)
+
+    assert not victim.tapped
+
+
+def test_a_land_is_not_a_legal_target(set_pool):
+    """The toggle honours the noun phrase now. It used to honour none at all,
+    which is why "tap or untap target creature" had to refuse at lowering —
+    lowered onto the unfiltered handler it could have untapped a land."""
+    game, p1, _kraken, _victim, land = _kraken_board(set_pool)
+
+    _draw_and_pay(game, p1)
+
+    assert not game.confirm_reflexive_target(0, game.permanent_id_of(land))
+    assert game.pending_choices, "the prompt is still owed"
+
+
+def test_declining_the_payment_creates_no_ability(set_pool):
+    """CR 603.12: the reflexive ability triggers on the action being taken. No
+    payment, no ability — and no prompt to answer."""
+    game, p1, _kraken, victim, _land = _kraken_board(set_pool)
+
+    _draw_and_pay(game, p1, accept=False)
+
+    assert game.pending_choices == []
+    assert not victim.tapped
+    assert p1.mana_pool["C"] == 2
+
+
+def test_the_kraken_is_always_a_legal_target_for_its_own_trigger(set_pool):
+    """CR 603.7, which 603.12 defers to, would keep the ability off the stack
+    with no legal target — and this card can never reach that: the Kraken has to
+    be on the battlefield for its own trigger to fire, and it is a creature. So
+    the "no legal target" path is real machinery with no reachable case here,
+    stated rather than tested through a board that cannot exist.
+    """
+    game, p1, kraken, _victim, _land = _kraken_board(set_pool)
+
+    _draw_and_pay(game, p1)
+
+    (choice,) = game.pending_choices
+    assert game.permanent_id_of(kraken) in {
+        target["permanent_id"] for target in choice.data["targets"]
+    }
