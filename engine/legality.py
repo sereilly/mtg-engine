@@ -35,7 +35,7 @@ describe it.
 
 import re
 
-from .handlers._common import permanent_matches_filter
+from .handlers._common import graveyard_card_matches, permanent_matches_filter
 from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle, expand_modal_activated_lines
 from .static_bonuses import conditional_static_holds
@@ -632,37 +632,15 @@ class LegalityMixin:
 
     def _enumerate_graveyard_creatures(self, caster_index: int, spec: dict) -> list[dict]:
         targets: list[dict] = []
-        any_card = spec.get("any_card")
-        # Reconstruction returns an *artifact* card; Raise Dead a creature card.
-        # One template with the type as data, which is why the picker takes it
-        # from the spec instead of assuming the creature case.
-        #
-        # The two branches test differently because their handlers do, and a
-        # picker that offers what resolution then refuses is the bug this module
-        # exists to prevent. `return_creature_from_graveyard_to_hand` asks
-        # whether the type appears in the card's type line, so an Ornithopter —
-        # an *artifact* creature — is a legal Reconstruction target (CR 205.2);
-        # the reanimators ask `primary_type`, which is narrower.
-        card_type = spec.get("card_type")
-        # "target red instant or sorcery card" (Chandra, Flame's Catalyst's
-        # −2): a *union* of primary types plus a colour, tested exactly as the
-        # grant handler tests its choice, so the picker offers what resolution
-        # will honour.
-        card_types = tuple(spec.get("card_types") or ())
-        color_filter = spec.get("graveyard_color_filter")
+        # Reconstruction returns an *artifact* card, Raise Dead a creature card,
+        # Chandra a red instant or sorcery. One template with the type as data,
+        # and one predicate shared with the cast-time re-check and the handler
+        # (`engine/handlers/_common.py`) — a picker that offers what
+        # resolution then refuses is the bug this module exists to prevent, and
+        # it was live: the re-check asked only "is it a creature card?".
 
         def eligible(card) -> bool:
-            if card_types and card.primary_type not in card_types:
-                return False
-            if color_filter and color_filter not in card.colors:
-                return False
-            if card_types:
-                return True
-            if any_card:
-                return True
-            if card_type is not None:
-                return card_type in card.type_line.lower()
-            return card.primary_type == "creature"
+            return graveyard_card_matches(spec, card)
 
         for seat, player in enumerate(self.players):
             if spec.get("own_graveyard_only") and seat != caster_index:

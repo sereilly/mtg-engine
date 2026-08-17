@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
+    graveyard_card_matches,
     permanent_matches_filter,
     resolve_amount,
     resolve_target_permanent,
@@ -436,16 +437,14 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     caster = context.caster
     any_card = bool(instruction.payload.get("any_card"))
     card_type = instruction.payload.get("card_type")
-    # "target instant or sorcery card" (Shipwreck Dowser) — a type union,
-    # tested by primary type exactly as the graveyard picker offers it.
     card_types = tuple(instruction.payload.get("card_types") or ())
 
     def _eligible(card) -> bool:
-        if card_types:
-            return card.primary_type in card_types
-        if any_card:
-            return True
-        return card_type is not None and card_type in card.type_line.lower()
+        # The picker's predicate, not a third spelling of it. The payload and
+        # the spec carry the same key names because one is derived from the
+        # other, so there is one answer to "may this card be chosen?".
+        return graveyard_card_matches(instruction.payload, card)
+
     # "Return up to two target creature cards from your graveyard to your hand."
     # (Sanguine Indulgence.) The several-targets description says a list was
     # collected, so every chosen slot is honoured rather than only the first.

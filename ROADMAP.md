@@ -7,8 +7,8 @@ printings, 26,113 unique cards** per `set_progress.json`.
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–73 — lives in git history at and before
-commit `9e47197`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–74 — lives in git history at and before
+commit `0c1decf`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,32 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 74: the ids the wire resolved and the cast threw away
-
-*(2026-08-16.)* No card — a regression **this effort introduced in round 65** and
-did not notice for nine rounds.
-
-`web/actions.py`'s preamble resolves `target_permanent_ids` off the request and
-deliberately *keeps* them, with a comment saying why: an index is positional on
-one `target_seat`, so a pair of targets on two battlefields cannot be expressed
-by indices at all. `_queue_spell_from_request` then dropped them.
-
-Every cross-board **cast** over HTTP therefore lost its second slot and resolved
-it as an index on the first slot's board. Rookie Mistake — the card round 65 was
-built around — has been half-castable in the browser ever since. The engine had
-it right, the activation path had it right, and the browser picker had it right;
-only the cast request path did not, which is why nothing failed.
-
-**The pattern, not the slip.** Round 65 landed the feature in dependency order
-with the grammar last and verified it by executing `cast_from_hand` directly —
-the seam one layer *below* the one that broke. A feature whose whole point is
-that it crosses seats needs one test on the path a player actually uses, and it
-did not have one. The new test asserts both halves of the contract: a cross-board
-cast reaches both boards, and a stale id is a 404 rather than a silent fallback
-to a slot number.
-
-Suite green, every `--check` gate green, shipped pool 388/388.
-
 ## Round 75: two targets tapped, and a marker that waits per controller
 
 *(2026-08-16.)* M21 **226 → 227** — Frost Breath. Two sentences, and **three**
@@ -395,4 +369,48 @@ filter-by-identity rebuild, its trigger never touches the stack (applied inline,
 so CR 603.4's second check is unobservable rather than skipped), and its prompt
 is name-keyed and deduped so two eligible copies get one prompt whose answer
 decides both.
+
+## Round 77: a graveyard slot is not an identity either
+
+*(2026-08-16.)* No card — the fix the last three rounds kept pointing at, and it
+turned out to be hiding **three** shipped-pool defects rather than one.
+
+`_stack_push` stamps a stable `permanent_id` for a battlefield target because "a
+stack object is the engine's only structure that outlives the moment it was
+built" — its own docstring. A card in a **graveyard** had no such stamp, so
+resolution re-read a raw index against a list that had since shifted:
+
+* **Raise Dead** named Grizzly Bears, one card left the graveyard in response,
+  and it returned **Hill Giant**. The several-card path was worse — Sanguine
+  Indulgence named two and returned one.
+* **Reconstruction was uncastable.** Its picker offers artifact cards; its
+  cast-time re-check hardcoded `primary_type != "creature"`. The only card a
+  player could name was one the check then refused, so with no creature in the
+  graveyard the card could not be played at all. One shared predicate now serves
+  picker, re-check and handler, and `legality.py` gets 22 lines shorter.
+* **A protection check read `battlefield[slot]` for a graveyard slot**, so a
+  White Knight the spell never targeted refused Raise Dead.
+
+**The identity is a card plus which copy of it**, because the dedupe leaves the
+engine nothing else: two copies of one card in one graveyard are the same
+`CardDefinition` object, and neither an id nor `is` separates them. The residual
+is stated rather than hidden — with two copies the engine cannot know *which* one
+left, so the read clamps to the last surviving copy and reports "gone" only when
+no copy remains, the one case the data model can actually establish.
+
+**Three things my brief got wrong**, all corrected on evidence: Fungal Rebirth
+does not target a graveyard card (thirteen cards do, four of which I had not
+named); `_stack_push` *can* know the zone, and today does something worse than
+nothing — it stamps a **battlefield** id onto a graveyard target; and the casting
+path cannot be the home, because it never sees an ability, a trigger or a mode.
+
+**Deliberately not fixed, and measured.** CR 608.2b's fizzle — a target that has
+become illegal — has the identical gap *on the battlefield*, and it is far more
+reachable: Lightning Bolt aimed at a creature that dies in response deals its 3 to
+whatever slid into the slot. Round 65 chose that fallback in writing. It wants one
+seam for both zones, which is the next round rather than a rider on this one.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions. Four regressions, all four watched to fail on
+the round-76 engine.
 

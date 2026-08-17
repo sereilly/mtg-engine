@@ -26,10 +26,11 @@ from ...cost_modifiers import (
     CostReduction, cost_reduction_for_cast, reduce_cost, spell_cost_tax,
 )
 from ...game_types import SimulationResult, StackItem
-from ...handlers._common import permanent_matches_filter
+from ...handlers._common import graveyard_card_matches, permanent_matches_filter
 from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ...oracle_types import x_spend_color_from_text
+from ...targeting import graveyard_target_spec
 from ...subject_filters import filter_head_noun, subject_matches
 from ...targeting import derive_cast_spec
 
@@ -755,11 +756,20 @@ class SpellCastingMixin:
         # Every chosen slot is checked, not just the first: a spell naming "up to
         # two target creatures" chooses each of them separately (CR 601.2c), and
         # one illegal choice makes the cast illegal however many others are fine.
-        for slot in (
-            target_permanent_index
+        #
+        # **Only where the slot is a battlefield slot.** A graveyard target's
+        # index counts into a different list, and reading it here refused Raise
+        # Dead over a White Knight the spell never named: CR 702.16b is about
+        # the spell's own targets, and a card in a graveyard is not a permanent
+        # (CR 115.2), so it has no protection to check in the first place.
+        chosen_slots = (
+            ()
+            if graveyard_target_spec(card, program, mode_index=mode_index) is not None
+            else target_permanent_index
             if isinstance(target_permanent_index, list)
             else [target_permanent_index]
-        ):
+        )
+        for slot in chosen_slots:
             if not isinstance(slot, int) or not (0 <= slot < len(target.battlefield)):
                 continue
             chosen = target.battlefield[slot]
@@ -897,18 +907,19 @@ class SpellCastingMixin:
                 for slot in slots:
                     if not isinstance(slot, int) or not (0 <= slot < len(caster.graveyard)):
                         return False, f"no valid target for {card.name}"
-                    if not any_card and caster.graveyard[slot].primary_type != "creature":
+                    if not graveyard_card_matches(primary.payload, caster.graveyard[slot]):
                         return False, f"no valid target for {card.name}"
             elif isinstance(target_permanent_index, int):
                 if target_player_index is not None and target_player_index != caster_index:
                     return False, f"no valid target for {card.name}"
                 if not (0 <= target_permanent_index < len(caster.graveyard)) or (
-                    not any_card
-                    and caster.graveyard[target_permanent_index].primary_type != "creature"
+                    not graveyard_card_matches(
+                        primary.payload, caster.graveyard[target_permanent_index]
+                    )
                 ):
                     return False, f"no valid target for {card.name}"
             elif not any(
-                any_card or c.primary_type == "creature" for c in caster.graveyard
+                graveyard_card_matches(primary.payload, c) for c in caster.graveyard
             ):
                 return False, f"no valid target for {card.name}"
 

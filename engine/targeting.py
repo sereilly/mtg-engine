@@ -724,6 +724,47 @@ def _from_targets_payload(targets) -> dict | None:
     return {"kind": derived, **flags} if derived is not None else None
 
 
+# The one spec kind whose chosen index is *not* a battlefield slot. Named
+# rather than spelled out at each reader, because "is this index a graveyard
+# index?" is asked in five places and a sixth that forgets is a spell reading a
+# battlefield it never targeted.
+GRAVEYARD_TARGET_KIND = "graveyard_creature"
+
+
+def graveyard_target_spec(
+    card, program, *, mode_index: int | None = None, instruction=None
+) -> dict | None:
+    """The spec of a chosen index that addresses a **graveyard**, else None.
+
+    A card in a graveyard is not a permanent (CR 115.2) and the index that names
+    it is a slot in a different list, so every reader that treats
+    ``target_permanent_index`` as a battlefield slot has to ask this first. It
+    used not to be asked at all: the cast-time protection check reads
+    ``target.battlefield[slot]`` unconditionally, so Raise Dead naming graveyard
+    slot 1 was refused because a White Knight happened to sit in battlefield
+    slot 1 (CR 702.16b applied to a permanent the spell never targeted).
+
+    Three callers, three ways of naming the same question — a spell
+    (``derive_cast_spec``), one mode of a modal spell, and an ability or trigger
+    that carries its own instruction. All three end at the same table, because
+    what an instruction targets does not depend on what produced it.
+    """
+    if instruction is not None:
+        spec = _from_instructions((instruction,))
+    elif (
+        mode_index is not None
+        and program.modes
+        and 0 <= mode_index < len(program.modes)
+        and program.modes[mode_index].instruction is not None
+    ):
+        spec = _from_instructions((program.modes[mode_index].instruction,))
+    else:
+        spec = derive_cast_spec(card, program)
+    if spec is not None and spec.get("kind") == GRAVEYARD_TARGET_KIND:
+        return spec
+    return None
+
+
 def derive_activation_spec(ability) -> dict | None:
     """What *ability* chooses when it is activated, or None when it chooses
     nothing (CR 602.2b).

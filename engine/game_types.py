@@ -46,6 +46,28 @@ CHOICE_KEYS = (
 )
 
 
+@dataclass(frozen=True)
+class GraveyardTarget:
+    """One card in one graveyard, named so the name survives the wait on the stack.
+
+    The graveyard's answer to ``permanent_id``, and it has to be a different
+    answer: ``load_cards`` dedupes by ``oracle_id``, so two copies of one card
+    in one graveyard are literally one ``CardDefinition`` object and neither an
+    id nor ``is`` can tell them apart. What can is *order* — ``ordinal`` is
+    which copy of ``card``, counting from the bottom of the pile, which is
+    stable under every other card leaving.
+
+    The residual, stated rather than hidden: with two copies of one card in one
+    graveyard the engine cannot know which of them left, because they are the
+    same object. Resolution therefore clamps to the last surviving copy and
+    reports "gone" only when *no* copy remains — the one case it can establish.
+    """
+
+    seat: int
+    card: CardDefinition
+    ordinal: int = 0
+
+
 @dataclass
 class StackItem:
     card: CardDefinition
@@ -62,6 +84,13 @@ class StackItem:
     # resolve to a *different* permanent at resolution time. Same shape as the
     # index (an int, a list, or None) so the two stay readable side by side.
     target_permanent_id: int | list[int | None] | None = None
+    # The same target when the chosen index is a slot in a *graveyard* rather
+    # than on a battlefield (CR 601.2c). A card there has no ``permanent_id`` to
+    # stamp, so the identity is a :class:`GraveyardTarget`. Same shape as the
+    # index beside it (one, a list, or None), for the same reason: a graveyard
+    # index is a position in a list, and anything leaving that zone in response
+    # renumbers every later slot exactly as the battlefield does.
+    target_graveyard_card: "GraveyardTarget | list[GraveyardTarget | None] | None" = None
     ability_instruction: OracleInstruction | None = None
     ability_effect_kind: str | None = None
     source_permanent: Permanent | None = None

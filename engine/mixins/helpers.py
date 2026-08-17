@@ -17,8 +17,10 @@ from ..events import emit
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
 from ..models import Permanent, PlayerState, next_permanent_id
+from ..game_types import GraveyardTarget
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
+from ..targeting import graveyard_target_spec
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 
@@ -790,6 +792,97 @@ class GameHelpersMixin:
                 return found
         return self.permanent_at(seat, index)
 
+    # -- The same question one zone over -----------------------------------
+    #
+    # A graveyard slot is as unstable as a battlefield slot and has no id to
+    # fall back on, so the four functions below are `permanent_id_of` /
+    # `permanent_by_id` / `chosen_permanent` rewritten for a zone whose objects
+    # cannot be told apart by identity at all.
+
+    def graveyard_target_at(self, seat, index):
+        """Name the card in *seat*'s graveyard slot *index*, or None.
+
+        The write half. ``ordinal`` counts how many *earlier* slots hold the
+        same ``CardDefinition`` object, which is the only thing that separates
+        two copies of one card once the dedupe has made them one object.
+        """
+        if seat is None or not 0 <= seat < len(self.players):
+            return None
+        graveyard = self.players[seat].graveyard
+        if not isinstance(index, int) or not 0 <= index < len(graveyard):
+            return None
+        card = graveyard[index]
+        ordinal = sum(1 for other in graveyard[:index] if other is card)
+        return GraveyardTarget(seat=seat, card=card, ordinal=ordinal)
+
+    def graveyard_index_of(self, target) -> int | None:
+        """Where *target* sits in its graveyard **now**, or None when no copy of
+        that card is there any more.
+
+        The read half. Clamps to the last surviving copy rather than failing
+        when fewer copies remain than the ordinal asked for: with two copies of
+        one card the engine cannot know *which* one left, because they are the
+        same object, so the choice is between two indistinguishable answers and
+        the one that keeps the two copies behaving alike is the honest one.
+        "Gone" is reserved for the case the data model can actually establish —
+        no copy of that card left in that graveyard.
+        """
+        if target is None or not 0 <= target.seat < len(self.players):
+            return None
+        graveyard = self.players[target.seat].graveyard
+        positions = [i for i, card in enumerate(graveyard) if card is target.card]
+        if not positions:
+            return None
+        return positions[min(target.ordinal, len(positions) - 1)]
+
+    def chosen_graveyard_index(self, target, index):
+        """The graveyard slot a cast-time choice named, re-located now.
+
+        Additive for the same reason ``chosen_permanent`` is: a stamp that no
+        longer resolves falls through to the index the caller already had, so
+        this can only turn a wrong answer into a right one. Mirrors the shape it
+        is given — one slot, a list of them, or None.
+        """
+        if isinstance(target, list):
+            slots = index if isinstance(index, list) else []
+            return [
+                self.chosen_graveyard_index(stamp, slots[i] if i < len(slots) else None)
+                for i, stamp in enumerate(target)
+            ]
+        found = self.graveyard_index_of(target)
+        return index if found is None else found
+
+    def stamp_graveyard_targets(self, seat, index):
+        """Every chosen graveyard slot, named. Mirrors the index's own shape."""
+        if isinstance(index, list):
+            return [self.graveyard_target_at(seat, slot) for slot in index]
+        return self.graveyard_target_at(seat, index)
+
+    def graveyard_target_seat(self, item, spec: dict) -> int:
+        """Whose graveyard a stack item's chosen index counts into.
+
+        The same defaulting the resolution side does, in one place so the stamp
+        and the reader cannot disagree: a spec that says ``own_graveyard_only``
+        is always the caster's own zone (that flag is read off the *handler*,
+        not off the printed words), and everything else follows the target
+        player the item recorded, behind ``_stack_push``'s standing convention.
+        """
+        if spec.get("own_graveyard_only"):
+            return item.caster_index
+        seat = item.target_player_index
+        if seat is None or not 0 <= seat < len(self.players):
+            # **The caster's own**, not the opposing seat. The opposing default
+            # is the *battlefield* convention — a spell naming a permanent and
+            # no player usually means an opponent's — and it is backwards one
+            # zone over, where the pile a spell reaches into is usually its own
+            # caster's. It was a disagreement rather than a preference, too:
+            # Animate Dead's cast validation checks the chosen index against the
+            # caster's graveyard while `_apply_aura_effect` read it out of the
+            # opponent's, so naming your own Grizzly Bears reanimated their
+            # Shivan Dragon.
+            seat = item.caster_index
+        return seat
+
     def remove_from_battlefield(self, permanent: Permanent) -> Permanent | None:
         """Take *permanent* off the battlefield. The one transition out.
 
@@ -1116,7 +1209,24 @@ class GameHelpersMixin:
         boundary, while it is still known to mean what it said. Resolution
         reads the id (``engine/handlers/_common.py``) and only falls back to
         the index when the id no longer resolves, which is exactly the
-        situation the old code was already in."""
+        situation the old code was already in.
+
+        **A graveyard target is stamped here too, and first.** Its index is a
+        slot in a different list, so the battlefield stamping below answers a
+        question the item never asked: Raise Dead naming graveyard slot 1 was
+        handed the id of whatever permanent sat in battlefield slot 1."""
+        spec = graveyard_target_spec(
+            item.card,
+            compile_card_oracle(item.card),
+            mode_index=item.chosen_mode_index,
+            instruction=item.ability_instruction,
+        )
+        if spec is not None:
+            item.target_graveyard_card = self.stamp_graveyard_targets(
+                self.graveyard_target_seat(item, spec), item.target_permanent_index
+            )
+            self.stack.append(item)
+            return item
         if item.target_permanent_id is not None:
             # The caller already knows the identities. The web layer does: it
             # resolves `target_permanent_ids` off the wire and then used to

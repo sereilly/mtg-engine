@@ -272,6 +272,30 @@ class StackResolutionMixin:
             woc_after.data["_stack_item"] = item
         return True
     def _run_stack_item_resolution(self, item: StackItem) -> None:
+        # **An index is not an identity** (ROADMAP idiom #11) and a graveyard is
+        # the zone with no identity to fall back on, so what ``_stack_push``
+        # stamped is turned back into a slot *here* — once, at the top, so every
+        # reader below (a spell, an ability, an Aura's reanimation, an
+        # enters-the-battlefield trigger) sees a live index without knowing this
+        # happened. The stamp itself is never overwritten: an item pushed back
+        # on for a pending choice re-locates from the same name next time.
+        if item.target_graveyard_card is not None:
+            item.target_permanent_index = self.chosen_graveyard_index(
+                item.target_graveyard_card, item.target_permanent_index
+            )
+            # And which pile the slot counts into. For a graveyard target that
+            # *is* what `target_player_index` means, and leaving it to be
+            # re-derived below is how the two halves of one choice came apart:
+            # every reader defaults it differently (`1 - caster` here, the
+            # caster there), so a spell was validated against one graveyard and
+            # resolved against another.
+            first = (
+                item.target_graveyard_card[0]
+                if isinstance(item.target_graveyard_card, list)
+                else item.target_graveyard_card
+            )
+            if first is not None:
+                item.target_player_index = first.seat
         # A triggered ability with a name-keyed resolve-time hook (Rod/Cup/Sphere,
         # Verduran Enchantress, Guardian Angel deferred onto the stack).
         if item.hook_key is not None:

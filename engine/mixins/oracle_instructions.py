@@ -18,6 +18,7 @@ from ..land_animation import LAND_ANIMATION_KIND
 from ..land_types import change_land_type
 from ..lord_buffs import LORD_BUFF_KIND
 from ..pt import add_pt_modifier
+from ..targeting import graveyard_target_spec
 
 
 # Attachment bookkeeping, not a granted characteristic. `aura_granted_meta` is
@@ -98,7 +99,18 @@ class OracleInstructionsMixin:
         # CR 702.16b / 702.18: a spell that targets a permanent with shroud, or with
         # protection from the spell's color, has an illegal target. On resolution it
         # does nothing (608.3b — removed from the stack with no effect).
-        chosen = self.chosen_permanent(target, target_permanent_index, target_permanent_id)
+        #
+        # Asked only of a *battlefield* index, for the reason the cast-time copy
+        # of this check is: a reanimation spell's index counts into a graveyard,
+        # and answering it from ``target.battlefield`` made Raise Dead fizzle
+        # against a permanent that merely arrived in that slot while the spell
+        # was on the stack.
+        chosen = (
+            None
+            if graveyard_target_spec(card, compile_card_oracle(card), mode_index=mode_index)
+            is not None
+            else self.chosen_permanent(target, target_permanent_index, target_permanent_id)
+        )
         if chosen is not None:
             if chosen.is_creature and not self._can_be_targeted(
                 chosen, card, caster_index=self.players.index(caster)

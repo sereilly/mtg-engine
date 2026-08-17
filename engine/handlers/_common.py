@@ -218,6 +218,38 @@ def permanent_effective_colors(perm: Permanent) -> set[str]:
     return perm.effective_colors
 
 
+def graveyard_card_matches(spec: dict, card) -> bool:
+    """Whether *card* is a legal choice for a graveyard target described by
+    *spec* — or by an instruction payload, which carries the same key names
+    because the spec is derived from it.
+
+    ``permanent_matches_filter``'s sibling one zone over, and here for the same
+    reason: **one predicate, three readers.** The picker that offers the card,
+    the cast-time re-check that admits it (idiom #9) and the handler that takes
+    it were three copies, and they disagreed. The re-check asked only "is it a
+    creature card?", so Reconstruction — "Return target **artifact** card from
+    your graveyard to your hand" — refused every artifact its own picker
+    offered, and with no creature in the pile could not be cast at all.
+
+    The narrowed type is containment in the printed type line rather than
+    ``primary_type``, because CR 205.2 makes an Ornithopter an artifact card
+    *and* a creature card. The bare case keeps ``primary_type``, which is what
+    the reanimation handlers ask of the card they put onto the battlefield.
+    """
+    card_types = tuple(spec.get("card_types") or ())
+    if card_types and card.primary_type not in card_types:
+        return False
+    color = spec.get("graveyard_color_filter")
+    if color and color not in card.colors:
+        return False
+    if card_types or spec.get("any_card"):
+        return True
+    card_type = spec.get("card_type")
+    if card_type is not None:
+        return card_type in card.type_line.lower()
+    return card.primary_type == "creature"
+
+
 def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     """Whether *perm* satisfies a target-filter payload (the key vocabulary
     produced by ``engine.grammar.ast.ObjectFilter.to_payload``:
