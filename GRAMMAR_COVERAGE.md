@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 73.4% | 70.2% | 47.3% | 191 |
+| M21 *(measured)* | 285 | 503 | 73.6% | 70.4% | 47.5% | 192 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -42,9 +42,9 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 7 | 4 | expected a keyword ability |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 6 | 3 | expected 'the number of' in a where-clause |  |
-| 6 | 3 | expected a quantity |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
+| 5 | 2 | expected a quantity |  |
 | 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 4 | 1 | expected 'mana' |  |
 | 4 | 4 | unrecognized discard cost |  |
@@ -840,6 +840,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Whenever this creature attacks, prevent all combat damage that would be dealt this turn to Dogs you control.`
 - **Palladium Myr**
   - `{T}: Add {C}{C}.`
+- **Peer into the Abyss**
+  - `Target player draws cards equal to half the number of cards in their library and loses half their life. Round up each time.`
 - **Pestilence**
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
   - `{B}: This enchantment deals 1 damage to each creature and each player.`

@@ -391,8 +391,42 @@ _REST_OF_TURN = ("this_turn", "until_end_of_turn")
 # characteristics at all, so only the printed type union and a card's name are
 # testable and anything else refuses rather than being counted as if it were
 # not there.
-_COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile")
+# "the number of cards in their library" (Peer into the Abyss). The evaluator
+# reads the zone off the owner by name, so the library needed no counting code —
+# only saying so here. It is listed last because it is the one zone whose count a
+# player cannot see, which changes nothing about the arithmetic and everything
+# about what a *picker* built on the same spec could offer.
+_COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile", "library")
 _CARD_ZONE_KEYS = frozenset({"type_filter", "named"})
+
+
+def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
+    """The spec for a computed amount that may be halved, or None if it is not one.
+
+    "Half the number of cards in their library" and "half their life" (Peer into
+    the Abyss) are the same shape: something the resolution computes, divided,
+    and rounded. So the halving rides on the *spec* rather than becoming a second
+    amount vocabulary — one evaluator still answers, which is the rule round 64
+    wrote down when the pump handler was found carrying its own counter.
+
+    A player's life total is not a pile to scan, so it arrives as a *named* board
+    count rather than a filter: ``evaluate_count`` maps the name onto the one
+    thing that computes it and answers 0 for a name it has no computation for,
+    which is why the name is minted here and nowhere else.
+    """
+    rounding = None
+    if isinstance(amount, ast.Half):
+        rounding = amount.rounding
+        amount = amount.of
+    if isinstance(amount, ast.CountOf):
+        spec = count_spec(amount.filter, node)
+    elif isinstance(amount, ast.BoardCount) and amount.name == "their_life":
+        spec = {"board_count": "their_life", "owner": "target"}
+    else:
+        return None
+    if rounding is not None:
+        spec["half"] = rounding
+    return spec
 
 
 def count_spec(filt: "ast.ObjectFilter", node, *, aggregate: str = "count") -> dict:

@@ -689,3 +689,108 @@ def test_the_present_tense_does_not_claim_a_state_test():
     )
 
     assert tortoise.parsed, tortoise.parse_error
+
+
+# --- Round 83: two computed halves, and a subject printed once --------------
+
+
+def _peer_game(set_pool, *, library, life):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Peer into the Abyss"]])
+    p2 = PlayerState(name="P2", library=[pool["Shock"]] * library, life=life)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Peer into the Abyss", target_player_index=1)
+    game._settle()
+    return p2
+
+
+def test_peer_into_the_abyss_compiles_to_two_computed_halves(set_pool):
+    """Two numbers the resolution computes, each travelling on the same spec a
+    plain count does â€” one with a zone to read, one with a name, and the halving
+    recorded on both rather than becoming a second amount vocabulary."""
+    program = compile_card_oracle(set_pool("M21")["Peer into the Abyss"])
+
+    assert program.supported, program.reason
+    (sequence,) = [i for i in program.instructions if i.kind == "sequence"]
+    draw, lose = sequence.payload["steps"]
+    assert draw.payload["x_from_count"] == {
+        "zone": "library", "owner": "owner", "filter": {}, "half": "up",
+    }
+    assert lose.payload["x_from_count"] == {
+        "board_count": "their_life", "owner": "target", "half": "up",
+    }
+
+
+def test_peer_into_the_abyss_rounds_both_halves_up(set_pool):
+    """"Round up **each time**" â€” per calculation, not once over the sentence.
+    An odd library and an odd life total in the same cast is what tells the two
+    readings apart."""
+    victim = _peer_game(set_pool, library=7, life=21)
+
+    assert len(victim.hand) == 4, "ceil(7/2)"
+    assert victim.life == 21 - 11, "ceil(21/2) lost"
+
+
+def test_peer_into_the_abyss_halves_an_even_library(set_pool):
+    victim = _peer_game(set_pool, library=6, life=20)
+
+    assert len(victim.hand) == 3
+    assert victim.life == 10
+
+
+def test_the_life_loss_does_not_read_a_library_the_draw_shrank(set_pool):
+    """The two halves read different things â€” a zone and a life total â€” so the
+    draw cannot change what the loss computes. Pinned because the obvious
+    mis-implementation is to route both through one count."""
+    victim = _peer_game(set_pool, library=7, life=20)
+
+    assert len(victim.library) == 3, "4 of 7 drawn"
+    assert victim.life == 10, "half of 20, not half of what was left"
+
+
+def test_a_printed_player_subject_carries_across_and():
+    """"Target player draws a card **and loses 1 life**." The subject is printed
+    once and meant twice. Bare imperatives already worked ("You gain 1 life and
+    draw a card") because their subject is implied by the verb; this is the
+    printed half of the same shape."""
+    result = compile_line("Target player draws a card and loses 1 life.", card_name="T")
+
+    assert [i.kind for i in result.instructions] == [
+        "draw_target_cards", "target_loses_life",
+    ]
+
+
+def test_only_a_player_subject_carries():
+    """The narrowing that keeps the carry honest. "gains", "loses" and "wins"
+    substitute "you" for a non-player subject rather than refusing, so carrying a
+    *creature* into one would read a sentence nobody printed â€” here, a creature's
+    controller winning the game."""
+    result = compile_line(
+        "Target creature gets +3/+3 until end of turn and wins the game.",
+        card_name="T",
+    )
+
+    assert not result.parsed
+
+
+def test_a_tail_that_names_its_own_subject_is_not_given_the_carried_one():
+    """Rookie Mistake's second clause names a *different* creature, and the
+    carried subject must not be read over it â€” the fuser claims that sentence,
+    and it still does."""
+    result = compile_line(
+        "Until end of turn, target creature gets +0/+2 and another target "
+        "creature gets -2/-0.",
+        card_name="T",
+    )
+
+    assert [i.kind for i in result.instructions] == ["pump_targets_until_eot"]
+
+
+def test_round_up_each_time_needs_something_to_round():
+    """The rider changes how a computed value is rounded, so a sentence with no
+    half in it is a wording this does not read â€” refused rather than consumed
+    and ignored."""
+    result = compile_line("Target player draws a card. Round up each time.", card_name="T")
+
+    assert not result.parsed

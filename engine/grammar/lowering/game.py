@@ -8,13 +8,14 @@ Grouped as "the game and its players" rather than "the board": none of these
 changes what a permanent is, and all of them change the state a player is in.
 """
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import OracleInstruction, X_FROM_COUNT
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
     _amount_payload,
     _back_reference_payload,
+    halved_count_spec,
     _describe_targets,
     _restrictions_beyond,
 )
@@ -270,11 +271,21 @@ def _lower_lose_life(
     # rather than as an amount. Resolved before the payload is built, because
     # an amount and a back-reference are alternatives — carrying both would let
     # a handler read whichever it happened to check first.
-    payload: dict[str, object] = (
-        dict(_back_reference_payload(node.amount, produced, event))
-        if isinstance(node.amount, ast.ThatMuch)
-        else {"amount": _amount_payload(node.amount)}
+    # "…and loses **half their life**" (Peer into the Abyss): a number the
+    # resolution computes, travelling on the same spec a counted amount does.
+    halved = (
+        halved_count_spec(node.amount, node)
+        if isinstance(node.amount, ast.Half)
+        else None
     )
+    if halved is not None:
+        payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: halved}
+    else:
+        payload = (
+            dict(_back_reference_payload(node.amount, produced, event))
+            if isinstance(node.amount, ast.ThatMuch)
+            else {"amount": _amount_payload(node.amount)}
+        )
     # "Each opponent who can't loses 3 life." (Liliana, Waker of the Dead) —
     # attached by the sentence-loop rider to a preceding each-player discard,
     # whose handler records the players that could not pay. Reading that record

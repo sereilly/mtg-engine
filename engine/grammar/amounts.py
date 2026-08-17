@@ -44,7 +44,7 @@ def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> a
             return ast.AllOf()
         if word == "half":
             stream.advance()
-            inner = parse_amount(stream, back_reference=back_reference)
+            inner = _parse_counted_amount(stream, back_reference=back_reference)
             rounding = "down"
             if stream.accept_word("rounded"):
                 rounding = "up" if stream.accept_word("up") else (
@@ -70,6 +70,28 @@ def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> a
     raise stream.error("expected a quantity")
 
 
+def _parse_counted_amount(
+    stream: TokenStream, *, back_reference: str | None = None
+) -> ast.Amount:
+    """``the number of <noun phrase>``, or any ordinary quantity.
+
+    Split out so "half" can take one of either — "half **the number of cards in
+    their library**" (Peer into the Abyss) is a half of a count, and
+    :func:`parse_amount`'s own recursion could only read the plain quantities.
+    Both readers reach the same noun parser, so the count means one thing
+    wherever it is printed.
+    """
+    mark = stream.mark()
+    if stream.accept_word("the") and stream.accept_phrase("number", "of"):
+        # Late import for the reason `parse_equal_to` gives: nouns depends on
+        # this module for comparisons, so the cycle is broken at call time.
+        from .nouns import parse_object_filter
+
+        return ast.CountOf(parse_object_filter(stream))
+    stream.reset(mark)
+    return parse_amount(stream, back_reference=back_reference)
+
+
 def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     """Parse an "equal to …" quantity clause, or return None if absent.
 
@@ -81,6 +103,12 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     mark = stream.mark()
     if not stream.accept_phrase("equal", "to"):
         return None
+
+    # "equal to **half** the number of cards in their library" (Peer into the
+    # Abyss). Handed to the quantity parser, which reads the half and the count
+    # under it; the shapes below are the ones that are not quantities at all.
+    if stream.at_word("half"):
+        return parse_amount(stream)
 
     stream.accept_word("the")
 

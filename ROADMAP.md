@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 232/285) to the full release line - **137 sets, 33,594
+M21 measured at 233/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–79 — lives in git history at and before
-commit `c46e6c8`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–80 — lives in git history at and before
+commit `99f2f63`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,48 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 80: a reveal that records, and the sentence that reads it
-
-*(2026-08-17.)* M21 **229 → 230** — Track Down.
-
-> Scry 3, then reveal the top card of your library. If it's a creature or land
-> card, draw a card.
-
-**The pool already had a reveal-top production, and reusing it would have been
-wrong.** Garruk, Savage Herald's is one node for a whole three-sentence template
-— "reveal … put it into your hand. Otherwise, put it on the bottom" — and its
-docstring says why: the two destinations *are* the effect, and every word of them
-is required. Track Down is the opposite decomposition: the reveal records what it
-showed and what follows is an ordinary conditional. Generalising the Garruk node
-would have made its own docstring untrue of half its cases, so this is a sibling
-node reached by *falling back* — the three-sentence template is still checked
-first and keeps every word it requires.
-
-**Recording is the point, not an implementation detail.** CR 701.15: revealing
-shows a card and moves it nowhere. The branch's own draw then changes what is on
-top, so a condition that re-read the library would be asking about whichever card
-the draw uncovered. The reveal writes the card into the resolution scratchpad and
-the conditional reads that, with the producer discipline round 78 established: no
-reveal in this effect, no lowering.
-
-**Present tense is a different question from past tense.** Round 78's `ItWas`
-asks what an object *was* before it left a zone (CR 608.2h); this asks what a card
-sitting in a library *is*. Different producers, so a separate node rather than a
-tense flag on one.
-
-**And the near-miss I walked straight into.** "it's" is not unambiguous the way
-"it was" is: Giant Tortoise prints "This creature gets +0/+3 **as long as it's
-untapped**", and my first cut swallowed it, turning a working card unsupported.
-The branch now takes a sentence only when a noun phrase naming card *types*
-follows, and hands it back otherwise. The suite caught it immediately — that test
-existed — which is the argument for running the whole thing rather than the file
-you are editing.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions, **zero hooks added**. Six new tests, five
-watched to fail on the round-79 engine; the sixth is the Giant Tortoise control,
-which passes on both and is the one that matters.
-
 ## Round 81: one counter, two amounts
 
 *(2026-08-17.)* M21 **230 → 231** — Lofty Denial.
@@ -336,44 +294,6 @@ Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
 byte-identical at 443 interactions, **zero hooks added**. Six new tests, four
 watched to fail on the round-80 engine; the other two are the refusal controls,
 which pass on both because the line refused for a different reason before.
-
-## Measured and not built: Peer into the Abyss
-
-*(2026-08-17.)* Scoped, built, and **reverted** rather than shipped half-done.
-Recorded here so the next attempt starts from the measurement instead of
-repeating it.
-
-> Target player draws cards equal to half the number of cards in their library
-> and loses half their life. Round up each time.
-
-Four gaps, and the first three are done work that was thrown away with the
-fourth — they are small and the design held up under execution:
-
-1. **A count could not read a library.** `_COUNTABLE_ZONES` listed battlefield,
-   graveyard, hand and exile. `evaluate_count` reads the zone off the owner by
-   name, so the library needed no counting code at all — only saying so.
-2. **`ast.Half` is a node with a producer and no consumer.** `parse_amount` has
-   built one since the AST was written and `_amount_payload` refuses it, so no
-   card could ever carry one. The same shape rounds 66 (`PayLife`) and 78
-   (`ItWas`) found; it is worth a sweep of its own, because a declared-and-unwired
-   node reads as support and is not.
-3. **"Half their life" is not "half" followed by the life keyword.** Everywhere
-   else the trailing "life" belongs to the *production* ("loses 3 life"); here it
-   belongs to the quantity. A quantity parser that consumed it would strip the
-   noun off every other printing of the verb.
-
-4. **The blocker: a printed subject does not carry across "and".** "You gain 1
-   life and draw a card" works because the second half is a bare imperative with
-   an implied "you"; "Target player draws a card **and loses 1 life**" does not,
-   because the sentence loop hands the tail to `parse_statement`, which wants a
-   subject of its own. That is a general grammar gap rather than this card's, and
-   fixing it under a deadline is how round 80 briefly turned Giant Tortoise
-   unsupported — so it wants its own round, with the whole pool re-run behind it.
-
-"Round up each time" is untouched and is the fifth: a trailing sentence binding
-*both* halves, which the where-clause rider is the precedent for — and "each
-time" means per calculation, which is why the rounding belongs on each computed
-spec rather than on the card.
 
 ## Round 82: a blanket prevention narrowed to a printed noun phrase
 
@@ -414,4 +334,55 @@ byte-identical at 443 interactions, **zero hooks added**. Seven new tests, six
 watched to fail on the round-81 engine. One of them pins round 73's "other" fix
 on this card's lord line, so a later change to one half cannot quietly undo the
 other.
+
+## Round 83: a subject printed once and meant twice
+
+*(2026-08-17.)* M21 **232 → 233** — Peer into the Abyss, and the general gap it
+was stuck behind.
+
+> Target player draws cards equal to half the number of cards in their library
+> and loses half their life. Round up each time.
+
+**The blocker was not this card's.** "You gain 1 life and draw a card" has always
+worked, because the tail is a bare imperative whose subject is implied by the
+verb. "Target player draws a card **and loses 1 life**" did not: the sentence
+loop hands the tail to `parse_statement`, which wants a subject of its own. So a
+printed subject now carries across the join — retried *after* the ordinary parse
+fails, never before, because a tail that names its own subject ("…and **another
+target creature** gets -2/-0") is a different sentence and reading the carried one
+over it would aim the second clause at the first one's object.
+
+**And the narrowing that keeps the carry honest, which the suite found.** My first
+cut carried any subject, and `tests/engine/test_grammar_parser.py` caught it
+immediately: "Target creature gets +3/+3 until end of turn **and wins the game**"
+started parsing. The verbs a carried subject reaches — "gains", "loses", "wins" —
+substitute "you" for a non-player subject rather than refusing, so carrying a
+creature into one reads a sentence nobody printed. Only a printed **player**
+carries. That guard existed and was right; this is the second round running where
+the whole-suite run caught an over-reach the targeted run would not have.
+
+**Three smaller things, each a gap rather than a card feature.** A count could not
+read a **library** — one registry entry, because `evaluate_count` already reads
+the zone off the owner by name. `ast.Half` was a node with a producer and **no
+consumer**, so no card could ever have carried one; that is the third instance of
+the declared-and-unwired shape this effort has found (`PayLife`, round 66;
+`ItWas`, round 78) and it is worth a sweep of its own. And "half their life" is
+one quantity rather than a half followed by the production's own "life" keyword —
+consuming it in the quantity parser would strip the noun off every other printing
+of the verb.
+
+The halving rides on the **spec**, not on a second amount vocabulary, so one
+evaluator still answers — the rule round 64 wrote down when the pump handler was
+caught carrying its own counter. "Round up **each time**" is per calculation, so
+it reaches every half in the sentence and refuses a sentence with none.
+
+**One thing I expected to matter and did not**: I scoped this worrying that the
+life loss would read a library the draw had already shrunk (CR 608.2). It cannot
+— the two halves read different things, a zone and a life total. The test pinning
+it is still worth having, because the obvious mis-implementation routes both
+through one count.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Eight new tests, five watched to fail on the round-82 engine.
 

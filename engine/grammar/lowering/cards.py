@@ -12,6 +12,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (
     _amount_payload,
+    halved_count_spec,
     _describe_targets,
     _is_you,
     _restrictions_beyond,
@@ -167,7 +168,15 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
     effect's controller, ``draw_target_cards`` for the chosen player. Picking by
     the drawer keeps each one's existing contract intact."""
     kind = "draw_controller_cards" if node.player.kind == "you" else "draw_target_cards"
-    if isinstance(node.count, ast.CountOf):
+    halved = (
+        halved_count_spec(node.count, node) if isinstance(node.count, ast.Half) else None
+    )
+    if halved is not None:
+        # "…draws cards equal to **half** the number of cards in their library"
+        # (Peer into the Abyss). The same spec a plain count travels on, with the
+        # division recorded on it — see `halved_count_spec`.
+        payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: halved}
+    elif isinstance(node.count, ast.CountOf):
         # "Draw cards equal to the number of …" (Frantic Inventory). The count
         # is taken at *resolution* (CR 608.2), so it travels as the same
         # ``x_from_count`` spec a where-clause defines and the amount is the

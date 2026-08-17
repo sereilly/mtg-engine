@@ -151,6 +151,27 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
         return ast.LoseGame(player)
     stream.reset(mark)
+    # "loses **half their life**" (Peer into the Abyss). Read here rather than in
+    # `parse_amount`, because the trailing "life" is the *production's* word
+    # everywhere else ("loses 3 life") and here it belongs to the quantity —
+    # "half their life" is one amount, not a half followed by a life keyword. A
+    # quantity parser that consumed it would leave every other printing of this
+    # verb without its noun.
+    half_mark = stream.mark()
+    if stream.accept_word("half") and stream.accept_word("their", "your", "his"):
+        stream.accept_phrase("or", "her")
+        if stream.accept_word("life"):
+            player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
+            rounding = "down"
+            round_mark = stream.mark()
+            if stream.accept_punct(",") and stream.accept_word("rounded"):
+                rounding = "up" if stream.accept_word("up") else "down"
+            else:
+                stream.reset(round_mark)
+            return ast.LoseLife(
+                player, ast.Half(ast.BoardCount("their_life"), rounding)
+            )
+    stream.reset(half_mark)
     try:
         amount = parse_amount(stream)
         if stream.accept_word("life"):

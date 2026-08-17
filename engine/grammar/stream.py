@@ -21,12 +21,18 @@ class TokenStream:
     catch.
     """
 
-    __slots__ = ("tokens", "pos", "line")
+    __slots__ = ("tokens", "pos", "line", "last_subject")
 
     def __init__(self, tokens: tuple[GToken, ...], line: str = "") -> None:
         self.tokens = tokens
         self.pos = 0
         self.line = line
+        # What the last subject-verb sentence read in its subject position.
+        # Recorded here rather than returned, because the verb dispatch has one
+        # return per verb and the only caller that needs it is the sentence
+        # loop: "Target player draws a card **and loses 1 life**" prints the
+        # subject once and means it twice. See `_parse_subject_verb`.
+        self.last_subject = None
 
     # -- inspection ---------------------------------------------------------
 

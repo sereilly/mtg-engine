@@ -106,8 +106,17 @@ def _parse_bound_subject(stream: TokenStream) -> ast.TargetSpec | None:
     return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
 
 
-def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
-    """``<subject> <verb> …`` — the common imperative-with-subject shape."""
+def _parse_subject_verb(
+    stream: TokenStream, carried_subject: ast.Recipient | None = None
+) -> ast.Statement:
+    """``<subject> <verb> …`` — the common imperative-with-subject shape.
+
+    *carried_subject* supplies the subject instead of reading one, for the tail
+    of a conjunction that shares the subject printed in front of it: "Target
+    player draws a card **and loses 1 life**" names the player once. The subject
+    the sentence actually used is left on ``stream.last_subject`` so the sentence
+    loop can hand it back on the next join.
+    """
     # "The next time a <colour> source of your choice would deal damage to you
     # this turn, prevent that damage." opens with a noun phrase rather than a
     # verb, so it is tried before the subject-verb shapes below.
@@ -228,8 +237,10 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
 
     # The self-reference token the lexer emits for the card's own name, plus
     # the "it" of a trigger's remainder clause, both denote the source.
-    source_spec: ast.Recipient | None = None
-    if stream.at_kind(SELF):
+    source_spec: ast.Recipient | None = carried_subject
+    if carried_subject is not None:
+        pass
+    elif stream.at_kind(SELF):
         stream.advance()
         source_spec = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
     elif stream.at_word("it"):
@@ -257,6 +268,7 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
     if source_spec is None:
         stream.reset(mark)
         raise stream.error("expected a subject")
+    stream.last_subject = source_spec
 
     token = stream.peek()
     if token is None:
@@ -464,6 +476,7 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             stream.reset(mark)
 
     statement = _parse_subject_verb(stream)
+    carried = stream.last_subject
 
     # "<statement>, then <statement>" / "<statement> and <statement>" /
     # "<statement>, <statement>, then <statement>" — a comma list is joined
@@ -486,9 +499,57 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         try:
             follow = parse_statement(stream, top_level=False)
         except GrammarError:
-            stream.reset(mark)
-            break
+            # "Target player draws a card **and loses 1 life**." A conjunction
+            # whose tail has no subject of its own, because the sentence printed
+            # one in front of both verbs. Retried rather than read this way
+            # first: a tail that *does* name a subject ("… and another target
+            # creature gets -2/-0") is a different sentence, and reading the
+            # carried one over it would silently aim the second clause at the
+            # first one's object.
+            #
+            # Bare imperatives already worked ("You gain 1 life and draw a
+            # card") because their subject is implied by the verb; this is the
+            # printed-subject half of the same shape.
+            after_fail = stream.mark()
+            # Only a printed **player** carries. The verbs a carried subject
+            # would reach — "gains", "loses", "wins" — substitute "you" for a
+            # non-player subject rather than refusing, so carrying a creature
+            # into one reads a sentence nobody printed: "Target creature gets
+            # +3/+3 until end of turn **and wins the game**" would parse, with
+            # the creature's controller winning. That line is a guard in
+            # tests/engine/test_grammar_parser.py and it is right.
+            if isinstance(carried, ast.PlayerRef):
+                try:
+                    follow = _parse_subject_verb(stream, carried_subject=carried)
+                except GrammarError:
+                    stream.reset(mark)
+                    break
+            else:
+                stream.reset(after_fail)
+                stream.reset(mark)
+                break
         statement = ast.Sequence((statement, follow))
+        # A third clause shares the subject of the one it follows, not of the
+        # sentence's head, which is the same rule and matters the moment a
+        # sentence names a second subject part-way through.
+        carried = stream.last_subject or carried
+
+    # "Round up each time." (Peer into the Abyss.) The second trailing modifier,
+    # read here for the same reason the where-clause is: it is not another
+    # statement, it changes how a value the sentence already computed is
+    # rounded. **Each time** is the load-bearing half — the rounding is applied
+    # per calculation, so it reaches every `Half` in the sentence rather than
+    # the last one, and a card printing it over a sentence with no half at all
+    # is a wording this does not read.
+    rounding_mark = stream.mark()
+    if stream.accept_punct("."):
+        if stream.accept_phrase("round", "up", "each", "time"):
+            stream.accept_punct(".")
+            rounded = _round_every_half(statement, "up")
+            if rounded is None:
+                raise stream.error("'round up each time' with nothing to round")
+            return rounded
+        stream.reset(rounding_mark)
 
     # "…, where X is the number of <filter>." The one trailing modifier the
     # loop above deliberately refuses to join, read here instead: it is not
@@ -498,6 +559,38 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # definition, and consuming it inside the first would leave the second's X
     # undefined.
     return statement
+
+
+def _round_every_half(node, rounding: str):
+    """*node* with every :class:`ast.Half` in it rounded *rounding*, or None
+    when it contains none.
+
+    Written against the dataclass fields rather than a per-node list, for the
+    reason ``_targeted_specs`` gives: a statement class added later is covered
+    by default instead of silently keeping the printed default. Returning None
+    for "nothing to round" is what lets the caller refuse the wording rather
+    than consume it and change nothing.
+    """
+    if isinstance(node, ast.Half):
+        return dataclasses.replace(node, rounding=rounding)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changed = False
+        updates = {}
+        for field in dataclasses.fields(node):
+            value = getattr(node, field.name)
+            rebuilt = _round_every_half(value, rounding)
+            if rebuilt is not None:
+                updates[field.name] = rebuilt
+                changed = True
+        return dataclasses.replace(node, **updates) if changed else None
+    if isinstance(node, tuple):
+        rebuilt_items = [_round_every_half(item, rounding) for item in node]
+        if not any(item is not None for item in rebuilt_items):
+            return None
+        return tuple(
+            new if new is not None else old for new, old in zip(rebuilt_items, node)
+        )
+    return None
 
 
 def _parse_where_x(stream: TokenStream) -> ast.Amount | None:

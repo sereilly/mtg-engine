@@ -39,6 +39,19 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
     return evaluate_count(game, owner, spec)
 
 
+def _halve(total: int, spec: dict) -> int:
+    """*total*, halved and rounded if the spec says to.
+
+    "Round up **each time**" (Peer into the Abyss) is per calculation rather than
+    once over the sentence, which is why the rounding is a property of each
+    computed spec instead of the card.
+    """
+    rounding = spec.get("half")
+    if rounding is None:
+        return total
+    return -(-total // 2) if rounding == "up" else total // 2
+
+
 def evaluate_count(game: "Game", owner: "PlayerState", spec: dict) -> int:
     """How much the amount a card *computes* currently is, for a named owner.
 
@@ -66,6 +79,13 @@ def evaluate_count(game: "Game", owner: "PlayerState", spec: dict) -> int:
         return int(getattr(owner, "creatures_died_under_your_control_this_turn", 0))
     if history is not None:
         return 0
+    # A *named* board count rather than a count of objects in a zone: a player's
+    # life total is not a pile to scan. Named for the reason `BoardCount` gives —
+    # the lowering maps a name onto the one thing that computes exactly it, and a
+    # name with no computation never reaches here.
+    board_count = spec.get("board_count")
+    if board_count is not None:
+        return _halve(int(owner.life) if board_count == "their_life" else 0, spec)
     filt = dict(spec.get("filter") or {})
     aggregate = spec.get("aggregate", "count")
     zone = spec.get("zone", "battlefield")
@@ -76,8 +96,8 @@ def evaluate_count(game: "Game", owner: "PlayerState", spec: dict) -> int:
             if permanent_matches_filter(perm, filt)
         ]
         if aggregate == "greatest_power":
-            return max((perm.effective_power for perm in matched), default=0)
-        return len(matched)
+            return _halve(max((perm.effective_power for perm in matched), default=0), spec)
+        return _halve(len(matched), spec)
     cards = getattr(owner, zone, None)
     if cards is None:
         return 0
@@ -88,8 +108,10 @@ def evaluate_count(game: "Game", owner: "PlayerState", spec: dict) -> int:
         # creature card with a characteristic-defining power has none here
         # either, which is CR 604.3's own answer: its P/T is 0 in every zone but
         # the battlefield.
-        return max((_printed_power(card) for card in matched_cards), default=0)
-    return len(matched_cards)
+        return _halve(
+            max((_printed_power(card) for card in matched_cards), default=0), spec
+        )
+    return _halve(len(matched_cards), spec)
 
 
 def _printed_power(card) -> int:
