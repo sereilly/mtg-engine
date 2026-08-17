@@ -350,10 +350,10 @@ def test_carrion_grub_etb_mills_its_own_controller(set_pool):
     controller and travels on the same `recipient` key life loss uses, rather
     than as a target the handler would read off `context.target`.
 
-    Asserted on the line rather than the card: Carrion Grub's *other* line
-    ("gets +X/+0, where X is the greatest power among creature cards in your
-    graveyard") still refuses, and a refused line stops the creature compiling
-    at all — so the card stays unsupported while this line is done.
+    Asserted on the line rather than the card, which is how it was written when
+    Carrion Grub's *other* line still refused — the card is supported now
+    (round 64), and the line-level assertion is the one that says what this test
+    is about.
     """
     grub = set_pool("M21")["Carrion Grub"]
     line = next(l for l in grub.oracle_text.split("\n") if "mill" in l)
@@ -365,7 +365,6 @@ def test_carrion_grub_etb_mills_its_own_controller(set_pool):
     assert mill.payload["recipient"] == "caster"
     assert mill.payload["amount"] == 4
     assert "targets" not in mill.payload  # a bare mill targets nobody
-    assert not compile_card_oracle(grub).supported
 
 
 # --- The causative round: "you may have <subject> <verb> ..." ---------------
@@ -2413,3 +2412,64 @@ def test_lilianas_devotee_is_silent_with_no_death(set_pool):
     game._settle()
 
     assert not game.pending_choices_of("optional_pay", 0)
+
+
+# --- Round 64: a static bonus whose size is computed ------------------------
+
+
+def _grub_board(set_pool, graveyard):
+    pool = set_pool("M21")
+    grub = Permanent(card=pool["Carrion Grub"])
+    p1 = PlayerState(
+        name="P1", battlefield=[grub], graveyard=[pool[name] for name in graveyard]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    return game, p1, grub
+
+
+def test_carrion_grub_takes_the_greatest_power_in_its_graveyard(set_pool):
+    """"This creature gets +X/+0, where X is the greatest power among creature
+    cards in your graveyard."
+
+    Two things the engine had no shape for: an aggregate that is a **maximum**
+    rather than a count, and a CR 613 layer-7c contribution whose *size* is
+    computed — which no text-keyed static table can express, because the size is
+    the whole variable part."""
+    game, p1, grub = _grub_board(set_pool, ["Alpine Watchdog", "Selfless Savior"])
+
+    # The Watchdog is the bigger of the two (2/2 against the Savior's 1/1).
+    assert (grub.effective_power, grub.effective_toughness) == (2, 5)
+
+
+def test_carrion_grub_is_recomputed_as_the_graveyard_changes(set_pool):
+    """A static ability is continuous (CR 611.3a), not locked in — so this is
+    the same question the where-clause asks at resolution, asked again on every
+    recompute. One evaluator answers both."""
+    game, p1, grub = _grub_board(set_pool, ["Alpine Watchdog"])
+    assert grub.effective_power == 2
+
+    p1.graveyard.append(set_pool("M21")["Gale Swooper"])  # 3/2
+    game.check_state_based_actions()
+
+    assert grub.effective_power == 3
+
+
+def test_carrion_grub_counts_no_noncreature_card(set_pool):
+    """The narrowing, and the empty case: a maximum over nothing is 0, which is
+    what the printed 0/5 body then is."""
+    game, p1, grub = _grub_board(set_pool, ["Island", "Shock"])
+
+    assert (grub.effective_power, grub.effective_toughness) == (0, 5)
+
+
+def test_a_static_computed_bonus_cannot_be_negative():
+    """The refresh resolves the amount against the computed value and nothing
+    carries a sign for it, so "-X/-0" would apply the bonus the wrong way —
+    making a creature bigger where the card shrinks it."""
+    result = compile_line(
+        "This creature gets -X/-0, where X is the greatest power among "
+        "creature cards in your graveyard."
+    )
+
+    assert result.parsed and not result.lowered
+    assert result.failure_reason == "a static computed bonus cannot be negative"

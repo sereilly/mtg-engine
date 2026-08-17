@@ -27,11 +27,56 @@ from ._common import (
     _names_several_targets,
     _restrictions_beyond,
     _signed,
+    count_spec,
 )
+
+
+def _static_x_amount(amount: ast.Amount, negative: bool, node) -> int | str:
+    """One half of a computed static bonus: the string "x" or a literal.
+
+    A negated X refuses. The refresh resolves the amount against the computed
+    value and nothing carries a sign for it, so admitting "-X/-0" here would be
+    a bonus applied with the wrong sign — the direction that makes a creature
+    bigger when the card shrinks it.
+    """
+    if isinstance(amount, ast.Var):
+        if negative:
+            raise LoweringError("a static computed bonus cannot be negative", node=node)
+        return "x"
+    if isinstance(amount, ast.Fixed):
+        return -amount.value if negative else amount.value
+    raise LoweringError("a static computed bonus needs X or a number", node=node)
+
+
+def _x_definition_spec(definition: ast.Amount, node) -> dict:
+    """The spec behind a where-clause's X, whichever aggregate it names."""
+    if isinstance(definition, ast.GreatestPowerAmong):
+        return count_spec(definition.filter, node, aggregate="greatest_power")
+    if isinstance(definition, ast.CountOf):
+        return count_spec(definition.filter, node)
+    raise LoweringError("only a count or a maximum can define X here", node=node)
 
 
 def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     if node.duration.kind is None:
+        # "This creature gets +X/+0, where X is the greatest power among
+        # creature cards in your graveyard." (Carrion Grub.) A pump with no
+        # duration is a *continuous* effect, which is why the general case
+        # refuses — but one on the ability's own source, with its size computed
+        # from a spec the shared evaluator reads, is exactly the CR 613 layer 7c
+        # contribution the P/T refresh already rebuilds every recompute
+        # (engine/mixins/permanent_state.py). What made it unreachable was not
+        # the layer, it was having no way to say how big it is.
+        if node.x_definition is not None and _is_source(node.subject):
+            return (
+                OracleInstruction("dynamic_pt_bonus", "", {
+                    "power": _static_x_amount(node.power, node.power_negative, node),
+                    "toughness": _static_x_amount(
+                        node.toughness, node.toughness_negative, node
+                    ),
+                    "x_from_count": _x_definition_spec(node.x_definition, node),
+                }),
+            )
         raise LoweringError(_durationless_reason(node.subject), node=node)
 
     if node.x_definition is not None:
@@ -46,22 +91,17 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
             raise LoweringError("a where-clause needs X in the P/T", node=node)
         if not isinstance(node.x_definition, ast.CountOf):
             raise LoweringError("only a count can define X here", node=node)
-        filt = node.x_definition.filter
-        if filt.zone != "graveyard":
-            raise LoweringError(
-                "only a graveyard count defines X for this handler", node=node
-            )
         assert isinstance(node.subject, ast.TargetSpec)
         payload: dict[str, object] = {
             "power": "x",
             "toughness": "x",
             "power_negative": node.power_negative,
             "toughness_negative": node.toughness_negative,
-            "x_from_count": {
-                "zone": "graveyard",
-                "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
-                "card_types": list(filt.card_types),
-            },
+            # The one spec every reader of a computed amount agrees on. The
+            # graveyard-only restriction that stood here was the handler's own
+            # counter talking; with the shared evaluator behind it, the zone is
+            # data like everything else.
+            "x_from_count": count_spec(node.x_definition.filter, node),
         }
         _describe_targets(payload, node.subject)
         return (OracleInstruction("pump_target_creature_until_eot", "", payload),)

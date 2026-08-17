@@ -337,7 +337,7 @@ _COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile")
 _CARD_ZONE_KEYS = frozenset({"type_filter", "named"})
 
 
-def count_spec(filt: "ast.ObjectFilter", node) -> dict:
+def count_spec(filt: "ast.ObjectFilter", node, *, aggregate: str = "count") -> dict:
     """What ``count_from_payload`` needs to take this count at resolution.
 
     One reader for both callers — the where-clause that *defines* an X and the
@@ -364,8 +364,13 @@ def count_spec(filt: "ast.ObjectFilter", node) -> dict:
         raise LoweringError(
             f"a count cannot be narrowed to the {controller}'s permanents", node=node
         )
-    return {
+    spec: dict = {
         "zone": filt.zone,
         "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
         "filter": payload,
     }
+    # Omitted when it is the default, so every spec written before aggregates
+    # existed is byte-identical.
+    if aggregate != "count":
+        spec["aggregate"] = aggregate
+    return spec

@@ -52,6 +52,19 @@ class CountOfDeaths:
 
 
 @dataclass(frozen=True)
+class GreatestPowerAmong:
+    """"the greatest power among creature cards in your graveyard" — a
+    *maximum*, not a count.
+
+    Its own node beside :class:`CountOf` for the reason the death count has
+    one: the two read the same objects and answer different questions, so a
+    lowering that saw only a filter would have to guess which. Zero when the set
+    is empty, which is what a maximum over nothing means for a P/T.
+    """
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class ThatMuch:
     """A back-reference to a quantity the surrounding context produced
     ("you gain that much life", "equal to the damage dealt").

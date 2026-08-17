@@ -28,17 +28,35 @@ def resolve_amount(raw: object, x_value: int | None) -> int:
 
 
 def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: dict) -> int:
-    """Evaluate a ``x_from_count`` spec against the board **at resolution**.
+    """Evaluate an ``x_from_count`` spec at *resolution*.
 
-    CR 613/608.2: a where-clause is not announced with the spell, it is counted
-    when the effect happens, so this runs at resolution and re-counts every
-    time. ``owner`` names whose zone is read — "you" is the effect's controller,
-    "target" the player it points at — and ``filter`` is the ordinary object
-    filter every other consumer already agrees on
-    (``permanent_matches_filter``), which is what stops a count meaning
-    something different from a target of the same words.
+    ``owner`` names whose zone is read — "you" is the effect's controller,
+    "target" the player it points at — which is the only thing a resolution
+    knows that a continuous recompute does not. Everything else is
+    :func:`evaluate_count`.
     """
     owner = context.caster if spec.get("owner", "you") == "you" else (context.target or context.caster)
+    return evaluate_count(game, owner, spec)
+
+
+def evaluate_count(game: "Game", owner: "PlayerState", spec: dict) -> int:
+    """How much the amount a card *computes* currently is, for a named owner.
+
+    CR 608.2: a where-clause is not announced with the spell, it is counted when
+    the effect happens — and CR 604.3's characteristic-defining version is
+    recounted continuously, which is the same question asked at a different
+    moment. **One evaluator for both**, because the alternative is what this
+    replaced: the pump handler carried its own graveyard counter under its own
+    spelling of the spec (``card_types`` where every other reader says
+    ``filter``), so "the number of creature cards in your graveyard" meant two
+    things depending on which sentence it was printed in.
+
+    ``filter`` is the ordinary object filter every other consumer agrees on, and
+    ``aggregate`` says what to do with the objects it names — count them, or
+    take the greatest power among them (Carrion Grub). An aggregate this does
+    not know returns 0 rather than guessing, and the lowerings refuse it long
+    before that.
+    """
     # A count of a *history* rather than of a zone: the creatures counted are
     # exactly the ones no longer on the battlefield, so there is nothing to
     # scan. Per seat, because the game-wide tally cannot answer "under your
@@ -49,33 +67,56 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
     if history is not None:
         return 0
     filt = dict(spec.get("filter") or {})
+    aggregate = spec.get("aggregate", "count")
     zone = spec.get("zone", "battlefield")
     if zone == "battlefield":
         seat = game.players.index(owner)
-        return sum(
-            1 for perm in game.controlled_by(seat)
+        matched = [
+            perm for perm in game.controlled_by(seat)
             if permanent_matches_filter(perm, filt)
-        )
+        ]
+        if aggregate == "greatest_power":
+            return max((perm.effective_power for perm in matched), default=0)
+        return len(matched)
     cards = getattr(owner, zone, None)
     if cards is None:
         return 0
-    # A card in a zone is not a permanent, so the shared matcher — which asks
-    # `has_type` of a battlefield object — cannot answer here. Only the printed
-    # type union and the card's own name are testable off a card, which is what
-    # the graveyard counts in this pool ask for.
+    matched_cards = [card for card in cards if _card_matches_filter(card, filt)]
+    if aggregate == "greatest_power":
+        # The *printed* power, because a card outside the battlefield has no
+        # computed characteristics at all (CR 613 applies to permanents). A
+        # creature card with a characteristic-defining power has none here
+        # either, which is CR 604.3's own answer: its P/T is 0 in every zone but
+        # the battlefield.
+        return max((_printed_power(card) for card in matched_cards), default=0)
+    return len(matched_cards)
+
+
+def _printed_power(card) -> int:
+    try:
+        return int(card.power)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _card_matches_filter(card, filt: dict) -> bool:
+    """Whether a *card* — not a permanent — answers a filter payload.
+
+    A card in a zone has no computed characteristics, so the shared matcher
+    (which asks ``has_type`` of a battlefield object) cannot answer here. Only
+    the printed type union and the card's own name are testable, which is what
+    every zone count in this pool asks for; the lowerings refuse anything else
+    rather than counting it as if it were not there.
+    """
     wanted = filt.get("type_filter")
     wanted_types = tuple(wanted) if isinstance(wanted, (list, tuple)) else ((wanted,) if wanted else ())
+    if wanted_types and card.primary_type not in wanted_types:
+        return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name
     # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —
     # the same reduction a search's named restriction already uses.
-    wanted_name = name_key(str(named)) if named else None
-    return sum(
-        1
-        for card in cards
-        if (not wanted_types or card.primary_type in wanted_types)
-        and (wanted_name is None or name_key(card.name) == wanted_name)
-    )
+    return not named or name_key(card.name) == name_key(str(named))
 
 
 def flip_coin(win_probability: float = 0.5) -> bool:

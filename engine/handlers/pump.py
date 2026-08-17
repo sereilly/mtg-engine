@@ -10,6 +10,7 @@ from ._common import (
     resolve_amount,
     resolve_target_permanent,
     resolve_target_permanents,
+    count_from_payload,
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword, remove_keyword
@@ -96,13 +97,11 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     # The sign travels separately because the payload's "x" cannot be negated.
     x_count = instruction.payload.get("x_from_count")
     if x_count is not None:
-        owner = caster if x_count.get("owner", "you") == "you" else (target or caster)
-        wanted_types = tuple(x_count.get("card_types") or ())
-        x_value = sum(
-            1
-            for c in owner.graveyard
-            if not wanted_types or c.primary_type in wanted_types
-        )
+        # Through the one evaluator. This used to be a second counter with a
+        # second spelling of the spec — hardcoded to the graveyard, reading
+        # `card_types` where every other reader says `filter` — so the same
+        # printed clause meant two things depending on the sentence around it.
+        x_value = count_from_payload(game, context, x_count)
     power_delta = resolve_amount(instruction.payload.get("power", 0), x_value)
     toughness_delta = resolve_amount(instruction.payload.get("toughness", 0), x_value)
     if instruction.payload.get("power_negative"):

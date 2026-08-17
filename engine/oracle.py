@@ -1488,7 +1488,39 @@ def _parse_planeswalker_program(
 _DOESNT_UNTAP_LINE = "this creature doesn't untap during your untap step"
 
 
-def _is_supported_static_creature_line(line: str) -> bool:
+#: The static instruction kinds a *creature's* own line may lower to through the
+#: grammar. Deliberately a short list rather than "anything the grammar reads":
+#: a creature's static lines have been gated by the whitelist below since the
+#: compiler was written, and opening that gate to every production at once is a
+#: change with its own blast radius. What is here is what the CR 613 refresh in
+#: engine/mixins/permanent_state.py dispatches on.
+_GRAMMAR_STATIC_CREATURE_KINDS = frozenset({"dynamic_pt_bonus"})
+
+
+def _grammar_static_creature_instruction(
+    line: str, card_name: str | None = None
+) -> OracleInstruction | None:
+    """The static contribution the grammar reads out of a creature's line.
+
+    Carrion Grub's "gets +X/+0, where X is the greatest power among creature
+    cards in your graveyard" is a layer-7c contribution whose *size* is
+    computed, which no text-keyed table can express — the size is the whole
+    variable part.
+    """
+    compiled = compile_grammar_line(normalize_creature_line(line), card_name=card_name)
+    if not compiled.usable or len(compiled.instructions) != 1:
+        return None
+    instruction = compiled.instructions[0]
+    return (
+        instruction
+        if instruction.kind in _GRAMMAR_STATIC_CREATURE_KINDS
+        else None
+    )
+
+
+def _is_supported_static_creature_line(line: str, card_name: str | None = None) -> bool:
+    if _grammar_static_creature_instruction(line, card_name) is not None:
+        return True
     normalized = normalize_creature_line(line)
     if normalized.startswith("protection from "):
         return True
@@ -1691,8 +1723,13 @@ def _parse_creature_program(
             continue
 
         # 4. Static text
-        if _is_supported_static_creature_line(line):
+        if _is_supported_static_creature_line(line, card_name):
             normalized = normalize_creature_line(line)
+            grammar_static = _grammar_static_creature_instruction(line, card_name)
+            if grammar_static is not None:
+                instructions.append(grammar_static)
+                static_lines.append(normalized)
+                continue
             # Characteristic-defining P/T (CR 604.3). One instruction kind
             # carrying what to count: these were four branches matching literals
             # that embedded the card's own name, so a reprint or any

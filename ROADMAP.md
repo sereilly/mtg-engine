@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 219/285) to the full release line - **137 sets, 33,594
+M21 measured at 220/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–60 — lives in git history at and before
-commit `e59dbe6`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–61 — lives in git history at and before
+commit `0d55a33`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,68 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 61: the draw debt, paid
-
-*(2026-08-16.)* No new cards, and that is what the round is: a debt recorded
-since round 28, prevented from spreading in round 31, given a card in round 58,
-and paid here.
-
-**Five handlers took their cards off the library themselves.** `player.draw` is
-the library operation; `Game._draw_with_replacements` is where drawing becomes
-an *event* — CR 614 lets a replacement take it (Aladdin's Lamp, Ring of Ma'rûf)
-or change how many cards it is (Teferi's Ageless Insight), and CR 121.2 makes a
-multi-card instruction that many individual draws. Wheel of Fortune, Timetwister,
-Bazaar of Baghdad, Sindbad and Verduran Enchantress all walked past it. Round 31
-banned the equivalent shortcut for counter placement *by AST guard, while that
-debt was still cheap to prevent*, and its docstring names this one as the reason;
-`tests/engine/test_draw_seam.py` is the same guard on the seam that already had
-the debt.
-
-**This is a shipped-pool fix, not an M21 one.** Every card in the failing
-interaction is LEA's: an armed Lamp and a Bazaar of Baghdad are both in the
-shipped 388, and the Lamp's charge sat unspent while the Bazaar drew two cards
-around it. The M21 doubler is what made the debt *visible* — a card that reads
-"draw two cards instead" and demonstrably did not — but the interaction has been
-wrong the whole time.
-
-**Sindbad needed more than a substitution.** "Draw a card and reveal it" read the
-top of the library *before* drawing, which is only the card drawn while nothing
-replaces the draw. It draws through the seam and then reads what actually
-arrived, which is also the honest reading of the card.
-
-**Three calls remain and all three are pregame** — CR 103.4's opening hand and
-the two mulligan redraws. Nothing is on any battlefield then, so there is no
-permanent for a CR 614 replacement to come from; routing them through the seam
-would announce a draw event to an empty board, which is not more correct, only
-more machinery. They are named in the guard's allow-list with that reason, and a
-second test fails if a name in that list stops existing — a stale exemption is
-an unguarded call site that looks guarded.
-
-Suite **5,115** at 22.9s, every `--check` green, shipped pool 388/388, M21 still
-217, AI simulation byte-identical at 443 interactions. The sim being unchanged is
-luck rather than evidence: no game in it happened to arm a draw replacement in
-the same turn as a Wheel. Three of the four new tests were watched to fail on the
-round-60 engine; the fourth is the allow-list's own sanity check.
-
-**Next:**
-
-- **A count as an amount.** "Draw cards **equal to the number of** cards named
-  Frantic Inventory in your graveyard" is three small things: the amount
-  production, "cards *named* X" in the noun parser, and a `named` restriction on
-  the zone count `count_from_payload` already does. The constraint to design
-  around is that round 54's machinery resolves one X per resolution, so a
-  sentence carrying two counts must refuse rather than let them collide.
-- **The Shrine cycle**, unchanged: Fruitful Harvest's colour choice at a
-  trigger's resolution, Shattered Heights' discard cost (whose "a land card or
-  **Shrine** card" is a noun-phrase *union* the parser has no production for),
-  Tranquil Light's per-Shrine cost reduction, Sanctum of All's two-zone search
-  and trigger-doubling static.
-- **A reflexive trigger** — "you may pay {1}. **When you do**, …" (Tolarian
-  Kraken), deliberately refused in round 60: CR 603.11 puts a second object on
-  the stack and the `may` machinery resolves inline.
-- **Experimental Overload's variable-P/T token and Jolrael's team base-P/T**,
-  then the legend rule from round 49.
-
 ## Round 62: a count that is the amount
 
 *(2026-08-16.)* M21 **217 → 218** — Frantic Inventory, and three things met in
@@ -441,3 +379,65 @@ choice of" with one keyword refuses.
 - **A reflexive trigger** — "you may pay {1}. **When you do**, …" (Tolarian
   Kraken), deliberately refused in round 60.
 - The legend rule from round 49.
+
+## Round 64: one evaluator for a computed amount
+
+*(2026-08-16.)* M21 **219 → 220** — Carrion Grub, whose one line needed two
+things the engine had no shape for and one it had two of.
+
+**A maximum is not a count.** "…where X is the **greatest power among** creature
+cards in your graveyard" reads the same objects as "the number of" and asks a
+different question, so it gets its own definition node beside `CountOf` — the
+distinction round 55 drew for the death count, for the same reason: a lowering
+that saw only a filter would have to guess.
+
+**A layer-7c contribution whose size is computed.** A pump with no duration is a
+continuous effect, which is why the general case refuses; but one on the
+ability's own source *is* the CR 613 layer 7c contribution the P/T refresh
+already rebuilds on every recompute. What made it unreachable was not the layer,
+it was having no way to say how big it is —
+`engine/static_bonuses.py`'s table can carry a bonus's condition and its size,
+and here the size is the whole variable part. The refusal now routes: a durationless
+self-pump *with* an `x_definition` lowers to `dynamic_pt_bonus` and the refresh
+resolves it.
+
+**And the thing there were two of.** The pump handler carried its own graveyard
+counter, hardcoded to that zone, reading `card_types` where every other reader
+of a computed amount says `filter` — so "the number of creature cards in your
+graveyard" meant two things depending on which sentence it was printed in. Both
+sides go through `evaluate_count` now, and the split that made that possible is
+the honest one: **a resolution knows whose zone to read and a continuous
+recompute does not**, so the context-aware wrapper is one line on top of an
+evaluator that takes an owner. The graveyard-only restriction on the pump was
+its own counter talking; with the shared evaluator behind it the zone is data
+like everything else.
+
+Two smaller decisions worth their lines. A **negated** computed bonus refuses:
+the refresh resolves the amount and nothing carries a sign for it, so "-X/-0"
+would make a creature bigger where the card shrinks it. And the creature
+compiler's static gate asks the grammar for a **short list** of kinds rather
+than for anything it can read — a creature's static lines have been gated by
+that whitelist since the compiler was written, and opening it to every
+production at once is a change with its own blast radius.
+
+Suite **5,127** at 23.1s, every `--check` green, shipped pool 388/388, AI
+simulation byte-identical at 443 interactions. Three of the four new tests were
+watched to fail on the round-63 engine; the fourth is the control that a
+graveyard of noncreature cards leaves the printed 0/5 body alone. One older test
+had to drop an assertion rather than change it — it pinned Carrion Grub as
+unsupported *while* its mill line worked, which was true and is not.
+
+**Next:**
+
+- **The other two readings of the same shape.** Kinetic Augur's power "is equal
+  to the number of instant and sorcery cards in your graveyard" is layer 7a
+  (characteristic-defining) where this was 7c, and `dynamic_pt_count`'s payload
+  vocabulary — battlefield-only, both stats — is what stands between them; the
+  card is also held up by its second line. Jolrael's "creatures you control have
+  base power and toughness X/X until end of turn" is layer 7b over a *team*,
+  which has no handler at all.
+- **The Shrine cycle**: Shattered Heights' discard cost (a noun-phrase *union*),
+  Tranquil Light's per-Shrine cost reduction, Sanctum of All's two-zone search
+  and trigger-doubling static, and Fruitful Harvest's counted any-colour mana
+  (round 63 measured it: a legacy text-keyed handler that adds exactly one).
+- **A reflexive trigger** (Tolarian Kraken), then the legend rule from round 49.

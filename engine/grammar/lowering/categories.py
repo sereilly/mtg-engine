@@ -37,6 +37,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # readings of the same printed sentence answer to different rules
     # (CR 611.2c vs 611.3a). Sharing a switch would tie them together.
     LORD_BUFF_KIND: "static_buffs",
+    # A permanent's continuous bonus **to itself**, sized by a computation
+    # (Carrion Grub). The same category as the anthem above and for the same
+    # reason: it is a CR 613 layer 7c contribution the P/T refresh rebuilds,
+    # not a one-shot pump with a duration. Who it applies to — the whole board
+    # or the source alone — is not what the category is about.
+    "dynamic_pt_bonus": "static_buffs",
     # A permanent's board-wide static effect on *lands* (CR 613 layer 4):
     # Kormus Bell animating every Swamp, Conversion turning every Mountain into
     # a Plains. Their own category rather than "static_buffs" because the two

@@ -36,9 +36,15 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         if not (stream.accept_word("x") and stream.accept_word("is")):
             raise stream.error("expected 'X is' after 'where'")
         stream.accept_word("the")
-        if not stream.accept_phrase("number", "of"):
+        # Two aggregates over the same noun phrase, and the words are what tell
+        # them apart: "the number of" counts the objects, "the greatest power
+        # among" takes a maximum over them (Carrion Grub).
+        if stream.accept_phrase("greatest", "power", "among"):
+            x_definition = ast.GreatestPowerAmong(parse_object_filter(stream))
+        elif stream.accept_phrase("number", "of"):
+            x_definition = ast.CountOf(parse_object_filter(stream))
+        else:
             raise stream.error("expected 'the number of' in a where-clause")
-        x_definition = ast.CountOf(parse_object_filter(stream))
     else:
         stream.reset(mark)
 

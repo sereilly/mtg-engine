@@ -36,6 +36,7 @@ from ..lord_buffs import (
     LordBuff,
     lord_buff_from_payload,
 )
+from ..handlers._common import evaluate_count, resolve_amount
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..pt import clear_base_pt, set_base_pt
@@ -472,6 +473,21 @@ class PermanentStateMixin:
             if dynamic_pt is not None:
                 value = _count_dynamic_pt(self, player, permanent, dynamic_pt.payload)
                 set_base_pt(permanent, value, value)
+
+            # A layer-7c bonus whose *size* is computed (Carrion Grub). The
+            # spec is the one every reader of a computed amount shares, so the
+            # amount here and the amount a where-clause resolves at resolution
+            # are the same function of the same board — which is the whole
+            # reason this needed no counter of its own.
+            for bonus in prog.instructions:
+                if bonus.kind != "dynamic_pt_bonus":
+                    continue
+                value = evaluate_count(self, player, bonus.payload.get("x_from_count") or {})
+                _add_static_pt(
+                    permanent,
+                    resolve_amount(bonus.payload.get("power", 0), value),
+                    resolve_amount(bonus.payload.get("toughness", 0), value),
+                )
 
             land_bonus_instr = next(
                 (i for i in prog.instructions if i.kind == "conditional_land_bonus"), None

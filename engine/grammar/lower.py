@@ -816,6 +816,16 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
         )
     effect = node.effect
     effects = effect.effects if isinstance(effect, ast.Conjunction) else (effect,)
+    # A static ability on the *source itself* whose size is computed (Carrion
+    # Grub's "gets +X/+0, where X is the greatest power among creature cards in
+    # your graveyard"). Not a lord buff — it buffs nobody else — and not a
+    # one-shot pump, because it has no duration; it is the CR 613 layer 7c
+    # contribution the P/T refresh rebuilds on every recompute. The pump
+    # lowering knows how to say that, so this routes rather than repeats.
+    if len(effects) == 1 and isinstance(effects[0], ast.Pump):
+        pump = effects[0]
+        if pump.x_definition is not None and _is_source(pump.subject):
+            return _lower_pump(pump)
     buff = _lower_lord_effects(node, effects)
     return (OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(buff)),)
 
