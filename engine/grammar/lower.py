@@ -65,6 +65,7 @@ from .lowering import (
     _lower_damage,
     _lower_damage_conjunction,
     _lower_damage_unless_pay,
+    _fused_conditional_counter,
     _fused_prepare_then_interact,
     _fused_two_target_pump,
     _lower_fight,
@@ -368,6 +369,7 @@ def lower_statement(
             _fused_exile_then_controller_life,
             _fused_prepare_then_interact,
             _fused_two_target_pump,
+            _fused_conditional_counter,
         ):
             fused = fuse(statement.steps)
             if fused is not None:

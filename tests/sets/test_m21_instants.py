@@ -1112,3 +1112,96 @@ def test_the_ai_taps_the_opponents_creatures_not_its_own(set_pool):
 
     assert action is not None and action.card_name == "Frost Breath"
     assert action.target_player_index == 1
+
+
+# --- Round 81: one counter, two amounts -------------------------------------
+
+
+def _denial_game(set_pool, *, with_flier):
+    pool = set_pool("M21")
+    battlefield = [Permanent(card=pool["Concordia Pegasus"])] if with_flier else []
+    p1 = PlayerState(name="P1", hand=[pool["Lofty Denial"]], battlefield=battlefield)
+    p2 = PlayerState(name="P2", hand=[pool["Shock"]])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.queue_from_hand(1, "Shock", target_player_index=0)
+    game.queue_from_hand(0, "Lofty Denial", target_stack_index=0)
+    return game, p1
+
+
+def _demanded(game):
+    return next((line for line in game.log if "must pay" in line), "")
+
+
+def test_lofty_denial_compiles_to_one_counter_with_a_replacement_amount(set_pool):
+    """Two sentences, **one** instruction.
+
+    Lowered as two steps the card counters twice and asks its victim to pay
+    twice, which is a different and much worse card. The second sentence adds no
+    effect â€” it replaces a number in the first â€” so the two fuse, and the
+    replacement rides beside the printed amount rather than becoming a branch.
+    """
+    program = compile_card_oracle(set_pool("M21")["Lofty Denial"])
+
+    assert program.supported, program.reason
+    (counter,) = [i for i in program.instructions if i.kind == "counter_top_stack_spell"]
+    assert counter.payload["unless_pays_amount"] == 1
+    assert counter.payload["unless_pays_if"] == {
+        "condition": {
+            "kind": "controls",
+            "who": "you",
+            "filter": {"type_filter": "creature", "with_keywords": ["flying"]},
+        },
+        "amount": 4,
+    }
+
+
+def test_lofty_denial_demands_one_without_a_flier(set_pool):
+    game, _p1 = _denial_game(set_pool, with_flier=False)
+    game._settle()
+
+    assert "must pay {1}" in _demanded(game)
+
+
+def test_lofty_denial_demands_four_with_a_flier(set_pool):
+    game, _p1 = _denial_game(set_pool, with_flier=True)
+    game._settle()
+
+    assert "must pay {4}" in _demanded(game)
+
+
+def test_the_amount_is_read_at_resolution_not_at_cast(set_pool):
+    """CR 608.2: the condition is checked as the spell resolves, so a flier that
+    dies in response changes what its victim owes. A lowering that branched at
+    cast time would have fixed the number when Lofty Denial went on the stack."""
+    game, p1 = _denial_game(set_pool, with_flier=True)
+    game.remove_from_battlefield(p1.battlefield[0])
+    game._settle()
+
+    assert "must pay {1}" in _demanded(game)
+
+
+def test_a_second_counter_without_instead_refuses():
+    """The near miss, and why the word is recorded rather than consumed. Two
+    counters in one line that are genuinely two effects would ask the spell's
+    controller to pay twice; no card prints it, and fusing them silently would
+    drop one."""
+    result = compile_line(
+        "Counter target spell unless its controller pays {1}. If you control a "
+        "creature with flying, counter that spell unless its controller pays {4}.",
+        card_name="Test",
+    )
+
+    assert not result.usable
+
+
+def test_instead_refuses_on_a_freshly_chosen_spell():
+    """"Instead" replaces an amount an earlier sentence named. On a new target
+    there is nothing to replace, so the sentence refuses rather than reading the
+    word as decoration."""
+    result = compile_line(
+        "Counter target spell unless its controller pays {4} instead.",
+        card_name="Test",
+    )
+
+    assert not result.usable

@@ -12,6 +12,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _lower_condition,
     _restrictions_beyond,
 )
 
@@ -38,6 +39,68 @@ _COUNTER_UNLESS_PAYS_X = (("X", 1),)
 # matching parse-coverage claim lives in HANDLER_CLAIMS in
 # scripts/parse_coverage.py.
 _COUNTER_PERFORMED_PENALTIES = frozenset({"tap_lands_and_empty_pool"})
+
+
+def _fused_conditional_counter(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"Counter target spell unless its controller pays {1}. If you control a
+    creature with flying, counter that spell unless its controller pays {4}
+    **instead**." (Lofty Denial.)
+
+    **One counter, two amounts.** Lowered as two steps the card counters twice
+    and asks its victim to pay twice, which is a different and much worse card.
+    The second sentence does not add an effect — it replaces a number in the
+    first — so the two fuse into the single instruction the first one describes,
+    carrying the conditional amount beside the printed one.
+
+    The condition is evaluated by the *handler*, at resolution (CR 608.2), which
+    is what the card says: a flier that dies in response to the counter changes
+    the number. Lowering it into two branches would have fixed the amount when
+    the spell was cast.
+    """
+    if len(steps) != 2:
+        return None
+    first, second = steps
+    if not isinstance(first, ast.CounterSpell):
+        return None
+    if not isinstance(second, ast.Conditional) or second.otherwise is not None:
+        return None
+    replacement = second.then
+    if not isinstance(replacement, ast.CounterSpell):
+        return None
+    if not replacement.replaces_prior_amount:
+        # Two counters in one line that are genuinely two effects. No card
+        # prints it, and fusing them would silently drop one.
+        raise LoweringError(
+            "a second counter in one line replaces the first only when it says "
+            '"instead"',
+            node=replacement,
+        )
+    if first.unless_pays is None or replacement.unless_pays is None:
+        raise LoweringError(
+            "a replaced amount needs an amount on both sentences", node=replacement
+        )
+    if replacement.subject.filter != ast.ObjectFilter():
+        raise LoweringError(
+            "the replacing sentence names the spell already targeted, and nothing "
+            "further about it",
+            node=replacement,
+        )
+    (base,) = _lower_counter_spell(first)
+    payload = dict(base.payload)
+    replacement_payload = dict(_lower_counter_spell(
+        ast.CounterSpell(first.subject, unless_pays=replacement.unless_pays)
+    )[0].payload)
+    if "unless_pays_amount" not in payload or "unless_pays_amount" not in replacement_payload:
+        raise LoweringError(
+            "a replaced amount must be a fixed cost on both sentences", node=replacement
+        )
+    payload["unless_pays_if"] = {
+        "condition": _lower_condition(second.condition),
+        "amount": replacement_payload["unless_pays_amount"],
+    }
+    return (OracleInstruction(base.kind, base.value, payload),)
 
 
 def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...]:

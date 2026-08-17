@@ -35,6 +35,12 @@ class CounterSpell:
     # penalty was written means lowering can refuse one nothing performs
     # instead of consuming the sentence and dropping it.
     unpaid_penalty: str | None = None
+    # "…counter **that spell** unless its controller pays {4} **instead**."
+    # (Lofty Denial.) The word is the whole difference between a second counter
+    # and a *replacement amount* for the first one, so it is recorded rather
+    # than consumed and dropped: without it the sentence pair would ask the
+    # spell's controller to pay twice, which is two counters and not this card.
+    replaces_prior_amount: bool = False
 
 
 @dataclass(frozen=True)

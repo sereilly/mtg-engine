@@ -24,8 +24,19 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
     """
     stream.expect_word("counter")
     subject = parse_target_spec(stream)
+    replaces_prior = False
     if subject is None:
-        raise stream.error("expected a spell to counter")
+        # "counter **that spell**" (Lofty Denial's second sentence) — the spell
+        # the sentence before it already targeted, not a second choice. Its own
+        # quantifier for the reason round 75's "those creatures" has one: a
+        # bound reference and a chosen one reach different machinery, and every
+        # lowering refuses "that" unless it says otherwise, so a sentence that
+        # reaches one fails by name rather than failing to parse.
+        if stream.accept_phrase("that", "spell"):
+            subject = ast.TargetSpec("that", ast.ObjectFilter())
+            replaces_prior = True
+        else:
+            raise stream.error("expected a spell to counter")
 
     if stream.accept_word("unless"):
         payer = parse_player_ref(stream)
@@ -37,7 +48,22 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
             # dropping the distinction.
             raise stream.error("only the spell's controller can pay to avoid a counter")
         stream.expect_word("pays", "pay")
-        return ast.CounterSpell(subject, unless_pays=_parse_mana_payment(stream, allow_variable=True))
+        payment = _parse_mana_payment(stream, allow_variable=True)
+        # "…pays {4} **instead**". Required on the bound form and refused on the
+        # chosen one: "counter target spell unless its controller pays {4}
+        # instead" replaces an amount no sentence before it named.
+        if stream.accept_word("instead"):
+            if not replaces_prior:
+                raise stream.error(
+                    "'instead' replaces an amount an earlier sentence named"
+                )
+        elif replaces_prior:
+            raise stream.error(
+                "a counter of the spell already targeted must say what it replaces"
+            )
+        return ast.CounterSpell(
+            subject, unless_pays=payment, replaces_prior_amount=replaces_prior
+        )
 
     return ast.CounterSpell(subject)
 

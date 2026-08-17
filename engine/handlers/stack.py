@@ -113,6 +113,22 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 cost = max(0, int(context.x_value or 0))
             else:
                 cost = max(0, int(instruction.payload["unless_pays_amount"]))
+            # "If you control a creature with flying, counter that spell unless
+            # its controller pays {4} **instead**." (Lofty Denial.) One counter
+            # with a replacement amount, asked here rather than lowered into two
+            # branches, because CR 608.2 puts the question at resolution: a flier
+            # that dies in response to this spell changes what its victim owes.
+            conditional = instruction.payload.get("unless_pays_if")
+            # Imported here rather than at module scope: control_flow dispatches
+            # back through EFFECT_HANDLERS, so a module-level import closes the
+            # cycle through engine/handlers/__init__.py. The same reason
+            # engine/oracle.py imports subject_filters inside its function.
+            from .control_flow import evaluate_condition
+
+            if conditional and evaluate_condition(
+                game, context, conditional.get("condition") or {}
+            ):
+                cost = max(0, int(conditional["amount"]))
             if cost == 0:
                 game.log.append(
                     f"{game.players[target.caster_index].name} pays {{0}}; "

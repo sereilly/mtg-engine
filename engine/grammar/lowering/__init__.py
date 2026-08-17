@@ -128,6 +128,7 @@ from .stack import (
     _COUNTER_HONOURED_FILTER_FIELDS,
     _COUNTER_UNLESS_PAYS_X,
     _COUNTER_PERFORMED_PENALTIES,
+    _fused_conditional_counter,
     _lower_counter_spell,
     _lower_modal_head,
 )
@@ -242,6 +243,7 @@ __all__ = [
     "_COUNTER_HONOURED_FILTER_FIELDS",
     "_COUNTER_UNLESS_PAYS_X",
     "_COUNTER_PERFORMED_PENALTIES",
+    "_fused_conditional_counter",
     "_lower_counter_spell",
     "_lower_modal_head",
     "_UNBLOCKABLE_POWER_LIMIT",
