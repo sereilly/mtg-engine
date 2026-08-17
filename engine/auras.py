@@ -168,7 +168,7 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (
         re.compile(rf"^enchanted {_NOUN} can attack as though it didn't have defender$"),
-        "Animate Wall — declare_attackers_step can_attack_as_though_no_defender",
+        "Animate Wall — declare_attackers_step._ignores_defender",
     ),
     (
         re.compile(

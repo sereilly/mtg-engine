@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**247 / 585 tracked rules covered (42%)** — 1120 tests, 0 unannotated.
+**248 / 585 tracked rules covered (42%)** — 1122 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -76,7 +76,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [606. Loyalty Abilities](#606-loyalty-abilities) | 5/5 | 100% |
 | [607. Linked Abilities](#607-linked-abilities) | 2/5 | 40% |
 | [608. Resolving Spells and Abilities](#608-resolving-spells-and-abilities) | 3/3 | 100% |
-| [609. Effects](#609-effects) | 3/7 | 42% |
+| [609. Effects](#609-effects) | 4/7 | 57% |
 | [610. One-Shot Effects](#610-one-shot-effects) | 2/5 | 40% |
 | [611. Continuous Effects](#611-continuous-effects) | 2/3 | 66% |
 | [612. Text-Changing Effects](#612-text-changing-effects) | 3/10 | 30% |
@@ -721,7 +721,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **609.1** An effect is something that happens in the game as a result of a spell or ability. When a spell, ... *(3 tests)*
 - [x] **609.2** Effects apply only to permanents unless the instruction’s text states otherwise or they clearly c... *(3 tests)*
 - [x] **609.3** If an effect attempts to do something impossible, it does only as much as possible. *(4 tests)*
-- [ ] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat...
+- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(2 tests)*
 - [ ] **609.5** If an effect could result in a tie, the text of the spell or ability that created the effect will...
 - [ ] **609.6** Some continuous effects are replacement effects or prevention effects. See rules 614 and 615.
 - [ ] **609.7** Some effects apply to damage from a source—for example, “The next time a red source of your choic...
@@ -850,7 +850,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **702.1** Most abilities describe exactly what they do in the card’s rules text. Some, though, are very com... *(1 tests)*
 - [x] **702.2** Deathtouch *(4 tests, subrules bc)*
-- [x] **702.3** Defender *(5 tests, subrules b)*
+- [x] **702.3** Defender *(6 tests, subrules b)*
 - [x] **702.4** Double Strike *(3 tests, subrules b)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.8** Flash *(2 tests, subrules ab)*

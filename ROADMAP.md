@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 224/285) to the full release line - **137 sets, 33,594
+M21 measured at 225/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–68 — lives in git history at and before
-commit `7cc3edc`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–69 — lives in git history at and before
+commit `9d20058`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,77 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 69: several cards in a graveyard, where a slot is all there is
-
-*(2026-08-16.)* M21 **222 â†’ 223** â€” Sanguine Indulgence. Its cost-reduction line
-turned out to be the *finished* half, and the round is about what a target means
-in a zone that has no identities in it.
-
-**"Up to two target creature cards from your graveyard."** Every earlier "up to
-N" in this engine names *permanents*, which carry a `permanent_id`. Round 65
-added `resolve_target_slots` for exactly the positional hazard â€” a resolver that
-compacts hands slot 1's card to slot 0 the moment the first target leaves â€” and
-the obvious move was to reuse it. It does not apply, and the reason is the
-interesting part: **in a graveyard there is no identity to resolve to.**
-`load_cards` dedupes by `oracle_id`, so two copies of one card are literally one
-`CardDefinition` â€” `gy[0] is gy[1]` is True. Neither an id nor `is` can tell two
-slots apart.
-
-What can is **order**. Each slot is resolved to its card before anything leaves
-the zone, and the removals then run **highest index first**, because popping slot
-0 slides every later card down one. Ascending removal on `[A, B, C]` with slots
-`[0, 1]` returns `{A, C}` â€” the graveyard spelling of the bug the battlefield
-resolver exists for. A repeated slot collapses to one card, which is CR 601.2c:
-one instance of "target" cannot name the same object twice.
-
-**The second blocker was one this round created for itself.** Reusing
-`_describe_several_targets` fails, because round 68 hardened `_filter_payload` to
-refuse any card- or non-battlefield-scoped filter â€” the gate that stops a
-graveyard clause compiling into a battlefield picker. That gate is right, so the
-several-*card* case gets its own describer rather than a hole in the gate.
-
-**Zero targets is a legal cast** (CR 601.2c: the caster announces *how many*, and
-none is one of the answers), so an empty graveyard must not refuse the spell â€”
-where a spell requiring its one target could not be cast at all. That is one
-line in the cast-legality check and one in the browser prompt, and it is the
-difference between "up to two" and "two".
-
-**The cost reduction was measured, not assumed**, because the ROADMAP records
-uncomputable cost reductions as a deliberate refusal and "cheaper is the one
-direction a cost error must never go". `_SELF_CONDITIONS` already maps "you've
-gained 3 or more life this turn"; measured, 0 and 2 life gained give no
-reduction, 3 and 5 give `{3}` exactly, and under the patch one black mana casts
-the card after three life gained and fails before it. Not claimed-but-unapplied,
-not unconditional. Gates are all-of and both halves hold.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions, **zero hooks added**. Nineteen new tests, all
-nineteen watched to fail on the round-68 engine. CR 115.2 and 601.2 gain a test
-each.
-
-**Next â€” and the first of these is the largest thing this session found:**
-
-- **A graveyard target is a slot on the stack and it goes stale, live in the
-  shipped pool.** Named Grizzly Bears in a graveyard, let one card leave in
-  response, and Raise Dead returns **Hill Giant**. The same shape reaches
-  Regrowth, Reconstruction, Resurrection, Rise Again, Animate Dead, Fungal
-  Rebirth, Shipwreck Dowser and Liliana, Death Mage. It is currently unreachable
-  in the shipped pool only because Timetwister is the sole card that disturbs a
-  graveyard and it is a sorcery â€” **M21 makes it reachable**, through Return to
-  Nature (an instant) and Scavenging Ooze. This wants its own round and it has to
-  precede promotion.
-- **Read the Tides' second mode is engine-correct and unreachable in the
-  browser**: `_mode_target_kind` has no entry for `bounce_target_creature` and
-  defaults to `"player"`, so the API serves two player seats as its valid targets
-  and the cast logs "No creatures to return".
-- **Fungal Rebirth returns an instant.** "target **permanent** card" parses with
-  `card_types=()` â€” "permanent" is a generic noun recording no restriction â€” so
-  it reduces to the same payload as "target card". Measured: the picker offered
-  Lightning Bolt and the cast returned it.
-- **`scripts/parse_coverage.py` reads `manifest_set_paths()` without
-  `include_measured`**, so its deletion probe is blind to M21 â€” which is why the
-  dropped "permanent" above was never flagged.
-
 ## Round 70: a trigger on the activation, not on what it resolves into
 
 *(2026-08-16.)* M21 **223 â†’ 224** â€” Keral Keep Disciples. The effect half was
@@ -440,4 +369,53 @@ placed before a short-circuit tests the short-circuit, not the guard.
 
 Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
 byte-identical at 443 interactions. CR 508.1 gains subrule c.
+
+## Round 72: a permission, not a removal
+
+*(2026-08-16.)* M21 **224 → 225** — Drowsing Tyrannodon.
+
+> Defender
+> As long as you control a creature with power 4 or greater, this creature can
+> attack as though it didn't have defender.
+
+**Both seams I proposed for it were wrong**, and the spec said so with evidence.
+`engine/combat_restrictions.py` is a *restriction* table with no condition
+vocabulary and this line is a **permission**; and `engine/static_bonuses.py` has
+stopped being about P/T — it already carries a general `conditional_static` kind
+that parses both printed word orders, already carries a non-P/T combat effect
+(`cant_be_blocked`), and already has a live re-asked predicate. So the card is
+two table rows and a reader, not a new mechanism.
+
+**The condition already had a reader, one layer away.** "You control a creature
+with power 4 or greater" is what Turret Ogre's intervening-if lowers to, and the
+grammar already produces `{"kind": "controls", … "power": {"op": "ge", "value":
+4}}` for it. The new row emits *that exact payload* and the evaluator gains one
+`controls` branch delegating to `subject_matches` — so the phrase has **one**
+meaning in the engine rather than a second regex that happens to agree today.
+That is idiom #1's rule (a narrowing read by two readers drifts) applied before
+the drift rather than after it.
+
+**"As though" is not losing the keyword — CR 609.4**, and my brief cited the
+wrong section (701 is keyword *actions*). The distinction is not academic and it
+is asserted two ways: the Tyrannodon attacks while `_has_keyword(…, "defender")`
+stays True, and a defender-narrowed noun phrase — Portcullis Vine's real
+sacrifice-cost filter — still matches it. A layer-6 removal would have passed an
+attack test and been wrong everywhere else the keyword is read.
+
+**No grammar production, and that is a measurement rather than a shortcut.**
+Across all 668 pool cards, ten lines print the leading "as long as" order, eight
+refuse, and exactly one has a condition the grammar's `_parse_condition` models.
+A `StaticAbilityNode` never lowers anyway, so a production would cost a whole-line
+shape, an AST node, a production and a `_looks_static` extension to move one line
+and execute nothing. Recorded in the backlog with that number.
+
+Whole-pool compile diff: **exactly one card changes**. Suite green, every
+`--check` gate green, shipped pool 388/388, AI simulation byte-identical at 443
+interactions, **zero hooks added**, no ratchet touched. Seven new tests, all seven
+watched to fail on the round-71 engine.
+
+The size guard again, and again it named a misfiling rather than bulk: two Vito
+tests were sitting in the creature file when Vito is a Legendary Creature and
+`test_m21_legendary_creatures.py` already held four others. Round 70's own axis,
+applied to tests that were on the wrong side of it.
 

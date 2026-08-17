@@ -170,3 +170,47 @@ def test_vito_drains_off_his_own_lifelink_grant(set_pool):
 
     assert p1.life == 22, "lifelink gained 2"
     assert p2.life == 16, "2 combat damage, then Vito's 2"
+
+
+def test_vito_stays_silent_when_the_opponent_gains_the_life(set_pool):
+    """"Whenever **you** gain life" is the ability's controller (CR 109.5). The
+    event is announced game-wide and the narrowing is the trigger's own word,
+    so this is what the event filter is for."""
+    pool = set_pool("M21")
+    vito = Permanent(card=pool["Vito, Thorn of the Dusk Rose"])
+    p1 = PlayerState(name="P1", battlefield=[vito])
+    p2 = PlayerState(
+        name="P2", hand=[pool["Revitalize"]], library=[pool["Swamp"]] * 3
+    )
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(1, "Revitalize")
+    assert result.supported, result.details
+    game._settle()
+
+    assert p2.life == 23
+    assert p1.life == 20, "Vito's controller gained nothing, so nothing drained"
+
+
+def test_vito_reads_the_life_a_replacement_left_and_not_the_life_intended(set_pool):
+    """CR 614: a replaced life gain never happened. Lich replaces the whole
+    gain with draws, so the event is not announced at all — which is why the
+    emit is after the replacements rather than beside the intent."""
+    from tests.helpers import CARDS_BY_NAME
+
+    pool = set_pool("M21")
+    vito = Permanent(card=pool["Vito, Thorn of the Dusk Rose"])
+    lich = Permanent(card=CARDS_BY_NAME["Lich"])
+    p1 = PlayerState(
+        name="P1", battlefield=[vito, lich], library=[pool["Swamp"]] * 5
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    before = p1.life
+
+    game._gain_life(p1, 3, "a test")
+    game._settle()
+
+    assert len(p1.hand) == 3, "Lich drew that many cards instead"
+    assert p1.life == before, "the gain was replaced, so no life arrived"
+    assert p2.life == 20, "no life was gained, so nothing triggered"

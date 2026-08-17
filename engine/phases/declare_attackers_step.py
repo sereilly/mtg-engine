@@ -13,6 +13,7 @@ from ..auras import aura_restriction_active
 from ..events import emit
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..static_bonuses import conditional_static_holds
 from ..trigger_utils import matching_triggers
 
 
@@ -279,8 +280,8 @@ class DeclareAttackersStepMixin:
         # neither prints the word. Both could attack while this read the card.
         # Animate Wall grants the exemption while attached
         # (auras.aura_restrictions).
-        if self._has_keyword(attacker, "defender") and not aura_restriction_active(
-            attacker, "ignores_defender"
+        if self._has_keyword(attacker, "defender") and not self._ignores_defender(
+            attacker
         ):
             return False
 
@@ -299,6 +300,37 @@ class DeclareAttackersStepMixin:
                 return False
 
         return True
+
+    def _ignores_defender(self, attacker: Permanent) -> bool:
+        """Whether *attacker* may attack "as though it didn't have defender".
+
+        CR 609.4: an "as though" effect applies **only** to the stated effect —
+        the creature still has defender for every other purpose, so this is a
+        permission read here rather than a keyword the layers remove. Removing it
+        would also change what a defender-narrowed filter matches
+        (``subject_filters``), what layer 6 reports to the web payload, and what
+        "creatures with defender" counts, none of which the card says.
+
+        Two sources, both asked live. An attached Aura (Animate Wall) is asked of
+        the Auras attached right now, and the permanent's own conditional static
+        (Drowsing Tyrannodon) is asked of the board right now — the condition can
+        change between layer recomputes, and declaring attackers is the read that
+        matters. It is the exact twin of the ``cant_be_blocked`` conditional
+        static the declare blockers step asks at block time.
+        """
+        if aura_restriction_active(attacker, "ignores_defender"):
+            return True
+        seat = self.controller_index_of(attacker)
+        if seat is None:
+            return False
+        return any(
+            i.kind == "conditional_static"
+            and i.payload.get("ignores_defender")
+            and conditional_static_holds(
+                self, seat, attacker, i.payload.get("condition") or {}
+            )
+            for i in compile_card_oracle(attacker.effective_card).instructions
+        )
 
     def _must_attack_if_able(self, attacker: Permanent) -> bool:
         if attacker.metadata.get("must_attack_until_eot"):

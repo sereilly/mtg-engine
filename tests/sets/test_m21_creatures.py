@@ -1299,50 +1299,6 @@ def test_tempered_veteran_tends_only_an_already_counted_creature(set_pool):
     assert (cat.effective_power, cat.effective_toughness) == (4, 3)
 
 
-def test_vito_stays_silent_when_the_opponent_gains_the_life(set_pool):
-    """"Whenever **you** gain life" is the ability's controller (CR 109.5). The
-    event is announced game-wide and the narrowing is the trigger's own word,
-    so this is what the event filter is for."""
-    pool = set_pool("M21")
-    vito = Permanent(card=pool["Vito, Thorn of the Dusk Rose"])
-    p1 = PlayerState(name="P1", battlefield=[vito])
-    p2 = PlayerState(
-        name="P2", hand=[pool["Revitalize"]], library=[pool["Swamp"]] * 3
-    )
-    game = Game(players=[p1, p2])
-
-    result = game.cast_from_hand(1, "Revitalize")
-    assert result.supported, result.details
-    game._settle()
-
-    assert p2.life == 23
-    assert p1.life == 20, "Vito's controller gained nothing, so nothing drained"
-
-
-def test_vito_reads_the_life_a_replacement_left_and_not_the_life_intended(set_pool):
-    """CR 614: a replaced life gain never happened. Lich replaces the whole
-    gain with draws, so the event is not announced at all — which is why the
-    emit is after the replacements rather than beside the intent."""
-    from tests.helpers import CARDS_BY_NAME
-
-    pool = set_pool("M21")
-    vito = Permanent(card=pool["Vito, Thorn of the Dusk Rose"])
-    lich = Permanent(card=CARDS_BY_NAME["Lich"])
-    p1 = PlayerState(
-        name="P1", battlefield=[vito, lich], library=[pool["Swamp"]] * 5
-    )
-    p2 = PlayerState(name="P2")
-    game = Game(players=[p1, p2])
-    before = p1.life
-
-    game._gain_life(p1, 3, "a test")
-    game._settle()
-
-    assert len(p1.hand) == 3, "Lich drew that many cards instead"
-    assert p1.life == before, "the gain was replaced, so no life arrived"
-    assert p2.life == 20, "no life was gained, so nothing triggered"
-
-
 # --- The subject-filtered trigger: "a creature you control with deathtouch" --
 
 
@@ -2499,3 +2455,106 @@ def test_a_non_loyalty_activation_leaves_the_disciples_silent(set_pool):
     assert result.supported, result.details
     # The Magmutt's own ping, and nothing behind it.
     assert [p.life for p in game.players] == [20, 19]
+
+# --- Round 72: a conditional permission that lifts defender ------------------
+
+
+def _tyrannodon_board(set_pool, *, with_big: bool):
+    """The Tyrannodon, optionally beside a plainly 4-power friend, at declare
+    attackers."""
+    pool = set_pool("M21")
+    tyrannodon = _nosick(Permanent(card=pool["Drowsing Tyrannodon"]))  # 3/3
+    battlefield = [tyrannodon]
+    if with_big:
+        battlefield.append(_nosick(Permanent(card=pool["Colossal Dreadmaw"])))  # 6/6
+    game = Game(players=[PlayerState(name="P1", battlefield=battlefield),
+                         PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    return game, tyrannodon
+
+
+def test_drowsing_tyrannodon_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Drowsing Tyrannodon"])
+
+    assert program.supported, program.reason
+    permission = [
+        i for i in program.instructions
+        if i.kind == "conditional_static" and i.payload.get("ignores_defender")
+    ]
+    assert len(permission) == 1, program.instructions
+    # The condition is the payload the grammar already produces for a
+    # "you control a creature with power 4 or greater" intervening-if, so the
+    # phrase has one meaning in the engine rather than two that agree today.
+    assert permission[0].payload["condition"] == {
+        "kind": "controls", "who": "you",
+        "filter": {"type_filter": "creature", "power": {"op": "ge", "value": 4}},
+    }
+
+
+def test_drowsing_tyrannodon_attacks_only_beside_a_four_power_creature(set_pool):
+    """The card has to *attack*, not merely compile. Fixing the parser alone
+    leaves a supported creature that still can't be declared."""
+    game, tyrannodon = _tyrannodon_board(set_pool, with_big=True)
+    assert game.declare_attackers(0, [0]) == (True, "declared attackers")
+
+    alone, tyrannodon_alone = _tyrannodon_board(set_pool, with_big=False)
+    ok, message = alone.declare_attackers(0, [0])
+    assert not ok
+    assert "cannot attack" in message
+    # Its own 3 power is under the threshold, so nothing on the board answers.
+    assert tyrannodon_alone.effective_power == 3
+
+
+def test_drowsing_tyrannodon_still_has_defender_while_it_attacks(set_pool):
+    """CR 609.4: "as though" applies to the stated effect and nothing else.
+
+    Granting the permission by *removing* defender would pass an attack test and
+    then quietly change what a defender-narrowed noun phrase matches â€” which is
+    how Portcullis Vine's "sacrifice a creature with defender" would stop
+    seeing it.
+    """
+    from engine.subject_filters import subject_matches
+
+    game, tyrannodon = _tyrannodon_board(set_pool, with_big=True)
+    assert game.can_attack(tyrannodon, 1)
+
+    assert game._has_keyword(tyrannodon, "defender")
+    assert subject_matches(
+        game, tyrannodon, {"type_filter": "creature", "with_keywords": ["defender"]},
+        observer=0,
+    )
+
+
+def test_drowsing_tyrannodon_can_answer_its_own_condition(set_pool):
+    """The card prints "a creature", not "another creature" (contrast Turret
+    Ogre), so a Tyrannodon pumped to 4 power satisfies itself â€” and the power it
+    is asked for is the layer-computed one, not the printed 3.
+    """
+    from engine.pt import add_pt_modifier
+
+    game, tyrannodon = _tyrannodon_board(set_pool, with_big=False)
+    assert not game.can_attack(tyrannodon, 1)
+
+    add_pt_modifier(tyrannodon, 1, 1)
+    game._recompute_continuous_effects()
+
+    assert tyrannodon.effective_power == 4
+    assert game.can_attack(tyrannodon, 1)
+
+
+def test_drowsing_tyrannodons_permission_ends_when_the_big_creature_does(set_pool):
+    """"As long as" is asked of the board at every read, never latched at a
+    recompute â€” the same reason the block-legality check asks Tome Anima's twin
+    at block time."""
+    game, tyrannodon = _tyrannodon_board(set_pool, with_big=True)
+    assert game.can_attack(tyrannodon, 1)
+
+    dreadmaw = game.players[0].battlefield[1]
+    game.remove_from_battlefield(dreadmaw)
+    game._settle()
+
+    assert not game.can_attack(tyrannodon, 1)

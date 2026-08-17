@@ -196,3 +196,89 @@ def test_508_1c_a_satisfied_restriction_does_not_answer_the_others():
     assert game.can_attack(serpent, 1) is False, (
         "no flying and no islandwalk, so Island Sanctuary still applies"
     )
+
+
+# ---------------------------------------------------------------------------
+# "As though" is not removal (CR 609.4)
+# ---------------------------------------------------------------------------
+
+
+def _dozing_lizard() -> CardDefinition:
+    """Drowsing Tyrannodon's template on an invented card.
+
+    Named nothing the pool prints: the permission has to fall out of the printed
+    sentence, so a test that could only pass for one name would not tell the
+    difference between a production and a hook.
+    """
+    text = (
+        "Defender\n"
+        "As long as you control a creature with power 4 or greater, this "
+        "creature can attack as though it didn't have defender."
+    )
+    return CardDefinition(
+        name="Dozing Lizard", mana_cost="{1}{G}", cmc=2.0,
+        type_line="Creature â€” Lizard", oracle_text=text,
+        colors=("G",), color_identity=("G",), keywords=("Defender",),
+        produced_mana=(),
+        raw={"name": "Dozing Lizard", "type_line": "Creature â€” Lizard",
+             "power": "3", "toughness": "3"},
+    )
+
+
+def _bruiser(power: int) -> CardDefinition:
+    return CardDefinition(
+        name=f"{power}-Power Bruiser", mana_cost="{4}{G}", cmc=5.0,
+        type_line="Creature â€” Beast", oracle_text="", colors=("G",),
+        color_identity=("G",), keywords=(), produced_mana=(),
+        raw={"name": f"{power}-Power Bruiser",
+             "type_line": "Creature â€” Beast",
+             "power": str(power), "toughness": "3"},
+    )
+
+
+def _lizard_game(friend_power: int | None):
+    lizard = _nosick(Permanent(card=_dozing_lizard()))
+    battlefield = [lizard]
+    if friend_power is not None:
+        battlefield.append(_nosick(Permanent(card=_bruiser(friend_power))))
+    game = Game(players=[PlayerState(name="P1", battlefield=battlefield),
+                         PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._recompute_continuous_effects()
+    return game, lizard
+
+
+@pytest.mark.cr("609.4", "702.3b")
+def test_609_4_an_as_though_permission_does_not_remove_defender():
+    """CR 609.4: the game treats the condition as true *for that effect only*.
+
+    Implementing the line by taking the keyword away would pass an attack test
+    and then be wrong everywhere else the keyword is read â€” a defender-narrowed
+    noun phrase (Portcullis Vine's "sacrifice a creature with defender") would
+    stop matching, and layer 6 would report a creature the card never changed.
+    """
+    from engine.subject_filters import subject_matches
+
+    game, lizard = _lizard_game(friend_power=5)
+
+    assert game.can_attack(lizard, 1) is True
+    assert game._has_keyword(lizard, "defender"), "the permission is not a removal"
+    assert subject_matches(
+        game, lizard, {"type_filter": "creature", "with_keywords": ["defender"]},
+        observer=0,
+    )
+
+
+@pytest.mark.cr("609.4")
+def test_609_4_the_condition_is_re_asked_rather_than_latched():
+    """"As long as" exists exactly while its condition does. A 3-power friend
+    never grants it, and a 5-power friend stops granting it when it leaves."""
+    game, lizard = _lizard_game(friend_power=3)
+    assert game.can_attack(lizard, 1) is False
+
+    game, lizard = _lizard_game(friend_power=5)
+    assert game.can_attack(lizard, 1) is True
+    game.remove_from_battlefield(game.players[0].battlefield[1])
+    game._settle()
+
+    assert game.can_attack(lizard, 1) is False

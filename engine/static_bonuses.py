@@ -109,12 +109,28 @@ _CONTROLS_PLANESWALKER_CONDITION = re.compile(
     r"^you control an? (?P<subtype>[a-z]+) planeswalker$"
 )
 _HAS_PLUS1_CONDITION = re.compile(r"^it has a \+1/\+1 counter on it$")
+# "you control a creature with power 4 or greater" (Drowsing Tyrannodon). The
+# threshold is data, and the noun phrase is lowered to the *same* filter payload
+# the grammar produces for Turret Ogre's intervening-if — so the phrase has one
+# meaning in the engine (``handlers/_common.permanent_matches_filter``'s ``power``
+# comparison) rather than a second regex that happens to agree today.
+_CONTROLS_POWER_CONDITION = re.compile(
+    r"^you control a creature with power (?P<power>\d+) or greater$"
+)
 
 _EFFECT_PT = re.compile(
     r"^gets \+(?P<power>\d+)/\+(?P<toughness>\d+)(?: and has (?P<keywords>[a-z ]+))?$"
 )
 _EFFECT_KEYWORDS = re.compile(r"^has (?P<keywords>[a-z ]+)$")
 _EFFECT_UNBLOCKABLE = re.compile(r"^can't be blocked$")
+# "can attack as though it didn't have defender" (Drowsing Tyrannodon).
+# CR 609.4: an "as though" permission applies to the stated effect ONLY. The
+# creature still HAS defender for every other purpose, so this is a payload the
+# attack-legality check reads — never a keyword removal, which would also change
+# what "creatures with defender" matches and what a Wall-referencing card sees.
+_EFFECT_IGNORES_DEFENDER = re.compile(
+    r"^can attack as though it didn't have defender$"
+)
 
 
 @lru_cache(maxsize=1)
@@ -139,6 +155,16 @@ def _parse_condition_text(text: str) -> dict[str, object] | None:
         return {"kind": "controls_planeswalker", "subtype": match.group("subtype")}
     if _HAS_PLUS1_CONDITION.match(text) is not None:
         return {"kind": "has_plus1_counter"}
+    match = _CONTROLS_POWER_CONDITION.match(text)
+    if match is not None:
+        return {
+            "kind": "controls",
+            "who": "you",
+            "filter": {
+                "type_filter": "creature",
+                "power": {"op": "ge", "value": int(match.group("power"))},
+            },
+        }
     return None
 
 
@@ -163,6 +189,8 @@ def _parse_effect_text(text: str) -> dict[str, object] | None:
         return {"keywords": keywords}
     if _EFFECT_UNBLOCKABLE.match(text) is not None:
         return {"cant_be_blocked": True}
+    if _EFFECT_IGNORES_DEFENDER.match(text) is not None:
+        return {"ignores_defender": True}
     return None
 
 
@@ -222,6 +250,24 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
         )
     if kind == "has_plus1_counter":
         return int(source.metadata.get("plus_counters", 0)) > 0
+    if kind == "controls":
+        # The same payload shape ``engine/grammar/lower._lower_condition``
+        # produces, answered by the same matcher — ``subject_matches`` is the one
+        # place a printed noun phrase is tested against a permanent, so "a
+        # creature with power 4 or greater" cannot mean one thing on a trigger's
+        # intervening-if and another on a continuous ability.
+        from .subject_filters import subject_matches
+
+        if condition.get("who", "you") != "you":
+            # No card in the pool prints an opponent-side "as long as", and a
+            # payload this cannot evaluate must not be silently answered False
+            # from inside a matcher loop that looks like it tried.
+            return False
+        described = condition.get("filter") or {}
+        return any(
+            subject_matches(game, perm, described, observer=seat, source=source)
+            for perm in game.controlled_by(seat)
+        )
     return False
 
 
