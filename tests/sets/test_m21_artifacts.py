@@ -100,3 +100,119 @@ def test_sparkhunter_masticore_keeps_its_planeswalker_protection(set_pool):
     game.enforce_mana_costs = False
 
     assert ("card_type", "planeswalker") in game._protection_qualities(masticore)
+
+
+# --- Round 86: a condition about two permanents at once ---------------------
+
+
+def _replicator_board(set_pool, mine=(), theirs=(), my_tokens=()):
+    """Chrome Replicator in hand over the board *mine*/*theirs* describes."""
+    pool = set_pool("M21")
+    from engine.tokens import make_token_card
+
+    battlefield = [Permanent(card=pool[name]) for name in mine]
+    battlefield += [
+        Permanent(
+            card=make_token_card(name, 2, 2, "Creature — Bear"),
+            metadata={"is_token": True},
+        )
+        for name in my_tokens
+    ]
+    p1 = PlayerState(
+        name="P1", battlefield=battlefield, hand=[pool["Chrome Replicator"]]
+    )
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=pool[n]) for n in theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game
+
+
+def _constructs(game):
+    return [
+        perm
+        for perm in game.controlled_by(0)
+        if perm.metadata.get("is_token") and perm.card.name == "Construct Token"
+    ]
+
+
+def test_chrome_replicator_compiles_supported(set_pool):
+    """The token half already worked; the whole card was its intervening-if.
+    "…with the same name as one another" is a relation *between* the counted
+    permanents, so it rides the condition rather than the object filter — an
+    ObjectFilter is asked about one permanent at a time, and no one permanent
+    can answer whether something else shares its name."""
+    program = compile_card_oracle(set_pool("M21")["Chrome Replicator"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    gate = trigger.instruction.payload["intervening_if"]
+    assert gate["count"] == 2 and gate["op"] == "ge" and gate["shared_name"]
+    assert gate["filter"] == {"exclude_types": ["land"], "nontoken": True}
+
+
+def test_a_pair_sharing_a_name_makes_the_construct(set_pool):
+    game = _replicator_board(set_pool, mine=["Alpine Watchdog", "Alpine Watchdog"])
+
+    game.cast_from_hand(0, "Chrome Replicator")
+    game._settle()
+
+    assert len(_constructs(game)) == 1
+
+
+def test_three_names_with_one_pair_among_them_still_counts(set_pool):
+    """The threshold bounds the largest same-name *group*, not the matching set.
+    Three permanents match the noun phrase here and only two share a name — and
+    that is what the card asks for."""
+    game = _replicator_board(
+        set_pool, mine=["Alpine Watchdog", "Gale Swooper", "Alpine Watchdog"]
+    )
+
+    game.cast_from_hand(0, "Chrome Replicator")
+    game._settle()
+
+    assert len(_constructs(game)) == 1
+
+
+def test_two_permanents_with_different_names_make_nothing(set_pool):
+    """Two matching permanents, no shared name. Counting the matching set the
+    way every other ``controls`` condition does would satisfy this — which is
+    exactly the reading the relation exists to rule out."""
+    game = _replicator_board(set_pool, mine=["Alpine Watchdog", "Gale Swooper"])
+
+    game.cast_from_hand(0, "Chrome Replicator")
+    game._settle()
+
+    assert _constructs(game) == []
+
+
+def test_the_pair_has_to_be_one_you_control(set_pool):
+    """"**You** control" — an opponent's matched set is a different player's."""
+    game = _replicator_board(set_pool, theirs=["Alpine Watchdog", "Alpine Watchdog"])
+
+    game.cast_from_hand(0, "Chrome Replicator")
+    game._settle()
+
+    assert _constructs(game) == []
+
+
+def test_lands_sharing_a_name_do_not_count(set_pool):
+    """"Nonland" is read, not decoration — two Mountains share a name and are
+    excluded anyway."""
+    game = _replicator_board(set_pool, mine=["Mountain", "Mountain"])
+
+    game.cast_from_hand(0, "Chrome Replicator")
+    game._settle()
+
+    assert _constructs(game) == []
+
+
+def test_tokens_sharing_a_name_do_not_count(set_pool):
+    """"Nontoken", the other half of the noun phrase — and the half that keeps
+    the card from feeding itself: two Constructs it made would otherwise satisfy
+    the next copy's condition."""
+    game = _replicator_board(set_pool, my_tokens=["Bear", "Bear"])
+
+    game.cast_from_hand(0, "Chrome Replicator")
+    game._settle()
+
+    assert _constructs(game) == []

@@ -408,6 +408,14 @@ class Controls:
     who: PlayerRef
     filter: ObjectFilter
     comparison: Comparison | None = None
+    #: "…two or more nonland, nontoken permanents **with the same name as one
+    #: another**" (Chrome Replicator). A relation *between* the counted objects,
+    #: which is why it sits here and not on `filter`: an ObjectFilter is tested
+    #: against one permanent at a time, and no single permanent can answer
+    #: whether it shares a name with something else. Set, `comparison` stops
+    #: bounding the whole matching set and bounds the largest same-name group
+    #: within it.
+    shared_name: bool = False
 
 
 @dataclass(frozen=True)

@@ -85,12 +85,26 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # — it answers about a permanent alone — so it is asked here, the same
         # split the counter handler makes.
         source = context.source_permanent if filters.get("exclude_self") else None
-        count = sum(
-            1
+        matched = [
+            permanent
             for player in players
             for permanent in game.controlled_by(player)
             if permanent is not source and permanent_matches_filter(permanent, filters)
-        )
+        ]
+        if payload.get("shared_name"):
+            # "…with the same name as one another" (Chrome Replicator). The
+            # threshold bounds the largest group sharing a name, not the
+            # matching set — three permanents with three different names satisfy
+            # nothing. The name is read off the *effective* card, so a Clone
+            # counts under the name it copied (CR 707.2), which is also the name
+            # printed on the board a player is looking at.
+            by_name: dict = {}
+            for permanent in matched:
+                name = permanent.effective_card.name
+                by_name[name] = by_name.get(name, 0) + 1
+            count = max(by_name.values(), default=0)
+        else:
+            count = len(matched)
         wanted = payload.get("count")
         op = payload.get("op", "eq")
         # "if an opponent controls more creatures than you" (Garruk,

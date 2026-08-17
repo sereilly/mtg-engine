@@ -551,6 +551,19 @@ def _lower_condition(
         if condition.comparison is not None and isinstance(condition.comparison.value, ast.Fixed):
             payload["count"] = condition.comparison.value.value
             payload["op"] = condition.comparison.op
+        if condition.shared_name:
+            # The threshold is what the relation is *for*: "permanents with the
+            # same name as one another" with no number would be read as
+            # "count > 0" downstream and hold for a single permanent, which is
+            # the opposite of what the words say. No card prints it that way, so
+            # it refuses rather than picking a number the text did not print.
+            if "count" not in payload:
+                raise LoweringError(
+                    "'with the same name as one another' needs the printed "
+                    "threshold it qualifies",
+                    node=condition,
+                )
+            payload["shared_name"] = True
         return payload
     if isinstance(condition, ast.IsState):
         return {"kind": "is_state", "state": condition.state, "negated": condition.negated}

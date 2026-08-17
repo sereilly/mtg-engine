@@ -660,11 +660,41 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
             another = stream.accept_word("another")
             if not another:
                 stream.accept_word("a", "an")
+            # "you control **two or more** nonland, nontoken permanents…"
+            # (Chrome Replicator). Read where it is printed, in front of the
+            # noun phrase, and only when "or more" follows the number: a bare
+            # number here would be a different condition ("exactly two"), and no
+            # card in the pool prints one, so guessing which it meant is the
+            # kind of silent widening a threshold must never take.
+            at_least: int | None = None
+            if not negated and not another:
+                count_mark = stream.mark()
+                try:
+                    amount = parse_amount(stream)
+                except GrammarError:
+                    amount = None
+                if (
+                    isinstance(amount, ast.Fixed)
+                    and stream.accept_phrase("or", "more")
+                ):
+                    at_least = amount.value
+                else:
+                    stream.reset(count_mark)
             filt = parse_object_filter(stream)
             if another:
                 filt = dataclasses.replace(filt, other_than_source=True)
-            comparison = None if not negated else ast.Comparison("eq", ast.Fixed(0))
-            return ast.Controls(player, filt, comparison)
+            # "…**with the same name as one another**". A relation over the set
+            # just counted, so it is read after the noun phrase and kept off the
+            # filter — see `ast.Controls.shared_name`.
+            shared_name = bool(
+                stream.accept_phrase("with", "the", "same", "name", "as", "one", "another")
+            )
+            comparison = None
+            if negated:
+                comparison = ast.Comparison("eq", ast.Fixed(0))
+            elif at_least is not None:
+                comparison = ast.Comparison("ge", ast.Fixed(at_least))
+            return ast.Controls(player, filt, comparison, shared_name)
         # "you gained 3 or more life this turn" (Indulging Patrician). "Or more"
         # is the only printed comparison on this clause, so the threshold is a
         # plain minimum rather than a Comparison: inventing "or less" here would

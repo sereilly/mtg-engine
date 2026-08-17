@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 235/285) to the full release line - **137 sets, 33,594
+M21 measured at 236/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–82 — lives in git history at and before
-commit `9cff89e`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–83 — lives in git history at and before
+commit `1d9dd56`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,57 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 83: a subject printed once and meant twice
-
-*(2026-08-17.)* M21 **232 → 233** — Peer into the Abyss, and the general gap it
-was stuck behind.
-
-> Target player draws cards equal to half the number of cards in their library
-> and loses half their life. Round up each time.
-
-**The blocker was not this card's.** "You gain 1 life and draw a card" has always
-worked, because the tail is a bare imperative whose subject is implied by the
-verb. "Target player draws a card **and loses 1 life**" did not: the sentence
-loop hands the tail to `parse_statement`, which wants a subject of its own. So a
-printed subject now carries across the join — retried *after* the ordinary parse
-fails, never before, because a tail that names its own subject ("…and **another
-target creature** gets -2/-0") is a different sentence and reading the carried one
-over it would aim the second clause at the first one's object.
-
-**And the narrowing that keeps the carry honest, which the suite found.** My first
-cut carried any subject, and `tests/engine/test_grammar_parser.py` caught it
-immediately: "Target creature gets +3/+3 until end of turn **and wins the game**"
-started parsing. The verbs a carried subject reaches — "gains", "loses", "wins" —
-substitute "you" for a non-player subject rather than refusing, so carrying a
-creature into one reads a sentence nobody printed. Only a printed **player**
-carries. That guard existed and was right; this is the second round running where
-the whole-suite run caught an over-reach the targeted run would not have.
-
-**Three smaller things, each a gap rather than a card feature.** A count could not
-read a **library** — one registry entry, because `evaluate_count` already reads
-the zone off the owner by name. `ast.Half` was a node with a producer and **no
-consumer**, so no card could ever have carried one; that is the third instance of
-the declared-and-unwired shape this effort has found (`PayLife`, round 66;
-`ItWas`, round 78) and it is worth a sweep of its own. And "half their life" is
-one quantity rather than a half followed by the production's own "life" keyword —
-consuming it in the quantity parser would strip the noun off every other printing
-of the verb.
-
-The halving rides on the **spec**, not on a second amount vocabulary, so one
-evaluator still answers — the rule round 64 wrote down when the pump handler was
-caught carrying its own counter. "Round up **each time**" is per calculation, so
-it reaches every half in the sentence and refuses a sentence with none.
-
-**One thing I expected to matter and did not**: I scoped this worrying that the
-life loss would read a library the draw had already shrunk (CR 608.2). It cannot
-— the two halves read different things, a zone and a life total. The test pinning
-it is still worth having, because the obvious mis-implementation routes both
-through one count.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Eight new tests, five watched to fail on the round-82 engine.
-
 ## Round 84: a count that never leaves its own decision
 
 *(2026-08-17.)* M21 **233 → 234** — Siege Striker, scoped and reverted last
@@ -403,3 +352,49 @@ Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Six new tests, five watched to fail on the round-84 engine.
 
+## Round 86: a condition about two permanents at once
+
+*(2026-08-17.)* M21 **235 → 236** — Chrome Replicator.
+
+> When this creature enters, if you control two or more nonland, nontoken
+> permanents with the same name as one another, create a 4/4 colorless Construct
+> artifact creature token.
+
+**The token half already worked** and so did the trigger; the whole card was its
+intervening-if, and the parser was failing the line on it.
+
+**Two things were missing, and only one of them is ordinary.** The threshold —
+"two or more" in front of the noun phrase — is a `Comparison("ge", …)` the
+`controls` condition has always been able to carry; it is read only when "or
+more" follows the number, because a bare number would be a different condition
+("exactly two") that no card in the pool prints, and guessing between them is the
+silent widening a threshold must never take.
+
+**The other is a relation, and that is the round.** "With the same name as one
+another" is not a property of a permanent: an `ObjectFilter` is tested against one
+permanent at a time by `permanent_matches_filter`, and *no single permanent can
+answer whether something else shares its name*. Put on the filter it would be a
+key the matcher cannot test — the exact shape `TESTABLE_SUBJECT_FILTER_KEYS`
+exists to refuse, where the phrase is then dropped and the card silently reads as
+"two or more nonland, nontoken permanents", which two different creatures already
+satisfy. So it rides the **condition**, as `Controls.shared_name`, and what it
+changes is what the threshold counts: the largest same-name group inside the
+matching set rather than the set. Three permanents with three different names
+satisfy nothing; three with one pair among them satisfy it.
+
+**The relation needs the threshold, so it refuses without one.** Lowered bare,
+`shared_name` would meet a payload with no `count` and the evaluator's
+"count > 0" default, which one permanent satisfies — the opposite of what the
+words say. No card prints it that way, so lowering raises rather than inventing
+the number the text did not print.
+
+The name is read off `effective_card`, so a Clone counts under the name it
+copied (CR 707.2) — the name printed on the board a player is looking at.
+"Nontoken" also does real work here beyond CR 111.1 tidiness: without it the
+Construct the card makes would help satisfy the next copy's condition.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Eight new tests, four watched to fail on the round-85 engine —
+the four negative ones pass there too, because an unsupported card also makes no
+token, which is why the positive cases are the ones that carry the round.

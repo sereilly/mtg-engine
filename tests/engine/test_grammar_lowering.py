@@ -3677,3 +3677,37 @@ def test_the_two_slot_lowerings_keep_the_distinctness_they_can_carry():
         {"type_filter": "creature", "controller": "you"},
         {"type_filter": "creature"},
     ]
+
+
+# ---------------------------------------------------------------------------
+# "with the same name as one another" — a relation, not a property
+# ---------------------------------------------------------------------------
+
+
+def test_a_shared_name_relation_without_its_threshold_is_refused():
+    """"Two or more permanents with the same name as one another" bounds the
+    largest same-name group. Strip the number and the payload downstream reads
+    as "count > 0", which one permanent satisfies — the opposite of what the
+    words say. No card prints it bare, so lowering refuses rather than inventing
+    the threshold the text did not print."""
+    from engine.grammar import ast
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    def gate(comparison):
+        return ast.TriggeredAbilityNode(
+            ast.TriggerEvent("enters_battlefield", "when"),
+            ast.Draw(ast.PlayerRef("you"), ast.Fixed(1)),
+            ast.Controls(
+                ast.PlayerRef("you"),
+                ast.ObjectFilter(),
+                comparison,
+                shared_name=True,
+            ),
+        )
+
+    (lowered,) = lower_ability(gate(ast.Comparison("ge", ast.Fixed(2))))
+    assert lowered.payload["intervening_if"]["shared_name"]
+
+    with pytest.raises(LoweringError):
+        lower_ability(gate(None))
