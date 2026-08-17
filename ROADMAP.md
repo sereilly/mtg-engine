@@ -337,6 +337,44 @@ byte-identical at 443 interactions, **zero hooks added**. Six new tests, four
 watched to fail on the round-80 engine; the other two are the refusal controls,
 which pass on both because the line refused for a different reason before.
 
+## Measured and not built: Peer into the Abyss
+
+*(2026-08-17.)* Scoped, built, and **reverted** rather than shipped half-done.
+Recorded here so the next attempt starts from the measurement instead of
+repeating it.
+
+> Target player draws cards equal to half the number of cards in their library
+> and loses half their life. Round up each time.
+
+Four gaps, and the first three are done work that was thrown away with the
+fourth — they are small and the design held up under execution:
+
+1. **A count could not read a library.** `_COUNTABLE_ZONES` listed battlefield,
+   graveyard, hand and exile. `evaluate_count` reads the zone off the owner by
+   name, so the library needed no counting code at all — only saying so.
+2. **`ast.Half` is a node with a producer and no consumer.** `parse_amount` has
+   built one since the AST was written and `_amount_payload` refuses it, so no
+   card could ever carry one. The same shape rounds 66 (`PayLife`) and 78
+   (`ItWas`) found; it is worth a sweep of its own, because a declared-and-unwired
+   node reads as support and is not.
+3. **"Half their life" is not "half" followed by the life keyword.** Everywhere
+   else the trailing "life" belongs to the *production* ("loses 3 life"); here it
+   belongs to the quantity. A quantity parser that consumed it would strip the
+   noun off every other printing of the verb.
+
+4. **The blocker: a printed subject does not carry across "and".** "You gain 1
+   life and draw a card" works because the second half is a bare imperative with
+   an implied "you"; "Target player draws a card **and loses 1 life**" does not,
+   because the sentence loop hands the tail to `parse_statement`, which wants a
+   subject of its own. That is a general grammar gap rather than this card's, and
+   fixing it under a deadline is how round 80 briefly turned Giant Tortoise
+   unsupported — so it wants its own round, with the whole pool re-run behind it.
+
+"Round up each time" is untouched and is the fifth: a trailing sentence binding
+*both* halves, which the where-clause rider is the precedent for — and "each
+time" means per calculation, which is why the rounding belongs on each computed
+spec rather than on the card.
+
 ## Round 82: a blanket prevention narrowed to a printed noun phrase
 
 *(2026-08-17.)* M21 **231 → 232** — Pack Leader.
