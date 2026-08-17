@@ -278,6 +278,19 @@ def grant_team_assign_unblocked_until_eot(game: Game, instruction: OracleInstruc
     return True, "resolved"
 
 
+def place_loyalty_counters(permanent, count: int) -> int:
+    """Put *count* loyalty counters on *permanent*; return the new total.
+
+    CR 306.5c: a planeswalker's loyalty **is** its loyalty counters, so this is
+    the one key damage marks against and a loyalty cost pays from. One function
+    because there is now more than one way a counter arrives — the ability's own
+    source, and a permanent its controller chose.
+    """
+    loyalty = int(permanent.metadata.get("loyalty_counters", 0)) + count
+    permanent.metadata["loyalty_counters"] = loyalty
+    return loyalty
+
+
 @effect_handler("add_loyalty_counters")
 def add_loyalty_counters(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) Loyalty on
@@ -290,10 +303,63 @@ def add_loyalty_counters(game: Game, instruction: OracleInstruction, context: Or
         game.log.append(f"{context.card.name}: its source has left, no loyalty added")
         return True, "resolved"
     count = int(instruction.payload.get("count", 1))
-    loyalty = int(source.metadata.get("loyalty_counters", 0))
-    source.metadata["loyalty_counters"] = loyalty + count
+    total = place_loyalty_counters(source, count)
     game.log.append(
-        f"{context.card.name}: {count} loyalty counter(s) added (now {loyalty + count})"
+        f"{context.card.name}: {count} loyalty counter(s) added (now {total})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("add_loyalty_counters_to_chosen")
+def add_loyalty_counters_to_chosen(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put a loyalty counter on a Liliana planeswalker you control."
+    (Liliana's Scrounger.)
+
+    No "target" is printed, so nothing was chosen when the ability went on the
+    stack (CR 115.1b): the controller picks now, out of what the noun phrase
+    names *now* — the ``untap_up_to`` shape, not the targeted one. Reading it as
+    a target would move the choice to announcement and let the ability be
+    countered on resolution (CR 608.2b) when the walker it named has left, where
+    the printed card would simply pick another.
+
+    One candidate is not a choice and is applied at once; several arm the
+    prompt; none does nothing, because "a Liliana planeswalker you control" can
+    name an empty set and the ability still resolves.
+    """
+    # Imported here rather than at module scope: engine/subject_filters.py
+    # imports handlers._common, so a module-level import would close the cycle
+    # through engine/handlers/__init__.py. Same reason engine/oracle.py imports
+    # it inside _resolve_subject_groups.
+    from ..subject_filters import subject_matches
+
+    seat = game.players.index(context.caster)
+    described = dict(instruction.payload.get("filter") or {})
+    count = int(instruction.payload.get("count", 1))
+    source = context.source_permanent
+    candidates = [
+        perm
+        for perm in game.all_permanents()
+        if subject_matches(game, perm, described, observer=seat, source=source)
+    ]
+    if not candidates:
+        game.log.append(
+            f"{context.card.name}: nothing it controls can receive a loyalty counter"
+        )
+        return True, "resolved"
+    if len(candidates) == 1:
+        total = place_loyalty_counters(candidates[0], count)
+        game.log.append(
+            f"{context.card.name}: {count} loyalty counter(s) on "
+            f"{candidates[0].card.name} (now {total})"
+        )
+        return True, "resolved"
+    game.arm_pending_choice(
+        "loyalty_recipient", seat,
+        card_name=context.card.name,
+        count=count,
+        filter=described,
+        _candidates=candidates,
+        _source=source,
     )
     return True, "resolved"
 

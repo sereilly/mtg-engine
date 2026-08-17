@@ -2548,5 +2548,3 @@ def test_tavern_swindler_cannot_be_activated_below_its_life_cost(set_pool):
     assert "life" in result.details
     assert p1.life == 2
     assert swindler.tapped is False
-
-

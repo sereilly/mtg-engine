@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 220/285) to the full release line - **137 sets, 33,594
+M21 measured at 222/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–64 — lives in git history at and before
-commit `eceefef`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–65 — lives in git history at and before
+commit `4f7624c`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,99 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 65: the duration in front, and a word that was being dropped
-
-*(2026-08-16.)* M21 **220 â†’ 220** â€” Rookie Mistake in, Selfless Savior out. The
-flat number is the round, in the sense rounds 12â€“14 and 16 established: a card
-left because it was playing wider than it prints.
-
-**The card was scheduled for the wrong reason, and the fix was one probe away.**
-"Until end of turn, target creature gets +0/+2 and **another target** creature
-gets -2/-0" was ranked as a multi-targeting gap. It is not: the second target has
-parsed since round 40 (`TargetSpec.distinct_from_prior`), and the sentence join
-already builds two statements. The actual first refusal is the **leading duration
-adverbial** â€” `Until end of turn, target creature gets +0/+2.` refuses on its own
-with the identical message, and it is card-independent. Sorting the backlog by
-the *reason string* would have had the fuser written first and the real blocker
-discovered underneath it.
-
-**A leading duration is distributed, not stored.** The trailing spelling attaches
-to the clause it follows, so the front-position one has to reach every effect
-behind it; a wrapper node holding it would be a second place to ask what a
-statement's duration is. It refuses rather than dropping in three shapes â€” a
-statement with no duration field, a statement already printing a different one,
-and any sequence containing either â€” because a dropped "until end of turn" is a
-permanent effect the card never printed. The production is placed **after**
-`_parse_cast_permission`, which prints the same prefix and reads it itself:
-ahead of it, both Chandras go unsupported. That ordering has its own test.
-
-**Two chosen creatures in one sentence cannot be two steps.** Every single-target
-handler resolves through `_one_choice`, which reads the first entry of the target
-list â€” so lowered as a `sequence` the card would compile supported and put both
-boosts on one creature. It fuses to one `pump_targets_until_eot` carrying a slot
-per clause, the third member of the family `target_bites_target` and
-`prepare_then_interact` opened. The printed "another" rides as `distinct` beside
-per-slot `filters`, not folded into a filter: it is a relation between two slots,
-and `permanent_matches_filter` tests one permanent, so it could never answer.
-
-**The slots are resolved positionally, and that needed a third resolver.**
-`resolve_target_permanents` *compacts* â€” it drops a decayed slot without padding
-â€” so `chosen[1]` becomes `chosen[0]` the moment the first target leaves. Primal
-Might and Hunter's Edge survive that only because their slot filters are
-disjoint and the impostor is rejected; Rookie Mistake's two slots are both a bare
-"target creature", where the surviving creature would take the other slot's
-effect. `resolve_target_slots` pads instead. (`prepare_then_interact` still reads
-the compacting one. It is correct today by that accident of the pool and wants
-moving over with a regression test of its own.)
-
-**And the word that was being dropped.** `parse_coverage.py`'s deletion probe
-reports `('another',)` on Selfless Savior â€” the emitted filter excluded nothing,
-so the picker offered the Savior as the target of "another target creature you
-control", an illegal choice a player could announce, whose cost then sacrificed
-it and whose ability then fizzled. CR 601.2c is why the word has to be said at
-all: two instances of "target" may otherwise name the same object. A
-one-recipient description has nowhere to record which *other* choice this one
-must differ from, so it now refuses. The alternative â€” reading a sole target's
-"another" as CR's source exclusion â€” is a larger change that conflates two
-meanings the AST deliberately separates, and it is the next round's, written up
-in the spec.
-
-Landed in dependency order with the grammar **last**, so at no intermediate point
-was the card castable with half its targets collected. That order was load-
-bearing twice: without the AI's per-slot side the AI put both targets on its own
-board (measured `[0, 1]`, seat 0 â€” it shrank its own creature), and the browser
-picker reset the selection on a click on the second board, so a human could never
-pump one of theirs and shrink one of the opponent's. Which slot wants which board
-is *derived* â€” the sign of the slot's P/T delta â€” never a name.
-
-One finding taken from the same measurement and fixed here, because it is
-unambiguous where the above is not: **`exclude_self` was honoured at resolution
-and ignored by every picker.** Basri's Acolyte's "up to two **other** target
-creatures you control" offered the Acolyte; so did Barrin and Brash Taunter. All
-three handlers already refuse the source. `legality.py` has honoured
-`exclude_source` all along â€” nothing read the filter key into it. One line.
-
-Suite **5,138** green, every `--check` gate green, shipped pool 388/388, AI
-simulation byte-identical at 443 interactions. Ten of the eleven new tests were
-watched to fail on the round-64 engine; the eleventh is the control that both
-Chandras keep their cast permissions.
-
-**Next:**
-
-- **"Another" as a source exclusion**, the alternative above: translate
-  `distinct_from_prior` on a sole target to `exclude_self` rather than refusing,
-  which returns Selfless Savior and covers Subira's and Niambi's same drop. It
-  needs a guard separating it from the two-slot meaning first.
-- **The headless AI simulator throws its chosen permanent target away.**
-  `grep target_permanent engine/ai_simulator.py` returns nothing, so every
-  targeted-permanent spell in a seeded run resolves through a handler fallback,
-  and a several-target spell resolves to *nothing at all*. Latent for the shipped
-  pool, live for M21, and live for the shipped pool the day M21 promotes. Fixing
-  it moves the 443-interaction baseline, which is why it is recorded rather than
-  folded in here.
-- The Shrine cycle, a static P/T contribution with a computed X (Kinetic Augur,
-  Jolrael), a reflexive trigger (Tolarian Kraken), then the legend rule.
-
 ## Round 66: a cost the engine had never charged, and a coin it had only ever flipped by name
 
 *(2026-08-16.)* M21 **220 â†’ 221** â€” Tavern Swindler, whose one line needed two
@@ -487,3 +394,78 @@ byte-identical at 443 interactions.
 
 **Next:** widen that fixture, or decide in the playbook that it stays narrow.
 Then Liliana's Scrounger, whose spec is what found this.
+
+## Round 68: a counter on a permanent the controller chooses
+
+*(2026-08-16.)* M21 **221 â†’ 222** â€” Liliana's Scrounger, whose one sentence the
+grammar had already read in full. What refused was the lowering, and what the
+round actually cost was a fourth thing nobody had listed.
+
+> At the beginning of each end step, if a creature died this turn, you may put a
+> loyalty counter on a Liliana planeswalker you control.
+
+**The restriction was lifted, not deleted.** "Loyalty counters only land on the
+ability's own source" was true of every card in the pool until this one:
+`_is_source` still routes to `add_loyalty_counters`, and a non-source noun phrase
+now gets `add_loyalty_counters_to_chosen` beside it. One write function under
+both, because there is now more than one way a loyalty counter arrives and CR
+306.5c makes it the key damage and loyalty costs read.
+
+**"Liliana" is a planeswalker subtype and never a card name** â€”
+`planeswalker_types.json` â†’ `PLANESWALKER_TYPES` â†’ `SUBTYPE_INDEX` â†’
+`subtype_filter`, with the `named` key absent. All three payload keys were
+already in `TESTABLE_SUBJECT_FILTER_KEYS`, so the card needed no vocabulary work
+and no new filter. That mattered: had it compiled to a name match it would have
+been dispatch on a card name outside `card_hooks.py`.
+
+**No "target" is printed, so nothing is chosen when the ability goes on the
+stack** (CR 115.1b). The controller picks at resolution out of what the phrase
+names *then* â€” the `untap_up_to` shape, not the targeted one. Reading it as a
+target would move the choice to announcement and let the ability do nothing on
+resolution when the walker it named has left, where the printed card simply picks
+another. One candidate is applied inline, none does nothing, several arm a
+`loyalty_recipient` prompt: one `register_choice`, one renderer, one AI default,
+no new `Game` field. The default is a stated policy â€” **fewest loyalty counters,
+ties by scan order** â€” because loyalty is a planeswalker's life total and
+CR 704.5i bins one at zero.
+
+**The fourth thing, which was the actual work.** `engine/oracle.py` collapsed
+"the"/"each"/"your" end step into one condition kind, and the CR 603.4 scan this
+card lands in is scoped to the *active player*. So without splitting the
+condition (`end_step_self`, mirroring `upkeep_self`/`combat_your_turn`) the card
+would have compiled supported and **never fired on an opponent's end step** â€”
+the same silent-wrongness shape as round 67, arrived at from the other side. Eight
+cards move to the new kind with no behaviour change. Two guards had to follow the
+split or quietly stop covering things: `test_trigger_tables.py` fails loudly,
+`test_grammar_lowering.py` fails *silently*, dropping Erg Raiders â€” the only
+shipped card with a "your end step" trigger.
+
+**And a rule about the payload gate that is worth keeping.**
+`TESTABLE_SUBJECT_FILTER_KEYS` alone is **not sufficient**, because
+`ObjectFilter.to_payload` does not emit `zone`, `is_enchanted`, `supertypes` or
+`colored` at all â€” so "a planeswalker card **in your graveyard**" reduces to the
+same payload as the plain phrase and would have compiled a graveyard clause into
+a battlefield picker. The gate has to be the payload keys *paired with*
+`_restrictions_beyond` over the AST. That is now three refusal tests.
+
+**The size guard again, one round after last time.** The block landed
+`test_m21_creatures.py` at 2,692 against a 2,600 cap. Every assertion in it reads
+a *planeswalker's* loyalty â€” the Scrounger is only the source of the counter â€” so
+it lives in `test_m21_planeswalkers.py`, which keeps loyalty behaviour in one
+place. Worth recording plainly: **M21 has 149 creatures and the printed-type axis
+is nearly exhausted**, so the next round that adds creature tests has to split the
+file for real rather than find it another home.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions, **zero hooks added**. Nine of the thirteen new
+tests were watched to fail on the round-67 engine; the four that pass vacuously
+are the negative controls, which earn their keep only now the card works.
+
+**Next:**
+
+- The counter-removal activation cost from round 66's *Next*, still open and
+  still a free ability.
+- "Another" as a source exclusion (round 65), the headless simulator's discarded
+  permanent target (round 65), the Shrine cycle, a static P/T contribution with a
+  computed X, a reflexive trigger, the legend rule.
+- Split `tests/sets/test_m21_creatures.py`.

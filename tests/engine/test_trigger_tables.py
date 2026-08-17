@@ -111,6 +111,9 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "upkeep_chosen": "at the beginning of the chosen player's upkeep",
     "draw_step_each": "at the beginning of each player's draw step",
     "end_step": "at the beginning of the end step",
+    # The scope narrowing, its own kind for the same reason combat_your_turn is:
+    # the dispatch reads the difference.
+    "end_step_self": "at the beginning of your end step",
     # Both spellings, because both tables carry both: the M21 Shrines print
     # "first" and modern templating prints "precombat".
     "main_phase_first": (

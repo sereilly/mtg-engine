@@ -1240,6 +1240,83 @@ class PendingChoicesMixin:
         deterministic default used for AI players and headless simulation."""
         self.auto_resolve_pending_choices(only_player_index=only_player_index, kinds=("optional_pay",))
 
+    # -- Which permanent receives a loyalty counter (Liliana's Scrounger) ----
+
+    def confirm_loyalty_recipient(self, player_index: int, permanent_id: int) -> bool:
+        return self.resolve_pending_choice(
+            "loyalty_recipient", player_index, permanent_id=permanent_id
+        )
+
+    def live_loyalty_recipients(self, choice: PendingChoice) -> list:
+        """The armed candidates still on the battlefield and still matching the
+        printed noun phrase.
+
+        Public because the prompt renderer is a second legitimate caller: the
+        list it offers and the list the answer is checked against have to be the
+        same rule, not two copies of it.
+
+        Asked again rather than trusted: the set was enumerated when the ability
+        resolved, and a permanent can leave — or stop being what the phrase names
+        — before the seat answers. By identity, never index.
+        """
+        described = dict(choice.data.get("filter") or {})
+        return [
+            perm
+            for perm in (choice.data.get("_candidates") or ())
+            if self.is_on_battlefield(perm)
+            and subject_matches(
+                self, perm, described,
+                observer=choice.player_index, source=choice.data.get("_source"),
+            )
+        ]
+
+    def _resolve_loyalty_recipient(self, choice: PendingChoice, permanent_id) -> bool:
+        """Put the counters on the permanent the seat named.
+
+        The offered list is a hint and this is the check: the answer must still
+        be one of the live candidates, so a client that offers a whole
+        battlefield cannot turn "a Liliana planeswalker you control" into any
+        planeswalker at all.
+        """
+        from ...handlers.pump import place_loyalty_counters
+
+        live = self.live_loyalty_recipients(choice)
+        if not live:
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{choice.data['card_name']}: nothing is left to receive the counter"
+            )
+            return True
+        perm = self.permanent_by_id(permanent_id) if permanent_id is not None else None
+        if perm is None or not any(perm is candidate for candidate in live):
+            return False
+        self.discard_pending_choice(choice)
+        count = int(choice.data.get("count", 1))
+        total = place_loyalty_counters(perm, count)
+        self.log.append(
+            f"{choice.data['card_name']}: {count} loyalty counter(s) on "
+            f"{perm.card.name} (now {total})"
+        )
+        self.check_state_based_actions()
+        return True
+
+    def _default_loyalty_recipient(self, choice: PendingChoice) -> None:
+        """The stated policy: **the fewest loyalty counters**, ties broken by
+        battlefield scan order.
+
+        Loyalty is a planeswalker's life total (CR 306.5c) and CR 704.5i bins one
+        that reaches zero, so the counter is worth most on the walker closest to
+        dying. A card whose AI should choose otherwise needs a valuation, not a
+        branch here.
+        """
+        live = self.live_loyalty_recipients(choice)
+        if not live:
+            self.discard_pending_choice(choice)
+            return
+        pick = min(live, key=lambda perm: int(perm.metadata.get("loyalty_counters", 0)))
+        if not self._resolve_loyalty_recipient(choice, self.permanent_id_of(pick)):
+            self.discard_pending_choice(choice)
+
     # -- Forced sacrifice of the player's choice (Lich, Lord of the Pit) ---------
     #
     # A single mechanism drives every "sacrifice a permanent you choose" effect so
@@ -1759,6 +1836,22 @@ register_choice(
     blocked_detail="choose a mode for the triggered ability before other actions",
     default_at_arm=True,
     spectator_visible=True,
+)
+
+register_choice(
+    "loyalty_recipient",
+    resolve=lambda game, choice, r: game._resolve_loyalty_recipient(
+        choice, r["permanent_id"]
+    ),
+    default=lambda game, choice: game._default_loyalty_recipient(choice),
+    action="loyalty_recipient_confirm",
+    prompt_key="loyalty_recipient",
+    blocked_detail="choose which planeswalker gets the loyalty counter before other actions",
+    # The trigger that armed this has to finish resolving, so a non-interactive
+    # seat never queues it — it takes the stated default where it stands.
+    default_at_arm=True,
+    # Nothing later in the same resolution reads the answer: the counter is the
+    # last thing the ability does.
 )
 
 register_choice(

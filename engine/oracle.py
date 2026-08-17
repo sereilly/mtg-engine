@@ -389,7 +389,15 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # CR 505.1a's precombat main phase, which is the only one that is "first".
     # Both printed spellings, because the modern templating says "precombat".
     ("main_phase_first",    r"at the beginning of your (?:first|precombat) main phase"),
-    ("end_step",            r"at the beginning of (?:the |each |your )?end(?: step)?"),
+    # "Your end step" is a *scope* narrowing, exactly like combat's below and
+    # upkeep_self/upkeep_each above: it fires only on its controller's own end
+    # step where the bare form fires on everyone's. A separate kind because the
+    # dispatch is what reads the difference — with one kind,
+    # engine/phases/end_step.py had to infer a scope per instruction kind, and
+    # the gated scan inferred "your" for every card that reached it.
+    # Must precede its own prefix, per the ordering rule.
+    ("end_step_self",       r"at the beginning of your end(?: step)?"),
+    ("end_step",            r"at the beginning of (?:the |each )?end(?: step)?"),
     # "…of combat on your turn" narrows the bare form to the active player's
     # combat (Adherent of Hope); must precede its own prefix below.
     ("combat_your_turn",    r"at the beginning of combat on your turn"),

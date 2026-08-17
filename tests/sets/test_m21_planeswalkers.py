@@ -362,3 +362,150 @@ def test_garruk_savage_herald_can_bite_an_opponents_creature(set_pool):
     assert theirs.damage_marked == 6
     assert not game.is_on_battlefield(theirs)
     assert mine.damage_marked == 0, "a bite is one-way"
+
+# --- Round 68: a counter on a permanent the controller chooses --------------
+#
+# Liliana's Scrounger is a creature, but every assertion below reads a
+# *planeswalker's* loyalty — the Scrounger is only the source of the counter.
+# They live here so loyalty behaviour is in one place, and because the creature
+# file is at the size guard's edge (tests/engine/test_set_test_convention.py):
+# M21 has 149 creatures and the printed-type axis has no further split left in
+# it, which is the signal idiom #13 says to act on rather than raise.
+
+# --- Round 68: a counter on a permanent the controller chooses --------------
+
+
+def _scrounger_walker(set_pool, name, loyalty=None):
+    card = set_pool("M21")[name]
+    return Permanent(card=card, metadata={"loyalty_counters": int(loyalty or card.loyalty)})
+
+
+def _scrounger_board(set_pool, walkers, *, scrounger_seat=0, interactive=(), died=True):
+    """A Scrounger, some planeswalkers beside it, and a creature that died.
+
+    ``scrounger_seat`` is a parameter because the trigger reads "each end step":
+    the seat that controls it is not necessarily the seat whose end step runs.
+    """
+    pool = set_pool("M21")
+    seats = [PlayerState(name="P1"), PlayerState(name="P2")]
+    seats[scrounger_seat].battlefield.append(Permanent(card=pool["Liliana's Scrounger"]))
+    seats[scrounger_seat].battlefield.extend(walkers)
+    game = Game(players=seats)
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    if died:
+        victim = Permanent(card=pool["Alpine Watchdog"])
+        seats[0].battlefield.append(victim)
+        game._permanent_to_graveyard(seats[0], victim)
+    return game
+
+
+def _end_step(game, seat=0):
+    game.resolve_end_step(seat)
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+
+def _loyalty(permanent):
+    return int(permanent.metadata.get("loyalty_counters", 0))
+
+
+def test_lilianas_scrounger_puts_the_counter_on_the_only_liliana(set_pool):
+    """"At the beginning of each end step, if a creature died this turn, you may
+    put a loyalty counter on a Liliana planeswalker you control."
+
+    One candidate is not a choice, so nothing is asked."""
+    liliana = _scrounger_walker(set_pool, "Liliana, Waker of the Dead")   # printed 4
+    _end_step(_scrounger_board(set_pool, [liliana]))
+
+    assert _loyalty(liliana) == 5
+
+
+def test_lilianas_scrounger_fires_on_an_opponents_end_step(set_pool):
+    """**Each** end step, not "your" â€” the word both condition tables read and
+    the dispatch did not.
+
+    The test that fails on a half-landed change: with the lowering in and the
+    condition still one kind, the gated end-step scan is scoped to the active
+    player's own permanents, so a Scrounger on the other seat compiles clean and
+    never fires."""
+    liliana = _scrounger_walker(set_pool, "Liliana, Death Mage")          # printed 4
+    _end_step(_scrounger_board(set_pool, [liliana], scrounger_seat=1))
+
+    assert _loyalty(liliana) == 5
+
+
+def test_lilianas_scrounger_is_silent_with_no_death(set_pool):
+    """The intervening-if, checked when the trigger would fire (CR 603.4)."""
+    liliana = _scrounger_walker(set_pool, "Liliana, Death Mage")
+    _end_step(_scrounger_board(set_pool, [liliana], died=False))
+
+    assert _loyalty(liliana) == 4
+
+
+def test_a_non_liliana_planeswalker_is_not_a_recipient(set_pool):
+    """The control. "Liliana" is a planeswalker *subtype*
+    (data/vocabulary/planeswalker_types.json), never a card name, so Garruk is
+    outside the phrase â€” and the narrowing is tested rather than dropped, which
+    is why the picker refuses a filter it cannot test."""
+    garruk = _scrounger_walker(set_pool, "Garruk, Unleashed")             # printed 4
+    _end_step(_scrounger_board(set_pool, [garruk]))
+
+    assert _loyalty(garruk) == 4
+
+
+def test_an_opponents_liliana_is_not_a_recipient(set_pool):
+    """"â€¦you control" is CR 109.5's seat: the ability's controller."""
+    theirs = _scrounger_walker(set_pool, "Liliana, Death Mage")
+    game = _scrounger_board(set_pool, [])
+    game.players[1].battlefield.append(theirs)
+    _end_step(game)
+
+    assert _loyalty(theirs) == 4
+
+
+def test_lilianas_scrounger_asks_which_liliana(set_pool):
+    """Two candidates is a real choice, so an interactive seat is asked â€” and
+    answers by ``permanent_id``, never by battlefield slot."""
+    waker = _scrounger_walker(set_pool, "Liliana, Waker of the Dead", loyalty=4)
+    mage = _scrounger_walker(set_pool, "Liliana, Death Mage", loyalty=2)
+    game = _scrounger_board(set_pool, [waker, mage], interactive=(0,))
+
+    game.resolve_end_step(0)
+    game._settle()
+    assert game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert game.pending_choices_of("loyalty_recipient", 0)
+    assert game.confirm_loyalty_recipient(0, game.permanent_id_of(waker))
+    assert (_loyalty(waker), _loyalty(mage)) == (5, 2)
+
+
+def test_the_loyalty_recipient_answer_is_rechecked(set_pool):
+    """The offered list is a hint and the engine is the check: a seat naming a
+    planeswalker outside the phrase is refused and still owes the prompt."""
+    waker = _scrounger_walker(set_pool, "Liliana, Waker of the Dead")
+    mage = _scrounger_walker(set_pool, "Liliana, Death Mage")
+    garruk = _scrounger_walker(set_pool, "Garruk, Unleashed")
+    game = _scrounger_board(set_pool, [waker, mage, garruk], interactive=(0,))
+
+    game.resolve_end_step(0)
+    game._settle()
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert not game.confirm_loyalty_recipient(0, game.permanent_id_of(garruk))
+    assert _loyalty(garruk) == 4
+    assert game.pending_choices_of("loyalty_recipient", 0)
+
+
+def test_a_non_interactive_seat_feeds_the_liliana_closest_to_dying(set_pool):
+    """The stated policy, not a valuation: fewest loyalty counters, ties by
+    battlefield scan order. Loyalty is a planeswalker's life total (CR 306.5c)
+    and CR 704.5i bins one at zero."""
+    waker = _scrounger_walker(set_pool, "Liliana, Waker of the Dead", loyalty=4)
+    mage = _scrounger_walker(set_pool, "Liliana, Death Mage", loyalty=2)
+    _end_step(_scrounger_board(set_pool, [waker, mage]))
+
+    assert (_loyalty(waker), _loyalty(mage)) == (4, 3)

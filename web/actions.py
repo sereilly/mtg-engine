@@ -1286,6 +1286,15 @@ def do_action(session_id: str, req: GameActionRequest):
         ):
             raise HTTPException(status_code=400, detail="no mode choice is pending for you")
 
+    elif req.action == "loyalty_recipient_confirm":
+        # Liliana's Scrounger: which planeswalker the loyalty counter lands on.
+        # Answered by stable id — the engine re-checks it against the live
+        # candidate set — never by battlefield slot.
+        if req.target_permanent_id is None:
+            raise HTTPException(status_code=400, detail="target_permanent_id is required")
+        if not session.game.confirm_loyalty_recipient(req.seat, req.target_permanent_id):
+            raise HTTPException(status_code=400, detail="invalid loyalty-counter recipient")
+
     elif req.action == "least_power_choice_confirm":
         # Drop of Honey: the controller picks which of the creatures tied for
         # least power is destroyed (target_seat + target_permanent_index).

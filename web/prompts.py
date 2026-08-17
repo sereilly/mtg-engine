@@ -542,6 +542,37 @@ def _mode_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("loyalty_recipient")
+def _loyalty_recipient(ctx: PromptContext, choices: list) -> dict:
+    """Liliana's Scrounger: which of the permanents the printed noun phrase
+    names gets the loyalty counter.
+
+    The candidates come from the engine's own liveness rule, so the list offered
+    and the list the answer is checked against cannot drift. ``seat``/``index``
+    ride alongside the stable ``id`` for the canvas, which addresses a card by
+    its slot; the engine answers on the id.
+    """
+    choice = choices[0]
+    live = {id(perm) for perm in ctx.game.live_loyalty_recipients(choice)}
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "count": choice.data.get("count", 1),
+        "candidates": [
+            {
+                "seat": seat,
+                "index": index,
+                "id": ctx.game.permanent_id_of(perm),
+                "name": perm.card.name,
+                "loyalty": int(perm.metadata.get("loyalty_counters", 0)),
+            }
+            for seat, player in enumerate(ctx.game.players)
+            for index, perm in enumerate(player.battlefield)
+            if id(perm) in live
+        ],
+    }
+
+
 @prompt_renderer("least_power_choice")
 def _least_power_choice(ctx: PromptContext, choices: list) -> dict:
     data = choices[0].data

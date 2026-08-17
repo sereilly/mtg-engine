@@ -2037,6 +2037,14 @@ function getLeastPowerChoiceInfo(state = currentState) {
   return info;
 }
 
+// Liliana's Scrounger: which planeswalker receives the loyalty counter.
+function getLoyaltyRecipientInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.loyalty_recipient;
+  if (!info || !Array.isArray(info.candidates) || info.candidates.length === 0) return null;
+  return info;
+}
+
 function getManaPaymentInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.mana_payment;
@@ -2359,6 +2367,26 @@ function getPromptBoardTargeting(state = currentState) {
           target_permanent_index: idx,
         }),
       invalidHint: "Only the creatures tied for least power can be chosen.",
+    });
+  }
+
+  // Liliana's Scrounger: which planeswalker the loyalty counter lands on.
+  // Answered by *id*, not by seat+index: the ability names permanents that may
+  // sit on either battlefield, and an index is positional on one seat.
+  const loyaltyRecipientInfo = getLoyaltyRecipientInfo(state);
+  if (loyaltyRecipientInfo) {
+    const byKey = new Map(
+      (loyaltyRecipientInfo.candidates || []).map((c) => [`${c.seat}-${c.index}`, c.id]),
+    );
+    return promptTargeting({
+      permanentKeys: [...byKey.keys()],
+      onPermanent: (targetSeat, idx) =>
+        submitPromptAction({
+          seat,
+          action: "loyalty_recipient_confirm",
+          target_permanent_id: byKey.get(`${targetSeat}-${idx}`),
+        }),
+      invalidHint: "Only a planeswalker the ability names can take the counter.",
     });
   }
 
@@ -3704,6 +3732,22 @@ function applyLeastPowerChoicePrompt(info) {
   steps.innerHTML = "<div>Action: click one of the highlighted creatures on the battlefield.</div>";
 }
 
+
+function applyLoyaltyRecipientPrompt(info) {
+  const panel = q("activationPanel");
+  panel.classList.remove("hidden");
+  q("promptOkBtn").classList.add("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  q("promptCustomOkBtn").disabled = true;
+  q("promptTitle").textContent = "Choose a planeswalker";
+  q("promptBody").textContent =
+    `${info.card_name}: put ${info.count} loyalty counter(s) on one of these.`;
+  q("promptSteps").innerHTML =
+    "<div>Action: click one of the highlighted planeswalkers on the battlefield.</div>";
+}
+
 // Power Sink: "Counter target spell unless its controller pays {X}." The targeted
 // spell's controller taps lands to fill their pool, then pays {X} to keep their
 // spell or declines (and it is countered, tapping their lands and draining mana).
@@ -4865,6 +4909,12 @@ function renderActivationPrompt() {
   const leastPowerChoiceInfo = getLeastPowerChoiceInfo();
   if (leastPowerChoiceInfo) {
     applyLeastPowerChoicePrompt(leastPowerChoiceInfo);
+    return;
+  }
+
+  const loyaltyRecipientInfo = getLoyaltyRecipientInfo();
+  if (loyaltyRecipientInfo) {
+    applyLoyaltyRecipientPrompt(loyaltyRecipientInfo);
     return;
   }
 

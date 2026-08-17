@@ -13,6 +13,7 @@ what is missing instead of producing an effect that never ends.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS
@@ -395,19 +396,81 @@ def _lower_lose_keyword(node: ast.LoseKeyword) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("remove_target_keyword_until_eot", "", payload),)
 
 
+# The ObjectFilter fields the loyalty-counter picker reads. Only what the pool
+# actually prints ("a Liliana planeswalker you control"): a filter with no card
+# behind it is untested by construction, and `_restrictions_beyond` turns every
+# other field — present today or added to the AST later — into a refusal rather
+# than a silently wider effect.
+_LOYALTY_PICKER_HONOURED = frozenset({"card_types", "subtypes", "controller"})
+
+
 def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
-    # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) Only the
-    # source's own loyalty has a home (metadata["loyalty_counters"], CR 306.5c),
-    # so any other subject refuses.
+    # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) The source's
+    # own loyalty lives on the permanent (metadata["loyalty_counters"],
+    # CR 306.5c); a *chosen* permanent's is the same key reached through the
+    # picker below.
     if node.counter == "loyalty":
-        if not _is_source(node.subject):
-            raise LoweringError(
-                "loyalty counters only land on the ability's own source", node=node
-            )
         if not isinstance(node.count, ast.Fixed) or node.up_to:
             raise LoweringError("variable loyalty-counter counts have no handler", node=node)
-        return (
-            OracleInstruction("add_loyalty_counters", "", {"count": node.count.value}),
+        if _is_source(node.subject):
+            return (
+                OracleInstruction("add_loyalty_counters", "", {"count": node.count.value}),
+            )
+        # "Put a loyalty counter on a Liliana planeswalker you control."
+        # (Liliana's Scrounger.) A noun phrase with no "target" in it: nothing
+        # was chosen when the ability went on the stack, so the controller picks
+        # at resolution out of what the phrase names then — the same split
+        # `_lower_sacrifice` makes between "sacrifice this creature" and
+        # "sacrifice a creature".
+        if (
+            isinstance(node.subject, ast.TargetSpec)
+            and not node.subject.targeted
+            and node.subject.quantifier not in ("all", "each")
+            and node.subject.count == 1
+        ):
+            filt = node.subject.filter
+            # Two gates, because they catch different halves of the same bug.
+            #
+            # `_restrictions_beyond` reads the **AST**, so a restriction
+            # `to_payload` does not emit at all cannot be dropped on the floor:
+            # "a planeswalker card **in your graveyard**" and "an **enchanted**
+            # planeswalker" both reduce to the same payload as the plain phrase,
+            # and without this they compile into a battlefield picker. The
+            # honoured set is only what the pool prints, per round 43's rule that
+            # a filter with no card behind it is untested by construction.
+            leftovers = _restrictions_beyond(filt, _LOYALTY_PICKER_HONOURED)
+            if leftovers:
+                raise LoweringError(
+                    f"the loyalty-counter picker does not honour {leftovers[0]!r}",
+                    node=node,
+                )
+            if not filt.card_types:
+                raise LoweringError(
+                    "a loyalty-counter picker with no card type would offer "
+                    "every permanent",
+                    node=node,
+                )
+            described = filt.to_payload()
+            # And the load-bearing gate CLAUDE.md names (round 34): a key
+            # `subject_matches` cannot test is one the picker would silently
+            # ignore, which would offer *every* planeswalker where the card names
+            # one subtype. Kept beside the first so widening the honoured set
+            # above can never outrun the matcher.
+            if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+                raise LoweringError(
+                    "the loyalty-counter picker cannot test this restriction",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "add_loyalty_counters_to_chosen", "",
+                    {"count": node.count.value, "filter": described},
+                ),
+            )
+        raise LoweringError(
+            "loyalty counters land on the ability's own source or on one "
+            "permanent its controller chooses",
+            node=node,
         )
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)

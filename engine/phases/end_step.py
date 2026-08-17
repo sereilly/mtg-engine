@@ -28,6 +28,18 @@ END_STEP_DEATH_COUNTER_KINDS = frozenset({
 END_STEP_EMPTY_BOARD_KINDS = frozenset({"sacrifice_if_no_creatures"})
 END_STEP_DID_NOT_ATTACK_KINDS = frozenset({"end_step_damage_if_not_attacked"})
 
+#: The two condition kinds this step dispatches, and the only difference between
+#: them: ``end_step_self`` is "at the beginning of **your** end step" and fires
+#: for the player whose end step this is; ``end_step`` is "the"/"each" and fires
+#: for everyone. The scope used to be inferred per *instruction kind* — the two
+#: death-counter scans happened to hold "each" cards and the gated scan happened
+#: to hold only "your" cards — so the first "each end step" card to reach the
+#: gated scan (Liliana's Scrounger) would have fired on its controller's turn
+#: alone.
+END_STEP_SELF_CONDITION = "end_step_self"
+END_STEP_EACH_CONDITION = "end_step"
+END_STEP_CONDITIONS = frozenset({END_STEP_SELF_CONDITION, END_STEP_EACH_CONDITION})
+
 #: Every instruction kind an ``end_step`` trigger can be dispatched on *by kind*.
 #: The fourth scan below is keyed on a payload **shape** instead and so has no
 #: entry here — see ``END_STEP_INTERVENING_IF``.
@@ -118,7 +130,7 @@ class EndStepMixin:
         if died:
             for controller_index, permanent, trig in iter_triggered_abilities(
                 self,
-                condition_kinds={"end_step"},
+                condition_kinds={END_STEP_EACH_CONDITION},
                 instruction_kinds=END_STEP_DEATH_COUNTER_KINDS,
             ):
                 events.append(make_trigger_event(
@@ -132,7 +144,7 @@ class EndStepMixin:
         if not has_creatures:
             for controller_index, permanent, trig in iter_triggered_abilities(
                 self,
-                condition_kinds={"end_step"},
+                condition_kinds={END_STEP_EACH_CONDITION},
                 instruction_kinds=END_STEP_EMPTY_BOARD_KINDS,
             ):
                 events.append(make_trigger_event(controller_index, permanent, trig))
@@ -144,7 +156,7 @@ class EndStepMixin:
         # resolution (matching the Pestilence intervening-if precedent).
         for controller_index, permanent, trig in iter_triggered_abilities(
             self,
-            condition_kinds={"end_step"},
+            condition_kinds={END_STEP_SELF_CONDITION},
             instruction_kinds=END_STEP_DID_NOT_ATTACK_KINDS,
             players=[self.players[player_index]],
         ):
@@ -168,11 +180,17 @@ class EndStepMixin:
             (id(event["source_permanent"]), id(event["instruction"]))
             for event in events
         }
-        for controller_index, permanent, trig in iter_triggered_abilities(
+        # Two scans, because the printed scope decides who fires: "your end
+        # step" is this step's own player, "the"/"each" is everyone.
+        gated = list(iter_triggered_abilities(
             self,
-            condition_kinds={"end_step"},
+            condition_kinds={END_STEP_SELF_CONDITION},
             players=[self.players[player_index]],
-        ):
+        )) + list(iter_triggered_abilities(
+            self,
+            condition_kinds={END_STEP_EACH_CONDITION},
+        ))
+        for controller_index, permanent, trig in gated:
             if trig.instruction is None:
                 continue
             gate = (trig.instruction.payload or {}).get(END_STEP_INTERVENING_IF)
@@ -194,8 +212,11 @@ class EndStepMixin:
         from ..events import emblem_trigger_events
 
         events.extend(
-            emblem_trigger_events(self, "end_step", [self.players[player_index]])
+            emblem_trigger_events(
+                self, END_STEP_SELF_CONDITION, [self.players[player_index]]
+            )
         )
+        events.extend(emblem_trigger_events(self, END_STEP_EACH_CONDITION))
 
         self._enqueue_triggered_batch(events)
 

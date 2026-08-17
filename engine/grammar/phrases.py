@@ -141,9 +141,13 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # the card supported and fires it on the wrong event (round 7).
     ("main_phase_first", ("the", "beginning", "of", "your", "first", "main", "phase")),
     ("main_phase_first", ("the", "beginning", "of", "your", "precombat", "main", "phase")),
+    # "Your" is a scope narrowing and so a separate kind, the same pair the
+    # oracle regex table carries: a condition narrowed on one side of the
+    # pipeline and not the other compiles the card supported and fires it on the
+    # wrong event (round 7).
+    ("end_step_self", ("the", "beginning", "of", "your", "end", "step")),
     ("end_step", ("the", "beginning", "of", "the", "end", "step")),
     ("end_step", ("the", "beginning", "of", "each", "end", "step")),
-    ("end_step", ("the", "beginning", "of", "your", "end", "step")),
     # The narrowed form precedes its own prefix, per the rule above.
     ("combat_your_turn", ("the", "beginning", "of", "combat", "on", "your", "turn")),
     ("combat", ("the", "beginning", "of", "combat")),

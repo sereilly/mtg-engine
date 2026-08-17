@@ -407,3 +407,55 @@ def test_a_variable_life_payment_is_not_admitted_as_a_cost():
 
     assert not result.parsed
     assert result.failure_reason == "only a fixed, positive life payment is charged"
+
+
+
+
+# --- Round 68: what the loyalty-counter picker refuses ----------------------
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        # A narrowing `subject_matches` cannot answer, refused where it is
+        # compiled rather than dropped where it is dispatched â€” otherwise the
+        # picker would offer every planeswalker the card did not name.
+        ("Put a loyalty counter on an attacking planeswalker you control.",
+         "attacking"),
+        # A restriction `ObjectFilter.to_payload` does not emit at all: "in your
+        # graveyard" reduces to the same payload as the plain phrase, so reading
+        # only the payload would compile a graveyard clause into a battlefield
+        # picker.
+        ("Put a loyalty counter on a planeswalker card in your graveyard.",
+         "zone"),
+        # And a sweep: no handler puts loyalty counters on a set of permanents.
+        ("Put a loyalty counter on each planeswalker you control.",
+         "controller chooses"),
+    ],
+)
+def test_the_loyalty_counter_picker_refuses_what_it_cannot_honour(line, expected):
+    result = compile_line(line, card_name="Test")
+
+    assert result.parsed and not result.lowered
+    assert expected in result.failure_reason
+
+
+def test_a_loyalty_counter_lands_on_one_chosen_permanent(set_pool):
+    """The shape that is admitted, and the whole payload it carries. The count
+    is data, the noun phrase is a filter, and nothing about the card's name is
+    in either."""
+    program = compile_card_oracle(set_pool("M21")["Liliana's Scrounger"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "end_step"
+    (action,) = trigger.instruction.payload["action"]
+    assert action.kind == "add_loyalty_counters_to_chosen"
+    assert action.payload == {
+        "count": 1,
+        "filter": {
+            "type_filter": "planeswalker",
+            "subtype_filter": "liliana",
+            "controller": "you",
+        },
+    }

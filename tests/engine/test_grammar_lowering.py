@@ -2683,6 +2683,7 @@ def test_every_executed_end_step_trigger_lands_on_a_kind_the_step_enqueues(catal
     """
     from engine.oracle import compile_card_oracle
     from engine.phases.end_step import (
+        END_STEP_CONDITIONS,
         END_STEP_DISPATCHED_KINDS,
         END_STEP_INTERVENING_IF,
     )
@@ -2699,7 +2700,10 @@ def test_every_executed_end_step_trigger_lands_on_a_kind_the_step_enqueues(catal
         for trig in compile_card_oracle(card).triggered_abilities:
             if not trig.supported or trig.instruction is None:
                 continue
-            if trig.condition.kind != "end_step":
+            # Both scopes, read from the step's own set: "your end step" is a
+            # separate condition kind, and hardcoding one here would silently
+            # stop covering Erg Raiders — the only shipped card that has one.
+            if trig.condition.kind not in END_STEP_CONDITIONS:
                 continue
             instruction = trig.instruction
             # The payload-shape scan dispatches on the *gate*, whatever the kind

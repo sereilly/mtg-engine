@@ -159,6 +159,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
     "add_loyalty_counters": "counters",
+    # The same counter on a permanent the controller chooses at resolution
+    # (Liliana's Scrounger). Same category, so GRAMMAR_CATEGORIES is unchanged:
+    # a counter is a counter whether the ability names its own source or a noun
+    # phrase, and a second switch would let one be gated off without the other.
+    "add_loyalty_counters_to_chosen": "counters",
     "target_bites_target": "damage",
     "source_fights_target": "damage",
     "source_bites_target": "damage",
