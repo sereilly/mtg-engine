@@ -381,7 +381,7 @@ grammar, the lowering and the handler in place but the scan omitted, the card
 **compiled supported, the whole suite passed, and all five `--check` gates
 passed, while the ability never once fired.** `test_trigger_dispatchers.py`
 cannot see it — it asks per condition kind, and `end_step_self` has had a
-dispatcher since round 68, over battlefields. That is round 58's `draws_car`
+dispatcher since round 68, over battlefields. That is round 58's `draws_card`
 failure on a new axis, so the round adds a behavioural guard: put the card in a
 graveyard, arm its condition, run the step, look at the battlefield. Verified by
 neutering the scan and watching it fail.
