@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 72.4% | 69.2% | 46.3% | 188 |
+| M21 *(measured)* | 285 | 503 | 72.6% | 69.4% | 46.5% | 188 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,7 +34,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | ---: | ---: | --- | --- |
 | 237 | 107 | expected a subject |  |
 | 95 | 39 | unrecognized effect verb |  |
-| 51 | 32 | unconsumed text |  |
+| 50 | 31 | unconsumed text |  |
 | 32 | 32 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
@@ -1080,6 +1080,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 - **Silent Dart**
   - `{4}, {T}, Sacrifice this artifact: It deals 3 damage to target creature.`
 - **Silversmote Ghoul**
+  - `At the beginning of your end step, if you gained 3 or more life this turn, return this card from your graveyard to the battlefield tapped.`
   - `{1}{B}, Sacrifice this creature: Draw a card.`
 - **Singing Tree**
   - `{T}: Target attacking creature has base power 0 until end of turn.`

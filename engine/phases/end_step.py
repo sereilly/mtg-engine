@@ -209,7 +209,7 @@ class EndStepMixin:
         # Emblems (CR 114.4): "At the beginning of your end step, …" (Garruk,
         # Unleashed's emblem) fires from the command zone — scoped to this end
         # step's own player, which is what "your" means here.
-        from ..events import emblem_trigger_events
+        from ..events import emblem_trigger_events, graveyard_trigger_events
 
         events.extend(
             emblem_trigger_events(
@@ -217,6 +217,33 @@ class EndStepMixin:
             )
         )
         events.extend(emblem_trigger_events(self, END_STEP_EACH_CONDITION))
+
+        # And from a graveyard (CR 113.6m; Silversmote Ghoul). Scoped like the
+        # emblem scan above: "your end step" is this step's own player, and for a
+        # card nobody controls "your" is its owner (CR 108.4a). The intervening-if
+        # is checked here — the same CR 603.4 check the gated battlefield scan
+        # above makes — and again as the ability resolves.
+        for _kind, _scope in (
+            (END_STEP_SELF_CONDITION, [self.players[player_index]]),
+            (END_STEP_EACH_CONDITION, None),
+        ):
+            for grave_event in graveyard_trigger_events(self, _kind, _scope):
+                grave_gate = (grave_event["instruction"].payload or {}).get(
+                    END_STEP_INTERVENING_IF
+                )
+                if grave_gate is not None:
+                    grave_seat = grave_event["controller_index"]
+                    if not evaluate_condition(
+                        self,
+                        OracleExecutionContext(
+                            caster=self.players[grave_seat],
+                            target=self.players[grave_seat],
+                            card=grave_event["card"],
+                        ),
+                        grave_gate,
+                    ):
+                        continue
+                events.append(grave_event)
 
         self._enqueue_triggered_batch(events)
 

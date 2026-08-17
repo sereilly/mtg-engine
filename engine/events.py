@@ -102,6 +102,67 @@ def emblem_trigger_events(game: Game, kind: str, players=None) -> list[dict]:
     return events
 
 
+#: The payload key an instruction carries when its effect moves the ability's
+#: own source out of a zone, and therefore the zone the ability *functions* from
+#: (CR 113.6m — whose own example is "Return this card from your graveyard to the
+#: battlefield tapped"). Stamped by the lowering from the zone the sentence
+#: names, so no card name and no list of instruction kinds decides which
+#: abilities work from a graveyard: the sentence does.
+FUNCTIONS_FROM = "functions_from"
+
+
+def _functions_from(trig, zone: str) -> bool:
+    """Whether *trig*'s effect declares it functions from *zone*."""
+    instruction = trig.instruction
+    if instruction is None:
+        return False
+    return (instruction.payload or {}).get(FUNCTIONS_FROM) == zone
+
+
+def graveyard_trigger_events(game: Game, kind: str, players=None) -> list[dict]:
+    """Every graveyard-resident trigger matching *kind*, as enqueueable event dicts.
+
+    The third zone a trigger can fire from, after the battlefield
+    (``iter_triggered_abilities``) and the command zone
+    (:func:`emblem_trigger_events`) — and narrow on purpose. CR 113.6 says an
+    object's abilities function only on the battlefield *unless* the ability says
+    otherwise, so scanning every graveyard card's triggers would fire abilities
+    that do not function there at all. The gate is CR 113.6m read off the
+    compiled effect: the ability functions in the graveyard exactly when what it
+    does is move its own source out of one.
+
+    A graveyard card is not a permanent and gets no stand-in for one. It rides
+    the event as ``card``, which ``_enqueue_triggered_ability`` already accepts
+    beside ``source_permanent`` — so the stack item names the card and the
+    resolution context has ``source_permanent=None``, which is the truth. An
+    emblem needs its detached ``Permanent`` because CR 114 gives it one; a card
+    in a graveyard is a card.
+
+    The seat is the graveyard's **owner** (CR 108.4a: the controller of a card
+    that has none is its owner), which is what "**your** end step" means for a
+    card nobody controls.
+    """
+    from .trigger_utils import matching_triggers
+
+    events: list[dict] = []
+    for seat, player in enumerate(game.players):
+        if players is not None and not any(p is player for p in players):
+            continue
+        for card in list(player.graveyard):
+            for trig in matching_triggers(card, condition_kinds={kind}):
+                if not _functions_from(trig, "graveyard"):
+                    continue
+                events.append({
+                    "controller_index": seat,
+                    "source_permanent": None,
+                    "card": card,
+                    "instruction": trig.instruction,
+                    "effect_kind": trig.effect_kind,
+                    "ability_text": trig.source_line,
+                })
+    return events
+
+
 def collect(game: Game, event: Event) -> list[dict]:
     """Every trigger that fires for *event*, as enqueueable event dicts.
 
@@ -135,12 +196,11 @@ def collect(game: Game, event: Event) -> list[dict]:
     # An emblem's ability fires from the command zone (CR 114.4) — collected
     # beside the permanents', through the same event, so APNAP ordering and
     # the enqueue path treat both alike.
-    events.extend(
-        emblem_trigger_events(
-            game, event.kind,
-            list(event.players) if event.players is not None else None,
-        )
-    )
+    scoped = list(event.players) if event.players is not None else None
+    events.extend(emblem_trigger_events(game, event.kind, scoped))
+    # And from a graveyard (CR 113.6m), for the same reason: no battlefield scan
+    # can find a card that is not on one.
+    events.extend(graveyard_trigger_events(game, event.kind, scoped))
     return events
 
 

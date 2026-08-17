@@ -96,10 +96,25 @@ def _parse_return(stream: TokenStream) -> ast.Statement:
         raise stream.error("expected a destination zone after 'return'")
     destination = _parse_zone(stream)
 
+    # "...to the battlefield **tapped**." (Silversmote Ghoul.) CR 110.5b: a
+    # permanent enters untapped unless a spell or ability says otherwise, and
+    # this is the ability saying so. Consumed here rather than left to
+    # engine/enter_effects.py, which answers for a permanent's *own printed*
+    # entry line (a static ability, CR 603.6d) — this rider is printed on the
+    # ability that does the moving, and the permanent it makes has no such line.
+    # Accepted only for the battlefield, because "to your hand tapped" is not a
+    # sentence and silently dropping the word is the bug class this grammar
+    # refuses by construction.
+    entering_tapped = False
+    if destination.name == "battlefield" and stream.accept_word("tapped"):
+        entering_tapped = True
+
     from_zone: ast.Zone | None = None
     if isinstance(subject, ast.TargetSpec) and subject.filter.zone != "battlefield":
         from_zone = ast.Zone(subject.filter.zone, subject.filter.zone_owner)
-    return ast.ReturnToZone(subject, destination, from_zone)
+    return ast.ReturnToZone(
+        subject, destination, from_zone, entering_tapped=entering_tapped
+    )
 
 
 def _parse_destroy(stream: TokenStream) -> ast.Statement:

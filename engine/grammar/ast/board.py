@@ -126,6 +126,14 @@ class ReturnToZone:
     # the chosen object may be on the stack instead of the battlefield, a
     # union no object filter expresses — so it is a flag on the node.
     also_stack: bool = False
+    # "Return this card from your graveyard to the battlefield **tapped**."
+    # (Silversmote Ghoul.) CR 110.5b: a permanent enters untapped *unless a spell
+    # or ability says otherwise*, and this is the ability saying so. The rider is
+    # on the *move*, not a static line on the card, so engine/enter_effects.py
+    # cannot claim it — that module answers for a permanent's own printed entry
+    # text, which CR 603.6d makes a static ability, and this permanent is not
+    # printed with one.
+    entering_tapped: bool = False
 
 
 @dataclass(frozen=True)

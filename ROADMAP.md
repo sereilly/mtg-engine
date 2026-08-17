@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 227/285) to the full release line - **137 sets, 33,594
+M21 measured at 228/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–72 — lives in git history at and before
-commit `0ac1855`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–73 — lives in git history at and before
+commit `9e47197`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,59 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 73: one word, two meanings, and four cards that were reading neither
-
-*(2026-08-16.)* M21 **225 → 226** — Selfless Savior returns, and the round is
-mostly about what its absence was hiding.
-
-**The word now has somewhere to go.** Round 65 withdrew the card rather than keep
-dropping its printed "another". The AST separates two meanings —
-`ObjectFilter.other_than_source` (CR 109.5, "other than the source") and
-`TargetSpec.distinct_from_prior` ("different from the sentence's earlier choice")
-— and CR 601.2c is why the difference matters at all, since two instances of
-"target" may otherwise name the same object. For a sentence whose *only* chosen
-object prints "another", the sole available referent is the source, so it lowers
-to `other_than_source`, which the picker and every handler already read.
-
-**The separation is structural, not a comment.** The genuinely two-slot meaning
-is claimed above by the fusers; everything else refuses through a new guard in
-the sequence lowering. That guard sits **after** the fusers on purpose — a shape
-that grows a fused lowering later is claimed above it and never reaches it, so
-the refusal can only shrink as the engine learns more. Its cost is zero cards,
-and the one synthetic shape it newly refuses compiled *supported* before it, with
-the word dropped and both clauses landing on one creature.
-
-**Four handlers were dropping the noun phrase they were given**, and those cards
-were worse than the one that prompted the round:
-
-| card | printed | what it did |
-| --- | --- | --- |
-| Ranger's Guile | "target creature **you control**" | +1/+1 **and** hexproof to an opponent's creature |
-| Invigorating Surge, Pridemalkin, Basri's Lieutenant | "+1/+1 counter on target creature **you control**" | counter on an opponent's creature |
-| Bolt Hound | "**Other** creatures you control get +1/+0" | buffed itself too |
-
-Three causes, each its own kind of drift. `grant_target_keyword_until_eot`
-resolved with the default "is it a creature?" predicate and read no filter at
-all. `pump_target_creature_until_eot`'s `_eligible` asked only
-`is_creature`/`blocking_only`. `add_counter_to_target`'s **single**-target branch
-asked two of the three questions **its own several-target branch fifty lines
-above** already asked — two branches of one handler disagreeing about one card's
-sentence. And the global buff read five filter fields and dropped the rest, where
-the keyword branch fifteen lines away uses `_restrictions_beyond`. All four now
-ask the same three questions: the filter, the source exclusion, and the seat.
-
-**The size guard fired for the third time in four rounds, and this time there was
-nothing left to move.** 149 of M21's cards are creatures, `Legendary Creature`
-already split off, and an audit found one non-creature name left in the file — a
-prop. So `tests/sets/README.md` gains a second axis, a **round boundary**, with
-the rule written beside it: reach for it only after the misfiling audit comes
-back empty, and never by raising the cap. Every previous firing surfaced a
-misfiling rather than bulk, which is why the audit comes first.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions, **zero hooks added**. Eleven new tests, all
-eleven watched to fail on the round-72 engine.
-
 ## Round 74: the ids the wire resolved and the cast threw away
 
 *(2026-08-16.)* No card — a regression **this effort introduced in round 65** and
@@ -391,4 +338,61 @@ same hole for Basri's Aegis and Read the Tides.
 Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
 byte-identical at 443 interactions, **zero hooks added**, no ratchet touched.
 Whole-pool line diff: exactly one line changed, Frost Breath's.
+
+## Round 76: a trigger that fires from a graveyard
+
+*(2026-08-16.)* M21 **227 → 228** — Silversmote Ghoul, and the round is worth
+taking for the seam rather than the card.
+
+**"Every trigger this engine dispatches is on a permanent" was wrong, twice.**
+Emblems already fire from the command zone, and **Nether Shadow already fires
+from a graveyard** — name-keyed in `card_hooks.py` since long before this
+effort. So this is not a new seam, it is the second card of a shape, which is
+what turns a special case into a rule.
+
+**The gate is derived, not declared.** CR 113.6 says an object's abilities
+function only on the battlefield *unless the ability says otherwise*, and
+CR 113.6m is the clause that says otherwise — for an ability whose effect moves
+its own source out of a zone. So the zone the sentence names as the source *is*
+the zone the ability functions from, stamped by the lowering as `functions_from`
+and read by the scan. No card name, and no list of instruction kinds: a list is
+only ever as complete as the last card that touched it.
+
+**Two of my three framings were wrong**, both corrected against the rules file.
+`_SELF_CONDITIONS` is not the reader for this card's condition — that maps the
+*contraction* ("you've gained"), Sanguine Indulgence's cast-cost gate; the Ghoul
+prints an intervening-if whose reader was already complete, and Griffin Aerie and
+Indulging Patrician print the identical clause and work today. And
+`enter_effects.py` is the wrong home for "tapped": it answers for a permanent's
+own printed entry line, which CR 603.6d makes a static ability, where this is
+CR 110.5b — a rider on the *move*. Putting it there would have made the Ghoul
+enter tapped when somebody else's reanimation returned it.
+
+**The look-alike trap, in the zone where it is worst.** A graveyard holds
+`CardDefinition` objects, and two copies of one card are *the same immutable
+object* — so the filter-by-identity rebuild this codebase bans on `battlefield`
+is worse here: it removes **all** copies, not merely the wrong one. Measured:
+`[c for c in gy if c is not card]` on a graveyard holding two Ghouls leaves
+neither. The handler pops at an identity-found index instead, and a test puts two
+in one graveyard and asserts both come back with distinct ids.
+
+**The guard that had to come with it.** Measured while building this: with the
+grammar, the lowering and the handler in place but the scan omitted, the card
+**compiled supported, the whole suite passed, and all five `--check` gates
+passed, while the ability never once fired.** `test_trigger_dispatchers.py`
+cannot see it — it asks per condition kind, and `end_step_self` has had a
+dispatcher since round 68, over battlefields. That is round 58's `draws_car`
+failure on a new axis, so the round adds a behavioural guard: put the card in a
+graveyard, arm its condition, run the step, look at the battlefield. Verified by
+neutering the scan and watching it fail.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical, **zero hooks added**. Whole-pool compile diff: exactly one card.
+
+**Recorded, not fixed** (its own round — it changes shipped, manually-verified
+behaviour): **Nether Shadow deletes cards from the game** by that same
+filter-by-identity rebuild, its trigger never touches the stack (applied inline,
+so CR 603.4's second check is unobservable rather than skipped), and its prompt
+is name-keyed and deduped so two eligible copies get one prompt whose answer
+decides both.
 

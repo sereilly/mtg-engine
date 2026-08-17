@@ -539,6 +539,46 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("return_self_from_graveyard")
+def return_self_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Return this card from your graveyard to the battlefield [tapped]."
+    (Silversmote Ghoul; CR 113.6m.)
+
+    The object is the ability's own source, so nothing is chosen and there is no
+    target index to read. CR 108.4a decides whose graveyard is searched: a card
+    in a graveyard has no controller, so the ability's "your" is its owner's seat
+    — the seat the fire site enqueued it under.
+
+    Located by **identity**, not by name and not by index. A graveyard is a list
+    of ``CardDefinition`` and two copies of one card are the same immutable
+    object, so a name match finds the wrong entry and a list-comprehension
+    rebuild removes *both* — which is exactly what the Nether Shadow scan in
+    ``phases/upkeep_step.py`` does today. ``pop`` at an identity-found index
+    removes one.
+    """
+    caster = context.caster
+    card = context.card
+    for index, held in enumerate(caster.graveyard):
+        if held is card:
+            caster.graveyard.pop(index)
+            break
+    else:
+        # CR 603.6: the ability looks for the object in the zone it moves it out
+        # of. Gone (exiled in response, shuffled away) means the ability does
+        # nothing, rather than conjuring a second copy of the card.
+        game.log.append(f"{card.name} was no longer in the graveyard")
+        return True, "resolved"
+    tapped = bool(instruction.payload.get("tapped"))
+    game._put_permanent_onto_battlefield(
+        game.players.index(caster), Permanent(card=card, tapped=tapped), None
+    )
+    game.log.append(
+        f"{card.name} returned from the graveyard to the battlefield"
+        + (" tapped" if tapped else "")
+    )
+    return True, "resolved"
+
+
 @effect_handler("bounce_target_creature")
 def bounce_target_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # "Return up to two target creatures to their owners' hands." (Read the

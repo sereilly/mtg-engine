@@ -420,6 +420,45 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
                 "return_creature_from_graveyard_to_hand", "", several_cards
             ),
         )
+    # "Return **this card** from your graveyard to the battlefield [tapped]."
+    # (Silversmote Ghoul; CR 113.6m's own example is Reassembling Skeleton.)
+    # Nothing is chosen — the ability names the object it is printed on — so this
+    # is not a targeted return and never reaches `_is_target` below.
+    #
+    # `functions_from` is the load-bearing key and it is *derived*, not declared:
+    # CR 113.6m says an ability whose effect moves the object it is on out of a
+    # zone functions only in that zone, so the zone the sentence names as the
+    # source is the zone the ability works from. The scan in engine/events.py
+    # reads that key rather than a list of instruction kinds, for the reason
+    # end_step.py's intervening-if gate is keyed on a payload shape: a list is
+    # only ever as complete as the last card that touched it.
+    if _is_source(subject) and node.from_zone is not None and node.from_zone.name == "graveyard":
+        assert isinstance(subject, ast.TargetSpec)
+        if node.from_zone.owner is None or node.from_zone.owner.kind != "you":
+            raise LoweringError(
+                "a card returns itself from its owner's graveyard", node=node
+            )
+        if node.to.name != "battlefield" or node.to.owner is not None:
+            raise LoweringError(
+                f"no handler returns a card from the graveyard to the {node.to.name}",
+                node=node,
+            )
+        # Every ObjectFilter field beyond the three the phrase "this card from
+        # your graveyard" sets. Written against the dataclass, so a restriction
+        # added later refuses rather than being silently dropped.
+        leftovers = _restrictions_beyond(
+            subject.filter, frozenset({"is_source", "zone", "zone_owner"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the self-return handler does not honour {leftovers[0]!r}", node=node
+            )
+        return (
+            OracleInstruction(
+                "return_self_from_graveyard", "",
+                {"tapped": node.entering_tapped, "functions_from": "graveyard"},
+            ),
+        )
     if not _is_target(subject):
         # "target" and "up to one target" (Liliana, Death Mage's +1) both
         # resolve one chosen object; anything wider has no handler.

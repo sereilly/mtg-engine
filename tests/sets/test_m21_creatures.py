@@ -2178,3 +2178,116 @@ def test_bolt_hound_does_not_pump_itself(set_pool):
     assert hound.effective_power == 2, "the Hound is not one of the *other* creatures"
     assert mate.effective_power == 3
     assert theirs.effective_power == 1, '"you control" still holds'
+
+
+# --- Round 76: a trigger that fires from a graveyard ------------------------
+
+
+def _ghoul_graveyard(set_pool, life_gained=3, copies=1):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", graveyard=[pool["Silversmote Ghoul"] for _ in range(copies)]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    p1.life_gained_this_turn = life_gained
+    return game, p1
+
+
+def _ghouls_on(player):
+    return [p for p in player.battlefield if p.card.name == "Silversmote Ghoul"]
+
+
+def test_silversmote_ghoul_compiles_with_the_zone_it_functions_from(set_pool):
+    """CR 113.6: an object's abilities function only on the battlefield unless
+    the ability says otherwise, and CR 113.6m is the clause that says so for an
+    ability whose effect moves its own source out of a zone.
+
+    So the key is *derived* from the sentence rather than declared per card: the
+    zone the sentence names as the source is the zone the ability works from, and
+    the scan reads that key rather than a list of instruction kinds."""
+    program = compile_card_oracle(set_pool("M21")["Silversmote Ghoul"])
+
+    assert program.supported, program.reason
+    trigger = next(
+        t for t in program.triggered_abilities
+        if t.instruction is not None
+        and t.instruction.kind == "return_self_from_graveyard"
+    )
+    assert trigger.condition.kind == "end_step_self"
+    payload = trigger.instruction.payload
+    assert payload["tapped"] is True
+    assert payload["functions_from"] == "graveyard"
+    # And the CR 603.4 gate rides the same instruction, which is what the
+    # graveyard scan re-checks before enqueueing anything.
+    assert payload["intervening_if"] == {
+        "kind": "life_gained_this_turn", "who": "you", "amount": 3,
+    }
+
+
+def test_silversmote_ghoul_returns_tapped_after_three_life(set_pool):
+    """"â€¦return this card from your graveyard to the battlefield **tapped**" â€”
+    CR 110.5b, a permanent enters untapped unless an ability says otherwise."""
+    game, p1 = _ghoul_graveyard(set_pool, life_gained=3)
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    (ghoul,) = _ghouls_on(p1)
+    assert ghoul.tapped, "CR 110.5b â€” the ability said otherwise"
+    assert p1.graveyard == []
+
+
+def test_silversmote_ghoul_stays_down_below_three_life(set_pool):
+    """The intervening-if (CR 603.4), checked when the trigger would fire."""
+    game, p1 = _ghoul_graveyard(set_pool, life_gained=2)
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert _ghouls_on(p1) == []
+    assert len(p1.graveyard) == 1
+
+
+def test_silversmote_ghoul_ignores_an_opponents_end_step(set_pool):
+    """"**Your** end step". A card in a graveyard has no controller, so "your"
+    is its owner's (CR 108.4a) â€” which is the seat the scan enqueues it under,
+    not whichever seat the step happens to be running for."""
+    game, p1 = _ghoul_graveyard(set_pool, life_gained=3)
+
+    game.resolve_end_step(1)
+    game._settle()
+
+    assert _ghouls_on(p1) == []
+    assert len(p1.graveyard) == 1
+
+
+def test_two_copies_in_one_graveyard_both_return(set_pool):
+    """The look-alike trap, in the zone where it is worst. A graveyard holds
+    ``CardDefinition`` objects and two copies of one card are *the same
+    immutable object*, so removing "one" with a filter-by-identity rebuild
+    removes **both** and a name match finds the wrong entry. The handler pops at
+    an identity-found index, which removes exactly one â€” and each copy is
+    enqueued separately, so both come back as distinct permanents."""
+    game, p1 = _ghoul_graveyard(set_pool, life_gained=3, copies=2)
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    returned = _ghouls_on(p1)
+    assert len(returned) == 2
+    assert len({p.permanent_id for p in returned}) == 2, "two objects, two ids"
+    assert p1.graveyard == []
+
+
+def test_the_self_return_refuses_a_destination_no_handler_moves_to():
+    """The rider is only a sentence for the battlefield. "To your hand tapped"
+    is not one, and silently dropping the word is the bug class this grammar
+    refuses by construction."""
+    result = compile_line(
+        "Return this card from your graveyard to your hand.", card_name="Test"
+    )
+
+    assert result.parsed and not result.lowered
+    assert "graveyard to the hand" in result.failure_reason

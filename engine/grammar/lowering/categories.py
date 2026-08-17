@@ -207,6 +207,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exile_target_graveyard_card": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
     "reanimate_creature": "zones",
+    # A card returning *itself* from the graveyard (Silversmote Ghoul). Same
+    # category as every other zone change: what differs is which object moves,
+    # not what kind of effect it is — so GRAMMAR_CATEGORIES is unchanged and one
+    # switch cannot gate half of "zones" off.
+    "return_self_from_graveyard": "zones",
     "bounce_target_creature": "zones",
     "add_mana_from_text": "mana",
     # A triggered *mana* ability on a land being tapped (CR 605.1b): resolved
