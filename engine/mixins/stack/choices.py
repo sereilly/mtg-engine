@@ -24,7 +24,7 @@ from __future__ import annotations
 import random
 
 from ...auras import attach_aura
-from ...handlers._common import permanent_matches_filter
+from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...land_types import change_land_type
 from ...models import CardDefinition, Permanent
 from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
@@ -376,6 +376,85 @@ class PendingChoicesMixin:
             self.discard_pending_choice(choice)
 
     # -- "Untap up to N <objects>" chosen on resolution (Rewind) --------------
+
+    # -- Tap any number, then grow by however many (Siege Striker) -----------
+
+    def confirm_tap_any_number(self, player_index: int, permanent_ids: list) -> bool:
+        """*permanent_ids* addresses the chosen creatures by stable id. An empty
+        list is a legal answer — "any number" includes none, and the card says
+        "you **may**"."""
+        return self.resolve_pending_choice(
+            "tap_any_number", player_index, permanent_ids=permanent_ids
+        )
+
+    def live_tap_any_number(self, choice: PendingChoice) -> list:
+        """The creatures this seat may still tap.
+
+        Public because the prompt renderer is the second legitimate caller: the
+        list offered and the list an answer is checked against have to be one
+        rule rather than two copies of it.
+        """
+        described = dict(choice.data.get("filter") or {})
+        untapped_only = bool(choice.data.get("untapped_only"))
+        return [
+            perm
+            for perm in self.controlled_by(choice.player_index)
+            if permanent_matches_filter(perm, described)
+            and not (untapped_only and perm.tapped)
+        ]
+
+    def _resolve_tap_any_number(self, choice: PendingChoice, permanent_ids: list) -> bool:
+        """Validated whole before anything taps, matching the untap picker: one
+        bad id rejects the answer and leaves the prompt queued.
+
+        The boost is applied here rather than by a later instruction, because
+        the number *is* the answer — see the handler that armed this.
+        """
+        ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
+        if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
+            return False
+        live = self.live_tap_any_number(choice)
+        chosen = []
+        for pid in ids:
+            perm = self.permanent_by_id(pid)
+            if perm is None or not any(perm is candidate for candidate in live):
+                return False
+            chosen.append(perm)
+        for perm in chosen:
+            self.become_tapped(perm)
+        card_name = choice.data.get("card_name", "")
+        names = ", ".join(perm.card.name for perm in chosen) if chosen else "nothing"
+        self.log.append(
+            f"{self.players[choice.player_index].name} tapped {names} ({card_name})"
+        )
+        source = self.permanent_by_id(choice.data.get("source_id"))
+        if source is not None and chosen:
+            power = int(choice.data.get("power", 0)) * len(chosen)
+            toughness = int(choice.data.get("toughness", 0)) * len(chosen)
+            apply_temp_pt_boost(source, power, toughness)
+            self.log.append(
+                f"{source.card.name} gets {power:+}/{toughness:+} until end of turn "
+                f"({len(chosen)} tapped this way)"
+            )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_tap_any_number(self, choice: PendingChoice) -> None:
+        """The stated policy: **tap everything eligible that is not attacking**.
+
+        Every creature tapped is a permanent boost to the attacker, and this
+        ability is printed on an attack trigger — so the only cost is losing a
+        blocker, and a creature already attacking is not going to block anyway.
+        A card that should choose otherwise needs a valuation, not a branch here.
+        """
+        picks = [
+            self.permanent_id_of(perm)
+            for perm in self.live_tap_any_number(choice)
+            if not perm.attacking
+        ]
+        chosen = [pid for pid in picks if pid is not None]
+        if not self._resolve_tap_any_number(choice, chosen):
+            self._resolve_tap_any_number(choice, [])
 
     def confirm_untap_up_to(self, player_index: int, permanent_ids: list) -> bool:
         """*permanent_ids* addresses the chosen permanents by stable id — an
@@ -1605,6 +1684,23 @@ register_choice(
     # The answer reshapes the library, and CR 608.2n's move to the graveyard
     # is a later step of the same resolution — the scry discipline exactly.
     suspends=True,
+)
+
+register_choice(
+    "tap_any_number",
+    resolve=lambda game, choice, r: game._resolve_tap_any_number(
+        choice, r.get("permanent_ids") or []
+    ),
+    default=lambda game, choice: game._default_tap_any_number(choice),
+    action="tap_any_number_confirm",
+    prompt_key="tap_any_number",
+    blocked_detail="choose which creatures to tap before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # Deliberately not suspending, and that is the whole reason the two printed
+    # sentences fuse into one instruction: the boost is applied by this choice's
+    # own resolver, so no value has to survive across a resumption.
 )
 
 register_choice(

@@ -96,6 +96,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "Untap up to four lands." (Rewind) — the controller picks the lands on
     # resolution through the pending-choice queue; no "target" is printed.
     "untap_up_to_matching": "tapping",
+    # "Tap any number of untapped creatures you control. This creature gets
+    # +1/+1 … for each creature tapped this way." (Siege Striker.) The tapping
+    # family rather than "pump": the pick is the effect and the boost is sized by
+    # it, so gating it behind the pump switch would tie two migrations together.
+    "tap_any_number_then_pump_self": "tapping",
     "untap_self": "tapping",
     "untap_enchanted_creature": "tapping",
     "grant_prevention_shield": "prevention",

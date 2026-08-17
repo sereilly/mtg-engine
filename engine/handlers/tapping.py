@@ -275,6 +275,35 @@ def tap_target_player_lands_and_drain_mana(game: Game, instruction: OracleInstru
     return True, "resolved"
 
 
+@effect_handler("tap_any_number_then_pump_self")
+def tap_any_number_then_pump_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may tap any number of untapped creatures you control. This creature
+    gets +1/+1 until end of turn for each creature tapped this way." (Siege
+    Striker.)
+
+    Arms the pick and stops. The boost is applied by the choice's *resolver*,
+    because the number is what the seat answers — fusing the two sentences into
+    one instruction is what lets the count stay inside a single decision instead
+    of having to survive a suspended resolution.
+
+    The source rides as an id, not an object: the seat may answer after other
+    things have resolved, and CR 400.7 makes a permanent that left and came back
+    a new object, so the pump must find the creature that armed this or none.
+    """
+    caster_index = game.players.index(context.caster)
+    source = context.source_permanent
+    game.arm_pending_choice(
+        "tap_any_number", caster_index,
+        filter=dict(instruction.payload.get("filter") or {}),
+        untapped_only=bool(instruction.payload.get("untapped_only")),
+        power=int(instruction.payload.get("power", 0)),
+        toughness=int(instruction.payload.get("toughness", 0)),
+        source_id=game.permanent_id_of(source) if source is not None else None,
+        card_name=context.card.name,
+    )
+    return True, "resolved"
+
+
 @effect_handler("untap_up_to_matching")
 def untap_up_to_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Untap up to four lands." (Rewind.) No "target" is printed, so nothing

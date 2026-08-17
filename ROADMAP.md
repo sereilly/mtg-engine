@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 233/285) to the full release line - **137 sets, 33,594
+M21 measured at 234/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–80 — lives in git history at and before
-commit `99f2f63`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–81 — lives in git history at and before
+commit `45617c9`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,87 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Measured and not built: Siege Striker
-
-*(2026-08-17.)* Scoped, part-built, and **reverted** — the same call as Peer into
-the Abyss two rounds ago, and for the same reason: what was working changed no
-card, and shipping it would have been machinery nothing reaches.
-
-> Whenever this creature attacks, you may tap any number of untapped creatures
-> you control. This creature gets +1/+1 until end of turn for each creature
-> tapped this way.
-
-**Done and thrown away** (small, and the design held under execution): "any
-number of" as a **quantifier** — its own rather than an "up to" with a large
-count, because an "up to" prints a maximum a picker shows and a re-check
-enforces, and here the bound is the set itself. Untargeted by construction, like
-Rewind's "up to four lands": nothing is chosen until the effect resolves. With it
-the tap lowers to a resolution-time multi-pick and the line's refusal moves from
-"unrecognized effect verb" to "unconsumed text" — measured, **zero cards
-changed**, which is exactly why it did not land.
-
-**What it still needs, and why it is a whole round:**
-
-- **The count crosses a step boundary.** "For each creature tapped **this way**"
-  reads how many the *previous* sentence tapped. Rewind's `untap_up_to` choice
-  is the obvious precedent and says in its own registration that it deliberately
-  does not suspend, "because the untap is the last step of the effect that armed
-  it". Here it is not. Either the choice suspends the resolution — the machinery
-  exists, and nothing has used it — or the two sentences **fuse into one
-  instruction** whose choice resolver taps *and* pumps, which is the cheaper
-  reading and matches what rounds 81 and 65 did with two clauses that are one
-  effect.
-- **A pending choice is four registrations plus two front ends**: resolver,
-  non-interactive default, `register_choice`, confirm method, a `web/prompts.py`
-  renderer and an action. Round 75's lesson is that the browser half is not
-  optional — a prompt with no renderer is armed and invisible.
-- **A dropped rider is already waiting there.** `ObjectFilter.to_payload` emits
-  `tapped_only` when `tapped` is True and **nothing at all** when it is False, so
-  "untapped creatures you control" reduces to "creatures you control". For a tap
-  that is nearly harmless — tapping a tapped creature does nothing — but the
-  *count* is the card, and it would count creatures that were already tapped.
-  Whoever builds this must carry the restriction explicitly or refuse the line;
-  it is the dropped-rider class in a place the effect makes load-bearing.
-
-## Round 81: one counter, two amounts
-
-*(2026-08-17.)* M21 **230 → 231** — Lofty Denial.
-
-> Counter target spell unless its controller pays {1}. If you control a creature
-> with flying, counter that spell unless its controller pays {4} instead.
-
-**Everything this card needs already existed except the fusing.** The counter
-flow takes an `unless_pays_amount`; round 72's `controls` condition payload
-already expresses "you control a creature with flying", `with_keywords` and all.
-What was missing is that the two sentences are **one counter**: lowered as two
-steps the card counters twice and asks its victim to pay twice, which is a
-different and much worse card.
-
-So the second sentence adds no effect — it replaces a number in the first — and
-the fuser emits the single instruction the first sentence describes with the
-replacement riding beside the printed amount.
-
-**The word "instead" is load-bearing and is therefore recorded, not consumed.**
-It is the whole difference between a replacement amount and a second counter, so
-it is required on the bound form ("counter **that spell** … instead") and refused
-on a freshly chosen one, where there is no earlier amount to replace. Both
-refusals are tested; neither costs a pool card.
-
-**The condition is asked by the handler, at resolution.** CR 608.2 puts the
-question there, and the card means it: a flier that dies in response to Lofty
-Denial drops the demand from {4} back to {1}. Lowering it into two branches would
-have fixed the number when the spell was cast. Measured all three ways.
-
-"That spell" gets its own quantifier for the reason round 75's "those creatures"
-did: a bound reference and a chosen one reach different machinery, and every
-lowering refuses "that" unless it says otherwise, so a sentence reaching one
-fails by name rather than failing to parse.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions, **zero hooks added**. Six new tests, four
-watched to fail on the round-80 engine; the other two are the refusal controls,
-which pass on both because the line refused for a different reason before.
-
 ## Round 82: a blanket prevention narrowed to a printed noun phrase
 
 *(2026-08-17.)* M21 **231 → 232** — Pack Leader.
@@ -427,4 +346,52 @@ through one count.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Eight new tests, five watched to fail on the round-82 engine.
+
+## Round 84: a count that never leaves its own decision
+
+*(2026-08-17.)* M21 **233 → 234** — Siege Striker, scoped and reverted last
+round, built now from the measurement that revert wrote down.
+
+> Whenever this creature attacks, you may tap any number of untapped creatures
+> you control. This creature gets +1/+1 until end of turn for each creature
+> tapped this way.
+
+**Two printed sentences, one instruction, and the reason is the count.** "For
+each creature tapped **this way**" is sized by what the sentence in front of it
+tapped — and that sentence is a choice made at *resolution*. As two steps the
+pump runs before the seat has answered and there is nothing to count. Rewind's
+`untap_up_to` says in its own registration that it deliberately does not suspend
+the resolution "because the untap is the last step of the effect that armed it";
+here it is not. Of the two available answers — suspend, or fuse — fusing is the
+cheaper: the choice's own resolver taps **and** pumps, so no value has to survive
+a resumption. The new registration says so where the next reader will look.
+
+**"Any number of" is its own quantifier**, not an "up to" with a large count. An
+"up to" prints a maximum a picker shows and a re-check enforces; here the bound
+*is* the set, so there is no number to send and none to validate against.
+Untargeted by construction, like Rewind's "up to four lands".
+
+**The dropped rider I predicted, and the one I did not.** Last round's note
+warned that `ObjectFilter.to_payload` emits `tapped_only` when `tapped` is True
+and **nothing** when it is False — so "untapped creatures you control" reduces to
+"creatures you control". Harmless for the tap, load-bearing for a count of what
+was tapped, so it is carried explicitly. The one I missed was my own: a bare
+"…gets +1/+1 for each creature tapped this way" lowered to a plain `pump_self`
+with the flag **silently dropped** — a supported card whose pump is a +0/+0. Its
+test failed on the first run and it now refuses by name.
+
+**Two guards did their job.** The pending-choice completeness guard rejected the
+round until the browser had a renderer *and* an `ActionKind` — round 75's lesson
+enforced by construction rather than remembered. And the size guard fired at 2,604
+lines, resolved by the second axis `tests/sets/README.md` gained in round 73: two
+early round sections moved to the file that already holds them.
+
+The non-interactive default is a stated policy — **tap everything eligible that
+is not already attacking**: every creature tapped is a permanent boost to an
+attacker, so the only cost is a blocker, and a creature already attacking was
+never going to block.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions, **zero hooks added**. Seven new tests, six
+watched to fail on the round-83 engine.
 

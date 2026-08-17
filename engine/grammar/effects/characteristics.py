@@ -29,6 +29,17 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     # graveyard" (Liliana, Waker of the Dead). The clause *defines* the X the
     # P/T token used, so it is recorded on the pump rather than consumed and
     # dropped — an undefined X would otherwise silently read as the cast cost's.
+    # "…for each creature tapped this way" (Siege Striker). Read before the
+    # where-clause because both are trailing modifiers and this one is not a
+    # definition of X — it multiplies the printed P/T by a number only the
+    # sentence in front of it can supply.
+    per_each_tapped = False
+    tapped_mark = stream.mark()
+    if stream.accept_phrase("for", "each", "creature", "tapped", "this", "way"):
+        per_each_tapped = True
+    else:
+        stream.reset(tapped_mark)
+
     x_definition: ast.Amount | None = None
     mark = stream.mark()
     stream.accept_punct(",")
@@ -50,7 +61,7 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
 
     pump = ast.Pump(
         subject, power, toughness, duration, power_negative, toughness_negative,
-        x_definition=x_definition,
+        x_definition=x_definition, per_each_tapped_this_way=per_each_tapped,
     )
 
     # "gets +3/+3 and gains flying until end of turn" / "get +1/+1 and have

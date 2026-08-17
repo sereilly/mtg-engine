@@ -554,3 +554,111 @@ def test_jeskai_elder_draws_then_asks_for_the_discard(set_pool):
     assert discard and discard[0].data["count"] == 1
     assert game.confirm_discard(0, [0])
     assert len(p1.hand) == 1, "and discarded one of their choice"
+
+
+# --- Round 23: the may-with-action-cost, and a counted gain ------------------
+
+
+@pytest.mark.parametrize("name", ["Aven Gagglemaster", "Dire Fleet Warmonger"])
+def test_round_23_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def test_aven_gagglemaster_counts_its_own_wings(set_pool):
+    pool = set_pool("M21")
+    flyers = [Permanent(card=pool["Concordia Pegasus"]) for _ in range(2)]
+    grounded = Permanent(card=pool["Pridemalkin"])
+    p1 = PlayerState(
+        name="P1", hand=[pool["Aven Gagglemaster"]],
+        battlefield=[*flyers, grounded],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    result = game.cast_from_hand(0, "Aven Gagglemaster")
+    assert result.supported, result.details
+    # Two Pegasi plus the Gagglemaster itself fly; the cat does not.
+    assert p1.life == 26
+
+
+def test_dire_fleet_warmonger_eats_a_creature_for_the_turn(set_pool):
+    pool = set_pool("M21")
+    warmonger = Permanent(card=pool["Dire Fleet Warmonger"])
+    snack = Permanent(card=pool["Pridemalkin"])
+    p1 = PlayerState(name="P1", battlefield=[warmonger, snack])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat fires the trigger
+    game._settle()
+    pending = game.pending_choices_of("optional_pay", 0)
+    assert pending, "the 'you may sacrifice' offer should be queued"
+    assert game.confirm_optional_pay(0, accept=True)
+    # Accepting arms the sacrifice prompt; Warmonger itself is excluded
+    # ("another"), so only the cat is a legal pick.
+    sac = game.pending_sacrifice_state()
+    assert sac is not None and sac["valid_indices"] == [1]
+    assert game.confirm_sacrifice(0, [1])
+    assert not game.is_on_battlefield(snack)
+    assert warmonger.effective_power == 5  # 3/3 printed, +2/+2
+    assert game._has_keyword(warmonger, "trample")
+    # CR 514.2: the meal wears off.
+    game.resolve_cleanup_step(0)
+    assert warmonger.effective_power == 3
+    assert not game._has_keyword(warmonger, "trample")
+
+
+def test_dire_fleet_warmonger_with_nothing_to_eat_is_never_asked(set_pool):
+    pool = set_pool("M21")
+    warmonger = Permanent(card=pool["Dire Fleet Warmonger"])
+    p1 = PlayerState(name="P1", battlefield=[warmonger])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game._settle()
+    assert not game.pending_choices_of("optional_pay", 0), (
+        "with no other creature the cost is unpayable, so the offer is never "
+        "made and the pump cannot be taken for free"
+    )
+    assert warmonger.effective_power == 3
+
+
+def test_falconer_adept_token_arrives_tapped_and_attacking(set_pool):
+    pool = set_pool("M21")
+    adept = Permanent(card=pool["Falconer Adept"])
+    p1 = PlayerState(name="P1", battlefield=[adept])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game._settle()
+    birds = [p for p in p1.battlefield if p.card.name == "Bird Token"]
+    assert len(birds) == 1
+    assert birds[0].tapped
+    bird_index = p1.battlefield.index(birds[0])
+    assert bird_index in game.combat_attackers, "the Bird joined the attack"
+
+
+# --- Round 25: protection grows past colour ----------------------------------
+
+
+def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool):
+    pool = set_pool("M21")
+    program = compile_card_oracle(pool["Baneslayer Angel"])
+    assert program.supported, program.reason
+    angel = Permanent(card=pool["Baneslayer Angel"])
+    dragon = Permanent(card=pool["Gadrak, the Crown-Scourge"])  # a Dragon
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[angel]),
+        PlayerState(name="P2", battlefield=[dragon]),
+    ])
+    assert game._is_protected_from(angel, dragon)
+    assert not game._can_block_attacker(dragon, angel)
+    # And the colour half of her line still reads: nothing here is a Demon or
+    # Dragon spell, so an ordinary removal spell may still target her.
+    assert game._can_be_targeted(angel, pool["Shock"])

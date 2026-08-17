@@ -60,6 +60,16 @@ def _x_definition_spec(definition: ast.Amount, node) -> dict:
 
 
 def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
+    if node.per_each_tapped_this_way:
+        # "…for each creature tapped **this way**" reaching here means no fuser
+        # claimed the sentence, so there is no tap in front of it and nothing for
+        # the phrase to count. Dropped, the pump is a silent +0/+0 on a card that
+        # reported supported — a back-reference names its producer or refuses
+        # (idiom #7).
+        raise LoweringError(
+            "\"for each creature tapped this way\" with no tap in this effect",
+            node=node,
+        )
     if node.duration.kind is None:
         # "This creature gets +X/+0, where X is the greatest power among
         # creature cards in your graveyard." (Carrion Grub.) A pump with no
@@ -166,6 +176,85 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         return (OracleInstruction("buff_creatures_global", "", payload),)
 
     raise LoweringError("unsupported pump subject", node=node)
+
+
+def _fused_tap_any_number_then_pump(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"You may tap any number of untapped creatures you control. This creature
+    gets +1/+1 until end of turn for each creature tapped this way." (Siege
+    Striker.)
+
+    **One instruction, because the count crosses the sentence boundary.** The
+    second sentence is sized by what the first one tapped, and the first one is a
+    choice made at resolution — so lowered as two steps the pump would run before
+    the seat had answered, and there would be nothing for "this way" to count.
+    Rewind's ``untap_up_to`` says in its own registration that it deliberately
+    does not suspend the resolution "because the untap is the last step of the
+    effect that armed it"; here it is not, and fusing is the cheaper of the two
+    answers — the choice's resolver taps *and* pumps, so no value has to survive
+    a suspension.
+
+    The printed "untapped" is carried explicitly rather than through the filter
+    payload: ``ObjectFilter.to_payload`` emits ``tapped_only`` when ``tapped`` is
+    True and **nothing** when it is False, so passing the payload alone would
+    reduce "untapped creatures you control" to "creatures you control". For the
+    tap that is nearly harmless — tapping a tapped creature does nothing — but
+    the *count* is the card, and it would count creatures that were already
+    tapped.
+    """
+    if len(steps) != 2:
+        return None
+    optional, payoff = steps
+    if not isinstance(payoff, ast.Pump) or not payoff.per_each_tapped_this_way:
+        return None
+    if not isinstance(optional, ast.May) or optional.cost is not None:
+        raise LoweringError(
+            '"for each creature tapped this way" needs a tap in front of it',
+            node=payoff,
+        )
+    tap = optional.action
+    if not isinstance(tap, ast.Tap) or not isinstance(tap.subject, ast.TargetSpec):
+        raise LoweringError(
+            '"for each creature tapped this way" counts a tap, and the sentence '
+            "in front of it is not one",
+            node=payoff,
+        )
+    spec = tap.subject
+    if spec.quantifier != "any_number":
+        raise LoweringError(
+            "the tapped-this-way count reads a resolution-time pick", node=payoff
+        )
+    if not _is_source(payoff.subject):
+        raise LoweringError(
+            "the tapped-this-way pump applies to the ability's own source",
+            node=payoff,
+        )
+    if payoff.duration.kind != "until_end_of_turn":
+        raise LoweringError(
+            "a tapped-this-way pump needs an end-of-turn duration", node=payoff
+        )
+    if payoff.x_definition is not None:
+        raise LoweringError(
+            "a tapped-this-way pump is sized by the tap, not by a where-clause",
+            node=payoff,
+        )
+    leftover = _restrictions_beyond(
+        spec.filter, frozenset({"card_types", "controller", "tapped", "type_match"})
+    )
+    if leftover:
+        raise LoweringError(
+            "the any-number tap cannot narrow by: " + ", ".join(leftover), node=payoff
+        )
+    return (
+        OracleInstruction("tap_any_number_then_pump_self", "", {
+            "filter": _filter_payload(spec.filter),
+            # See the docstring: the payload cannot carry "untapped".
+            "untapped_only": spec.filter.tapped is False,
+            "power": _signed(payoff.power, payoff.power_negative),
+            "toughness": _signed(payoff.toughness, payoff.toughness_negative),
+        }),
+    )
 
 
 def _fused_two_target_pump(

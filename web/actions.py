@@ -1068,6 +1068,23 @@ def do_action(session_id: str, req: GameActionRequest):
         if not ok:
             raise HTTPException(status_code=400, detail="invalid card index")
 
+    elif req.action == "tap_any_number_confirm":
+        pending = next(
+            (c for c in session.game.pending_choices_of("tap_any_number")),
+            None,
+        )
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no tap choice pending")
+        if req.seat != pending.player_index:
+            raise HTTPException(status_code=400, detail="not your choice")
+        # An empty list is legal: "any number" includes none, and the card says
+        # "you **may**". The engine re-checks every id against the same list the
+        # prompt offered, so a stale pick is refused rather than silently
+        # dropped.
+        ok = session.game.confirm_tap_any_number(req.seat, req.target_permanent_ids or [])
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid tap selection")
+
     elif req.action == "untap_up_to_confirm":
         pending = next(
             (c for c in session.game.pending_choices_of("untap_up_to")),

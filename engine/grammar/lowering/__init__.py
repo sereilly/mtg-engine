@@ -62,6 +62,7 @@ from .damage import (
     _lower_prevent_all,
 )
 from .characteristics import (
+    _fused_tap_any_number_then_pump,
     _fused_two_target_pump,
     _lower_double_power,
     _lower_pump,
@@ -181,6 +182,7 @@ __all__ = [
     "_lower_damage_conjunction",
     "_lower_prevent_damage",
     "_lower_prevent_all",
+    "_fused_tap_any_number_then_pump",
     "_fused_two_target_pump",
     "_lower_pump",
     "_lower_set_base_pt",

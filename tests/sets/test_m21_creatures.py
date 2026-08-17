@@ -22,114 +22,6 @@ from engine.targeting import derive_activation_spec
 from tests.helpers import _nosick
 
 
-# --- Round 23: the may-with-action-cost, and a counted gain ------------------
-
-
-@pytest.mark.parametrize("name", ["Aven Gagglemaster", "Dire Fleet Warmonger"])
-def test_round_23_cards_compile_supported(set_pool, name):
-    program = compile_card_oracle(set_pool("M21")[name])
-    assert program.supported, program.reason
-
-
-def test_aven_gagglemaster_counts_its_own_wings(set_pool):
-    pool = set_pool("M21")
-    flyers = [Permanent(card=pool["Concordia Pegasus"]) for _ in range(2)]
-    grounded = Permanent(card=pool["Pridemalkin"])
-    p1 = PlayerState(
-        name="P1", hand=[pool["Aven Gagglemaster"]],
-        battlefield=[*flyers, grounded],
-    )
-    game = Game(players=[p1, PlayerState(name="P2")])
-    result = game.cast_from_hand(0, "Aven Gagglemaster")
-    assert result.supported, result.details
-    # Two Pegasi plus the Gagglemaster itself fly; the cat does not.
-    assert p1.life == 26
-
-
-def test_dire_fleet_warmonger_eats_a_creature_for_the_turn(set_pool):
-    pool = set_pool("M21")
-    warmonger = Permanent(card=pool["Dire Fleet Warmonger"])
-    snack = Permanent(card=pool["Pridemalkin"])
-    p1 = PlayerState(name="P1", battlefield=[warmonger, snack])
-    game = Game(players=[p1, PlayerState(name="P2")])
-    game.interactive_seats = {0}
-    game.start_turn(0)
-    game._close_current_priority_step()
-    game.advance_combat_phase()  # beginning_of_combat fires the trigger
-    game._settle()
-    pending = game.pending_choices_of("optional_pay", 0)
-    assert pending, "the 'you may sacrifice' offer should be queued"
-    assert game.confirm_optional_pay(0, accept=True)
-    # Accepting arms the sacrifice prompt; Warmonger itself is excluded
-    # ("another"), so only the cat is a legal pick.
-    sac = game.pending_sacrifice_state()
-    assert sac is not None and sac["valid_indices"] == [1]
-    assert game.confirm_sacrifice(0, [1])
-    assert not game.is_on_battlefield(snack)
-    assert warmonger.effective_power == 5  # 3/3 printed, +2/+2
-    assert game._has_keyword(warmonger, "trample")
-    # CR 514.2: the meal wears off.
-    game.resolve_cleanup_step(0)
-    assert warmonger.effective_power == 3
-    assert not game._has_keyword(warmonger, "trample")
-
-
-def test_dire_fleet_warmonger_with_nothing_to_eat_is_never_asked(set_pool):
-    pool = set_pool("M21")
-    warmonger = Permanent(card=pool["Dire Fleet Warmonger"])
-    p1 = PlayerState(name="P1", battlefield=[warmonger])
-    game = Game(players=[p1, PlayerState(name="P2")])
-    game.interactive_seats = {0}
-    game.start_turn(0)
-    game._close_current_priority_step()
-    game.advance_combat_phase()
-    game._settle()
-    assert not game.pending_choices_of("optional_pay", 0), (
-        "with no other creature the cost is unpayable, so the offer is never "
-        "made and the pump cannot be taken for free"
-    )
-    assert warmonger.effective_power == 3
-
-
-def test_falconer_adept_token_arrives_tapped_and_attacking(set_pool):
-    pool = set_pool("M21")
-    adept = Permanent(card=pool["Falconer Adept"])
-    p1 = PlayerState(name="P1", battlefield=[adept])
-    game = Game(players=[p1, PlayerState(name="P2")])
-    game.start_turn(0)
-    game._close_current_priority_step()
-    game.advance_combat_phase()  # beginning_of_combat
-    game.advance_combat_phase()  # declare_attackers
-    ok, msg = game.declare_attackers(0, [0])
-    assert ok, msg
-    game._settle()
-    birds = [p for p in p1.battlefield if p.card.name == "Bird Token"]
-    assert len(birds) == 1
-    assert birds[0].tapped
-    bird_index = p1.battlefield.index(birds[0])
-    assert bird_index in game.combat_attackers, "the Bird joined the attack"
-
-
-# --- Round 25: protection grows past colour ----------------------------------
-
-
-def test_baneslayer_angel_compiles_and_shields_against_its_named_tribes(set_pool):
-    pool = set_pool("M21")
-    program = compile_card_oracle(pool["Baneslayer Angel"])
-    assert program.supported, program.reason
-    angel = Permanent(card=pool["Baneslayer Angel"])
-    dragon = Permanent(card=pool["Gadrak, the Crown-Scourge"])  # a Dragon
-    game = Game(players=[
-        PlayerState(name="P1", battlefield=[angel]),
-        PlayerState(name="P2", battlefield=[dragon]),
-    ])
-    assert game._is_protected_from(angel, dragon)
-    assert not game._can_block_attacker(dragon, angel)
-    # And the colour half of her line still reads: nothing here is a Demon or
-    # Dragon spell, so an ordinary removal spell may still target her.
-    assert game._can_be_targeted(angel, pool["Shock"])
-
-
 # --- Round 32: the opponent-scoped board, in both readings --------------------
 
 
@@ -2474,6 +2366,130 @@ def test_a_blanket_prevention_on_one_recipient_still_refuses():
     is still a shield, and still refused."""
     result = compile_line(
         "Prevent all combat damage that would be dealt this turn to you.",
+        card_name="Test",
+    )
+
+    assert not result.usable
+
+
+# --- Round 84: a count that never leaves its own decision -------------------
+
+
+def _striker_board(set_pool, *, interactive=(), extra_tapped=False):
+    """Siege Striker attacking, an untapped creature, a creature already
+    attacking, and optionally one already tapped."""
+    from engine.game_types import OracleExecutionContext
+
+    pool = set_pool("M21")
+    striker = _nosick(Permanent(card=pool["Siege Striker"]))
+    striker.attacking = True
+    idle = Permanent(card=pool["Alpine Watchdog"])
+    attacker = Permanent(card=pool["Concordia Pegasus"])
+    attacker.attacking = True
+    battlefield = [striker, idle, attacker]
+    if extra_tapped:
+        already = Permanent(card=pool["Alpine Watchdog"])
+        already.tapped = True
+        battlefield.append(already)
+    p1 = PlayerState(name="P1", battlefield=battlefield)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+
+    trigger = compile_card_oracle(pool["Siege Striker"]).triggered_abilities[0]
+    game._execute_oracle_instruction(
+        trigger.instruction,
+        OracleExecutionContext(
+            caster=p1, target=p1, card=pool["Siege Striker"], source_permanent=striker
+        ),
+    )
+    return game, striker, idle, attacker
+
+
+def test_siege_striker_compiles_to_one_instruction(set_pool):
+    """Two printed sentences, one instruction â€” because the count crosses the
+    sentence boundary. "For each creature tapped **this way**" is sized by what
+    the sentence in front of it tapped, and that sentence is a choice made at
+    resolution; as two steps the pump would run before the seat had answered."""
+    program = compile_card_oracle(set_pool("M21")["Siege Striker"])
+
+    assert program.supported, program.reason
+    (trigger,) = program.triggered_abilities
+    assert trigger.instruction.kind == "tap_any_number_then_pump_self"
+    assert trigger.instruction.payload["power"] == 1
+    assert trigger.instruction.payload["untapped_only"] is True
+
+
+def test_the_boost_is_one_per_creature_tapped(set_pool):
+    game, striker, idle, attacker = _striker_board(set_pool, interactive=(0,))
+
+    assert game.confirm_tap_any_number(
+        0, [game.permanent_id_of(idle), game.permanent_id_of(attacker)]
+    )
+
+    assert (striker.effective_power, striker.effective_toughness) == (3, 3)
+    assert idle.tapped and attacker.tapped
+
+
+def test_tapping_nothing_is_a_legal_answer(set_pool):
+    """"You **may** tap **any number**" â€” none is a number, so an empty answer
+    resolves the prompt and grows the Striker by nothing."""
+    game, striker, _idle, _attacker = _striker_board(set_pool, interactive=(0,))
+
+    assert game.confirm_tap_any_number(0, [])
+
+    assert (striker.effective_power, striker.effective_toughness) == (1, 1)
+
+
+def test_a_creature_already_tapped_is_not_offered(set_pool):
+    """"**untapped** creatures you control". Carried explicitly, because
+    ``ObjectFilter.to_payload`` emits ``tapped_only`` when tapped is True and
+    *nothing* when it is False â€” so the payload alone would read the phrase as
+    "creatures you control". Harmless for the tap itself, since tapping a tapped
+    creature does nothing; not harmless for a count of what was tapped, which is
+    the card."""
+    game, _striker, _idle, _attacker = _striker_board(
+        set_pool, interactive=(0,), extra_tapped=True
+    )
+
+    (choice,) = game.pending_choices
+    offered = [perm.card.name for perm in game.live_tap_any_number(choice)]
+
+    assert offered.count("Alpine Watchdog") == 1, "the tapped one is not offered"
+
+
+def test_an_answer_the_prompt_never_offered_is_refused(set_pool):
+    """The enumeration is a hint and the engine re-checks the answer (idiom #9):
+    a client naming an opponent's creature is refused, and still owes the
+    prompt."""
+    game, striker, _idle, _attacker = _striker_board(set_pool, interactive=(0,))
+    theirs = Permanent(card=set_pool("M21")["Alpine Watchdog"])
+    game.players[1].battlefield.append(theirs)
+
+    assert not game.confirm_tap_any_number(0, [game.permanent_id_of(theirs)])
+    assert (striker.effective_power, striker.effective_toughness) == (1, 1)
+    assert game.pending_choices_of("tap_any_number", 0)
+
+
+def test_a_non_interactive_seat_taps_everything_that_is_not_attacking(set_pool):
+    """The stated policy, not a valuation: every creature tapped is a permanent
+    boost to an attacker, so the only cost is losing a blocker â€” and a creature
+    already attacking was never going to block."""
+    game, striker, idle, attacker = _striker_board(set_pool)
+
+    game.auto_resolve_pending_choices()
+
+    assert idle.tapped, "an idle creature is worth more tapped"
+    assert not attacker.tapped, "already attacking, so nothing was given up"
+    assert (striker.effective_power, striker.effective_toughness) == (2, 2)
+
+
+def test_the_tapped_this_way_count_needs_a_tap_in_front_of_it():
+    """A back-reference names its producer or refuses (idiom #7). Without the
+    tap there is nothing for "this way" to count, and the pump would silently be
+    a +0/+0."""
+    result = compile_line(
+        "This creature gets +1/+1 until end of turn for each creature tapped this way.",
         card_name="Test",
     )
 

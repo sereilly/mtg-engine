@@ -222,6 +222,38 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("tap_any_number")
+def _tap_any_number(ctx: PromptContext, choices: list) -> dict:
+    """"Tap any number of untapped creatures you control." (Siege Striker.)
+
+    Only the seat's *own* creatures, and only ones the phrase still names — the
+    engine offers the list through ``live_tap_any_number`` so the prompt and the
+    re-check are one rule rather than two copies of it. There is no maximum to
+    send: "any number" is bounded by the list itself, which is exactly why the
+    quantifier is its own rather than an "up to" with a large count.
+
+    The boost is reported so the player can see what the pick is worth per
+    creature; the engine multiplies it by how many they name.
+    """
+    choice = choices[0]
+    candidates = [
+        {
+            "seat": choice.player_index,
+            "index": ctx.game.battlefield_index_of(perm),
+            "id": ctx.game.permanent_id_of(perm),
+            "name": perm.card.name,
+        }
+        for perm in ctx.game.live_tap_any_number(choice)
+    ]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "power": choice.data.get("power", 0),
+        "toughness": choice.data.get("toughness", 0),
+        "candidates": candidates,
+    }
+
+
 @prompt_renderer("untap_up_to")
 def _untap_up_to(ctx: PromptContext, choices: list) -> dict:
     """"Untap up to four lands." (Rewind): every matching permanent on every

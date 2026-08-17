@@ -38,6 +38,13 @@ class Pump:
     # (Liliana, Waker of the Dead) — what the Var in power/toughness counts.
     # None when X is announced (a cast cost) rather than defined by the text.
     x_definition: Amount | None = None
+    # "gets +1/+1 until end of turn **for each creature tapped this way**"
+    # (Siege Striker). A back-reference to what an earlier sentence of the same
+    # effect did, not a count of the board — the creatures it counts are the ones
+    # that sentence tapped, and a board count would include every creature that
+    # was already tapped. A flag rather than an `ObjectFilter`, because the set
+    # is not describable: only the sentence in front of it knows which ones.
+    per_each_tapped_this_way: bool = False
 
 
 @dataclass(frozen=True)

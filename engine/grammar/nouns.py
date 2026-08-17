@@ -643,6 +643,17 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     # resolution, where "up to two target creatures" is chosen at cast.
     targeted = False
 
+    # "tap **any number of** untapped creatures you control" (Siege Striker).
+    # Its own quantifier rather than an "up to" with a very large count: an "up
+    # to" prints a maximum a picker shows and a re-check enforces, and there is
+    # none here — the bound is the set itself. Untargeted by construction, like
+    # Rewind's "up to four lands": no "target" is printed, so nothing is chosen
+    # until the effect resolves (CR 115.1b).
+    if stream.accept_phrase("any", "number", "of"):
+        return ast.TargetSpec(
+            "any_number", parse_object_filter(stream), count=0, targeted=False
+        )
+
     if stream.accept_phrase("up", "to"):
         quantifier = "up_to"
         token = stream.peek()

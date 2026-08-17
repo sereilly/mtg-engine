@@ -45,6 +45,7 @@ ActionKind = Literal[
     "search_library_confirm",
     "search_library_decline",
     "search_exile_confirm",
+    "tap_any_number_confirm",
     "untap_up_to_confirm",
     "look_top_pick_confirm",
     "reorder_library_confirm",
