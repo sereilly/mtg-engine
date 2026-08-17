@@ -128,6 +128,43 @@ def _describe_several_targets(payload: dict[str, object], recipient: ast.TargetS
     }
 
 
+def _describe_several_card_targets(
+    payload: dict[str, object], recipient: ast.TargetSpec
+) -> None:
+    """Record an "up to N target <type> card(s)" description, N > 1, where the
+    targets are **cards in another zone** rather than permanents.
+
+    A sibling of :func:`_describe_several_targets` rather than a branch in it,
+    because the two cannot share a body: that one describes its filter through
+    :func:`_filter_payload`, which **refuses** a card or a non-battlefield zone
+    outright, and for a good reason - a filter payload has no way to say "in
+    your graveyard", so emitting one would point the picker at the battlefield
+    for an effect that reads a graveyard.
+
+    The shared *key* is deliberate: ``targets["count"] > 1`` is the one query
+    that finds every several-target instruction in a compiled program
+    (``engine/ai_valuation.py`` walks for exactly that), so a card-shaped one
+    filed under a different key would be invisible to it.
+    """
+    if not recipient.targeted:
+        raise LoweringError(
+            "this 'up to N' names no targets; the choice belongs to resolution",
+            node=recipient,
+        )
+    payload["targets"] = {
+        "quantifier": recipient.quantifier,
+        "kind": "card",
+        # No filter, deliberately. What the cards may be is already on the
+        # instruction's own payload, which is what the handler and the spec
+        # function both read; a second copy here could disagree with it, and
+        # nothing would say which one won.
+        #
+        # The maximum, not the count chosen - "up to two" may legally name one
+        # or none (CR 601.2c).
+        "count": recipient.count,
+    }
+
+
 def _targets_payload(recipient: ast.Recipient) -> dict[str, object] | None:
     """A description of what *recipient* refers to, for engine/targeting.py.
 

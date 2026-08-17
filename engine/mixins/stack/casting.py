@@ -848,7 +848,33 @@ class SpellCastingMixin:
             # graveyard pick; an untargeted cast just needs a legal card there.
             caster = self.players[caster_index]
             any_card = bool(primary.payload.get("any_card"))
-            if isinstance(target_permanent_index, int):
+            targets_desc = primary.payload.get("targets") or {}
+            several = (
+                isinstance(targets_desc, dict)
+                and isinstance(targets_desc.get("count"), int)
+                and targets_desc["count"] > 1
+            )
+            if several:
+                # "Up to two target creature cards ...": CR 601.2c lets the
+                # caster announce *zero* targets, so an empty graveyard is not a
+                # reason to refuse the cast. What is refused is a named slot that
+                # is not a legal choice - the picker's list is a hint and this is
+                # the re-check (idiom #9).
+                slots = (
+                    target_permanent_index
+                    if isinstance(target_permanent_index, list)
+                    else ([] if target_permanent_index is None else [target_permanent_index])
+                )
+                if slots and target_player_index is not None and target_player_index != caster_index:
+                    return False, f"no valid target for {card.name}"
+                if len(slots) > targets_desc["count"]:
+                    return False, f"too many targets for {card.name}"
+                for slot in slots:
+                    if not isinstance(slot, int) or not (0 <= slot < len(caster.graveyard)):
+                        return False, f"no valid target for {card.name}"
+                    if not any_card and caster.graveyard[slot].primary_type != "creature":
+                        return False, f"no valid target for {card.name}"
+            elif isinstance(target_permanent_index, int):
                 if target_player_index is not None and target_player_index != caster_index:
                     return False, f"no valid target for {card.name}"
                 if not (0 <= target_permanent_index < len(caster.graveyard)) or (

@@ -3489,3 +3489,63 @@ def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
         + "\n".join(disagreements)
     )
     assert checked, "no card in the pool exercises a subject-filtered trigger"
+
+
+def test_several_cards_from_a_graveyard_carry_the_same_narrowing_as_one():
+    """"Up to two target artifact cards" is the one-card payload plus a count.
+    The two arities build their payload through one function on purpose: a
+    second copy is how the several-card branch ends up returning a creature for
+    a line that says artifact."""
+    one = compile_line(
+        "Return target artifact card from your graveyard to your hand.", card_name="Test"
+    )
+    several = compile_line(
+        "Return up to two target artifact cards from your graveyard to your hand.",
+        card_name="Test",
+    )
+
+    assert one.lowered and several.lowered
+    assert one.instructions[0].payload == {"any_card": False, "card_type": "artifact"}
+    assert several.instructions[0].payload == {
+        "any_card": False,
+        "card_type": "artifact",
+        "targets": {"quantifier": "up_to", "kind": "card", "count": 2},
+    }
+
+
+def test_a_several_card_return_refuses_a_narrowing_the_handler_cannot_test():
+    """The several path reads the same two payload keys as the one-card path, so
+    an adjective invisible to both refuses the line rather than returning any two
+    creature cards — and the refusal names the restriction, not the arity."""
+    result = compile_line(
+        "Return up to two target black creature cards from your graveyard to your hand.",
+        card_name="Test",
+    )
+
+    assert result.parsed
+    assert not result.lowered
+    assert "restriction" in result.failure_reason
+
+
+def test_several_cards_to_the_battlefield_still_has_no_handler():
+    """Only the graveyard→hand handler reads a list. The reanimator resolves one
+    chosen index, so the arity is refused there rather than silently reanimating
+    the first of two."""
+    result = compile_line(
+        "Return up to two target creature cards from your graveyard to the battlefield.",
+        card_name="Test",
+    )
+
+    assert result.parsed
+    assert not result.lowered
+
+
+def test_several_cards_from_any_graveyard_still_has_no_handler():
+    """"From a graveyard" is a different search, at either arity."""
+    result = compile_line(
+        "Return up to two target creature cards from a graveyard to your hand.",
+        card_name="Test",
+    )
+
+    assert result.parsed
+    assert not result.lowered

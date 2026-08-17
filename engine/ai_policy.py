@@ -765,8 +765,15 @@ def _choose_several_targets(
         return None
     legal = game.cast_target_spec(caster_index, card).get("valid_targets") or []
     by_seat: dict[int, list[int]] = {}
+    # A graveyard card is not a permanent and has no `permanent_id`; its slots
+    # are indices into one player's graveyard, so they are collected under that
+    # seat and sent as indices. Same stated policy - take the maximum - because
+    # the per-target benefit argument is the same.
+    wanted_kind = (
+        "graveyard" if (spec or {}).get("kind") == "graveyard_creature" else "permanent"
+    )
     for entry in legal:
-        if entry.get("kind") != "permanent":
+        if entry.get("kind") != wanted_kind:
             continue
         by_seat.setdefault(int(entry["seat"]), []).append(int(entry["index"]))
     if not by_seat:

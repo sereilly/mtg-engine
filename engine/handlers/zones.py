@@ -394,6 +394,43 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+def _resolve_graveyard_slots(caster, context, count, eligible):
+    """The cards *count* chosen graveyard slots name, removed from the graveyard.
+
+    **An index is not an identity** (ROADMAP idiom #11), and a graveyard is the
+    hand's case rather than the battlefield's: a card there has no
+    ``permanent_id``, and two copies of one card are literally one
+    ``CardDefinition`` object, so neither an id nor ``is`` can tell two slots
+    apart. What can is the order of removal. Each slot is resolved to its card
+    *before* anything leaves the zone, and the removals then run highest index
+    first, because popping slot 0 slides every later card down one and would
+    hand slot 1 the wrong card - the graveyard spelling of the bug
+    :func:`resolve_target_slots` exists for on the battlefield.
+
+    A repeated index collapses: CR 601.2c says one instance of "target" cannot
+    name the same object twice, so a client sending ``[0, 0]`` gets one card
+    back, not two. A slot that is out of range or names an ineligible card is
+    dropped (CR 608.2b) and the rest of the effect still happens; an empty
+    answer is a legal outcome of "up to N".
+    """
+    chosen = context.target_permanent_index
+    slots = chosen if isinstance(chosen, list) else ([] if chosen is None else [chosen])
+    graveyard = caster.graveyard
+    seen: set[int] = set()
+    resolved: list[tuple[int, object]] = []
+    for slot in slots[:count]:
+        if not isinstance(slot, int) or slot in seen:
+            continue
+        if not (0 <= slot < len(graveyard)) or not eligible(graveyard[slot]):
+            continue
+        seen.add(slot)
+        resolved.append((slot, graveyard[slot]))
+    for index, _card in sorted(resolved, key=lambda pair: pair[0], reverse=True):
+        graveyard.pop(index)
+    # Printed order, not removal order: the hand and the log read left to right.
+    return [card for _index, card in resolved]
+
+
 @effect_handler("return_creature_from_graveyard_to_hand")
 def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -409,6 +446,27 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
         if any_card:
             return True
         return card_type is not None and card_type in card.type_line.lower()
+    # "Return up to two target creature cards from your graveyard to your hand."
+    # (Sanguine Indulgence.) The several-targets description says a list was
+    # collected, so every chosen slot is honoured rather than only the first.
+    targets_desc = instruction.payload.get("targets") or {}
+    if (
+        isinstance(targets_desc, dict)
+        and isinstance(targets_desc.get("count"), int)
+        and targets_desc["count"] > 1
+    ):
+        picked = _resolve_graveyard_slots(
+            caster, context, targets_desc["count"], _eligible
+        )
+        for returned_card in picked:
+            caster.hand.append(returned_card)
+            game.log.append(
+                f"Returned {returned_card.name} from graveyard to hand"
+            )
+        if not picked:
+            game.log.append("No card was returned from the graveyard")
+        return True, "resolved"
+
     # Honor the caster's chosen graveyard card (Rule 601.2c). Regrowth
     # (any_card) accepts any type; Raise Dead only a creature card.
     idx = context.target_permanent_index

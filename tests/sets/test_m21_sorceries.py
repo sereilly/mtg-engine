@@ -382,3 +382,215 @@ def test_the_second_slot_refuses_a_creature_its_own_filter_excludes(set_pool):
 
     assert mine.metadata["plus_counters"] == 1, "the counter still lands"
     assert also_mine.damage_marked == 0, "but nothing is bitten"
+
+
+# --- The several-cards round: "up to two target" cards in a graveyard --------
+#
+# Sanguine Indulgence is the first card naming more than one target *card*.
+# Every earlier "up to N" names permanents, which carry a `permanent_id`; a card
+# in a graveyard has only a slot, so these pin what that slot is allowed to mean.
+
+
+def _indulgence_game(set_pool, graveyard, *, life_gained=0, enforce=False, **mana):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Sanguine Indulgence"]],
+        graveyard=[pool[n] for n in graveyard],
+        library=[pool["Swamp"]] * 6,
+    )
+    p1.life_gained_this_turn = life_gained
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = enforce
+    game.active_player_index = 0
+    if enforce:
+        p1.mana_pool = {sym: mana.get(sym, 0) for sym in ("W", "U", "B", "R", "G", "C")}
+    return game, p1
+
+
+def test_sanguine_indulgence_returns_both_cards_its_two_slots_named(set_pool):
+    """The card the round buys. Two slots, two cards, and the card the caster
+    did not name stays where it is."""
+    game, p1 = _indulgence_game(
+        set_pool, ["Alpine Watchdog", "Shock", "Garruk's Warsteed"]
+    )
+
+    result = game.cast_from_hand(
+        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0, 2],
+    )
+
+    assert result.supported, result.details
+    assert sorted(c.name for c in p1.hand) == ["Alpine Watchdog", "Garruk's Warsteed"]
+    assert [c.name for c in p1.graveyard] == ["Shock", "Sanguine Indulgence"]
+
+
+def test_sanguine_indulgence_reads_its_slots_before_anything_leaves_the_zone(set_pool):
+    """Two *adjacent* slots, which is where a graveyard index stops being an
+    identity: removing slot 0 slides every later card down one, so a handler
+    removing in the order it was handed would take slot 1's neighbour instead.
+    Slot 1 is Garruk's Warsteed, and Concordia Pegasus has to survive."""
+    game, p1 = _indulgence_game(
+        set_pool, ["Alpine Watchdog", "Garruk's Warsteed", "Concordia Pegasus"]
+    )
+
+    result = game.cast_from_hand(
+        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0, 1],
+    )
+
+    assert result.supported, result.details
+    assert sorted(c.name for c in p1.hand) == ["Alpine Watchdog", "Garruk's Warsteed"]
+    assert [c.name for c in p1.graveyard] == ["Concordia Pegasus", "Sanguine Indulgence"]
+
+
+def test_sanguine_indulgence_may_name_only_one(set_pool):
+    """"Up to two" is a maximum, not a requirement (CR 601.2c) — one named slot
+    returns one card and the spell still resolves."""
+    game, p1 = _indulgence_game(set_pool, ["Shock", "Alpine Watchdog"])
+
+    result = game.cast_from_hand(
+        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[1],
+    )
+
+    assert result.supported, result.details
+    assert [c.name for c in p1.hand] == ["Alpine Watchdog"]
+    assert [c.name for c in p1.graveyard] == ["Shock", "Sanguine Indulgence"]
+
+
+def test_sanguine_indulgence_is_castable_with_an_empty_graveyard(set_pool):
+    """Naming zero targets is a legal announcement, so an empty graveyard is not
+    a reason to refuse the cast the way it is for a spell requiring its one
+    target."""
+    game, p1 = _indulgence_game(set_pool, [])
+
+    result = game.cast_from_hand(0, "Sanguine Indulgence", target_player_index=0)
+
+    assert result.supported, result.details
+    assert [c.name for c in p1.hand] == []
+    assert [c.name for c in p1.graveyard] == ["Sanguine Indulgence"]
+
+
+def test_sanguine_indulgence_refuses_a_slot_that_is_not_a_creature_card(set_pool):
+    """The picker's list is a hint and the cast re-checks it: a named slot
+    holding an instant is refused by name rather than quietly skipped."""
+    game, p1 = _indulgence_game(set_pool, ["Shock", "Alpine Watchdog"])
+
+    result = game.cast_from_hand(
+        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0, 1],
+    )
+
+    assert not result.supported
+    assert result.details == "no valid target for Sanguine Indulgence"
+    assert any(c.name == "Sanguine Indulgence" for c in p1.hand), "the spell was not cast"
+
+
+def test_sanguine_indulgence_returns_one_card_for_a_repeated_slot(set_pool):
+    """CR 601.2c: one instance of "target" cannot name the same object twice, so
+    a doubled index is one choice however it arrives."""
+    game, p1 = _indulgence_game(set_pool, ["Alpine Watchdog", "Garruk's Warsteed"])
+
+    result = game.cast_from_hand(
+        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0, 0],
+    )
+
+    assert result.supported, result.details
+    assert [c.name for c in p1.hand] == ["Alpine Watchdog"]
+
+
+def test_sanguine_indulgence_costs_three_less_after_three_life_gained(set_pool):
+    """{3}{B} less {3} is {B} — one black mana casts it. The condition is
+    computed from the caster's own life-gain record, so the discount is charged
+    rather than assumed."""
+    game, _ = _indulgence_game(set_pool, ["Alpine Watchdog"], enforce=True, B=1)
+    assert not game.queue_from_hand(
+        0, "Sanguine Indulgence", target_player_index=0
+    ).supported
+
+    discounted, _ = _indulgence_game(
+        set_pool, ["Alpine Watchdog"], life_gained=3, enforce=True, B=1
+    )
+    assert discounted.queue_from_hand(
+        0, "Sanguine Indulgence", target_player_index=0
+    ).supported
+
+
+def test_sanguine_indulgence_charges_full_price_below_three_life_gained(set_pool):
+    """Two life gained is not three. The reduction is conditional, and reading
+    an unmet condition as met is the one direction a cost error must never
+    go — so the same board pays four mana here and one above."""
+    full, player = _indulgence_game(
+        set_pool, ["Alpine Watchdog"], life_gained=2, enforce=True, B=1, C=3
+    )
+    assert full.queue_from_hand(0, "Sanguine Indulgence", target_player_index=0).supported
+    assert sum(player.mana_pool.values()) == 0
+
+    discounted, discounted_player = _indulgence_game(
+        set_pool, ["Alpine Watchdog"], life_gained=3, enforce=True, B=1, C=3
+    )
+    assert discounted.queue_from_hand(
+        0, "Sanguine Indulgence", target_player_index=0
+    ).supported
+    assert sum(discounted_player.mana_pool.values()) == 3
+
+
+def test_the_picker_offers_two_slots_of_the_casters_own_graveyard(set_pool):
+    """What the client reads: the maximum it has to collect, and a legal-target
+    list holding only creature cards in the caster's own graveyard."""
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Sanguine Indulgence"]],
+        graveyard=[pool["Alpine Watchdog"], pool["Shock"], pool["Garruk's Warsteed"]],
+    )
+    p2 = PlayerState(name="P2", graveyard=[pool["Concordia Pegasus"]])
+    game = Game(players=[p1, p2])
+
+    spec = game.cast_target_spec(0, pool["Sanguine Indulgence"])
+
+    assert spec["kind"] == "graveyard_creature"
+    assert spec["max_targets"] == 2
+    assert spec["own_graveyard_only"] is True
+    assert [(t["seat"], t["index"], t["name"]) for t in spec["valid_targets"]] == [
+        (0, 0, "Alpine Watchdog"),
+        (0, 2, "Garruk's Warsteed"),
+    ]
+
+
+def test_the_ai_takes_the_maximum_out_of_its_own_graveyard(set_pool):
+    """The stated policy for "up to N" (ROADMAP idiom #8), reached through the
+    graveyard enumeration rather than the battlefield one — the AI's slot
+    collector skipped every non-permanent entry until this card."""
+    from engine.ai_policy import choose_cast_action
+
+    game, _ = _indulgence_game(
+        set_pool, ["Alpine Watchdog", "Shock", "Garruk's Warsteed"]
+    )
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None and action.card_name == "Sanguine Indulgence"
+    assert action.target_player_index == 0
+    assert action.target_permanent_index == [0, 2]
+
+
+def test_rise_again_still_reanimates_exactly_one(set_pool):
+    """Negative control: the destination is what picks the handler, so the
+    several-cards branch must not reach the graveyard→battlefield one."""
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Rise Again"]],
+        graveyard=[pool["Alpine Watchdog"], pool["Garruk's Warsteed"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    program = compile_card_oracle(pool["Rise Again"])
+    assert [(i.kind, i.payload) for i in program.instructions][0] == (
+        "reanimate_creature", {},
+    )
+
+    result = game.cast_from_hand(
+        0, "Rise Again", target_player_index=0, target_permanent_index=1,
+    )
+    assert result.supported, result.details
+    assert [p.card.name for p in game.controlled_by(0)] == ["Garruk's Warsteed"]
+    assert [c.name for c in p1.graveyard] == ["Alpine Watchdog", "Rise Again"]

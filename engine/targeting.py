@@ -434,6 +434,13 @@ def _graveyard_return_spec(payload: dict) -> dict:
     it.
     """
     spec: dict = {"kind": "graveyard_creature", "own_graveyard_only": True}
+    # "Up to two target creature cards" (Sanguine Indulgence). This kind settles
+    # its own spec, so the generic `targets` reading in `_from_instruction` never
+    # runs for it - the maximum has to be lifted here, or the picker collects one
+    # card for a spell that names two.
+    count = (payload.get("targets") or {}).get("count")
+    if isinstance(count, int) and count > 1:
+        spec["max_targets"] = count
     if payload.get("card_types"):
         # "target instant or sorcery card" (Shipwreck Dowser) — the union the
         # round-19 graveyard picker already tests by primary type.
@@ -652,6 +659,13 @@ def _from_targets_payload(targets) -> dict | None:
     if not isinstance(targets, dict):
         return None
     kind = targets.get("kind")
+    if kind == "card":
+        # A card in a graveyard is not a permanent (CR 115.2), and this function
+        # only knows how to describe permanents, players and the stack. The
+        # instruction that carries such a description settles its own spec in
+        # `_KIND_TO_SPEC_FROM_PAYLOAD`; answering here would hand the picker a
+        # battlefield when the effect reads a graveyard.
+        return None
     if kind == "any":
         return {"kind": "any"}
     if kind == "divided":

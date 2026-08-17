@@ -1549,13 +1549,23 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
   const ownGraveyardOnly = !!spec.own_graveyard_only;
   const noun = graveyardCardNoun(spec);
   const verb = spec.any_card ? "return" : "reanimate";
-  if ((spec.valid_targets || []).length === 0) {
+  // "Return up to two target creature cards from your graveyard to your hand."
+  // (Sanguine Indulgence): several slots and a maximum the caster may legally
+  // stop short of. It stays *this* prompt rather than the several-permanents
+  // one because the click surface is the zone-reveal panel, not the canvas —
+  // and because `targetKind` is what keeps that panel auto-opened.
+  const max = severalTargetMaximum(card);
+  // An empty graveyard is not a reason to refuse the cast when the maximum may
+  // be zero (CR 601.2c). The prompt opens with nothing clickable and a reachable
+  // confirm, which is what announcing no targets looks like.
+  if (!max && (spec.valid_targets || []).length === 0) {
     clearPendingHandCast();
     updateActionHint(`No ${noun}s in ${ownGraveyardOnly ? "your" : "any"} graveyard for ${cardName}.`, true);
     return;
   }
   pendingCastTarget = {
     card, cardName, targetKind: "graveyard_creature", castAction,
+    ...(max ? { maxTargets: max, severalGraveyard: [] } : {}),
     ...pendingTargetFields(card),
   };
   renderActivationPrompt();
@@ -1566,6 +1576,67 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
   const targetSeats = [...new Set((pendingCastTarget.validGraveyard || []).map((t) => t.seat))];
   const sections = targetSeats.map((s) => zoneRevealSectionFor(s, "graveyard"));
   if (sections.length) openZoneReveal(sections, { auto: true });
+}
+
+function severalGraveyardHint() {
+  const p = pendingCastTarget;
+  if (!p || !p.severalGraveyard) return "";
+  const n = p.severalGraveyard.length;
+  return n === 0
+    ? `Choose up to ${p.maxTargets} cards in your graveyard for ${p.cardName} (click each), then confirm. Choosing none is legal.`
+    : `${n} of up to ${p.maxTargets} chosen.`;
+}
+
+function toggleSeveralGraveyardTarget(zoneSeat, index) {
+  const p = pendingCastTarget;
+  if (!p || !p.severalGraveyard) return;
+  const legal = (p.validGraveyard || []).some((t) => t.seat === zoneSeat && t.index === index);
+  if (!legal) {
+    updateActionHint("That card isn't a valid target for the pending spell.", true);
+    return;
+  }
+  const at = p.severalGraveyard.findIndex((t) => t.seat === zoneSeat && t.idx === index);
+  if (at >= 0) {
+    p.severalGraveyard.splice(at, 1);
+  } else {
+    if (p.severalGraveyard.length >= p.maxTargets) {
+      updateActionHint(`${p.cardName} names at most ${p.maxTargets} targets — click one to deselect it.`, true);
+      return;
+    }
+    p.severalGraveyard.push({ seat: zoneSeat, idx: index });
+  }
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(severalGraveyardHint());
+}
+
+function confirmSeveralGraveyardTargets() {
+  const p = pendingCastTarget;
+  if (!p || !p.severalGraveyard) return;
+  const { cardName, castAction, severalGraveyard } = p;
+  // Indices, not ids: a card in a graveyard has no `permanent_id` to send. The
+  // engine re-checks every slot against the graveyard as it stands at cast time
+  // and refuses one that is no longer a legal choice, which is the protection an
+  // id gives on the battlefield.
+  const targetSeat = severalGraveyard.length ? severalGraveyard[0].seat : seat;
+  if (!severalGraveyard.every((t) => t.seat === targetSeat)) {
+    // The indices are positional on one `target_seat`; a spread across two
+    // graveyards cannot be sent at all. No printed card names one, so this is a
+    // refusal rather than a wire format.
+    updateActionHint("Choose cards from one graveyard.", true);
+    return;
+  }
+  const body = { seat, action: castAction || "cast", card_name: cardName, target_seat: targetSeat };
+  if (severalGraveyard.length) {
+    body.target_permanent_indices = severalGraveyard.map((t) => t.idx);
+  }
+  clearPendingCastTargeting();
+  closeZoneRevealIfAutoOpened();
+  updateActionHint(`Casting ${cardName}...`);
+  sendAction(body)
+    .then(() => updateActionHint(`Cast ${cardName}.`))
+    .catch((e) => updateActionHint(e.message, true))
+    .finally(() => clearPendingHandCast());
 }
 
 // Whether a serialized stack item (at top-first array index `arrayIndex`) is a
@@ -5204,6 +5275,26 @@ function renderActivationPrompt() {
       const spec = targetSpecOf(pendingCastTarget.card);
       const noun = graveyardCardNoun(spec);
       const where = spec?.own_graveyard_only ? "your graveyard" : "a graveyard";
+      if (pendingCastTarget.severalGraveyard) {
+        // "Up to N": an accumulate-and-confirm prompt, for the same reason the
+        // several-permanents one is — the caster may legally stop short of the
+        // maximum, and a one-click picker has nowhere to put that decision.
+        body.textContent =
+          `Click up to ${pendingCastTarget.maxTargets} glowing ${noun}s in ${where} to choose them, then confirm. ` +
+          "Click a chosen one again to deselect it.";
+        steps.innerHTML = [
+          `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
+          `<div>${escapeHtml(severalGraveyardHint())}</div>`,
+          `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="severalGraveyardConfirmBtn">Confirm targets</button></div>`,
+        ].join("");
+        // Never disabled: "up to N" may legally choose none (CR 601.2c).
+        const graveyardBtn = document.getElementById("severalGraveyardConfirmBtn");
+        if (graveyardBtn) graveyardBtn.addEventListener("click", confirmSeveralGraveyardTargets);
+        cancelBtn.classList.remove("hidden");
+        cancelBtn.disabled = false;
+        customOkBtn.disabled = true;
+        return;
+      }
       body.textContent = `Click a glowing ${noun} in ${where} to choose the target.`;
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else {
@@ -8367,13 +8458,25 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
   const isCastableFromZone = (index) => castableEntries.some((entry) => entry.index === index);
   // Render with the most recently added card (end of the array) leftmost,
   // while keeping each card's original index for targeting clicks.
+  // Slots already chosen for an "up to N" graveyard prompt, so a second click
+  // reads as a deselect rather than as a repeat of the same choice.
+  const chosenSlots = pendingCastTarget?.severalGraveyard || null;
+  const isChosenGraveyardTarget = (index) =>
+    !!chosenSlots && chosenSlots.some((t) => t.seat === zoneSeat && t.idx === index);
   for (let index = cards.length - 1; index >= 0; index--) {
     const card = cards[index];
-    const el = createCardElement(card, { compact: true, showManaCost: false });
+    const el = createCardElement(card, {
+      compact: true, showManaCost: false,
+      selected: graveyardTargeting && isChosenGraveyardTarget(index),
+    });
     if (graveyardTargeting && isValidGraveyardTarget(index)) {
       el.classList.add("targeting-valid");
       el.style.cursor = "pointer";
-      el.addEventListener("click", () => resolvePendingCastTarget(zoneSeat, index));
+      el.addEventListener("click", () => (
+        chosenSlots
+          ? toggleSeveralGraveyardTarget(zoneSeat, index)
+          : resolvePendingCastTarget(zoneSeat, index)
+      ));
     } else if (isCastableFromZone(index) && !pendingCastTarget && !pendingCastHandCard) {
       el.classList.add("castable-from-zone");
       el.style.cursor = "pointer";

@@ -827,3 +827,74 @@ def test_700_2_a_head_choosing_several_modes_is_not_reduced_to_one():
 
     assert program.modes == ()
     assert program.supported is False
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_a_variable_number_of_targets_may_be_announced_as_none():
+    """"If the spell has a variable number of targets, the player announces how
+    many targets they will choose." Zero is one of the answers, so a spell whose
+    only targeting is "up to N" is castable with nothing legal to name — where a
+    spell requiring its one target could not be cast at all (CR 115.1b)."""
+    dredge = _mk_card(
+        "Dredge Up",
+        "Sorcery",
+        "Return up to two target creature cards from your graveyard to your hand.",
+    )
+    p1 = PlayerState(name="P1", hand=[dredge])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    result = game.cast_from_hand(0, "Dredge Up", target_player_index=0)
+
+    assert result.supported, result.details
+    assert p1.hand == []
+    assert [c.name for c in p1.graveyard] == ["Dredge Up"]
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_one_instance_of_target_cannot_name_the_same_object_twice():
+    """"The same target can't be chosen multiple times for any one instance of
+    the word 'target'." Two slots naming one object are one choice, so the
+    effect happens once — not twice, and not to a second object nobody named."""
+    dredge = _mk_card(
+        "Dredge Up",
+        "Sorcery",
+        "Return up to two target creature cards from your graveyard to your hand.",
+    )
+    bear = _mk_card("Bear", "Creature — Bear")
+    ogre = _mk_card("Ogre", "Creature — Ogre")
+    p1 = PlayerState(name="P1", hand=[dredge], graveyard=[bear, ogre])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    result = game.cast_from_hand(
+        0, "Dredge Up", target_player_index=0, target_permanent_index=[0, 0],
+    )
+
+    assert result.supported, result.details
+    assert [c.name for c in p1.hand] == ["Bear"]
+    assert [c.name for c in p1.graveyard] == ["Ogre", "Dredge Up"]
+
+
+@pytest.mark.cr("601.2c", "115.2")
+def test_601_2c_each_announced_slot_names_its_own_object():
+    """A spell naming several targets affects each of them once. The objects
+    here are *cards in a graveyard*, which CR 115.2 admits because the spell
+    says where to look — and which have no battlefield identity, so what a slot
+    means has to be settled before any of them moves."""
+    dredge = _mk_card(
+        "Dredge Up",
+        "Sorcery",
+        "Return up to two target creature cards from your graveyard to your hand.",
+    )
+    first = _mk_card("First Bear", "Creature — Bear")
+    second = _mk_card("Second Bear", "Creature — Bear")
+    third = _mk_card("Third Bear", "Creature — Bear")
+    p1 = PlayerState(name="P1", hand=[dredge], graveyard=[first, second, third])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    result = game.cast_from_hand(
+        0, "Dredge Up", target_player_index=0, target_permanent_index=[0, 1],
+    )
+
+    assert result.supported, result.details
+    assert sorted(c.name for c in p1.hand) == ["First Bear", "Second Bear"]
+    assert [c.name for c in p1.graveyard] == ["Third Bear", "Dredge Up"]

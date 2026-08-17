@@ -15,6 +15,7 @@ from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _describe_several_card_targets,
     _describe_several_targets,
     _describe_targets,
     _filter_payload,
@@ -248,6 +249,27 @@ def _reads_no_return_restriction(filt: ast.ObjectFilter) -> bool:
     )
 
 
+def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
+    """The card-type half of a graveyard-to-hand return's payload.
+
+    One function because the one-card and several-card branches have to narrow
+    *identically*: the named card type is a filter the handler applies, so it is
+    carried rather than collapsed - reading "artifact card" as "any card" would
+    let Reconstruction return a creature. A *union* ("instant or sorcery card",
+    Shipwreck Dowser) travels as its own additive key, so Raise Dead's payload
+    stays byte-identical. Two copies of this is how "up to two target artifact
+    cards" ends up returning a creature.
+    """
+    if len(filt.card_types) > 1:
+        return {
+            "any_card": False,
+            "card_type": None,
+            "card_types": list(filt.card_types),
+        }
+    card_type = filt.card_types[0] if filt.card_types else None
+    return {"any_card": card_type is None, "card_type": card_type}
+
+
 def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ...]:
     """"Return <object> [from <zone>] to <zone>" — Raise Dead, Regrowth,
     Resurrection and Unsummon.
@@ -291,6 +313,41 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
         several: dict[str, object] = {}
         _describe_several_targets(several, subject)
         return (OracleInstruction("bounce_target_creature", "", several),)
+    # "Return up to two target creature cards from your graveyard to your hand."
+    # (Sanguine Indulgence.) The same instruction as the one-card return - the
+    # effect per card is identical, and `_graveyard_to_hand_payload` is the same
+    # narrowing - plus the several-targets opt-in, which is what says the handler
+    # resolves a list and the picker collects up to N.
+    #
+    # Gated to exactly the shape that handler reads: the caster's own graveyard,
+    # their own hand, and nothing `_reads_no_return_restriction` refuses for the
+    # one-card path, since the several path reads the same payload keys and no
+    # more. "Up to two target **black** creature cards" therefore refuses rather
+    # than returning any two.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and _names_several_targets(subject)
+        and node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.from_zone.owner is not None
+        and node.from_zone.owner.kind == "you"
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "you"
+        and subject.filter.is_card
+    ):
+        if _reads_no_return_restriction(subject.filter):
+            # Raised here rather than left to the generic refusal below, so the
+            # named clause says which half is missing: the arity is fine and the
+            # adjective is not.
+            raise LoweringError("no return handler honours this restriction", node=node)
+        several_cards = _graveyard_to_hand_payload(subject.filter)
+        _describe_several_card_targets(several_cards, subject)
+        return (
+            OracleInstruction(
+                "return_creature_from_graveyard_to_hand", "", several_cards
+            ),
+        )
     if not _is_target(subject):
         # "target" and "up to one target" (Liliana, Death Mage's +1) both
         # resolve one chosen object; anything wider has no handler.
@@ -327,29 +384,11 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
         if destination.name == "hand":
             if destination.owner is None or destination.owner.kind != "you":
                 raise LoweringError("this handler returns cards to your own hand", node=node)
-            # The named card type is a filter the handler applies, so it is
-            # carried rather than collapsed: reading "artifact card" as "any
-            # card" would let Reconstruction return a creature. A *union*
-            # ("instant or sorcery card", Shipwreck Dowser) travels as its own
-            # additive key, so Raise Dead's payload stays byte-identical.
-            if len(filt.card_types) > 1:
-                return (
-                    OracleInstruction(
-                        "return_creature_from_graveyard_to_hand",
-                        "",
-                        {
-                            "any_card": False,
-                            "card_type": None,
-                            "card_types": list(filt.card_types),
-                        },
-                    ),
-                )
-            card_type = filt.card_types[0] if filt.card_types else None
             return (
                 OracleInstruction(
                     "return_creature_from_graveyard_to_hand",
                     "",
-                    {"any_card": card_type is None, "card_type": card_type},
+                    _graveyard_to_hand_payload(filt),
                 ),
             )
 

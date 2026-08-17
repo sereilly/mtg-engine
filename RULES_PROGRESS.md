@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**247 / 585 tracked rules covered (42%)** — 1116 tests, 0 unannotated.
+**247 / 585 tracked rules covered (42%)** — 1119 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -252,7 +252,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 115. Targets
 
 - [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(6 tests, subrules bcd)*
-- [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(2 tests)*
+- [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [ ] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe...
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(2 tests)*
 - [ ] **115.5** A spell or ability on the stack is an illegal target for itself.
@@ -646,7 +646,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(81 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(84 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
