@@ -7,8 +7,8 @@ printings, 26,113 unique cards** per `set_progress.json`.
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–70 — lives in git history at and before
-commit `5249f66`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–71 — lives in git history at and before
+commit `36ecf1c`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,37 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 71: attack restrictions were not cumulative
-
-*(2026-08-16.)* No card — a **shipped-pool** bug, found while scoping Drowsing
-Tyrannodon and fixed ahead of it because it is not that card's.
-
-CR 508.1c: "if **any** restrictions are being disobeyed, the declaration of
-attackers is illegal." Restrictions are cumulative, so satisfying one settles
-only that one. The `cant_attack_without_land_type` branch **`return`ed** its own
-answer, so a satisfied land condition short-circuited every later restriction in
-the function.
-
-**Sea Serpent attacks straight through Island Sanctuary**, measured. The two
-cards meet on exactly the board where both are played — the Serpent's own clause
-*requires* the defending player to control an Island, which is the board an
-Island Sanctuary player has — and they have shipped together since Alpha, in
-LEA, LEB, 2ED and 3ED. The Serpent has neither flying nor islandwalk. Five cards
-carry the instruction: Sea Serpent, Pirate Ship, Dandân, Island Fish Jasconius,
-Merchant Ship.
-
-The same `return` also skipped the **defender** check three lines below, so a
-creature printed with both that clause and defender would attack with no
-permission at all. Latent — no such card exists yet, and Drowsing Tyrannodon is
-the card that would have met it.
-
-Nothing in the suite covered this, because every other restriction is checked
-*after* the one that returned. That is the shape worth remembering: a guard
-placed before a short-circuit tests the short-circuit, not the guard.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions. CR 508.1 gains subrule c.
-
 ## Round 72: a permission, not a removal
 
 *(2026-08-16.)* M21 **224 → 225** — Drowsing Tyrannodon.
@@ -388,4 +357,30 @@ misfiling rather than bulk, which is why the audit comes first.
 Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
 byte-identical at 443 interactions, **zero hooks added**. Eleven new tests, all
 eleven watched to fail on the round-72 engine.
+
+## Round 74: the ids the wire resolved and the cast threw away
+
+*(2026-08-16.)* No card — a regression **this effort introduced in round 65** and
+did not notice for nine rounds.
+
+`web/actions.py`'s preamble resolves `target_permanent_ids` off the request and
+deliberately *keeps* them, with a comment saying why: an index is positional on
+one `target_seat`, so a pair of targets on two battlefields cannot be expressed
+by indices at all. `_queue_spell_from_request` then dropped them.
+
+Every cross-board **cast** over HTTP therefore lost its second slot and resolved
+it as an index on the first slot's board. Rookie Mistake — the card round 65 was
+built around — has been half-castable in the browser ever since. The engine had
+it right, the activation path had it right, and the browser picker had it right;
+only the cast request path did not, which is why nothing failed.
+
+**The pattern, not the slip.** Round 65 landed the feature in dependency order
+with the grammar last and verified it by executing `cast_from_hand` directly —
+the seam one layer *below* the one that broke. A feature whose whole point is
+that it crosses seats needs one test on the path a player actually uses, and it
+did not have one. The new test asserts both halves of the contract: a cross-board
+cast reaches both boards, and a stale id is a 404 rather than a silent fallback
+to a slot number.
+
+Suite green, every `--check` gate green, shipped pool 388/388.
 

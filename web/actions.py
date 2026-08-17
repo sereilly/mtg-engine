@@ -219,6 +219,15 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         card_name,
         target_player_index=target,
         target_permanent_index=permanent_target,
+        # The same targets by stable identity. The preamble above resolves these
+        # off the wire and deliberately *keeps* them, because a pair of targets
+        # may sit on two battlefields and `target_permanent_index` is positional
+        # on one `target_seat` — and then this function dropped them, so every
+        # cross-board cast over HTTP lost its second slot and resolved as an
+        # index on the first slot's board. Rookie Mistake has been half-castable
+        # in the browser since round 65 for exactly this reason; the engine and
+        # the activation path (below) had it right the whole time.
+        target_permanent_ids=req.target_permanent_ids,
         x_value=x_value,
         new_color=req.mana_color,
         target_stack_index=engine_stack_index,
