@@ -10,6 +10,7 @@ ability or (for a mana ability, CR 605.1a) performs it without using the stack.
 from __future__ import annotations
 
 from ...cost_modifiers import ability_cost_tax
+from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
 from ...handlers._common import permanent_matches_filter
 from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
@@ -663,6 +664,19 @@ class AbilityActivationMixin:
             self.log.append(
                 f"{controller.name} activated {permanent.card.name} "
                 f"({loyalty_delta:+d} loyalty, now {loyalty_now + loyalty_delta})"
+            )
+            # "Whenever you activate a loyalty ability of …" (Keral Keep
+            # Disciples). CR 606.4's payment *is* the activation, so this is the
+            # event — and it is announced here rather than at the legality gate
+            # above, which returns early: announcing there would fire the trigger
+            # on activations the rules refused. The walker is still on the
+            # battlefield at this point, which is what lets a minus ability that
+            # bins it (CR 704.5i) still be something the trigger saw.
+            # `queue_permanent_ability` holds the batch until the ability is on
+            # the stack, so CR 603.3 puts this above it.
+            emit(
+                self, "you_activate_loyalty_ability",
+                subject=permanent, seat=controller_index,
             )
 
         # Pay the discard additional cost. Costs are paid on activation, before

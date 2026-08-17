@@ -351,6 +351,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # a property of the fire site rather than a flag it has to remember.
     ("source_you_control_damages_opponent",
      r"whenever a source you control deals noncombat damage to an opponent"),
+    # "Whenever you activate a loyalty ability of a Chandra planeswalker …"
+    # (Keral Keep Disciples). "Chandra" is a planeswalker *subtype*
+    # (data/vocabulary/planeswalker_types.json) and never a card name, so the
+    # regex only delimits the noun phrase and the noun parser reads it — the
+    # `_subject` group machinery, in the position where a dropped rider would
+    # fire the table off every planeswalker in the format. The "of an? …" is
+    # required: a wording with no subject at all names a larger set than any
+    # card prints and must refuse rather than compile unnarrowed.
+    ("you_activate_loyalty_ability",
+     r"whenever you activate a loyalty ability of (?P<walker_subject>an? [^,]+)"),
     ("draws_card",                  r"whenever you draw a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
     # turn, announced by the draw sweep in check_state_based_actions off the

@@ -31,7 +31,7 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import GrammarError, LoweringError
 from .lower import GRAMMAR_ONLY_PAYLOAD_KEYS, categories_of, lower_ability
-from .lowering._common import _filter_payload
+from .lowering._common import _filter_payload, _restrictions_beyond
 from .parser import parse_line
 from .phrases import parse_subject_filter
 
@@ -250,6 +250,23 @@ def behavioural_payload(payload: dict) -> dict:
     return {k: v for k, v in payload.items() if k not in GRAMMAR_ONLY_PAYLOAD_KEYS}
 
 
+#: The ``ObjectFilter`` fields ``to_payload`` actually reads. A narrowing
+#: outside this set has no payload form at all, so it does not survive the trip
+#: to the dispatcher — and the caller's "are all these keys testable?" check
+#: cannot see the difference, because what is missing left no key behind.
+#: Round 68 hit the same thing on the lowering side and paired the payload gate
+#: with ``_restrictions_beyond`` over the AST; this is that pairing on the
+#: *trigger* side, where the consequence is a condition that announces itself on
+#: a strictly larger set than the card prints.
+_PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
+    "card_types", "type_match", "subtypes", "colors", "excluded_colors",
+    "excluded_types", "excluded_subtypes", "with_keywords", "without_keywords",
+    "controller", "tapped", "attacking", "blocking", "other_than_source",
+    "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
+    "colored", "with_plus1_counter",
+})
+
+
 def subject_filter_payload(phrase: str, *, plural: bool = False) -> dict | None:
     """The payload form of the set of objects a narrowed trigger names.
 
@@ -268,6 +285,15 @@ def subject_filter_payload(phrase: str, *, plural: bool = False) -> dict | None:
     """
     filt = parse_subject_filter(phrase, plural=plural)
     if filt is None:
+        return None
+    # The AST gate, before the payload one. ``supertypes``, ``is_enchanted`` and
+    # ``blocked`` have no ``to_payload`` key, so "a **legendary** creature you
+    # control" reduced to exactly the payload of "a creature you control" and the
+    # testable-keys check downstream saw a clean, unnarrowed filter — a trigger
+    # firing on every creature its controller has. Reading the dataclass rather
+    # than a hand-listed tuple also refuses a restriction added to
+    # ``ObjectFilter`` after this was written.
+    if _restrictions_beyond(filt, _PAYLOAD_HONOURED_FILTER_FIELDS):
         return None
     try:
         return _filter_payload(filt)

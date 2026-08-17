@@ -13,6 +13,7 @@ from __future__ import annotations
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
+from tests.helpers import _nosick
 
 
 # --- Exiling a whole zone ---------------------------------------------------
@@ -63,3 +64,39 @@ def test_tormods_crypt_leaves_the_other_graveyard_alone(set_pool):
     # pay the cost — and everything that was already there stays.
     assert [c.name for c in p1.graveyard] == ["Shock", "Tormod's Crypt"]
     assert p2.graveyard == []
+
+
+# --- Artifact creatures ----------------------------------------------------
+
+
+def test_epitaph_golem_bottoms_a_chosen_graveyard_card(set_pool):
+    pool = set_pool("M21")
+    golem = Permanent(card=pool["Epitaph Golem"])
+    p1 = PlayerState(
+        name="P1", battlefield=[golem],
+        graveyard=[pool["Shock"], pool["Concordia Pegasus"]],
+        library=[pool["Island"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    result = game.activate_permanent_ability(
+        0, "Epitaph Golem", ability_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    assert result.supported, result.details
+    assert [c.name for c in p1.graveyard] == ["Shock"]
+    assert [c.name for c in p1.library] == ["Island", "Concordia Pegasus"]
+
+
+def test_sparkhunter_masticore_keeps_its_planeswalker_protection(set_pool):
+    """The card the cost line was hiding. "Protection from planeswalkers" is a
+    quality this engine models (CR 702.16), and the whole card was unsupported
+    only because the compiler stopped at line one."""
+    pool = set_pool("M21")
+    masticore = _nosick(Permanent(card=pool["Sparkhunter Masticore"]))
+    walker = Permanent(card=pool["Basri Ket"], metadata={"loyalty_counters": 4})
+    p1 = PlayerState(name="P1", battlefield=[masticore])
+    p2 = PlayerState(name="P2", battlefield=[walker])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    assert ("card_type", "planeswalker") in game._protection_qualities(masticore)

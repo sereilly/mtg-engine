@@ -499,65 +499,6 @@ def test_roaming_ghostlight_bounces_a_non_spirit(set_pool):
     assert [c.name for c in p2.hand] == ["Concordia Pegasus"]
 
 
-def test_barrin_bounces_a_planeswalker_to_its_owners_hand(set_pool):
-    """The union half: "up to one other target creature **or planeswalker**".
-    And the CR 400.3 nuance the end-step test below leans on: the walker goes
-    to its *owner's* hand, so bouncing the opponent's does not feed Barrin's
-    own put-into-your-hand history."""
-    pool = set_pool("M21")
-    walker = Permanent(
-        card=pool["Garruk, Unleashed"], metadata={"loyalty_counters": 4},
-    )
-    p1 = PlayerState(name="P1", hand=[pool["Barrin, Tolarian Archmage"]])
-    p2 = PlayerState(name="P2", battlefield=[walker])
-    game = Game(players=[p1, p2])
-    result = game.cast_from_hand(
-        0, "Barrin, Tolarian Archmage", target_player_index=1, target_permanent_index=0,
-    )
-    assert result.supported, result.details
-    assert not game.is_on_battlefield(walker)
-    assert any(c.name == "Garruk, Unleashed" for c in p2.hand)
-    assert game.permanents_to_hand_this_turn.get(0, 0) == 0
-    assert game.permanents_to_hand_this_turn.get(1, 0) == 1
-
-
-def test_barrin_draws_at_end_step_after_bouncing_his_controllers_own(set_pool):
-    pool = set_pool("M21")
-    mine = Permanent(card=pool["Concordia Pegasus"])
-    p1 = PlayerState(
-        name="P1", hand=[pool["Barrin, Tolarian Archmage"]],
-        battlefield=[mine], library=[pool["Island"]] * 3,
-    )
-    game = Game(players=[p1, PlayerState(name="P2")])
-    result = game.cast_from_hand(
-        0, "Barrin, Tolarian Archmage", target_player_index=0, target_permanent_index=0,
-    )
-    assert result.supported, result.details
-    assert any(c.name == "Concordia Pegasus" for c in p1.hand)
-    # The bounce landed in *your* hand, which is what the end-step
-    # intervening-if reads (CR 603.4). The trigger goes on the stack and
-    # resolves through the ordinary settle.
-    hand_before = len(p1.hand)
-    game.resolve_end_step(0)
-    game._settle()
-    assert len(p1.hand) == hand_before + 1
-
-
-def test_barrin_end_step_trigger_stays_quiet_without_a_bounce(set_pool):
-    pool = set_pool("M21")
-    barrin = Permanent(card=pool["Barrin, Tolarian Archmage"])
-    p1 = PlayerState(name="P1", battlefield=[barrin], library=[pool["Island"]] * 3)
-    game = Game(players=[p1, PlayerState(name="P2")])
-    hand_before = len(p1.hand)
-    game.resolve_end_step(0)
-    game._settle()
-    assert not game.stack
-    assert len(p1.hand) == hand_before, (
-        "nothing was put into Barrin's controller's hand from the battlefield "
-        "this turn, so CR 603.4 keeps the trigger off the stack"
-    )
-
-
 def test_shipwreck_dowser_returns_an_instant_but_not_a_creature(set_pool):
     pool = set_pool("M21")
     p1 = PlayerState(
@@ -687,24 +628,6 @@ def test_falconer_adept_token_arrives_tapped_and_attacking(set_pool):
     assert birds[0].tapped
     bird_index = p1.battlefield.index(birds[0])
     assert bird_index in game.combat_attackers, "the Bird joined the attack"
-
-
-def test_epitaph_golem_bottoms_a_chosen_graveyard_card(set_pool):
-    pool = set_pool("M21")
-    golem = Permanent(card=pool["Epitaph Golem"])
-    p1 = PlayerState(
-        name="P1", battlefield=[golem],
-        graveyard=[pool["Shock"], pool["Concordia Pegasus"]],
-        library=[pool["Island"]],
-    )
-    game = Game(players=[p1, PlayerState(name="P2")])
-    result = game.activate_permanent_ability(
-        0, "Epitaph Golem", ability_index=0,
-        target_player_index=0, target_permanent_index=1,
-    )
-    assert result.supported, result.details
-    assert [c.name for c in p1.graveyard] == ["Shock"]
-    assert [c.name for c in p1.library] == ["Island", "Concordia Pegasus"]
 
 
 # --- Round 25: protection grows past colour ----------------------------------
@@ -1376,59 +1299,6 @@ def test_tempered_veteran_tends_only_an_already_counted_creature(set_pool):
     assert (cat.effective_power, cat.effective_toughness) == (4, 3)
 
 
-def test_azusa_grants_two_additional_land_plays(set_pool):
-    pool = set_pool("M21")
-    azusa = Permanent(card=pool["Azusa, Lost but Seeking"])
-    assert compile_card_oracle(azusa.card).supported
-    p1 = PlayerState(name="P1", battlefield=[azusa], hand=[pool["Forest"]] * 4)
-    game = Game(players=[p1, PlayerState(name="P2")])
-    game.enforce_mana_costs = True  # CR 305.2's count is enforced in this mode
-
-    plays = [game.cast_from_hand(0, "Forest").supported for _ in range(4)]
-    assert plays == [True, True, True, False], "one land plus Azusa's two"
-
-
-def test_kaervek_shrinks_every_other_creature_and_not_himself(set_pool):
-    pool = set_pool("M21")
-    kaervek = Permanent(card=pool["Kaervek, the Spiteful"])
-    own_bird = Permanent(card=pool["Concordia Pegasus"])    # 1/3, his own side
-    frail = Permanent(card=pool["Speaker of the Heavens"])  # 1/1, opposing
-    p1 = PlayerState(name="P1", battlefield=[kaervek, own_bird])
-    p2 = PlayerState(name="P2", battlefield=[frail])
-    game = Game(players=[p1, p2])
-
-    program = compile_card_oracle(kaervek.card)
-    assert program.supported, program.reason
-    game._recalculate_lord_buffs()
-
-    assert kaervek.effective_power == 3, "'Other creatures' excludes the source"
-    assert own_bird.effective_power == 0, "his own side shrinks too"
-    assert frail.effective_toughness == 0
-    game.check_state_based_actions()
-    assert not game.is_on_battlefield(frail), "a 1/1 dies under him (CR 704.5f)"
-    assert game.is_on_battlefield(own_bird)
-
-
-def test_vito_drains_for_exactly_the_life_that_arrived(set_pool):
-    """The trigger's number is the event's, not a printed amount: Revitalize
-    gains 3, so the opponent loses 3."""
-    pool = set_pool("M21")
-    vito = Permanent(card=pool["Vito, Thorn of the Dusk Rose"])
-    p1 = PlayerState(
-        name="P1", battlefield=[vito], hand=[pool["Revitalize"]],
-        library=[pool["Swamp"]] * 3,
-    )
-    p2 = PlayerState(name="P2")
-    game = Game(players=[p1, p2])
-
-    result = game.cast_from_hand(0, "Revitalize")
-    assert result.supported, result.details
-    game._settle()
-
-    assert p1.life == 23
-    assert p2.life == 17, "target opponent loses that much life"
-
-
 def test_vito_stays_silent_when_the_opponent_gains_the_life(set_pool):
     """"Whenever **you** gain life" is the ability's controller (CR 109.5). The
     event is announced game-wide and the narrowing is the trigger's own word,
@@ -1471,36 +1341,6 @@ def test_vito_reads_the_life_a_replacement_left_and_not_the_life_intended(set_po
     assert len(p1.hand) == 3, "Lich drew that many cards instead"
     assert p1.life == before, "the gain was replaced, so no life arrived"
     assert p2.life == 20, "no life was gained, so nothing triggered"
-
-
-def test_vito_drains_off_his_own_lifelink_grant(set_pool):
-    """His two lines meet: the {3}{B}{B} grant makes the team lifelink, combat
-    damage gains life through the one seam, and the seam announces it."""
-    pool = set_pool("M21")
-    vito = Permanent(card=pool["Vito, Thorn of the Dusk Rose"])
-    beater = _nosick(Permanent(card=pool["Alpine Watchdog"]))  # 2/2 vigilance
-    p1 = PlayerState(name="P1", battlefield=[vito, beater])
-    p2 = PlayerState(name="P2")
-    game = Game(players=[p1, p2])
-    game.enforce_mana_costs = False
-
-    result = game.activate_permanent_ability(0, "Vito, Thorn of the Dusk Rose")
-    assert result.supported, result.details
-    game._settle()
-    assert game._has_keyword(beater, "lifelink")
-
-    game.start_turn(0)
-    game._close_current_priority_step()
-    game.advance_combat_phase()  # beginning_of_combat
-    game.advance_combat_phase()  # declare_attackers
-    ok, msg = game.declare_attackers(0, [1])
-    assert ok, msg
-    game.advance_combat_phase()  # declare_blockers
-    game.advance_combat_phase()  # combat_damage
-    game._settle()
-
-    assert p1.life == 22, "lifelink gained 2"
-    assert p2.life == 16, "2 combat damage, then Vito's 2"
 
 
 # --- The subject-filtered trigger: "a creature you control with deathtouch" --
@@ -1630,35 +1470,6 @@ def test_gloom_sower_drains_once_per_blocker(set_pool):
     assert (p1.life, p2.life) == (24, 16), "two blockers, 2 life each way apiece"
 
 
-def test_garruks_uprising_third_line_is_no_longer_dropped(set_pool):
-    """It reported *supported* with this line compiling to nothing — the
-    partial-implementation class, on a card whose other two lines work. The
-    power bound is what decides, and it reads the layer-computed power."""
-    pool = set_pool("M21")
-    uprising = Permanent(card=pool["Garruk's Uprising"])
-    p1 = PlayerState(
-        name="P1", battlefield=[uprising],
-        hand=[pool["Alpine Watchdog"], pool["Elder Gargaroth"]],
-        library=[pool["Forest"]] * 4,
-    )
-    game = Game(players=[p1, PlayerState(name="P2")])
-    game.enforce_mana_costs = False
-
-    program = compile_card_oracle(uprising.card)
-    assert any(
-        t.condition.kind == "matching_permanent_enters" and t.supported
-        for t in program.triggered_abilities
-    ), "the line compiles to a real trigger"
-
-    game.cast_from_hand(0, "Alpine Watchdog")   # 2/2 — below the bound
-    game._settle()
-    assert len(p1.hand) == 1, "no draw for a small creature"
-
-    game.cast_from_hand(0, "Elder Gargaroth")   # 6/6
-    game._settle()
-    assert len(p1.hand) == 1, "cast one, drew one"
-
-
 # --- Costs go down as well as up (CR 601.2f / 118.7) ------------------------
 
 
@@ -1745,23 +1556,6 @@ def test_stormwing_entity_discounts_itself_after_an_instant(set_pool):
     discounted._settle()
     assert [c.name for c in player.spells_cast_this_turn] == ["Shock"]
     assert discounted.queue_from_hand(0, "Stormwing Entity").supported
-
-
-def test_a_cast_is_recorded_even_when_the_spell_never_resolves(set_pool):
-    """"You've **cast** an instant this turn" asks about the casting. A
-    countered spell was cast (CR 601.2i finishes it before anyone responds), so
-    the record is written where the cast is announced, not where it resolves."""
-    pool = set_pool("M21")
-    p1 = PlayerState(
-        name="P1", hand=[pool["Shock"]], library=[pool["Island"]] * 4,
-    )
-    game = Game(players=[p1, PlayerState(name="P2")])
-
-    assert game.queue_from_hand(0, "Shock", target_player_index=1).supported
-    assert [c.name for c in p1.spells_cast_this_turn] == ["Shock"]
-
-    game.begin_turn_bookkeeping(1)
-    assert p1.spells_cast_this_turn == [], "a 'this turn' record that never resets is a turn-two bug"
 
 
 # --- Fight (CR 701.14), and the damage a creature reflects -------------------
@@ -1994,21 +1788,6 @@ def test_goremand_makes_each_opponent_sacrifice_when_it_enters(set_pool):
     )
 
 
-def test_sparkhunter_masticore_keeps_its_planeswalker_protection(set_pool):
-    """The card the cost line was hiding. "Protection from planeswalkers" is a
-    quality this engine models (CR 702.16), and the whole card was unsupported
-    only because the compiler stopped at line one."""
-    pool = set_pool("M21")
-    masticore = _nosick(Permanent(card=pool["Sparkhunter Masticore"]))
-    walker = Permanent(card=pool["Basri Ket"], metadata={"loyalty_counters": 4})
-    p1 = PlayerState(name="P1", battlefield=[masticore])
-    p2 = PlayerState(name="P2", battlefield=[walker])
-    game = Game(players=[p1, p2])
-    game.enforce_mana_costs = False
-
-    assert ("card_type", "planeswalker") in game._protection_qualities(masticore)
-
-
 # --- The trigger-timing round -----------------------------------------------
 
 
@@ -2100,20 +1879,6 @@ def test_the_death_count_is_the_controllers_own(set_pool):
     game._settle()
 
     assert len([c for c in p1.hand if c.name == "Swamp"]) == 1
-
-
-def test_a_variable_count_of_any_colour_mana_refuses(set_pool):
-    """Found by round 54's "an X nothing reads" guard rather than by a card.
-    "Add X mana of any one color" was read as **one** mana: the parser took
-    ``count.value if isinstance(count, ast.Fixed) else 1``, so a card printing X
-    would have added a single mana and reported success. Nothing in the pool
-    reaches the grammar with that shape — both cards that print it keep their own
-    fused handlers — which is exactly why it had to refuse rather than wait for
-    the card that would have found it."""
-    result = compile_line("Add X mana of any one color.")
-
-    assert not result.parsed
-    assert "variable count of any-colour mana" in (result.failure_reason or "")
 
 
 # --- Round 57: a damage event that knows who dealt it -----------------------
@@ -2548,3 +2313,189 @@ def test_tavern_swindler_cannot_be_activated_below_its_life_cost(set_pool):
     assert "life" in result.details
     assert p1.life == 2
     assert swindler.tapped is False
+
+# --- Round 69: a trigger on the activation, not on what it resolves into ----
+#
+# "Whenever you activate a loyalty ability of a Chandra planeswalker, this
+# creature deals 1 damage to each opponent." One condition with two narrowings,
+# and they fail in different directions: the *actor* is CR 109.5's "you" (drop
+# it and an opponent's own tick-up pings them on your behalf) and the *object*
+# is a printed noun phrase (drop it and every planeswalker in the format is a
+# Chandra). "Chandra" is a planeswalker subtype â€” see
+# data/vocabulary/planeswalker_types.json â€” and never a card name.
+
+
+def _disciples_board(set_pool, walker_name, *, loyalty=None,
+                     walker_seat=0, disciple_seat=0):
+    """A planeswalker and the Disciples, on the seats named.
+
+    The seats are parameters because the trigger says "you": which seat
+    activates and which seat watches are the two halves the condition tests.
+    """
+    pool = set_pool("M21")
+    card = pool[walker_name]
+    walker = Permanent(
+        card=card, metadata={"loyalty_counters": int(loyalty or card.loyalty)}
+    )
+    seats = [PlayerState(name="P1"), PlayerState(name="P2")]
+    seats[walker_seat].battlefield.append(walker)
+    disciples = Permanent(card=pool["Keral Keep Disciples"])
+    seats[disciple_seat].battlefield.append(disciples)
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.active_player_index = walker_seat
+    return game, walker, disciples
+
+
+def test_keral_keep_disciples_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Keral Keep Disciples"])
+    assert program.supported, program.reason
+    condition = program.triggered_abilities[0].condition
+    assert condition.kind == "you_activate_loyalty_ability"
+    # The subtype, and no `named` key: four cards in this pool alone are called
+    # Chandra-something, and a name match here would be dispatch on a card name
+    # outside card_hooks.py.
+    assert condition.payload["walker_filter"] == {
+        "type_filter": "planeswalker",
+        "subtype_filter": "chandra",
+    }
+
+
+def test_keral_keep_disciples_pings_each_opponent_when_a_chandra_ticks_up(set_pool):
+    """+1 on Chandra, Flame's Catalyst: her own 3 to each opponent, and the
+    Disciples' 1 on top of it."""
+    game, walker, _ = _disciples_board(set_pool, "Chandra, Flame's Catalyst")
+
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=0)
+
+    assert result.supported, result.details
+    assert [p.life for p in game.players] == [20, 16]
+    assert walker.metadata["loyalty_counters"] == 6
+
+
+def test_the_disciples_trigger_goes_on_the_stack_above_the_loyalty_ability(set_pool):
+    """CR 603.3: an ability that triggers while a loyalty ability is being
+    activated is put on the stack once that activation finishes, so it is the
+    topmost object and resolves first.
+
+    This engine pays costs *before* it pushes â€” a payment that cannot be made
+    has to leave nothing behind â€” so the announcement at the CR 606.4 payment
+    is held by ``deferring_triggers`` until the push has happened. Read off the
+    stack rather than off the log, because the order is the assertion.
+    """
+    pool = set_pool("M21")
+    game, walker, _ = _disciples_board(set_pool, "Chandra, Heart of Fire")
+    game.players[0].library = [pool["Shock"]] * 5
+
+    queued = game.queue_permanent_ability(0, walker.card.name, ability_index=1)
+
+    assert queued.details == "queued", queued.details
+    assert [item.card.name for item in game.stack] == [
+        "Chandra, Heart of Fire",
+        "Keral Keep Disciples",
+    ], "the trigger is above the ability that fired it"
+
+
+def test_a_planeswalker_of_another_subtype_leaves_the_disciples_silent(set_pool):
+    """The control for the object half. Liliana's +1 is not damage, so any life
+    lost here would be the Disciples firing on a phrase they do not match."""
+    game, walker, _ = _disciples_board(set_pool, "Liliana, Death Mage")
+
+    assert game.activate_permanent_ability(
+        0, walker.card.name, ability_index=0
+    ).supported
+    assert [p.life for p in game.players] == [20, 20]
+
+
+def test_an_opponents_chandra_leaves_your_disciples_silent(set_pool):
+    """The control for the actor half, and the one the printed phrase does not
+    carry: there is no "you control" on the planeswalker, so the filter alone
+    matches an opponent's Chandra. "You" is the *trigger's* controller
+    (CR 109.5), which is the seat the announcement carries.
+    """
+    game, walker, _ = _disciples_board(
+        set_pool, "Chandra, Flame's Catalyst", walker_seat=1, disciple_seat=0,
+    )
+
+    assert game.activate_permanent_ability(
+        1, walker.card.name, ability_index=0
+    ).supported
+    # Chandra's own 3 at her opponent, and nothing from the Disciples.
+    assert [p.life for p in game.players] == [17, 20]
+
+
+def test_the_disciples_fire_off_a_minus_that_bins_its_own_walker(set_pool):
+    """CR 606.4's payment *is* the activation, and CR 704.5i bins a
+    planeswalker the moment its last loyalty counter goes â€” so by the time the
+    trigger resolves the Chandra is in the graveyard. What the condition asked
+    about happened while she was still there."""
+    pool = set_pool("M21")
+    game, walker, _ = _disciples_board(
+        set_pool, "Chandra, Flame's Catalyst", loyalty=8,
+    )
+    game.players[0].library = [pool["Shock"]] * 8
+
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=2)
+
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(walker), "0 loyalty (CR 704.5i)"
+    assert game.players[1].life == 19
+
+
+def test_a_loyalty_cost_the_walker_cannot_pay_fires_nothing(set_pool):
+    """CR 606.6: a minus larger than the loyalty on the permanent cannot be
+    activated at all, so there is no activation for the trigger to have seen.
+    The announcement sits *after* the sufficiency check for that reason."""
+    game, walker, _ = _disciples_board(
+        set_pool, "Chandra, Flame's Catalyst", loyalty=1,
+    )
+
+    refused = game.activate_permanent_ability(0, walker.card.name, ability_index=2)
+
+    assert not refused.supported
+    assert "606.6" in refused.details
+    assert [p.life for p in game.players] == [20, 20]
+    assert not game.stack, (
+        "a refused activation leaves nothing behind â€” including a trigger "
+        "announced before the check that refused it"
+    )
+
+
+def test_a_second_loyalty_activation_the_same_turn_fires_nothing(set_pool):
+    """CR 606.3's other half: one loyalty ability per permanent per turn. The
+    second attempt is refused, so it pings nobody â€” one tick, one ping."""
+    game, walker, _ = _disciples_board(set_pool, "Chandra, Flame's Catalyst")
+
+    assert game.activate_permanent_ability(
+        0, walker.card.name, ability_index=0
+    ).supported
+    again = game.activate_permanent_ability(0, walker.card.name, ability_index=0)
+
+    assert not again.supported
+    assert [p.life for p in game.players] == [20, 16]
+    assert not game.stack
+
+
+def test_a_non_loyalty_activation_leaves_the_disciples_silent(set_pool):
+    """"A **loyalty** ability" (CR 606.2) â€” which is why the announcement sits
+    at the loyalty-counter payment rather than at the bottom of every
+    activation.
+
+    Belt and braces: the subject filter refuses a creature anyway, and no card
+    in this pool prints a *non*-loyalty ability on a planeswalker (the compiler
+    refuses one outright), so this is the closest a real card gets to the
+    distinction.
+    """
+    pool = set_pool("M21")
+    game, _, _ = _disciples_board(set_pool, "Chandra, Flame's Catalyst")
+    game.players[0].battlefield.append(
+        _nosick(Permanent(card=pool["Chandra's Magmutt"]))
+    )
+
+    result = game.activate_permanent_ability(
+        0, "Chandra's Magmutt", target_player_index=1,
+    )
+
+    assert result.supported, result.details
+    # The Magmutt's own ping, and nothing behind it.
+    assert [p.life for p in game.players] == [20, 19]

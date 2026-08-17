@@ -408,3 +408,35 @@ def test_an_opponents_draw_is_not_yours(set_pool):
     game._draw_with_replacements(p2, 1)
 
     assert len(p2.hand) == 1
+
+
+# --- A line that compiled to nothing ----------------------------------------
+
+
+def test_garruks_uprising_third_line_is_no_longer_dropped(set_pool):
+    """It reported *supported* with this line compiling to nothing — the
+    partial-implementation class, on a card whose other two lines work. The
+    power bound is what decides, and it reads the layer-computed power."""
+    pool = set_pool("M21")
+    uprising = Permanent(card=pool["Garruk's Uprising"])
+    p1 = PlayerState(
+        name="P1", battlefield=[uprising],
+        hand=[pool["Alpine Watchdog"], pool["Elder Gargaroth"]],
+        library=[pool["Forest"]] * 4,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    program = compile_card_oracle(uprising.card)
+    assert any(
+        t.condition.kind == "matching_permanent_enters" and t.supported
+        for t in program.triggered_abilities
+    ), "the line compiles to a real trigger"
+
+    game.cast_from_hand(0, "Alpine Watchdog")   # 2/2 — below the bound
+    game._settle()
+    assert len(p1.hand) == 1, "no draw for a small creature"
+
+    game.cast_from_hand(0, "Elder Gargaroth")   # 6/6
+    game._settle()
+    assert len(p1.hand) == 1, "cast one, drew one"

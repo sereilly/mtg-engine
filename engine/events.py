@@ -427,6 +427,33 @@ def _subject_led_filter(
     )
 
 
+# The one event narrowed on **both** axes: the actor and the object. "Whenever
+# **you** activate a loyalty ability of **a Chandra planeswalker**" (Keral Keep
+# Disciples) is the seat scoping of `_SEAT_SCOPED_EVENTS` — CR 109.5's "you",
+# the trigger's own controller — over the subject filter of
+# `_SUBJECT_LED_FILTER_KEYS`, and neither half alone is the card: without the
+# seat, an opponent ticking up their own Chandra pings them for you; without the
+# filter, any planeswalker does. One predicate rather than a third table,
+# because there is one card; a second one makes the pair a row.
+@event_filter("you_activate_loyalty_ability")
+def _loyalty_activation_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever you activate a loyalty ability of a Chandra planeswalker …"
+
+    Announced from the CR 606.4 payment in ``mixins/stack/activation.py`` — the
+    loyalty counters moving *is* the activation's cost being paid — and held
+    there until the ability is on the stack by ``deferring_triggers``, so the
+    trigger sits above it (CR 603.3) and resolves first.
+    """
+    seat = event.payload.get("seat")
+    if seat is None or game.controller_index_of(permanent) != seat:
+        return False
+    return trigger_subject_matches(
+        game, trig, "walker", event.subject, observer=seat, source=permanent,
+    )
+
+
 def trigger_subject_matches(
     game: Game,
     trig: ParsedTriggeredAbility,

@@ -100,6 +100,11 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 _FILTERED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("this", "creature", "blocks"), "creature_blocks"),
     (("this", "creature", "becomes", "blocked", "by"), "creature_becomes_blocked"),
+    # "Whenever you activate a loyalty ability of **a Chandra planeswalker**"
+    # (Keral Keep Disciples) — the same pair the oracle regex table carries, so
+    # the two front ends turn one printed phrase into one filter.
+    (("you", "activate", "a", "loyalty", "ability", "of"),
+     "you_activate_loyalty_ability"),
 )
 
 # The same, for events whose subject comes *first* — "a creature you control

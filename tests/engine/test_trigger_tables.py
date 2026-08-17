@@ -80,6 +80,9 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     ),
     "one_or_more_attack": "whenever one or more creatures you control attack",
     "draws_card": "whenever you draw a card",
+    "you_activate_loyalty_ability": (
+        "whenever you activate a loyalty ability of a chandra planeswalker"
+    ),
     "draws_second_card": "whenever you draw your second card each turn",
     "you_gain_life": "whenever you gain life",
     "you_sacrifice_permanent": "whenever you sacrifice a permanent",

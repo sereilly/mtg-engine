@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 223/285) to the full release line - **137 sets, 33,594
+M21 measured at 224/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–66 — lives in git history at and before
-commit `d9cdc4b`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–67 — lives in git history at and before
+commit `40e81df`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,63 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 67: the gate on an object nothing reads
-
-*(2026-08-16.)* M21 **221 â†’ 221**, and the flat number is again the point:
-Sabertooth Mauler has been supported this whole time and its trigger had **never
-once fired**. Not a fizzle, not a log line â€” never enqueued.
-
-> At the beginning of your end step, if a creature died this turn, put a +1/+1
-> counter on this creature and untap it.
-
-**A new route into the Nine Lives class.** Every earlier member was a line that
-lowered to *nothing*. This one lowers to two perfectly good instructions,
-`add_counter_to_self` and `untap_self`, and `lower_ability` attaches CR 603.4's
-intervening-if to each of them, correctly, because it attaches the gate to every
-**top-level** instruction. `engine/oracle.py` then wraps the pair in a `sequence`
-â€” and the wrapper is the new top level. Both readers of the gate look at the top
-level: the end step's scan decides whether to enqueue the trigger at all, and
-`mixins/stack/resolution.py` re-checks it on resolution. So the condition sat on
-a payload nothing reads, and the card did nothing.
-
-The fix carries the gate onto the wrapper, and only when **every** step agrees â€”
-the gate belongs to the *line*, and a wrapper cannot express two different ones.
-Steps that disagree keep their own and the wrapper stays ungated, which is
-today's behaviour; no card in the pool prints that shape. Whole-pool program
-diff: **one card**.
-
-**The guard for exactly this failure existed, and was vacuous twice over.**
-`test_every_executed_end_step_trigger_lands_on_a_kind_the_step_enqueues` was
-written against this bug class. It missed it because:
-
-1. **It read `compile_line`'s unfused instruction list** â€” two instructions that
-   each *do* carry the gate â€” where the step is handed the fused one. A guard
-   reading a different object from its dispatcher is checking a card nobody
-   plays. It now reads the fused instruction, through `compile_card_oracle`.
-2. **It did not know the step also dispatches on the gate itself**, whatever the
-   instruction kind. Over the measured pool it would have flagged five healthy
-   cards (Griffin Aerie, Barrin, Liliana's Devotee, Indulging Patrician,
-   Twinblade Assassins) beside the one sick one â€” which is the reason it could
-   only ever be run somewhere those cards do not exist.
-
-Both halves fixed, and the fix is demonstrated rather than asserted: the guard's
-logic over the whole pool including M21 finds **zero** with the fix in and
-**exactly Sabertooth Mauler** with it reverted.
-
-**One thing deliberately not done.** The guard's fixture stays the shipped
-`catalog`, so it still cannot see the card that broke it â€” widening a
-shipped-pool guard to a measured set is `SET_PLAYBOOK.md`'s policy call, not a
-bug fix, and it is recorded here rather than taken quietly. It has been measured
-as free (zero findings). The card itself is covered by
-`tests/regressions/test_fused_trigger_gate.py`, whose two tests were watched to
-fail and pass on the round-66 engine respectively.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions.
-
-**Next:** widen that fixture, or decide in the playbook that it stays narrow.
-Then Liliana's Scrounger, whose spec is what found this.
-
 ## Round 68: a counter on a permanent the controller chooses
 
 *(2026-08-16.)* M21 **221 â†’ 222** â€” Liliana's Scrounger, whose one sentence the
@@ -458,3 +401,86 @@ each.
 - **`scripts/parse_coverage.py` reads `manifest_set_paths()` without
   `include_measured`**, so its deletion probe is blind to M21 â€” which is why the
   dropped "permanent" above was never flagged.
+
+## Round 70: a trigger on the activation, not on what it resolves into
+
+*(2026-08-16.)* M21 **223 â†’ 224** â€” Keral Keep Disciples. The effect half was
+already finished; the whole round is the trigger, and the most valuable edit in
+it is not the card's.
+
+> Whenever you activate a loyalty ability of a Chandra planeswalker, this
+> creature deals 1 damage to each opponent.
+
+**A trigger subject was dropping any restriction the payload has no key for, and
+that is a bug this round found rather than a feature it needed.**
+`ObjectFilter.to_payload` emits nothing for `supertypes`, `is_enchanted` or
+`blocked` â€” so "a **legendary** creature you control" reduced to *exactly* the
+payload of "a creature you control", and the `TESTABLE_SUBJECT_FILTER_KEYS` gate
+downstream saw a clean, unnarrowed filter, because what was missing left no key
+behind. Measured on the round-69 engine: an invented "Whenever a legendary
+creature you control attacks, you gain 1 life" compiled **supported**, and a
+plain Dog attacking alone took its controller to 21. Round 68 found the same hole
+one layer down and paired the payload gate with `_restrictions_beyond` over the
+AST; this is that pairing on the trigger side, where the consequence is a
+condition announcing itself on a strictly larger set than the card prints. The
+honoured set is *derived* from the fields `to_payload` reads, so a restriction
+added to `ObjectFilter` later refuses instead of silently vanishing.
+
+**One condition, two narrowings, failing in opposite directions.** The *actor* is
+CR 109.5's "you" â€” drop it and an opponent ticking up their own Chandra pings
+them on your behalf. The *object* is a printed noun phrase â€” drop it and every
+planeswalker in the format is a Chandra. Neither existing table can express both:
+`event_filter` raises on duplicate registration, so a kind can be seat-scoped
+**or** subject-led, never both, and the three subject-led events carry their whole
+narrowing inside the noun phrase where this card's "you" sits outside it. One
+predicate, because there is one card; a second one makes the pair a row.
+
+**"Chandra" is a subtype and never a card name** â€” four cards in this pool alone
+are called Chandra-something, and a name match would have been dispatch on a card
+name outside `card_hooks.py`. The regex only delimits the phrase; the noun parser
+reads it, and both front ends produce a byte-identical filter, which the existing
+whole-pool guard checks with no new test needed.
+
+**The fire site is CR 606.4's payment**, and its position is load-bearing in two
+directions. Below the legality gate, because that gate returns early and
+announcing above it would fire the trigger on activations the rules refused â€”
+tested for both CR 606.3 (one loyalty ability per turn) and CR 606.6 (a minus
+larger than the loyalty). And while the walker is still on the battlefield, so a
+minus that bins it (CR 704.5i) is still something the trigger saw. CR 603.3's
+ordering is *not* settled by the fire site: this engine pays costs before it
+pushes, so `queue_permanent_ability`'s existing `deferring_triggers` wrapper is
+what puts the trigger above the ability. Asserted off the stack, not the log.
+
+**The size guard, third round running â€” and this time it was a real split.**
+`test_m21_creatures.py` went 2,550 â†’ 2,315 by five moves, three of them
+misfilings the split turned up: Garruk's Uprising (an Enchantment), two artifact
+creatures, a per-turn record naming an Instant, and a grammar probe naming no
+card. The rest is a new `test_m21_legendary_creatures.py` â€” `Legendary` is part
+of the printed type line (CR 205.4a), M21 prints eleven and only four are
+supported, so seven future rounds land there rather than back in the file that
+just overflowed, and the standing "legend rule reads the printed name" work
+(round 49) has a home when it is done.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions, **zero hooks added**. Eight of the eleven new
+tests were watched to fail on the round-69 engine; the three that pass are
+controls that earn their keep only now the card works.
+
+**Next:**
+
+- **The graveyard-slot staleness from round 69** â€” still the largest open item,
+  and it must precede promotion.
+- **A planeswalker with a non-loyalty activated ability cannot compile at all**,
+  so this round's `is_loyalty` narrowing has no representable counter-example in
+  the pool. Said in the test docstring rather than pretended away.
+- **`mana_like_kinds` does not exclude loyalty abilities** (CR 605.1a) â€” latent,
+  nothing in the pool reaches it.
+- **Every triggered `deal_damage` in the pool reports
+  `effect_kind="spell_pattern"`**, so `is_triggered` is false on the wire for all
+  21 of them. Carried vocabulary from the parser migration, deliberately not
+  touched here.
+- **`tests/sets/test_lea_cards.py` is at 2,598 of 2,600** â€” the next LEA test of
+  any kind trips the guard with two lines of warning.
+- Round 66's counter-removal cost, round 65's "another"-as-source-exclusion and
+  the headless simulator's discarded target, the Shrine cycle, a computed static
+  P/T, a reflexive trigger, the legend rule.

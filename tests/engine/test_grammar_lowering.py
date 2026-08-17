@@ -3549,3 +3549,45 @@ def test_several_cards_from_any_graveyard_still_has_no_handler():
 
     assert result.parsed
     assert not result.lowered
+
+def test_a_trigger_subject_refuses_a_restriction_the_payload_cannot_carry():
+    """``ObjectFilter.to_payload`` has no key for a supertype, so "a
+    **legendary** creature you control" reduced to exactly the payload of "a
+    creature you control" â€” and the ``TESTABLE_SUBJECT_FILTER_KEYS`` gate over
+    that payload cannot see a restriction that left no key behind.
+
+    Round 68 found the same hole one layer down (a graveyard-scoped noun phrase
+    compiling into a battlefield picker) and paired the payload gate with
+    ``_restrictions_beyond`` over the AST. This is that pairing on the trigger
+    side, where the consequence is a condition announcing itself on a strictly
+    larger set than the card prints.
+    """
+    from engine.grammar import subject_filter_payload
+
+    assert subject_filter_payload("a creature you control") == {
+        "type_filter": "creature", "controller": "you",
+    }
+    for dropped in (
+        "a legendary creature you control",   # supertypes
+        "a snow creature you control",        # supertypes
+        "an enchanted creature",              # is_enchanted
+    ):
+        assert subject_filter_payload(dropped) is None, dropped
+
+
+def test_a_supertype_narrowed_trigger_refuses_rather_than_firing_on_everything():
+    """The same hole, as a card. On the round-68 engine this compiled
+    *supported* with ``attacker_filter={'type_filter': 'creature', 'controller':
+    'you'}`` and gained life off a plain 2/2 attacking."""
+    from engine.oracle import compile_card_oracle
+    from tests.helpers import _mk_creature_card
+
+    program = compile_card_oracle(_mk_creature_card(
+        "Legend Watcher", 2, 2,
+        "Whenever a legendary creature you control attacks, you gain 1 life.",
+    ))
+
+    assert not program.supported, (
+        "the word 'legendary' has no payload key, so admitting this line gains "
+        "life off any attacker its controller has"
+    )

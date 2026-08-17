@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 72.0% | 68.6% | 45.7% | 185 |
+| M21 *(measured)* | 285 | 503 | 72.2% | 68.8% | 45.9% | 186 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 239 | 109 | expected a subject |  |
+| 238 | 108 | expected a subject |  |
 | 95 | 39 | unrecognized effect verb |  |
 | 51 | 32 | unconsumed text |  |
 | 32 | 32 | unrecognized activation cost |  |
@@ -646,6 +646,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `At the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of Swamps they control.`
 - **Keen Glidemaster**
   - `{2}{U}: Target creature gains flying until end of turn.`
+- **Keral Keep Disciples**
+  - `Whenever you activate a loyalty ability of a Chandra planeswalker, this creature deals 1 damage to each opponent.`
 - **Khabál Ghoul**
   - `At the beginning of each end step, put a +1/+1 counter on this creature for each creature that died this turn.`
 - **King Suleiman**

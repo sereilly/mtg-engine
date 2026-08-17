@@ -459,3 +459,69 @@ def test_a_loyalty_counter_lands_on_one_chosen_permanent(set_pool):
             "controller": "you",
         },
     }
+
+
+# --- Two per-turn records, and a probe that names no card ------------------
+
+
+def test_a_cast_is_recorded_even_when_the_spell_never_resolves(set_pool):
+    """"You've **cast** an instant this turn" asks about the casting. A
+    countered spell was cast (CR 601.2i finishes it before anyone responds), so
+    the record is written where the cast is announced, not where it resolves."""
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", hand=[pool["Shock"]], library=[pool["Island"]] * 4,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    assert game.queue_from_hand(0, "Shock", target_player_index=1).supported
+    assert [c.name for c in p1.spells_cast_this_turn] == ["Shock"]
+
+    game.begin_turn_bookkeeping(1)
+    assert p1.spells_cast_this_turn == [], "a 'this turn' record that never resets is a turn-two bug"
+
+
+def test_a_variable_count_of_any_colour_mana_refuses(set_pool):
+    """Found by round 54's "an X nothing reads" guard rather than by a card.
+    "Add X mana of any one color" was read as **one** mana: the parser took
+    ``count.value if isinstance(count, ast.Fixed) else 1``, so a card printing X
+    would have added a single mana and reported success. Nothing in the pool
+    reaches the grammar with that shape — both cards that print it keep their own
+    fused handlers — which is exactly why it had to refuse rather than wait for
+    the card that would have found it."""
+    result = compile_line("Add X mana of any one color.")
+
+    assert not result.parsed
+    assert "variable count of any-colour mana" in (result.failure_reason or "")
+
+# --- Round 69: what the loyalty-activation trigger refuses ------------------
+
+
+def test_a_loyalty_activation_trigger_with_no_subject_refuses():
+    """"â€¦of a Chandra planeswalker" is the whole narrowing. A wording with no
+    subject at all names every loyalty ability in the game, which is a set no
+    printed card watches â€” so the line refuses rather than compiling as the
+    widest reading of itself."""
+    refused = compile_line(
+        "Whenever you activate a loyalty ability, this creature deals 1 damage "
+        "to each opponent."
+    )
+    assert not refused.usable
+    assert refused.parse_error
+
+
+def test_a_loyalty_activation_trigger_reads_its_subject_as_a_noun_phrase():
+    """The narrowing is data, not a pattern per subtype: a card printed with a
+    different planeswalker needs no code at all."""
+    for phrase, expected in (
+        ("a Chandra planeswalker", ("planeswalker", "chandra")),
+        ("a Garruk planeswalker", ("planeswalker", "garruk")),
+    ):
+        compiled = compile_line(
+            f"Whenever you activate a loyalty ability of {phrase}, this "
+            "creature deals 1 damage to each opponent."
+        )
+        assert compiled.usable, compiled.parse_error or compiled.lowering_error
+        subject = compiled.node.event.subject
+        assert (subject.card_types[0], subject.subtypes[0]) == expected
+        assert subject.named is None, "a subtype, never a card name"
