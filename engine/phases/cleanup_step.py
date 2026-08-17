@@ -60,6 +60,7 @@ class CleanupStepMixin:
                     self.log.append(f"{active_player.name} discarded {excess} card(s) in cleanup")
 
         self.combat_damage_prevented_until_eot = False
+        self.combat_damage_prevented_for = []
         # CR 603.7: a delayed trigger scoped to "this turn" that has not fired
         # (or has fired all it will) expires with the turn.
         self.delayed_triggers = [

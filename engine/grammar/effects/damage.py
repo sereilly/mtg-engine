@@ -326,6 +326,15 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
         if recipient is None:
             raise stream.error("expected something to shield")
     duration = _parse_duration(stream)
+    # "…that would be dealt **this turn to Dogs you control**" (Pack Leader).
+    # The printed order puts the duration first, and both orders are the same
+    # sentence — so the recipient is read on either side rather than the card
+    # failing on word order. Only one of the two may appear: a line naming a
+    # recipient twice is not a wording this reads.
+    if recipient is None and stream.accept_word("to"):
+        recipient = parse_recipient(stream)
+        if recipient is None:
+            raise stream.error("expected something to shield")
     return ast.PreventDamage(
         ast.AllOf(), to=recipient, duration=duration, combat_only=combat_only
     )

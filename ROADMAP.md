@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 231/285) to the full release line - **137 sets, 33,594
+M21 measured at 232/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–78 — lives in git history at and before
-commit `acd8797`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–79 — lives in git history at and before
+commit `c46e6c8`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,46 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 79: a card deleted from the game
-
-*(2026-08-16.)* No card — round 76 recorded this and recommended its own round;
-this is that round, and the deletion half turned out to be small and safe on its
-own.
-
-Nether Shadow's upkeep return removed its card with
-`[c for c in graveyard if c is not card]`. A graveyard holds `CardDefinition`
-objects and `load_cards` dedupes by `oracle_id`, so two copies of one card in one
-graveyard are **the same object** — and that comprehension therefore removes
-*every* copy while putting only the eligible one onto the battlefield.
-
-Measured: one Shadow deep enough to return, a second on top of the pile,
-**five cards in and four out**. One was deleted from the game.
-
-It is the look-alike bug class `tests/engine/test_control_reads.py` bans on the
-battlefield, and it is **worse here**: there, two copies are distinct `Permanent`
-objects and the removal takes the wrong *one*; in a graveyard it takes all of
-them. Round 77 met the same shared-object problem on the targeting side and
-answered it with a card-plus-ordinal identity. This site did not need that — the
-candidate scan **already knew the index**, having computed it to count the cards
-above, and threw it away. So the fix is to keep it and pop, removing
-highest-index-first so one removal does not renumber the next.
-
-The tests assert **conservation** — what goes in comes out, somewhere — because
-that is the property the bug broke, and it holds for one eligible copy, for two,
-and for none. Only the asymmetric case failed before the fix; the symmetric ones
-were right by coincidence, which is exactly why a card-count assertion is the
-right one.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-**byte-identical at 443 interactions** — the change is unreachable from the
-seeded decks, which is why it survived this long.
-
-**Still open from round 76**, and deliberately not folded in: Nether Shadow's
-trigger never touches the stack (applied inline, so CR 603.4's second check is
-unobservable rather than skipped) and its prompt is name-keyed and deduped, so
-two eligible copies get one prompt whose answer decides both. Both change
-manually-verified behaviour and want the migration round.
-
 ## Round 80: a reveal that records, and the sentence that reads it
 
 *(2026-08-17.)* M21 **229 → 230** — Track Down.
@@ -376,4 +336,44 @@ Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
 byte-identical at 443 interactions, **zero hooks added**. Six new tests, four
 watched to fail on the round-80 engine; the other two are the refusal controls,
 which pass on both because the line refused for a different reason before.
+
+## Round 82: a blanket prevention narrowed to a printed noun phrase
+
+*(2026-08-17.)* M21 **231 → 232** — Pack Leader.
+
+> Whenever this creature attacks, prevent all combat damage that would be dealt
+> this turn to Dogs you control.
+
+**A turn-wide record, not a shield per Dog** — and that is the whole design
+decision. `engine/shields.py` hands a `Shield` to a *recipient*, which fixes the
+set at resolution. "Dogs you control" is not fixed: CR 611.2c fixes an effect's
+set only where the effect says so, and this one says a phrase. So a Dog that
+enters **after** the trigger resolves is protected too, and a shield handed to
+each Dog present would have been a strictly narrower card than the one printed.
+That case is a test, and it is the one that decides the shape.
+
+The record therefore sits beside the existing blanket flag, with the same
+lifetime and cleared in the same two places, and the interceptor re-matches the
+phrase when damage would be dealt. Its ordering constant sits next to the
+unscoped blanket's for the reason that file already gives: neither has charges,
+so applying one costs its recipient nothing and neither can be spent on damage
+that was never going to be dealt.
+
+**The refusal it replaces stays for everything else.** "…dealt this turn to you"
+is a shield on one recipient and still refuses — the record covers whoever
+*matches*, which is a different thing from whoever was named.
+
+**And a word-order fix that is not cosmetic.** The production read the recipient
+only *before* the duration; Pack Leader prints it after. Both orders are the same
+sentence, so the recipient is now read on either side rather than the card
+failing on where the words sit.
+
+Measured five ways: the controller's Dog and a Dog that arrived later are both
+prevented; a non-Dog, an opponent's Dog, and noncombat damage all go through.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions, **zero hooks added**. Seven new tests, six
+watched to fail on the round-81 engine. One of them pins round 73's "other" fix
+on this card's lord line, so a later change to one half cannot quietly undo the
+other.
 

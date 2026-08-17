@@ -181,6 +181,29 @@ def prevent_all_combat_damage(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("prevent_all_combat_damage_to_matching")
+def prevent_all_combat_damage_to_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Prevent all combat damage that would be dealt this turn to Dogs you
+    control." (Pack Leader.)
+
+    Arms a turn-wide record carrying the printed noun phrase and the seat "you
+    control" resolves to — the ability's controller (CR 109.5), captured now
+    because the effect is theirs even if the Dogs change hands later.
+
+    The *set* is deliberately not captured: `engine/prevention.py` re-matches the
+    phrase when damage would be dealt, so a Dog that enters after this resolves
+    is covered. Handing a shield to each Dog present would have made the card
+    narrower than it prints.
+    """
+    described = dict(instruction.payload.get("filter") or {})
+    seat = game.players.index(context.caster)
+    game.combat_damage_prevented_for.append({"filter": described, "seat": seat})
+    game.log.append(
+        f"{context.card.name}: combat damage to matching permanents is prevented this turn"
+    )
+    return True, "resolved"
+
+
 @effect_handler("mark_non_wall_target_to_attack")
 def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target

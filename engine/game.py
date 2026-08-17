@@ -111,6 +111,18 @@ class Game(
     skip_phase_counts: dict[str, int] = field(default_factory=dict)
     skip_step_counts: dict[str, int] = field(default_factory=dict)
     combat_damage_prevented_until_eot: bool = False
+    # "Prevent all combat damage that would be dealt this turn **to Dogs you
+    # control**." (Pack Leader.) The scoped twin of the flag above, and a list
+    # rather than a flag because each entry carries the noun phrase it protects
+    # and the seat "you control" means.
+    #
+    # A turn-wide record and not a per-recipient ``Shield``, which is the
+    # decision worth writing down: the printed set is re-read when damage would
+    # be dealt, so a Dog that arrives *after* this resolves is protected too. A
+    # shield handed to each Dog present at resolution would silently be a
+    # narrower card. Same lifetime as the flag above, cleared in the same two
+    # places.
+    combat_damage_prevented_for: list = field(default_factory=list)
     combat_attackers: dict[int, int] = field(default_factory=dict)
     # CR 508.1b: attackers sent at a planeswalker rather than at its controller.
     # Maps attacker battlefield idx (active player's seat) -> the attacked

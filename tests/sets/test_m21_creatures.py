@@ -2373,3 +2373,108 @@ def test_the_rider_refuses_with_no_exile_before_it():
 
     assert result.parsed and not result.lowered
     assert result.failure_reason
+
+
+# --- Round 82: a blanket prevention narrowed to a printed noun phrase -------
+
+
+def _pack_leader_board(set_pool):
+    """Pack Leader with its trigger already resolved, a Dog and a non-Dog of its
+    controller's, and a Dog of the opponent's."""
+    from engine.game_types import OracleExecutionContext
+
+    pool = set_pool("M21")
+    leader = _nosick(Permanent(card=pool["Pack Leader"]))
+    my_dog = Permanent(card=pool["Alpine Watchdog"])
+    my_other = Permanent(card=pool["Concordia Pegasus"])
+    their_dog = Permanent(card=pool["Alpine Watchdog"])
+    p1 = PlayerState(name="P1", battlefield=[leader, my_dog, my_other])
+    p2 = PlayerState(name="P2", battlefield=[their_dog])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    trigger = compile_card_oracle(pool["Pack Leader"]).triggered_abilities[0]
+    game._execute_oracle_instruction(
+        trigger.instruction,
+        OracleExecutionContext(
+            caster=p1, target=p1, card=pool["Pack Leader"], source_permanent=leader
+        ),
+    )
+    return game, p1, my_dog, my_other, their_dog
+
+
+def _combat_damage(game, permanent, amount=3):
+    from engine.damage_events import deal_damage
+
+    return deal_damage(
+        game,
+        {"recipient": permanent, "amount": amount, "source": permanent.card, "combat": True},
+    ).dealt
+
+
+def test_pack_leader_prevents_combat_damage_to_its_controllers_dogs(set_pool):
+    game, _p1, my_dog, _my_other, _their_dog = _pack_leader_board(set_pool)
+
+    assert _combat_damage(game, my_dog) == 0
+
+
+def test_pack_leader_protects_a_dog_that_arrived_after_it_resolved(set_pool):
+    """The case that decides the shape. "Dogs you control" is re-read when
+    damage would be dealt (CR 611.2c fixes a set only where the effect says so,
+    and this one does not), so a shield handed to each Dog present at resolution
+    would have been a strictly narrower card than the one printed."""
+    game, p1, _my_dog, _my_other, _their_dog = _pack_leader_board(set_pool)
+    latecomer = Permanent(card=set_pool("M21")["Alpine Watchdog"])
+    p1.battlefield.append(latecomer)
+
+    assert _combat_damage(game, latecomer) == 0
+
+
+def test_pack_leader_does_not_protect_a_non_dog(set_pool):
+    game, _p1, _my_dog, my_other, _their_dog = _pack_leader_board(set_pool)
+
+    assert _combat_damage(game, my_other) == 3
+
+
+def test_pack_leader_does_not_protect_an_opponents_dog(set_pool):
+    """"Dogs **you control**" â€” CR 109.5's seat, the ability's controller."""
+    game, _p1, _my_dog, _my_other, their_dog = _pack_leader_board(set_pool)
+
+    assert _combat_damage(game, their_dog) == 3
+
+
+def test_pack_leader_leaves_noncombat_damage_alone(set_pool):
+    """"â€¦all **combat** damage". A burn spell still burns."""
+    from engine.damage_events import deal_damage
+
+    game, _p1, my_dog, _my_other, _their_dog = _pack_leader_board(set_pool)
+
+    dealt = deal_damage(
+        game,
+        {"recipient": my_dog, "amount": 3, "source": my_dog.card, "combat": False},
+    ).dealt
+
+    assert dealt == 3
+
+
+def test_pack_leaders_lord_line_still_excludes_itself(set_pool):
+    """Round 73 fixed the global buff dropping "other"; this pins it on the card
+    that prints both an "other" lord line and the round's new prevention, so a
+    later change to one cannot quietly undo the other."""
+    program = compile_card_oracle(set_pool("M21")["Pack Leader"])
+
+    (buff,) = [i for i in program.instructions if i.payload.get("subtypes") == ["dog"]]
+    assert buff.payload["other"] is True
+
+
+def test_a_blanket_prevention_on_one_recipient_still_refuses():
+    """The scoped record covers whoever *matches* when damage would be dealt, so
+    it can carry a noun phrase and cannot carry one creature or one player. That
+    is still a shield, and still refused."""
+    result = compile_line(
+        "Prevent all combat damage that would be dealt this turn to you.",
+        card_name="Test",
+    )
+
+    assert not result.usable

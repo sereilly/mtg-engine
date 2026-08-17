@@ -100,6 +100,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "untap_enchanted_creature": "tapping",
     "grant_prevention_shield": "prevention",
     "prevent_all_combat_damage": "prevention",
+    # The same blanket, narrowed to a printed noun phrase (Pack Leader). Same
+    # category: what differs is who it covers, not what kind of effect it is.
+    "prevent_all_combat_damage_to_matching": "prevention",
     "recolor_target_from_text": "recolor",
     # A printed text change (CR 612). Its own category rather than "recolor":
     # the Lace cycle makes an object a colour, while this replaces a *word*

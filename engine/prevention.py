@@ -81,6 +81,10 @@ from .shields import (
 # shielded outright; the numeric pool runs last so an all-or-nothing shield is
 # spent before points are drawn from a pool that could cover later damage.
 COMBAT_BLANKET = 10  # "Prevent all combat damage that would be dealt this turn"
+# The same blanket narrowed to a printed noun phrase (Pack Leader). Beside the
+# unscoped one and before every consumable shield, for the same reason: it has
+# no charges, so applying it costs its recipient nothing.
+COMBAT_BLANKET_SCOPED = 11
 COMBAT_SHIELD = 20  # "…dealt to and dealt by that creature this turn"
 SOURCE_CAP = 100  # Forcefield against a chosen attacker
 GENERIC_CAP = 200  # Forcefield with no chosen attacker
@@ -301,6 +305,29 @@ def _applies_all_combat(game, event: dict) -> bool:
     return bool(event.get("combat")) and game.combat_damage_prevented_until_eot
 
 
+def _applies_scoped_combat(game, event: dict) -> bool:
+    """Whether an armed "…to <noun phrase>" prevention covers this event.
+
+    The noun phrase is matched **now**, not when the effect resolved (CR 611.2c
+    fixes a set only where the effect says so, and "Dogs you control" does not):
+    a Dog that entered after Pack Leader attacked is still a Dog its controller
+    controls when the damage would be dealt.
+    """
+    if not event.get("combat"):
+        return False
+    recipient = event.get("recipient")
+    if recipient is None or not hasattr(recipient, "card"):
+        # A player is not a "Dog you control". Only permanents are scoped.
+        return False
+    from .subject_filters import subject_matches
+
+    for entry in getattr(game, "combat_damage_prevented_for", ()) or ():
+        seat = entry.get("seat")
+        if subject_matches(game, recipient, entry.get("filter") or {}, observer=seat):
+            return True
+    return False
+
+
 def _applies_combat_to_and_by(game, event: dict) -> bool:
     return bool(event.get("combat")) and (
         combat_shielded(event["recipient"]) or combat_shielded(event.get("source"))
@@ -323,6 +350,15 @@ def _prevent_all_combat_damage(game, event: dict) -> PreventionOutcome | None:
     """Fog / Holy Day: "Prevent all combat damage that would be dealt this
     turn." A turn-wide flag rather than a shield, so it is never used up — and
     it applies only to combat damage, leaving spell and ability damage alone."""
+    return PreventionOutcome(prevented=event["amount"])
+
+
+@prevention_effect(COMBAT_BLANKET_SCOPED, applies=_applies_scoped_combat)
+def _prevent_scoped_combat_damage(game, event: dict) -> PreventionOutcome | None:
+    """Pack Leader: "Prevent all combat damage that would be dealt this turn to
+    Dogs you control." A turn-wide record like the blanket above rather than a
+    shield each Dog holds, so it is never used up and it covers Dogs that were
+    not on the battlefield when it resolved."""
     return PreventionOutcome(prevented=event["amount"])
 
 

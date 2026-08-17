@@ -29,6 +29,7 @@ class EndOfCombatStepMixin:
                 permanent.metadata.pop("absolute_toughness", None)
             permanent.metadata.pop("blocked_this_combat", None)
         self.combat_damage_prevented_until_eot = False
+        self.combat_damage_prevented_for = []
         for player in self.players:
             # CR 615.3: a shield whose duration is this combat expires here.
             # Which shields those are is data on the shield, so this sweep does

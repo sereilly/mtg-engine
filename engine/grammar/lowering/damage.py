@@ -17,6 +17,7 @@ from ._common import (
     _amount_payload,
     _describe_targets,
     _filter_payload,
+    _restrictions_beyond,
     _full_mana_payload,
     _back_reference_payload,
     _is_source,
@@ -574,6 +575,37 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
     if not node.combat_only:
         raise LoweringError("no handler prevents all damage of every kind", node=node)
     if node.to is not None:
+        # "…to Dogs you control" (Pack Leader). A *set* named by a printed noun
+        # phrase, which the scoped record can carry and re-match when damage
+        # would be dealt; anything else — one player, one creature, a chosen
+        # target — is a shield on one recipient and stays refused, because the
+        # record covers whoever matches rather than whoever was there.
+        if (
+            isinstance(node.to, ast.TargetSpec)
+            and not node.to.targeted
+            and node.to.quantifier in ("all", "each")
+            and node.to.filter.controller == "you"
+        ):
+            if node.duration.kind not in _REST_OF_TURN:
+                raise LoweringError(
+                    "the scoped combat-damage record lasts exactly this turn",
+                    node=node,
+                )
+            leftover = _restrictions_beyond(
+                node.to.filter,
+                frozenset({"card_types", "subtypes", "controller", "type_match"}),
+            )
+            if leftover:
+                raise LoweringError(
+                    "the scoped prevention cannot narrow by: " + ", ".join(leftover),
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "prevent_all_combat_damage_to_matching", "",
+                    {"filter": _filter_payload(node.to.filter)},
+                ),
+            )
         raise LoweringError(
             "prevent_all_combat_damage is turn-wide; no handler scopes a blanket "
             "prevention to one recipient",
