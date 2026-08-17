@@ -470,6 +470,22 @@ class CoinFlipResult:
 
 
 @dataclass(frozen=True)
+class RevealedCardIs:
+    """``if it's a <filter>`` — a *present-tense* test on a card a previous
+    sentence of the same effect revealed. (Track Down.)
+
+    Its own node beside :class:`ItWas`, which is the past-tense one, and the
+    distinction is not grammatical fussiness: "it **was** a creature card" asks
+    what an object was before it left a zone (CR 608.2h, last-known
+    information), while "it**'s** a creature card" asks what a card sitting in a
+    library *is*. They read different producers and one of them can be answered
+    by looking, so a single node would have to carry a tense flag and every
+    reader would have to branch on it.
+    """
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class ItWas:
     """"If **it** was a creature card" (Scavenging Ooze).
 
@@ -499,6 +515,7 @@ class HadPlus1Counter:
 
 Condition = Union[
     CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter, ItWas,
+    RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
 ]
 

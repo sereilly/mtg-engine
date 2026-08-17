@@ -13,15 +13,36 @@ from __future__ import annotations
 import pytest
 
 from engine import Game
+from engine.grammar import compile_line
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 
 
-def test_track_down_still_refuses_its_reveal_clause(set_pool):
-    """Scry 3 parses now, but "then reveal the top card of your library" has no
-    production — the sentence refuses whole rather than scrying and dropping
-    the rest."""
-    assert not compile_card_oracle(set_pool("M21")["Track Down"]).supported
+def test_track_down_composes_a_scry_a_reveal_and_a_conditional_draw(set_pool):
+    """Three sentences, three instructions, composed rather than fused.
+
+    The pool already had a *whole-template* reveal production — Garruk, Savage
+    Herald's "reveal … put it into your hand … Otherwise, put it on the bottom"
+    — whose docstring says every word of both destinations is the effect. Track
+    Down's reveal is the opposite decomposition: the reveal records what it
+    showed, and what follows is an ordinary conditional. Generalising Garruk's
+    node would have made its own docstring untrue of half its cases, so this is a
+    sibling node and the two templates stay honest.
+    """
+    program = compile_card_oracle(set_pool("M21")["Track Down"])
+
+    assert program.supported, program.reason
+    (sequence, *_rest) = program.instructions
+    scry, reveal, branch = sequence.payload["steps"]
+    assert (scry.kind, scry.payload["amount"]) == ("scry", 3)
+    assert reveal.kind == "reveal_top_of_library"
+    assert branch.payload["condition"] == {
+        "kind": "revealed_card_is",
+        "card_types": ["creature", "land"],
+        "type_match": "any",
+    }
+    (drawn,) = branch.payload["then"]
+    assert drawn.kind == "draw_controller_cards"
 
 
 # --- The counter round: +1/+1 counters on non-source subjects ---------------
@@ -594,3 +615,77 @@ def test_rise_again_still_reanimates_exactly_one(set_pool):
     assert result.supported, result.details
     assert [p.card.name for p in game.controlled_by(0)] == ["Garruk's Warsteed"]
     assert [c.name for c in p1.graveyard] == ["Alpine Watchdog", "Rise Again"]
+
+
+# --- Round 80: a reveal that records, and the sentence that reads it --------
+
+
+def _track_down_game(set_pool, top_name):
+    """Track Down cast with *top_name* on top and the scry answered to keep it
+    there, so what the reveal sees is what the test named."""
+    pool = set_pool("M21")
+    library = [pool[top_name], pool["Shock"], pool["Shock"]] + [pool["Shock"]] * 4
+    p1 = PlayerState(name="P1", hand=[pool["Track Down"]], library=library)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Track Down")
+    assert game.confirm_scry(0, card_order=[0, 1, 2], bottom_count=0) is True
+    game._settle()
+    return game, p1
+
+
+def test_track_down_draws_when_the_revealed_card_is_a_creature(set_pool):
+    game, player = _track_down_game(set_pool, "Alpine Watchdog")
+
+    assert [c.name for c in player.hand] == ["Alpine Watchdog"]
+
+
+def test_track_down_draws_when_the_revealed_card_is_a_land(set_pool):
+    """"a creature **or** land card" is a union, so either type answers it."""
+    game, player = _track_down_game(set_pool, "Island")
+
+    assert [c.name for c in player.hand] == ["Island"]
+
+
+def test_track_down_draws_nothing_for_any_other_card(set_pool):
+    """The control. The reveal still happened â€” revealing moves nothing
+    (CR 701.15) â€” so the card is still on top and the hand is empty."""
+    game, player = _track_down_game(set_pool, "Shock")
+
+    assert player.hand == []
+    assert player.library[0].name == "Shock", "revealing does not move the card"
+    assert any("revealed Shock" in line for line in game.log)
+
+
+def test_the_condition_reads_the_revealed_card_and_not_the_library(set_pool):
+    """Why the reveal records rather than the branch re-reading.
+
+    The branch's own draw changes what is on top, and a re-read would then be
+    asking about whichever card the draw uncovered. Here the revealed creature
+    is drawn and a *non*-matching card sits underneath it: a re-reading engine
+    would still be right by luck, so the assertion is that the drawn card is the
+    one that was revealed."""
+    game, player = _track_down_game(set_pool, "Alpine Watchdog")
+
+    assert [c.name for c in player.hand] == ["Alpine Watchdog"]
+    assert player.library[0].name == "Shock"
+
+
+def test_the_conditional_refuses_with_no_reveal_before_it():
+    """A back-reference names its producer or refuses (idiom #7): with nothing
+    revealed there is no card for "it" to name, and the branch would answer
+    False forever while the card compiled clean."""
+    result = compile_line("If it's a creature card, draw a card.", card_name="Test")
+
+    assert not result.usable
+
+
+def test_the_present_tense_does_not_claim_a_state_test():
+    """"as long as **it's** untapped" (Giant Tortoise) opens with the same two
+    words and is not a card test. The revealed-card branch takes a sentence only
+    when a noun phrase naming card types follows, and hands it back otherwise."""
+    tortoise = compile_line(
+        "This creature gets +0/+3 as long as it's untapped.", card_name="Test"
+    )
+
+    assert tortoise.parsed, tortoise.parse_error

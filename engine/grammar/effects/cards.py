@@ -192,17 +192,31 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     stream.expect_word("reveal")
     for word in ("the", "top", "card", "of", "your", "library"):
         stream.expect_word(word)
+    # "Scry 3, then reveal the top card of your library. If it's a creature or
+    # land card, draw a card." (Track Down.) The reveal is the whole sentence
+    # and what follows it is an ordinary conditional, so the bare node is
+    # returned and the sentence loop reads the rest. Tried by *falling back*
+    # rather than by looking ahead: Garruk's three-sentence template is checked
+    # first and keeps every word it requires, so a line that matches it is
+    # unaffected, and a line that does not gets a node instead of a refusal.
+    mark = stream.mark()
     if not stream.accept_punct("."):
-        raise stream.error("expected the sorting sentences after the reveal")
+        return ast.RevealTop()
     if not stream.accept_word("if"):
-        raise stream.error("expected \"If it's a …\" after the reveal")
+        stream.reset(mark)
+        return ast.RevealTop()
     if not (stream.accept_phrase("it", "'s") or stream.accept_phrase("it", "is")):
-        raise stream.error("expected \"it's\" after 'if'")
+        stream.reset(mark)
+        return ast.RevealTop()
     stream.accept_word("a", "an")
     filt = parse_object_filter(stream)
     stream.accept_punct(",")
     if not stream.accept_phrase("put", "it", "into", "your", "hand"):
-        raise stream.error("expected 'put it into your hand'")
+        # The conditional is somebody else's ("…, draw a card"). Hand the whole
+        # thing back and let the sentence loop read it as the two statements it
+        # is.
+        stream.reset(mark)
+        return ast.RevealTop()
     if not stream.accept_punct("."):
         raise stream.error("expected the 'Otherwise' sentence")
     stream.expect_word("otherwise")

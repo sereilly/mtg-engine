@@ -66,6 +66,7 @@ from ._core import (
     Cost,
     CoinFlipResult,
     ItWas,
+    RevealedCardIs,
     Controls,
     IsState,
     DiedThisTurn,
@@ -128,6 +129,7 @@ from .cards import (
     SearchLibrary,
     Shuffle,
     LookAtHand,
+    RevealTop,
     RevealTopToHandOrBottom,
 )
 from .stack import (
@@ -200,6 +202,7 @@ __all__ = [
     "Cost",
     "CoinFlipResult",
     "ItWas",
+    "RevealedCardIs",
     "Controls",
     "IsState",
     "DiedThisTurn",
@@ -258,6 +261,7 @@ __all__ = [
     "SearchLibrary",
     "Shuffle",
     "LookAtHand",
+    "RevealTop",
     "RevealTopToHandOrBottom",
     # stack
     "CounterSpell",

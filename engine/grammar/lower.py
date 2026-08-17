@@ -146,6 +146,11 @@ _PRODUCES: dict[str, str] = {
     # — by then a target may have left, and CR 611.2c fixed the set when the
     # effect began.
     "tap_target_permanent": "tapped_permanents",
+    # "…reveal the top card of your library. **If it's** a creature or land
+    # card, draw a card." (Track Down.) The reveal records what it showed and
+    # the conditional after it reads that record — not the library, which the
+    # draw in its own branch would have changed underneath it.
+    "reveal_top_of_library": "revealed_card",
 }
 
 
@@ -289,6 +294,10 @@ def lower_statement(
     if isinstance(statement, ast.PutOntoBattlefield):
         return _lower_put_onto_battlefield(statement)
 
+    if isinstance(statement, ast.RevealTop):
+        # CR 701.15: revealing shows a card and moves nothing, so the whole
+        # effect is the record it leaves for the sentences after it.
+        return (OracleInstruction("reveal_top_of_library", "", {}),)
     if isinstance(statement, ast.RevealTopToHandOrBottom):
         return _lower_reveal_top(statement)
 

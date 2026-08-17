@@ -221,6 +221,24 @@ class CastPermission:
 
 
 @dataclass(frozen=True)
+class RevealTop:
+    """``Reveal the top card of your library.`` (Track Down.)
+
+    The reveal alone. CR 701.15 makes revealing a card show it to all players
+    and move it nowhere, so what this does to the game is *record what is
+    there* — and the sentences after it read that record rather than the
+    library, because by then a draw may have taken the card.
+
+    Its own node beside :class:`RevealTopToHandOrBottom` rather than that one
+    generalised. That template is one node for three sentences on purpose: its
+    two destinations are the effect, and every word of them is required. This is
+    the opposite decomposition — a reveal that records, and whatever ordinary
+    conditional follows it — so folding them together would make the Garruk
+    template's own docstring untrue of half its cases.
+    """
+
+
+@dataclass(frozen=True)
 class RevealTopToHandOrBottom:
     """"Reveal the top card of your library. If it's a <filter>, put it into
     your hand. Otherwise, put it on the bottom of your library." (Garruk,

@@ -452,6 +452,34 @@ def _lower_condition(
                 node=condition,
             )
         return {"kind": "coin_flip", "won": condition.won}
+    if isinstance(condition, ast.RevealedCardIs):
+        # The pronoun's referent again, and the same discipline: a reveal
+        # earlier in this same effect has to have recorded what it showed, or
+        # there is nothing for "it" to name and the branch would answer False
+        # forever while the card compiled clean (idiom #7).
+        if "revealed_card" not in produced:
+            raise LoweringError(
+                "'it' with nothing in this effect that revealed a card",
+                node=condition,
+            )
+        leftover = _restrictions_beyond(
+            condition.filter, {"card_types", "is_card", "type_match"}
+        )
+        if leftover:
+            raise LoweringError(
+                "the revealed-card test cannot ask this of a card: "
+                + ", ".join(leftover),
+                node=condition,
+            )
+        if not condition.filter.card_types:
+            raise LoweringError(
+                "'it's …' reads a card's printed type line", node=condition
+            )
+        return {
+            "kind": "revealed_card_is",
+            "card_types": list(condition.filter.card_types),
+            "type_match": condition.filter.type_match,
+        }
     if isinstance(condition, ast.ItWas):
         # The pronoun's referent, resolved here because only here is the
         # sentence in front of it known. One producer answers it today — the

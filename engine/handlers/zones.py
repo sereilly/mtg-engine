@@ -1154,6 +1154,31 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("reveal_top_of_library")
+def reveal_top_of_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the top card of your library." (Track Down.)
+
+    CR 701.15: revealing shows a card to all players and **moves it nowhere**.
+    So the card stays on top, the log names it — that is what a reveal is to
+    this engine — and the whole lasting effect is the record left for the
+    sentences after it.
+
+    Recorded rather than re-read, because the very next sentence may draw it:
+    "if it's a creature or land card, draw a card" asks about the card that was
+    revealed, and by the time the branch runs the library's top is a different
+    card. An empty library records nothing, which the condition reads as False —
+    a legal outcome, not an error.
+    """
+    caster = context.caster
+    if not caster.library:
+        game.log.append(f"{caster.name} has no library to reveal from")
+        return True, "resolved"
+    top = caster.library[0]
+    context.results["revealed_card"] = top
+    game.log.append(f"{caster.name} revealed {top.name} from the top of their library")
+    return True, "resolved"
+
+
 @effect_handler("reveal_top_to_hand_or_bottom")
 def reveal_top_to_hand_or_bottom(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Reveal the top card of your library. If it's a creature card, put it

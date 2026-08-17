@@ -593,6 +593,28 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
         stream.accept_word("a", "an")
         return ast.ItWas(parse_object_filter(stream))
 
+    # "if it's a creature or land card" (Track Down) — the present-tense twin of
+    # the clause above, and a different question: that one asks what an object
+    # *was* before it left a zone, this one asks what a card revealed by an
+    # earlier sentence of this same effect *is*. Different producers, so
+    # different nodes.
+    #
+    # Guarded and reset, unlike the past-tense branch, because "it's" is not
+    # unambiguous the way "it was" is: "This creature gets +0/+3 **as long as
+    # it's untapped**" (Giant Tortoise) opens with the same two words and is a
+    # state test, not a card test. So this branch takes the sentence only when a
+    # noun phrase naming card *types* follows, and hands it back otherwise.
+    it_mark = stream.mark()
+    if stream.accept_phrase("it", "'s") or stream.accept_phrase("it", "is"):
+        stream.accept_word("a", "an")
+        try:
+            revealed_filter = parse_object_filter(stream)
+        except GrammarError:
+            revealed_filter = None
+        if revealed_filter is not None and revealed_filter.card_types:
+            return ast.RevealedCardIs(revealed_filter)
+    stream.reset(it_mark)
+
     if stream.accept_phrase("a", "creature", "died"):
         _parse_duration(stream)
         return ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))

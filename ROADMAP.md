@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 229/285) to the full release line - **137 sets, 33,594
+M21 measured at 230/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–76 — lives in git history at and before
-commit `a0f36b6`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–77 — lives in git history at and before
+commit `64c1ee4`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,50 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 77: a graveyard slot is not an identity either
-
-*(2026-08-16.)* No card — the fix the last three rounds kept pointing at, and it
-turned out to be hiding **three** shipped-pool defects rather than one.
-
-`_stack_push` stamps a stable `permanent_id` for a battlefield target because "a
-stack object is the engine's only structure that outlives the moment it was
-built" — its own docstring. A card in a **graveyard** had no such stamp, so
-resolution re-read a raw index against a list that had since shifted:
-
-* **Raise Dead** named Grizzly Bears, one card left the graveyard in response,
-  and it returned **Hill Giant**. The several-card path was worse — Sanguine
-  Indulgence named two and returned one.
-* **Reconstruction was uncastable.** Its picker offers artifact cards; its
-  cast-time re-check hardcoded `primary_type != "creature"`. The only card a
-  player could name was one the check then refused, so with no creature in the
-  graveyard the card could not be played at all. One shared predicate now serves
-  picker, re-check and handler, and `legality.py` gets 22 lines shorter.
-* **A protection check read `battlefield[slot]` for a graveyard slot**, so a
-  White Knight the spell never targeted refused Raise Dead.
-
-**The identity is a card plus which copy of it**, because the dedupe leaves the
-engine nothing else: two copies of one card in one graveyard are the same
-`CardDefinition` object, and neither an id nor `is` separates them. The residual
-is stated rather than hidden — with two copies the engine cannot know *which* one
-left, so the read clamps to the last surviving copy and reports "gone" only when
-no copy remains, the one case the data model can actually establish.
-
-**Three things my brief got wrong**, all corrected on evidence: Fungal Rebirth
-does not target a graveyard card (thirteen cards do, four of which I had not
-named); `_stack_push` *can* know the zone, and today does something worse than
-nothing — it stamps a **battlefield** id onto a graveyard target; and the casting
-path cannot be the home, because it never sees an ability, a trigger or a mode.
-
-**Deliberately not fixed, and measured.** CR 608.2b's fizzle — a target that has
-become illegal — has the identical gap *on the battlefield*, and it is far more
-reachable: Lightning Bolt aimed at a creature that dies in response deals its 3 to
-whatever slid into the slot. Round 65 chose that fallback in writing. It wants one
-seam for both zones, which is the next round rather than a rider on this one.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions. Four regressions, all four watched to fail on
-the round-76 engine.
-
 ## Round 78: what a card *was*, read after it stopped being there
 
 *(2026-08-16.)* M21 **228 → 229** — Scavenging Ooze, which round 77 had to
@@ -389,4 +345,46 @@ trigger never touches the stack (applied inline, so CR 603.4's second check is
 unobservable rather than skipped) and its prompt is name-keyed and deduped, so
 two eligible copies get one prompt whose answer decides both. Both change
 manually-verified behaviour and want the migration round.
+
+## Round 80: a reveal that records, and the sentence that reads it
+
+*(2026-08-17.)* M21 **229 → 230** — Track Down.
+
+> Scry 3, then reveal the top card of your library. If it's a creature or land
+> card, draw a card.
+
+**The pool already had a reveal-top production, and reusing it would have been
+wrong.** Garruk, Savage Herald's is one node for a whole three-sentence template
+— "reveal … put it into your hand. Otherwise, put it on the bottom" — and its
+docstring says why: the two destinations *are* the effect, and every word of them
+is required. Track Down is the opposite decomposition: the reveal records what it
+showed and what follows is an ordinary conditional. Generalising the Garruk node
+would have made its own docstring untrue of half its cases, so this is a sibling
+node reached by *falling back* — the three-sentence template is still checked
+first and keeps every word it requires.
+
+**Recording is the point, not an implementation detail.** CR 701.15: revealing
+shows a card and moves it nowhere. The branch's own draw then changes what is on
+top, so a condition that re-read the library would be asking about whichever card
+the draw uncovered. The reveal writes the card into the resolution scratchpad and
+the conditional reads that, with the producer discipline round 78 established: no
+reveal in this effect, no lowering.
+
+**Present tense is a different question from past tense.** Round 78's `ItWas`
+asks what an object *was* before it left a zone (CR 608.2h); this asks what a card
+sitting in a library *is*. Different producers, so a separate node rather than a
+tense flag on one.
+
+**And the near-miss I walked straight into.** "it's" is not unambiguous the way
+"it was" is: Giant Tortoise prints "This creature gets +0/+3 **as long as it's
+untapped**", and my first cut swallowed it, turning a working card unsupported.
+The branch now takes a sentence only when a noun phrase naming card *types*
+follows, and hands it back otherwise. The suite caught it immediately — that test
+existed — which is the argument for running the whole thing rather than the file
+you are editing.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions, **zero hooks added**. Six new tests, five
+watched to fail on the round-79 engine; the sixth is the Giant Tortoise control,
+which passes on both and is the one that matters.
 

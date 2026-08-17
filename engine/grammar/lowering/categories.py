@@ -156,6 +156,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "return_spell_or_creature_to_hand": "zones",
     "put_cards_from_hand_onto_battlefield": "zones",
     "reveal_top_to_hand_or_bottom": "zones",
+    # The bare reveal (Track Down). Same category as the template above: both
+    # look at the top of a library, and what differs is what the card's other
+    # sentences then do about it.
+    "reveal_top_of_library": "zones",
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
     "add_loyalty_counters": "counters",

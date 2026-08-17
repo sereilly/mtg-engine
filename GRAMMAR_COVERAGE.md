@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 72.8% | 69.6% | 46.7% | 189 |
+| M21 *(measured)* | 285 | 503 | 73.0% | 69.8% | 46.9% | 190 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,7 +34,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | ---: | ---: | --- | --- |
 | 236 | 106 | expected a subject |  |
 | 95 | 39 | unrecognized effect verb |  |
-| 50 | 31 | unconsumed text |  |
+| 49 | 30 | unconsumed text |  |
 | 32 | 32 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
@@ -1246,6 +1246,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Target creature gets +4/+4 until end of turn.`
 - **Tormod's Crypt**
   - `{T}, Sacrifice this artifact: Exile target player's graveyard.`
+- **Track Down**
+  - `Scry 3, then reveal the top card of your library. If it's a creature or land card, draw a card. (To scry 3, look at the top three cards of your library, then put any number of them on the bottom and the rest on top in any order.)`
 - **Tranquil Cove**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {W} or {U}.`

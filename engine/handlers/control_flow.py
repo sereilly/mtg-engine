@@ -122,6 +122,26 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return count >= wanted
         return False
 
+    if kind == "revealed_card_is":
+        # "If it's a creature or land card" (Track Down). Reads the card an
+        # earlier step of this same resolution revealed, never the library:
+        # the branch below this one draws, and a re-read would then be asking
+        # about whichever card the draw uncovered.
+        revealed = context.results.get("revealed_card")
+        if revealed is None:
+            return False
+        wanted = [str(t) for t in (payload.get("card_types") or ())]
+        if not wanted:
+            return False
+        line = (revealed.type_line or "").lower()
+        matches = [t for t in wanted if t in line]
+        # "creature **or** land card" is a union; "artifact creature" is one
+        # object that is both. The same distinction `type_match` draws
+        # everywhere else, carried here so the two cannot disagree.
+        if payload.get("type_match") == "all":
+            return len(matches) == len(wanted)
+        return bool(matches)
+
     if kind == "coin_flip":
         # CR 705.2. The flip recorded its result; asking again would flip a
         # second coin, so a card printing both branches could win *and* lose.
