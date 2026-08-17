@@ -7,8 +7,8 @@ printings, 26,113 unique cards** per `set_progress.json`.
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–63 — lives in git history at and before
-commit `31cb660`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–64 — lives in git history at and before
+commit `eceefef`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,68 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 64: one evaluator for a computed amount
-
-*(2026-08-16.)* M21 **219 → 220** — Carrion Grub, whose one line needed two
-things the engine had no shape for and one it had two of.
-
-**A maximum is not a count.** "…where X is the **greatest power among** creature
-cards in your graveyard" reads the same objects as "the number of" and asks a
-different question, so it gets its own definition node beside `CountOf` — the
-distinction round 55 drew for the death count, for the same reason: a lowering
-that saw only a filter would have to guess.
-
-**A layer-7c contribution whose size is computed.** A pump with no duration is a
-continuous effect, which is why the general case refuses; but one on the
-ability's own source *is* the CR 613 layer 7c contribution the P/T refresh
-already rebuilds on every recompute. What made it unreachable was not the layer,
-it was having no way to say how big it is —
-`engine/static_bonuses.py`'s table can carry a bonus's condition and its size,
-and here the size is the whole variable part. The refusal now routes: a durationless
-self-pump *with* an `x_definition` lowers to `dynamic_pt_bonus` and the refresh
-resolves it.
-
-**And the thing there were two of.** The pump handler carried its own graveyard
-counter, hardcoded to that zone, reading `card_types` where every other reader
-of a computed amount says `filter` — so "the number of creature cards in your
-graveyard" meant two things depending on which sentence it was printed in. Both
-sides go through `evaluate_count` now, and the split that made that possible is
-the honest one: **a resolution knows whose zone to read and a continuous
-recompute does not**, so the context-aware wrapper is one line on top of an
-evaluator that takes an owner. The graveyard-only restriction on the pump was
-its own counter talking; with the shared evaluator behind it the zone is data
-like everything else.
-
-Two smaller decisions worth their lines. A **negated** computed bonus refuses:
-the refresh resolves the amount and nothing carries a sign for it, so "-X/-0"
-would make a creature bigger where the card shrinks it. And the creature
-compiler's static gate asks the grammar for a **short list** of kinds rather
-than for anything it can read — a creature's static lines have been gated by
-that whitelist since the compiler was written, and opening it to every
-production at once is a change with its own blast radius.
-
-Suite **5,127** at 23.1s, every `--check` green, shipped pool 388/388, AI
-simulation byte-identical at 443 interactions. Three of the four new tests were
-watched to fail on the round-63 engine; the fourth is the control that a
-graveyard of noncreature cards leaves the printed 0/5 body alone. One older test
-had to drop an assertion rather than change it — it pinned Carrion Grub as
-unsupported *while* its mill line worked, which was true and is not.
-
-**Next:**
-
-- **The other two readings of the same shape.** Kinetic Augur's power "is equal
-  to the number of instant and sorcery cards in your graveyard" is layer 7a
-  (characteristic-defining) where this was 7c, and `dynamic_pt_count`'s payload
-  vocabulary — battlefield-only, both stats — is what stands between them; the
-  card is also held up by its second line. Jolrael's "creatures you control have
-  base power and toughness X/X until end of turn" is layer 7b over a *team*,
-  which has no handler at all.
-- **The Shrine cycle**: Shattered Heights' discard cost (a noun-phrase *union*),
-  Tranquil Light's per-Shrine cost reduction, Sanctum of All's two-zone search
-  and trigger-doubling static, and Fruitful Harvest's counted any-colour mana
-  (round 63 measured it: a legacy text-keyed handler that adds exactly one).
-- **A reflexive trigger** (Tolarian Kraken), then the legend rule from round 49.
-
 ## Round 65: the duration in front, and a word that was being dropped
 
 *(2026-08-16.)* M21 **220 â†’ 220** â€” Rookie Mistake in, Selfless Savior out. The
@@ -492,3 +430,60 @@ asserted). CR 705 goes 0/3 â†’ 2/3 and CR 119 1/10 â†’ 2/10.
 - The rest of round 65's *Next*, unchanged: "another" as a source exclusion, the
   headless simulator's discarded permanent target, the Shrine cycle, a static
   P/T contribution with a computed X, a reflexive trigger, the legend rule.
+
+## Round 67: the gate on an object nothing reads
+
+*(2026-08-16.)* M21 **221 â†’ 221**, and the flat number is again the point:
+Sabertooth Mauler has been supported this whole time and its trigger had **never
+once fired**. Not a fizzle, not a log line â€” never enqueued.
+
+> At the beginning of your end step, if a creature died this turn, put a +1/+1
+> counter on this creature and untap it.
+
+**A new route into the Nine Lives class.** Every earlier member was a line that
+lowered to *nothing*. This one lowers to two perfectly good instructions,
+`add_counter_to_self` and `untap_self`, and `lower_ability` attaches CR 603.4's
+intervening-if to each of them, correctly, because it attaches the gate to every
+**top-level** instruction. `engine/oracle.py` then wraps the pair in a `sequence`
+â€” and the wrapper is the new top level. Both readers of the gate look at the top
+level: the end step's scan decides whether to enqueue the trigger at all, and
+`mixins/stack/resolution.py` re-checks it on resolution. So the condition sat on
+a payload nothing reads, and the card did nothing.
+
+The fix carries the gate onto the wrapper, and only when **every** step agrees â€”
+the gate belongs to the *line*, and a wrapper cannot express two different ones.
+Steps that disagree keep their own and the wrapper stays ungated, which is
+today's behaviour; no card in the pool prints that shape. Whole-pool program
+diff: **one card**.
+
+**The guard for exactly this failure existed, and was vacuous twice over.**
+`test_every_executed_end_step_trigger_lands_on_a_kind_the_step_enqueues` was
+written against this bug class. It missed it because:
+
+1. **It read `compile_line`'s unfused instruction list** â€” two instructions that
+   each *do* carry the gate â€” where the step is handed the fused one. A guard
+   reading a different object from its dispatcher is checking a card nobody
+   plays. It now reads the fused instruction, through `compile_card_oracle`.
+2. **It did not know the step also dispatches on the gate itself**, whatever the
+   instruction kind. Over the measured pool it would have flagged five healthy
+   cards (Griffin Aerie, Barrin, Liliana's Devotee, Indulging Patrician,
+   Twinblade Assassins) beside the one sick one â€” which is the reason it could
+   only ever be run somewhere those cards do not exist.
+
+Both halves fixed, and the fix is demonstrated rather than asserted: the guard's
+logic over the whole pool including M21 finds **zero** with the fix in and
+**exactly Sabertooth Mauler** with it reverted.
+
+**One thing deliberately not done.** The guard's fixture stays the shipped
+`catalog`, so it still cannot see the card that broke it â€” widening a
+shipped-pool guard to a measured set is `SET_PLAYBOOK.md`'s policy call, not a
+bug fix, and it is recorded here rather than taken quietly. It has been measured
+as free (zero findings). The card itself is covered by
+`tests/regressions/test_fused_trigger_gate.py`, whose two tests were watched to
+fail and pass on the round-66 engine respectively.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions.
+
+**Next:** widen that fixture, or decide in the playbook that it stays narrow.
+Then Liliana's Scrounger, whose spec is what found this.

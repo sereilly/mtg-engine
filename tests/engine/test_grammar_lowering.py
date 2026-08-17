@@ -2681,17 +2681,38 @@ def test_every_executed_end_step_trigger_lands_on_a_kind_the_step_enqueues(catal
     dispatched set lives in ``engine/phases/end_step.py`` as data precisely so
     this check can read it rather than restate it.
     """
-    from engine.oracle import _parse_trigger_condition, normalize_creature_line
-    from engine.phases.end_step import END_STEP_DISPATCHED_KINDS
+    from engine.oracle import compile_card_oracle
+    from engine.phases.end_step import (
+        END_STEP_DISPATCHED_KINDS,
+        END_STEP_INTERVENING_IF,
+    )
 
+    # Read the **fused** instruction, which is what the step is actually handed.
+    # This used to walk `compile_line`'s unfused list, and that is how Sabertooth
+    # Mauler got past it: its line lowers to two instructions that each carry the
+    # CR 603.4 gate, so the guard saw a healthy card, while `engine/oracle.py`
+    # wrapped them in a `sequence` and the step saw one gateless object it never
+    # enqueued. A guard that reads a different object from its dispatcher is
+    # checking a card nobody plays.
     undispatched = []
-    for name, line, _node, instructions in _executed_trigger_lines(catalog):
-        condition, _ = _parse_trigger_condition(normalize_creature_line(line))
-        if condition is None or condition.kind != "end_step":
-            continue
-        for instruction in instructions:
+    for card in catalog:
+        for trig in compile_card_oracle(card).triggered_abilities:
+            if not trig.supported or trig.instruction is None:
+                continue
+            if trig.condition.kind != "end_step":
+                continue
+            instruction = trig.instruction
+            # The payload-shape scan dispatches on the *gate*, whatever the kind
+            # (see END_STEP_INTERVENING_IF's own comment) — so a gated trigger is
+            # dispatched by construction and the kind list has nothing to say
+            # about it. Without this the guard flags healthy cards, which is why
+            # it could only ever be run somewhere they do not exist.
+            if instruction.payload.get(END_STEP_INTERVENING_IF) is not None:
+                continue
             if instruction.kind not in END_STEP_DISPATCHED_KINDS:
-                undispatched.append(f"{name}: {line}\n    kind: {instruction.kind}")
+                undispatched.append(
+                    f"{card.name}: {trig.source_line}\n    kind: {instruction.kind}"
+                )
 
     assert not undispatched, (
         "the grammar executes an end-step trigger the step never enqueues, so "

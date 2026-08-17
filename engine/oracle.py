@@ -852,10 +852,31 @@ def _grammar_instruction(
         return None
 
     instructions = compiled.instructions
-    instruction = (
-        instructions[0] if len(instructions) == 1
-        else OracleInstruction("sequence", "", {"steps": instructions})
-    )
+    if len(instructions) == 1:
+        instruction = instructions[0]
+    else:
+        # CR 603.4's gate is attached by ``lower_ability`` to every *top-level*
+        # instruction the line lowered to. Wrapping them makes the wrapper the
+        # new top level, and both readers of the gate — the scan in
+        # engine/phases/end_step.py and the resolution re-check in
+        # engine/mixins/stack/resolution.py — read the top level. So a wrapper
+        # that did not carry it put the condition on a payload nothing reads,
+        # and the trigger was never enqueued at all: Sabertooth Mauler's "put a
+        # +1/+1 counter on this creature **and untap it**" lowers to two
+        # instructions and had never once fired, while reporting supported with
+        # both halves correctly gated.
+        #
+        # Carried only when every step agrees, because the gate is the *line's*
+        # and a wrapper cannot express two different ones. Steps that disagree
+        # keep their own and the wrapper stays ungated, which is the behaviour
+        # before this — no card in the pool lowers that shape.
+        payload: dict = {"steps": instructions}
+        gate = instructions[0].payload.get("intervening_if")
+        if gate is not None and all(
+            step.payload.get("intervening_if") == gate for step in instructions
+        ):
+            payload["intervening_if"] = gate
+        instruction = OracleInstruction("sequence", "", payload)
     category = next(iter(sorted(compiled.categories)), "effect")
     if condition_kind is not None:
         effect_kind = triggered_label(instruction.kind, condition_kind)
