@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 72.6% | 69.4% | 46.5% | 188 |
+| M21 *(measured)* | 285 | 503 | 72.8% | 69.6% | 46.7% | 189 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 237 | 107 | expected a subject |  |
+| 236 | 106 | expected a subject |  |
 | 95 | 39 | unrecognized effect verb |  |
 | 50 | 31 | unconsumed text |  |
 | 32 | 32 | unrecognized activation cost |  |
@@ -1022,6 +1022,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Remove a corpse counter from this creature: Regenerate this creature.`
   - `At the beginning of each end step, put a corpse counter on this creature for each creature that died this turn.`
   - `Remove a corpse counter from this creature: Regenerate this creature.`
+- **Scavenging Ooze**
+  - `{G}: Exile target card from a graveyard. If it was a creature card, put a +1/+1 counter on this creature and you gain 1 life.`
 - **Scorching Dragonfire**
   - `Scorching Dragonfire deals 3 damage to target creature or planeswalker. If that creature or planeswalker would die this turn, exile it instead.`
 - **Scoured Barrens**

@@ -25,6 +25,7 @@ cannot do.
 
 from .categories import INSTRUCTION_CATEGORIES
 from ._common import (
+    _lower_condition,
     _filter_payload,
     _restrictions_beyond,
     GRAMMAR_ONLY_PAYLOAD_KEYS,
@@ -148,6 +149,7 @@ from .game import (
 )
 
 __all__ = [
+    "_lower_condition",
     "INSTRUCTION_CATEGORIES",
     "_filter_payload",
     "_restrictions_beyond",

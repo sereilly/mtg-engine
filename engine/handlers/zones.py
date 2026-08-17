@@ -783,6 +783,12 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     """
     card = context.card
     owner = context.target if context.target is not None else context.caster
+    # **Last-known information is frozen at the fire site** (CR 608.2h, ROADMAP
+    # idiom #6). "If it was a creature card" is asked after the card has left
+    # the graveyard, so the answer is recorded here, as the card is taken, not
+    # re-read from the exile pile at the next step — where another effect's
+    # exile would answer for this one.
+    context.results["exiled_cards"] = []
     index = context.target_permanent_index
     if not (isinstance(index, int) and 0 <= index < len(owner.graveyard)):
         # Honour the choice, else take the first legal one — the same fallback
@@ -795,6 +801,7 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     exiled = owner.graveyard.pop(index)
     owner.exile.append(exiled)
+    context.results["exiled_cards"] = [exiled]
     game.log.append(f"{card.name} exiled {exiled.name} from {owner.name}'s graveyard")
     return True, "resolved"
 

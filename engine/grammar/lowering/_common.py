@@ -432,3 +432,79 @@ def count_spec(filt: "ast.ObjectFilter", node, *, aggregate: str = "count") -> d
     if aggregate != "count":
         spec["aggregate"] = aggregate
     return spec
+
+
+def _lower_condition(
+    condition: ast.Condition, produced: frozenset[str] = frozenset()
+) -> dict[str, object]:
+    """*produced* names the scratchpad values earlier steps of this same effect
+    recorded. It defaults to empty, which is what refuses a coin-flip condition
+    on an intervening-if (CR 603.4): that condition is checked when the trigger
+    would fire, where no flip of this resolution can have happened yet."""
+    if isinstance(condition, ast.CoinFlipResult):
+        # A back-reference names its producer or refuses (round 33). Without a
+        # flip earlier in the same effect there is nothing to read, and
+        # `evaluate_condition` would quietly answer False — so a card printing
+        # only "If you win the flip, …" would compile supported and do nothing.
+        if "coin_flip" not in produced:
+            raise LoweringError(
+                "'the flip' with no coin flip before it in this effect",
+                node=condition,
+            )
+        return {"kind": "coin_flip", "won": condition.won}
+    if isinstance(condition, ast.ItWas):
+        # The pronoun's referent, resolved here because only here is the
+        # sentence in front of it known. One producer answers it today — the
+        # card an exile step of this same effect took out of a graveyard — and
+        # a second producer means a second key, never this one widened, for the
+        # reason `amount_from` and `amount_from_trigger` are two keys.
+        if "exiled_cards" not in produced:
+            raise LoweringError(
+                "'it' with nothing in this effect that named what it moved",
+                node=condition,
+            )
+        leftover = _restrictions_beyond(
+            condition.filter, {"card_types", "is_card", "type_match"}
+        )
+        if leftover:
+            raise LoweringError(
+                "the last-known-information test cannot ask this of a card: "
+                + ", ".join(leftover),
+                node=condition,
+            )
+        if not condition.filter.is_card or not condition.filter.card_types:
+            raise LoweringError(
+                "'it was …' reads a card's printed type line", node=condition
+            )
+        return {
+            "kind": "exiled_card_was",
+            "card_types": list(condition.filter.card_types),
+        }
+    if isinstance(condition, ast.Controls):
+        payload = {
+            "kind": "controls",
+            "who": condition.who.kind,
+            "filter": condition.filter.to_payload(),
+        }
+        if condition.comparison is not None and isinstance(condition.comparison.value, ast.Fixed):
+            payload["count"] = condition.comparison.value.value
+            payload["op"] = condition.comparison.op
+        return payload
+    if isinstance(condition, ast.IsState):
+        return {"kind": "is_state", "state": condition.state, "negated": condition.negated}
+    if isinstance(condition, ast.DiedThisTurn):
+        return {"kind": "died_this_turn", "filter": condition.filter.to_payload()}
+    if isinstance(condition, ast.ReturnedToHandThisTurn):
+        return {"kind": "returned_to_hand_this_turn"}
+    if isinstance(condition, ast.HadPlus1Counter):
+        return {"kind": "had_plus1_counter"}
+    if isinstance(condition, ast.LifeGainedThisTurn):
+        # The seat rides the payload rather than being baked into the kind, so
+        # "if an opponent gained…" is the same condition with a different `who`
+        # the day a card prints it.
+        return {
+            "kind": "life_gained_this_turn",
+            "who": condition.who.kind,
+            "amount": condition.amount,
+        }
+    raise LoweringError(f"no lowering for condition {type(condition).__name__}", node=condition)

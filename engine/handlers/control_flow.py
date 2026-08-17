@@ -140,6 +140,20 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         value = bool(getattr(source, state, False)) if state else False
         return (not value) if payload.get("negated") else value
 
+    if kind == "exiled_card_was":
+        # "If it was a creature card" (Scavenging Ooze). The card is in exile by
+        # now, and CR 400.7 makes that a new object, so the only honest source
+        # is the record the exiling step wrote (CR 608.2h). No record means
+        # nothing was exiled — False, not a guess at a pile this effect did not
+        # fill.
+        cards = context.results.get("exiled_cards") or []
+        # The printed type *line*, not the primary type: an Ornithopter is an
+        # artifact creature card and CR 205.2 says it is a creature card too.
+        wanted = tuple(payload.get("card_types") or ())
+        return bool(cards) and all(
+            any(name in card.type_line.lower() for name in wanted) for card in cards
+        )
+
     if kind == "died_this_turn":
         return int(getattr(game, "creatures_died_this_turn", 0) or 0) > 0
 

@@ -584,6 +584,15 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
                 return ast.LifeGainedThisTurn(player, amount.value)
         stream.reset(mark)
 
+    # "if it was a creature card" (Scavenging Ooze). A back-reference, like the
+    # flip above and unlike everything below it: no read of the board can answer
+    # it, because the card it asks about has already left the zone the effect
+    # took it from (CR 608.2h). Which object "it" names is lowering's question,
+    # not the parser's — the parser cannot see the sentence in front of it.
+    if stream.accept_phrase("it", "was"):
+        stream.accept_word("a", "an")
+        return ast.ItWas(parse_object_filter(stream))
+
     if stream.accept_phrase("a", "creature", "died"):
         _parse_duration(stream)
         return ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))

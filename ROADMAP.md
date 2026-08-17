@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 228/285) to the full release line - **137 sets, 33,594
+M21 measured at 229/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–74 — lives in git history at and before
-commit `0c1decf`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–75 — lives in git history at and before
+commit `7876c06`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,63 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 75: two targets tapped, and a marker that waits per controller
-
-*(2026-08-16.)* M21 **226 → 227** — Frost Breath. Two sentences, and **three**
-independent refusals under the one error message the census reports.
-
-> Tap up to two target creatures. Those creatures don't untap during their
-> controller's next untap step.
-
-The reported `expected a subject` is the *second* sentence, and it hides two
-problems: `those` is a determiner nothing read (the noun parser knows `up to /
-target / another / each / all / this / a`, and the bound-subject reader knew only
-the singular `that <card type>`), and `don't` is not an effect verb. The first
-sentence parses and dies at lowering — `no handler taps or untaps several
-targets` — which the joined line never even reaches. Sorting the backlog by the
-reported reason would have fixed the wrong one.
-
-**`untap_restrictions.py` is not the home**, though the name fits. That table is
-keyed on *a permanent's own oracle text*, of which a frozen creature has none,
-and it has no concept of a lifetime. The real precedent is `phased_out`: CR 502's
-*other* per-controller turn-based action, already a `Permanent.metadata` marker
-that the untap step both honours and consumes.
-
-**Per controller is exact, and it is exact by carrying no seat at all.** The
-untap step runs for the active player and looks only at permanents that player
-controls, so two creatures under two controllers each wait for their own step
-with nothing recording whose step it is. Measured across four untap steps. The
-sweep sits *after* the skip-the-whole-step return, which gets Stasis right for
-free: a skipped untap step is a step that does not happen (CR 500.11), so it is
-not yet the "next untap step" the spell named.
-
-**Composed, not fused.** The tap records which permanents it affected — by id,
-because the next instruction runs after it and a permanent may have left (CR
-400.7) — and the marker reads that record through `_PRODUCES`. So "those
-creatures" names what the *effect* chose rather than re-resolving the slots, and
-CR 611.2c fixed that set when the effect began. A creature that was already
-tapped is still one of those creatures, so it is recorded whether or not
-`become_tapped` had anything to do.
-
-**Two refusals that are the production's whole safety.** "Next" is required —
-drop it and the sentence is the *permanent* restriction `engine/auras.py` already
-derives for Paralyze, a strictly larger effect. And "their controller's" is
-required while "your" is refused: that is exert's wording (CR 701.43a) and means
-the effect controller's step, which this marker carries no seat to express.
-
-**Two things found by measuring rather than reasoning.** The verb dispatch needed
-a `peek_word(1) == "untap"` guard: without it the whole-pool line diff was two
-lines, the second being Lich's "You don't lose the game…" having its *failure
-message* regressed. And the arity re-check had to go above the per-kind arms
-rather than in one — Frost Breath's primary instruction is a `sequence` wrapper,
-so none of the existing arms sees the tap at all, and a cast naming three targets
-was accepted with the handler silently capping at two. That fix also closes the
-same hole for Basri's Aegis and Read the Tides.
-
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions, **zero hooks added**, no ratchet touched.
-Whole-pool line diff: exactly one line changed, Frost Breath's.
-
 ## Round 76: a trigger that fires from a graveyard
 
 *(2026-08-16.)* M21 **227 → 228** — Silversmote Ghoul, and the round is worth
@@ -413,4 +356,54 @@ seam for both zones, which is the next round rather than a rider on this one.
 Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
 byte-identical at 443 interactions. Four regressions, all four watched to fail on
 the round-76 engine.
+
+## Round 78: what a card *was*, read after it stopped being there
+
+*(2026-08-16.)* M21 **228 → 229** — Scavenging Ooze, which round 77 had to
+precede.
+
+> {G}: Exile target card from a graveyard. If it was a creature card, put a
+> +1/+1 counter on this creature and you gain 1 life.
+
+Three things looked new and only one was. **"A graveyard"** — any pile, not the
+controller's — the engine already did. **An activated ability** targeting a
+graveyard card it did for the targeting spec, but not for the stack identity
+(round 77) and not in the browser at all: the activation cascade has no
+`graveyard_creature` case, so five M21 cards are unpickable there today, and this
+round adds the missing branch.
+
+**Last-known information was the one that needed building** (CR 608.2h, idiom
+#6). The mechanism existed — `_PRODUCES` and the resolution scratchpad, with
+`had_plus1_counter` as the worked example — but no producer: the exile recorded
+nothing, so there was nothing for "it was" to read. `ItWas(filter)` parses with
+no referent, exactly as `ThatMuch(None)` does, and lowering resolves it against
+what this same effect produced and **refuses without a producer**. Otherwise the
+condition answers False forever and the card compiles clean with a rider that
+never fires — the shape this repo has now found on four separate axes.
+
+The exile is unconditional and only the rider is gated, which is what the two
+tests pin: an instant still leaves the graveyard and the Ooze gets nothing.
+
+**The size-guard premise I gave the agent was out of date** — round 73's split
+had already bought the room, and the file was 2,180 against the 2,600 cap rather
+than at its edge. No split, no audit.
+
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions, **zero hooks added**, no ratchet touched.
+Whole-pool compile diff: exactly one card.
+
+**Next**, carried from this session and unfixed:
+
+- **One fizzle seam for both zones** (round 77's deferral, and the largest
+  remaining): CR 608.2b on the battlefield is the same gap and more reachable —
+  Lightning Bolt aimed at a creature that dies in response deals its 3 to
+  whatever slid into the slot.
+- **Nether Shadow deletes cards from the game** (round 76): the
+  filter-by-identity graveyard rebuild removes every copy, its trigger never
+  touches the stack, and its prompt is name-keyed and deduped.
+- The counter-removal activation cost the grammar admits and nobody charges
+  (round 66); "another" past the sole-target case (round 73); Read the Tides'
+  browser-unreachable second mode and Fungal Rebirth's dropped "permanent"
+  (round 69); `parse_coverage.py` blind to measured sets; the Shrine cycle; a
+  reflexive trigger; the legend rule.
 

@@ -107,6 +107,7 @@ from .lowering import (
     _lower_search_library,
     _lower_set_base_pt,
     _lower_doesnt_untap_next_step,
+    _lower_condition,
     _lower_tap,
     _lower_tap_or_untap,
     _lower_win_game,
@@ -135,6 +136,10 @@ _PRODUCES: dict[str, str] = {
     # exiled this way" / "you may cast them this turn" read.
     "exile_top_of_library": "exiled_cards",
     "search_and_exile_matching": "exiled_cards",
+    # And the graveyard exile, which is what "If **it** was a creature card"
+    # reads (Scavenging Ooze) — the same key, because the question the
+    # back-reference asks is the same one: what did this effect just exile?
+    "exile_target_graveyard_card": "exiled_cards",
     # "Tap up to two target creatures. **Those creatures** don't untap…"
     # (Frost Breath.) The tap records which permanents it affected, by id, and
     # the sentence after it reads that record rather than re-resolving the slots
@@ -598,54 +603,6 @@ def _lower_steps(
                 produced = produced | {result}
         instructions += lowered
     return instructions
-
-
-def _lower_condition(
-    condition: ast.Condition, produced: frozenset[str] = frozenset()
-) -> dict[str, object]:
-    """*produced* names the scratchpad values earlier steps of this same effect
-    recorded. It defaults to empty, which is what refuses a coin-flip condition
-    on an intervening-if (CR 603.4): that condition is checked when the trigger
-    would fire, where no flip of this resolution can have happened yet."""
-    if isinstance(condition, ast.CoinFlipResult):
-        # A back-reference names its producer or refuses (round 33). Without a
-        # flip earlier in the same effect there is nothing to read, and
-        # `evaluate_condition` would quietly answer False — so a card printing
-        # only "If you win the flip, …" would compile supported and do nothing.
-        if "coin_flip" not in produced:
-            raise LoweringError(
-                "'the flip' with no coin flip before it in this effect",
-                node=condition,
-            )
-        return {"kind": "coin_flip", "won": condition.won}
-    if isinstance(condition, ast.Controls):
-        payload = {
-            "kind": "controls",
-            "who": condition.who.kind,
-            "filter": condition.filter.to_payload(),
-        }
-        if condition.comparison is not None and isinstance(condition.comparison.value, ast.Fixed):
-            payload["count"] = condition.comparison.value.value
-            payload["op"] = condition.comparison.op
-        return payload
-    if isinstance(condition, ast.IsState):
-        return {"kind": "is_state", "state": condition.state, "negated": condition.negated}
-    if isinstance(condition, ast.DiedThisTurn):
-        return {"kind": "died_this_turn", "filter": condition.filter.to_payload()}
-    if isinstance(condition, ast.ReturnedToHandThisTurn):
-        return {"kind": "returned_to_hand_this_turn"}
-    if isinstance(condition, ast.HadPlus1Counter):
-        return {"kind": "had_plus1_counter"}
-    if isinstance(condition, ast.LifeGainedThisTurn):
-        # The seat rides the payload rather than being baked into the kind, so
-        # "if an opponent gained…" is the same condition with a different `who`
-        # the day a card prints it.
-        return {
-            "kind": "life_gained_this_turn",
-            "who": condition.who.kind,
-            "amount": condition.amount,
-        }
-    raise LoweringError(f"no lowering for condition {type(condition).__name__}", node=condition)
 
 
 def _fused_upkeep_pay_to_untap(

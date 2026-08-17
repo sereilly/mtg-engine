@@ -469,21 +469,26 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
     if seat is None or not 0 <= seat < len(players):
         return targets
 
+    # A graveyard target, read off the identity the stack stamped rather than
+    # re-derived from the card. Three things follow from that and none of them
+    # did before: an *ability*'s graveyard target gets an arrow at all
+    # (`cast_target_kind` is the spell-side question and was asked with
+    # `not is_ability`), a *mode*'s does (Return to Nature's third), and the
+    # arrow follows the card as the pile shifts underneath it.
+    stamped = item.target_graveyard_card
+    if stamped is not None:
+        for stamp in (stamped if isinstance(stamped, list) else [stamped]):
+            index = game.graveyard_index_of(stamp)
+            if index is not None:
+                targets.append({"kind": "graveyard", "seat": stamp.seat, "index": index})
+        return targets
+
     raw = item.target_permanent_index
     indices = raw if isinstance(raw, list) else ([raw] if isinstance(raw, int) else [])
     if indices:
-        is_ability = item.ability_instruction is not None or item.hook_key is not None
-        # A reanimation spell's index is into that seat's graveyard, so aim at the
-        # graveyard pile rather than at whatever permanent shares the index.
-        if not is_ability and cast_target_kind(item.card) == "graveyard_creature":
-            zone = players[seat].graveyard
-            kind = "graveyard"
-        else:
-            zone = players[seat].battlefield
-            kind = "permanent"
         for idx in indices:
-            if isinstance(idx, int) and 0 <= idx < len(zone):
-                targets.append({"kind": kind, "seat": seat, "index": idx})
+            if isinstance(idx, int) and 0 <= idx < len(players[seat].battlefield):
+                targets.append({"kind": "permanent", "seat": seat, "index": idx})
         return targets
 
     # No permanent chosen: the seat is a real target only if the text says so —

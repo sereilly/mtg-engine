@@ -1542,7 +1542,7 @@ function graveyardCardNoun(spec) {
   return `${spec?.card_type || "creature"} card`;
 }
 
-function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
+function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast", extra = {}) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
   const spec = targetSpecOf(card);
@@ -1567,6 +1567,10 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
     card, cardName, targetKind: "graveyard_creature", castAction,
     ...(max ? { maxTargets: max, severalGraveyard: [] } : {}),
     ...pendingTargetFields(card),
+    // Which permanent, and which of its abilities, when this prompt was opened
+    // by an activation rather than a cast. The picker is identical — the card
+    // clicked is in a graveyard either way — so only the action differs.
+    ...extra,
   };
   renderActivationPrompt();
   renderBoard(currentState);
@@ -5784,6 +5788,19 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       renderBoard(currentState);
       return;
     }
+  }
+
+  // "{G}: Exile target card from a graveyard." (Scavenging Ooze; also Epitaph
+  // Golem, Obsessive Stitcher, Liliana Death Mage, Chandra Flame's Catalyst.)
+  // The clickable surface is the zone-reveal panel rather than the canvas, so
+  // this reuses the cast-side prompt and every branch below it stays a
+  // battlefield picker. Without it the ability was sent with no target at all
+  // and the engine's stale-choice fallback took the first legal card.
+  if (cardRequiresTargetGraveyardCreature(card)) {
+    startCastGraveyardCreatureTargetPrompt(card, "activate", {
+      sourcePermanentIndex: permanentIndex, abilityIndex,
+    });
+    return;
   }
 
   // Activated abilities that destroy a target creature (e.g. Royal Assassin)

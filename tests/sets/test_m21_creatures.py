@@ -2291,3 +2291,85 @@ def test_the_self_return_refuses_a_destination_no_handler_moves_to():
 
     assert result.parsed and not result.lowered
     assert "graveyard to the hand" in result.failure_reason
+
+
+# --- Round 78: what a card *was*, read after it stopped being there ---------
+
+
+def _ooze_board(set_pool, graveyard_card, *, opponent=True):
+    pool = set_pool("M21")
+    ooze = _nosick(Permanent(card=pool["Scavenging Ooze"]))
+    p1 = PlayerState(name="P1", battlefield=[ooze], life=20)
+    p2 = PlayerState(name="P2")
+    holder = p2 if opponent else p1
+    holder.graveyard.append(pool[graveyard_card])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, ooze, holder
+
+
+def _activate(game, holder_seat):
+    return game.activate_permanent_ability(
+        0, "Scavenging Ooze", permanent_index=0,
+        target_player_index=holder_seat, target_permanent_index=0,
+    )
+
+
+def test_scavenging_ooze_compiles_supported(set_pool):
+    """"{G}: Exile target card from **a** graveyard." â€” any graveyard, not the
+    controller's, and the rider reads what the exiled card *was*."""
+    program = compile_card_oracle(set_pool("M21")["Scavenging Ooze"])
+
+    assert program.supported, program.reason
+
+
+def test_exiling_a_creature_card_grows_the_ooze_and_gains_the_life(set_pool):
+    """The whole sentence: the exile happens either way, and the counter and the
+    life ride on what the card was."""
+    game, ooze, holder = _ooze_board(set_pool, "Alpine Watchdog")
+
+    result = _activate(game, 1)
+    assert result.supported, result.details
+    game._settle()
+
+    assert int(ooze.metadata.get("plus_counters", 0)) == 1
+    assert game.players[0].life == 21
+    assert holder.graveyard == []
+
+
+def test_exiling_a_noncreature_card_exiles_it_and_nothing_else(set_pool):
+    """"**If it was a creature card**" is a condition on the rider, not on the
+    exile. The instant still goes, and the Ooze gets nothing."""
+    game, ooze, holder = _ooze_board(set_pool, "Shock")
+
+    _activate(game, 1)
+    game._settle()
+
+    assert int(ooze.metadata.get("plus_counters", 0)) == 0
+    assert game.players[0].life == 20
+    assert holder.graveyard == [], "the exile is unconditional"
+
+
+def test_the_ooze_can_eat_its_own_controllers_graveyard(set_pool):
+    """"a graveyard" is any graveyard (CR 109.5 does not narrow it), so the
+    controller's own pile is a legal choice."""
+    game, ooze, holder = _ooze_board(set_pool, "Alpine Watchdog", opponent=False)
+
+    _activate(game, 0)
+    game._settle()
+
+    assert int(ooze.metadata.get("plus_counters", 0)) == 1
+    assert holder.graveyard == []
+
+
+def test_the_rider_refuses_with_no_exile_before_it():
+    """A back-reference names its producer or refuses (idiom #7). "It was" reads
+    what an earlier step of the same effect recorded, so with nothing recorded
+    the condition would answer False forever and the card would compile clean
+    while its rider never fired."""
+    result = compile_line(
+        "If it was a creature card, you gain 1 life.", card_name="Test"
+    )
+
+    assert result.parsed and not result.lowered
+    assert result.failure_reason

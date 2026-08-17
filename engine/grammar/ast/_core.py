@@ -470,6 +470,24 @@ class CoinFlipResult:
 
 
 @dataclass(frozen=True)
+class ItWas:
+    """"If **it** was a creature card" (Scavenging Ooze).
+
+    A back-reference to the object an earlier step of this same effect moved,
+    read as last-known information (CR 608.2h): the card is already in exile
+    when this is asked, so the answer is what it was in the graveyard, not what
+    the exile zone holds.
+
+    The pronoun carries no referent, exactly as ``ThatMuch(None)`` carries no
+    producer: the parser cannot see the sentence in front of it, so lowering is
+    what resolves "it" against the values earlier steps recorded, and refuses
+    when nothing recorded one (round 33's rule).
+    """
+
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class HadPlus1Counter:
     """"if it had a +1/+1 counter on it" (Basri's Lieutenant, CR 603.4).
 
@@ -480,7 +498,7 @@ class HadPlus1Counter:
 
 
 Condition = Union[
-    CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter,
+    CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter, ItWas,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
 ]
 
