@@ -198,6 +198,33 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
                 {"tapped": node.entering_tapped, "functions_from": "graveyard"},
             ),
         )
+    # "…you may return **an** instant or sorcery card from your graveyard to
+    # your hand." (Experimental Overload.) Chosen but not targeted (CR 115.1):
+    # the card is in the chooser's own graveyard, so there is nothing for
+    # targeting to protect — no shroud, no protection, no "changes target"
+    # effect can reach it — and the picker the targeted spelling already uses is
+    # the same picker. Admitted only in that shape: a *bare* quantifier over
+    # anyone else's zone, or over the battlefield, still refuses.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "a"
+        and subject.count == 1
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+        and subject.filter.zone_owner is not None
+        and subject.filter.zone_owner.kind == "you"
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "you"
+    ):
+        if _reads_no_return_restriction(subject.filter):
+            raise LoweringError("no return handler honours this restriction", node=node)
+        return (
+            OracleInstruction(
+                "return_creature_from_graveyard_to_hand", "",
+                _graveyard_to_hand_payload(subject.filter),
+            ),
+        )
     if not _is_target(subject):
         # "target" and "up to one target" (Liliana, Death Mage's +1) both
         # resolve one chosen object; anything wider has no handler.

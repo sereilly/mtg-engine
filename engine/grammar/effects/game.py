@@ -118,12 +118,21 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     power, power_negative, toughness, toughness_negative = expect_pt(stream)
     if power_negative or toughness_negative:
         raise stream.error("a token's printed power/toughness cannot be negative")
+    counted_pt = None
     if not (isinstance(power, ast.Fixed) and isinstance(toughness, ast.Fixed)):
-        # ``CreateToken`` stores printed integers, and ``create_token`` reads
-        # them with ``int(...)``. A variable "X/X token" has no representation
-        # on either side, so it refuses here rather than resolving to a
-        # sentinel that would reach the battlefield as a real creature.
-        raise stream.error("a token with a variable power/toughness has no representation")
+        # "Create an **X/X** … token, where X is the number of …" (Experimental
+        # Overload). Both halves must be the *same* variable: "X/Y" is two
+        # counts and the where-clause that follows defines one, so admitting it
+        # would silently give the token the wrong toughness.
+        if not (
+            isinstance(power, ast.Var) and isinstance(toughness, ast.Var)
+            and power.name == toughness.name
+        ):
+            raise stream.error(
+                "a token's printed power/toughness is a number or one variable"
+            )
+        counted_pt = power
+        power = toughness = None
 
     colors: list[str] = []
     stated_colour = False
@@ -198,8 +207,9 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
 
     return ast.CreateToken(
         count=count,
-        power=power.value,
-        toughness=toughness.value,
+        power=power.value if power is not None else None,
+        toughness=toughness.value if toughness is not None else None,
+        counted_pt=counted_pt,
         name=name,
         colors=tuple(colors),
         types=tuple(card_types),

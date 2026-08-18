@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 80.3% | 77.9% | 54.5% | 222 |
+| M21 *(measured)* | 285 | 503 | 80.5% | 78.1% | 54.7% | 223 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -417,6 +417,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Destroy target creature or planeswalker with mana value 3 or less.`
 - **Epitaph Golem**
   - `{2}: Put target card from your graveyard on the bottom of your library.`
+- **Experimental Overload**
+  - `Create an X/X blue and red Weird creature token, where X is the number of instant and sorcery cards in your graveyard. Then you may return an instant or sorcery card from your graveyard to your hand. Exile Experimental Overload.`
 - **Faith's Fetters**
   - `When this Aura enters, you gain 4 life.`
 - **Falconer Adept**

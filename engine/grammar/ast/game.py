@@ -67,6 +67,14 @@ class CreateToken:
     # multiplier over a history, exactly as on a counter placement or a life
     # gain — the set counted is the one no battlefield still holds.
     per_death: object | None = None
+    # "Create an **X/X** blue and red Weird creature token, where X is the
+    # number of instant and sorcery cards in your graveyard." (Experimental
+    # Overload.) The P/T is a *count*, taken as the token is created (CR 608.2)
+    # and then fixed — a token is not a characteristic-defining ability, so a
+    # card later leaving the graveyard does not shrink it. ``power`` and
+    # ``toughness`` stay None when this is set, because there is no printed
+    # number for them to hold.
+    counted_pt: object | None = None
     # The printed text a *predefined* token carries (CR 111.10). Transcribed
     # from `engine/tokens.py`'s table at parse time rather than left for the
     # handler to look up again, so the AST says everything the token is.

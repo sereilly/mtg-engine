@@ -256,59 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 115: a trigger that fired from one place only
-
-*(2026-08-18.)* M21 **264 → 265** — Archfiend's Vessel.
-
-> Lifelink
-> When this creature enters, if it entered from your graveyard or you cast it
-> from your graveyard, exile it. If you do, create a 5/5 black Demon creature
-> token with flying.
-
-Four pieces, and the fourth is a defect the card merely walked into.
-
-**"Exile it" is not a target.** Every exile the engine had resolved a *chosen*
-permanent, so an ability exiling its own source had no lowering at all. It gets
-its own instruction kind rather than a flag on the targeted exile — a handler
-that resolves a target and one that reads `context.source_permanent` share
-nothing beyond the move — and a source already gone exiles nothing rather than
-falling back to a scan, which would exile whichever look-alike it reached first.
-
-**"If you do" after an action that was not optional.** The fold existed only for
-a `May`, where the branch is a consequence of the player's decision. Here the
-exile is compulsory and the branch asks whether it *took place* (CR 608.2b's "as
-much as possible"), so it lowers to an ordinary `if_then` whose condition reads
-the record the exile wrote. The pairing with "the step before it" is made in
-`_lower_steps`, the one place that knows both which step that was and what it
-records — a field on the node would have been a second copy of `_PRODUCES`.
-
-**"Entered from" and "you cast it from" are two events, not one.** A permanent
-put onto the battlefield from a graveyard and a permanent spell cast from a
-graveyard leave the same card in the same place by different routes, and the
-card names both. So the entry seam stamps where the permanent came from, the
-cast stamps the zone the spell was cast from, and the condition asks each. `None`
-means the caller did not say — the same defaulting as round 111's `was_cast`,
-and one more fact about an entry that two different rules now ask.
-
-**And a permanent's own entry trigger fired from exactly one place: the
-resolution of a permanent *spell*.** Every other route onto the battlefield — a
-reanimation, a token, an effect putting a card into play — never fired it. So a
-reanimated Archfiend's Vessel made no Demon, and a Niambi put into play returned
-nothing; both compile the ability perfectly and nothing ran it. The seam now
-fires it, with the cast path keeping its own call because it has the caster's
-cast-time target choice to thread through (CR 601.2c) and an entry from a
-graveyard has no equivalent. `was_cast` is what keeps the two from both firing —
-the same flag CR 701.5a needed for Containment Priest, one fact about an entry
-asked by two rules.
-
-The suite passed that change unmodified and the AI simulation stayed
-byte-identical, which is the measurement that made it a fix rather than a
-gamble.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Seven new tests, all watched to fail on the round-114 engine.
-
 ## Round 116: a tribe is not a card type, and a count is a count
 
 *(2026-08-18.)* M21 **265 → 266** — Rin and Seri, Inseparable.
@@ -394,3 +341,51 @@ stamp records.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Four new tests, all watched to fail on the round-116 engine.
+
+## Round 118: a token as big as a graveyard, and a spell that exiles itself
+
+*(2026-08-18.)* M21 **267 → 268** — Experimental Overload.
+
+> Create an X/X blue and red Weird creature token, where X is the number of
+> instant and sorcery cards in your graveyard. Then you may return an instant or
+> sorcery card from your graveyard to your hand. Exile Experimental Overload.
+
+Three sentences, three small gaps — and the third had been fixed three rounds
+earlier without the card noticing.
+
+**An X/X token.** `CreateToken` stored printed integers and the refusal beside
+it said so, which was true when it was written and had quietly stopped being the
+only option: the where-clause machinery stamps its count onto the instruction
+and the executor resolves it into the context's X *before any handler runs*, so
+the payload says "x" and the handler reads a number, exactly as a pump or a
+counted damage does. Both halves must be the **same** variable — "X/Y" is two
+counts and the clause defines one, so admitting it would give the token a
+toughness nothing stated.
+
+Taken at resolution and then fixed onto the token's card. A token has no
+characteristic-defining ability, so a card later leaving the graveyard does not
+shrink it; and Experimental Overload is still resolving while the count is
+taken, which is why it does not count itself (CR 608.2n bins it last).
+
+**A chosen card that is not a target.** "Return **an** instant or sorcery card
+from your graveyard" resolved nowhere: every graveyard return the engine had was
+targeted. Admitted in exactly the shape where the distinction cannot matter —
+the chooser's own graveyard — because there is nothing for targeting to protect
+there: no shroud, no protection, no "changes target" effect can reach a card in
+your own graveyard, and the picker is the one the targeted spelling already
+uses. A bare quantifier over anyone else's zone still refuses.
+
+**A spell exiling itself.** Round 115 gave "exile it" a handler, and that
+handler exiles the ability's *source permanent* — of which a sorcery has none.
+So the words compiled, the handler ran, and it exiled nothing. The object here is
+the spell on the stack, which makes this CR 608.2n's "where the card goes"
+rather than a zone change of something in play, and it routes through the same
+flag the "if that spell would be put into your graveyard, exile it instead"
+rider uses. Set rather than performed: the card is still resolving, and the
+resolution tail is the one place that bins it.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Six new tests, all watched to fail on the round-117 engine; one guard
+that recorded the old token refusal was rewritten to state what replaced it and
+what still refuses.

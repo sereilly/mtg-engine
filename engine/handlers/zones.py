@@ -782,6 +782,18 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
     """
     source = context.source_permanent
     if source is None or not game.is_on_battlefield(source):
+        # **A spell exiling itself** (Experimental Overload's "Exile Experimental
+        # Overload."). There is no permanent — the object is the spell on the
+        # stack — so this is CR 608.2n's "where the card goes" rather than a
+        # zone change of something in play, and it routes through the same flag
+        # the "if that spell would be put into your graveyard, exile it instead"
+        # rider uses. Set rather than performed: the card is still resolving,
+        # and the resolution tail is the one place that bins it.
+        if source is None and context.card is not None:
+            game.exile_resolving_spell = True
+            context.results["exiled_self"] = True
+            game.log.append(f"{context.card.name} will be exiled as it resolves")
+            return True, "resolved"
         game.log.append(f"{context.card.name}: nothing to exile")
         return True, "resolved"
     owner_index = game.owner_index_of(source)

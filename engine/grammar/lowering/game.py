@@ -179,7 +179,7 @@ def _lower_create_token(
         return (OracleInstruction("create_token", "", payload),)
     if "creature" not in node.types:
         raise LoweringError("make_token_card only builds creature tokens", node=node)
-    if node.power is None or node.toughness is None:
+    if node.counted_pt is None and (node.power is None or node.toughness is None):
         raise LoweringError("a creature token has a printed power/toughness", node=node)
     if node.name:
         name = _title(node.name)
@@ -198,8 +198,15 @@ def _lower_create_token(
 
     payload: dict[str, object] = {
         "name": name,
-        "power": node.power,
-        "toughness": node.toughness,
+        # "Create an **X/X** … token, where X is the number of …" (Experimental
+        # Overload). The where-clause wrapping this sentence stamps the count
+        # onto the instruction and the executor resolves it into the context's
+        # X before the handler runs — so the payload says "x" and the handler
+        # reads a number, exactly as a pump or a counted damage does. Both
+        # halves, because the production admitted them only as the *same*
+        # variable.
+        "power": "x" if node.counted_pt is not None else node.power,
+        "toughness": "x" if node.counted_pt is not None else node.toughness,
         "type_line": type_line,
     }
     if node.colors:

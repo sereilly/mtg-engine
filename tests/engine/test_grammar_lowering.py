@@ -2441,9 +2441,12 @@ def test_a_non_creature_token_refuses():
             "to the payload -- the dropped-rider shape the deletion probe flags",
         ),
         (
-            "Create an X/X colorless Insect creature token named Wasp.",
-            "variable P/T: CreateToken stores printed integers and create_token "
-            "reads them with int(), so there is no representation on either side",
+            "Create an X/Y colorless Insect creature token named Wasp.",
+            "two different variables: the where-clause that follows such a "
+            "sentence defines one X, so admitting a second would give the token "
+            "a toughness nothing had stated. A single repeated variable is "
+            "admitted since round 118 and reads the same X every other effect "
+            "does -- the cast's, or the one a where-clause defines",
         ),
         (
             "Create a 1/1 legendary colorless Insect creature token named Wasp.",

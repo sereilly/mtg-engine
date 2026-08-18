@@ -1151,3 +1151,108 @@ def test_the_replacement_reaches_the_exiled_creatures_controller(set_pool):
         "battlefield, then shuffles the rest into their library."
     )
     assert orphan.instructions == ()
+
+
+# --- Experimental Overload: an X/X token and a spell exiling itself (118) ---
+
+
+def _overload_board(set_pool, graveyard):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", life=20, hand=[pool["Experimental Overload"]],
+        graveyard=[pool[n] for n in graveyard],
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    return game, p1
+
+
+def test_experimental_overload_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Experimental Overload"])
+    assert program.supported, program.reason
+
+
+def test_the_weird_is_as_big_as_the_graveyard(set_pool):
+    """The P/T is a count taken at resolution (CR 608.2) and then fixed onto the
+    token's card — a token has no characteristic-defining ability, so a card
+    later leaving the graveyard does not shrink it."""
+    game, p1 = _overload_board(set_pool, ["Shock", "Transmogrify", "Mountain"])
+
+    game.cast_from_hand(0, "Experimental Overload")
+    game._settle()
+
+    tokens = [p for p in game.controlled_by(0) if p.metadata.get("is_token")]
+    assert [(t.card.name, t.effective_power, t.effective_toughness) for t in tokens] == [
+        ("Weird Token", 2, 2)
+    ]
+    # The Mountain is not an instant or a sorcery, and Experimental Overload
+    # itself is still resolving — CR 608.2n bins it last.
+    assert len(p1.graveyard) == 3
+
+
+def test_a_spell_can_exile_itself_as_it_resolves(set_pool):
+    """"Exile Experimental Overload." There is no permanent — the object is the
+    spell on the stack — so this is CR 608.2n's "where the card goes" and it
+    routes through the same flag the "exile it instead" rider uses."""
+    game, p1 = _overload_board(set_pool, ["Shock", "Transmogrify"])
+
+    game.cast_from_hand(0, "Experimental Overload")
+    game._settle()
+
+    assert [c.name for c in p1.exile] == ["Experimental Overload"]
+    assert "Experimental Overload" not in [c.name for c in p1.graveyard]
+
+
+def test_the_optional_return_takes_a_card_from_your_own_graveyard(set_pool):
+    """Chosen but not targeted (CR 115.1): the card is in the chooser's own
+    graveyard, so nothing targeting protects — no shroud, no protection, no
+    "changes target" effect reaches it — and the picker is the one the targeted
+    spelling already uses."""
+    game, p1 = _overload_board(set_pool, ["Shock", "Transmogrify"])
+
+    game.cast_from_hand(0, "Experimental Overload")
+    game._settle()
+    assert p1.hand == []
+
+    assert game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert [c.name for c in p1.hand] == ["Shock"]
+    assert [c.name for c in p1.graveyard] == ["Transmogrify"]
+
+
+def test_an_empty_graveyard_makes_a_zero_zero_that_dies(set_pool):
+    """X is 0, so the token is a 0/0 and state-based actions bin it at once
+    (CR 704.5a). The token really was created — it is not that the effect was
+    skipped."""
+    game, p1 = _overload_board(set_pool, ["Mountain"])
+
+    game.cast_from_hand(0, "Experimental Overload")
+    game._settle()
+
+    assert [p for p in game.controlled_by(0) if p.metadata.get("is_token")] == []
+    # The control: the effect really did run, and on a graveyard with something
+    # to count it leaves a token standing. Without it this holds on any engine
+    # where the card is unsupported and nothing happens at all.
+    assert [c.name for c in p1.exile] == ["Experimental Overload"]
+    control, _ = _overload_board(set_pool, ["Shock"])
+    control.cast_from_hand(0, "Experimental Overload")
+    control._settle()
+    assert [
+        p.card.name for p in control.controlled_by(0) if p.metadata.get("is_token")
+    ] == ["Weird Token"]
+
+
+def test_a_token_with_two_different_variables_refuses(set_pool):
+    """One repeated variable is the card's shape; two would give the token a
+    toughness the where-clause never defined."""
+    from engine.grammar import compile_line
+
+    assert compile_line(
+        "Create an X/X blue and red Weird creature token, where X is the number "
+        "of instant and sorcery cards in your graveyard."
+    ).instructions
+    assert compile_line(
+        "Create an X/Y blue and red Weird creature token, where X is the number "
+        "of instant and sorcery cards in your graveyard."
+    ).instructions == ()

@@ -457,6 +457,16 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     # card that dies the moment anything animates it.
     printed_power = payload.get("power")
     printed_toughness = payload.get("toughness")
+    # "Create an **X/X** … token, where X is the number of …" (Experimental
+    # Overload). The where-clause's count is already resolved into the context's
+    # X by the time this runs, so both halves read the one number. Taken **now**
+    # and then fixed onto the token's card: a token has no
+    # characteristic-defining ability, so a card later leaving the graveyard
+    # does not shrink it (CR 608.2 counts at resolution).
+    if printed_power == "x" or printed_toughness == "x":
+        counted = max(0, int(context.x_value or 0))
+        printed_power = counted if printed_power == "x" else printed_power
+        printed_toughness = counted if printed_toughness == "x" else printed_toughness
     token_card = make_token_card(
         str(payload.get("name", "Token")),
         None if printed_power is None else int(printed_power),
