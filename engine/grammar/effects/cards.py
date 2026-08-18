@@ -355,6 +355,12 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # search over both. The lexer splits "and/or" into two words.
     graveyard = bool(stream.accept_phrase("and", "or", "graveyard"))
     stream.expect_word("for")
+    # "…for **up to two** basic land cards, reveal those cards, put one onto the
+    # battlefield tapped and the other into your hand" (Cultivate). A counted
+    # search, read here so the count and the destinations are parsed together —
+    # they are the same fact, one entry per find.
+    if stream.accept_phrase("up", "to", "two"):
+        return _parse_two_card_search(stream, graveyard)
     if not stream.accept_word("a", "an"):
         raise stream.error("a search for more than one card has no representation")
     # "a card named X" is read by the noun parser, like every other restriction
@@ -402,6 +408,50 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         stream.accept_word("then")
         stream.expect_word("shuffle")
     return ast.SearchLibrary(ast.PlayerRef("you"), filt, destination, graveyard)
+
+
+def _parse_two_card_search(stream: TokenStream, graveyard: bool) -> ast.Statement:
+    """The tail of ``Search your library for up to two <filter>, reveal those
+    cards, put one <zone> and the other <zone>, then shuffle.`` (Cultivate.)
+
+    Split from the singular production rather than branched inside it, because
+    every clause after the count is *different*: "those cards" not "it", two
+    destinations joined by "and the other", and an entry state on the first.
+    Sharing the code would mean a chain of `if two:` through a production whose
+    whole job is to read one shape.
+
+    Both destinations are required. A card that puts one somewhere and says
+    nothing about the second find is a different effect, and defaulting the
+    second to the first is how a search silently puts two lands on the
+    battlefield.
+    """
+    filt = parse_object_filter(stream)
+    stream.accept_punct(",")
+    # "reveal those cards," — the plural of the singular production's "reveal
+    # it", and honoured the same way: the search log names what was found.
+    if stream.accept_word("reveal"):
+        if not stream.accept_phrase("those", "cards"):
+            raise stream.error("expected 'those cards' after the plural reveal")
+        stream.accept_punct(",")
+    stream.expect_word("put")
+    stream.expect_word("one")
+    stream.expect_word("into", "onto")
+    first = _parse_zone(stream)
+    first_tapped = bool(stream.accept_word("tapped"))
+    if not stream.accept_phrase("and", "the", "other"):
+        raise stream.error("expected 'and the other' before the second destination")
+    stream.expect_word("into", "onto")
+    second = _parse_zone(stream)
+    second_tapped = bool(stream.accept_word("tapped"))
+    stream.accept_punct(",")
+    stream.accept_word("then")
+    stream.expect_word("shuffle")
+    return ast.SearchLibrary(
+        ast.PlayerRef("you"), filt, first, graveyard,
+        extra_destinations=(second,),
+        tapped=(first_tapped, second_tapped),
+        up_to=True,
+    )
 
 
 def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:

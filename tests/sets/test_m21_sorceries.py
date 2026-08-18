@@ -974,3 +974,99 @@ def test_an_untimed_control_change_still_refuses(set_pool):
     result = compile_line("Gain control of target creature.")
 
     assert not result.parsed
+
+
+# --- Round 99: a search that finds twice and splits its finds ---------------
+
+
+def _cultivate_board(set_pool, library=("Forest", "Shock", "Island", "Mountain")):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Cultivate"]],
+        library=[pool[name] for name in library],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.cast_from_hand(0, "Cultivate")
+    game._settle()
+    return game, p1
+
+
+def test_cultivate_compiles_supported(set_pool):
+    """Two finds and two destinations are the *same fact*, so they travel
+    together: a card that names two destinations cannot lower to a search that
+    finds one."""
+    program = compile_card_oracle(set_pool("M21")["Cultivate"])
+    assert program.supported, program.reason
+
+    (search,) = program.instructions
+    assert search.payload["count"] == 2
+    assert search.payload["destinations"] == ["battlefield", "hand"]
+    assert search.payload["tapped"] == [True, False]
+    assert search.payload["restrictions"]["supertypes"] == ["basic"]
+
+
+def test_the_first_find_enters_tapped_and_the_second_goes_to_hand(set_pool):
+    """The prompt is answered once per find and consumes the front of the
+    destination list, so the second find cannot land where the first was meant
+    to."""
+    game, p1 = _cultivate_board(set_pool)
+
+    assert game.confirm_search_library(0, 0)          # Forest
+    library = [c.name for c in p1.library]
+    assert game.confirm_search_library(0, library.index("Island"))
+
+    assert [(p.card.name, p.tapped) for p in game.controlled_by(0)] == [("Forest", True)]
+    assert [c.name for c in p1.hand] == ["Island"]
+    assert game.pending_choices == []
+
+
+def test_the_library_is_not_shuffled_between_the_two_finds(set_pool):
+    """CR 701.19d shuffles when the *search* is over. Shuffling between two
+    finds of one search would hide the second from the player still looking."""
+    game, p1 = _cultivate_board(set_pool)
+    before = [c.name for c in p1.library]
+
+    game.confirm_search_library(0, 0)
+
+    assert [c.name for c in p1.library] == [n for n in before if n != "Forest"]
+    assert game.pending_choices, "the second find is still owed"
+
+
+def test_a_nonbasic_card_is_not_a_legal_find(set_pool):
+    """"A **basic** land card" — a supertype is printed on the type line, which
+    is the whole test for what the picker may honour: a card in a library has no
+    computed characteristics at all (CR 613.1)."""
+    game, p1 = _cultivate_board(set_pool)
+    shock = [c.name for c in p1.library].index("Shock")
+
+    assert not game.confirm_search_library(0, shock)
+    assert [c.name for c in p1.hand] == []
+
+
+def test_finding_fewer_is_a_legal_answer(set_pool):
+    """"Up to two" — and CR 701.19b makes fail-to-find legal regardless. The
+    decline ends the whole search rather than one find of it, which is the
+    player stating they are done."""
+    game, p1 = _cultivate_board(set_pool)
+
+    assert game.confirm_search_library(0, 0)
+    assert game.decline_search_library(0)
+
+    assert [(p.card.name, p.tapped) for p in game.controlled_by(0)] == [("Forest", True)]
+    assert p1.hand == []
+    assert game.pending_choices == []
+
+
+def test_a_single_find_search_is_unchanged(set_pool):
+    """The counted shape is additive: a search that names one destination keeps
+    the payload — and the flow — it has always had."""
+    from engine.grammar import compile_line
+
+    (search,) = compile_line(
+        "Search your library for a card, put that card into your hand, then shuffle."
+    ).instructions
+
+    assert search.payload == {"count": 1, "card_type": "any"}

@@ -276,6 +276,13 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         zones=zones,
         restrictions=dict(instruction.payload.get("restrictions") or {}),
         destination=instruction.payload.get("destination", "hand"),
+        # "…put one onto the battlefield tapped and the other into your hand"
+        # (Cultivate): one entry per find, in the printed order. The prompt is
+        # answered once per find and consumes the front of this list, so the
+        # second find cannot land where the first was meant to.
+        destinations=list(instruction.payload.get("destinations") or ()),
+        tapped=list(instruction.payload.get("tapped") or ()),
+        up_to=bool(instruction.payload.get("up_to")),
     )
     game.log.append(f"{caster.name} is searching their " + " and ".join(zones))
     return True, "pending_search_library"

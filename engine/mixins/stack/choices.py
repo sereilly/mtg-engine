@@ -286,10 +286,13 @@ class PendingChoicesMixin:
         caster = self.players[choice.player_index]
         zones = tuple(choice.data.get("zones", ("library",)))
         if zone == "none":
+            # Fail-to-find ends the whole search, not one find of it: CR 701.19b
+            # is about the search, and "up to two" makes finding fewer a legal
+            # answer the player states by declining the rest.
             if "library" in zones:
                 random.shuffle(caster.library)
             self.discard_pending_choice(choice)
-            self.log.append(f"{caster.name} searched and found nothing")
+            self.log.append(f"{caster.name} searched and found nothing more")
             return True
         # A zone the search was not armed with is not a zone this search may
         # look in: "search your library" is a different card from "search your
@@ -313,15 +316,35 @@ class PendingChoicesMixin:
         # emblem) — the found card enters play instead of the hand. The
         # destination was fixed when the search was armed; the wire cannot
         # promote a tutor-to-hand into a tutor-to-battlefield.
-        destination = choice.data.get("destination", "hand")
+        # A counted search consumes its destinations in the printed order; a
+        # single-find one has the fixed `destination` it has always had.
+        remaining = list(choice.data.get("destinations") or ())
+        tapped_flags = list(choice.data.get("tapped") or ())
+        if remaining:
+            destination = remaining.pop(0)
+            enters_tapped = bool(tapped_flags.pop(0)) if tapped_flags else False
+        else:
+            destination = choice.data.get("destination", "hand")
+            enters_tapped = False
         if destination == "battlefield":
             from ...models import Permanent as _Permanent
 
-            self._put_permanent_onto_battlefield(
-                choice.player_index, _Permanent(card=card), None
-            )
+            found = _Permanent(card=card, tapped=enters_tapped)
+            self._put_permanent_onto_battlefield(choice.player_index, found, None)
         else:
             caster.hand.append(card)
+        self.log.append(
+            f"{caster.name} searched {zone} and put {card.name} "
+            + ("onto the battlefield" if destination == "battlefield" else "into hand")
+        )
+        # More finds owed: the prompt stays, minus the destination just used, and
+        # the library is *not* shuffled yet — CR 701.19d shuffles when the search
+        # is over, and shuffling between two finds of one search would hide the
+        # second from the player who is still looking.
+        if remaining:
+            choice.data["destinations"] = remaining
+            choice.data["tapped"] = tapped_flags
+            return True
         # Only a library search shuffles (CR 701.19d, and the printed "If you
         # search your library this way, shuffle"): a graveyard is an open zone,
         # and randomising a library the player did not search would destroy
@@ -329,10 +352,6 @@ class PendingChoicesMixin:
         if zone == "library":
             random.shuffle(caster.library)
         self.discard_pending_choice(choice)
-        self.log.append(
-            f"{caster.name} searched {zone} and put {card.name} "
-            + ("onto the battlefield" if destination == "battlefield" else "into hand")
-        )
         return True
 
     def _default_search_library(self, choice: PendingChoice) -> None:

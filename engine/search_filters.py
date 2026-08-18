@@ -70,6 +70,13 @@ def search_matches(card, data: dict) -> bool:
     if any(excluded in type_line for excluded in data.get("exclude_types") or ()):
         return False
     restrictions = data.get("restrictions") or {}
+    # "a **basic** land card" (Cultivate). A supertype is printed on the type
+    # line and needs no computed characteristic to read — which is the whole
+    # test for what this predicate may honour, because a card in a library has
+    # none (CR 613.1).
+    for supertype in restrictions.get("supertypes") or ():
+        if supertype not in type_line:
+            return False
     named = restrictions.get("named")
     if named is not None and name_key(card.name) != name_key(named):
         return False

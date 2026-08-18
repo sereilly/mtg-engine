@@ -466,7 +466,9 @@ def _lower_look_at_hand(node: ast.LookAtHand) -> tuple[OracleInstruction, ...]:
 # tests. Every other field of the noun phrase is still refused by
 # _restrictions_beyond, because nothing in the flow tests one: the player would
 # simply be offered their whole library.
-_SEARCH_HONOURED_FILTER_FIELDS = frozenset({"card_types", "is_card"}) | SEARCH_RESTRICTIONS
+_SEARCH_HONOURED_FILTER_FIELDS = (
+    frozenset({"card_types", "is_card", "supertypes"}) | SEARCH_RESTRICTIONS
+)
 
 
 def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, ...]:
@@ -531,7 +533,32 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
                 node=node,
             )
         restrictions["mana_value"] = {"op": filt.mana_value.op, "value": value}
-    payload: dict[str, object] = {"count": 1, "card_type": card_type}
+    if filt.supertypes:
+        # "a **basic** land card" — printed on the type line, so the picker can
+        # read it off a card in a library where no computed characteristic is
+        # available (CR 613.1).
+        restrictions["supertypes"] = list(filt.supertypes)
+    # One entry per find, in the printed order: how many are found and where each
+    # goes are the same fact, so a card that names two destinations cannot lower
+    # to a search that finds one.
+    destinations = [_SEARCH_DESTINATIONS[node.to.name]]
+    for zone in node.extra_destinations:
+        if zone.name not in _SEARCH_DESTINATIONS:
+            raise LoweringError(
+                f"the search flow has no destination {zone.name!r}", node=node
+            )
+        if zone.name == "hand" and (zone.owner is None or zone.owner.kind != "you"):
+            raise LoweringError(
+                "the search flow puts a found card into the searcher's own hand",
+                node=node,
+            )
+        destinations.append(_SEARCH_DESTINATIONS[zone.name])
+    payload: dict[str, object] = {"count": len(destinations), "card_type": card_type}
+    if len(destinations) > 1:
+        payload["destinations"] = destinations
+        payload["tapped"] = list(node.tapped) or [False] * len(destinations)
+        if node.up_to:
+            payload["up_to"] = True
     # Both keys are emitted only when the card carries them, so the payload of
     # every search printed before this change — Demonic Tutor's — stays
     # byte-identical and a behaviour signature does not move.
@@ -539,9 +566,14 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         payload["restrictions"] = restrictions
     if node.graveyard:
         payload["zones"] = ("library", "graveyard")
-    if to_battlefield:
+    if to_battlefield and len(destinations) == 1:
         payload["destination"] = "battlefield"
     return (OracleInstruction("search_library", "", payload),)
+
+
+#: The zone names the search flow can put a found card into. A name outside this
+#: refuses rather than landing the card somewhere the flow does not implement.
+_SEARCH_DESTINATIONS = {"hand": "hand", "battlefield": "battlefield"}
 
 
 def _lower_exile_top_of_library(node: ast.ExileTopOfLibrary) -> tuple[OracleInstruction, ...]:

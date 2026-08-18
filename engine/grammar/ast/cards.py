@@ -130,6 +130,17 @@ class SearchLibrary:
     # the filter because it says where the search happens, not what it may
     # find; the filter's `named` field carries the latter.
     graveyard: bool = False
+    #: "…for **up to two** basic land cards … put **one** onto the battlefield
+    #: tapped **and the other** into your hand" (Cultivate). One entry per find,
+    #: in the printed order, so how many are found and where each goes are the
+    #: same fact. ``to`` above is the single-find spelling and stays the first
+    #: entry's zone; a card printing three destinations needs no new field.
+    extra_destinations: tuple[Zone, ...] = ()
+    #: Whether each find enters tapped, aligned with the destinations above.
+    tapped: tuple[bool, ...] = ()
+    #: "Up to" — finding fewer, none included, is a legal answer (CR 701.19b's
+    #: fail-to-find is always legal, but this says so on the card).
+    up_to: bool = False
 
 
 @dataclass(frozen=True)

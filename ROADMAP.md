@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 248/285) to the full release line - **137 sets, 33,594
+M21 measured at 249/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–95 — lives in git history at and before
-commit `50e351a`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–96 — lives in git history at and before
+commit `4b5b545`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,43 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 96: a sweep over what something is attached to
-
-*(2026-08-17.)* M21 **245 → 246** — Turn to Slag.
-
-> Turn to Slag deals 5 damage to target creature. Destroy all Equipment attached
-> to that creature.
-
-**The damage already worked.** The second sentence needed two things: a sweep
-that takes a *filter* rather than a card type, and a way to say what the
-Equipment is attached to.
-
-`destroy_all_matching` is the first; the per-scope kinds beside it each name one
-scope ("all creatures", "all lands of a type"), and a narrowed set has no scope to
-name. It is gated on `object_only_filter`, so a phrase the matcher cannot test
-refuses rather than sweeping wider than the card says.
-
-**The attachment rides beside the filter, not in it.** What an Equipment is
-attached to is a *relation*, and `permanent_matches_filter` answers about a
-permanent alone — so the handler resolves it, the same split the `controls`
-condition already makes for "another". Only the referents the table names are
-admitted: an attachment clause whose object nothing can resolve would be dropped
-and the sweep would take every Equipment on the board.
-
-**The interesting case is the one the intuitive reading gets wrong.** "That
-creature" is the spell's own target, and after 5 damage it is usually dead — so
-the natural expectation is that its Equipment survives, unattached. It does not.
-CR 704.3 checks state-based actions only when a player would receive priority, so
-the lethally damaged creature is *still on the battlefield* while the rest of the
-spell resolves, still wearing its Equipment. Both die, in that order. I wrote the
-test the intuitive way first and the engine disagreed; the engine was right, and
-the case is pinned because that is exactly the reading a later edit would
-"fix" the wrong way.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Five new tests, three watched to fail on the round-95 engine.
-
 ## Round 97: protection from a colour chosen as it resolves
 
 *(2026-08-17.)* M21 **246 → 247** — Feat of Resistance.
@@ -381,3 +344,50 @@ shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**; executed lines 41.8% → **41.9%**. Five new tests, four watched to
 fail on the round-97 engine, and two obsolete fallback tests deleted with the
 fallback they described.
+
+## Round 99: a search that finds twice and splits its finds
+
+*(2026-08-18.)* M21 **248 → 249** — Cultivate, closing the batch.
+
+> Search your library for up to two basic land cards, reveal those cards, put one
+> onto the battlefield tapped and the other into your hand, then shuffle.
+
+**The search flow found exactly one card, into exactly one zone.** Its production
+said so out loud — "singular by construction: the article is *expected* rather
+than a general quantity being parsed" — and its resolver moved one card and
+discarded the prompt.
+
+**How many are found and where each goes are the same fact**, so they travel
+together: one destination per find, in the printed order. That is what makes the
+refusal honest in the other direction too — a card that names two destinations
+cannot lower to a search that finds one, because there would be a destination
+left over.
+
+The prompt is answered once per find and **consumes the front of the list**, so
+the second find cannot land where the first was meant to. Between the two, the
+library is deliberately *not* shuffled: CR 701.19d shuffles when the search is
+over, and shuffling between two finds of one search would hide the second from
+the player who is still looking.
+
+**Fail-to-find ends the search, not one find of it.** CR 701.19b makes it legal
+regardless of what the card says, and "up to two" says it too — declining is the
+player stating they are done, and the shuffle happens then.
+
+**"Basic" is a supertype**, which the search picker had no way to test. It is
+printed on the type line, and that is the whole test for what this predicate may
+honour: a card in a library has no computed characteristics at all (CR 613.1), so
+what is printed on the face is all there is. One clause in
+``engine/search_filters.py``, shared by the engine's re-check, the AI's pick and
+the web picker — which is what keeps a find from being legal in one seat and not
+another.
+
+The two-card production is split from the singular one rather than branched
+inside it: every clause after the count differs ("those cards" not "it", two
+destinations joined by "and the other", an entry state on the first), and sharing
+the code would mean a chain of `if two:` through a production whose whole job is
+to read one shape.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Six new tests, five watched to fail on the round-98 engine, and
+the single-find payload pinned unchanged.
