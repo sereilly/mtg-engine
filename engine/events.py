@@ -234,6 +234,53 @@ def _cast_card(event: Event) -> CardDefinition | None:
     return card if card is not None and hasattr(card, "colors") else None
 
 
+@event_filter("opponent_casts_nth_spell_each_turn")
+def _opponent_nth_cast_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever an opponent casts their **second** spell each turn" (Mangara).
+
+    The ordinal is asked of the *caster's* record of what they have cast this
+    turn — the spell that fired this event is already on it, so "their second"
+    means exactly two. Counted rather than flagged, because CR 121.2's per-spell
+    reading is what makes "their third" a different card and not this one.
+    """
+    caster_index = event.payload.get("caster_index")
+    if caster_index is None:
+        return False
+    if game.players.index(_controller_of(game, permanent)) == caster_index:
+        return False
+    wanted = _NUMBER_WORDS.get(str(trig.condition.payload.get("spell_ordinal", "")))
+    if wanted is None:
+        return False
+    return len(game.players[caster_index].spells_cast_this_turn) == wanted
+
+
+_NUMBER_WORDS = {
+    "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
+}
+
+
+@event_filter("opponent_attackers_declared")
+def _opponent_attack_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever an **opponent** attacks with creatures" (Mangara).
+
+    Only for a permanent whose controller is not the attacking seat, and the
+    intervening-if's number is stamped into the trigger's context here — the
+    count is per *seat*, and this is the one place that knows which seat is
+    asking.
+    """
+    attacking_seat = event.payload.get("seat")
+    seat = game.players.index(_controller_of(game, permanent))
+    if attacking_seat is None or seat == attacking_seat:
+        return False
+    aimed = event.payload.get("aimed_by_seat") or {}
+    event.payload["attackers_aimed"] = int(aimed.get(seat, 0))
+    return True
+
+
 @event_filter("permanent_becomes_untapped")
 def _self_untapped_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event

@@ -655,3 +655,103 @@ def test_a_delayed_trigger_whose_event_has_no_fire_site_refuses(set_pool):
         "less becomes tapped, draw a card.",
         "Invented Card",
     ) is None
+
+
+# --- Mangara, the Diplomat: the other side of two events (round 129) --------
+
+
+def _mangara_board(set_pool, attackers=2):
+    pool = set_pool("M21")
+    mangara = Permanent(card=pool["Mangara, the Diplomat"])
+    p1 = PlayerState(name="P1", life=20, library=[pool["Mountain"]] * 8)
+    p2 = PlayerState(
+        name="P2", life=20, hand=[pool["Shock"], pool["Shock"], pool["Shock"]],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(0, mangara, None)
+    _nosick(mangara)
+    for _ in range(attackers):
+        perm = Permanent(card=pool["Alpine Watchdog"])
+        game._put_permanent_onto_battlefield(1, perm, None)
+        _nosick(perm)
+    return game, p1, p2
+
+
+def _opponent_attacks(game, count):
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "beginning_of_combat")
+    game.advance_combat_phase()
+    game.declare_attackers(1, list(range(count)))
+    game._settle()
+
+
+def test_mangara_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Mangara, the Diplomat"])
+    assert program.supported, program.reason
+    assert {t.condition.kind for t in program.triggered_abilities} == {
+        "opponent_attackers_declared", "opponent_casts_nth_spell_each_turn",
+    }
+
+
+def test_two_attackers_aimed_at_you_draw_a_card(set_pool):
+    """CR 603.4's intervening-if over *this* attack's batch. Not a board count:
+    "those creatures" is exactly the set declared, and counting attacking
+    creatures at large would include another opponent's."""
+    game, p1, _ = _mangara_board(set_pool, attackers=2)
+
+    _opponent_attacks(game, 2)
+
+    assert len(p1.hand) == 1
+
+
+def test_one_attacker_does_not(set_pool):
+    game, p1, _ = _mangara_board(set_pool, attackers=1)
+
+    _opponent_attacks(game, 1)
+
+    assert p1.hand == []
+    # The control: two of them on the same board do draw. Without it this holds
+    # on any engine where the card is unsupported and nothing fires at all.
+    control, control_p1, _ = _mangara_board(set_pool, attackers=2)
+    _opponent_attacks(control, 2)
+    assert len(control_p1.hand) == 1
+
+
+def test_only_the_opponents_second_spell_draws(set_pool):
+    """The ordinal is asked of the *caster's* record — the spell that fired the
+    event is already on it, so "their second" means exactly two. Counted rather
+    than flagged, because that is what makes "their third" a different card."""
+    game, p1, _ = _mangara_board(set_pool)
+    drawn = []
+
+    for _ in range(3):
+        before = len(p1.hand)
+        game.cast_from_hand(1, "Shock", target_player_index=0)
+        game._settle()
+        drawn.append(len(p1.hand) - before)
+
+    assert drawn == [0, 1, 0]
+
+
+def test_your_own_attack_does_not_fire_it(set_pool):
+    """"Whenever an **opponent** attacks" — the filter refuses a permanent whose
+    controller is the attacking seat."""
+    pool = set_pool("M21")
+    game, p1, _ = _mangara_board(set_pool, attackers=0)
+    for _ in range(2):
+        perm = Permanent(card=pool["Alpine Watchdog"])
+        game._put_permanent_onto_battlefield(0, perm, None)
+        _nosick(perm)
+
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "beginning_of_combat")
+    game.advance_combat_phase()
+    game.declare_attackers(0, [1, 2])
+    game._settle()
+
+    assert p1.hand == []
+    # The control, again on a board one seat apart.
+    control, control_p1, _ = _mangara_board(set_pool, attackers=2)
+    _opponent_attacks(control, 2)
+    assert len(control_p1.hand) == 1

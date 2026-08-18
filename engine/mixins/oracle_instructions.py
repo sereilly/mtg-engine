@@ -169,6 +169,15 @@ class OracleInstructionsMixin:
             # and the handler finds it on the stack by identity.
             cast_card=card,
         )
+        # "Whenever an opponent casts their **second** spell each turn"
+        # (Mangara). Round 123's ordinal asked by the other seat: the same
+        # event, the same question, a different player's record — and its own
+        # kind because this one is announced to every seat where that one is
+        # only for the caster's own permanents.
+        emit(
+            self, "opponent_casts_nth_spell_each_turn",
+            subject=card, caster_index=caster_index,
+        )
         emit(self, "enchantment_cast", subject=card, caster_index=caster_index)
         # Prowess (CR 702.108a): each creature the caster controls with the
         # keyword gets +1/+1 until end of turn on a noncreature cast. Asked of

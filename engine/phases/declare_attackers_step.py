@@ -484,6 +484,43 @@ class DeclareAttackersStepMixin:
         as it was announced, and a later removal renumbers that map.
         """
         emit(self, "attackers_declared", seat=controller_index, attackers=list(declared))
+        # "Whenever an **opponent** attacks with creatures" (Mangara). The same
+        # declaration asked from the other side, so it is announced here rather
+        # than given a site of its own — and it carries, per seat, how many of
+        # the batch are aimed at that seat, because CR 603.4's intervening-if
+        # asks about the declaration and a recount at resolution would see a
+        # combat that had moved on.
+        aimed: dict[int, int] = {}
+        for attacker in declared:
+            defender = self._defender_seat_of(attacker)
+            if defender is not None:
+                aimed[defender] = aimed.get(defender, 0) + 1
+        emit(
+            self, "opponent_attackers_declared",
+            seat=controller_index, attackers=list(declared), aimed_by_seat=aimed,
+        )
+
+    def _defender_seat_of(self, attacker: "Permanent") -> int | None:
+        """Which seat *attacker* is attacking — the player, or the controller of
+        the planeswalker it is aimed at.
+
+        Both count as attacking that player for Mangara's purposes, which is
+        what its "you and/or planeswalkers you control" says, so one lookup
+        answers both halves.
+        """
+        index = next(
+            (i for i, perm in enumerate(self.controlled_by(
+                self.controller_index_of(attacker) or 0
+            )) if perm is attacker),
+            None,
+        )
+        if index is None:
+            return None
+        walker_id = self.combat_attacked_planeswalkers.get(index)
+        if walker_id is not None:
+            walker = self.permanent_by_id(walker_id)
+            return self.controller_index_of(walker) if walker is not None else None
+        return self.combat_attackers.get(index)
 
     def _fire_matching_creature_attacks_triggers(
         self, declared: list[Permanent]

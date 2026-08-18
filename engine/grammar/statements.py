@@ -15,7 +15,7 @@ from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import (PT, SELF, WORD)
 from .nouns import (parse_object_filter, parse_player_ref, parse_recipient)
-from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES
+from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, NUMBER_WORDS
 from .stream import TokenStream
 from .amounts import expect_pt
 from .phrases import (
@@ -768,6 +768,21 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
     # sentence states — an "or" that consumed only its first half would leave
     # the rest as unaccounted text and fail the line, which is the safe
     # direction, but reading it as the first half alone would not be.
+    # "two or more of those creatures are attacking you and/or planeswalkers
+    # you control" (Mangara). Every word required: "those creatures" is what
+    # binds the count to this attack's batch, and the aim clause is what makes
+    # it a question about *this* player rather than about attacking at large.
+    if stream.at_word("two") or stream.at_word("one") or stream.at_word("three"):
+        mark_aim = stream.mark()
+        word = stream.peek_word()
+        if word in NUMBER_WORDS:
+            stream.advance()
+            if stream.accept_phrase(
+                "or", "more", "of", "those", "creatures", "are", "attacking",
+                "you", "and", "or", "planeswalkers", "you", "control",
+            ):
+                return ast.AttackersAimedAtYou(NUMBER_WORDS[word])
+        stream.reset(mark_aim)
     if stream.accept_phrase("it", "entered", "from"):
         if stream.accept_word("your"):
             zone = stream.peek_word()

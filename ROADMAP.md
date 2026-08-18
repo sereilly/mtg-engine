@@ -256,42 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 126: one choice, three zones, one subset
-
-*(2026-08-18.)* M21 **275 → 276** — Necromentia.
-
-> Choose a card name other than a basic land card name. Search target
-> opponent's graveyard, hand, and library for any number of cards with that name
-> and exile them. That player shuffles, then creates a 2/2 black Zombie creature
-> token for each card exiled from their hand this way.
-
-Three sentences, one node, one handler — the same reason round 117's reveal is
-one: they share a choice and a pile. "That name" is what the first sentence
-chose, and "each card exiled from their **hand** this way" counts exactly the
-subset the search took from *one* of the three zones. Split apart, the last
-sentence would count a pile nobody had recorded, and a handler counting the
-whole pile makes far more Zombies than the card promises.
-
-**The zones are data, in printed order.** A card searching two of them is the
-same effect over a shorter list, and the order is the order the cards are found
-in.
-
-**CR 202.1 lets a player name any card**, so the prompt's list of suggestions is
-a convenience and never the rule: the engine accepts a name outside it. The one
-printed restriction — not a basic land's name — *is* enforced, at the choice
-rather than in the list. A non-interactive seat names the commonest card it can
-see among the searched zones and obeys the same restriction, because a headless
-game must not make a choice a player could not.
-
-Adding the prompt was one `register_choice`, one renderer and one action, and
-`tests/engine/test_pending_choices.py` failed until all three existed — which is
-exactly what that guard is for. Round 125's choice needed none of them because
-it reused an existing kind.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Five new tests, all watched to fail on the round-125 engine.
-
 ## Round 127: a counter that means nothing, and a trigger with no event
 
 *(2026-08-18.)* M21 **276 → 277** — Mazemind Tome.
@@ -375,3 +339,38 @@ falling back to a scan that would free some other creature.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Six new tests, five watched to fail on the round-127 engine.
+
+## Round 129: two events already announced, asked from the other side
+
+*(2026-08-18.)* M21 **278 → 279** — Mangara, the Diplomat.
+
+> Whenever an opponent attacks with creatures, if two or more of those creatures
+> are attacking you and/or planeswalkers you control, draw a card.
+> Whenever an opponent casts their second spell each turn, draw a card.
+
+Both events were already announced — the attack declaration and the cast — and
+both needed the *other* seat's version. Each gets its own condition kind rather
+than a flag, because the fire sites differ in who is asked: the existing cast
+ordinal is announced for the caster's own permanents, and this one for
+everyone's.
+
+**"Those creatures" binds the count to this declaration.** A board count of
+attacking creatures would include another opponent's, so the number is computed
+at the declaration and stamped into the trigger's context. CR 603.4 checks an
+intervening-if when the trigger would fire *and* again on resolution, and both
+readings want the number the declaration had — a recount at resolution asks
+about a combat that may have moved on.
+
+**"You and/or planeswalkers you control" is one question.** A creature attacking
+a planeswalker is attacking its controller for this purpose, and the card says
+so — so one lookup answers both halves, and the per-seat tally the declaration
+carries is keyed by that answer.
+
+**The ordinal counts, it does not flag.** "Their second spell" is `len(spells
+cast this turn) == 2` with the firing spell already on the list; CR 121.2's
+per-spell reading is what makes "their third" a different card and not this one.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Five new tests, all watched to fail on the round-128 engine — the two
+negative ones carry an in-test control.

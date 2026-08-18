@@ -87,6 +87,10 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # Longest first: the bare phrase below is a strict prefix of this one, so
     # matching it first would leave "from anywhere other than their hand"
     # unaccounted and fail the line.
+    ("opponent_attackers_declared",
+     ("an", "opponent", "attacks", "with", "creatures")),
+    ("opponent_casts_nth_spell_each_turn",
+     ("an", "opponent", "casts", "their", "second", "spell", "each", "turn")),
     ("opponent_casts_spell",
      ("an", "opponent", "casts", "a", "spell", "from", "anywhere", "other",
       "than", "their", "hand")),

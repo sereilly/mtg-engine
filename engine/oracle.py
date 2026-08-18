@@ -255,6 +255,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # one that is not.
     ("attackers_declared",
      r"whenever this creature and at least (?P<others_count>[a-z]+) other creatures attack"),
+    # "Whenever an opponent attacks with creatures, if two or more of those
+    # creatures are attacking you and/or planeswalkers you control, …"
+    # (Mangara, the Diplomat.) The *opponent's* declaration rather than the
+    # controller's, and the intervening-if counts how many of that batch are
+    # aimed at this permanent's controller — a different question from "how many
+    # attacked", which is why the count is not part of the condition.
+    ("opponent_attackers_declared",
+     r"whenever an opponent attacks with creatures"),
+    # "Whenever an opponent casts their **second** spell each turn" (Mangara).
+    # Round 123's ordinal with the other seat asking: same event, same question,
+    # a different player's record. Its own kind because the *fire site* differs
+    # — this one is announced for every seat, that one only for the caster.
+    ("opponent_casts_nth_spell_each_turn",
+     r"whenever an opponent casts their (?P<spell_ordinal>[a-z]+) spell each turn"),
     ("creature_attacks",            r"whenever this creature attacks"),
     # "…blocks **a creature with flying**" (Snarespinner) narrows the source's
     # own block trigger by what it blocked. Before the bare form, which is its

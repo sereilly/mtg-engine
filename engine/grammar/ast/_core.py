@@ -599,6 +599,22 @@ class HadPlus1Counter:
 
 
 @dataclass(frozen=True)
+class AttackersAimedAtYou:
+    """"if **two or more of those creatures** are attacking you and/or
+    planeswalkers you control" (Mangara, the Diplomat).
+
+    CR 603.4's intervening-if over the batch the trigger fired on. Not a board
+    count: "those creatures" is exactly the set declared in this attack, and a
+    count of attacking creatures at large would include another opponent's.
+
+    Both halves of the aim are one question — the player and their walkers — so
+    there is one field and not two: a creature attacking a planeswalker its
+    controller owns is attacking *them* for this purpose, and the card says so.
+    """
+    count: int
+
+
+@dataclass(frozen=True)
 class EnteredFrom:
     """"if it entered from your graveyard **or you cast it from your
     graveyard**" (Archfiend's Vessel) — CR 603.4's intervening-if asking where
@@ -641,7 +657,7 @@ class ItHappened:
 
 Condition = Union[
     CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter, ItWas,
-    EnteredFrom, ItHappened, RevealedCardIs,
+    AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
 ]
 

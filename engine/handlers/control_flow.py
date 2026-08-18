@@ -166,6 +166,13 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
     # seam stamps where the permanent came from, and the cast stamps the zone
     # the spell was cast from. A permanent that entered any other way answers
     # False, which is the reading that leaves the Vessel a plain 1/1.
+    # "if two or more of those creatures are attacking you and/or planeswalkers
+    # you control" (Mangara). The number the *declaration* had, frozen by the
+    # fire site: recounting here would ask about a combat that may have changed.
+    if kind == "attackers_aimed_at_you":
+        aimed = int((context.trigger_context or {}).get("attackers_aimed", 0))
+        return aimed >= int(payload.get("count", 0))
+
     if kind == "entered_from":
         source = context.source_permanent
         if source is None:

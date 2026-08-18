@@ -605,6 +605,14 @@ def _lower_condition(
                 node=condition,
             )
         return {"kind": "coin_flip", "won": condition.won}
+    if isinstance(condition, ast.AttackersAimedAtYou):
+        # The batch rides the trigger's captured context — the fire site records
+        # how many of the declared attackers are aimed at this permanent's
+        # controller — rather than being recounted at resolution, where combat
+        # may already have moved on (CR 603.4 checks the condition when the
+        # trigger would fire *and* again on resolution, and both readings want
+        # the number the declaration had).
+        return {"kind": "attackers_aimed_at_you", "count": condition.count}
     if isinstance(condition, ast.EnteredFrom):
         # CR 603.4's intervening-if, asked of the permanent that fired the
         # trigger. Both halves ride the payload; the evaluator asks about the

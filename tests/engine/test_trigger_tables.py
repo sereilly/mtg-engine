@@ -75,6 +75,9 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "spell_cast": "whenever a player casts a spell",
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
+    "opponent_attackers_declared": "whenever an opponent attacks with creatures",
+    "opponent_casts_nth_spell_each_turn":
+        "whenever an opponent casts their second spell each turn",
     "permanent_becomes_untapped": (
         "whenever this creature becomes untapped",
         "whenever this artifact becomes untapped",
