@@ -256,48 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 128: the untap seam, eleven years late
-
-*(2026-08-18.)* M21 **277 → 278** — Ghostly Pilferer.
-
-> Whenever this creature becomes untapped, you may pay {2}. If you do, draw a card.
-> Whenever an opponent casts a spell from anywhere other than their hand, draw a card.
-> Discard a card: This creature can't be blocked this turn.
-
-**`become_tapped` has existed since the round that found Lifetap firing on one
-path out of seventeen. Its twin did not.** `perm.tapped = False` was written in
-eleven places, so a "becomes untapped" trigger could only ever have seen
-whichever one its implementer wired into — the untap step, probably, and not
-Twiddle, not an untapper's own ability, not the nine other ways a permanent
-untaps. Ghostly Pilferer is the first card in the pool to ask, so the seam came
-first and the trigger second.
-
-CR 701.26b gives the same two exclusions the tap seam records: re-untapping an
-untapped permanent is no state change and no trigger, and a permanent that
-*enters* untapped never becomes untapped — it was never tapped on the
-battlefield.
-
-**The condition kind is the event's name.** Naming it `self_becomes_untapped`
-while the seam emitted `permanent_becomes_untapped` compiled a trigger that
-collected nothing — the shape rounds 93, 105 and 119 each found a different way.
-The identity check that makes it "**this** creature" is an event filter, so a
-board of Pilferers does not all fire when one untaps.
-
-**"From anywhere other than their hand" is a narrowing on the cast's zone**,
-which the stack item has recorded since the cast-permission seam. It now rides
-the cast event too; an event with no zone counts as a cast from the hand, which
-is the ordinary case and the one that must not fire.
-
-**"This creature can't be blocked this turn" is not a target.** Its own
-instruction kind, the same split round 115's "exile it" makes — a handler that
-resolves a target and one that reads `context.source_permanent` share nothing
-beyond the flag they set — and a source already gone grants nothing rather than
-falling back to a scan that would free some other creature.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Six new tests, five watched to fail on the round-127 engine.
-
 ## Round 129: two events already announced, asked from the other side
 
 *(2026-08-18.)* M21 **278 → 279** — Mangara, the Diplomat.
@@ -383,3 +341,43 @@ stays behind with the line-level productions.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Five new tests, all watched to fail on the round-129 engine.
+
+## Round 131: the top of your library is a place you can play from
+
+*(2026-08-18.)* M21 **280 → 281** — Conspicuous Snoop.
+
+> Play with the top card of your library revealed.
+> You may cast Goblin spells from the top of your library.
+> As long as the top card of your library is a Goblin card, this creature has
+> all activated abilities of that card.
+
+Three printed permissions over one question — *what is on top of whose library,
+and who may see or play it?* — so one module answers all three, and Radha's
+"you may look … and you may play lands from the top" joins them next round.
+
+**Not routed through `cast_permissions.py`.** Every grant there is an *effect's*
+— put on `game.cast_permissions` and taken away again — where this is read off
+the permanent's own text for as long as it is in play (CR 113.6d). The same
+distinction round 114 drew for Demonic Embrace, one zone over: a permission that
+is derived simply stops being true, and has nothing to clear.
+
+**Revealed and visible are two permissions, not one.** CR 400.2's public object
+is stronger than "you may look at the top card any time", and the difference is
+only who *else* can see it — so both are asked, and the weaker one does not
+imply the stronger.
+
+**The ability grant's source is a card in a zone.** It is not a permanent, and
+the library changes on every draw, so the grant is *derived on every read*
+rather than stamped — a stamped answer goes stale the moment a card is drawn.
+That ruled out `Permanent.effective_card`, which is a property with no game to
+ask, so the fold lives on a seam the two callers that need it can reach.
+
+Only the **activated** lines are taken, because that is what the card says: a
+Goblin with a dies-trigger on top grants nothing, and handing over the whole
+text would give the Snoop abilities it never had.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Five new tests, all watched to fail on the round-130 engine — with the
+stash taken `-u`, since the module under test is a new file and a tracked-only
+stash would have left it in place and three of the five passing.

@@ -16,6 +16,7 @@ not shipping it.
 
 from __future__ import annotations
 
+import dataclasses
 import pytest
 
 from engine import Game
@@ -2210,3 +2211,85 @@ def test_the_tax_applies_only_to_an_opponents_spell_aimed_at_the_whale(set_pool)
     assert spell_cost_tax(game, 1, shock, [whale]) == (3, ["Pursued Whale"])
     assert spell_cost_tax(game, 1, shock, []) == (0, [])
     assert spell_cost_tax(game, 0, shock, [whale]) == (0, []), "not the controller's own"
+
+
+# --- Conspicuous Snoop: the top of your library (round 131) -----------------
+
+
+def _snoop_board(set_pool, top="Goblin Arsonist"):
+    pool = set_pool("M21")
+    snoop = Permanent(card=pool["Conspicuous Snoop"])
+    p1 = PlayerState(name="P1", life=20, library=[pool[top], pool["Mountain"]])
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(0, snoop, None)
+    _nosick(snoop)
+    return game, p1, snoop, pool
+
+
+def test_conspicuous_snoop_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Conspicuous Snoop"])
+    assert program.supported, program.reason
+
+
+def test_the_top_card_is_public(set_pool):
+    """CR 400.2: "play with the top card revealed" makes it a public object —
+    a stronger permission than "you may look", which is its own line and shows
+    the card to its controller alone."""
+    from engine.library_top import top_is_public, top_is_visible
+
+    game, _, _, _ = _snoop_board(set_pool)
+
+    assert top_is_public(game, 0)
+    assert top_is_visible(game, 0)
+    assert not top_is_public(game, 1)
+
+
+def test_a_goblin_on_top_may_be_cast_and_a_land_may_not(set_pool):
+    """CR 601.3 opens the *top of the library*, not the library — so the
+    permission is asked of the card that is actually on top, and the narrowing
+    is the printed noun phrase read by the same reader every other one uses."""
+    from engine.library_top import top_castable
+
+    game, p1, _, _ = _snoop_board(set_pool)
+    assert top_castable(game, 0, p1.library[0])
+    assert not top_castable(game, 0, p1.library[1]), "only the top card"
+
+    game, p1, _, _ = _snoop_board(set_pool, top="Mountain")
+    assert not top_castable(game, 0, p1.library[0]), "a land is not a Goblin spell"
+
+
+def test_the_snoop_has_the_top_goblins_activated_abilities(set_pool):
+    """A layer-6 grant whose source is a card in a *zone*, not a permanent. It
+    is derived on every read rather than stamped, because the library changes
+    on every draw and a stamped grant would go stale.
+
+    The Goblin is invented: M21 prints none with an activated ability, and the
+    property under test is the shape rather than any particular card.
+    """
+    from tests.helpers import _mk_creature_card
+
+    game, p1, snoop, _ = _snoop_board(set_pool)
+    pinger = _mk_creature_card(
+        "Goblin Pinger", 1, 1, "{R}: This creature deals 1 damage to any target.",
+    )
+    pinger = dataclasses.replace(pinger, type_line="Creature — Goblin")
+    p1.library.insert(0, pinger)
+
+    granted = game.playable_card_of(snoop).oracle_text
+    assert "{R}: This creature deals 1 damage to any target." in granted
+
+    # Draw the Goblin away and the grant goes with it.
+    p1.library.pop(0)
+    assert "deals 1 damage" not in game.playable_card_of(snoop).oracle_text
+
+
+def test_only_activated_abilities_are_granted(set_pool):
+    """"…has all **activated** abilities of that card" — a triggered ability on
+    top grants nothing, and handing over the whole text would give the Snoop
+    abilities it never had. Goblin Arsonist prints only a dies-trigger."""
+    from engine.library_top import granted_top_abilities
+
+    game, _, snoop, _ = _snoop_board(set_pool, top="Goblin Arsonist")
+
+    assert granted_top_abilities(game, snoop) == ()

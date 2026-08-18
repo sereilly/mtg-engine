@@ -209,7 +209,10 @@ class AbilityActivationMixin:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
-        program = compile_card_oracle(permanent.effective_card)
+        # Through the seam rather than off the card directly: Conspicuous Snoop
+        # has the activated abilities of whatever is on top of its controller's
+        # library, and that is a grant no read of the permanent alone can see.
+        program = compile_card_oracle(self.playable_card_of(permanent))
 
         # "Activate only if you've controlled this artifact continuously since
         # the beginning of your most recent turn" (Rocket Launcher). CR 302.6's

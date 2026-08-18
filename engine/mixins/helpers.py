@@ -617,6 +617,24 @@ class GameHelpersMixin:
         emit(self, "permanent_becomes_tapped", subject=permanent)
         return True
 
+    def playable_card_of(self, permanent: "Permanent"):
+        """*permanent*'s effective card, plus any abilities granted by the card
+        on top of its controller's library (Conspicuous Snoop).
+
+        Not folded into ``Permanent.effective_card``: that is a property with no
+        game to ask, and the grant's source is not a permanent at all but a card
+        in a *zone* — one that changes on every draw, so a stamped answer goes
+        stale where a derived one cannot. Asked here, where the game is, by the
+        two callers that need it: the activation path and the ability listing
+        the UI reads.
+        """
+        from ..library_top import granted_top_abilities
+        from ..models import _with_granted_abilities
+
+        base = permanent.effective_card
+        granted = granted_top_abilities(self, permanent)
+        return _with_granted_abilities(base, granted) if granted else base
+
     def become_untapped(self, permanent: "Permanent") -> bool:
         """Turn *permanent* from tapped to untapped, firing "becomes untapped"
         triggers (CR 701.26b). Returns whether it actually changed.

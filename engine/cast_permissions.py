@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 # Zones a permission may open. "hand" appears because a cost waiver ("without
 # paying their mana costs") is the same seam with the ordinary zone.
-PERMISSION_ZONES = ("hand", "graveyard", "exile")
+PERMISSION_ZONES = ("hand", "graveyard", "exile", "library")
 
 
 @dataclass
@@ -165,6 +165,20 @@ def permission_for(
             continue
         if _covers(game, permission, card, zone, as_land=as_land):
             return permission
+    # "You may cast Goblin spells from the top of your library." (Conspicuous
+    # Snoop.) A static permission of a *permanent*, read off its text for as
+    # long as it is in play — so it is derived rather than stored, exactly as
+    # the card's own permission below is, and for the same reason: a stored
+    # grant would have to be taken away when the Snoop leaves.
+    if zone == "library":
+        from .library_top import top_castable
+
+        if top_castable(game, player_index, card):
+            return CastPermission(
+                player_index=player_index, zone="library", mode="play",
+                cards=[card], duration=None, source_name="top of library",
+            )
+        return None
     # The card's own static permission, asked last: a granted one may waive a
     # cost or open a wider zone, and answering with this first would hide it.
     # Only for a card actually in that zone and actually this player's, which is

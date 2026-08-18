@@ -1943,6 +1943,14 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if global_static_for(normalized) is not None:
         return True
+    # "Play with the top card of your library revealed." / "…you may cast Goblin
+    # spells from the top of your library." (Conspicuous Snoop, Radha.) Static
+    # permissions read off the permanent's own text while it is in play
+    # (CR 113.6d), so like every table above they need no instruction.
+    from .library_top import library_top_line
+
+    if library_top_line(normalized):
+        return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",
         "this creature enters with x +1/+1 counters on it",
@@ -2406,6 +2414,10 @@ def _derived_static_claims(
 
     if any(named_protection_line(line) for line in oracle_text.splitlines()):
         claims.append("named_protection")
+    from .library_top import library_top_line
+
+    if any(library_top_line(line) for line in oracle_text.splitlines()):
+        claims.append("library_top")
     return claims
 
 
