@@ -480,10 +480,20 @@ def collect_control_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
             only,
             int(entry["controller_index"]),
             timestamp=int(entry["timestamp"]),
-            label=f"control:{entry['source'].card.name}",
+            # The source is a permanent for a linked change and a *card* for a
+            # spell's until-end-of-turn one (Traitorous Greed) — the label is a
+            # name either way, and asking each object for its own is what keeps
+            # this from having to know which kind it was handed.
+            label=f"control:{_control_source_name(entry['source'])}",
         )
         for entry in control_changes(perm)
     ]
+
+
+def _control_source_name(source) -> str:
+    """The name of whatever recorded a control contribution."""
+    card = getattr(source, "card", None)
+    return getattr(card if card is not None else source, "name", "?")
 
 
 def computed_controller(perm: Permanent, base_seat: int) -> int:

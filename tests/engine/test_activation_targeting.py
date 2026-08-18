@@ -237,13 +237,11 @@ def test_a_shield_on_yourself_or_on_the_source_targets_nothing(by_name):
 # the reason and what would delete the entry. This is the whole of what is left
 # of the shadow parser on the activation side: one line shape, carried by
 # `_UNDERIVABLE_ABILITY_TARGETS` in engine/legality.py.
-_FALLBACK_ABILITIES = {
-    ("Jandor's Saddlebags", 0): (
-        "'Untap target creature' lowers to untap_target_permanent, whose handler "
-        "untaps whatever it is handed; deriving 'permanent' off the kind would "
-        "offer lands. Delete when that handler honours its filter."
-    ),
-}
+#: Empty. Its one entry — Jandor's Saddlebags' "untap target creature" — said
+#: "delete when that handler honours its filter", and round 98 did: the grammar
+#: lowers the line and the derivation answers from the compiled program. There
+#: is no shadow parser left on the activation side.
+_FALLBACK_ABILITIES: dict[tuple[str, int], str] = {}
 
 _REMINDER = re.compile(r"\([^)]*\)")
 # "of your choice" covers the Circle of Protection / Forcefield / Jade Monolith
@@ -298,23 +296,6 @@ def test_the_text_fallback_carries_exactly_what_it_is_acknowledged_for(supported
     }
 
     assert reliant == set(_FALLBACK_ABILITIES)
-
-
-def test_the_line_the_fallback_covers_is_one_the_grammar_also_refuses():
-    """Why that entry is a refusal and not an oversight, stated where it fails.
-
-    The grammar declines to lower "untap target creature" because no untap
-    handler honours a target restriction — the same missing evidence the
-    derivation refuses to invent. When that handler starts honouring its filter
-    the grammar will lower the line, this assertion will fail, and the fallback
-    (and this test) should be deleted together.
-    """
-    from engine.grammar import compile_line
-
-    compiled = compile_line("Untap target creature.", card_name="Jandor's Saddlebags")
-
-    assert compiled.parsed, "the grammar reads the line; it is the lowering that refuses"
-    assert compiled.lowering_error == "no untap handler honors this restriction"
 
 
 def test_the_fallback_still_reaches_the_prompt_it_exists_for(by_name):

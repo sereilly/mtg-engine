@@ -65,23 +65,52 @@ def base_controller(permanent: "Permanent") -> int | None:
     return value if isinstance(value, int) else None
 
 
-def change_control(permanent: "Permanent", seat: int, *, source: "Permanent") -> None:
+def change_control(
+    permanent: "Permanent", seat: int, *, source, until_eot: bool = False
+) -> None:
     """Record that *source* gives control of *permanent* to *seat*.
 
     One contribution per source: re-recording replaces the previous one and
     takes a fresh timestamp, which is what Ghazbán Ogre needs when the life
     lead moves from one player to another on a later upkeep.
+
+    *until_eot* is a lifetime rather than a link (CR 611.2c, Traitorous Greed).
+    A linked change is ended by whatever happens to its source permanent; this
+    one has no permanent to watch — the sorcery that granted it is in a graveyard
+    before the turn is over — so cleanup drops it, the same way every other
+    until-end-of-turn effect ends.
+
+    *source* is therefore not required to be a permanent: for a spell it is the
+    ``CardDefinition``, which is the object the contribution belongs to. Two
+    copies resolving in one turn collapse to one contribution, which is the right
+    answer — both end at the same cleanup, and the later timestamp wins while
+    they overlap.
     """
     kept = [entry for entry in control_changes(permanent) if entry["source"] is not source]
     kept.append({
         "source": source,
         "controller_index": int(seat),
         "timestamp": next_timestamp(),
+        "until_eot": bool(until_eot),
     })
     permanent.metadata[CONTROL_EFFECTS] = kept
 
 
-def end_control_change(permanent: "Permanent", *, source: "Permanent") -> bool:
+def end_until_eot_control_changes(permanent: "Permanent") -> bool:
+    """Drop every until-end-of-turn control contribution. Returns whether any
+    was dropped, so the caller knows whether to recompute."""
+    existing = control_changes(permanent)
+    kept = [entry for entry in existing if not entry.get("until_eot")]
+    if len(kept) == len(existing):
+        return False
+    if kept:
+        permanent.metadata[CONTROL_EFFECTS] = kept
+    else:
+        permanent.metadata.pop(CONTROL_EFFECTS, None)
+    return True
+
+
+def end_control_change(permanent: "Permanent", *, source) -> bool:
     """Drop *source*'s contribution to *permanent*'s control. Returns whether
     there was one. Unconditional by design: a source that recorded nothing has
     nothing to end, so callers never have to check first."""
@@ -112,6 +141,7 @@ def has_control_change(permanent: "Permanent") -> bool:
 
 __all__ = [
     "BASE_CONTROLLER", "CONTROL_EFFECTS", "base_controller", "change_control",
-    "control_changes", "end_control_change", "has_control_change",
+    "control_changes", "end_control_change", "end_until_eot_control_changes",
+    "has_control_change",
     "set_base_controller",
 ]

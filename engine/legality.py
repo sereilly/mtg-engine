@@ -147,9 +147,17 @@ _FILTERABLE_ABILITY_KINDS = {
 # It goes away when that handler honours its filter — at which point the
 # grammar lowers the line with its restriction, the derivation answers, and
 # tests/engine/test_activation_targeting.py fails on this entry being stale.
-_UNDERIVABLE_ABILITY_TARGETS: tuple[tuple[re.Pattern, dict], ...] = (
-    (re.compile(r"\buntap target creature\b"), {"kind": "creature"}),
-)
+#: Empty, and that is the whole point: this was the last of the shadow parser on
+#: the activation side. Its one entry covered "untap target creature", which the
+#: grammar refused to lower because ``untap_target_permanent`` ignored filters —
+#: so deriving "creature" off the instruction kind would have offered lands.
+#: Round 98 taught that handler its noun phrase, the grammar lowers the line, and
+#: the derivation answers from the compiled program like everything else.
+#:
+#: A new entry here is a claim that a program *genuinely cannot* describe what a
+#: line targets. Keep it empty if you can.
+_UNDERIVABLE_ABILITY_TARGETS: tuple[tuple[re.Pattern, dict], ...] = ()
+
 
 
 def _fallback_activation_spec(source_line: str) -> dict | None:

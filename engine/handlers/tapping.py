@@ -65,6 +65,30 @@ def untap_target_land(game: Game, instruction: OracleInstruction, context: Oracl
 
 @effect_handler("untap_target_permanent")
 def untap_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Untap target permanent", and the narrowed forms.
+
+    The narrowing is applied here rather than refused at lowering (which is what
+    sent "untap target **land**" to a handler of its own). An explicitly chosen
+    non-matching permanent fizzles instead of sliding onto an arbitrary legal
+    one — the same rule the filtered tap beside it follows.
+    """
+    narrowed = any(
+        key in instruction.payload
+        for key in ("type_filter", "subtype_filter", "color_filter")
+    )
+    if narrowed:
+        perm = resolve_target_permanent(
+            game, context,
+            predicate=lambda p: permanent_matches_filter(p, instruction.payload),
+            fallback_on_invalid_choice=False,
+        )
+        if perm is not None:
+            perm.tapped = False
+        game.log.append(
+            f"Untapped {perm.card.name}" if perm is not None
+            else "No valid permanent to untap"
+        )
+        return True, "resolved"
     target = context.target
     untapped = game._tap_or_untap_target(
         target, make_tapped=False, target_permanent_index=context.target_permanent_index

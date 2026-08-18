@@ -8,7 +8,7 @@ from ..oracle_types import OracleInstruction
 from ..pt import set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import make_token_card
-from ._common import resolve_amount, resolve_target_permanent
+from ._common import permanent_matches_filter, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -58,6 +58,50 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         "duration": payload.get("duration", "end_of_turn"),
     })
     game.log.append(f"{context.card.name} set up a delayed trigger for this turn")
+    return True, "resolved"
+
+
+@effect_handler("gain_control_until_eot")
+def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Gain control of target creature until end of turn." (Traitorous Greed.)
+
+    A CR 613 layer-2 *contribution* with a lifetime rather than a move, so
+    nothing has to be put back: cleanup drops the contribution and whatever
+    remains decides. ``base_controller_index`` is untouched, which is what makes
+    the reversion correct and CR 108.3 ownership still read off the original
+    seat.
+
+    The contribution belongs to the **spell**, not to a permanent — there is no
+    permanent to belong to — so the card is its source. Two copies in one turn
+    collapse to one contribution, which is the right answer: both end at the same
+    cleanup.
+    """
+    from ..control import change_control
+
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    target = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: permanent_matches_filter(perm, filters),
+        fallback_on_invalid_choice=False,
+    )
+    if target is None:
+        game.log.append(f"{context.card.name}: no valid permanent to gain control of")
+        return True, "resolved"
+    seat = game.players.index(context.caster)
+    change_control(target, seat, source=context.card, until_eot=True)
+    game._sync_control()
+    context.results["controlled_permanent"] = target.permanent_id
+    # The sentences after this one are *about the same creature* ("Untap that
+    # creature. It gains haste…"), and it is now on a different battlefield.
+    # `context.target` is the seat the remaining steps resolve their target id
+    # against — deliberately scoped, so a stale id cannot resolve to a permanent
+    # that changed hands between the choice and the resolution. This effect is
+    # what changed those hands, one step ago, so the scope is updated rather than
+    # widened: the id still has to name a permanent that seat controls.
+    context.target = context.caster
+    game.log.append(
+        f"{context.caster.name} gains control of {target.card.name} until end of turn"
+    )
     return True, "resolved"
 
 

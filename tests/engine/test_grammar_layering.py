@@ -43,7 +43,13 @@ PARSE_LAYERS = ["phrases", "effects", "statements", "costs", "parser"]
 LOWER_LAYERS = ["lowering", "statics", "lower"]
 
 EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game"]
-LOWERING_FAMILIES = EFFECT_FAMILIES
+# The lowering side carries one family the parsing side does not. Zone movement
+# is one `return`/`exile`/`put` production each on the way in and a decision
+# about *which handler moves the object* on the way out, so `lowering/board.py`
+# outgrew the 1,000-line cap while `effects/board.py` stayed small. A near-empty
+# `effects/zones.py` would buy back the symmetry and cost the thing symmetry is
+# for — one home per template per side, findable from the family name.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 

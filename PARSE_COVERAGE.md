@@ -44,8 +44,8 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 208 |
-| card_hooks bespoke (name-keyed) | 140 |
+| parse rule | 209 |
+| card_hooks bespoke (name-keyed) | 139 |
 | activation cost | 113 |
 | trigger table | 78 |
 | keyword table | 59 |

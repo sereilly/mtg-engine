@@ -19,10 +19,10 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | LEA | 290 | 388 | 78.9% | 77.6% | 41.8% | 149 |
 | LEB | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
-| ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
-| 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 76.3% | 73.2% | 50.3% | 206 |
-| **All (shipped)** | **1248** | **1663** | **78.1%** | **76.5%** | **41.8%** | **634** |
+| ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
+| 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
+| M21 *(measured)* | 285 | 503 | 76.5% | 73.4% | 50.5% | 207 |
+| **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -53,14 +53,14 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 3 | 3 | unrecognized discard cost |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | expected something to shield |  |
-| 2 | 1 | no untap handler honors this restriction |  |
 | 2 | 2 | expected 'unless defending player controls' |  |
 | 2 | 2 | a where-clause pump needs a single target |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | expected a destination zone after 'return' |  |
 
 ## Cards executing through the grammar
 
-634 cards, 695 lines.
+636 cards, 697 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -630,6 +630,9 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 - **Jandor's Ring**
   - `{2}, {T}, Discard the last card you drew this turn: Draw a card.`
   - `{2}, {T}, Discard the last card you drew this turn: Draw a card.`
+- **Jandor's Saddlebags**
+  - `{3}, {T}: Untap target creature.`
+  - `{3}, {T}: Untap target creature.`
 - **Jayemdae Tome**
   - `{4}, {T}: Draw a card.`
   - `{4}, {T}: Draw a card.`
@@ -1279,6 +1282,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{T}, Sacrifice this artifact: Exile target player's graveyard.`
 - **Track Down**
   - `Scry 3, then reveal the top card of your library. If it's a creature or land card, draw a card. (To scry 3, look at the top three cards of your library, then put any number of them on the bottom and the rest on top in any order.)`
+- **Traitorous Greed**
+  - `Gain control of target creature until end of turn. Untap that creature. It gains haste until end of turn. Add two mana of any one color. (The creature can attack and {T} this turn.)`
 - **Tranquil Cove**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {W} or {U}.`

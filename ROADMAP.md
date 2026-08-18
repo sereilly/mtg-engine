@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 247/285) to the full release line - **137 sets, 33,594
+M21 measured at 248/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–94 — lives in git history at and before
-commit `bdd7e8b`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–95 — lives in git history at and before
+commit `50e351a`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,50 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 95: how much any-colour mana is data
-
-*(2026-08-17.)* M21 **244 → 245** — Sanctum of Fruitful Harvest, and a card hook
-retired.
-
-> At the beginning of your first main phase, add X mana of any one color, where X
-> is the number of Shrines you control.
-
-**The whole card was one number.** Everything else compiled. "Add X mana of any
-one color" refused because `add_mana_from_text`'s any-colour path is
-`_add_mana_from_text` **probing the clause text** for the literal phrase "one
-mana of any color" — it recognizes one mana and no other count, so any other
-number lowered onto it would have added nothing while reporting success. That is
-why the refusal was written rather than a guess, and round 54's "an X nothing
-reads" guard is what found it before a card did.
-
-The count travels on the payload now. It is an `Amount`, so a printed digit, an
-X, and an X *defined by a where-clause* are the same instruction with different
-data — and the where-clause resolves through `count_from_payload`, the one
-evaluator every computed amount in the engine shares. "Any **one** color" stays
-one choice for the whole clause: the count multiplies a single symbol rather than
-asking again per mana.
-
-**Black Lotus was the card that had been paying for the old shape.** "{T},
-Sacrifice this artifact: Add three mana of any one color" kept a name-keyed
-`sacrifice_self_for_mana` hook for exactly as long as "three" had nowhere to go.
-The sacrifice is an ordinary activation cost and the mana an ordinary
-instruction, so the decomposition is the card as printed — and the guards said so
-before the ROADMAP did: `test_card_lines` failed on the entry as *dead* the
-moment the number could travel. **The hook is deleted**, and both ratchets
-tightened onto the improvement: hooked cards 24.2% → **24.0%**, entries per 100
-supported 26.0 → **25.8**, executed lines 41.6% → **41.8%**.
-
-The clause text still rides along, and that is not a leftover: `activation.py`
-injects the chosen colour by keying on the `any_color` payload flag, and the AI's
-mana valuation reads the number — which now comes off the payload, with 1 as the
-honest floor for a count that is an X the valuation cannot have.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **one
-hook removed**. Seven new tests, six watched to fail on the round-94 engine;
-three tests that asserted the old refusals were rewritten to state what replaced
-them.
-
 ## Round 96: a sweep over what something is attached to
 
 *(2026-08-17.)* M21 **245 → 246** — Turn to Slag.
@@ -374,3 +330,54 @@ a protection from the wrong things, and doing nothing is the honest failure; the
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Six new tests, all six watched to fail on the round-96 engine.
+
+## Round 98: a control change with a lifetime of its own
+
+*(2026-08-17.)* M21 **247 → 248** — Traitorous Greed, and the last text fallback
+on the activation side.
+
+> Gain control of target creature until end of turn. Untap that creature. It
+> gains haste until end of turn. Add two mana of any one color.
+
+**Four sentences, and every one of them needed something.** The mana came free
+from round 95.
+
+*The control change is a lifetime, not a link.* Every control change the engine
+had was tied to a **permanent** — Aladdin's lasts as long as you control
+Aladdin, and ending it is watching that permanent. A sorcery has no permanent to
+watch: it is in a graveyard before the turn is over. So the contribution carries
+`until_eot` and cleanup drops it, which CR 611.2c is. Dropping the contribution
+*is* the reversion — the permanent never moved, so whatever contributions remain
+simply decide again, and `base_controller` is untouched throughout.
+
+*The pronoun sentences follow the creature across battlefields.* "Untap that
+creature" is the same creature one sentence later, and it is on a different
+battlefield by then. A target is deliberately scoped to the seat it was chosen
+from, so a stale id cannot resolve to a permanent that changed hands between the
+choice and the resolution — the docstring says so in as many words. This effect
+is what changed those hands, one step ago, so the scope **moves with it** rather
+than being widened: the id still has to name a permanent that seat controls.
+
+*"Untap that creature" is a verb bound to the previous target*, which needed a
+sibling to the pronoun-*grant* rider. One verb at a time, deliberately: each
+imperative has to be checked against the shape its handler implements.
+
+**And that untap retired the last shadow parser on the activation side.**
+`untap_target_permanent` ignored filters, so "untap target creature" refused at
+lowering, so `engine/legality.py` carried a regex fallback to derive the picker —
+whose acknowledgement said, in the test's own words, *"delete when that handler
+honours its filter"*. It honours it now. `_UNDERIVABLE_ABILITY_TARGETS` is
+**empty**, and every activation prompt in the pool is derived from the compiled
+program.
+
+**`lowering/board.py` crossed 1,000 lines**, so zone movement moved to
+`lowering/zones.py`. It has no twin in `effects/`, and the guard now says why:
+the parsing side of these templates is one production each, while the lowering
+side is where the work is — a near-empty `effects/zones.py` would buy back the
+symmetry and cost the thing symmetry is for.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**; executed lines 41.8% → **41.9%**. Five new tests, four watched to
+fail on the round-97 engine, and two obsolete fallback tests deleted with the
+fallback they described.

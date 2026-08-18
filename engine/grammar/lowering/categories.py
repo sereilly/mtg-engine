@@ -118,6 +118,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "mark_text_modified": "text_change",
     # A control change whose duration is linked to its source (CR 611.3).
     "steal_target_permanent_linked_to_self": "control",
+    "gain_control_until_eot": "control",
     "sacrifice_self": "zones",
     # The controller-chosen sacrifice (Dire Fleet Warmonger's optional cost).
     "sacrifice_matching_permanent": "zones",

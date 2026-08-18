@@ -41,6 +41,10 @@ from __future__ import annotations
 # position (the clause right of an ability's colon).
 ACTIVATED_LABELS: dict[str, str] = {
     "add_counter_to_self": "activated_counter",
+    # Jandor's Saddlebags. Declared here rather than taken from the "tapping"
+    # category default, so the card keeps the bucket it reported before the
+    # grammar learned to lower its line — the whole reason this table exists.
+    "untap_target_permanent": "activated_untap",
     # Historically "triggered_counter" — the label Dwarven Weaponsmith's hook
     # declared for this kind before the grammar learned the lowering. Kept so
     # the card is not silently re-bucketed; the misnomer is the legacy

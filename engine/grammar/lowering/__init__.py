@@ -79,11 +79,18 @@ from .characteristics import (
     _lower_become_color,
     _lower_change_text,
 )
+from .zones import (
+    _EXILED_CREATURE,
+    _reads_no_return_restriction,
+    _lower_put_onto_battlefield,
+    _lower_return_to_zone,
+    _lower_exile,
+    _lower_put_on_library_top,
+    _fused_exile_then_controller_life,
+)
 from .board import (
     _lower_phase_out,
     _lower_put_on_library_bottom,
-    _lower_put_on_library_top,
-    _lower_put_onto_battlefield,
     _DESTROY_ALL_KINDS,
     _BASIC_LAND_TYPES,
     _BLOCK_PAIR_EVENTS,
@@ -91,17 +98,12 @@ from .board import (
     _lower_delayed_destroy,
     _lower_doesnt_untap_next_step,
     _lower_tap,
-    _reads_no_return_restriction,
-    _lower_return_to_zone,
     _lower_tap_or_untap,
     _lower_regenerate,
     _lower_sacrifice_unless_pay,
     _LINKED_STEAL_FILTER,
     _lower_gain_control,
     _lower_sacrifice,
-    _EXILED_CREATURE,
-    _lower_exile,
-    _fused_exile_then_controller_life,
 )
 from .cards import (
     _lower_reveal_top,

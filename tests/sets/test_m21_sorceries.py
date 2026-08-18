@@ -887,3 +887,90 @@ def test_a_creature_dying_to_the_damage_still_loses_its_equipment(set_pool):
 
     assert not game.is_on_battlefield(victim)
     assert not game.is_on_battlefield(sword)
+
+
+# --- Round 98: a control change with a lifetime of its own ------------------
+
+
+def _greed_board(set_pool, tapped=True):
+    pool = set_pool("M21")
+    victim = Permanent(card=pool["Gale Swooper"], tapped=tapped)
+    p1 = PlayerState(name="P1", hand=[pool["Traitorous Greed"]])
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    return game, p1, victim
+
+
+def _cast_greed(game, colour="R"):
+    return game.cast_from_hand(
+        0, "Traitorous Greed",
+        target_player_index=1, target_permanent_index=0, new_color=colour,
+    )
+
+
+def test_traitorous_greed_compiles_supported(set_pool):
+    """Four sentences, and every one of them needed something. The control
+    change is a *lifetime* rather than a link — the sorcery that granted it is
+    in a graveyard before the turn ends, so there is no permanent to watch and
+    CR 611.2c ends it at cleanup instead."""
+    program = compile_card_oracle(set_pool("M21")["Traitorous Greed"])
+    assert program.supported, program.reason
+
+
+def test_it_takes_untaps_hastes_and_pays(set_pool):
+    game, p1, victim = _greed_board(set_pool)
+
+    result = _cast_greed(game)
+    assert result.supported, result.details
+    game._settle()
+
+    assert game.controller_index_of(victim) == 0
+    assert not victim.tapped
+    assert game._has_keyword(victim, "haste")
+    assert p1.mana_pool["R"] == 2
+
+
+def test_the_pronoun_sentences_follow_the_creature_across_battlefields(set_pool):
+    """"Untap **that creature**" is the same creature one sentence later — and
+    it is on a different battlefield by then. A target is scoped to the seat it
+    was chosen from, so a stale id cannot resolve to a permanent that changed
+    hands; this effect is what changed those hands, one step ago, so the scope
+    moves with it rather than being widened."""
+    game, _p1, victim = _greed_board(set_pool)
+
+    _cast_greed(game)
+    game._settle()
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Gale Swooper"]
+    assert not victim.tapped, "the untap found it on its new battlefield"
+
+
+def test_control_reverts_at_cleanup_without_moving_anything(set_pool):
+    """Dropping the contribution *is* the reversion: the permanent never moved,
+    so whatever contributions remain simply decide again.
+    ``base_controller`` is untouched throughout, which is what makes the
+    reversion correct and CR 108.3 ownership still read off the original seat."""
+    from engine.control import base_controller
+
+    game, _p1, victim = _greed_board(set_pool)
+    _cast_greed(game)
+    game._settle()
+    assert base_controller(victim) == 1
+
+    game.resolve_cleanup_step(0)
+
+    assert game.controller_index_of(victim) == 1
+    assert [p.card.name for p in game.controlled_by(1)] == ["Gale Swooper"]
+
+
+def test_an_untimed_control_change_still_refuses(set_pool):
+    """The duration is required, and required to be one the engine ends. An
+    untimed steal is a permanent control change and reverts under completely
+    different circumstances."""
+    from engine.grammar import compile_line
+
+    result = compile_line("Gain control of target creature.")
+
+    assert not result.parsed

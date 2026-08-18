@@ -44,9 +44,15 @@ def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:
     subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected what to gain control of")
+    # "…until end of turn" (Traitorous Greed). A lifetime of its own rather than
+    # one tied to a permanent that is still there: the spell that granted it is
+    # in a graveyard by the time the turn ends, so nothing can be watched for —
+    # CR 611.2c ends it at cleanup instead.
+    if stream.accept_phrase("until", "end", "of", "turn"):
+        return ast.GainControl(subject, "until_end_of_turn")
     if not stream.accept_phrase("for", "as", "long", "as", "you", "control", "this"):
         raise stream.error(
-            "no handler for a control change without the source-linked duration"
+            "no handler for a control change without a duration the engine ends"
         )
     # The noun after "this" names the source's own type and adds nothing the
     # payload carries, but it still has to be consumed for the line to be

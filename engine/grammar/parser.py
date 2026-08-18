@@ -181,6 +181,37 @@ def _statement_bound_target(statement: ast.Statement) -> ast.TargetSpec | None:
     return None
 
 
+def _parse_pronoun_verb_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``Untap that creature.`` after a sentence that chose one.
+
+    The sibling of :func:`_parse_pronoun_grant_rider`: that one binds the
+    previous target to a *grant*, this one to a plain imperative verb. "Untap
+    that creature" (Traitorous Greed) has no target of its own — the spell chose
+    one sentence ago, and re-parsing it as a fresh target would raise a second
+    picker for a choice CR 601.2c says was made once.
+
+    Only "untap" today, and one verb at a time deliberately: each imperative has
+    to be checked against the shape its handler implements, and a table of verbs
+    admitted wholesale would claim sentences nothing performs.
+    """
+    target = _statement_bound_target(steps[-1]) if steps else None
+    if target is None:
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("untap"):
+        return None
+    if not (
+        stream.accept_phrase("that", "creature")
+        or stream.accept_phrase("that", "permanent")
+        or stream.accept_word("it")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.Untap(target)
+
+
 def _parse_pronoun_grant_rider(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> ast.Statement | None:
@@ -444,6 +475,10 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if _attach_when_you_do(stream, steps):
                 continue
             if _attach_spend_only(stream, steps):
+                continue
+            pronoun_verb = _parse_pronoun_verb_rider(stream, steps)
+            if pronoun_verb is not None:
+                steps.append(pronoun_verb)
                 continue
             pronoun_grant = _parse_pronoun_grant_rider(stream, steps)
             if pronoun_grant is not None:

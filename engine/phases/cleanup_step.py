@@ -11,6 +11,7 @@ P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
 from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissions
 from ..models import Permanent
 from ..keywords import clear_until_eot_keywords
+from ..control import end_until_eot_control_changes
 from ..mixins._constants import _EOT_METADATA_KEYS
 from ..shields import clear_shields
 
@@ -37,6 +38,7 @@ class CleanupStepMixin:
 
         active_player = self.players[player_index]
         cleanup_completed = True
+        control_reverted = False
         if not active_player.has_no_max_hand_size:
             max_hand_size = 7
             excess = max(0, len(active_player.hand) - max_hand_size)
@@ -121,9 +123,21 @@ class CleanupStepMixin:
                 # together, in one place, rather than needing a metadata key per
                 # keyword listed in _EOT_METADATA_KEYS.
                 clear_until_eot_keywords(permanent)
+                # CR 611.2c: an until-end-of-turn control change ends here too.
+                # Dropping the contribution *is* the reversion — the permanent
+                # never moved, so whatever contributions remain simply decide
+                # again (engine/control.py).
+                if end_until_eot_control_changes(permanent):
+                    control_reverted = True
                 # Sandals of Abdallah: the linked "when that creature dies this
                 # turn" destruction expires with the islandwalk grant above.
                 permanent.metadata.pop("on_death_destroy_permanents", None)
+        # A control change that ended is a change to who controls what, so the
+        # battlefield projection and every derived characteristic are rebuilt —
+        # the same pair `change_control`'s callers run when one begins.
+        if control_reverted:
+            self._sync_control()
+            self._recompute_continuous_effects()
         # 610.3: return all creatures exiled "until end of turn" to their owners' battlefields
         returned_from_exile = list(self.exile_until_eot)
         self.exile_until_eot.clear()
