@@ -420,3 +420,129 @@ def test_niambi_cannot_activate_with_no_legendary_card_in_hand(set_pool):
     assert [c.name for c in p1.hand] == ["Alpine Watchdog", "Mountain"]
     assert not niambi.tapped
     assert p1.graveyard == []
+
+
+# --- Rin and Seri: a cast trigger narrowed by tribe (round 116) -------------
+
+
+def _rin_board(set_pool, hand=(), extra=()):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20, hand=[pool[name] for name in hand])
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    rin = Permanent(card=pool["Rin and Seri, Inseparable"])
+    game._put_permanent_onto_battlefield(0, rin, None)
+    _nosick(rin)
+    for name in extra:
+        game._put_permanent_onto_battlefield(0, Permanent(card=pool[name]), None)
+    return game, p1, pool
+
+
+def test_rin_and_seri_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Rin and Seri, Inseparable"])
+    assert program.supported, program.reason
+
+
+def test_casting_a_dog_spell_makes_a_cat_and_a_cat_spell_makes_a_dog(set_pool):
+    """A creature *subtype* narrowing on a cast trigger. The table narrowed by
+    card type and explicitly refused a subtype, because the word list was
+    exactly what the event filter tested — a subtype admitted there would have
+    been dropped and the trigger would have fired on every spell."""
+    game, _, _ = _rin_board(
+        set_pool, hand=["Alpine Watchdog", "Pridemalkin", "Mountain"],
+    )
+
+    game.cast_from_hand(0, "Alpine Watchdog")
+    game._settle()
+    assert "Cat Token" in [p.card.name for p in game.controlled_by(0)]
+    assert "Dog Token" not in [p.card.name for p in game.controlled_by(0)]
+
+    game.cast_from_hand(0, "Pridemalkin")
+    game._settle()
+    assert "Dog Token" in [p.card.name for p in game.controlled_by(0)]
+
+
+def test_casting_a_spell_of_neither_tribe_makes_nothing(set_pool):
+    game, _, _ = _rin_board(set_pool, hand=["Mountain", "Alpine Watchdog"])
+    before = sorted(p.card.name for p in game.controlled_by(0))
+
+    game.cast_from_hand(0, "Mountain")
+    game._settle()
+
+    assert sorted(p.card.name for p in game.controlled_by(0)) == sorted(
+        before + ["Mountain"]
+    )
+    # The control: a Dog spell on the same board *does* make a token. Without it
+    # this holds on any engine where the card is unsupported and no trigger
+    # fires at all.
+    game.cast_from_hand(0, "Alpine Watchdog")
+    game._settle()
+    assert "Cat Token" in [p.card.name for p in game.controlled_by(0)]
+
+
+def test_the_cast_narrowing_carries_the_subtype(set_pool):
+    """The narrowing has to survive into the condition payload, because that is
+    what the event filter tests. A subtype the table consumed and did not record
+    would be a trigger that fires on every spell — which is precisely why the
+    table refused a subtype until the filter could test one."""
+    pool = set_pool("M21")
+    program = compile_card_oracle(pool["Rin and Seri, Inseparable"])
+
+    narrowings = sorted(
+        t.condition.payload.get("cast_subtype") for t in program.triggered_abilities
+    )
+    assert narrowings == ["cat", "dog"]
+    assert all(t.supported for t in program.triggered_abilities)
+
+
+def test_the_subtype_is_read_off_the_printed_subtype_not_the_type_line(set_pool):
+    """A substring search of the type line would let a tribe answer for a longer
+    word, and would let a card *type* answer a tribe — which is the type
+    narrowing's job, one row above. The filter asks the same printed-subtype
+    reader the layer seed uses."""
+    from engine.layer_bridge import printed_shape
+
+    pool = set_pool("M21")
+    _, dog = printed_shape(pool["Alpine Watchdog"])
+    _, cat = printed_shape(pool["Pridemalkin"])
+    _, land = printed_shape(pool["Mountain"])
+
+    assert "dog" in dog and "dog" not in cat and "dog" not in land
+    assert "cat" in cat and "cat" not in dog
+
+
+def test_rin_and_seri_counts_each_tribe_separately(set_pool):
+    """Two steps of one ability, each with its own count. Rin and Seri is a Dog
+    Cat, so it answers both — three Dogs and two Cats on this board."""
+    game, p1, _ = _rin_board(
+        set_pool, extra=["Alpine Watchdog", "Bolt Hound", "Pridemalkin"],
+    )
+    opponent = game.players[1]
+
+    result = game.activate_permanent_ability(
+        0, "Rin and Seri, Inseparable", target_player_index=1,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert opponent.life == 17
+    assert p1.life == 22
+
+
+def test_a_counted_damage_goes_through_the_one_evaluator(set_pool):
+    """The general form. Karma's fused kind stays, because its *recipient* is
+    the upkeep's player rather than a chosen target — a shape this cannot
+    express."""
+    from engine.grammar import compile_line
+
+    compiled = compile_line(
+        "This creature deals damage to any target equal to the number of Dogs "
+        "you control."
+    )
+    (instruction,) = compiled.instructions
+
+    assert instruction.kind == "deal_damage"
+    assert instruction.payload["x_from_count"] == {
+        "zone": "battlefield", "owner": "you",
+        "filter": {"type_filter": "creature", "subtype_filter": "dog"},
+    }

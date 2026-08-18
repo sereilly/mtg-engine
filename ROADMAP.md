@@ -256,71 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 113: three Auras that reported supported and did nothing
-
-*(2026-08-18.)* M21 **262 → 263** — Faith's Fetters.
-
-> Enchant permanent
-> When this Aura enters, you gain 4 life.
-> Enchanted permanent can't attack or block, and its activated abilities can't
-> be activated unless they're mana abilities.
-
-One card, and it needed four things — three of which were defects it merely
-walked into.
-
-**The restriction table and the support gate were two copies of one list.**
-Every pattern in `_RESTRICTIONS` was also written out in `_TEMPLATES`: one
-deciding what an Aura *does*, one deciding whether the card is supported. Adding
-Faith's Fetters to the first made the restriction derive perfectly, apply
-perfectly, and the card still reported unsupported — the exact failure this
-file's other comments keep describing. `aura_effect_claim` now falls through to
-`aura_continuous_claim`, which asks the derivation tables, and the six duplicated
-entries are gone.
-
-**The attach path was a cascade of per-noun branches** — creature, land, Wall,
-artifact, enchantment — each re-deriving "does this permanent answer the enchant
-clause?" from the noun it was written for. A sixth noun needed a sixth branch, so
-"Enchant **permanent**" attached to nothing and the Aura went to the graveyard as
-though its target had left. The general branch asks
-`permanent_matches_enchant_noun`, which is the question the *cast* already
-answered; a seventh noun needs no code.
-
-Its entry guard was a third reading of the same thing, and a worse one: it
-searched for a `spell_pattern` instruction whose value begins "enchant", which
-depends on the rest of the card. Faith's Fetters compiles a life-gain trigger, so
-its spell patterns are about life, and the function returned before the cascade
-could run.
-
-**An Aura's ordinary entry trigger fired nowhere.** The resolution path skipped
-the generic enters-the-battlefield trigger for *every* Aura, on the strength of
-the two whose entry text `_apply_aura_effect` performs itself (Animate Dead's
-reanimation, Earthbind's conditional damage). So an Aura whose entry trigger
-compiled to a perfectly ordinary instruction did nothing at all — **Rousing Read
-drew no cards, Setessan Training drew none**, both reporting supported, both
-shipped in the measured set. `_apply_aura_effect` now *returns* whether it ran
-the entry text and the caller does the general thing otherwise, after the attach
-rather than before it.
-
-**And "This creature can't block." was enforced nowhere at all.** It compiles to
-a `cant_block` instruction and reports the card supported;
-`engine/combat_restrictions.py`'s comment named `phases/declare_blockers_step` as
-the enforcement site and that file had never mentioned the kind. Every question
-in `_can_block_attacker` is about the *attacker*, which is how a restriction on
-the blocker came to have no home. No card in the pool prints the bare line today,
-which is why it went unnoticed — it is one of the commonest templates in Magic,
-and Pursued Whale's token prints it.
-
-CR 605.1a's mana exception is part of the restriction's *name*, because the
-clause without it is strictly harsher: an Aura that stopped a land tapping for
-mana would lock its controller out of the game rather than shut off one ability.
-`is_mana_ability` is one predicate asked by the one caller that needs it.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Eleven new tests, nine watched to fail on the round-112 engine; the two
-that pass there carry an in-test control, because "the ability still worked" is
-also what an unattached Aura looks like.
-
 ## Round 114: one card, two prices
 
 *(2026-08-18.)* M21 **263 → 264** — Demonic Embrace.
@@ -421,3 +356,49 @@ gamble.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Seven new tests, all watched to fail on the round-114 engine.
+
+## Round 116: a tribe is not a card type, and a count is a count
+
+*(2026-08-18.)* M21 **265 → 266** — Rin and Seri, Inseparable.
+
+> Whenever you cast a Dog spell, create a 1/1 green Cat creature token.
+> Whenever you cast a Cat spell, create a 1/1 white Dog creature token.
+> {R}{G}{W}, {T}: Rin and Seri deals damage to any target equal to the number
+> of Dogs you control. You gain life equal to the number of Cats you control.
+
+**The cast trigger narrowed by card type and refused a subtype on purpose.**
+Its word list was exactly what the event filter tested against the type line, so
+the comment beside it said a subtype word "must keep refusing rather than
+compile and fire on every spell" — a refusal recorded as a known limit rather
+than left to be discovered. Both front ends carried the same list and the same
+note. Lifting it meant teaching the filter first: the subtype is read through
+the printed-subtype reader the layer seed uses, not searched for in the type
+line, so a tribe cannot answer for a longer word and a card type cannot answer
+a tribe. The vocabulary supplies the words, so a set adding a tribe needs
+`fetch_vocabulary.py` and nothing here.
+
+**Counted damage was one card wearing a general shape.** "Deals damage equal to
+the number of …" had exactly one lowering — Karma's, fused down to a kind whose
+handler damages the player whose upkeep is resolving. Everything needed for the
+general form was already there: `count_spec` describes the noun phrase,
+`x_from_count` carries it, and the instruction executor resolves it into
+`x_value` before any handler runs. So the general case is `deal_damage` with a
+counted amount, and Karma's kind stays because its *recipient* is not something
+this shape can express.
+
+The life gain took the same route, and that is the point of routing it there:
+the ability counts **Dogs** for its damage and **Cats** for its life in one
+sentence pair, so the two steps carry two specs and the executor resolves each
+against its own instruction. A second counter with its own spelling of the spec
+is exactly the drift `count_spec` exists to prevent.
+
+Rin and Seri is a Dog **Cat**, so it answers both counts — which is the check
+worth writing down, because a tribal count that read the type line as a whole
+would have found it once and a matcher asking for a single subtype would have
+missed it entirely.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Seven new tests, six watched to fail on the round-115 engine; the
+seventh states the printed-subtype reader's contract, which the new filter asks
+and which predates it.

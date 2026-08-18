@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 79.7% | 77.1% | 53.7% | 220 |
+| M21 *(measured)* | 285 | 503 | 80.1% | 77.7% | 54.3% | 221 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 223 | 93 | expected a subject |  |
+| 221 | 91 | expected a subject |  |
 | 91 | 35 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
 | 31 | 31 | unrecognized activation cost |  |
@@ -1013,6 +1013,10 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Target blocking creature gets +7/+7 until end of turn.`
   - `Target blocking creature gets +7/+7 until end of turn.`
   - `Target blocking creature gets +7/+7 until end of turn.`
+- **Rin and Seri, Inseparable**
+  - `Whenever you cast a Dog spell, create a 1/1 green Cat creature token.`
+  - `Whenever you cast a Cat spell, create a 1/1 white Dog creature token.`
+  - `{R}{G}{W}, {T}: Rin and Seri deals damage to any target equal to the number of Dogs you control. You gain life equal to the number of Cats you control.`
 - **Rise Again**
   - `Return target creature card from your graveyard to the battlefield.`
 - **Roaming Ghostlight**

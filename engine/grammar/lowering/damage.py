@@ -12,8 +12,10 @@ life" is two instructions in a sequence rather than a fused kind.
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ...oracle_types import X_FROM_COUNT
 from ._common import (
     _REST_OF_TURN,
+    count_spec,
     _amount_payload,
     _describe_targets,
     _filter_payload,
@@ -116,7 +118,32 @@ def _lower_counted_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]
         and node.riders == ast.DamageRiders()
     ):
         return (OracleInstruction("deal_damage_equal_to_swamps", "", {}),)
-    raise LoweringError("no handler computes this counted damage", node=node)
+    # "…deals damage to any target equal to the number of Dogs you control."
+    # (Rin and Seri, Inseparable.) The general form, through the one counting
+    # evaluator every other computed amount already uses — Karma's fused kind
+    # above stays because its *recipient* is the upkeep's player rather than a
+    # chosen target, which is not something this shape can express.
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("a counted damage carries no riders yet", node=node)
+    if len(node.recipients) != 1:
+        raise LoweringError("a counted damage reaches one recipient", node=node)
+    recipient = node.recipients[0]
+    # "any target" (CR 115.4) is a quantifier of its own, not a narrower
+    # "target": it admits a player, a planeswalker or a creature, which is
+    # exactly what `deal_damage`'s resolver already picks between.
+    if not (
+        _is_target(recipient)
+        or (isinstance(recipient, ast.TargetSpec)
+            and recipient.quantifier == "any_target")
+        or (isinstance(recipient, ast.PlayerRef)
+            and recipient.kind in ("target_player", "target_opponent"))
+    ):
+        raise LoweringError("no handler aims this counted damage", node=node)
+    payload: dict[str, object] = {
+        "amount": "x", X_FROM_COUNT: count_spec(node.amount.filter, node),
+    }
+    _describe_targets(payload, recipient)
+    return (OracleInstruction("deal_damage", "", payload),)
 
 
 def _lower_board_count_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:

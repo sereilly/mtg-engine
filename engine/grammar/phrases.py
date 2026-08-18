@@ -23,7 +23,8 @@ from .errors import GrammarError
 from .lexer import (MANA, PT, PUNCT, SELF, tokenize)
 from .nouns import (parse_object_filter, parse_target_spec)
 from .stream import TokenStream
-from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, NUMBER_WORDS, match_longest)
+from .vocabulary import (COLOR_WORDS, CREATURE_TYPES, KEYWORD_INDEX, NUMBER_WORDS,
+                         match_longest)
 _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("land_dies", ("a", "land", "is", "put", "into", "a", "graveyard", "from", "the", "battlefield")),
     # Longest first: the explicit-self spelling (Basri's Lieutenant) names the
@@ -601,6 +602,19 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                 if stream.accept_word("spell"):
                     return ast.TriggerEvent(
                         "you_cast_spell", "whenever", subject=narrowed,
+                    )
+            # "…you cast a **Dog** spell" (Rin and Seri, Inseparable). A
+            # creature subtype, which this production refused until the cast
+            # filter learned to test one. Read from the vocabulary rather than a
+            # literal list, and *after* the type words above so a card type
+            # keeps its own narrowing — "creature" is both a type word and, in
+            # no set, a subtype, but the ordering is what guarantees it.
+            if word in CREATURE_TYPES:
+                stream.advance()
+                if stream.accept_word("spell"):
+                    return ast.TriggerEvent(
+                        "you_cast_spell", "whenever",
+                        subject=ast.ObjectFilter(subtypes=(word,)),
                     )
         stream.reset(mark)
         # Events whose *subject* is a noun phrase rather than the source. Each

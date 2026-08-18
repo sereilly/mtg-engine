@@ -15,6 +15,7 @@ from ..errors import LoweringError
 from ._common import (
     _amount_payload,
     _back_reference_payload,
+    count_spec,
     halved_count_spec,
     _describe_targets,
     _restrictions_beyond,
@@ -63,6 +64,20 @@ def _lower_gain_life(
                 {
                     **_back_reference_payload(node.amount, produced, event),
                     "recipient": recipient,
+                },
+            ),
+        )
+    # "You gain life equal to the number of Cats you control." (Rin and Seri.)
+    # A counted amount, through the same evaluator every other computed number
+    # in the engine uses — the alternative is a second counter with its own
+    # spelling of the spec, which is the drift `count_spec` exists to prevent.
+    if isinstance(node.amount, ast.CountOf):
+        return (
+            OracleInstruction(
+                "target_gains_life", "",
+                {
+                    "amount": "x", "recipient": recipient,
+                    X_FROM_COUNT: count_spec(node.amount.filter, node),
                 },
             ),
         )

@@ -310,6 +310,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # sake; the article split ("a"/"an") keeps the two from colliding.
     ("you_cast_spell",
      r"whenever you cast a (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell"),
+    # "…a **Dog** spell" (Rin and Seri, Inseparable). A creature *subtype*
+    # rather than a card type, which the row above deliberately refused: its
+    # word list is exactly what the event filter tests against the type line,
+    # and a subtype admitted there would have been dropped and fired on every
+    # spell. Read from the vocabulary instead of a literal list, so a set adding
+    # a tribe needs `fetch_vocabulary.py` and nothing here — and matched
+    # case-insensitively against the *printed subtype*, not against the whole
+    # type line, so "Dog" does not answer a "Dogpile".
+    ("you_cast_spell",              r"whenever you cast a (?P<cast_subtype>[a-z][a-z-]+) spell"),
     ("you_cast_spell",              r"whenever you cast a spell"),
     ("enchantment_cast",            r"whenever you cast an enchantment spell"),
     # Ankh of Mishra's land entry keeps its own kind and its own fire site, so

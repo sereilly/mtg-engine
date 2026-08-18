@@ -297,6 +297,17 @@ def _controller_cast_filter(
                 return False
         elif cast_type not in type_line:
             return False
+    # "…a **Dog** spell" (Rin and Seri). The printed subtype, read through the
+    # same reader the layer seed uses rather than as a substring of the type
+    # line — a substring match would let "Dog" answer for a "Dogpile", and would
+    # answer for a card *type* word too, which is the row above's job.
+    cast_subtype = trig.condition.payload.get("cast_subtype")
+    if cast_subtype:
+        from .layer_bridge import printed_shape
+
+        _, subtypes = printed_shape(card)
+        if cast_subtype.lower() not in subtypes:
+            return False
     return True
 
 
