@@ -45,8 +45,11 @@ class LoseLife:
 @dataclass(frozen=True)
 class CreateToken:
     count: Amount
-    power: int
-    toughness: int
+    # None for a **noncreature** token (a Treasure): CR 208.1 gives P/T only to
+    # creatures, and 0/0 is a different answer that would die to state-based
+    # actions the moment anything animated it.
+    power: int | None
+    toughness: int | None
     name: str
     colors: tuple[str, ...] = ()
     types: tuple[str, ...] = ()
@@ -60,6 +63,14 @@ class CreateToken:
     # controller, read back from the exile step of the same resolution. None
     # means the effect's own controller, which every earlier token card is.
     recipient: str | None = None
+    # "…**for each nontoken creature that died this turn**" (Gadrak). A
+    # multiplier over a history, exactly as on a counter placement or a life
+    # gain — the set counted is the one no battlefield still holds.
+    per_death: object | None = None
+    # The printed text a *predefined* token carries (CR 111.10). Transcribed
+    # from `engine/tokens.py`'s table at parse time rather than left for the
+    # handler to look up again, so the AST says everything the token is.
+    oracle_text: str | None = None
 
 
 @dataclass(frozen=True)

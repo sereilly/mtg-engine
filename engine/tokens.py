@@ -57,10 +57,28 @@ def token_image_uris(source_card: CardDefinition, token_name: str) -> dict[str, 
     return None
 
 
+#: Tokens Magic prints by name alone (CR 111.10). The card says "create a
+#: Treasure token" and nothing else, because the characteristics are the
+#: *token's* and not the card's — so they live here, once, rather than being
+#: transcribed onto every card that makes one.
+#:
+#: Only Treasure so far, which is what the pool prints. A predefined token is a
+#: standing definition, not a template with parameters, so each new one is an
+#: entry and never a branch.
+PREDEFINED_TOKENS: dict[str, dict] = {
+    "treasure": {
+        "name": "Treasure Token",
+        "type_line": "Artifact — Treasure",
+        "oracle_text": "{T}, Sacrifice this token: Add one mana of any color.",
+        "colors": (),
+    },
+}
+
+
 def make_token_card(
     name: str,
-    power: int,
-    toughness: int,
+    power: int | None,
+    toughness: int | None,
     type_line: str,
     *,
     colors: Sequence[str] = (),
@@ -78,12 +96,15 @@ def make_token_card(
     keywords = tuple(keywords)
     if oracle_text is None:
         oracle_text = "\n".join(keywords)
-    raw: dict = {
-        "name": name,
-        "type_line": type_line,
-        "power": str(power),
-        "toughness": str(toughness),
-    }
+    raw: dict = {"name": name, "type_line": type_line}
+    # A noncreature token (a Treasure) has no printed P/T at all, and "0" is not
+    # the same answer as "none": stamped as 0/0 it would be a creature card with
+    # lethal toughness the moment anything animated it, and CR 208.1 gives P/T
+    # only to creatures in the first place.
+    if power is not None:
+        raw["power"] = str(power)
+    if toughness is not None:
+        raw["toughness"] = str(toughness)
     if image_source is not None:
         image_uris = token_image_uris(image_source, name)
         if image_uris is not None:

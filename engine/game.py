@@ -227,6 +227,12 @@ class Game(
     is_draw: bool = False
     # 700.4-style turn tracking: creatures that died this turn (e.g. Scavenging Ghoul)
     creatures_died_this_turn: int = 0
+    # The same turn, counting only the ones that were cards (Gadrak). A token
+    # dying is a real creature death, so this is a strictly smaller number and a
+    # genuinely different question — kept as its own tally for the reason the
+    # per-seat one beside it is: a reader that wants one and gets the other is
+    # wrong by however many tokens died, silently.
+    nontoken_creatures_died_this_turn: int = 0
     # "Rest of the game" delayed upkeep triggers left behind by a permanent that
     # has died (Cyclopean Tomb): each entry is {"controller_index", "lands"} where
     # ``lands`` are the still-mired Permanents whose mire counters must be removed

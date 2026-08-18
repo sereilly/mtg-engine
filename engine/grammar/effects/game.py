@@ -9,10 +9,12 @@ permanent's characteristics, and none of them shares vocabulary with another
 family.
 """
 
+from ...tokens import PREDEFINED_TOKENS
 from .. import ast
 from ..amounts import expect_pt, parse_amount
 from ..lexer import (WORD)
 from ..nouns import (parse_object_filter)
+from ..phrases import _parse_for_each
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX, match_longest)
 
@@ -92,6 +94,26 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     # by the same production so the token grammar exists exactly once.
     stream.expect_word("create", "creates")
     count = parse_amount(stream)
+
+    # "Create a **Treasure** token." (Gadrak.) A token Magic prints by name
+    # alone: its characteristics belong to the token and live in
+    # `engine/tokens.py`, so the card states nothing but which one. Read before
+    # the P/T, which such a token has none of.
+    named = stream.peek_word()
+    predefined = PREDEFINED_TOKENS.get(named or "")
+    if predefined is not None:
+        stream.advance()
+        stream.expect_word("token", "tokens")
+        return ast.CreateToken(
+            count, None, None, predefined["name"],
+            colors=tuple(predefined["colors"]),
+            types=tuple(predefined["type_line"].split("—")[0].strip().lower().split()),
+            subtypes=tuple(
+                predefined["type_line"].split("—")[1].strip().lower().split()
+            ) if "—" in predefined["type_line"] else (),
+            oracle_text=predefined["oracle_text"],
+            per_death=_parse_for_each(stream),
+        )
 
     power, power_negative, toughness, toughness_negative = expect_pt(stream)
     if power_negative or toughness_negative:

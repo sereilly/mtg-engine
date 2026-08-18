@@ -42,6 +42,10 @@ _GENERIC_NOUNS = frozenset({
 # "this <self-word>" refers to the ability's own source.
 _SELF_NOUNS = frozenset({
     "creature", "artifact", "enchantment", "land", "permanent", "spell", "aura", "card",
+    # "Sacrifice this **token**" — modern templating for a token's own printed
+    # ability (the Treasure token). Not a card type: it is what the object is,
+    # exactly as "this permanent" is, and it names the same source.
+    "token",
 })
 
 _STATE_ADJECTIVES = {

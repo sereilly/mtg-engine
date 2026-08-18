@@ -408,13 +408,19 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
             game.log.append(f"{card.name}: nothing was exiled, so no token is created")
             return True, "resolved"
         controller_index = recorded
+    # A predefined token (a Treasure) carries its own printed text and has no
+    # P/T at all — CR 208.1 gives P/T to creatures, and 0/0 would be a creature
+    # card that dies the moment anything animates it.
+    printed_power = payload.get("power")
+    printed_toughness = payload.get("toughness")
     token_card = make_token_card(
         str(payload.get("name", "Token")),
-        int(payload.get("power", 1)),
-        int(payload.get("toughness", 1)),
+        None if printed_power is None else int(printed_power),
+        None if printed_toughness is None else int(printed_toughness),
         str(payload.get("type_line", "Creature — Token")),
         colors=tuple(payload.get("colors") or ()),
         keywords=tuple(payload.get("keywords") or ()),
+        oracle_text=payload.get("oracle_text"),
         image_source=card,
     )
     # "that many" — a delayed attack trigger's batch count (Basri Ket's −2),
@@ -423,6 +429,12 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     if raw_count == "trigger_count":
         tctx = context.trigger_context or {}
         count = int(tctx.get("trigger_count", context.results.get("trigger_count", 0)))
+    elif isinstance(raw_count, dict) and "history" in raw_count:
+        # "…for each nontoken creature that died this turn" (Gadrak): the game's
+        # own tally, because the objects counted are exactly the ones no zone
+        # still holds. Which tally the phrase named is settled at lowering; an
+        # unknown one makes no tokens rather than falling back to a wider count.
+        count = int(getattr(game, str(raw_count["history"]), 0) or 0)
     else:
         count = resolve_amount(raw_count, context.x_value)
     for _ in range(count):

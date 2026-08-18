@@ -636,7 +636,10 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # printings name the card instead of saying "this artifact", so accept
     # either wording.
     sacrifice_self = bool(
-        re.search(r"\bsacrifice this (artifact|creature|enchantment|permanent|land)\b", cost_lower)
+        re.search(
+            r"\bsacrifice this (artifact|creature|enchantment|permanent|land|token)\b",
+            cost_lower,
+        )
     )
     # "Sacrifice a creature" / "Sacrifice another creature" / "Sacrifice a
     # creature with defender" — a *chosen* permanent (Atog, Hobblefiend,
@@ -1628,6 +1631,28 @@ def _grammar_static_creature_instruction(
     )
 
 
+def _restriction_line(line: str, card_name: str | None) -> str:
+    """*line* normalized with the card's own name collapsed to "this creature".
+
+    Pre-modern templating — and modern legendary templating — writes the
+    subject as the card's name: "**Gadrak** can't attack unless…". The combat
+    restriction table is anchored on "this creature", so without this the clause
+    matched nothing and the card reported "text too complex" for a template the
+    engine implements. The lexer already collapses the same references for the
+    grammar (CR 201.4c's short name included); this is that rule on the
+    static-line path.
+
+    Scoped to this one consult rather than folded into
+    ``normalize_creature_line``, whose output is *stored* on the program as
+    ``static_lines`` and matched on by several text-keyed readers — rewriting it
+    for every card that names itself is a change with its own blast radius and
+    no card asking for it.
+    """
+    return _collapse_self_references(
+        normalize_creature_line(line), card_name, "this creature"
+    )
+
+
 def _is_supported_static_creature_line(line: str, card_name: str | None = None) -> bool:
     if _grammar_static_creature_instruction(line, card_name) is not None:
         return True
@@ -1648,7 +1673,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # supported, with the restriction silently absent. Deriving the gate from
     # the dispatch table means an unrecognized rider is now reported unsupported
     # (loud) instead.
-    if combat_restriction_for(normalized) is not None:
+    if combat_restriction_for(_restriction_line(line, card_name)) is not None:
         return True
     # A lord's continuous buff to other creatures. The gate used to admit the
     # bare prefix "other ", which is a template in disguise: "Other Goblins
@@ -1858,7 +1883,11 @@ def _parse_creature_program(
                 instructions.append(
                     OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(lord))
                 )
-            elif (restriction := combat_restriction_for(normalized)) is not None:
+            elif (
+                restriction := combat_restriction_for(
+                    _restriction_line(line, card_name)
+                )
+            ) is not None:
                 # Combat restrictions are templates, derived rather than listed
                 # (engine/combat_restrictions.py). The chain that used to sit
                 # here matched exact strings and hardcoded Island, so a card

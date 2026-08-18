@@ -27,6 +27,15 @@ from dataclasses import dataclass, field
 # per card.
 _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 
+# Printed number words a threshold can be written with. Shared with nothing on
+# purpose: the compiler's own `_NUMBER_WORDS` covers trigger counts and is a
+# different table for a different clause; what they have in common is English,
+# not a rule.
+_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
+
 
 @dataclass(frozen=True)
 class CombatRestriction:
@@ -38,6 +47,7 @@ class CombatRestriction:
 
 # (pattern, kind) — enforced by:
 #   cant_attack_without_land_type   phases/declare_attackers_step.can_attack
+#   cant_attack_without_controlled_count  phases/declare_attackers_step.can_attack
 #   cant_attack                     phases/declare_attackers_step.can_attack
 #   cant_block                      phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
@@ -51,6 +61,18 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             rf"an? (?P<land_type>{'|'.join(_LAND_TYPES)})$"
         ),
         "cant_attack_without_land_type",
+    ),
+    # "…unless **you** control four or more artifacts" (Gadrak). The count and
+    # the type are payload for the reason the land type above is: a card printed
+    # with any other number or type is the same restriction, and baking either
+    # into the kind made every variation a new kind, a new handler branch and a
+    # new gate entry.
+    (
+        re.compile(
+            r"^this creature can't attack unless you control "
+            r"(?P<count>\w+) or more (?P<controlled_type>[a-z]+)s$"
+        ),
+        "cant_attack_without_controlled_count",
     ),
     (re.compile(r"^this creature can't attack$"), "cant_attack"),
     (re.compile(r"^this creature can't block$"), "cant_block"),
@@ -88,10 +110,22 @@ def combat_restriction_for(normalized_line: str) -> CombatRestriction | None:
             continue
         # Numeric captures reach handlers as ints: a payload whose type depends
         # on which regex matched is how a comparison silently becomes a string
-        # compare.
-        payload = {
-            key: int(value) if value is not None and value.isdigit() else value
-            for key, value in match.groupdict().items()
-        }
+        # compare. A printed number **word** is read here too — the regex only
+        # delimits it, the way it delimits a noun phrase everywhere else — and a
+        # word with no number behind it refuses the whole line rather than
+        # reaching a comparison as a string, where it would compare unequal to
+        # every count and quietly stop the creature attacking at all.
+        payload = {}
+        for key, value in match.groupdict().items():
+            if value is not None and value.isdigit():
+                payload[key] = int(value)
+                continue
+            if key == "count" and value is not None:
+                number = _NUMBER_WORDS.get(value)
+                if number is None:
+                    return None
+                payload[key] = number
+                continue
+            payload[key] = value
         return CombatRestriction(kind, payload)
     return None

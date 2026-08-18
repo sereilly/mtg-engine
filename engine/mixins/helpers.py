@@ -465,6 +465,10 @@ class GameHelpersMixin:
         # Living Lands) dying counts as a creature death (Scavenging Ghoul).
         if permanent.is_creature:
             self.creatures_died_this_turn = getattr(self, "creatures_died_this_turn", 0) + 1
+            if not permanent.metadata.get("is_token", False):
+                self.nontoken_creatures_died_this_turn = (
+                    getattr(self, "nontoken_creatures_died_this_turn", 0) + 1
+                )
             # "…under your control" is a different question from the game-wide
             # count above, and only the controller can answer it. `player` is
             # the controller the permanent last had; the owner is looked up

@@ -146,8 +146,26 @@ def _lower_create_token(
       builds a creature card, and a type line with no card types would come out
       as a bare subtype the loader could not classify.
     """
+    # A *predefined* token (CR 111.10) is named, typed and worded by the table
+    # in `engine/tokens.py`, so it needs none of the transcription below — and
+    # it has no P/T, which every check below assumes.
+    if node.oracle_text is not None:
+        payload: dict[str, object] = {
+            "name": node.name,
+            "type_line": (
+                " ".join(_title(w) for w in node.types)
+                + (" — " + " ".join(_title(w) for w in node.subtypes) if node.subtypes else "")
+            ),
+            "oracle_text": node.oracle_text,
+        }
+        if node.colors:
+            payload["colors"] = node.colors
+        _stamp_token_count(payload, node)
+        return (OracleInstruction("create_token", "", payload),)
     if "creature" not in node.types:
         raise LoweringError("make_token_card only builds creature tokens", node=node)
+    if node.power is None or node.toughness is None:
+        raise LoweringError("a creature token has a printed power/toughness", node=node)
     if node.name:
         name = _title(node.name)
     elif node.subtypes:
@@ -173,16 +191,7 @@ def _lower_create_token(
         payload["colors"] = node.colors
     if node.keywords:
         payload["keywords"] = tuple(_title(word) for word in node.keywords)
-    if isinstance(node.count, ast.ThatMuch):
-        # "create that many … tokens" — the count is the firing event's own
-        # number (a delayed attack trigger's matching attackers), recorded by
-        # the firing site in the resolution scratchpad.
-        payload["count"] = "trigger_count"
-        count = "trigger_count"
-    else:
-        count = _amount_payload(node.count)
-        if count != 1:
-            payload["count"] = count
+    count = _stamp_token_count(payload, node)
     # "…that are tapped and attacking" (Basri Ket): entry state the handler
     # stamps as the tokens arrive.
     if node.tapped:
@@ -366,3 +375,46 @@ def _lower_lose_life(
         payload["recipient"] = "each_player"
         return (OracleInstruction("target_loses_life", "", payload),)
     raise LoweringError(f"unsupported life-loss target {node.player.kind!r}", node=node)
+
+
+def _stamp_token_count(payload: dict, node: "ast.CreateToken"):
+    """Record how many tokens to make, and return it.
+
+    Three shapes, and they are three because the *number* comes from three
+    different places: a printed count, the firing event's own tally, and a
+    history of what died. Shared between the predefined and transcribed token
+    branches so a count added to one is a count the other gets too.
+    """
+    if isinstance(node.per_death, ast.DiedThisTurn):
+        # "…for each nontoken creature that died this turn" (Gadrak). A tally
+        # rather than a scan: the creatures counted are exactly the ones no
+        # battlefield still holds. Which tally is decided by the phrase — the
+        # engine keeps a nontoken one beside the game-wide one, because a token
+        # dying is a real creature death and a *different* number.
+        filt = node.per_death.filter
+        leftover = _restrictions_beyond(filt, frozenset({"card_types", "nontoken"}))
+        if leftover or filt.card_types != ("creature",):
+            raise LoweringError(
+                "the death tally counts creatures and nothing narrower", node=node
+            )
+        history = (
+            "nontoken_creatures_died_this_turn" if filt.nontoken
+            else "creatures_died_this_turn"
+        )
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+            raise LoweringError(
+                "a per-death token count multiplies one token, not several",
+                node=node,
+            )
+        payload["count"] = {"history": history}
+        return payload["count"]
+    if isinstance(node.count, ast.ThatMuch):
+        # "create that many … tokens" — the count is the firing event's own
+        # number (a delayed attack trigger's matching attackers), recorded by
+        # the firing site in the resolution scratchpad.
+        payload["count"] = "trigger_count"
+        return "trigger_count"
+    count = _amount_payload(node.count)
+    if count != 1:
+        payload["count"] = count
+    return count

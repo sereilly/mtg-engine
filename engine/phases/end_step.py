@@ -204,6 +204,24 @@ class EndStepMixin:
             )
             if not evaluate_condition(self, fire_context, gate):
                 continue
+            already.add((id(permanent), id(trig.instruction)))
+            events.append(make_trigger_event(controller_index, permanent, trig))
+
+        # Everything else with an end-step condition. The scans above are keyed
+        # to *instruction kinds*, which made this step a cascade: Gadrak's
+        # "create a Treasure token for each nontoken creature that died this
+        # turn" compiled to a perfectly good `create_token` and fired nowhere,
+        # because `create_token` was on none of the lists. A trigger's condition
+        # is what says when it fires; its effect is not a second condition.
+        #
+        # Deduped against everything above by the same `already` set, so a kind
+        # a specific scan handles (with its own trigger context, or its own
+        # re-checked guard) is not enqueued twice.
+        for controller_index, permanent, trig in gated:
+            if trig.instruction is None:
+                continue
+            if (id(permanent), id(trig.instruction)) in already:
+                continue
             events.append(make_trigger_event(controller_index, permanent, trig))
 
         # Emblems (CR 114.4): "At the beginning of your end step, …" (Garruk,

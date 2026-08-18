@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 242/285) to the full release line - **137 sets, 33,594
+M21 measured at 243/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–89 — lives in git history at and before
-commit `8692eaf`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–90 — lives in git history at and before
+commit `f5457ac`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,63 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 90: a blocking requirement, and a tally of the dead
-
-*(2026-08-17.)* M21 **239 → 240** — Canopy Stalker.
-
-> This creature must be blocked if able.
-> When this creature dies, you gain 1 life for each creature that died this turn.
-
-**Two lines, two families, and both already had a near neighbour that was the
-wrong shape.**
-
-*"Must be blocked if able" is a requirement, not a restriction* (CR 509.1c), and
-it is the **weakest of the three** the blockers step now enforces. Lure demands
-that *every* able creature block; Blaze of Glory demands that *one* creature
-block everything; this demands only that the attacker not be left unblocked while
-an able creature stands by. Folding it into the Lure loop — the tempting move,
-since they sit twelve lines apart — would forbid the defender keeping a second
-blocker back, which is a legal declaration this card does not take away. The
-declaration is *refused* rather than corrected, because which creature blocks is
-still the defender's choice.
-
-*"For each creature that died this turn" is a tally, not a scan.* The board
-reading of those words counts the opposite set: the creatures still alive. The
-noun parser consumes "creature" and stops, so the trailing words were unconsumed
-and the line failed loudly — which was right, and is why the fix is an
-**ordering** rather than a fallback: `_parse_for_each` is tried before the board
-filter, so the history wins where both would match.
-
-**A fragment two families needed, moved to where those live.** `_parse_for_each`
-was in `effects/characteristics.py`, written for "put a +1/+1 counter … for each
-creature that died this turn". The life family now asks exactly the same
-question, and a family importing a family is what makes the grouping stop being
-information — so it moved to `phrases.py`, which is the rule
-`tests/engine/test_grammar_layering.py` states and the reason it states it.
-
-**Game-wide, not per-seat.** The card says "each creature", so the count comes off
-`Game.creatures_died_this_turn`. `PlayerState.creatures_died_under_your_control_this_turn`
-sits beside it and is a different number the moment an opponent's creature dies;
-the two are separate fields precisely so one cannot be read for the other, and a
-test pins both at once. A narrowing the tally cannot express ("for each
-**artifact** that died") refuses rather than counting a wider set — the record is
-one number, not a filterable pile.
-
-The AI assigns a blocker rather than submitting a declaration that bounces, the
-same accommodation it already makes for Blaze of Glory. Both new reads address
-their permanent through the seam (`permanent_at`), so the positional-indexing
-ratchet did not move.
-
-**A third M21 creature file.** `test_m21_creatures.py` is at the size guard again
-and the printed-type axis is spent, so the rounds at the far end were cut into
-`test_m21_creatures_late_rounds.py` — the same round-boundary cut round 73 made at
-the near end, at the other end of the sequence, leaving the middle file's history
-intact rather than re-cutting it.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Nine new tests, five watched to fail on the round-89 engine.
-
 ## Round 91: mana that may only pay for some spells
 
 *(2026-08-17.)* M21 **240 → 241** — Vodalian Arcanist.
@@ -406,3 +349,59 @@ Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Four new tests, two watched to fail on the round-91 engine — the
 two negative ones pass there too, because an unsupported card also draws nothing.
+
+## Round 93: a token printed by name, and a threshold on your own board
+
+*(2026-08-17.)* M21 **242 → 243** — Gadrak, the Crown-Scourge.
+
+> Gadrak can't attack unless you control four or more artifacts.
+> At the beginning of your end step, create a Treasure token for each nontoken
+> creature that died this turn.
+
+**Its own name was the reason the first line failed.** Magic templates a
+legendary card's static line with the card's name, not "this creature", and the
+combat-restriction table is anchored on the latter — so the clause matched
+nothing and the card reported "text too complex" for a template the engine
+implements. The lexer already collapses exactly these references for the grammar
+(CR 201.4c's short name included); `_restriction_line` is that rule on the
+static-line path, **scoped to this one consult** because
+`normalize_creature_line`'s output is *stored* on the program and matched on by
+several text-keyed readers.
+
+The threshold and the type are payload, as the land type beside them already is —
+and the printed *word* is read rather than compared, with an unreadable one
+refusing the whole line: a word that reached the comparison as a string would
+compare unequal to every count and quietly stop the creature attacking at all.
+What differs from the land clause is whose board is counted: this one is the
+attacker's own.
+
+**A Treasure is a token Magic prints by name alone** (CR 111.10). Its
+characteristics belong to the *token*, so they live in one table in
+`engine/tokens.py` rather than being transcribed onto every card that makes one —
+and it has **no P/T**, which took the token maker's first `None`: CR 208.1 gives
+power and toughness to creatures, and 0/0 would be a creature card that dies to
+state-based actions the moment anything animates it. Its own printed ability
+needed one word, too — "Sacrifice this **token**" is modern templating for a
+token's self-reference, and it is what the object *is*, exactly as "this
+permanent" is.
+
+**"Nontoken" is a second tally, not a filter.** A token dying is a real creature
+death, so `nontoken_creatures_died_this_turn` is a strictly smaller number than
+round 90's `creatures_died_this_turn` and a genuinely different question. Kept
+apart for the reason the per-seat tally is: a reader that wants one and gets the
+other is wrong by however many tokens died, silently.
+
+**What this found: the end step dispatched on instruction *kind*.** Three scans,
+each keyed to a list of kinds, plus a fourth for triggers gated by an
+intervening-if. Gadrak's trigger compiled to a perfectly good `create_token`, its
+condition matched, and it fired **nowhere** — because `create_token` was on none
+of the lists. A trigger's condition is what says when it fires; its effect is not
+a second condition. There is now a general scan behind the specific ones, deduped
+by the same set that already existed for that purpose. An audit of the whole pool
+found exactly one card in the gap, and it is this one.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Eight new tests, six watched to fail on the round-92 engine —
+including two that show the restriction absent rather than merely unread: Gadrak
+attacked freely there with no artifacts at all.

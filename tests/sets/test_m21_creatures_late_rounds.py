@@ -574,3 +574,120 @@ def test_a_spell_aimed_elsewhere_does_not(set_pool):
     game.cast_from_hand(1, "Shock", target_player_index=1, target_permanent_index=0)
 
     assert game.pending_choices == []
+
+
+# --- Round 93: a token printed by name, and a threshold on your own board ---
+
+
+def _gadrak_board(set_pool, artifacts=0):
+    pool = set_pool("M21")
+    gadrak = _nosick(Permanent(card=pool["Gadrak, the Crown-Scourge"]))
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[gadrak] + [
+            Permanent(card=pool["Tormod's Crypt"]) for _ in range(artifacts)
+        ],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    return game, p1, gadrak
+
+
+def test_gadrak_compiles_supported(set_pool):
+    """The subject of its own static line is its **name**, which is how Magic
+    templates a legendary card. The restriction table is anchored on "this
+    creature", so the name is collapsed to that before the table is asked — the
+    rule the lexer already applies for the grammar, on the static-line path."""
+    program = compile_card_oracle(set_pool("M21")["Gadrak, the Crown-Scourge"])
+    assert program.supported, program.reason
+
+    restriction = next(
+        i for i in program.instructions
+        if i.kind == "cant_attack_without_controlled_count"
+    )
+    # The number and the type are data: a card printed with any other pair is
+    # the same restriction, and the printed word is read rather than compared.
+    assert restriction.payload == {"count": 4, "controlled_type": "artifact"}
+
+
+@pytest.mark.parametrize("artifacts,allowed", [(0, False), (3, False), (4, True)])
+def test_the_threshold_is_counted_on_your_own_board(set_pool, artifacts, allowed):
+    """"Unless **you** control" — the attacker's own controller, which is the
+    difference from the land clause beside it (that one counts the defender's)."""
+    game, _p1, gadrak = _gadrak_board(set_pool, artifacts)
+
+    assert game.can_attack(gadrak, 1) is allowed
+
+
+def _gadrak_end_step(set_pool, nontoken_deaths=0, token_deaths=0):
+    from engine.tokens import make_token_card
+
+    pool = set_pool("M21")
+    gadrak = Permanent(card=pool["Gadrak, the Crown-Scourge"])
+    doomed = [Permanent(card=pool["Gale Swooper"]) for _ in range(nontoken_deaths)]
+    doomed += [
+        Permanent(
+            card=make_token_card("Bear", 2, 2, "Creature — Bear"),
+            metadata={"is_token": True},
+        )
+        for _ in range(token_deaths)
+    ]
+    p1 = PlayerState(name="P1", battlefield=[gadrak] + doomed)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.active_player_index = 0
+    for perm in doomed:
+        perm.damage_marked = 99
+    game.check_state_based_actions()
+    game._settle()
+    game.resolve_end_step(0)
+    game._settle()
+    return game, p1
+
+
+def _treasures(game):
+    return [p for p in game.controlled_by(0) if p.card.name == "Treasure Token"]
+
+
+def test_a_treasure_is_made_for_each_nontoken_creature_that_died(set_pool):
+    game, _p1 = _gadrak_end_step(set_pool, nontoken_deaths=2)
+
+    assert len(_treasures(game)) == 2
+
+
+def test_a_token_that_died_is_not_counted(set_pool):
+    """"**Nontoken**" is read, not decoration — a token dying is a real
+    creature death, so the two tallies are different numbers and the engine
+    keeps them apart rather than filtering one into the other."""
+    game, _p1 = _gadrak_end_step(set_pool, nontoken_deaths=2, token_deaths=3)
+
+    assert game.creatures_died_this_turn == 5
+    assert game.nontoken_creatures_died_this_turn == 2
+    assert len(_treasures(game)) == 2
+
+
+def test_nothing_died_makes_nothing(set_pool):
+    game, _p1 = _gadrak_end_step(set_pool)
+
+    assert _treasures(game) == []
+
+
+def test_the_treasure_is_a_noncreature_token_that_makes_mana(set_pool):
+    """A token Magic prints by name alone (CR 111.10): its characteristics
+    belong to the token, so they live in one table rather than being
+    transcribed onto every card that makes one. It has no P/T at all — CR 208.1
+    gives P/T to creatures, and 0/0 would be a creature card that dies the
+    moment anything animates it."""
+    game, p1 = _gadrak_end_step(set_pool, nontoken_deaths=1)
+
+    (treasure,) = _treasures(game)
+    assert treasure.card.type_line == "Artifact — Treasure"
+    assert not treasure.is_creature
+    assert treasure.card.power is None and treasure.card.toughness is None
+
+    result = game.activate_permanent_ability(
+        0, "Treasure Token",
+        permanent_index=game.battlefield_index_of(treasure),
+        mana_color="R",
+    )
+    assert result.supported, result.details
+    assert p1.mana_pool["R"] == 1
+    assert not game.is_on_battlefield(treasure), "sacrificed to pay its own cost"

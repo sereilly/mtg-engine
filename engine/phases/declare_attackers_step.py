@@ -271,6 +271,30 @@ class DeclareAttackersStepMixin:
             ):
                 return False
 
+        # "…unless you control four or more artifacts" (Gadrak). The attacker's
+        # *own* controller is counted, which is the difference from the land
+        # clause above — and CR 508.1c keeps it cumulative for the same reason
+        # that one is: satisfying this restriction answers only this one.
+        without_count = next(
+            (
+                i for i in program.instructions
+                if i.kind == "cant_attack_without_controlled_count"
+            ),
+            None,
+        )
+        if without_count is not None:
+            wanted = int(without_count.payload.get("count", 0))
+            card_type = str(without_count.payload.get("controlled_type") or "")
+            # `has_type`, so an animated artifact land counts as the artifact it
+            # currently is (CR 613 layer 4) — the same rule the land clause
+            # above follows for a text-changed type.
+            held = sum(
+                1 for perm in self.controlled_by(self.controller_index_of(attacker))
+                if perm.has_type(card_type)
+            )
+            if held < wanted:
+                return False
+
         if "cant_attack" in instr_kinds:
             return False
 
