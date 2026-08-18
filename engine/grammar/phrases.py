@@ -646,8 +646,18 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # enters" is Ankh of Mishra's own event with its own fire site, and this
         # production would otherwise claim it as a generic entry.
         mark = stream.mark()
+        # "Whenever **this creature or** another Rogue you control enters"
+        # (Thieves' Guild Enforcer) — the source's own entry spelled out. The
+        # subject that follows is the same noun phrase the bare form reads, and
+        # the difference is exactly the word "another": with the prefix the
+        # source is *included*, so the exclusion the noun parser folds on for
+        # "another" has to be undone here rather than left to narrow a set the
+        # card widened.
+        explicit_self = bool(stream.accept_phrase("this", "creature", "or"))
         subject = parse_subject_filter_at(stream)
         if subject is not None:
+            if explicit_self:
+                subject = replace(subject, other_than_source=False)
             for phrase, kind in _SUBJECT_LED_EVENTS:
                 if stream.accept_phrase(*phrase):
                     return ast.TriggerEvent(kind, "whenever", subject=subject)

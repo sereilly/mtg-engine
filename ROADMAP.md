@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 252/285) to the full release line - **137 sets, 33,594
+M21 measured at 253/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–99 — lives in git history at and before
-commit `8dc8725`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–100 — lives in git history at and before
+commit `5af33a4`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,41 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 100: a base P/T set over a whole team
-
-*(2026-08-18.)* M21 **249 → 250** — Jolrael, Mwonvuli Recluse.
-
-> {4}{G}{G}: Until end of turn, creatures you control have base power and
-> toughness X/X, where X is the number of cards in your hand.
-
-**The line parsed already; the refusal was one word.** "Base P/T change on a
-non-target subject" — every base-P/T set the engine had was aimed at one chosen
-permanent (Sorceress Queen, Singing Tree), and its handler asks a *picker* which
-one.
-
-A sweep is a second kind rather than a flag on that one, because the two resolve
-completely differently: one asks a picker which permanent, the other asks the
-board which permanents. Sharing a handler would mean a resolution that sometimes
-consults a target it was never given.
-
-**X is fixed as the ability resolves**, and that is the part worth pinning.
-CR 608.2 calculates the value on resolution; it does not track the hand
-afterwards, so drawing a card later in the turn does not grow the team. Carrying
-the count as a *spec* for the layer refresh to re-evaluate would have said the
-opposite, and the layers recompute constantly — the test draws a fourth card and
-asserts nothing moves.
-
-The affected set is snapshotted for the same reason (CR 611.2c): a creature
-entering after this resolves was never affected by it.
-
-The team form refuses to set only one characteristic. "Creatures you control have
-base power 0" would leave toughness tracking whatever else applies — a different
-effect, and one nothing here performs.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Six new tests, three watched to fail on the round-99 engine.
-
 ## Round 101: mana by a board count, and damage equal to your own power
 
 *(2026-08-18.)* M21 **250 → 251** — Leafkin Avenger.
@@ -371,3 +336,40 @@ it was collected.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Six new tests, four watched to fail on the round-101 engine.
+
+## Round 103: a trigger that includes its own source, and a zone threshold
+
+*(2026-08-18.)* M21 **252 → 253** — Thieves' Guild Enforcer.
+
+> Whenever this creature or another Rogue you control enters, each opponent mills
+> two cards.
+> As long as an opponent has eight or more cards in their graveyard, this
+> creature gets +2/+1 and has deathtouch.
+
+**"This creature or another X" is the bare form plus the source**, and the
+difference is exactly one word. The noun parser folds "another" into
+`exclude_self` (CR 109.5), and the words in front of it put the source back —
+so the exclusion has to be *undone* rather than left to narrow a set the card
+widened. The engine already had this spelling for *dies* (Basri's Lieutenant);
+this is the entry twin, and both map onto the one kind so there is still one
+dispatcher.
+
+An **empty named group** is how the pattern says which spelling matched. It is
+present in the match's groupdict exactly when that alternative fired and carries
+no text of its own to be re-read — which is what keeps the marker from becoming
+a second thing to parse.
+
+**The static condition is a zone *size*, not a set of objects.** Nothing is
+matched, so it is its own condition kind rather than a `controls` payload with a
+graveyard filter — and the seat is printed, because "an opponent" and "you" are
+different questions with different answers. "**An** opponent" is any one of
+them, so it is an `any` over the opponents rather than a sum, and a game with
+more than two seats answers what the card says.
+
+The threshold's number word is read, not compared. A word the table does not know
+refuses the whole condition, because a threshold that quietly becomes zero is a
+static that always holds.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Eight new tests, five watched to fail on the round-102 engine.

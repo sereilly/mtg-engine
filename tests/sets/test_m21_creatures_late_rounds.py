@@ -1017,3 +1017,105 @@ def test_the_payer_may_name_which_spirits_tap(set_pool):
 
     assert not geists[0].tapped
     assert geists[1].tapped and geists[2].tapped
+
+
+# --- Round 103: a trigger that includes its own source, and a zone threshold -
+
+
+def _enforcer_board(set_pool, opponent_graveyard=0, hand=()):
+    pool = set_pool("M21")
+    enforcer = _nosick(Permanent(card=pool["Thieves' Guild Enforcer"]))
+    p1 = PlayerState(
+        name="P1", battlefield=[enforcer],
+        hand=[pool[name] for name in hand],
+        library=[pool["Island"]] * 5,
+    )
+    p2 = PlayerState(
+        name="P2",
+        graveyard=[pool["Shock"]] * opponent_graveyard,
+        library=[pool["Island"]] * 10,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, p1, p2, enforcer
+
+
+def test_thieves_guild_enforcer_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Thieves' Guild Enforcer"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "matching_permanent_enters"
+    # "This creature or another Rogue" *includes* the source, so the exclusion
+    # the noun parser folds on for "another" has to be undone.
+    assert "exclude_self" not in trigger.condition.payload["enterer_filter"]
+
+
+def test_its_own_entry_fires_it(set_pool):
+    """The spelling exists to say so: the bare "another Rogue you control"
+    reading would have excluded the source."""
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", hand=[pool["Thieves' Guild Enforcer"]], library=[pool["Island"]] * 5
+    )
+    p2 = PlayerState(name="P2", library=[pool["Island"]] * 10)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Thieves' Guild Enforcer")
+    game._settle()
+
+    assert len(p2.graveyard) == 2
+
+
+def test_a_second_rogue_fires_both(set_pool):
+    """Two abilities see one entry: the newcomer's own, and the one already
+    there watching for another Rogue."""
+    game, _p1, p2, _enforcer = _enforcer_board(
+        set_pool, hand=("Thieves' Guild Enforcer",)
+    )
+
+    game.cast_from_hand(0, "Thieves' Guild Enforcer")
+    game._settle()
+
+    assert len(p2.graveyard) == 4
+
+
+def test_a_creature_that_is_not_a_rogue_fires_nothing(set_pool):
+    game, _p1, p2, _enforcer = _enforcer_board(set_pool, hand=("Gale Swooper",))
+
+    game.cast_from_hand(0, "Gale Swooper")
+    game._settle()
+
+    assert p2.graveyard == []
+
+
+@pytest.mark.parametrize(
+    "graveyard,stats,deathtouch",
+    [(0, (1, 1), False), (7, (1, 1), False), (8, (3, 2), True)],
+)
+def test_the_static_reads_the_opponents_graveyard(
+    set_pool, graveyard, stats, deathtouch
+):
+    """A zone *size*, not a set of objects — nothing is matched, so it is its own
+    condition kind rather than a `controls` payload with a graveyard filter."""
+    game, _p1, _p2, enforcer = _enforcer_board(set_pool, opponent_graveyard=graveyard)
+
+    assert (enforcer.effective_power, enforcer.effective_toughness) == stats
+    assert game._has_keyword(enforcer, "deathtouch") is deathtouch
+
+
+def test_an_unreadable_threshold_refuses_the_condition(set_pool):
+    """The number word is read, not compared. A threshold that quietly became
+    zero is a static that always holds."""
+    from engine.static_bonuses import static_bonus_for
+
+    assert static_bonus_for(
+        "as long as an opponent has eight or more cards in their graveyard, "
+        "this creature gets +2/+1 and has deathtouch"
+    ) is not None
+    assert static_bonus_for(
+        "as long as an opponent has umpteen or more cards in their graveyard, "
+        "this creature gets +2/+1 and has deathtouch"
+    ) is None

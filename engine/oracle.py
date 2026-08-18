@@ -324,6 +324,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # the partial-implementation class round 16 wrote down. Deleted rather than
     # kept beside this one: "whenever a creature enters" is this pattern with an
     # empty narrowing, and it fires now.
+    # The same set spelled to make the source's own entry explicit (Thieves'
+    # Guild Enforcer). "This creature" is one of the Rogues you control — its
+    # controller is who "you" means — so the union names exactly what the
+    # pattern below does *plus the source*, and the difference is one word in
+    # the subject: "another" excludes the source, "a" does not. Mapping both
+    # onto one kind keeps one dispatcher; the subject decides the rest.
+    ("matching_permanent_enters",
+     r"whenever this creature or (?P<enterer_subject>another [^,]+?) enters"
+     r"(?: the battlefield)?(?P<enterer_includes_source>)"),
     ("matching_permanent_enters",
      r"whenever (?P<enterer_subject>(?:a|another) [^,]+) enters(?: the battlefield)?"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
@@ -808,7 +817,17 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
         if described is None or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
             return None
         del resolved[key]
-        resolved[key[: -len(suffix)] + "_filter"] = described
+        # "Whenever **this creature or** another Rogue you control enters"
+        # (Thieves' Guild Enforcer). The phrase read above says "another", which
+        # the noun parser folds into `exclude_self` — and the words in front of
+        # it put the source back in. An empty named group is how a pattern says
+        # so: it is present in the match's groupdict exactly when that spelling
+        # matched, and it carries no text of its own to be re-read.
+        stem = key[: -len(suffix)]
+        if f"{stem}_includes_source" in payload:
+            described = {k: v for k, v in described.items() if k != "exclude_self"}
+            del resolved[f"{stem}_includes_source"]
+        resolved[stem + "_filter"] = described
     return resolved
 
 

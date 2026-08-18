@@ -118,6 +118,16 @@ _CONTROLS_POWER_CONDITION = re.compile(
     r"^you control a creature with power (?P<power>\d+) or greater$"
 )
 
+# "as long as an opponent has eight or more cards in their graveyard"
+# (Thieves' Guild Recruiter cycle). A zone *size*, not a set of objects: nothing
+# is matched, so it is its own condition kind rather than a `controls` payload
+# with a graveyard filter — and the seat it asks about is printed, because "an
+# opponent" and "you" are different questions with different answers.
+_GRAVEYARD_SIZE_CONDITION = re.compile(
+    r"^(?P<who>an opponent|you) ha(?:s|ve) (?P<count>\w+) or more cards in "
+    r"(?:their|your) graveyard$"
+)
+
 _EFFECT_PT = re.compile(
     r"^gets \+(?P<power>\d+)/\+(?P<toughness>\d+)(?: and has (?P<keywords>[a-z ]+))?$"
 )
@@ -155,6 +165,19 @@ def _parse_condition_text(text: str) -> dict[str, object] | None:
         return {"kind": "controls_planeswalker", "subtype": match.group("subtype")}
     if _HAS_PLUS1_CONDITION.match(text) is not None:
         return {"kind": "has_plus1_counter"}
+    match = _GRAVEYARD_SIZE_CONDITION.match(text)
+    if match is not None:
+        count = _NUMBER_WORDS.get(match.group("count"))
+        if count is None:
+            # The number word is read, not compared — an unreadable one refuses
+            # the whole condition rather than defaulting, because a threshold
+            # that quietly becomes zero is a static that always holds.
+            return None
+        return {
+            "kind": "graveyard_size",
+            "who": "opponent" if match.group("who") == "an opponent" else "you",
+            "count": count,
+        }
     match = _CONTROLS_POWER_CONDITION.match(text)
     if match is not None:
         return {
@@ -250,6 +273,18 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
         )
     if kind == "has_plus1_counter":
         return int(source.metadata.get("plus_counters", 0)) > 0
+    if kind == "graveyard_size":
+        # "**An** opponent" is any one of them, not all — so it is an `any` over
+        # the opponents rather than a sum, and a game with more than two seats
+        # answers what the card says.
+        wanted = int(condition.get("count", 0))
+        if condition.get("who") == "opponent":
+            return any(
+                len(player.graveyard) >= wanted
+                for index, player in enumerate(game.players)
+                if index != seat and not player.lost
+            )
+        return len(game.players[seat].graveyard) >= wanted
     if kind == "controls":
         # The same payload shape ``engine/grammar/lower._lower_condition``
         # produces, answered by the same matcher — ``subject_matches`` is the one
