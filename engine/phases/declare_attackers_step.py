@@ -295,7 +295,13 @@ class DeclareAttackersStepMixin:
             if held < wanted:
                 return False
 
-        if "cant_attack" in instr_kinds:
+        # The creature's own printed clause, and the one an Aura imposes
+        # (Faith's Fetters). Asked of the Auras attached right now, so the
+        # restriction ends when the Aura does without anything clearing a flag —
+        # the arrangement every other entry in that table already uses.
+        if "cant_attack" in instr_kinds or aura_restriction_active(
+            attacker, "cant_attack"
+        ):
             return False
 
         # Defender is asked of layer 6, not of the printed keyword list: a Clone

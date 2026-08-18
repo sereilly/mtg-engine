@@ -917,3 +917,162 @@ def test_a_restriction_the_matcher_cannot_test_leaves_the_card_unsupported(set_p
     assert not target_restriction_line(
         "you can't choose an enchanted creature as this spell's target as you cast it"
     )
+
+
+# --- Faith's Fetters, and three Auras whose ETB never fired (round 113) -----
+
+
+def _fetters_board(set_pool, victim_card="Baneslayer Angel", victim_seat=1):
+    pool = set_pool("M21")
+    victim = Permanent(card=pool[victim_card])
+    p1 = PlayerState(name="P1", hand=[pool["Faith's Fetters"]], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(victim_seat, victim, None)
+    # After the entry, which stamps the sickness this clears.
+    _nosick(victim)
+    return game, p1, p2, victim
+
+
+def _fetter(game, victim_seat=1):
+    result = game.cast_from_hand(
+        0, "Faith's Fetters",
+        target_player_index=victim_seat, target_permanent_index=0,
+    )
+    game._settle()
+    return result
+
+
+def test_faiths_fetters_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Faith's Fetters"])
+    assert program.supported, program.reason
+
+
+def test_faiths_fetters_attaches_to_any_permanent(set_pool):
+    """"Enchant **permanent**". The attach path was a cascade of per-noun
+    branches — creature, land, Wall, artifact, enchantment — each re-deriving
+    "does this answer the enchant clause?" from the noun it was written for. A
+    sixth noun therefore needed a sixth branch, and without one the Aura entered
+    play unattached and went straight to the graveyard."""
+    from engine.auras import auras_attached_to
+
+    game, _, _, victim = _fetters_board(set_pool)
+
+    assert _fetter(game).supported
+    assert [a.card.name for a in auras_attached_to(victim)] == ["Faith's Fetters"]
+
+
+def test_faiths_fetters_gains_four_life(set_pool):
+    """The Aura's own ETB trigger. Auras were skipped by the generic
+    enters-the-battlefield path on the strength of the two whose entry text
+    ``_apply_aura_effect`` performs itself, so an ordinary one did nothing."""
+    game, p1, _, _ = _fetters_board(set_pool)
+
+    _fetter(game)
+
+    assert p1.life == 24
+
+
+def test_a_fettered_permanent_cannot_attack_or_block(set_pool):
+    pool = set_pool("M21")
+    game, _, _, victim = _fetters_board(set_pool)
+    assert game.can_attack(victim, 0), "the control: it could attack before"
+
+    _fetter(game)
+
+    assert not game.can_attack(victim, 0)
+    attacker = Permanent(card=pool["Alpine Watchdog"])
+    game._put_permanent_onto_battlefield(0, attacker, None)
+    _nosick(attacker)
+    assert not game._can_block_attacker(victim, attacker)
+
+
+def test_a_fettered_permanents_activated_abilities_are_shut_off(set_pool):
+    """The restriction's second half."""
+    from tests.helpers import _mk_creature_card
+
+    pinger = _mk_creature_card(
+        "Pinger", 1, 1, "{T}: This creature deals 1 damage to any target.",
+    )
+    perm = Permanent(card=pinger)
+    p1 = PlayerState(name="P1", hand=[set_pool("M21")["Faith's Fetters"]], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(1, perm, None)
+    _nosick(perm)
+
+    _fetter(game)
+    result = game.activate_permanent_ability(1, "Pinger", target_player_index=0)
+
+    assert not result.supported
+    assert "can't be activated" in result.details
+    assert p1.life == 24, "the ping did not happen"
+
+
+def test_a_fettered_permanent_may_still_use_a_mana_ability(set_pool):
+    """CR 605.1a's exception, and the reason it is part of the restriction's
+    name: without it an Aura on a land would lock its controller out of the
+    game rather than shut off one ability."""
+    from tests.helpers import _mk_creature_card
+
+    elf = Permanent(card=_mk_creature_card("Mana Elf", 1, 1, "{T}: Add {G}."))
+    p1 = PlayerState(name="P1", hand=[set_pool("M21")["Faith's Fetters"]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(1, elf, None)
+    _nosick(elf)
+
+    _fetter(game)
+    # The control: the Aura really is attached. Without it this holds on any
+    # engine where Faith's Fetters never attaches and restricts nothing.
+    from engine.auras import auras_attached_to
+    assert [a.card.name for a in auras_attached_to(elf)] == ["Faith's Fetters"]
+
+    result = game.activate_permanent_ability(1, "Mana Elf")
+
+    assert result.supported, result.details
+    assert p2.mana_pool.get("G") == 1
+
+
+def test_a_fettered_land_still_taps_for_mana(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Faith's Fetters"]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(1, Permanent(card=pool["Mountain"]), None)
+
+    _fetter(game)
+    # The control: the Aura really is attached. Without it this holds on any
+    # engine where Faith's Fetters never attaches and restricts nothing.
+    from engine.auras import auras_attached_to
+    land = next(iter(game.controlled_by(1)))
+    assert [a.card.name for a in auras_attached_to(land)] == ["Faith's Fetters"]
+
+    game.tap_land_for_mana(1, "Mountain")
+
+    assert p2.mana_pool.get("R") == 1
+
+
+@pytest.mark.parametrize(
+    "name,expected_hand",
+    [("Setessan Training", 1), ("Rousing Read", 2)],
+)
+def test_an_auras_ordinary_entry_trigger_fires(set_pool, name, expected_hand):
+    """Two more Auras that reported supported and did nothing. Both compile
+    their entry trigger to an ordinary instruction; nothing ran it, because the
+    resolution path skipped the generic trigger for every Aura alike."""
+    pool = set_pool("M21")
+    victim = Permanent(card=pool["Alpine Watchdog"])
+    p1 = PlayerState(name="P1", hand=[pool[name]], library=[pool["Mountain"]] * 5)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(1, victim, None)
+    _nosick(victim)
+
+    game.cast_from_hand(0, name, target_player_index=1, target_permanent_index=0)
+    game._settle()
+
+    assert len(p1.hand) == expected_hand

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**249 / 587 tracked rules covered (42%)** — 1128 tests, 0 unannotated.
+**249 / 587 tracked rules covered (42%)** — 1130 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -611,7 +611,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(28 tests, subrules abcghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(30 tests, subrules abcghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(9 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -861,7 +861,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.12** Indestructible *(2 tests, subrules b)*
 - [x] **702.14** Landwalk *(7 tests, subrules abc)*
 - [x] **702.15** Lifelink *(6 tests, subrules b)*
-- [x] **702.16** Protection *(41 tests, subrules abcdefghjkmn)*
+- [x] **702.16** Protection *(42 tests, subrules abcdefghjkmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(3 tests, subrules a)*
 - [x] **702.19** Trample *(9 tests, subrules bf)*

@@ -408,6 +408,23 @@ class DeclareBlockersStepMixin:
                 continue
             return False
 
+        # **The blocker's own restriction, which nothing asked.**
+        # "This creature can't block." compiled to a `cant_block` instruction,
+        # reported the card supported, and was read by no one — the comment in
+        # `engine/combat_restrictions.py` named this file as the enforcement
+        # site, and this file had never mentioned the kind. Every question below
+        # is about the *attacker*, which is how a restriction on the blocker
+        # came to have no home at all.
+        #
+        # Off the effective card, like every other read here: a Clone of a
+        # creature that can't block can't block either (CR 707.2).
+        blocker_program = compile_card_oracle(blocker.effective_card)
+        if "cant_block" in {i.kind for i in blocker_program.instructions}:
+            return False
+        # And the Aura-imposed half (Faith's Fetters).
+        if aura_restriction_active(blocker, "cant_block"):
+            return False
+
         attacker_program = compile_card_oracle(attacker.effective_card)
         attacker_kinds = {i.kind for i in attacker_program.instructions}
 

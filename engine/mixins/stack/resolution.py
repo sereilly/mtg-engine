@@ -434,21 +434,36 @@ class StackResolutionMixin:
             )
             self.log.append(f"{caster.name} put {card.name} onto battlefield")
             self._apply_global_buff(caster, card)
-            # Auras resolve their own "when this Aura enters" text through
-            # _apply_aura_effect's bespoke matching (Animate Dead, Earthbind) —
-            # skip the generic ETB-trigger path for them to avoid firing twice.
-            if "Aura" not in card.type_line:
+            is_aura = "Aura" in card.type_line
+            if not is_aura:
                 self._apply_self_enters_battlefield_triggers(
                     caster_index, permanent, target_player_index,
                     target_permanent_index, target_permanent_id,
                 )
-            self._apply_aura_effect(
+            ran_entry_text = self._apply_aura_effect(
                 caster_index,
                 permanent,
                 target_player_index,
                 target_permanent_index,
                 target_permanent_id,
             )
+            # An Aura's own "when this Aura enters" trigger, for every Aura whose
+            # entry text `_apply_aura_effect` did *not* perform itself.
+            #
+            # This used to be skipped for all of them, on the strength of the two
+            # it does perform bespokely (Animate Dead's reanimation, Earthbind's
+            # conditional damage) — so an Aura whose entry trigger compiled to an
+            # ordinary instruction did nothing at all while reporting supported.
+            # Three cards were in that state.
+            #
+            # After the attach rather than before it, which is the order the rest
+            # of the engine already keeps: "when this Aura enters, tap enchanted
+            # creature" has nothing to tap until the Aura is attached.
+            if is_aura and not ran_entry_text:
+                self._apply_self_enters_battlefield_triggers(
+                    caster_index, permanent, target_player_index,
+                    target_permanent_index, target_permanent_id,
+                )
             # An Aura that failed to attach (its target left the battlefield while the
             # spell was on the stack) goes to its owner's graveyard instead of
             # remaining on the battlefield unattached (MTG Rule 303.4g)

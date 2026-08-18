@@ -11,7 +11,8 @@ from ..handlers import EFFECT_HANDLERS
 from ..handlers._common import X_FROM_COUNT, count_from_payload
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import attach_aura, aura_animates_artifact, aura_keyword_grants
-from ..auras import aura_enchants
+from ..auras import aura_enchant_clause, aura_enchants
+from ..mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..keywords import remove_keyword
 from ..land_animation import LAND_ANIMATION_KIND
@@ -223,8 +224,20 @@ class OracleInstructionsMixin:
         target_player_index: int | None,
         target_permanent_index: int | None = None,
         target_permanent_id: int | list[int | None] | None = None,
-    ) -> None:
+    ) -> bool:
         """Attach a resolving Aura to what it targeted, and run its enter text.
+
+        Returns whether it ran the Aura's **own** "when this Aura enters" text.
+        Two of them are performed here by bespoke text matching — Animate Dead's
+        reanimation and Earthbind's conditional damage — and the caller fires
+        the ordinary triggered-ability path for every Aura it says no to.
+
+        That answer used to be assumed rather than reported: the caller skipped
+        the generic path for *every* Aura, on the strength of these two, so an
+        Aura whose entry trigger compiled to a perfectly ordinary instruction
+        silently did nothing. Rousing Read drew no cards, Setessan Training drew
+        none, and Faith's Fetters gained no life — all three reporting supported.
+        
 
         *target_permanent_id* is the same choice as *target_permanent_index*,
         recorded when the Aura was cast (CR 601.2c). An Aura is the longest gap
@@ -233,16 +246,30 @@ class OracleInstructionsMixin:
         so it is the case where a battlefield slot is most likely to have been
         renumbered underneath the index by the time this runs.
         """
+        ran_entry_text = False
         program = compile_card_oracle(aura_permanent.effective_card)
         text = program.normalized_text
         # The enchant clause is asked of the *printed* text: it is a line,
         # and `normalized_text` has already joined the lines into one blob.
         printed = aura_permanent.effective_card.oracle_text
-        if not any(
-            instr.kind == "spell_pattern" and instr.value.startswith("enchant")
-            for instr in program.instructions
-        ) and not aura_enchants(printed, "enchantment"):
-            return
+        # "Does this Aura have an enchant clause?" asked of the one function that
+        # answers it. This was a search for a ``spell_pattern`` instruction whose
+        # value begins "enchant" — a third reading of the clause, and one that
+        # depends on the *rest* of the card: Faith's Fetters' text compiles to a
+        # life-gain trigger, so its spell patterns are about gaining life and
+        # this returned before the cascade below could attach anything. The Aura
+        # entered play unattached and went to the graveyard as though its target
+        # had left.
+        # ``aura_enchant_clause`` and not ``aura_enchant_noun``: the noun reader
+        # answers a *battlefield* question and returns None for "enchant creature
+        # card in a graveyard" (Animate Dead), which is still very much an Aura
+        # with an enchant clause. The clause reader is the one that asks whether
+        # the line exists at all — the same function `resolution.py` uses two
+        # calls later to decide whether an unattached Aura goes to the graveyard.
+        if aura_enchant_clause(printed) is None and not aura_enchants(
+            printed, "enchantment"
+        ):
+            return ran_entry_text
 
         target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
         target_player = self.players[target_idx]
@@ -287,7 +314,7 @@ class OracleInstructionsMixin:
                         if revived_card is not None:
                             break
                 if revived_card is None:
-                    return
+                    return ran_entry_text
 
                 # Put the revived creature onto the battlefield under the caster's control
                 revived_perm = Permanent(card=revived_card)
@@ -307,7 +334,8 @@ class OracleInstructionsMixin:
                     revived_perm.power_bonus += -1
 
                 self.log.append(f"{aura_permanent.card.name} reanimated {revived_card.name} and attached to aura")
-                return
+                ran_entry_text = True
+                return ran_entry_text
 
             # Normal enchant-creature behavior: attach to the creature chosen at cast time.
             # If the chosen target is no longer a legal creature (it left the battlefield
@@ -326,7 +354,7 @@ class OracleInstructionsMixin:
                     None,
                 )
             if not target_creature:
-                return
+                return ran_entry_text
 
             # Snapshot the creature's pre-grant state so the continuous effects this
             # Aura grants can be reversed when the Aura leaves the battlefield
@@ -415,6 +443,7 @@ class OracleInstructionsMixin:
                     self._mark_damage_on_permanent(target_creature, 2, source=aura_permanent)
                     remove_keyword(target_creature, "flying")
                     self.log.append(f"{aura_permanent.card.name} dealt 2 damage to {target_creature.card.name} and stripped flying")
+                ran_entry_text = True
 
             # Paralyze: tap enchanted creature on enter and mark it as prevented from untapping
             if "tap enchanted creature" in text and "doesn't untap during its controller's untap step" in text:
@@ -456,7 +485,7 @@ class OracleInstructionsMixin:
                 )
             if target_land is None:
                 self.log.append(f"{aura_permanent.card.name} found no land target")
-                return
+                return ran_entry_text
             attach_aura(aura_permanent, target_land)
             # Nothing is stamped on the land any more, so there is no
             # `aura_granted_meta` to record here. The land-type change is a
@@ -537,7 +566,7 @@ class OracleInstructionsMixin:
                 )
 
             if target_artifact is None:
-                return
+                return ran_entry_text
 
             # Attach metadata links
             attach_aura(aura_permanent, target_artifact)
@@ -587,6 +616,45 @@ class OracleInstructionsMixin:
 
             if target_enchantment is None:
                 self.log.append(f"{aura_permanent.card.name} found no enchantment target")
-                return
+                return ran_entry_text
             attach_aura(aura_permanent, target_enchantment)
             self.log.append(f"{aura_permanent.card.name} enchants {target_enchantment.card.name}")
+
+        elif aura_enchant_noun(aura_permanent.effective_card) is not None:
+            # "Enchant **permanent**" (Faith's Fetters) — and every other noun
+            # this cascade does not name.
+            #
+            # The five branches above each re-derive "does this permanent answer
+            # the enchant clause?" from the noun they are written for, which is
+            # why a sixth noun needed a sixth branch and Faith's Fetters
+            # attached to nothing at all. The cast has already asked that exact
+            # question, through ``permanent_matches_enchant_noun`` — so this
+            # asks the same function rather than a sixth copy of it, and a
+            # seventh noun needs no code.
+            #
+            # Placed last so the branches above keep their bespoke behaviour
+            # (Animate Dead's reanimation, the land and Wall special cases);
+            # this is the general attach, not a replacement for them.
+            noun = aura_enchant_noun(aura_permanent.effective_card)
+            chosen = None
+            if target_permanent_index is not None:
+                candidate = self.chosen_permanent(
+                    target_player, target_permanent_index, target_permanent_id
+                )
+                if candidate is not None and permanent_matches_enchant_noun(candidate, noun):
+                    chosen = candidate
+            elif target_permanent_index is None:
+                chosen = next(
+                    (
+                        perm
+                        for perm in self.controlled_by(target_player)
+                        if permanent_matches_enchant_noun(perm, noun)
+                    ),
+                    None,
+                )
+            if chosen is None:
+                self.log.append(f"{aura_permanent.card.name} found no {noun} target")
+                return ran_entry_text
+            attach_aura(aura_permanent, chosen)
+            self.log.append(f"{aura_permanent.card.name} enchants {chosen.card.name}")
+        return ran_entry_text

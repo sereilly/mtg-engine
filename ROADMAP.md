@@ -256,61 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 110: the turn ends, which is not the same as reaching its end
-
-*(2026-08-18.)* M21 **259 → 260** — Discontinuity.
-
-> During your turn, this spell costs {2}{U}{U} less to cast.
-> End the turn. (Exile all spells and abilities from the stack, including this
-> card. Discard down to your maximum hand size. Damage wears off, and "this
-> turn" and "until end of turn" effects end.)
-
-The cost line was already implemented, so the whole card was one sentence — and
-that sentence is CR 724.1, an **expedited process that replaces the rest of
-resolution** rather than an effect on any object. It gets one instruction kind
-whose handler is the process, and `Game.end_the_turn` lives on the
-turn-structure mixin beside the rest of the phase and step navigation.
-
-Each of 724.1's five parts is a way a card could otherwise cheat it, so each is
-written out rather than approximated by "advance to the ending phase":
-
-* **724.1a is vacuous in this engine, and says so** rather than being skipped. A
-  trigger here is announced straight onto the stack, so there is no window in
-  which one has triggered and is waiting to be put there. The moment that stops
-  being true, that comment is the bug report.
-* **724.1b** exiles every object on the stack **including the one resolving**.
-  That one was popped before its handler ran, so it is not in the list — it is
-  flagged, and the resolution tail bins it through the single site that decides
-  where a spell's card goes (CR 608.2n). Read as an ordinary resolution,
-  Discontinuity would land in its owner's graveyard and be recastable.
-* **724.1c** checks state-based actions with nobody receiving priority, which is
-  why the window is cleared *before* the check — a check that opened one would
-  hand a player exactly the response 724.1 exists to deny.
-* **724.1d** removes everything from combat and skips to cleanup. Marked damage
-  is deliberately **not** cleared here: CR 514.2 does that in the cleanup step
-  the game is now heading for, and doing it twice would wipe damage dealt by
-  something that fired during the process.
-* **724.1e** needs no code at all, and that is the design. The process leaves the
-  game at the *end step's* end, so the next advance resolves cleanup and
-  `resolve_end_step` — the function that fires "at the beginning of the end
-  step" — is never called. Furious Rise, bought last round, is the witness: it
-  would exile a card and grant a permission, and does neither.
-
-**"End the turn" is three words and every one is required.** "End of turn" is a
-duration and "at the beginning of the end step" is a trigger; both are read
-elsewhere, and a production consuming only "end" would pull either of them into
-a process that exiles the stack.
-
-CR **724 joined the tracked scope** in `scripts/rules_progress.py`. 724.2's
-end-the-*phase* half has no card in the pool and shows as untested, which is the
-honest reading rather than a section trimmed to what passes.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Eight new tests, seven watched to fail on the round-109 engine; the
-eighth documents the cost line that was already implemented, so the card is
-covered rather than half-covered.
-
 ## Round 111: replaced, not triggered — and a gate that asked for one constant
 
 *(2026-08-18.)* M21 **260 → 261** — Containment Priest.
@@ -408,3 +353,68 @@ every `--check` gate green, shipped pool 388/388, AI simulation byte-identical a
 443 interactions, **zero hooks added**. Six new tests, all watched to fail on the
 round-111 engine; two guards that recorded the old reading were rewritten to
 state what replaced it.
+
+## Round 113: three Auras that reported supported and did nothing
+
+*(2026-08-18.)* M21 **262 → 263** — Faith's Fetters.
+
+> Enchant permanent
+> When this Aura enters, you gain 4 life.
+> Enchanted permanent can't attack or block, and its activated abilities can't
+> be activated unless they're mana abilities.
+
+One card, and it needed four things — three of which were defects it merely
+walked into.
+
+**The restriction table and the support gate were two copies of one list.**
+Every pattern in `_RESTRICTIONS` was also written out in `_TEMPLATES`: one
+deciding what an Aura *does*, one deciding whether the card is supported. Adding
+Faith's Fetters to the first made the restriction derive perfectly, apply
+perfectly, and the card still reported unsupported — the exact failure this
+file's other comments keep describing. `aura_effect_claim` now falls through to
+`aura_continuous_claim`, which asks the derivation tables, and the six duplicated
+entries are gone.
+
+**The attach path was a cascade of per-noun branches** — creature, land, Wall,
+artifact, enchantment — each re-deriving "does this permanent answer the enchant
+clause?" from the noun it was written for. A sixth noun needed a sixth branch, so
+"Enchant **permanent**" attached to nothing and the Aura went to the graveyard as
+though its target had left. The general branch asks
+`permanent_matches_enchant_noun`, which is the question the *cast* already
+answered; a seventh noun needs no code.
+
+Its entry guard was a third reading of the same thing, and a worse one: it
+searched for a `spell_pattern` instruction whose value begins "enchant", which
+depends on the rest of the card. Faith's Fetters compiles a life-gain trigger, so
+its spell patterns are about life, and the function returned before the cascade
+could run.
+
+**An Aura's ordinary entry trigger fired nowhere.** The resolution path skipped
+the generic enters-the-battlefield trigger for *every* Aura, on the strength of
+the two whose entry text `_apply_aura_effect` performs itself (Animate Dead's
+reanimation, Earthbind's conditional damage). So an Aura whose entry trigger
+compiled to a perfectly ordinary instruction did nothing at all — **Rousing Read
+drew no cards, Setessan Training drew none**, both reporting supported, both
+shipped in the measured set. `_apply_aura_effect` now *returns* whether it ran
+the entry text and the caller does the general thing otherwise, after the attach
+rather than before it.
+
+**And "This creature can't block." was enforced nowhere at all.** It compiles to
+a `cant_block` instruction and reports the card supported;
+`engine/combat_restrictions.py`'s comment named `phases/declare_blockers_step` as
+the enforcement site and that file had never mentioned the kind. Every question
+in `_can_block_attacker` is about the *attacker*, which is how a restriction on
+the blocker came to have no home. No card in the pool prints the bare line today,
+which is why it went unnoticed — it is one of the commonest templates in Magic,
+and Pursued Whale's token prints it.
+
+CR 605.1a's mana exception is part of the restriction's *name*, because the
+clause without it is strictly harsher: an Aura that stopped a land tapping for
+mana would lock its controller out of the game rather than shut off one ability.
+`is_mana_ability` is one predicate asked by the one caller that needs it.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Eleven new tests, nine watched to fail on the round-112 engine; the two
+that pass there carry an in-test control, because "the ability still worked" is
+also what an unattached Aura looks like.

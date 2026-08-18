@@ -9,7 +9,9 @@ ability or (for a mana ability, CR 605.1a) performs it without using the stack.
 
 from __future__ import annotations
 
+from ...auras import aura_restriction_active
 from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
+from ...mana_payment import is_mana_ability
 from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
 from ...handlers._common import permanent_matches_filter
@@ -469,6 +471,19 @@ class AbilityActivationMixin:
                 )
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        # "…and its activated abilities can't be activated unless they're mana
+        # abilities." (Faith's Fetters.) CR 605.1a decides which abilities the
+        # exception leaves open, asked through the one predicate rather than
+        # re-read here — a second reading would shut off an ability the rules
+        # leave open, which for a land is the difference between a shut-down
+        # permanent and a player locked out of casting anything.
+        if aura_restriction_active(permanent, "activated_abilities_shut_off") and not is_mana_ability(ability):
+            details = (
+                f"{permanent.card.name}'s activated abilities can't be activated"
+            )
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         # "Only this creatures owner may activate this ability." (Personal
         # Incarnation.) The owner — not whoever controls it — is the only legal

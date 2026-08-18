@@ -141,6 +141,41 @@ def plan_payment(
     return ManaPayment(from_pool=from_pool, tapped=tuple(lands[i] for i in tapped))
 
 
+#: Instruction kinds that put mana into a pool. CR 605.1a's "could add mana to
+#: a player's mana pool" is a question about what the ability *does*, so it is
+#: asked of the compiled program rather than of the printed words — a land that
+#: says "add {G}" and one that says "add one mana of any color" are the same
+#: kind of ability and neither spells the test out.
+MANA_PRODUCING_KINDS: frozenset[str] = frozenset({
+    "add_mana_from_text",
+    "sacrifice_creature_for_mana",
+    "sacrifice_self_for_mana",
+    "channel_life_for_mana",
+    "drain_target_lands_mana",
+})
+
+
+def is_mana_ability(ability) -> bool:
+    """Whether *ability* is a mana ability (CR 605.1a).
+
+    Three clauses, and only two of them can be answered here. It must be able to
+    add mana, which the instruction kind says; it must not target, which the
+    payload says. The third — "not a loyalty ability" — is a property of the
+    cost, and a loyalty ability never produces mana in this pool, so asking the
+    kind answers it too.
+
+    Its own function because two callers need the same answer and the harder one
+    is a *restriction*: "activated abilities can't be activated unless they're
+    mana abilities" (Faith's Fetters) is a rule about this predicate, and a
+    second reading of it would shut off an ability the rules leave open — or,
+    worse, leave one open that should be shut.
+    """
+    instruction = getattr(ability, "instruction", None)
+    if instruction is None or instruction.kind not in MANA_PRODUCING_KINDS:
+        return False
+    return not (instruction.payload or {}).get("targets")
+
+
 def generic_cost(amount: int) -> dict[str, int]:
     """A cost of ``{N}`` in the one shape a payment reads.
 

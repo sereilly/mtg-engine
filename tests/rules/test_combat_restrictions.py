@@ -282,3 +282,58 @@ def test_609_4_the_condition_is_re_asked_rather_than_latched():
     game._settle()
 
     assert game.can_attack(lizard, 1) is False
+
+
+@pytest.mark.cr("509.1a")
+def test_a_creatures_own_cant_block_is_asked_of_the_blocker():
+    """"This creature can't block." compiled to a ``cant_block`` instruction,
+    reported the card supported, and was read by nobody.
+
+    ``engine/combat_restrictions.py``'s own comment named
+    ``phases/declare_blockers_step`` as the enforcement site, and that file had
+    never mentioned the kind — every question in ``_can_block_attacker`` is
+    about the *attacker*, which is how a restriction on the blocker came to have
+    no home at all. The pool prints the line on no card today, which is why it
+    went unnoticed; it is one of the commonest templates in Magic."""
+    from engine import Game
+    from engine.models import Permanent, PlayerState
+    from tests.helpers import _mk_creature_card
+
+    banned = Permanent(card=_mk_creature_card(
+        "Idle Hands", 2, 2, "This creature can't block.",
+    ))
+    willing = Permanent(card=_mk_creature_card("Eager", 2, 2, ""))
+    attacker = Permanent(card=_mk_creature_card("Attacker", 3, 3, ""))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[banned, willing]),
+    ])
+
+    assert game._can_block_attacker(willing, attacker), (
+        "the control: an unrestricted creature blocks"
+    )
+    assert not game._can_block_attacker(banned, attacker)
+
+
+@pytest.mark.cr("509.1a", "702.16f")
+def test_a_clone_of_a_creature_that_cant_block_cannot_block_either():
+    """CR 707.2: the copy has the copied card's abilities. Asked of the
+    *effective* card, like every other read in that function."""
+    from engine import Game
+    from engine.models import Permanent, PlayerState
+    from tests.helpers import _mk_creature_card
+
+    from engine.copies import become_copy
+
+    original = Permanent(card=_mk_creature_card(
+        "Idle Hands", 2, 2, "This creature can't block.",
+    ))
+    clone = Permanent(card=_mk_creature_card("Shapeshifter", 0, 0, ""))
+    become_copy(clone, original)
+    attacker = Permanent(card=_mk_creature_card("Attacker", 3, 3, ""))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[original, clone]),
+    ])
+
+    assert not game._can_block_attacker(clone, attacker)

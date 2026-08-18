@@ -138,44 +138,26 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         "P/T + keyword + layer-4 subtype — aura_type_grants / layer_bridge",
     ),
     (
-        # Furor of the Bitten: P/T plus a combat requirement (CR 508.1a). The
-        # P/T half is read by `aura_static_pt_grant`, which searches rather than
-        # anchors, and the requirement by `aura_restrictions` — so this one
-        # entry claims a line whose two halves live in two places.
-        re.compile(
-            rf"^enchanted {_NOUN} gets [+-]\d+/[+-]\d+ and attacks each combat if able$"
-        ),
-        "static P/T + must-attack requirement — declare_attackers_step",
-    ),
-    (
         re.compile(
             r"^enchanted land has indestructible and can't be enchanted by other auras$"
         ),
         "Wall of Wonder-style land protection — _apply_aura_effect",
     ),
     # --- combat and untap modifications ------------------------------------
-    (
-        re.compile(r"^all creatures able to block enchanted creature do so$"),
-        "Lure — declare_blockers_step",
-    ),
-    (
-        re.compile(rf"^enchanted {_NOUN} can't be blocked except by walls$"),
-        "Invisibility — declare_blockers_step only_blockable_by_walls",
-    ),
-    (
-        re.compile(rf"^enchanted {_NOUN} can attack as though it had haste$"),
-        "Instill Energy — summoning-sickness bypass",
-    ),
-    (
-        re.compile(rf"^enchanted {_NOUN} can attack as though it didn't have defender$"),
-        "Animate Wall — declare_attackers_step._ignores_defender",
-    ),
-    (
-        re.compile(
-            rf"^enchanted {_NOUN} doesn't untap during its controller's untap step$"
-        ),
-        "Paralyze — untap_step aura_prevents_untap",
-    ),
+    #
+    # **Nothing here.** Six entries stood in this block, one per pattern already
+    # written in `_RESTRICTIONS` — the same sentence in two lists, one deciding
+    # what the Aura does and one deciding whether the card is supported. Furor
+    # of the Bitten's compound line was here too, and its comment described the
+    # split as a feature.
+    #
+    # It is the failure this file's other comments keep naming, and it fired the
+    # moment round 113 added one: Faith's Fetters' restriction derived
+    # perfectly, applied perfectly, and the card reported unsupported, because
+    # the second list had never heard of it. `aura_effect_claim` now falls
+    # through to `aura_continuous_claim`, which asks the derivation tables — so
+    # a restriction added to `_RESTRICTIONS` is claimed by construction, and
+    # `tests/rules/test_aura_support.py` fails if a copy comes back.
     # --- control and type changes -------------------------------------------
     (
         re.compile(rf"^you control enchanted {_NOUN}$"),
@@ -305,7 +287,15 @@ def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     for pattern, claim in _TEMPLATES:
         if pattern.match(normalized_line):
             return claim
-    return None
+    # **The derivation tables, asked rather than copied.** Every pattern in
+    # `_RESTRICTIONS` was also written out in `_TEMPLATES` — the same sentence
+    # in two lists, one deciding what the Aura *does* and one deciding whether
+    # the card is supported. Adding Faith's Fetters to the first made the
+    # restriction work perfectly and left the card reporting unsupported, which
+    # is the exact shape this file's other comments keep describing: a gate and
+    # a dispatch reading two copies of one rule. `aura_continuous_claim` already
+    # asks the tables, so asking it here retires the copies.
+    return aura_continuous_claim(normalized_line)
 
 
 def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> list[str]:
@@ -552,6 +542,29 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         # summoning-sick Llanowar Elves under Instill Energy tapped for mana.
         re.compile(rf"^enchanted {_NOUN} can attack as though it had haste$"),
         "attacks_as_though_hasty",
+    ),
+    (
+        # Faith's Fetters, first half. Two restrictions in one printed clause,
+        # and both are named here rather than one standing for the pair: a card
+        # printing only "can't attack" (Pacifism) or only "can't block" is a
+        # different card, and the enforcement sites are two different steps.
+        re.compile(rf"^enchanted {_NOUN} can't attack or block\b"),
+        "cant_attack",
+    ),
+    (
+        re.compile(rf"^enchanted {_NOUN} can't attack or block\b"),
+        "cant_block",
+    ),
+    (
+        # Faith's Fetters, second half. CR 605.1a's exception is part of the
+        # name, because the clause without it is a strictly harsher restriction
+        # — an Aura that stopped a land tapping for mana would lock its
+        # controller out of the game rather than shut off one ability.
+        re.compile(
+            rf"^enchanted {_NOUN} can't attack or block, and its activated "
+            r"abilities can't be activated unless they're mana abilities$"
+        ),
+        "activated_abilities_shut_off",
     ),
 )
 
