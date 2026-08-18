@@ -315,11 +315,46 @@ def _opponent_cast_filter(
 
 # The controller clause of a "whenever a <filter> becomes tapped" condition, as
 # the legacy trigger table captures it, mapped to whose permanents qualify.
+# Whose spell or ability did the targeting. Absent means anyone's.
+_TARGETING_CONTROLLER_SCOPES = {
+    "an opponent controls": "opponent",
+    "you control": "you",
+}
+
 # Absent means any player's.
 _TAPPED_CONTROLLER_SCOPES = {
     "an opponent controls": "opponent",
     "you control": "you",
 }
+
+
+@event_filter("self_becomes_target")
+def _self_becomes_target_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever this creature becomes the target of a spell or ability an
+    opponent controls…" (Warden of the Woods).
+
+    "**This** creature", so the event's subject must be the very permanent whose
+    ability this is — by identity, because a look-alike on the same battlefield
+    is a different permanent and would otherwise draw its controller two cards.
+
+    Whose spell it must be is read off the trigger's own parsed condition, so
+    the unnarrowed wording and "you control" are the same dispatcher with
+    different data.
+    """
+    if event.subject is not permanent:
+        return False
+    scope = _TARGETING_CONTROLLER_SCOPES.get(
+        trig.condition.payload.get("targeting_controller")
+    )
+    if scope is None:
+        return True
+    source_seat = event.payload.get("source_seat")
+    if not isinstance(source_seat, int):
+        return False
+    observer = game.players.index(_controller_of(game, permanent))
+    return (source_seat == observer) if scope == "you" else (source_seat != observer)
 
 
 @event_filter("permanent_becomes_tapped")

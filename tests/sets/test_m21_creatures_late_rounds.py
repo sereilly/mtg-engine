@@ -507,3 +507,70 @@ def test_the_old_field_name_is_a_view_over_the_collection(set_pool):
     p1.creature_only_mana["G"] = 2
 
     assert p1.restricted_mana["creature"] == {"G": 2}
+
+
+# --- Round 92: a trigger that fires when something points at you ------------
+
+
+def _warden_board(set_pool, caster_seat, spell, opposing=()):
+    pool = set_pool("M21")
+    warden = _nosick(Permanent(card=pool["Warden of the Woods"]))
+    p1 = PlayerState(name="P1", battlefield=[warden], library=[pool["Island"]] * 5)
+    p2 = PlayerState(
+        name="P2",
+        library=[pool["Island"]] * 5,
+        battlefield=[Permanent(card=pool[name]) for name in opposing],
+    )
+    (p1 if caster_seat == 0 else p2).hand = [pool[spell]]
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    return game, p1, p2, warden
+
+
+def test_warden_of_the_woods_compiles_supported(set_pool):
+    """Whose spell it must be is *data* on one condition, not a kind — the
+    unnarrowed wording and "you control" are the same dispatcher asked a
+    different question."""
+    program = compile_card_oracle(set_pool("M21")["Warden of the Woods"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "self_becomes_target"
+    assert trigger.condition.payload["targeting_controller"] == "an opponent controls"
+
+
+def test_an_opponents_spell_fires_it(set_pool):
+    """CR 601.2c chooses targets as the spell is cast, which is the moment it
+    goes on the stack — so that is where the announcement is, and the Warden
+    draws whether or not the Shock ever resolves."""
+    game, p1, _p2, _warden = _warden_board(set_pool, 1, "Shock")
+
+    game.cast_from_hand(1, "Shock", target_player_index=0, target_permanent_index=0)
+
+    (choice,) = game.pending_choices
+    assert choice.kind == "optional_pay"
+    assert game.confirm_optional_pay(0, accept=True)
+    assert len(p1.hand) == 2
+
+
+def test_its_own_controllers_spell_does_not(set_pool):
+    """"An opponent controls" is read, not decoration."""
+    game, p1, _p2, _warden = _warden_board(set_pool, 0, "Shock")
+
+    game.cast_from_hand(0, "Shock", target_player_index=0, target_permanent_index=0)
+
+    assert game.pending_choices == []
+    assert p1.hand == []
+
+
+def test_a_spell_aimed_elsewhere_does_not(set_pool):
+    """"**This** creature" — the subject is compared by identity, because a
+    look-alike on the same battlefield is a different permanent."""
+    game, _p1, _p2, _warden = _warden_board(
+        set_pool, 1, "Shock", opposing=["Gale Swooper"]
+    )
+
+    game.cast_from_hand(1, "Shock", target_player_index=1, target_permanent_index=0)
+
+    assert game.pending_choices == []

@@ -263,6 +263,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_becomes_blocked",    r"whenever this creature becomes blocked"),
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
+    # "Whenever this creature becomes the target of a spell or ability an
+    # opponent controls" (Warden of the Woods). Whose spell it must be is a
+    # named group, so "you control" and the unnarrowed form are the same
+    # condition with different data — the arrangement the tapped trigger below
+    # already uses, for the same reason.
+    #
+    # A separate kind from the WHEN table's `becomes_target`, because a kind
+    # lives in one table: that one is a one-shot wording no card in the pool
+    # prints, and it still has no dispatcher.
+    ("self_becomes_target",
+     r"whenever this creature becomes the target of a spell or ability"
+     r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     ("enchanted_land_tapped",       r"whenever enchanted land becomes tapped"),
     ("self_becomes_tapped",         r"whenever this land becomes tapped"),
     # "Whenever a Forest an opponent controls becomes tapped" (Lifetap). The

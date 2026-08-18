@@ -38,6 +38,20 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_dealt_damage_by_self_dies",
      ("a", "creature", "dealt", "damage", "by", "this", "creature", "this", "turn", "dies")),
     ("creature_dies", ("a", "creature", "dies")),
+    # "…becomes the target of a spell or ability an opponent controls" (Warden
+    # of the Woods). Longest first, as everywhere in this table: the narrowed
+    # wording has the unnarrowed one as a strict prefix, so matching that first
+    # would strand "an opponent controls" — and *both* front ends would then
+    # name a condition that fires on the controller's own spells too.
+    ("self_becomes_target",
+     ("this", "creature", "becomes", "the", "target", "of", "a", "spell",
+      "or", "ability", "an", "opponent", "controls")),
+    ("self_becomes_target",
+     ("this", "creature", "becomes", "the", "target", "of", "a", "spell",
+      "or", "ability", "you", "control")),
+    ("self_becomes_target",
+     ("this", "creature", "becomes", "the", "target", "of", "a", "spell",
+      "or", "ability")),
     ("creature_deals_combat_damage", ("this", "creature", "deals", "combat", "damage", "to", "a", "player")),
     # Narrowed to an opponent (Hypnotic Specter). Must precede the unnarrowed
     # form below, which is a strict prefix of it: matching that first would name

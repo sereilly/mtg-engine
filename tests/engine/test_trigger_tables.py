@@ -100,6 +100,14 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "creature you control"
     ),
     "deals_damage_to_player": "whenever this creature deals damage to a player",
+    # Both wordings, because the narrowing is data on one condition: the
+    # unnarrowed form fires on anyone's spell and the narrowed one only on an
+    # opponent's, and a table holding just one of them would let the other drift.
+    "self_becomes_target": (
+        "whenever this creature becomes the target of a spell or ability",
+        "whenever this creature becomes the target of a spell or ability "
+        "an opponent controls",
+    ),
     # when
     "enters_battlefield": "when this creature enters the battlefield",
     "leaves_battlefield": "when this creature leaves the battlefield",

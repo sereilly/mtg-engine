@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 241/285) to the full release line - **137 sets, 33,594
+M21 measured at 242/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–88 — lives in git history at and before
-commit `3794c8b`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–89 — lives in git history at and before
+commit `8692eaf`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,62 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 89: one action, two ways to take it
-
-*(2026-08-17.)* M21 **238 → 239** — Crypt Lurker, closing the batch.
-
-> When this creature enters, you may sacrifice a creature or discard a creature
-> card. If you do, draw a card.
-
-**Two gaps, and the smaller one had already been half-built.** Round 87 taught
-the engine a discard the printed phrase narrows — as a *cost*. This is the same
-phrase as an *effect*, so it runs through the same gate
-(`chargeable_card_filter`) and refuses the same things: "Discard a **legendary**
-card" has no payload key for its supertype, would reduce to "discard a card", and
-so is not admitted rather than quietly taking anything. The prompt carries the
-filter, and `live_discard_candidates` is the one rule the offer, the re-check and
-the non-interactive default all read — the arrangement `live_tap_any_number`
-already makes, for the failure it already prevents.
-
-**The larger gap is the "or", and it is not a sequence.** "Sacrifice a creature
-or discard a creature card" is one action with two ways to take it. Read as two
-steps it would do both; read as the first half it would drop the rest, which is
-what the unconsumed-token invariant was loudly refusing the whole line for.
-
-It lowers onto **`choose_one`** — the handler a printed "Choose one —" already
-uses. That is not a shortcut but the observation that the same question is being
-asked: which of these does the controller pick? A second mechanism would mean two
-prompts, two non-interactive defaults, and two places for a mode to go unoffered.
-What differs is only where the alternatives were printed, and the labels are the
-card's own words, sliced back out of the line through the tokens' offsets so the
-prompt reads like the card rather than like the lexer.
-
-**A mode you cannot take is not offered.** The `may` handler has always withheld
-an offer whose action cannot be performed — "you may sacrifice another creature"
-with nothing to sacrifice would otherwise run the if-you-do branch off a cost that
-never happened. That check is now asked *per alternative*: the accept branch is
-rebuilt with the unofferable modes removed, and only when none is left does the
-whole offer go unmade. With no creature card in hand, Crypt Lurker offers the
-sacrifice alone. (The reverse case cannot be built — the Lurker is itself a
-creature, so the sacrifice is always open.)
-
-`_action_is_takeable` answers for two instruction kinds and True for everything
-else, which is what the engine already did for all of them. A kind added there
-has to be one whose "nothing to give" case is real and checkable: a wrongly-False
-answer *withdraws an offer the card makes*, which is the opposite error and just
-as wrong.
-
-**`lower.py` crossed 1,000 lines**, so the static-ability lowering moved to
-`engine/grammar/statics.py`, between `lowering/` and `lower` in the layer order.
-A family: everything in it answers "what does this permanent do while it sits
-there?", which has no resolution, no targets and no order of steps — and its
-correctness is a *round trip*, the lord-buff filter handed to the derivation
-table and rebuilt and compared, which is easier to see in one file.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Nine new tests, all nine watched to fail on the round-88 engine.
-
 ## Round 90: a blocking requirement, and a tally of the dead
 
 *(2026-08-17.)* M21 **239 → 240** — Canopy Stalker.
@@ -419,3 +363,46 @@ overstate what is spendable.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Seven new tests, six watched to fail on the round-90 engine.
+
+## Round 92: a trigger that fires when something points at you
+
+*(2026-08-17.)* M21 **241 → 242** — Warden of the Woods.
+
+> Whenever this creature becomes the target of a spell or ability an opponent
+> controls, you may draw two cards.
+
+**The condition was already in the table, and had never had a dispatcher.**
+`engine/oracle.py`'s WHEN table has carried `becomes_target` — "when this becomes
+the target" — since before the grammar existed, matching nothing in the pool and
+announced by nothing anywhere. That is precisely the class
+`tests/engine/test_trigger_dispatchers.py` was written for, and the reason it
+passed is the reason the guard asks its question of *conditions the pool
+produces*: no supported card produced one.
+
+This card produces the **whenever** wording, which is a different kind — a kind
+lives in one table — so `self_becomes_target` is new, and it arrives with the
+thing the old row never had.
+
+**The dispatcher is `_stack_push`, and that is not a convenience.** CR 601.2c has
+a spell choose its targets as it is cast and CR 602.2b an ability as it is
+activated; both are the moment the object is put on the stack, and `_stack_push`
+is the one place that happens. It is also where the targets have just been
+stamped from unstable slots into stable ids, so the announcement runs against the
+permanents the item really points at rather than whatever occupies those slots.
+The trigger fires on the *targeting*, so the Warden draws whether or not the
+Shock ever resolves — which is what CR 603.2 says and what the test pins.
+
+**Whose spell it must be is data.** "An opponent controls" is a named group on
+one condition, so the unnarrowed wording and "you control" are the same
+dispatcher asked a different question — the arrangement Lifetap's tapped trigger
+already uses. The announcement carries the caster's seat, because nothing
+downstream could recover from a targeted permanent who pointed at it.
+
+"**This** creature" is compared by identity, not by value: a look-alike on the
+same battlefield is a different permanent and would otherwise draw its controller
+two cards.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Four new tests, two watched to fail on the round-91 engine — the
+two negative ones pass there too, because an unsupported card also draws nothing.

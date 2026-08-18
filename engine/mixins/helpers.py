@@ -1245,7 +1245,39 @@ class GameHelpersMixin:
         if 0 <= seat < len(self.players):
             item.target_permanent_id = self.permanent_ids_at(seat, item.target_permanent_index)
         self.stack.append(item)
+        self._announce_targeting(item)
         return item
+
+    def _announce_targeting(self, item) -> None:
+        """"…becomes the target of a spell or ability" (CR 603.2, Warden of the
+        Woods).
+
+        Announced here because here is where the targets exist: CR 601.2c has a
+        spell choose them as it is cast and CR 602.2b an ability as it is
+        activated, which is exactly the moment an object is put on the stack.
+        Reading the ids the stamping above just settled means a target that has
+        already changed hands or left is not announced against a stale slot.
+
+        One event per targeted permanent, and the announcement carries *who* did
+        the targeting — the narrowing "an opponent controls" is about the spell's
+        controller, which nothing downstream could recover from the permanent.
+        """
+        from ..events import emit
+
+        ids = item.target_permanent_id
+        if ids is None:
+            return
+        for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
+            if not isinstance(permanent_id, int):
+                continue
+            targeted = self.permanent_by_id(permanent_id)
+            if targeted is None:
+                continue
+            emit(
+                self, "self_becomes_target",
+                subject=targeted,
+                source_seat=item.caster_index,
+            )
 
     def _destroy_swept_permanents(
         self,
