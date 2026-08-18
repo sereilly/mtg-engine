@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 77.9% | 75.0% | 52.1% | 213 |
+| M21 *(measured)* | 285 | 503 | 77.9% | 75.3% | 52.5% | 215 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -54,9 +54,9 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 2 | expected 'unless defending player controls' |  |
-| 2 | 2 | a where-clause pump needs a single target |  |
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
+| 1 | 1 | no handler for doom counters |  |
 
 ## Cards executing through the grammar
 
@@ -73,6 +73,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Target creature gets +1/+1 and gains your choice of deathtouch or lifelink until end of turn. (Any amount of damage a creature with deathtouch deals to a creature is enough to destroy it. Damage dealt by a creature with lifelink also causes its controller to gain that much life.)`
 - **Ali Baba**
   - `{R}: Tap target Wall.`
+- **Alpine Houndmaster**
+  - `Whenever this creature attacks, it gets +X/+0 until end of turn, where X is the number of other attacking creatures.`
 - **Ancestral Recall**
   - `Target player draws three cards.`
   - `Target player draws three cards.`
@@ -941,6 +943,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
 - **Quirion Dryad**
   - `Whenever you cast a spell that's white, blue, black, or red, put a +1/+1 counter on this creature.`
+- **Radha, Heart of Keld**
+  - `{4}{R}{G}: Radha gets +X/+X until end of turn, where X is the number of lands you control.`
 - **Radiant Fountain**
   - `When this land enters, you gain 2 life.`
   - `{T}: Add {C}.`

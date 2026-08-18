@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 255/285) to the full release line - **137 sets, 33,594
+M21 measured at 256/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–102 — lives in git history at and before
-commit `c72cf96`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–103 — lives in git history at and before
+commit `431e0ac`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,43 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 103: a trigger that includes its own source, and a zone threshold
-
-*(2026-08-18.)* M21 **252 → 253** — Thieves' Guild Enforcer.
-
-> Whenever this creature or another Rogue you control enters, each opponent mills
-> two cards.
-> As long as an opponent has eight or more cards in their graveyard, this
-> creature gets +2/+1 and has deathtouch.
-
-**"This creature or another X" is the bare form plus the source**, and the
-difference is exactly one word. The noun parser folds "another" into
-`exclude_self` (CR 109.5), and the words in front of it put the source back —
-so the exclusion has to be *undone* rather than left to narrow a set the card
-widened. The engine already had this spelling for *dies* (Basri's Lieutenant);
-this is the entry twin, and both map onto the one kind so there is still one
-dispatcher.
-
-An **empty named group** is how the pattern says which spelling matched. It is
-present in the match's groupdict exactly when that alternative fired and carries
-no text of its own to be re-read — which is what keeps the marker from becoming
-a second thing to parse.
-
-**The static condition is a zone *size*, not a set of objects.** Nothing is
-matched, so it is its own condition kind rather than a `controls` payload with a
-graveyard filter — and the seat is printed, because "an opponent" and "you" are
-different questions with different answers. "**An** opponent" is any one of
-them, so it is an `any` over the opponents rather than a sum, and a game with
-more than two seats answers what the card says.
-
-The threshold's number word is read, not compared. A word the table does not know
-refuses the whole condition, because a threshold that quietly becomes zero is a
-static that always holds.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Eight new tests, five watched to fail on the round-102 engine.
-
 ## Round 104: an exile that lasts as long as its source does
 
 *(2026-08-18.)* M21 **253 → 254** — Kitesail Freebooter, closing the batch.
@@ -375,3 +338,35 @@ Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
 byte-identical at 443 interactions, **zero hooks added**. Eight new tests, five
 watched to fail on the round-104 engine; one guard that asserted the old refusal
 was rewritten to state what replaced it.
+
+## Round 106: a computed pump on the ability's own source
+
+*(2026-08-18.)* M21 **255 → 256** — Alpine Houndmaster.
+
+> Whenever this creature attacks, it gets +X/+0 until end of turn, where X is the
+> number of other attacking creatures.
+
+**One refusal, and it named the wrong thing.** "A where-clause pump needs a
+single target" — every computed pump the engine had was aimed at a *chosen*
+permanent, and this one is on the ability's own source. It routes through
+`pump_self`, which has boosted the source until end of turn since the engine was
+written; what was missing was only a way to say **how big**, and that is the same
+`x_from_count` spec every other computed amount already carries. A second
+instruction kind would have been the same handler with the number arriving by a
+different road.
+
+Only the characteristics the card writes as X are variable. "+X/+0" pumps power
+alone, and the literal half stayed literal — read as X it would have grown the
+toughness too.
+
+**"Other" is an identity comparison, and the evaluator could not make it.**
+`permanent_matches_filter` answers about one permanent alone (CR 109.5's
+exclusion is a comparison against the ability's *source*), so the key would have
+been dropped and a lone attacker would have counted itself. A resolution knows
+its source, so `count_from_payload` passes one and the evaluator performs the
+exclusion — and the continuous recompute, which has no source, never produces the
+key in the first place.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Four new tests, three watched to fail on the round-105 engine.

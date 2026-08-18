@@ -63,10 +63,24 @@ def pump_self(game: Game, instruction: OracleInstruction, context: OracleExecuti
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    power_delta = int(instruction.payload.get("power", 0))
-    toughness_delta = int(instruction.payload.get("toughness", 0))
+    # "…gets +X/+0 until end of turn, where X is the number of other attacking
+    # creatures." (Alpine Houndmaster.) X is defined by a count taken at
+    # resolution, through the one evaluator every computed amount shares — so
+    # the same printed clause means the same number here as on a targeted pump.
+    x_value = context.x_value
+    x_count = instruction.payload.get("x_from_count")
+    if x_count is not None:
+        x_value = count_from_payload(game, context, x_count)
+    power_delta = resolve_amount(instruction.payload.get("power", 0), x_value)
+    toughness_delta = resolve_amount(instruction.payload.get("toughness", 0), x_value)
+    if instruction.payload.get("power_negative"):
+        power_delta = -power_delta
+    if instruction.payload.get("toughness_negative"):
+        toughness_delta = -toughness_delta
     apply_temp_pt_boost(source_permanent, power_delta, toughness_delta)
-    game.log.append(f"{card.name} gets +{power_delta}/+{toughness_delta} until end of turn")
+    game.log.append(
+        f"{card.name} gets {power_delta:+}/{toughness_delta:+} until end of turn"
+    )
     return True, "resolved"
 
 

@@ -97,16 +97,27 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         # count, so the payload carries what to count and the handler computes
         # it at resolution; the sign travels separately because _signed cannot
         # negate a variable.
-        if not _is_target(node.subject):
+        # "…**it** gets +X/+0 until end of turn, where X is the number of other
+        # attacking creatures." (Alpine Houndmaster.) The subject is the
+        # ability's own source, not a chosen target — a temporary pump on the
+        # source is what `pump_self` already does, and what was missing was only
+        # a way to say how big it is. Its own kind rather than a flag, for the
+        # reason the base-P/T pair is two kinds: one asks a picker which
+        # permanent and the other asks the context for the source.
+        on_source = _is_source(node.subject)
+        if not on_source and not _is_target(node.subject):
             raise LoweringError("a where-clause pump needs a single target", node=node)
-        if not isinstance(node.power, ast.Var) or not isinstance(node.toughness, ast.Var):
-            raise LoweringError("a where-clause needs X in the P/T", node=node)
         if not isinstance(node.x_definition, ast.CountOf):
             raise LoweringError("only a count can define X here", node=node)
-        assert isinstance(node.subject, ast.TargetSpec)
+        # Only the characteristics the card writes as X are variable: "+X/+0"
+        # pumps power alone, so the literal half stays literal.
         payload: dict[str, object] = {
-            "power": "x",
-            "toughness": "x",
+            "power": "x" if isinstance(node.power, ast.Var) else _signed(
+                node.power, node.power_negative
+            ),
+            "toughness": "x" if isinstance(node.toughness, ast.Var) else _signed(
+                node.toughness, node.toughness_negative
+            ),
             "power_negative": node.power_negative,
             "toughness_negative": node.toughness_negative,
             # The one spec every reader of a computed amount agrees on. The
@@ -115,6 +126,14 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
             # data like everything else.
             "x_from_count": count_spec(node.x_definition.filter, node),
         }
+        if on_source:
+            # ``pump_self`` already boosts the source until end of turn; what was
+            # missing was a way to say how big, which is the same
+            # ``x_from_count`` spec every other computed amount carries. A second
+            # kind would be the same handler with the number arriving by a
+            # different road.
+            return (OracleInstruction("pump_self", "", payload),)
+        assert isinstance(node.subject, ast.TargetSpec)
         _describe_targets(payload, node.subject)
         return (OracleInstruction("pump_target_creature_until_eot", "", payload),)
 

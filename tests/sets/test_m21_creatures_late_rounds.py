@@ -1315,3 +1315,59 @@ def test_a_combat_damage_trigger_with_any_effect_now_fires(set_pool):
     _swing(game, [0])
 
     assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+
+
+# --- Round 106: a computed pump on the ability's own source -----------------
+
+
+def _houndmaster_swing(set_pool, other_attackers=0):
+    pool = set_pool("M21")
+    hound = _nosick(Permanent(card=pool["Alpine Houndmaster"]))
+    others = [
+        _nosick(Permanent(card=pool["Gale Swooper"])) for _ in range(other_attackers)
+    ]
+    p1 = PlayerState(name="P1", battlefield=[hound] + others)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game.declare_attackers(0, list(range(1 + other_attackers)))
+    game._settle()
+    return game, hound
+
+
+def test_alpine_houndmaster_compiles_supported(set_pool):
+    """The refusal was "a where-clause pump needs a single target" — every
+    computed pump the engine had was aimed at one chosen permanent, and this one
+    is on the ability's own source. It routes through ``pump_self``, which
+    already boosts the source until end of turn: what was missing was a way to
+    say *how big*, and that is the same ``x_from_count`` spec every other
+    computed amount carries."""
+    program = compile_card_oracle(set_pool("M21")["Alpine Houndmaster"])
+    assert program.supported, program.reason
+
+    attack = next(
+        t for t in program.triggered_abilities if t.condition.kind == "creature_attacks"
+    )
+    assert attack.instruction.kind == "pump_self"
+    assert attack.instruction.payload["power"] == "x"
+    assert attack.instruction.payload["toughness"] == 0, "+X/+0 — only power is variable"
+
+
+@pytest.mark.parametrize("others,power", [(0, 2), (1, 3), (2, 4)])
+def test_the_pump_counts_the_other_attackers(set_pool, others, power):
+    game, hound = _houndmaster_swing(set_pool, others)
+
+    assert hound.effective_power == power
+    assert hound.effective_toughness == 2, "+X/+0 leaves toughness alone"
+
+
+def test_other_excludes_the_source_itself(set_pool):
+    """"**Other** attacking creatures" is an identity comparison against the
+    ability's own source, which ``permanent_matches_filter`` deliberately does
+    not answer — it is about one permanent alone. The resolution knows the
+    source, so it performs the exclusion; a continuous recompute, which does
+    not, never produces the key."""
+    game, hound = _houndmaster_swing(set_pool, other_attackers=0)
+
+    assert hound.effective_power == 2, "attacking alone is +0/+0, not +1/+0"

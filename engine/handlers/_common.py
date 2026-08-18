@@ -35,9 +35,14 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
     "target" the player it points at — which is the only thing a resolution
     knows that a continuous recompute does not. Everything else is
     :func:`evaluate_count`.
+
+    A resolution also knows the ability's **source**, which is the other thing a
+    continuous recompute does not: "the number of **other** attacking creatures"
+    (Alpine Houndmaster) excludes it, and `permanent_matches_filter` cannot —
+    that is an identity comparison, not a property of a permanent.
     """
     owner = context.caster if spec.get("owner", "you") == "you" else (context.target or context.caster)
-    return evaluate_count(game, owner, spec)
+    return evaluate_count(game, owner, spec, exclude=context.source_permanent)
 
 
 def _halve(total: int, spec: dict) -> int:
@@ -53,7 +58,9 @@ def _halve(total: int, spec: dict) -> int:
     return -(-total // 2) if rounding == "up" else total // 2
 
 
-def evaluate_count(game: "Game", owner: "PlayerState", spec: dict) -> int:
+def evaluate_count(
+    game: "Game", owner: "PlayerState", spec: dict, *, exclude=None
+) -> int:
     """How much the amount a card *computes* currently is, for a named owner.
 
     CR 608.2: a where-clause is not announced with the spell, it is counted when
@@ -92,9 +99,16 @@ def evaluate_count(game: "Game", owner: "PlayerState", spec: dict) -> int:
     zone = spec.get("zone", "battlefield")
     if zone == "battlefield":
         seat = game.players.index(owner)
+        # "**Other** …" (CR 109.5) is an identity comparison against the ability's
+        # own source, which the matcher deliberately does not answer — it is
+        # about one permanent alone. A spec carrying the key with no source to
+        # compare against counts nothing extra rather than silently dropping it:
+        # the caller that has a source passes one, and the continuous recompute
+        # that does not never produces the key.
+        skip = exclude if filt.pop("exclude_self", False) else None
         matched = [
             perm for perm in game.controlled_by(seat)
-            if permanent_matches_filter(perm, filt)
+            if perm is not skip and permanent_matches_filter(perm, filt)
         ]
         if aggregate == "greatest_power":
             return _halve(max((perm.effective_power for perm in matched), default=0), spec)
