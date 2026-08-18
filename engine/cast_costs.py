@@ -24,6 +24,8 @@ failure is *the spell can't be cast*, and once after, to perform it.
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -48,11 +50,26 @@ class AdditionalCost:
     phrase: str
     sacrifice_filter: dict | None = None
     discard_cards: int = 0
+    #: "…by paying **3 life** and discarding a card" (Demonic Embrace).
+    #: CR 118.4 makes an unpayable life cost an uncastable spell, checked with
+    #: the rest of the costs before anything is spent.
+    pay_life: int = 0
+    #: The zone this cost applies to, when the sentence naming it also names a
+    #: zone. Demonic Embrace costs {1}{B}{B} from the hand and {1}{B}{B} plus 3
+    #: life plus a card from the graveyard — the *same card*, so the cost cannot
+    #: be a property of the card alone. ``None`` means every zone, which is what
+    #: an "as an additional cost to cast this spell" line means.
+    from_zone: str | None = None
 
     def describe(self) -> str:
+        parts = []
         if self.sacrifice_filter is not None:
-            return f"sacrifice a {filter_head_noun(self.sacrifice_filter)}"
-        return f"discard {self.discard_cards} card(s)"
+            parts.append(f"sacrifice a {filter_head_noun(self.sacrifice_filter)}")
+        if self.pay_life:
+            parts.append(f"pay {self.pay_life} life")
+        if self.discard_cards:
+            parts.append(f"discard {self.discard_cards} card(s)")
+        return " and ".join(parts) or "no additional cost"
 
 
 # Canonical lowercase phrases, matched against a whole normalized line. Both
@@ -69,6 +86,56 @@ ADDITIONAL_COSTS: tuple[AdditionalCost, ...] = (
 )
 
 
+#: "You may cast this card from your <zone> by paying <costs> in addition to
+#: paying its other costs." The costs half of the sentence
+#: ``cast_permissions.self_permission_zone`` reads the zone half of.
+_SELF_PERMISSION_COSTS = re.compile(
+    r"^you may cast this card from your (?P<zone>graveyard|exile) by paying "
+    r"(?P<costs>.+?) in addition to paying its other costs$"
+)
+
+#: The cost clauses that sentence may list, each mapped to the field it fills.
+#: A clause outside this set makes the whole line unread — the card then reports
+#: unsupported rather than castable at a discount, which is the direction a cost
+#: must never drift in.
+_SELF_PERMISSION_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^(\d+) life$"), "pay_life"),
+    (re.compile(r"^discarding (?:a|one) card$"), "discard_one"),
+)
+
+
+def _self_permission_cost(line: str) -> AdditionalCost | None:
+    """The additional costs a self-granted zone permission charges, or None.
+
+    Every clause must be read or the line is refused: a sentence that named a
+    cost this table cannot charge would otherwise let the card be cast from the
+    graveyard for less than it prints.
+    """
+    match = _SELF_PERMISSION_COSTS.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    fields: dict[str, int] = {"pay_life": 0, "discard_cards": 0}
+    for clause in re.split(r",\s*|\s+and\s+", match.group("costs")):
+        clause = clause.strip()
+        if not clause:
+            continue
+        for pattern, field in _SELF_PERMISSION_CLAUSES:
+            found = pattern.match(clause)
+            if found is None:
+                continue
+            if field == "pay_life":
+                fields["pay_life"] += int(found.group(1))
+            else:
+                fields["discard_cards"] += 1
+            break
+        else:
+            return None
+    return AdditionalCost(
+        match.group(0), pay_life=fields["pay_life"],
+        discard_cards=fields["discard_cards"], from_zone=match.group("zone"),
+    )
+
+
 def additional_cost_for_line(line: str) -> AdditionalCost | None:
     """The cost *line* states, or None when it states none.
 
@@ -80,7 +147,7 @@ def additional_cost_for_line(line: str) -> AdditionalCost | None:
     for cost in ADDITIONAL_COSTS:
         if text == cost.phrase:
             return cost
-    return None
+    return _self_permission_cost(line)
 
 
 def additional_costs(card: CardDefinition) -> tuple[AdditionalCost, ...]:

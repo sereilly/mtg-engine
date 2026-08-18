@@ -313,6 +313,7 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
     engine implements stay one table (`IMPLEMENTED_KEYWORDS`).
     """
     from .oracle import _is_supported_keyword_line
+    from .cast_costs import cast_cost_claims_line
     from .target_restrictions import target_restriction_line
 
     return [
@@ -330,6 +331,14 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
         # matcher cannot answer leaves the line unclaimed and the card
         # unsupported rather than admitted with the restriction absent.
         and not target_restriction_line(line)
+        # "You may cast this card from your graveyard by paying 3 life and
+        # discarding a card in addition to paying its other costs." (Demonic
+        # Embrace.) Not an effect the Aura has while attached and not a
+        # restriction on its targeting — it is a cost and a permission, both
+        # read off this same line by the two tables that charge and open them.
+        # Asked as those tables rather than listed here, so a clause they cannot
+        # charge leaves the line unclaimed and the card unsupported.
+        and not cast_cost_claims_line(line)
         and aura_effect_claim(line, card_name) is None
     ]
 

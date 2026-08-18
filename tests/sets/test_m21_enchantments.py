@@ -1076,3 +1076,131 @@ def test_an_auras_ordinary_entry_trigger_fires(set_pool, name, expected_hand):
     game._settle()
 
     assert len(p1.hand) == expected_hand
+
+
+# --- Demonic Embrace: a permission the card grants itself (round 114) -------
+
+
+def _embrace_board(set_pool, *, in_graveyard, life=20, spare_cards=1):
+    pool = set_pool("M21")
+    hand = [pool["Mountain"]] * spare_cards
+    graveyard = []
+    if in_graveyard:
+        graveyard.append(pool["Demonic Embrace"])
+    else:
+        hand.insert(0, pool["Demonic Embrace"])
+    p1 = PlayerState(name="P1", life=life, hand=hand, graveyard=graveyard)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    victim = Permanent(card=pool["Alpine Watchdog"])
+    game._put_permanent_onto_battlefield(0, victim, None)
+    _nosick(victim)
+    return game, p1, victim
+
+
+def _embrace(game, *, from_zone):
+    result = game.cast_from_hand(
+        0, "Demonic Embrace",
+        target_player_index=0, target_permanent_index=0, from_zone=from_zone,
+    )
+    game._settle()
+    return result
+
+
+def test_demonic_embrace_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Demonic Embrace"])
+    assert program.supported, program.reason
+
+
+def test_demonic_embrace_from_hand_costs_no_extra(set_pool):
+    """One card with two prices. The additional cost names a *zone*, so it
+    cannot be a property of the card alone — from the hand this is an ordinary
+    Aura."""
+    from engine.auras import auras_attached_to
+
+    game, p1, victim = _embrace_board(set_pool, in_graveyard=False)
+
+    assert _embrace(game, from_zone="hand").supported
+    assert p1.life == 20
+    assert [c.name for c in p1.hand] == ["Mountain"]
+    assert [a.card.name for a in auras_attached_to(victim)] == ["Demonic Embrace"]
+
+
+def test_demonic_embrace_from_the_graveyard_pays_life_and_a_card(set_pool):
+    """The permission is a static ability of the card while it sits in the zone
+    (CR 113.6d) — nothing grants it and nothing takes it away, so it is derived
+    from the text rather than stored on ``game.cast_permissions``."""
+    from engine.auras import auras_attached_to
+
+    game, p1, victim = _embrace_board(set_pool, in_graveyard=True)
+
+    assert _embrace(game, from_zone="graveyard").supported
+    assert p1.life == 17
+    assert p1.hand == []
+    assert [c.name for c in p1.graveyard] == ["Mountain"]
+    assert [a.card.name for a in auras_attached_to(victim)] == ["Demonic Embrace"]
+    # +3/+1 on a 2/2.
+    assert (victim.effective_power, victim.effective_toughness) == (5, 3)
+
+
+def test_exactly_enough_life_pays(set_pool):
+    """CR 118.4: a player may pay life as long as the total is at least the
+    amount, so paying down to 0 is legal and 3 life pays a 3-life cost."""
+    game, p1, _ = _embrace_board(set_pool, in_graveyard=True, life=3)
+
+    assert _embrace(game, from_zone="graveyard").supported
+    assert p1.life == 0
+
+
+def test_too_little_life_makes_the_spell_uncastable(set_pool):
+    """CR 601.2h: an unpayable cost makes the spell uncastable, not free."""
+    game, p1, _ = _embrace_board(set_pool, in_graveyard=True, life=2)
+
+    result = _embrace(game, from_zone="graveyard")
+
+    assert not result.supported
+    assert "cannot pay 3 life" in result.details
+    assert p1.life == 2
+    assert [c.name for c in p1.graveyard] == ["Demonic Embrace"]
+
+
+def test_an_empty_hand_makes_the_spell_uncastable(set_pool):
+    game, p1, _ = _embrace_board(set_pool, in_graveyard=True, spare_cards=0)
+
+    result = _embrace(game, from_zone="graveyard")
+
+    assert not result.supported
+    assert "not enough cards in hand" in result.details
+    assert p1.life == 20
+
+
+def test_the_permission_and_its_costs_are_read_from_one_line(set_pool):
+    """Two readers of one sentence, which this codebase refuses elsewhere and
+    accepts here because they answer different questions of it: one asks whether
+    the zone is open, the other what must be paid. Held to the same line, so
+    there can be no permission with no costs attached, nor costs with no
+    permission behind them."""
+    from engine.cast_costs import additional_costs
+    from engine.cast_permissions import self_permission_zone
+
+    card = set_pool("M21")["Demonic Embrace"]
+
+    assert self_permission_zone(card) == "graveyard"
+    (cost,) = additional_costs(card)
+    assert (cost.from_zone, cost.pay_life, cost.discard_cards) == ("graveyard", 3, 1)
+
+
+def test_a_cost_clause_the_table_cannot_charge_refuses_the_whole_line():
+    """A clause outside the set makes the sentence unread, so the card reports
+    unsupported rather than castable from the graveyard for less than it
+    prints."""
+    from engine.cast_costs import additional_cost_for_line
+
+    assert additional_cost_for_line(
+        "You may cast this card from your graveyard by paying 3 life and "
+        "discarding a card in addition to paying its other costs."
+    ) is not None
+    assert additional_cost_for_line(
+        "You may cast this card from your graveyard by paying 3 life and "
+        "sacrificing a Zombie in addition to paying its other costs."
+    ) is None

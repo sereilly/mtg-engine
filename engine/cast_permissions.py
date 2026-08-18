@@ -30,6 +30,7 @@ card leaves the stack routes it without knowing which effect asked.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -117,6 +118,41 @@ def _covers(game, permission: CastPermission, card, zone: str, *, as_land: bool)
     return True
 
 
+#: "You may cast this card from your graveyard by paying 3 life and discarding a
+#: card in addition to paying its other costs." (Demonic Embrace.)
+#:
+#: A permission the card grants **itself**, rather than one an effect handed it.
+#: Every grant above is a `CastPermission` an effect put on `game.cast_permissions`
+#: and something later takes away; this one is a static ability of the card
+#: while it sits in the zone (CR 113.6d), so there is nothing to grant, nothing
+#: to expire, and no state at all — it is derived from the text on demand, the
+#: same shape `cast_restrictions.py` uses for a printed timing gate.
+_SELF_PERMISSION = re.compile(
+    r"^you may cast this card from your (?P<zone>graveyard|exile) by paying "
+    r"(?P<costs>.+?) in addition to paying its other costs$"
+)
+
+
+def self_permission_zone(card) -> str | None:
+    """The zone *card*'s own text lets it be cast from, or None.
+
+    The additional costs are read by ``engine/cast_costs.py`` from the same
+    line — two readers of one sentence, which is a thing this codebase refuses
+    elsewhere and accepts here for a reason worth stating: they answer different
+    questions of it. This one asks *whether the zone is open*, which the cast
+    path needs before it will look outside the hand; that one asks *what must be
+    paid*, which it needs after. Splitting the sentence differently would mean a
+    permission with no costs attached or costs with no permission behind them,
+    and the guard in ``tests/rules/test_cast_permissions.py`` holds the two to
+    the same line.
+    """
+    for line in (getattr(card, "oracle_text", "") or "").splitlines():
+        match = _SELF_PERMISSION.match(line.strip().lower().rstrip("."))
+        if match is not None:
+            return match.group("zone")
+    return None
+
+
 def permission_for(
     game, player_index: int, card, zone: str, *, as_land: bool = False
 ) -> CastPermission | None:
@@ -129,6 +165,20 @@ def permission_for(
             continue
         if _covers(game, permission, card, zone, as_land=as_land):
             return permission
+    # The card's own static permission, asked last: a granted one may waive a
+    # cost or open a wider zone, and answering with this first would hide it.
+    # Only for a card actually in that zone and actually this player's, which is
+    # what a stored grant carries and this has to check for itself.
+    if (
+        zone != "hand"
+        and not as_land
+        and self_permission_zone(card) == zone
+        and any(entry is card for entry in getattr(game.players[player_index], zone))
+    ):
+        return CastPermission(
+            player_index=player_index, zone=zone, mode="cast", cards=[card],
+            duration=None, source_name=getattr(card, "name", ""),
+        )
     return None
 
 

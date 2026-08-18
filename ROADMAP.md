@@ -256,52 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 111: replaced, not triggered — and a gate that asked for one constant
-
-*(2026-08-18.)* M21 **260 → 261** — Containment Priest.
-
-> Flash
-> If a nontoken creature would enter and it wasn't cast, exile it instead.
-
-**A card whose whole text is one CR 614 replacement**, which is why it found the
-hole. `engine/replacements.py` gained a new event kind, `would_enter_battlefield`,
-asked at `_put_permanent_onto_battlefield` — the single entry path every
-permanent in the engine comes through, already the home of the CR 400.7 identity
-stamp and the entry announcement. Asked *first*, before any of them: a replaced
-permanent never enters, so it gets no id, contributes to no layer and announces
-nothing. A "when it enters, exile it" reading would let all three happen first,
-which is a different card.
-
-**"It wasn't cast" is CR 701.5a, and the seam had no way to say it.** Of the
-twelve entry sites, exactly **one** is a resolving permanent spell; every other
-— a token, a reanimation, a cleanup return, an effect putting a card into play —
-is a permanent that was not cast. So `was_cast` defaults to False and the one
-cast site says so. The default is also the direction that fails *visibly*: a
-cast creature wrongly exiled is a card a player watches disappear, where a
-reanimation wrongly surviving is nothing happening.
-
-**The gate asked for one replacement by name.** `_is_supported_static_creature_line`
-compared the normalized line against Conclave Mentor's constant — while the
-*noncreature* classifier had asked `replacement_claims_line`, the whole
-registry, since that function was written. So a **creature** whose static line
-was any other implemented replacement reported unsupported with a working
-interceptor behind it. That is the partial-list mistake this file keeps finding
-one table at a time (Azusa against land plays, Gloom against cost modifiers),
-and Containment Priest is the card that made this instance visible because it
-prints nothing else.
-
-Widening it surfaced the same omission in the guard: `tests/engine/test_static_line_support.py`
-asks six derivation tables whether a line is backed by code and had never asked
-the seventh, so Lich's and Library of Leng's lines arrived unbacked the moment
-the gate admitted them. Both are dispatched by interceptors that self-select on
-the permanent's own text — the same registry, now asked.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Eight new tests, all watched to fail on the round-110 engine — the
-three negative ones carry an in-test control, because "nothing was exiled" is
-also what an engine that does not know the card looks like.
-
 ## Round 112: a restriction on the choice, and the falsy half of a tri-state
 
 *(2026-08-18.)* M21 **261 → 262** — Enthralling Hold.
@@ -418,3 +372,51 @@ pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Eleven new tests, nine watched to fail on the round-112 engine; the two
 that pass there carry an in-test control, because "the ability still worked" is
 also what an unattached Aura looks like.
+
+## Round 114: one card, two prices
+
+*(2026-08-18.)* M21 **263 → 264** — Demonic Embrace.
+
+> Enchant creature
+> Enchanted creature gets +3/+1, has flying, and is a Demon in addition to its
+> other types.
+> You may cast this card from your graveyard by paying 3 life and discarding a
+> card in addition to paying its other costs.
+
+The first two lines were already claimed; the card was that third sentence, and
+it is **two different things said once**: a permission to cast from a zone the
+rules close, and the costs of doing so.
+
+**A permission the card grants itself.** Every grant `cast_permissions.py` held
+was a `CastPermission` some effect put on `game.cast_permissions` and something
+later took away. This one is a static ability of the card while it sits in the
+graveyard (CR 113.6d) — nothing grants it, nothing expires it, and there is no
+state at all — so it is derived from the text on demand, the shape
+`cast_restrictions.py` already uses for a printed timing gate. Asked *after* the
+stored grants, because a granted permission may waive a cost or open a wider
+zone and answering with this first would hide it.
+
+**The cost belongs to the zone, not to the card.** Demonic Embrace costs
+{1}{B}{B} from the hand and {1}{B}{B} plus 3 life plus a card from the
+graveyard — the same card, so `AdditionalCost` grew a `from_zone`, and an
+unmarked cost ("as an additional cost to cast this spell") still applies
+wherever the spell is cast from. It also grew `pay_life`: CR 118.4 lets a player
+pay life down to 0 and no further, and CR 601.2h then makes an unpayable cost an
+uncastable spell rather than a free one, so exactly 3 life pays and 2 refuses.
+
+**Two readers of one sentence, which is normally the bug.** The zone half is
+read by `cast_permissions.self_permission_zone` and the cost half by
+`cast_costs._self_permission_cost`. They are allowed to share a line because
+they answer different questions of it — *is the zone open?*, which the cast path
+needs before it will look outside the hand, and *what must be paid?*, which it
+needs after — and a test holds both to the same line, so there can be no
+permission with no costs attached nor costs with no permission behind them.
+
+Every clause of the cost list must be read or the whole line is refused. A
+sentence naming something the table cannot charge ("…and sacrificing a Zombie")
+leaves the card unsupported rather than castable from the graveyard for less
+than it prints.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Eight new tests, all watched to fail on the round-113 engine.

@@ -307,7 +307,15 @@ class SpellCastingMixin:
         # cast for free, which is what happened while the phrase lived in the
         # spell-pattern whitelist. Paid further down, once every other cost has
         # cleared and the card itself has left the hand.
-        cast_costs = additional_costs(card)
+        # Only the costs this *zone* charges. Demonic Embrace prints one card
+        # with two prices — {1}{B}{B} from the hand and {1}{B}{B} plus 3 life
+        # plus a card from the graveyard — so a cost naming a zone applies to
+        # that zone alone, and an unmarked cost ("as an additional cost to cast
+        # this spell") applies wherever the spell is cast from.
+        cast_costs = tuple(
+            cost for cost in additional_costs(card)
+            if cost.from_zone is None or cost.from_zone == from_zone
+        )
         unpayable = self._unpayable_additional_cost(
             caster_index, card, cast_costs, spell_hand_index=hand_index,
             from_zone=from_zone,
@@ -547,6 +555,15 @@ class SpellCastingMixin:
                         f"{filter_head_noun(cost.sacrifice_filter)} to "
                         f"sacrifice for its additional cost (CR 601.2h)"
                     )
+            # CR 118.4: a player may pay life only down to 0, and CR 601.2h then
+            # makes an unpayable cost an uncastable spell rather than a free
+            # one. Checked with the others, before anything is spent.
+            if cost.pay_life and caster.life < cost.pay_life:
+                return (
+                    f"{card.name} can't be cast: {caster.name} cannot pay "
+                    f"{cost.pay_life} life with {caster.life} remaining "
+                    f"(CR 601.2h)"
+                )
             if cost.discard_cards:
                 # The spell itself is still in the zone it is being cast from,
                 # and it is about to be on the stack — so it cannot be one of
@@ -644,6 +661,11 @@ class SpellCastingMixin:
                     self.log.append(
                         f"{caster.name} sacrificed {name} to cast {card.name}"
                     )
+            if cost.pay_life:
+                caster.life -= cost.pay_life
+                self.log.append(
+                    f"{caster.name} paid {cost.pay_life} life to cast {card.name}"
+                )
             if cost.discard_cards:
                 for _ in range(cost.discard_cards):
                     if not caster.hand:
