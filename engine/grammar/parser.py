@@ -34,6 +34,7 @@ whole-pool snapshot of every compiled program and every line's parse result,
 diffed before and after.
 """
 
+import dataclasses
 import re
 from dataclasses import replace
 
@@ -442,6 +443,8 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
                 continue
             if _attach_when_you_do(stream, steps):
                 continue
+            if _attach_spend_only(stream, steps):
+                continue
             pronoun_grant = _parse_pronoun_grant_rider(stream, steps)
             if pronoun_grant is not None:
                 if pronoun_grant is not _RIDER_FOLDED:
@@ -566,6 +569,38 @@ def _attach_when_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool
         reflexive=branch,
     )
     steps[-1] = ast.WhereX(folded, definition) if definition is not None else folded
+    return True
+
+
+def _attach_spend_only(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """Fold "Spend this mana only to …" into the mana production before it.
+
+    A rider and not a step: the sentence adds nothing to the game, it says what
+    the *previous* sentence's mana may pay for (CR 106.6b). Parsed as its own
+    step it would be an effect nothing performs, and the mana would go into the
+    unrestricted pool with the restriction reported as understood.
+
+    Which restrictions exist is `engine/restricted_mana.py`'s question, asked
+    through its own matcher over the sentence's printed text — the delegation
+    round 85 established for a registry-claimed sentence, and for its reason: a
+    copy of the phrase here would be free to drift from the predicate that
+    enforces it, and mana spent more freely than the card allows is the
+    direction that drift goes.
+    """
+    from ..restricted_mana import mana_restriction_for
+
+    if not isinstance(steps[-1], ast.AddMana):
+        return False
+    mark = stream.mark()
+    start = stream.pos
+    while not stream.exhausted and not stream.at_punct(".", ";"):
+        stream.advance()
+    sentence = stream.text_between(start, stream.pos)
+    restriction = mana_restriction_for(sentence)
+    if restriction is None:
+        stream.reset(mark)
+        return False
+    steps[-1] = dataclasses.replace(steps[-1], spend_only=restriction.key)
     return True
 
 

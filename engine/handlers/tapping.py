@@ -287,7 +287,8 @@ def tap_target_player_lands_and_drain_mana(game: Game, instruction: OracleInstru
             game.become_tapped(perm)
     for sym in ("W", "U", "B", "R", "G", "C"):
         target.mana_pool[sym] = 0
-    target.creature_only_mana.clear()
+    for bucket in target.restricted_mana.values():
+        bucket.clear()
     game.log.append(f"{card.name} tapped all lands and drained mana from {target.name}")
     return True, "resolved"
 

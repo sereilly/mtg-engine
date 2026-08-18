@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 240/285) to the full release line - **137 sets, 33,594
+M21 measured at 241/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–87 — lives in git history at and before
-commit `64ecea9`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–88 — lives in git history at and before
+commit `3794c8b`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,68 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 88: an ability the payment creates
-
-*(2026-08-17.)* M21 **237 → 238** — Tolarian Kraken.
-
-> Whenever you draw a card, you may pay {1}. When you do, you may tap or untap
-> target creature.
-
-**One word from a shape that already worked.** "*If* you do" has parsed since
-the `may` production was written; "*when* you do" is CR 603.12's **reflexive
-triggered ability**, and the difference is not stylistic. An if-you-do branch is
-the rest of this same resolution and has only the targets that resolution already
-picked. A reflexive ability is a *new* ability the action creates, and it chooses
-its own targets as it is created — which is the whole of this card, because the
-resolution that creates it fired on **a card being drawn** and named no permanent
-at all. Folded onto `then`, "target creature" would have run against whatever
-`resolve_target_permanent` fell back to: the first permanent on the board.
-
-So it is its own AST field, its own payload key, and its own production — three
-places where a later edit would have to *choose* to conflate them.
-
-**What the payment creates is a prompt.** `_create_reflexive_ability` derives what
-the branch targets from the branch itself (`derive_instruction_spec`, the same
-reader an activated ability's prompt uses), enumerates the legal targets, and
-arms a `reflexive_target` choice. Each offered slot is resolved to a
-`permanent_id` *there* — at the moment the ability is created — because the
-prompt outlives the resolution that armed it and a slot stops naming the same
-permanent as soon as anything ahead of it leaves. The answer is checked against
-the list that was offered, not against the board: a creature that became legal
-afterwards is not a legal answer, because targets are chosen once.
-
-**Two things this uncovered, both of them things the engine already said about
-itself.**
-
-*The toggle honoured nothing.* `tap_or_untap_target` ran
-`predicate=lambda p: True`, so any narrowing had to refuse at lowering — "tap or
-untap target **creature**" lowered onto it could have untapped a land. It reads
-the filter now, the same way the plain tap beside it does, and what still refuses
-is a phrase `permanent_matches_filter` cannot test.
-
-*A spell whose whole effect is optional never performs it.* `_lower_may` has
-documented this since it was written, **measured on Twiddle** — the prompt rides
-the pending-choice queue and only a triggered ability's resolution holds that
-queue open, so a spell, which leaves the stack the instant it resolves, queues its
-effect and walks away. It went unenforced because no line reached the shape.
-Teaching the toggle its filter made one reachable *immediately*: Twiddle's card
-hook was silently shadowed by a `may` that did nothing, and four of its pinned
-regression tests said so. The documented limit is now a `LoweringError`, scoped
-exactly as the docstring scopes it — a spell's **whole** line, not a `may` that is
-one sentence of a longer one (Basri's Aegis, Liliana's Scorn) and not a trigger
-remainder.
-
-**`parser.py` crossed 1,000 lines again**, so the cost clause — everything left of
-an activated ability's colon — moved to `engine/grammar/costs.py` and into the
-layer order between `statements` and `parser`. A family rather than an arbitrary
-cut: every production in it is paired with a reader in `engine/oracle.py` that
-collects the same cost, and that pairing is easier to keep honest in one file.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added** (and Twiddle's kept alive rather than shadowed). Nine new tests,
-all nine watched to fail on the round-87 engine.
-
 ## Round 89: one action, two ways to take it
 
 *(2026-08-17.)* M21 **238 → 239** — Crypt Lurker, closing the batch.
@@ -430,3 +368,54 @@ intact rather than re-cutting it.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Nine new tests, five watched to fail on the round-89 engine.
+
+## Round 91: mana that may only pay for some spells
+
+*(2026-08-17.)* M21 **240 → 241** — Vodalian Arcanist.
+
+> {T}: Add {C}. Spend this mana only to cast an instant or sorcery spell.
+
+**The engine already had this feature, for exactly one wording.** Metamorphosis's
+"spend this mana only to cast creature spells" was a `PlayerState` field named
+`creature_only_mana`, a `spend_only == "creature"` branch in the mana handler, and
+a `creature_spell: bool` threaded to `_pay_mana_cost`. A second wording had
+nowhere to go in that shape but a second field, a second bool and a second branch
+— which is the arrangement `engine/shields.py` was built to stop repeating, and
+the reason this round is a module rather than a flag.
+
+`engine/restricted_mana.py` is the registry: a printed phrase, the key it
+produces, and a predicate over the **card being cast**. The parser claims the
+phrase, the payer asks the predicate, so what is admitted and what is enforced
+cannot drift. `PlayerState.restricted_mana` is one bucket per key;
+`creature_only_mana` survives as a **view** over the `"creature"` bucket, because
+the web payload, the AI simulator and four existing tests read it by name — the
+same arrangement, and the same reason, as the prevention fields.
+
+**The restriction is a rider, not a step.** "Spend this mana only to …" adds
+nothing to the game; it says what the *previous* sentence's mana may pay for
+(CR 106.6b). Parsed as its own sentence it would be an effect nothing performs,
+and the mana would land in the unrestricted pool with the restriction reported as
+understood. So it folds onto the `AddMana` before it, through the registry's own
+matcher over the sentence's printed text — round 85's delegation, for round 85's
+reason.
+
+**Two refusals worth stating.** The any-colour mana branch is *text-keyed* (the
+handler probes the clause for "one mana of any color"), so a restriction folded
+onto it would ride the payload and be ignored; no card prints the pair, and it
+refuses rather than adding unrestricted mana. And an unknown restriction key
+admits **nothing** — mana whose restriction the engine cannot test must not be
+spendable on anything, which is the opposite of the usual "unknown means
+unrestricted" default and is the only safe direction here.
+
+An activated ability is not cast (CR 602.2), so no "only to cast" bucket pays for
+one. The payer is handed `None` for the spell, and None admitting nothing is that
+rule rather than a missing argument.
+
+The client now reads the whole collection and labels each bucket by its key,
+falling back to a generic "restricted" chip for a key it has no label for —
+honest about what the mana is rather than folding it into the pool, which would
+overstate what is spendable.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Seven new tests, six watched to fail on the round-90 engine.

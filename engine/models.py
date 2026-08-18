@@ -475,10 +475,24 @@ class PlayerState:
     mana_pool: dict[str, int] = field(
         default_factory=lambda: {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
     )
-    # Metamorphosis: "Spend this mana only to cast creature spells." Mana held
-    # here joins the pool only when paying for a creature spell (spent before
-    # unrestricted mana) and empties whenever the regular pool does.
-    creature_only_mana: dict[str, int] = field(default_factory=dict)
+    # "Spend this mana only to…" (CR 106.6b) — one bucket per restriction key,
+    # each keyed by mana symbol. Mana held here joins the pool only when paying
+    # for a spell that restriction admits (spent before unrestricted mana) and
+    # empties whenever the regular pool does. ``engine/restricted_mana.py`` owns
+    # which keys exist and what each admits.
+    #
+    # It was a single field named ``creature_only_mana``, which is why that name
+    # survives below as a *view*: the web payload, the AI simulator and the
+    # existing tests read it, and the second wording ("an instant or sorcery
+    # spell") would otherwise have needed a second field beside it — the shape
+    # ``engine/shields.py`` was built to stop repeating.
+    restricted_mana: dict[str, dict[str, int]] = field(default_factory=dict)
+
+    @property
+    def creature_only_mana(self) -> dict[str, int]:
+        """The creature-spells-only bucket. A view, so in-place mutation and
+        ``.clear()`` reach the collection they used to *be*."""
+        return self.restricted_mana.setdefault("creature", {})
     # CR 615 prevention shields. These four, plus ``reverse_damage_sources``
     # below and the read-only ``damage_prevention_color``, are *views* over
     # ``engine/shields.py``'s one generic collection (installed below the

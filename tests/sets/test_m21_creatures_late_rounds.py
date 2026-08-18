@@ -405,3 +405,105 @@ def test_the_history_clause_is_not_read_as_a_board_count(set_pool):
     # set: the record is one number, not a filterable pile.
     refused = compile_line("You gain 1 life for each artifact that died this turn.")
     assert refused.parsed and not refused.lowered
+
+
+# --- Round 91: mana that may only pay for some spells -----------------------
+
+
+def _arcanist_board(set_pool, hand=(), opposing=()):
+    pool = set_pool("M21")
+    arcanist = _nosick(Permanent(card=pool["Vodalian Arcanist"]))
+    p1 = PlayerState(
+        name="P1", battlefield=[arcanist], hand=[pool[name] for name in hand]
+    )
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=pool[name]) for name in opposing]
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    return game, p1
+
+
+def test_vodalian_arcanist_compiles_supported(set_pool):
+    """"Spend this mana only to…" is a rider on the mana it restricts, not a
+    step of its own: parsed as a sentence it would be an effect nothing
+    performs, and the mana would land in the unrestricted pool with the
+    restriction reported as understood."""
+    program = compile_card_oracle(set_pool("M21")["Vodalian Arcanist"])
+    assert program.supported, program.reason
+
+    (ability,) = program.activated_abilities
+    assert ability.instruction.payload["spend_only"] == "instant_or_sorcery"
+
+
+def test_the_mana_does_not_reach_the_ordinary_pool(set_pool):
+    game, p1 = _arcanist_board(set_pool)
+
+    assert game.activate_permanent_ability(0, "Vodalian Arcanist", permanent_index=0).supported
+
+    assert p1.mana_pool["C"] == 0
+    assert p1.restricted_mana["instant_or_sorcery"] == {"C": 1}
+
+
+def test_an_instant_may_be_paid_for_with_it(set_pool):
+    game, p1 = _arcanist_board(
+        set_pool, hand=["Scorching Dragonfire"], opposing=["Gale Swooper"]
+    )
+    game.activate_permanent_ability(0, "Vodalian Arcanist", permanent_index=0)
+    p1.mana_pool["R"] = 1
+
+    result = game.cast_from_hand(
+        0, "Scorching Dragonfire", target_player_index=1, target_permanent_index=0
+    )
+
+    assert result.supported, result.details
+    assert p1.restricted_mana["instant_or_sorcery"]["C"] == 0, "the generic pip came from the bucket"
+
+
+def test_a_creature_spell_cannot_touch_it(set_pool):
+    """The restriction is what the whole line is for. Chandra's Magmutt costs the
+    same {1}{R} the instant above did and cannot be cast."""
+    game, p1 = _arcanist_board(set_pool, hand=["Chandra's Magmutt"])
+    game.activate_permanent_ability(0, "Vodalian Arcanist", permanent_index=0)
+    p1.mana_pool["R"] = 1
+
+    result = game.cast_from_hand(0, "Chandra's Magmutt")
+
+    assert not result.supported
+    assert p1.restricted_mana["instant_or_sorcery"]["C"] == 1, "nothing was spent"
+
+
+def test_an_activated_ability_is_not_a_spell(set_pool):
+    """"Only to **cast**" — an activated ability is not cast at all (CR 602.2),
+    so no bucket admits one. The payer is handed None for the spell and None
+    admits nothing, which is that rule rather than a missing argument."""
+    from engine.restricted_mana import restriction_admits
+
+    game, p1 = _arcanist_board(set_pool)
+    game.activate_permanent_ability(0, "Vodalian Arcanist", permanent_index=0)
+
+    from engine.mixins.stack.casting import _spendable_restricted_mana
+
+    assert _spendable_restricted_mana(p1, None) == {}
+    assert not restriction_admits("instant_or_sorcery", set_pool("M21")["Alpine Watchdog"])
+
+
+def test_a_restriction_key_with_no_predicate_admits_nothing(set_pool):
+    """The safe direction. A key the engine cannot test is mana whose
+    restriction it cannot enforce, and treating it as unrestricted would spend
+    it on anything."""
+    from engine.restricted_mana import restriction_admits
+
+    assert not restriction_admits("dragon", set_pool("M21")["Alpine Watchdog"])
+
+
+def test_the_old_field_name_is_a_view_over_the_collection(set_pool):
+    """``creature_only_mana`` was the whole feature and is now one bucket. It
+    survives as a view because the web payload, the AI simulator and the
+    existing tests read it — the same arrangement ``engine/shields.py`` made for
+    the prevention fields, and for the same reason."""
+    _game, p1 = _arcanist_board(set_pool)
+
+    p1.creature_only_mana["G"] = 2
+
+    assert p1.restricted_mana["creature"] == {"G": 2}

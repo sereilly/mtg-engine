@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 75.0% | 71.8% | 48.9% | 199 |
+| M21 *(measured)* | 285 | 503 | 75.1% | 72.0% | 49.1% | 200 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 232 | 102 | expected a subject |  |
+| 231 | 101 | expected a subject |  |
 | 94 | 38 | unrecognized effect verb |  |
 | 46 | 27 | unconsumed text |  |
 | 32 | 32 | unrecognized activation cost |  |
@@ -1318,6 +1318,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 - **Vito, Thorn of the Dusk Rose**
   - `Whenever you gain life, target opponent loses that much life.`
   - `{3}{B}{B}: Creatures you control gain lifelink until end of turn.`
+- **Vodalian Arcanist**
+  - `{T}: Add {C}. Spend this mana only to cast an instant or sorcery spell.`
 - **Volcanic Geyser**
   - `Volcanic Geyser deals X damage to any target.`
 - **Waker of Waves**

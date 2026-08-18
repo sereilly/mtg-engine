@@ -447,7 +447,12 @@ class TestMetamorphosis:
         assert me["creature_only_mana"] == {}
 
     def test_client_renders_a_distinct_tracker_with_a_hover_explanation(self):
-        assert "creature_only_mana" in APP_JS
+        # The client reads `restricted_mana`, the collection this bucket became
+        # in round 91 when a second wording arrived ("an instant or sorcery
+        # spell"). The creature-only label is still the one it shows for this
+        # key — which is what this test is about, and why the payload key it
+        # happens to arrive under is not.
+        assert "restricted_mana" in APP_JS
         assert "This mana can only be used to cast creature spells." in APP_JS
         assert "mana-symbol-restricted" in APP_JS
         styles = (

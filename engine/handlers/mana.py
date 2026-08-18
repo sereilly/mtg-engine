@@ -146,13 +146,24 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
 
     pips = instruction.payload.get("pips")
     if pips:
+        # "Spend this mana only to cast an instant or sorcery spell." (Vodalian
+        # Arcanist.) The mana goes into its own bucket rather than the pool;
+        # `_pay_mana_cost` merges a bucket in only for a spell the restriction
+        # admits, and every bucket empties at the same step boundary the pool
+        # does.
+        spend_only = instruction.payload.get("spend_only")
+        bucket = (
+            caster.restricted_mana.setdefault(str(spend_only), {})
+            if spend_only else caster.mana_pool
+        )
         added: list[str] = []
         for symbol, count in pips:
             if symbol not in caster.mana_pool:
                 continue
-            caster.mana_pool[symbol] += int(count)
+            bucket[symbol] = bucket.get(symbol, 0) + int(count)
             added.append(f"{{{symbol}}}" * int(count))
-        game.log.append(f"{card.name} produced {''.join(added)}")
+        suffix = f" (spendable only on {spend_only} spells)" if spend_only else ""
+        game.log.append(f"{card.name} produced {''.join(added)}{suffix}")
         return True, "resolved"
 
     game._add_mana_from_text(

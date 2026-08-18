@@ -8602,7 +8602,19 @@ function closeZoneRevealIfAutoOpened() {
 
 const lastManaCounts = {};
 
-function renderMana(containerId, manaPool, targetSeat = null, creatureOnlyPool = null) {
+// The label each "spend this mana only to…" bucket shows. Keyed by the same
+// restriction key engine/restricted_mana.py produces, so a bucket the client has
+// no label for still renders — as a restricted chip with a generic note, which
+// is honest about what it is rather than silently folding it into the pool.
+const RESTRICTED_MANA_LABELS = {
+  creature: ["creatures only", "This mana can only be used to cast creature spells."],
+  instant_or_sorcery: [
+    "instants/sorceries only",
+    "This mana can only be used to cast an instant or sorcery spell.",
+  ],
+};
+
+function renderMana(containerId, manaPool, targetSeat = null, restrictedPools = null) {
   const container = q(containerId);
   container.innerHTML = "";
   const pool = manaPool || {};
@@ -8648,26 +8660,35 @@ function renderMana(containerId, manaPool, targetSeat = null, creatureOnlyPool =
     `<span class="mana-total-label">total</span>`;
   container.appendChild(totalChip);
 
-  // Metamorphosis: restricted mana lives in its own bucket and can't pay for
-  // anything but creature spells, so it gets its own chips rather than being
-  // added into the counts above (which would overstate what's spendable).
-  const restricted = creatureOnlyPool || {};
-  const RESTRICTED_TITLE = "This mana can only be used to cast creature spells.";
-  for (const symbol of MANA_ORDER) {
-    const count = Number(restricted[symbol] || 0);
-    if (count <= 0) continue;
-    const chip = document.createElement("div");
-    chip.className = `mana-symbol mana-${symbol} mana-symbol-filled mana-symbol-restricted`;
-    chip.title = RESTRICTED_TITLE;
-    const src = symbolSrc(`{${symbol}}`);
-    const glyph = src
-      ? `<img class="mtg-symbol mtg-symbol-mana" src="${escapeHtml(src)}" alt="{${symbol}}" title="${escapeHtml(RESTRICTED_TITLE)}" />`
-      : `<span class="mana-glyph-text">${symbol === "C" ? "◇" : symbol}</span>`;
-    chip.innerHTML =
-      `<span class="mana-orb-glyph">${glyph}</span>` +
-      `<span class="mana-orb-count">${count}</span>` +
-      `<span class="mana-orb-restricted-badge" title="${escapeHtml(RESTRICTED_TITLE)}">creatures only</span>`;
-    container.appendChild(chip);
+  // Restricted mana lives in its own bucket per restriction and can't pay for
+  // anything but the spells that restriction admits, so each gets its own chips
+  // rather than being added into the counts above (which would overstate what's
+  // spendable). A bare object is the legacy creature-only shape.
+  const buckets =
+    restrictedPools && !Array.isArray(restrictedPools) && MANA_ORDER.some((s) => s in restrictedPools)
+      ? { creature: restrictedPools }
+      : restrictedPools || {};
+  for (const [key, restricted] of Object.entries(buckets)) {
+    const [badge, title] = RESTRICTED_MANA_LABELS[key] || [
+      "restricted",
+      "This mana can only be spent on certain spells.",
+    ];
+    for (const symbol of MANA_ORDER) {
+      const count = Number((restricted || {})[symbol] || 0);
+      if (count <= 0) continue;
+      const chip = document.createElement("div");
+      chip.className = `mana-symbol mana-${symbol} mana-symbol-filled mana-symbol-restricted`;
+      chip.title = title;
+      const src = symbolSrc(`{${symbol}}`);
+      const glyph = src
+        ? `<img class="mtg-symbol mtg-symbol-mana" src="${escapeHtml(src)}" alt="{${symbol}}" title="${escapeHtml(title)}" />`
+        : `<span class="mana-glyph-text">${symbol === "C" ? "◇" : symbol}</span>`;
+      chip.innerHTML =
+        `<span class="mana-orb-glyph">${glyph}</span>` +
+        `<span class="mana-orb-count">${count}</span>` +
+        `<span class="mana-orb-restricted-badge" title="${escapeHtml(title)}">${badge}</span>`;
+      container.appendChild(chip);
+    }
   }
 
   lastManaCounts[containerId] = current;
@@ -9942,9 +9963,9 @@ function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
     q(`ffaLife_${idx}`)?.classList.toggle("targeting-valid", isTargetable);
     // Corner opponents' floating mana, mirroring the classic #oppMana column:
     // only non-zero orbs render (CSS), and the row hides entirely while empty.
-    renderMana(`ffaMana_${idx}`, p.mana_pool, idx, p.creature_only_mana);
+    renderMana(`ffaMana_${idx}`, p.mana_pool, idx, p.restricted_mana);
     const manaTotal = Object.values(p.mana_pool || {}).reduce((sum, n) => sum + Number(n || 0), 0)
-      + Object.values(p.creature_only_mana || {}).reduce((sum, n) => sum + Number(n || 0), 0);
+      + Object.values(p.restricted_mana || {}).reduce((sum, b) => sum + Object.values(b || {}).reduce((t, n) => t + Number(n || 0), 0), 0);
     q(`ffaMana_${idx}`)?.classList.toggle("hidden", manaTotal === 0 && !debugAddManaMode);
     const hand = Array.isArray(p.hand)
       ? p.hand
@@ -10145,17 +10166,17 @@ function renderBoard(state) {
   renderZoneCards("oppExileCards", opp.exile || []);
   renderZoneCards("oppAnteCards", opp.ante || []);
 
-  renderMana("selfMana", me.mana_pool, seat, me.creature_only_mana);
-  renderMana("oppMana", opp.mana_pool, oppSeat, opp.creature_only_mana);
+  renderMana("selfMana", me.mana_pool, seat, me.restricted_mana);
+  renderMana("oppMana", opp.mana_pool, oppSeat, opp.restricted_mana);
   // FFA hides the stage-right #oppMana column (CSS) — the classic opponent's
   // pool shows inline in their top-left header pill instead, like the corner
   // seats' rows, so every pool sits next to its owner.
   const oppManaHeader = q("oppManaHeader");
   if (oppManaHeader) {
     if (playerCount > 2) {
-      renderMana("oppManaHeader", opp.mana_pool, oppSeat, opp.creature_only_mana);
+      renderMana("oppManaHeader", opp.mana_pool, oppSeat, opp.restricted_mana);
       const oppManaTotal = Object.values(opp.mana_pool || {}).reduce((sum, n) => sum + Number(n || 0), 0)
-        + Object.values(opp.creature_only_mana || {}).reduce((sum, n) => sum + Number(n || 0), 0);
+        + Object.values(opp.restricted_mana || {}).reduce((sum, b) => sum + Object.values(b || {}).reduce((t, n) => t + Number(n || 0), 0), 0);
       oppManaHeader.classList.toggle("hidden", oppManaTotal === 0 && !debugAddManaMode);
     } else {
       oppManaHeader.classList.add("hidden");

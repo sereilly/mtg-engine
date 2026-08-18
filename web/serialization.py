@@ -740,9 +740,16 @@ def _serialize_player(
         "battlefield": battlefield,
         "emblems": _serialize_emblems(player),
         "mana_pool": _serialize_mana_pool(player),
-        # Metamorphosis: "Spend this mana only to cast creature spells." Kept in
-        # its own bucket so the UI can show it as a distinct, labelled tracker
-        # instead of folding it into the ordinary pool.
+        # "Spend this mana only to…" (CR 106.6b). Each restriction keeps its own
+        # bucket so the UI can show it as a distinct, labelled tracker instead
+        # of folding it into the ordinary pool — which would overstate what is
+        # spendable. ``creature_only_mana`` is the first of these and keeps its
+        # own key because the client already reads it by name.
         "creature_only_mana": {sym: n for sym, n in player.creature_only_mana.items() if n > 0},
+        "restricted_mana": {
+            key: {sym: n for sym, n in bucket.items() if n > 0}
+            for key, bucket in (player.restricted_mana or {}).items()
+            if any(n > 0 for n in bucket.values())
+        },
         "playable_hand_indices": playable_hand_indices if viewer_seat == seat else [],
     }

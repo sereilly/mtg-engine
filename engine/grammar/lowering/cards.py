@@ -271,7 +271,19 @@ def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:
     ``sacrifice_self_for_mana`` handler on the legacy path.
     """
     if node.pips:
-        return (OracleInstruction("add_mana_from_text", "", {"pips": node.pips}),)
+        payload: dict[str, object] = {"pips": node.pips}
+        if node.spend_only is not None:
+            payload["spend_only"] = node.spend_only
+        return (OracleInstruction("add_mana_from_text", "", payload),)
+    # The any-colour branch keeps its clause text for a *text-keyed* handler
+    # probe, so a restriction folded onto it would be carried in the payload and
+    # ignored by the branch that reads the text. No card prints the pair; it
+    # refuses rather than adding unrestricted mana.
+    if node.spend_only is not None:
+        raise LoweringError(
+            "the any-colour mana branch is text-keyed and carries no restriction",
+            node=node,
+        )
     if node.any_color != 1:
         raise LoweringError(
             "only one mana of any colour has a handler; "

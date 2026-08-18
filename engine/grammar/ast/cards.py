@@ -79,6 +79,11 @@ class AddMana:
     # than taking structured pips, so lowering passes it through unchanged;
     # this field goes away when the handler takes ``pips`` directly.
     source_text: str = ""
+    # "Spend this mana only to cast an instant or sorcery spell." (Vodalian
+    # Arcanist.) The restriction *key* from `engine/restricted_mana.py`, not the
+    # phrase: which spells it admits is that module's question, asked again by
+    # the payer, so one rule answers "what may this pay for?" in both places.
+    spend_only: str | None = None
 
 
 @dataclass(frozen=True)

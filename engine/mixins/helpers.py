@@ -174,7 +174,8 @@ class GameHelpersMixin:
         for player in self.players:
             for symbol in _MANA_SYMBOLS:
                 player.mana_pool[symbol] = 0
-            player.creature_only_mana.clear()
+            for bucket in player.restricted_mana.values():
+                bucket.clear()
 
     def _recompute_continuous_effects(self) -> None:
         """Recalculate all static/continuous P/T effects (611.3). Call after any
