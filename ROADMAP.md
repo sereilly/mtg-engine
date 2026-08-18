@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 253/285) to the full release line - **137 sets, 33,594
+M21 measured at 254/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–100 — lives in git history at and before
-commit `5af33a4`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–101 — lives in git history at and before
+commit `95242d6`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,44 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 101: mana by a board count, and damage equal to your own power
-
-*(2026-08-18.)* M21 **250 → 251** — Leafkin Avenger.
-
-> {T}: Add {G} for each creature with power 4 or greater you control.
-> {7}{R}: This creature deals damage equal to its power to target player or
-> planeswalker.
-
-**"For each" multiplies the clause, not a number.** Round 95 made *how much*
-any-colour mana is data; this is the other multiplier — a board count applied to
-every pip. Read where the pips are, because parsed apart the count would be a
-sentence nothing performs and the mana would come out flat. Both pip spellings
-ask the same reader: "Add {G} for each …" and "Add two {G} for each …" differ
-only in how the symbols were written.
-
-"You control" is *carried* rather than tested — the count's `owner` scans one
-seat's battlefield, which is what `carried_separately` exists to name. Everything
-else has to be answerable about a permanent alone, because that is what the
-evaluator's matcher is.
-
-**The second line found a dropped rider.** "Target player **or planeswalker**" is
-the one union damage prints, and it is read by `_parse_damage_recipient` —
-deliberately, so the flag exists only where the damage lowering can receive it.
-The *deferred-amount* word order ("deals damage equal to X **to** Y") called plain
-`parse_recipient` instead, so those two words were unconsumed and the whole line
-failed. One call site, and the failure was loud rather than silent, which is the
-invariant working.
-
-**Damage equal to the source's own power, at a player**, is one payload key
-rather than a kind. The two `…bites…` handlers beside it resolve a *permanent*
-recipient and so cannot carry a player; what is actually new here is only where
-the number comes from. Read off the `Permanent` at resolution, so it is the
-computed power (CR 613) and a pump between activation and resolution counts.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Eight new tests, all eight watched to fail on the round-100 engine.
-
 ## Round 102: blocking only one thing, and a cost paid by tapping
 
 *(2026-08-18.)* M21 **251 → 252** — Shacklegeist.
@@ -373,3 +335,62 @@ static that always holds.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Eight new tests, five watched to fail on the round-102 engine.
+
+## Round 104: an exile that lasts as long as its source does
+
+*(2026-08-18.)* M21 **253 → 254** — Kitesail Freebooter, closing the batch.
+
+> When this creature enters, target opponent reveals their hand. You choose a
+> noncreature, nonland card from it. Exile that card until this creature leaves
+> the battlefield.
+
+**The node was built expecting this card.** `RevealHandAndChoose` has carried a
+`fate` field since Duress needed it, with a docstring naming Kitesail Freebooter
+as the one that exiles instead of discarding, and `_apply_revealed_hand_fate`
+said "the exile ending arrives with the card that needs it". It arrived.
+
+**The exiled card is held by the *source*, not by the game.** What returns it is
+the source leaving, so the record lives on the permanent — where it goes wherever
+the permanent does, and where nothing can hold a stale reference to a card that
+CR 400.7 will bring back as a new object.
+
+**The return is on `remove_all_from_battlefield`**, the one transition out, and
+that is the whole argument for that function existing: the battlefield used to be
+shortened in 41 places in three spellings, so anything that must happen when a
+permanent leaves had 41 places to be wired into and 41 to be forgotten. One
+return, every departure.
+
+The ending is expected **whole**, duration included. "Exile that card" with no
+duration is a permanent exile and a different card, and letting the clause be
+absent would let it be *deleted* with no change to the parse — the dropped-rider
+shape the full-consumption invariant exists for.
+
+A hand with nothing choosable queues no prompt at all: a choice with no legal
+answer is not a choice, and leaving it queued would block the caster on something
+they cannot satisfy.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Six new tests, four watched to fail on the round-103 engine.
+
+### Measured and left: Feline Sovereign
+
+Scoped out of this batch after measurement, so the next attempt starts from the
+number rather than from scratch. Two lines, and the second is the wall:
+
+* *"Other Cats you control get +1/+1 and have protection from Dogs."* —
+  `grantable_keywords()` excludes "protection" **on purpose** ("protection has
+  its own metadata channel with its own checks"), so a lord granting it needs
+  that channel *derived* rather than stamped: a lord buff is rebuilt on every
+  recompute, and a stamped grant would be one nothing clears. Round 97's
+  colour-keyed metadata generalises to any quality by reading
+  `_protection_quality_of` instead of the colour map — small, and the right
+  first step.
+* *"Whenever one or more Cats you control deal combat damage to a player…"* — a
+  **batched** combat-damage trigger. The fire site
+  (`mixins/effects.py::_fire_combat_damage_triggers`) is per-attacker *and*
+  filtered by a hard-coded `instruction_kinds` list — the same dispatch-on-effect
+  defect round 93 fixed in the end step, still live here. Widening it is worth a
+  round of its own; the batch shape ("one or more X", fired once per damaged
+  player) needs a fire site that runs after the damage step rather than per
+  creature.

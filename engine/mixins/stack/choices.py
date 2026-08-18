@@ -797,9 +797,29 @@ class PendingChoicesMixin:
         from ...handlers.zones import _resolve_one_discard
 
         fate = str(choice.data.get("fate", "discard"))
-        if fate != "discard":
+        if fate == "discard":
+            return _resolve_one_discard(self, victim_index, hand_index, to_library=False)
+        if fate != "exile_until_source_leaves":
             return False
-        return _resolve_one_discard(self, victim_index, hand_index, to_library=False)
+        # "Exile that card until this creature leaves the battlefield."
+        # (Kitesail Freebooter.) The card is held *by the source*, not by the
+        # game: what returns it is the source leaving, and a record on the
+        # permanent is a record that goes wherever the permanent does — the
+        # linked-exile shape CR 400.7 needs, since the returning card is a new
+        # object and nothing may hold a stale reference to it.
+        source = self.permanent_by_id(choice.data.get("source_id"))
+        victim = self.players[victim_index]
+        if source is None or not 0 <= hand_index < len(victim.hand):
+            return False
+        card = victim.hand.pop(hand_index)
+        victim.exile.append(card)
+        held = list(source.metadata.get("exiled_until_leaves") or ())
+        held.append({"owner_index": victim_index, "card": card})
+        source.metadata["exiled_until_leaves"] = held
+        self.log.append(
+            f"{card.name} is exiled until {source.card.name} leaves the battlefield"
+        )
+        return True
 
     def _default_discard(self, choice: PendingChoice) -> None:
         """Discard the lowest-index *eligible* cards, keeping them in the

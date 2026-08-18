@@ -955,6 +955,21 @@ class GameHelpersMixin:
             player.battlefield = survivors
         if removed:
             self._renumber_combat_after_removal(vacated)
+        # "…until this creature leaves the battlefield" (Kitesail Freebooter).
+        # Here because this is the one transition out: a return wired into any
+        # single caller would be a return the other forty forgot, which is the
+        # reason this function exists at all.
+        for perm in removed:
+            for entry in perm.metadata.pop("exiled_until_leaves", ()) or ():
+                owner = self.players[int(entry["owner_index"])]
+                card = entry["card"]
+                if card in owner.exile:
+                    owner.exile.remove(card)
+                    owner.hand.append(card)
+                    self.log.append(
+                        f"{card.name} returns to {owner.name}'s hand "
+                        f"({perm.card.name} left the battlefield)"
+                    )
         return removed
 
     @staticmethod

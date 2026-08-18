@@ -1119,3 +1119,84 @@ def test_an_unreadable_threshold_refuses_the_condition(set_pool):
         "as long as an opponent has umpteen or more cards in their graveyard, "
         "this creature gets +2/+1 and has deathtouch"
     ) is None
+
+
+# --- Round 104: an exile that lasts as long as its source does --------------
+
+
+def _freebooter_board(set_pool, victim_hand=("Shock", "Gale Swooper", "Island")):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Kitesail Freebooter"]])
+    p2 = PlayerState(name="P2", hand=[pool[name] for name in victim_hand])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.cast_from_hand(0, "Kitesail Freebooter", target_player_index=1)
+    game._settle()
+    return game, p1, p2
+
+
+def test_kitesail_freebooter_compiles_supported(set_pool):
+    """The reveal-and-choose node has carried a ``fate`` since it was written,
+    with a docstring naming this card as the one that would need the exile
+    ending. This is that card."""
+    program = compile_card_oracle(set_pool("M21")["Kitesail Freebooter"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.instruction.payload["fate"] == "exile_until_source_leaves"
+
+
+def test_only_a_noncreature_nonland_card_may_be_chosen(set_pool):
+    game, _p1, p2 = _freebooter_board(set_pool)
+
+    (choice,) = game.pending_choices
+    assert choice.data["legal_indices"] == [0], "the Shock, not the creature or the land"
+    assert [p2.hand[i].name for i in choice.data["legal_indices"]] == ["Shock"]
+
+
+def test_the_chosen_card_is_exiled_not_discarded(set_pool):
+    game, _p1, p2 = _freebooter_board(set_pool)
+
+    assert game.confirm_revealed_hand_pick(0, 0)
+
+    assert [c.name for c in p2.exile] == ["Shock"]
+    assert p2.graveyard == []
+    assert [c.name for c in p2.hand] == ["Gale Swooper", "Island"]
+
+
+def test_it_comes_back_when_the_freebooter_leaves(set_pool):
+    """The card is held *by the source*, so what returns it is the source
+    leaving — and the return lives on the one transition out, because a return
+    wired into any single caller would be a return the other forty forgot."""
+    game, _p1, p2 = _freebooter_board(set_pool)
+    game.confirm_revealed_hand_pick(0, 0)
+    (freebooter,) = list(game.controlled_by(0))
+
+    game.remove_from_battlefield(freebooter)
+
+    assert p2.exile == []
+    assert [c.name for c in p2.hand] == ["Gale Swooper", "Island", "Shock"]
+
+
+def test_a_hand_with_nothing_choosable_queues_no_prompt(set_pool):
+    """A choice with no legal answer is not a choice, and leaving it queued
+    would block the caster on a prompt they cannot satisfy."""
+    game, _p1, p2 = _freebooter_board(set_pool, victim_hand=("Gale Swooper", "Island"))
+
+    assert game.pending_choices == []
+    assert p2.exile == []
+
+
+def test_a_bare_exile_ending_is_not_this_card(set_pool):
+    """The whole ending is expected, the duration included: "exile that card"
+    with no duration is a permanent exile and a different card, and letting the
+    clause be absent would let it be deleted with no change to the parse."""
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Target opponent reveals their hand. You choose a noncreature, nonland "
+        "card from it. Exile that card."
+    )
+
+    assert not result.lowered

@@ -756,6 +756,14 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         victim_index=victim_index,
         legal_indices=legal,
         fate=str(instruction.payload.get("fate", "discard")),
+        # "…until **this creature** leaves the battlefield" (Kitesail
+        # Freebooter): the source holds the exiled card, so which permanent it
+        # is has to reach the answer. By id, because the prompt outlives the
+        # resolution that armed it.
+        source_id=(
+            context.source_permanent.permanent_id
+            if context.source_permanent is not None else None
+        ),
     )
     return True, "resolved"
 

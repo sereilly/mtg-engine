@@ -517,6 +517,17 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     stream.accept_punct(".")
     if stream.accept_phrase("that", "player", "discards", "that", "card"):
         return ast.RevealHandAndChoose(player, chosen.filter, fate="discard")
+    # "Exile that card until this creature leaves the battlefield." (Kitesail
+    # Freebooter.) The *whole* ending is expected, the duration included: a bare
+    # "exile that card" is a permanent exile and a different card, and letting
+    # the clause be absent would let it be deleted with no change to the parse.
+    if stream.accept_phrase(
+        "exile", "that", "card", "until", "this", "creature", "leaves",
+        "the", "battlefield",
+    ):
+        return ast.RevealHandAndChoose(
+            player, chosen.filter, fate="exile_until_source_leaves"
+        )
     stream.reset(mark)
     return None
 
