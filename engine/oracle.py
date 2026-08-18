@@ -1779,15 +1779,23 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if cost_modifier_claims_line(normalized):
         return True
-    # A CR 614 replacement carried out by engine/replacements.py from the
-    # permanent's own text (Conclave Mentor's extra +1/+1 counter). The
-    # constant is imported rather than spelled out: the interceptor
-    # self-selects on that exact string, so a copy here could claim a line
-    # nothing implements. Ali from Cairo's line predates this and is still a
-    # literal in the list below.
-    from .replacements import EXTRA_PLUS1_COUNTER_TEXT
+    # **Every** CR 614 replacement carried out by engine/replacements.py from
+    # the permanent's own text, not one of them.
+    #
+    # This asked for Conclave Mentor's constant alone, which is the partial-list
+    # mistake this file keeps finding one table at a time: the *noncreature*
+    # classifier has asked `replacement_claims_line` — the whole registry —
+    # since that function was written, so a creature whose static line is any
+    # other implemented replacement reported unsupported however well the
+    # interceptor ran. Containment Priest is the card that made it visible,
+    # because its whole text is one.
+    #
+    # Asked as the registry rather than spelled out: an interceptor self-selects
+    # on its own exact string, so a literal copied here could claim a line
+    # nothing implements.
+    from .replacements import replacement_claims_line
 
-    if normalized == EXTRA_PLUS1_COUNTER_TEXT:
+    if replacement_claims_line(normalized):
         return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",

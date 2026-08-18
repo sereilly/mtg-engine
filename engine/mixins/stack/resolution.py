@@ -425,7 +425,13 @@ class StackResolutionMixin:
                     target_player_index if target_player_index is not None else caster_index,
                     target_permanent_index,
                 )
-            self._put_permanent_onto_battlefield(caster_index, permanent, target_player_index)
+            # The one entry site in the engine that *is* a cast (CR 701.5a):
+            # a permanent spell resolving. Every other path puts a permanent
+            # onto the battlefield without casting it, which is what
+            # Containment Priest reads.
+            self._put_permanent_onto_battlefield(
+                caster_index, permanent, target_player_index, was_cast=True,
+            )
             self.log.append(f"{caster.name} put {card.name} onto battlefield")
             self._apply_global_buff(caster, card)
             # Auras resolve their own "when this Aura enters" text through

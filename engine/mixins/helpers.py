@@ -1443,7 +1443,44 @@ class GameHelpersMixin:
         controller_index: int,
         permanent: Permanent,
         target_player_index: int | None,
+        *,
+        was_cast: bool = False,
     ) -> None:
+        """Put *permanent* onto the battlefield — the one entry path there is.
+
+        *was_cast* is CR 701.5a's distinction and defaults to the common case:
+        of the entry sites in the engine, exactly one is a resolving permanent
+        spell, and every other — a token, a reanimation, a cleanup return, an
+        effect that puts a card into play — is a permanent that was **not**
+        cast. Containment Priest is the first card to ask, and the honest answer
+        for a caller that has not thought about it is the one that describes
+        what most callers do.
+
+        The default is also the direction that fails *visibly*: a cast creature
+        wrongly exiled is a card a player watches disappear, where a reanimation
+        wrongly surviving is nothing happening.
+        """
+        # CR 614: "if a nontoken creature would enter … exile it instead"
+        # (Containment Priest). Asked before anything else, because a
+        # replacement means the permanent never enters at all — no id is
+        # stamped, no layer contribution is made, no enters-the-battlefield
+        # trigger is announced. A "when it enters, exile it" reading would let
+        # every one of those happen first, which is a different card.
+        consumed, _ = apply_replacements(
+            self,
+            "would_enter_battlefield",
+            {
+                "permanent": permanent,
+                "controller_index": controller_index,
+                "was_cast": was_cast,
+                # CR 616.1 asks the *affected* player to choose among contending
+                # effects; for an entry that is the seat the permanent would
+                # enter under.
+                "player": self.players[controller_index],
+            },
+        )
+        if consumed:
+            return
         # CR 400.7: what enters is a *new object*, so it gets a new identity —
         # nothing that held the old id may address it. Stamped before the append
         # so no reader can observe the permanent on the battlefield under an id

@@ -1482,3 +1482,125 @@ def test_a_life_tax_is_not_counted_as_mana(set_pool):
     game, _p1, _p2, _terror = _terror_board(set_pool, theirs=("Shock",))
     generic, _names = spell_cost_tax(game, 1, set_pool("M21")["Shock"])
     assert generic == 0
+
+
+# --- Containment Priest: replaced, not triggered (round 111) ----------------
+
+
+def _priest_board(set_pool, *, with_priest=True):
+    pool = set_pool("M21")
+    battlefield = [Permanent(card=pool["Containment Priest"])] if with_priest else []
+    p1 = PlayerState(name="P1", battlefield=battlefield, life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2, pool
+
+
+def test_containment_priest_compiles_supported(set_pool):
+    """Its whole text is one CR 614 replacement plus a keyword. The creature
+    static gate asked for one replacement constant by name where the noncreature
+    gate had always asked the whole registry, so this card was unsupported with
+    a working interceptor behind it."""
+    program = compile_card_oracle(set_pool("M21")["Containment Priest"])
+    assert program.supported, program.reason
+
+
+def test_containment_priest_exiles_a_creature_that_was_not_cast(set_pool):
+    game, p1, _, pool = _priest_board(set_pool)
+
+    game._put_permanent_onto_battlefield(0, Permanent(card=pool["Baneslayer Angel"]), None)
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Containment Priest"]
+    assert [c.name for c in p1.exile] == ["Baneslayer Angel"]
+
+
+def test_containment_priest_leaves_a_cast_creature_alone(set_pool):
+    """CR 701.5a. Exactly one entry site in the engine is a cast — a resolving
+    permanent spell — and it is the one that says so."""
+    game, p1, _, pool = _priest_board(set_pool)
+    p1.hand = [pool["Concordia Pegasus"]]
+
+    game.cast_from_hand(0, "Concordia Pegasus")
+    game._settle()
+
+    assert "Concordia Pegasus" in [p.card.name for p in game.controlled_by(0)]
+    assert p1.exile == []
+    # The control, on the same board: something the Priest *does* catch. Without
+    # it the assertions above hold on any engine where the card is unsupported
+    # and nothing is exiled at all.
+    game._put_permanent_onto_battlefield(0, Permanent(card=pool["Baneslayer Angel"]), None)
+    assert [c.name for c in p1.exile] == ["Baneslayer Angel"]
+
+
+def test_containment_priest_stops_an_opponents_uncast_creature(set_pool):
+    """"…would enter" is any battlefield, not its controller's. The interceptor
+    asks every seat whether it controls the text, which is why an opponent's
+    reanimation is caught too."""
+    game, _, p2, pool = _priest_board(set_pool)
+
+    game._put_permanent_onto_battlefield(1, Permanent(card=pool["Alpine Watchdog"]), None)
+
+    assert list(game.controlled_by(1)) == []
+    assert [c.name for c in p2.exile] == ["Alpine Watchdog"]
+
+
+def test_containment_priest_does_not_touch_a_token(set_pool):
+    """The printed word "nontoken" is a clause of the applicability, not an
+    approximation of one: a token is created rather than put onto the
+    battlefield from a zone, and would cease to exist rather than be exiled."""
+    game, p1, _, pool = _priest_board(set_pool)
+    token = Permanent(card=pool["Concordia Pegasus"], metadata={"is_token": True})
+
+    game._put_permanent_onto_battlefield(0, token, None)
+
+    assert "Concordia Pegasus" in [p.card.name for p in game.controlled_by(0)]
+    assert p1.exile == []
+    # The control, on the same board: something the Priest *does* catch. Without
+    # it the assertions above hold on any engine where the card is unsupported
+    # and nothing is exiled at all.
+    game._put_permanent_onto_battlefield(0, Permanent(card=pool["Baneslayer Angel"]), None)
+    assert [c.name for c in p1.exile] == ["Baneslayer Angel"]
+
+
+def test_containment_priest_does_not_touch_a_noncreature(set_pool):
+    game, p1, _, pool = _priest_board(set_pool)
+
+    game._put_permanent_onto_battlefield(0, Permanent(card=pool["Mountain"]), None)
+
+    assert "Mountain" in [p.card.name for p in game.controlled_by(0)]
+    assert p1.exile == []
+    # The control, on the same board: something the Priest *does* catch. Without
+    # it the assertions above hold on any engine where the card is unsupported
+    # and nothing is exiled at all.
+    game._put_permanent_onto_battlefield(0, Permanent(card=pool["Baneslayer Angel"]), None)
+    assert [c.name for c in p1.exile] == ["Baneslayer Angel"]
+
+
+def test_containment_priest_exiles_to_the_owners_zone(set_pool):
+    """CR 400.3: the card goes to its *owner's* exile, which differs from the
+    entering controller's the moment an opponent reanimates your creature."""
+    game, p1, p2, pool = _priest_board(set_pool)
+    stolen = Permanent(
+        card=pool["Baneslayer Angel"], metadata={"owner_player_index": 0},
+    )
+
+    game._put_permanent_onto_battlefield(1, stolen, None)
+
+    assert [c.name for c in p1.exile] == ["Baneslayer Angel"]
+    assert p2.exile == []
+
+
+def test_the_replaced_creature_never_enters_at_all(set_pool):
+    """The difference between this and a "when it enters, exile it" trigger,
+    which would let every one of these happen first: no enters-the-battlefield
+    trigger is announced, and the permanent gets no battlefield identity."""
+    game, p1, _, pool = _priest_board(set_pool)
+    watcher = Permanent(card=pool["Baneslayer Angel"])
+    before = len(game.stack)
+
+    game._put_permanent_onto_battlefield(0, watcher, None)
+
+    assert len(game.stack) == before
+    assert game.permanent_id_of(watcher) is None
+    assert not game.is_on_battlefield(watcher)

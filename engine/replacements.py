@@ -138,6 +138,7 @@ DRAW_DOUBLED = 5  # Teferi's Ageless Insight
 DRAW_FROM_OUTSIDE = 10  # Ring of Ma'rûf
 DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
 EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
+EXILE_INSTEAD_OF_ENTERING = 10  # Containment Priest
 
 # Set on the event once an interceptor consumes it. It lives on the payload
 # because the payload is the one piece of state the 616.1 loop threads through
@@ -704,6 +705,58 @@ def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     return ReplacementOutcome(replaced=True)
 
 
+EXILE_UNCAST_CREATURE_TEXT = (
+    "if a nontoken creature would enter and it wasn't cast, exile it instead"
+)
+
+
+def _applies_exile_uncast_creature(game, payload: dict) -> bool:
+    permanent = payload["permanent"]
+    # Every clause of the printed sentence, asked here rather than in the body:
+    # CR 616.1 counts the effects in contention before running any, so an
+    # interceptor that answered by applying itself would make them uncountable.
+    if payload["was_cast"] or permanent.metadata.get("is_token", False):
+        return False
+    if not permanent.is_creature:
+        return False
+    # "…would enter" is any battlefield, not just its controller's: Containment
+    # Priest stops an opponent's reanimation too. ``_player_controls_text``
+    # answers about one seat, so the question is asked of every seat.
+    return any(
+        game._player_controls_text(player, EXILE_UNCAST_CREATURE_TEXT)
+        for player in game.players
+    )
+
+
+@replacement_effect(
+    "would_enter_battlefield", EXILE_INSTEAD_OF_ENTERING,
+    applies=_applies_exile_uncast_creature,
+)
+def _exile_instead_of_entering(game, payload: dict) -> ReplacementOutcome | None:
+    """Containment Priest: "If a nontoken creature would enter and it wasn't
+    cast, exile it instead."
+
+    The permanent never enters, so nothing that watches entering sees it — no
+    enters-the-battlefield trigger, no layer contribution, no summoning-sickness
+    stamp. That is the whole point of a CR 614 replacement over a
+    "when it enters, exile it" trigger, which would let every one of those
+    happen first.
+
+    A token is *created* rather than put onto the battlefield from a zone, and
+    ceases to exist rather than being exiled (CR 111.7), which is why the
+    printed word "nontoken" is a clause of the applicability rather than an
+    approximation of it.
+    """
+    permanent = payload["permanent"]
+    owner_index = game.owner_index_of(permanent)
+    owner = game.players[owner_index if owner_index is not None else payload["controller_index"]]
+    owner.exile.append(permanent.card)
+    game.log.append(
+        f"{permanent.card.name} was exiled instead of entering the battlefield"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
 # ---------------------------------------------------------------------------
 # Interactive replacements (CR 614 + engine/replacement_choices.py)
 #
@@ -972,6 +1025,10 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # line, rider included — the exemption is implemented, not ignored, so the
     # claim covers the words that state it.
     (DOUBLE_DRAW_TEXT, ""),
+    # _exile_instead_of_entering (Containment Priest): the phrase is the whole
+    # line, and every clause of it — nontoken, creature, not cast — is a clause
+    # of the applicability predicate rather than an approximation of one.
+    (EXILE_UNCAST_CREATURE_TEXT, ""),
 )
 
 

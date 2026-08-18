@@ -39,6 +39,7 @@ from engine.combat_restrictions import combat_restriction_for
 from engine.cost_modifiers import cost_modifier_claims_line
 from engine.land_play_allowance import land_play_line
 from engine.lord_buffs import lord_buff_for
+from engine.replacements import replacement_claims_line
 from engine.oracle import (
     _is_supported_static_creature_line,
     compile_card_oracle,
@@ -104,6 +105,15 @@ def _derived(normalized: str) -> bool:
         # spell_cost_tax / spell_cost_reduction / ability_cost_tax, which read
         # every permanent's own text through the same table the gate asks.
         or cost_modifier_claims_line(normalized)
+        # "If you would gain life, draw that many cards instead" (Lich), "…you
+        # may put it on top of your library instead" (Library of Leng) —
+        # dispatched by engine/replacements.py's interceptors, which self-select
+        # on the permanent's own text through the same registry the gate asks.
+        # The seventh derivation table, and the last to be asked here: it joined
+        # when round 111 widened the creature gate from one hand-copied
+        # replacement constant to the whole registry, and these two lines
+        # arrived with it.
+        or replacement_claims_line(normalized)
     )
 
 

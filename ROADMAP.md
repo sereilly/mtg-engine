@@ -256,71 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 108: a supertype is a restriction, not a decoration
-
-*(2026-08-18.)* M21 **257 → 258** — Niambi, Esteemed Speaker.
-
-> Flash
-> When Niambi enters, you may return another target creature you control to its
-> owner's hand. If you do, you gain life equal to that creature's mana value.
-> {1}{W}{U}, {T}, Discard a legendary card: Draw two cards.
-
-**The word was parsed, recorded, and then dropped.** The noun parser has read
-"legendary" into `ObjectFilter.supertypes` for as long as the field has existed,
-and `to_payload` has never emitted a key for it — so `"Destroy target legendary
-creature."` lowered **byte-identically** to `"Destroy target creature."`, a
-printed restriction consumed and silently discarded on the way to the dispatcher.
-Two gates knew: `subject_filter_payload` and `chargeable_card_filter` both name
-supertypes in their docstrings as the field that "reduces to a card" and refuse
-the phrase for it. The third reader, `_filter_payload`, is the one every ordinary
-effect goes through, and it had no such check.
-
-So the round is one key made real end to end — emitted by `to_payload`, tested by
-both matchers off the type line (CR 205.4a; nothing in layers 4–6 computes a
-supertype, so the answer is the line the permanent *effectively* has, which folds
-in a copy and a text change), and admitted by all three key sets.
-
-**"Token" is a supertype Scryfall reports and this engine cannot answer.** A
-token object's printed line reads "Token Creature — Goblin"; `make_token_card`
-prints no such word and the engine answers "is this a token?" from the
-permanent's identity. A type-line test would therefore match *no* token at all —
-a restriction silently matching nothing, which is the same failure as one
-silently matching everything, wearing the other coat. `TYPE_LINE_SUPERTYPES`
-splits it out of the fetched vocabulary rather than editing the data, so
-`fetch_vocabulary.py` stays free to re-download it and "a token creature"
-refuses loudly.
-
-**The one-off guard became a table, and immediately caught two more.** A field
-that emits *sometimes* falls between the two questions the gates ask —
-`_restrictions_beyond` says "honoured?" and answers yes, the key check says
-"testable?" and sees nothing, because a field that emitted nothing left no key to
-inspect. `mana_value` had a hand-written line for exactly this. `power` and
-`toughness` emit under the identical condition (a literal bound rides, a variable
-one does not) and had none, so `"with power X or greater"` dropped its bound and
-reached every creature. `CONDITIONALLY_EMITTED_FIELDS` is now one table asked by
-all three gates.
-
-**"If you do" is the rest of this resolution, and could not see it.** `_lower_may`
-lowered its `then` branch against the *outer* produced-values set, so a
-back-reference to what the optional action recorded had no producer and refused.
-The three sibling branches keep the outer set on purpose: `otherwise` runs
-precisely when the action did not happen, `reflexive` is a separate ability under
-CR 603.12 with a scratchpad of its own, and the offer's cost records nothing.
-
-Two smaller things the card needed. The bounce path refused a **controller**
-narrowing outright — its handler read a filter carrying `exclude_self` and
-`exclude_subtypes` and nothing relative — so "you control" now rides that same
-payload and is answered by `subject_matches`, which has the seat (CR 109.5). And
-the discard cost's shortfall message said "not enough cards in hand" when the
-hand was full of cards that simply were not legendary, sending a player to look
-for the wrong problem.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Nine new tests, all watched to fail on the round-107 engine; three
-guards that asserted the refusal this round removed were rewritten to state what
-replaced it.
-
 ## Round 109: a duration that is neither of the two
 
 *(2026-08-18.)* M21 **258 → 259** — Furious Rise.
@@ -419,3 +354,49 @@ pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Eight new tests, seven watched to fail on the round-109 engine; the
 eighth documents the cost line that was already implemented, so the card is
 covered rather than half-covered.
+
+## Round 111: replaced, not triggered — and a gate that asked for one constant
+
+*(2026-08-18.)* M21 **260 → 261** — Containment Priest.
+
+> Flash
+> If a nontoken creature would enter and it wasn't cast, exile it instead.
+
+**A card whose whole text is one CR 614 replacement**, which is why it found the
+hole. `engine/replacements.py` gained a new event kind, `would_enter_battlefield`,
+asked at `_put_permanent_onto_battlefield` — the single entry path every
+permanent in the engine comes through, already the home of the CR 400.7 identity
+stamp and the entry announcement. Asked *first*, before any of them: a replaced
+permanent never enters, so it gets no id, contributes to no layer and announces
+nothing. A "when it enters, exile it" reading would let all three happen first,
+which is a different card.
+
+**"It wasn't cast" is CR 701.5a, and the seam had no way to say it.** Of the
+twelve entry sites, exactly **one** is a resolving permanent spell; every other
+— a token, a reanimation, a cleanup return, an effect putting a card into play —
+is a permanent that was not cast. So `was_cast` defaults to False and the one
+cast site says so. The default is also the direction that fails *visibly*: a
+cast creature wrongly exiled is a card a player watches disappear, where a
+reanimation wrongly surviving is nothing happening.
+
+**The gate asked for one replacement by name.** `_is_supported_static_creature_line`
+compared the normalized line against Conclave Mentor's constant — while the
+*noncreature* classifier had asked `replacement_claims_line`, the whole
+registry, since that function was written. So a **creature** whose static line
+was any other implemented replacement reported unsupported with a working
+interceptor behind it. That is the partial-list mistake this file keeps finding
+one table at a time (Azusa against land plays, Gloom against cost modifiers),
+and Containment Priest is the card that made this instance visible because it
+prints nothing else.
+
+Widening it surfaced the same omission in the guard: `tests/engine/test_static_line_support.py`
+asks six derivation tables whether a line is backed by code and had never asked
+the seventh, so Lich's and Library of Leng's lines arrived unbacked the moment
+the gate admitted them. Both are dispatched by interceptors that self-select on
+the permanent's own text — the same registry, now asked.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Eight new tests, all watched to fail on the round-110 engine — the
+three negative ones carry an in-test control, because "nothing was exiled" is
+also what an engine that does not know the card looks like.
