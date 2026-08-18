@@ -222,6 +222,13 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # gain is multiplied by a battlefield count of the gainer's own permanents,
     # keywords asked of layer 6 so a granted flying counts.
     per_each = instruction.payload.get("per_each")
+    # "…for each creature that died this turn" (Canopy Stalker): the game's own
+    # tally, because the objects counted are exactly the ones no zone still
+    # holds. Game-wide — `creatures_died_under_your_control_this_turn` beside it
+    # is the per-seat tally, and reading one for the other is a different number
+    # every time an opponent's creature dies.
+    if per_each is not None and per_each.get("history") == "creatures_died_this_turn":
+        life_gain *= int(getattr(game, "creatures_died_this_turn", 0))
     if per_each is not None and per_each.get("zone") == "battlefield":
         wanted_types = tuple(per_each.get("card_types") or ())
         wanted_keywords = tuple(per_each.get("with_keywords") or ())

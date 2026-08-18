@@ -154,6 +154,37 @@ class DeclareBlockersStepMixin:
                 if blocker_idx not in assignments:
                     return False, f"{blocker.card.name} must block {attacker.card.name} due to Lure"
 
+        # "This creature must be blocked if able." (Canopy Stalker.) CR 509.1c:
+        # a blocking *requirement*, and the weakest of the three here — **one**
+        # able creature must block it, where Lure above demands every able one
+        # and Blaze of Glory below demands one creature block everything. Folding
+        # it into Lure would forbid the defender keeping a second blocker back,
+        # which is a legal declaration and one this card does not take away.
+        #
+        # Read off the attacker's compiled program, like the power restriction in
+        # `_can_block_attacker`, and off its *effective* card so a copy of it
+        # carries the requirement (CR 707.2).
+        for attacker_idx in (own_attackers if not _camouflage_resolution else ()):
+            attacker = self.permanent_at(attacker_controller, attacker_idx)
+            if attacker is None:
+                continue
+            program = compile_card_oracle(attacker.effective_card)
+            if not any(i.kind == "must_be_blocked" for i in program.instructions):
+                continue
+            if any(attacker_idx in assigned for assigned in assignments.values()):
+                continue
+            able = any(
+                blocker.is_creature
+                and not blocker.tapped
+                and self._can_block_attacker(blocker, attacker)
+                and not self._left_right_block_illegal(attacker_idx, blocker_idx, blocker)
+                for blocker_idx, blocker in enumerate(self.controlled_by(defender))
+            )
+            if able:
+                return False, (
+                    f"{attacker.card.name} must be blocked if able"
+                )
+
         # Blaze of Glory enforcement: the marked creature "blocks each attacking
         # creature this turn if able" — every attacker (aimed at this defender) it
         # can legally block must be among its assignments. Also skipped for

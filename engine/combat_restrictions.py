@@ -43,6 +43,7 @@ class CombatRestriction:
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
 #   cant_be_blocked_by_walls        phases/declare_blockers_step
 #   cant_block_power_n_or_greater   phases/declare_blockers_step
+#   must_be_blocked                 phases/declare_blockers_step
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(
@@ -55,6 +56,13 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^this creature can't block$"), "cant_block"),
     (re.compile(r"^this creature attacks each combat if able$"), "must_attack_each_combat"),
     (re.compile(r"^this creature can't be blocked by walls$"), "cant_be_blocked_by_walls"),
+    # A blocking *requirement* rather than a restriction (CR 509.1c), and
+    # weaker than Lure's: **one** able creature must block it, not every
+    # able creature. The two are enforced a dozen lines apart in the
+    # blockers step and must not be folded together — "all able" on a card
+    # printed "must be blocked" would forbid the defender keeping a blocker
+    # back, which is a legal declaration.
+    (re.compile(r"^this creature must be blocked if able$"), "must_be_blocked"),
     (
         # The threshold is data for the same reason the land type is: "power 4 or
         # greater" is the same restriction Ironclaw Orcs has, and baking 2 into

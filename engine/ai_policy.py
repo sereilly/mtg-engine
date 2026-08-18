@@ -360,6 +360,33 @@ def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int,
         if must:
             assignments[blocker_idx] = must
 
+    # "Must be blocked if able" (Canopy Stalker): declare_blockers refuses a
+    # declaration that leaves such an attacker unblocked while an able creature
+    # stands by, so the AI assigns one — the cheapest still-free blocker, which
+    # is a stated policy and not a valuation. Blocking is compulsory here, so
+    # declining is not the safe fallback it is for menace below.
+    for attacker_idx in attackers:
+        attacker = game.permanent_at(attacker_player, attacker_idx)
+        if attacker is None:
+            continue
+        if not any(
+            i.kind == "must_be_blocked"
+            for i in compile_card_oracle(attacker.effective_card).instructions
+        ):
+            continue
+        if any(
+            attacker_idx == assigned or (isinstance(assigned, list) and attacker_idx in assigned)
+            for assigned in assignments.values()
+        ):
+            continue
+        for blocker_idx in available_blockers:
+            if blocker_idx in assignments:
+                continue
+            blocker = game.permanent_at(defender, blocker_idx)
+            if blocker is not None and game._can_block_attacker(blocker, attacker):
+                assignments[blocker_idx] = attacker_idx
+                break
+
     # Menace (CR 702.111b): declare_blockers refuses an assignment that puts
     # exactly one blocker on a menace attacker, so the AI declines those blocks
     # rather than submitting a declaration that bounces. Ganging up is a

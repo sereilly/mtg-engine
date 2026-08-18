@@ -73,6 +73,24 @@ def _lower_gain_life(
     # battlefield count of the gainer's own permanents. The honoured fields are
     # exactly what the handler tests; anything else refuses rather than being
     # dropped into a larger gain.
+    if isinstance(node.per_each, ast.DiedThisTurn):
+        # "…for each creature that died this turn" (Canopy Stalker). A tally,
+        # not a scan: the creatures counted are precisely the ones no longer on
+        # a battlefield, so there is nothing to filter and the count comes off
+        # the game's own record. Game-wide, because the card says "each
+        # creature" and not "each creature you control" — the per-seat tally is
+        # a different number and answers a different card.
+        if node.player.kind != "you":
+            raise LoweringError(
+                "the per-each life gain is the effect's own controller", node=node
+            )
+        leftover = _restrictions_beyond(node.per_each.filter, frozenset({"card_types"}))
+        if leftover or node.per_each.filter.card_types != ("creature",):
+            raise LoweringError(
+                "the death tally counts creatures and nothing narrower", node=node
+            )
+        payload["per_each"] = {"history": "creatures_died_this_turn"}
+        return (OracleInstruction("target_gains_life", "", payload),)
     if node.per_each is not None:
         filt = node.per_each
         if node.player.kind != "you" or filt.zone != "battlefield":

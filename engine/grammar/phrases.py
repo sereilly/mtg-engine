@@ -21,7 +21,7 @@ from dataclasses import replace
 from . import ast
 from .errors import GrammarError
 from .lexer import (MANA, PT, PUNCT, SELF, tokenize)
-from .nouns import (parse_target_spec)
+from .nouns import (parse_object_filter, parse_target_spec)
 from .stream import TokenStream
 from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, NUMBER_WORDS, match_longest)
 _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -194,6 +194,43 @@ _ZONES = frozenset({"battlefield", "graveyard", "hand", "library", "exile", "sta
 # ---------------------------------------------------------------------------
 # Small shared productions
 # ---------------------------------------------------------------------------
+
+
+# Moved here from `effects/characteristics.py` the day a second family needed
+# it: "you gain 1 life **for each creature that died this turn**" (Canopy
+# Stalker) is the life family asking exactly the question the counter family
+# was already asking. A fragment two families want lives in `phrases`, never
+# in one of them — that coupling is what makes the grouping stop being
+# information, and the layering guard fails on it.
+def _parse_for_each(stream: TokenStream) -> ast.DiedThisTurn | None:
+    """``for each <objects> that died this turn`` — a trailing iteration clause.
+
+    The set is a *history*, not a board state, which is why it produces
+    :class:`ast.DiedThisTurn` rather than the noun phrase's own filter.
+
+    "This turn" is required rather than defaulted, for the reason the deletion
+    probe exists: the engine's death tally resets each turn, so a clause
+    counting some other window is a different number — and letting the words be
+    absent would let them be *deleted* with no change to the parse.
+
+    Returning None leaves the cursor where it was, so a caller that does not
+    find the clause still owes the rest of the line to full-token consumption.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("that", "died"):
+        stream.reset(mark)
+        return None
+    if _parse_duration(stream).kind != "this_turn":
+        stream.reset(mark)
+        return None
+    return ast.DiedThisTurn(filt)
 
 
 def parse_subject_filter(phrase: str, *, plural: bool = False) -> ast.ObjectFilter | None:

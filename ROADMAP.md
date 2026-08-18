@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 239/285) to the full release line - **137 sets, 33,594
+M21 measured at 240/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–86 — lives in git history at and before
-commit `3794c8b`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–87 — lives in git history at and before
+commit `64ecea9`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,66 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 87: a cost paid with a card the phrase names
-
-*(2026-08-17.)* M21 **236 → 237** — Sanctum of Shattered Heights.
-
-> {1}, Discard a land card or Shrine card: Sanctum of Shattered Heights deals X
-> damage to target creature or planeswalker, where X is the number of Shrines you
-> control.
-
-**Everything to the right of the colon already worked** — X off a board count, a
-target that may be a creature or a planeswalker. The whole card was its *cost*:
-a discard the printed phrase narrows, which the engine could neither admit nor
-charge. `_parse_costs` read exactly the four words "discard a card" and refused
-anything else; the charger's regex was `discard an? card`.
-
-**A card is not a permanent, and that is the round.** CR 613.1 applies the layer
-system to permanents, so a card in a hand, a graveyard or a library has no
-computed characteristics at all — it is not tapped, it has no controller, and
-nothing can have changed its colour or its P/T. `_card_matches_filter` has always
-known this in its docstring; what it did not have was a *named* set of what it can
-answer, the way `TESTABLE_SUBJECT_FILTER_KEYS` and `OBJECT_ONLY_FILTER_KEYS` name
-theirs. `CARD_ONLY_FILTER_KEYS` is that set — three keys — and a phrase reaching
-outside it refuses the cost rather than charging the wider one. So "Discard a
-**legendary** card" (Niambi, Esteemed Speaker) is still unsupported, and now for
-a stated reason: a supertype has no payload key at all, so it would leave nothing
-behind for the key check to see and the cost would quietly become "discard a
-card".
-
-**Two readers, one gate.** A cost clause is read twice in this engine — the
-grammar decides whether to admit the line, `engine/oracle.py` reads what is
-actually charged — and the standing rule since round 56 is that the two must ask
-the same function, because the direction they drift in is a cost nobody pays.
-They ask `chargeable_card_filter`. The tightened whole-pool guard now compares
-the two *filters* rather than just "is a discard charged at all", the same
-sharpening the sacrifice branch beside it already had.
-
-**The "or" is a union across two different characteristics** — a card type and a
-subtype — and no single `ObjectFilter` can say it: its fields are AND'd, so
-"land" and "shrine" folded together would name a card that is both, which is
-nothing in the pool and a strictly harder cost than the card prints. So the
-disjunction lives in the *shape* of what is carried, a tuple of filters, read by
-`card_matches_any`.
-
-The picker narrows with the same reader the charger accepts by, so a hand of
-Shock and Gale Swooper offers nothing and the ability cannot be activated at all
-(CR 602.5c: an unpayable cost is an unactivatable ability, not a free one). A
-named hand index that does not answer the phrase is refused rather than slid onto
-a card that does — a stale click must not discard the land the player meant to
-keep.
-
-One widening with no card behind it, stated as such: the card matcher's type test
-asked `primary_type`, which collapses a multi-type line to one word, so "Artifact
-Creature — Construct" was a creature there but not an artifact (CR 205.2a says it
-is both). It reads the printed type set now. No card in the pool asks the question
-the difference changes.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Ten new or tightened tests, nine watched to fail on the round-86
-engine.
-
 ## Round 88: an ability the payment creates
 
 *(2026-08-17.)* M21 **237 → 238** — Tolarian Kraken.
@@ -433,3 +373,60 @@ table and rebuilt and compared, which is easier to see in one file.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Nine new tests, all nine watched to fail on the round-88 engine.
+
+## Round 90: a blocking requirement, and a tally of the dead
+
+*(2026-08-17.)* M21 **239 → 240** — Canopy Stalker.
+
+> This creature must be blocked if able.
+> When this creature dies, you gain 1 life for each creature that died this turn.
+
+**Two lines, two families, and both already had a near neighbour that was the
+wrong shape.**
+
+*"Must be blocked if able" is a requirement, not a restriction* (CR 509.1c), and
+it is the **weakest of the three** the blockers step now enforces. Lure demands
+that *every* able creature block; Blaze of Glory demands that *one* creature
+block everything; this demands only that the attacker not be left unblocked while
+an able creature stands by. Folding it into the Lure loop — the tempting move,
+since they sit twelve lines apart — would forbid the defender keeping a second
+blocker back, which is a legal declaration this card does not take away. The
+declaration is *refused* rather than corrected, because which creature blocks is
+still the defender's choice.
+
+*"For each creature that died this turn" is a tally, not a scan.* The board
+reading of those words counts the opposite set: the creatures still alive. The
+noun parser consumes "creature" and stops, so the trailing words were unconsumed
+and the line failed loudly — which was right, and is why the fix is an
+**ordering** rather than a fallback: `_parse_for_each` is tried before the board
+filter, so the history wins where both would match.
+
+**A fragment two families needed, moved to where those live.** `_parse_for_each`
+was in `effects/characteristics.py`, written for "put a +1/+1 counter … for each
+creature that died this turn". The life family now asks exactly the same
+question, and a family importing a family is what makes the grouping stop being
+information — so it moved to `phrases.py`, which is the rule
+`tests/engine/test_grammar_layering.py` states and the reason it states it.
+
+**Game-wide, not per-seat.** The card says "each creature", so the count comes off
+`Game.creatures_died_this_turn`. `PlayerState.creatures_died_under_your_control_this_turn`
+sits beside it and is a different number the moment an opponent's creature dies;
+the two are separate fields precisely so one cannot be read for the other, and a
+test pins both at once. A narrowing the tally cannot express ("for each
+**artifact** that died") refuses rather than counting a wider set — the record is
+one number, not a filterable pile.
+
+The AI assigns a blocker rather than submitting a declaration that bounces, the
+same accommodation it already makes for Blaze of Glory. Both new reads address
+their permanent through the seam (`permanent_at`), so the positional-indexing
+ratchet did not move.
+
+**A third M21 creature file.** `test_m21_creatures.py` is at the size guard again
+and the printed-type axis is spent, so the rounds at the far end were cut into
+`test_m21_creatures_late_rounds.py` — the same round-boundary cut round 73 made at
+the near end, at the other end of the sequence, leaving the middle file's history
+intact rather than re-cutting it.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Nine new tests, five watched to fail on the round-89 engine.

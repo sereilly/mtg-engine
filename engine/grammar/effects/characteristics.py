@@ -16,7 +16,7 @@ from ..lexer import (GToken, PT, WORD)
 from ..nouns import (parse_object_filter, parse_recipient)
 from ..stream import TokenStream
 from ..vocabulary import (COLOR_WORDS)
-from ..phrases import _COUNTER_KINDS, _parse_duration, _parse_keywords
+from ..phrases import _COUNTER_KINDS, _parse_duration, _parse_for_each, _parse_keywords
 
 
 def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -115,13 +115,22 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                 # "…for each creature you control with flying" (Aven
                 # Gagglemaster) — recorded rather than consumed-and-dropped,
                 # mirroring the loses-life multiplier.
-                per_each: ast.ObjectFilter | None = None
-                for_each_mark = stream.mark()
-                if stream.accept_phrase("for", "each"):
-                    try:
-                        per_each = parse_object_filter(stream)
-                    except GrammarError:
-                        stream.reset(for_each_mark)
+                #
+                # The *history* clause is read first: "for each creature that
+                # died this turn" (Canopy Stalker) counts exactly the creatures
+                # the battlefield no longer holds, and the board reading of the
+                # same words counts the opposite set. The noun parser consumes
+                # "creature" and stops, so without this the trailing words were
+                # unconsumed and the line failed loudly — which was right, and
+                # is why the ordering matters rather than the fallback.
+                per_each: object | None = _parse_for_each(stream)
+                if per_each is None:
+                    for_each_mark = stream.mark()
+                    if stream.accept_phrase("for", "each"):
+                        try:
+                            per_each = parse_object_filter(stream)
+                        except GrammarError:
+                            stream.reset(for_each_mark)
                 return ast.GainLife(player, amount, per_each=per_each)
         except GrammarError:
             pass
@@ -272,37 +281,6 @@ def _expect_counter_kind(stream: TokenStream, suffix: str = "") -> GToken:
         raise stream.error("expected a counter kind" + suffix)
     stream.advance()
     return token
-
-
-def _parse_for_each(stream: TokenStream) -> ast.DiedThisTurn | None:
-    """``for each <objects> that died this turn`` — a trailing iteration clause.
-
-    The set is a *history*, not a board state, which is why it produces
-    :class:`ast.DiedThisTurn` rather than the noun phrase's own filter.
-
-    "This turn" is required rather than defaulted, for the reason the deletion
-    probe exists: the engine's death tally resets each turn, so a clause
-    counting some other window is a different number — and letting the words be
-    absent would let them be *deleted* with no change to the parse.
-
-    Returning None leaves the cursor where it was, so a caller that does not
-    find the clause still owes the rest of the line to full-token consumption.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("for", "each"):
-        return None
-    try:
-        filt = parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("that", "died"):
-        stream.reset(mark)
-        return None
-    if _parse_duration(stream).kind != "this_turn":
-        stream.reset(mark)
-        return None
-    return ast.DiedThisTurn(filt)
 
 
 def _parse_put_counter(stream: TokenStream) -> ast.Statement:
