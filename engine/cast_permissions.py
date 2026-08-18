@@ -59,14 +59,37 @@ class CastPermission:
     card_types: tuple[str, ...] = ()
     free: bool = False
     exile_instead: bool = False
-    # "end_of_turn" is swept at cleanup; None lasts until end of game
+    # "end_of_turn" is swept at cleanup; "until_source_grants_again" is retired
+    # by the next grant from the same permanent; None lasts until end of game
     # (CR 611.2a), bounded by the cards staying in the granted zone.
     duration: str | None = "end_of_turn"
     source_name: str = ""
+    # Which permanent granted this, by id. "Until you exile another card with
+    # **this** enchantment" (Furious Rise) is bounded by one permanent's own
+    # later grant, so two Furious Rises are two independent permissions — the
+    # name they share cannot say that, and a battlefield slot moves the moment
+    # anything leaves (CR 400.7 gives a returning permanent a new id, which is
+    # also correct here: the new object has granted nothing yet).
+    source_permanent_id: int | None = None
 
 
 def grant_permission(game, **kwargs) -> CastPermission:
     permission = CastPermission(**kwargs)
+    # "…until you exile another card with this enchantment." The ending event is
+    # this same permanent granting again, so the retirement happens here rather
+    # than in a turn step: there is no moment to sweep at, only this one. A
+    # grant with no source id retires nothing, which is the safe direction — it
+    # would otherwise clear every unsourced grant a player holds.
+    if permission.duration == "until_source_grants_again" and permission.source_permanent_id is not None:
+        # Slice assignment, not rebinding: ``expire_end_of_turn`` mutates the
+        # same list in place and a caller may be holding it.
+        game.cast_permissions[:] = [
+            held for held in game.cast_permissions
+            if not (
+                held.duration == "until_source_grants_again"
+                and held.source_permanent_id == permission.source_permanent_id
+            )
+        ]
     game.cast_permissions.append(permission)
     return permission
 

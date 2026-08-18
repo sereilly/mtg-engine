@@ -719,3 +719,125 @@ def test_any_one_color_is_one_choice_for_the_whole_clause(set_pool):
     produced = [symbol for symbol, amount in p1.mana_pool.items() if amount]
     assert len(produced) == 1
     assert p1.mana_pool[produced[0]] == 3
+
+
+# --- Furious Rise: a duration that is neither of the two (round 109) --------
+
+
+def _rise_board(set_pool, *, power_four=True, copies=1):
+    pool = set_pool("M21")
+    rises = [Permanent(card=pool["Furious Rise"]) for _ in range(copies)]
+    # Baneslayer Angel is 5/5; Alpine Watchdog is 2/2 and fails the intervening-if.
+    watcher = Permanent(
+        card=pool["Baneslayer Angel" if power_four else "Alpine Watchdog"]
+    )
+    p1 = PlayerState(
+        name="P1", battlefield=[*rises, watcher],
+        library=[pool["Concordia Pegasus"], pool["Daybreak Charger"], pool["Mountain"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    return game, p1, rises
+
+
+def test_furious_rise_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Furious Rise"])
+    assert program.supported, program.reason
+
+
+def test_furious_rise_exiles_and_permits_only_with_a_big_creature(set_pool):
+    """CR 603.4's intervening-if, checked when the trigger would fire. The
+    permission is the second step of the same resolution, so it does not happen
+    either.
+
+    The control runs first and in the same test: on any engine where the card is
+    unsupported *nothing* fires, and the negative half would hold for the wrong
+    reason."""
+    control, controls_p1, _ = _rise_board(set_pool, power_four=True)
+    control.resolve_end_step(0)
+    control._settle()
+    assert [c.name for c in controls_p1.exile] == ["Concordia Pegasus"]
+    assert len(control.cast_permissions) == 1
+
+    game, p1, _ = _rise_board(set_pool, power_four=False)
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert p1.exile == []
+    assert game.cast_permissions == []
+
+
+def test_furious_rise_permission_survives_the_cleanup_sweep(set_pool):
+    """The reason this duration had to exist. "Until end of turn" is swept at
+    cleanup (CR 514.2), and reading Furious Rise's clause as that one would
+    throw the exiled card away on the very turn it was exiled — the card would
+    never be playable at all, because it is exiled *in* the end step."""
+    from engine.cast_permissions import expire_end_of_turn, permission_for
+
+    game, p1, _ = _rise_board(set_pool)
+    game.resolve_end_step(0)
+    game._settle()
+    exiled = p1.exile[0]
+    assert permission_for(game, 0, exiled, "exile") is not None
+
+    expire_end_of_turn(game)
+
+    assert permission_for(game, 0, exiled, "exile") is not None
+
+
+def test_furious_rise_retires_its_own_earlier_grant(set_pool):
+    """"…until you exile **another** card with this enchantment." The ending
+    event is this same permanent granting again, so the previous card stops
+    being playable exactly when the next one is exiled — where a stated-duration
+    reading of "no duration" (CR 611.2a) would leave every card it had ever
+    exiled playable at once."""
+    from engine.cast_permissions import permission_for
+
+    game, p1, _ = _rise_board(set_pool)
+    game.resolve_end_step(0)
+    game._settle()
+    first = p1.exile[0]
+
+    game.resolve_end_step(0)
+    game._settle()
+    second = p1.exile[-1]
+
+    assert [c.name for c in p1.exile] == ["Concordia Pegasus", "Daybreak Charger"]
+    assert permission_for(game, 0, first, "exile") is None
+    assert permission_for(game, 0, second, "exile") is not None
+
+
+def test_two_furious_rises_are_two_independent_permissions(set_pool):
+    """Why the grant is keyed by ``permanent_id`` and not by the card's name.
+    Both enchantments exile in the same end step; neither retires the other,
+    because "this enchantment" is one permanent and the name they share cannot
+    tell them apart."""
+    from engine.cast_permissions import permission_for
+
+    game, p1, rises = _rise_board(set_pool, copies=2)
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert len(p1.exile) == 2
+    assert all(permission_for(game, 0, card, "exile") is not None for card in p1.exile)
+    ids = {p.source_permanent_id for p in game.cast_permissions}
+    assert ids == {game.permanent_id_of(rise) for rise in rises}
+
+
+def test_furious_rise_lets_the_exiled_card_actually_be_played(set_pool):
+    """The permission is a play permission, not a cast one — Furious Rise says
+    "play", which covers a land as well (CR 305.1 still charges the land drop).
+    Driven end to end so the grant is not merely recorded."""
+    game, p1, _ = _rise_board(set_pool)
+    game.resolve_end_step(0)
+    game._settle()
+    exiled = p1.exile[0]
+
+    result = game.cast_from_hand(0, exiled.name, from_zone="exile")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in game.controlled_by(0)][-1] == "Concordia Pegasus"
+    assert p1.exile == []

@@ -247,6 +247,15 @@ class CastPermission:
     what: str  # "exiled_this_way" | "target_card" | "spells_from_hand"
     target: TargetSpec | None = None
     until_end_of_turn: bool = False
+    #: "…**until you exile another card with this enchantment**" (Furious Rise).
+    #: A stated duration (CR 611.2a) whose ending event is this same permanent
+    #: granting again — so it is neither of the two the model had, and reading it
+    #: as either is wrong in a direction: end-of-turn throws the card away at
+    #: cleanup, and no-duration lets every card the enchantment ever exiled stay
+    #: playable at once. The event may simply never happen (the enchantment
+    #: leaves, or no end step finds a creature with power 4), and then the
+    #: permission lasts, which is what the card says.
+    until_source_grants_again: bool = False
     free: bool = False
     # "If that spell would be put into your graveyard, exile it instead." —
     # attached by the rider parser, so a wording carrying it cannot shed it.

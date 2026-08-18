@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 78.7% | 76.1% | 53.1% | 217 |
+| M21 *(measured)* | 285 | 503 | 78.9% | 76.3% | 53.3% | 218 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,7 +33,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 226 | 96 | expected a subject |  |
-| 92 | 36 | unrecognized effect verb |  |
+| 91 | 35 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
 | 31 | 31 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -476,6 +476,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
+- **Furious Rise**
+  - `At the beginning of your end step, if you control a creature with power 4 or greater, exile the top card of your library. You may play that card until you exile another card with this enchantment.`
 - **Gadrak, the Crown-Scourge**
   - `At the beginning of your end step, create a Treasure token for each nontoken creature that died this turn. (It's an artifact with "{T}, Sacrifice this token: Add one mana of any color.")`
 - **Gale Swooper**

@@ -607,18 +607,44 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         stream.reset(mark)
         return None
 
+    regrant = False
+
     def _trailing_duration() -> bool:
-        nonlocal until_eot
+        nonlocal until_eot, regrant
         if stream.accept_phrase("this", "turn"):
             until_eot = True
+        # "until you exile another card with this <permanent type>" (Furious
+        # Rise). The noun is whatever the card is printed as, so it is consumed
+        # as a word rather than matched against one spelling — an Artifact
+        # printing the same sentence needs no second branch. Every token is
+        # consumed or the phrase is not this one, because a half-read duration
+        # would leave "with this enchantment" as unaccounted text and fail the
+        # whole line.
+        elif stream.accept_phrase("until", "you", "exile", "another", "card"):
+            if not stream.accept_phrase("with", "this"):
+                raise stream.error("expected 'with this <permanent>'")
+            if stream.exhausted or stream.at_punct(".", ";"):
+                raise stream.error("expected the permanent this sentence is on")
+            stream.advance()
+            regrant = True
         return True
 
     # "cards exiled this way" / "them" — both name the cards a step of this
     # same resolution exiled; lowering demands the producer.
-    if stream.accept_phrase("cards", "exiled", "this", "way") or stream.accept_word("them"):
+    # "cards exiled this way" / "them" / "that card" — all name the cards a step
+    # of this same resolution exiled; lowering demands the producer. The
+    # singular is the same set with one member in it (Furious Rise exiles the
+    # top card, so "that card" is the whole of what was exiled), which is why it
+    # is a spelling here rather than a second ``what``.
+    if (
+        stream.accept_phrase("cards", "exiled", "this", "way")
+        or stream.accept_word("them")
+        or stream.accept_phrase("that", "card")
+    ):
         _trailing_duration()
         return ast.CastPermission(
-            mode=mode, what="exiled_this_way", until_end_of_turn=until_eot
+            mode=mode, what="exiled_this_way", until_end_of_turn=until_eot,
+            until_source_grants_again=regrant,
         )
     # "spells from your hand without paying their mana costs" — a cost waiver.
     # The waiver clause is required: a bare "you may cast spells from your

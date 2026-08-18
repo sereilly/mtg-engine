@@ -1372,6 +1372,7 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
             game, player_index=caster_index, zone=payload.get("zone", "exile"),
             mode=payload.get("mode", "cast"), cards=cards,
             duration=duration, source_name=source_name,
+            source_permanent_id=game.permanent_id_of(context.source_permanent),
         )
         game.log.append(
             f"{caster.name} may {payload.get('mode', 'cast')} "

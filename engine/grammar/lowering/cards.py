@@ -669,7 +669,12 @@ def _lower_cast_permission(
                 "in this effect",
                 node=node,
             )
-        if not node.until_end_of_turn:
+        # A *stated* duration is required (CR 611.2a), but there are now two of
+        # them. Without one the permission outlives the card that granted it;
+        # read as the wrong one it is wrong in a stated direction — end-of-turn
+        # discards Furious Rise's card at the next cleanup, and no-duration
+        # leaves every card it has ever exiled playable at once.
+        if not (node.until_end_of_turn or node.until_source_grants_again):
             raise LoweringError(
                 "an exiled-cards permission without its printed duration "
                 "would outlive the card that granted it",
@@ -682,7 +687,10 @@ def _lower_cast_permission(
                     "zone": "exile",
                     "mode": node.mode,
                     "cards_from": "exiled_cards",
-                    "duration": "end_of_turn",
+                    "duration": (
+                        "end_of_turn" if node.until_end_of_turn
+                        else "until_source_grants_again"
+                    ),
                 },
             ),
         )

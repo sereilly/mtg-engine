@@ -256,38 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 106: a computed pump on the ability's own source
-
-*(2026-08-18.)* M21 **255 → 256** — Alpine Houndmaster.
-
-> Whenever this creature attacks, it gets +X/+0 until end of turn, where X is the
-> number of other attacking creatures.
-
-**One refusal, and it named the wrong thing.** "A where-clause pump needs a
-single target" — every computed pump the engine had was aimed at a *chosen*
-permanent, and this one is on the ability's own source. It routes through
-`pump_self`, which has boosted the source until end of turn since the engine was
-written; what was missing was only a way to say **how big**, and that is the same
-`x_from_count` spec every other computed amount already carries. A second
-instruction kind would have been the same handler with the number arriving by a
-different road.
-
-Only the characteristics the card writes as X are variable. "+X/+0" pumps power
-alone, and the literal half stayed literal — read as X it would have grown the
-toughness too.
-
-**"Other" is an identity comparison, and the evaluator could not make it.**
-`permanent_matches_filter` answers about one permanent alone (CR 109.5's
-exclusion is a comparison against the ability's *source*), so the key would have
-been dropped and a lone attacker would have counted itself. A resolution knows
-its source, so `count_from_payload` passes one and the evaluator performs the
-exclusion — and the continuous recompute, which has no source, never produces the
-key in the first place.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Four new tests, three watched to fail on the round-105 engine.
-
 ## Round 107: the event's own creature, and a tax paid in life
 
 *(2026-08-18.)* M21 **256 → 257** — Terror of the Peaks.
@@ -391,3 +359,47 @@ pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Nine new tests, all watched to fail on the round-107 engine; three
 guards that asserted the refusal this round removed were rewritten to state what
 replaced it.
+
+## Round 109: a duration that is neither of the two
+
+*(2026-08-18.)* M21 **258 → 259** — Furious Rise.
+
+> At the beginning of your end step, if you control a creature with power 4 or
+> greater, exile the top card of your library. You may play that card until you
+> exile another card with this enchantment.
+
+**The first sentence already worked** — end-step trigger, CR 603.4 intervening-if
+over a power-4 filter, exile the top card. The whole card hung on the second one,
+and specifically on its duration.
+
+`cast_permissions.py` had exactly two: `"end_of_turn"`, swept at cleanup
+(CR 514.2), and `None`, lasting until end of game (CR 611.2a). Furious Rise's
+clause is neither, and reading it as either is wrong in a *stated* direction —
+end-of-turn discards the card at the very cleanup after the end step that exiled
+it, so it would never be playable at all; no-duration leaves every card the
+enchantment has ever exiled playable at once. So there is a third:
+`"until_source_grants_again"`, retired by the next grant from the same permanent.
+The ending event may simply never occur — the enchantment is destroyed, or no end
+step finds a creature with power 4 — and then the permission lasts, which is
+what the card says.
+
+**Retired where it ends, not swept where it would be convenient.** There is no
+turn step to sweep at: the event is another grant, so the retirement lives in
+`grant_permission` itself. A grant carrying no source id retires nothing, which
+is the safe direction — the alternative clears every unsourced permission the
+player holds.
+
+**Keyed by `permanent_id`, because "this enchantment" is one permanent.** Two
+Furious Rises are two independent permissions, and the name they share cannot
+say so; a battlefield slot cannot either, since anything leaving renumbers the
+rest. CR 400.7 makes the id right in the other direction too: a Furious Rise that
+leaves and returns is a new object that has granted nothing yet.
+
+**"That card" is a spelling, not a second referent.** It names the cards a step
+of this same resolution exiled — the identical back-reference "cards exiled this
+way" and "them" already make, with one member in the list because the exile took
+one card. A second `what` would have been the same producer check written twice.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Six new tests, all watched to fail on the round-108 engine.
