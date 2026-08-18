@@ -79,6 +79,11 @@ class ActivatedAbilityCost:
     # `_chargeable_discard_filters` refuses to read one, the same pairing
     # `sacrifice_filter` describes.
     discard_filters: tuple[dict, ...] = ()
+    # Subira: "Discard your hand: …" — every card, chosen by nobody. Its own
+    # field rather than a large ``discard_cards``, because the payability check
+    # is the opposite: a count can be unpayable for want of cards, and this one
+    # never is.
+    discard_whole_hand: bool = False
     # Shacklegeist: "Tap two untapped Spirits you control: …" — N permanents the
     # payer taps, named by the printed noun phrase. Distinct from
     # ``requires_tap``, which taps the *source* and is the {T} symbol: this taps

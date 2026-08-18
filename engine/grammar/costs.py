@@ -235,6 +235,11 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             stream.advance()
             if stream.accept_phrase("the", "last", "card", "you", "drew", "this", "turn"):
                 costs.append(ast.DiscardCost(ast.Fixed(1), last_drawn=True))
+            elif stream.accept_phrase("your", "hand"):
+                # "Discard your hand" (Subira). Every card at once — no choice
+                # for the payer, no filter to narrow, and payable with an empty
+                # hand, because discarding nothing is discarding your hand.
+                costs.append(ast.DiscardCost(ast.Fixed(0), whole_hand=True))
             else:
                 # "Discard a card" (Seasoned Hallowblade) — the payer picks, and
                 # ``ActivatedAbilityCost.discard_cards`` is what collects it.

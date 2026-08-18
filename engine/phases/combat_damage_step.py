@@ -825,6 +825,11 @@ class CombatDamageStepMixin:
                     self._fire_combat_damage_to_player_triggers(
                         source_attacker, defender, outcome.dealt
                     )
+                    # And the delayed ones (Subira), which belong to no
+                    # permanent and so cannot be found by the ability scan above.
+                    self._fire_delayed_combat_damage_triggers(
+                        source_attacker, defender, outcome.dealt
+                    )
                     # "Whenever **one or more** … deal combat damage to a
                     # player" is one trigger however many creatures dealt it, so
                     # the pairs are recorded here and fired once each at the end

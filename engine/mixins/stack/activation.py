@@ -610,6 +610,9 @@ class AbilityActivationMixin:
                 if card is not named:
                     discard_cost_cards.append(card)
 
+        # "Discard your hand" (Subira). Never unpayable — discarding nothing is
+        # discarding your hand — so there is no check beside the others above,
+        # only the payment below.
         # "Pay 3 life" (Tavern Swindler). CR 119.4: a player may pay life only
         # if their life total is at least the amount — so exactly 3 life pays a
         # 3-life cost and 2 does not, and paying down to 0 is legal. CR 602.5c
@@ -817,6 +820,20 @@ class AbilityActivationMixin:
             self.log.append(
                 f"{controller.name} discarded {cost_card.name} "
                 f"to activate {permanent.card.name}"
+            )
+
+        # "Discard your hand" (Subira). Every card, snapshotted before the loop
+        # because `_discard_card` may itself put something into the hand (Library
+        # of Leng's replacement offers the top of the library instead) — iterating
+        # the live list would then skip or revisit a card.
+        if ability.cost.discard_whole_hand:
+            emptied = list(controller.hand)
+            controller.hand = []
+            for cost_card in emptied:
+                self._discard_card(controller, cost_card)
+            self.log.append(
+                f"{controller.name} discarded their hand "
+                f"({len(emptied)} card(s)) to activate {permanent.card.name}"
             )
 
         # Pay the life (CR 118.3b: the payment is subtracted from the life total,

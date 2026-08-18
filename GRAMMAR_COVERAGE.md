@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 221 | 91 | expected a subject |  |
+| 222 | 92 | expected a subject |  |
 | 90 | 34 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
 | 31 | 31 | unrecognized activation cost |  |
@@ -52,11 +52,11 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 3 | 2 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | expected something to shield |  |
-| 2 | 2 | unrecognized discard cost |  |
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
 | 1 | 1 | no handler for doom counters |  |
 | 1 | 1 | expected 'be' |  |
+| 1 | 1 | no handler for restricting a non-targeted subject |  |
 
 ## Cards executing through the grammar
 

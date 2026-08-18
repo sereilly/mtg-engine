@@ -419,6 +419,13 @@ class DiscardCost:
     # can say: its fields are AND'd, so "land" and "shrine" together would name
     # a card that is both. Empty is the unrestricted "Discard a card".
     filters: tuple[ObjectFilter, ...] = ()
+    #: "Discard **your hand**" (Subira, Tulzidi Caravanner). Every card, so
+    #: there is nothing for the payer to choose and nothing for a filter to
+    #: narrow — a different cost from "discard a card", not a count of it, which
+    #: is why it is a flag rather than a very large ``count``. CR 601.2h still
+    #: makes it payable with an empty hand: discarding nothing is discarding
+    #: your hand.
+    whole_hand: bool = False
 
 
 @dataclass(frozen=True)

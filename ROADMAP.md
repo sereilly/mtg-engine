@@ -256,52 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 116: a tribe is not a card type, and a count is a count
-
-*(2026-08-18.)* M21 **265 → 266** — Rin and Seri, Inseparable.
-
-> Whenever you cast a Dog spell, create a 1/1 green Cat creature token.
-> Whenever you cast a Cat spell, create a 1/1 white Dog creature token.
-> {R}{G}{W}, {T}: Rin and Seri deals damage to any target equal to the number
-> of Dogs you control. You gain life equal to the number of Cats you control.
-
-**The cast trigger narrowed by card type and refused a subtype on purpose.**
-Its word list was exactly what the event filter tested against the type line, so
-the comment beside it said a subtype word "must keep refusing rather than
-compile and fire on every spell" — a refusal recorded as a known limit rather
-than left to be discovered. Both front ends carried the same list and the same
-note. Lifting it meant teaching the filter first: the subtype is read through
-the printed-subtype reader the layer seed uses, not searched for in the type
-line, so a tribe cannot answer for a longer word and a card type cannot answer
-a tribe. The vocabulary supplies the words, so a set adding a tribe needs
-`fetch_vocabulary.py` and nothing here.
-
-**Counted damage was one card wearing a general shape.** "Deals damage equal to
-the number of …" had exactly one lowering — Karma's, fused down to a kind whose
-handler damages the player whose upkeep is resolving. Everything needed for the
-general form was already there: `count_spec` describes the noun phrase,
-`x_from_count` carries it, and the instruction executor resolves it into
-`x_value` before any handler runs. So the general case is `deal_damage` with a
-counted amount, and Karma's kind stays because its *recipient* is not something
-this shape can express.
-
-The life gain took the same route, and that is the point of routing it there:
-the ability counts **Dogs** for its damage and **Cats** for its life in one
-sentence pair, so the two steps carry two specs and the executor resolves each
-against its own instruction. A second counter with its own spelling of the spec
-is exactly the drift `count_spec` exists to prevent.
-
-Rin and Seri is a Dog **Cat**, so it answers both counts — which is the check
-worth writing down, because a tribal count that read the type line as a whole
-would have found it once and a matcher asking for a single subtype would have
-missed it entirely.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Seven new tests, six watched to fail on the round-115 engine; the
-seventh states the printed-subtype reader's contract, which the new filter asks
-and which predates it.
-
 ## Round 117: three sentences, one pile
 
 *(2026-08-18.)* M21 **266 → 267** — Transmogrify.
@@ -389,3 +343,43 @@ pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Six new tests, all watched to fail on the round-117 engine; one guard
 that recorded the old token refusal was rewritten to state what replaced it and
 what still refuses.
+
+## Round 119: a trigger created by an ability, and asked where it will fire
+
+*(2026-08-18.)* M21 **268 → 269** — Subira, Tulzidi Caravanner.
+
+> {1}{R}, {T}, Discard your hand: Until end of turn, whenever a creature you
+> control with power 2 or less deals combat damage to a player, draw a card.
+
+**"Discard your hand" is not a count of "discard a card".** There is no card for
+the payer to name, no filter to narrow, and — the part that decides it belongs
+in its own field — it is *never unpayable*: discarding nothing is discarding your
+hand, where a count can fail for want of cards. The payment snapshots the hand
+before emptying it, because `_discard_card` can put something back (Library of
+Leng offers the top of the library instead) and iterating the live list would
+then skip or revisit a card.
+
+**A delayed triggered ability (CR 603.7), narrowed.** The machinery existed for
+Basri Ket — an entry on `game.delayed_triggers`, fired from the declare-attackers
+step — and it could express exactly one narrowing, `nontoken`. Subira's subject
+is a printed noun phrase, so it is read by the noun parser into the same filter
+payload every other narrowing travels as, and both fire sites ask
+`subject_matches`, which has the seat "you control" needs (CR 109.5).
+
+**Its event has its own fire site, and the compiler checks that first.** "Deals
+combat damage to a player" is not the attack event: the entry belongs to no
+permanent, so the ability scan that finds Hypnotic Specter's trigger cannot
+reach it, and it needs a site of its own in the combat damage step. Rounds 93 and
+105 each found a trigger with nowhere to be announced *after* shipping it; here
+the question is asked at the moment the trigger is **created** — an event outside
+`_DELAYED_EVENTS` has no site, so the clause is not read and the card refuses.
+
+The clause is read by `engine/oracle.py` rather than the grammar for the reason
+the loyalty path already records: handed to the grammar it classifies as a
+triggered ability *of the permanent*, and the inner effect runs at once — a draw
+now instead of a draw when a creature connects.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Six new tests, five watched to fail on the round-118 engine; the sixth
+is the no-activation baseline for the one above it.

@@ -10,6 +10,7 @@ pass. Also holds the attack-legality query (``can_attack``),
 """
 
 from ..auras import aura_restriction_active
+from ..subject_filters import subject_matches
 from ..events import emit
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
@@ -188,9 +189,20 @@ class DeclareAttackersStepMixin:
         for entry in list(self.delayed_triggers):
             if entry.get("event") != "creatures_attack":
                 continue
+            # "…whenever **a creature you control with power 2 or less**
+            # attacks" (Subira's shape, on the attack event). The narrowing is a
+            # filter payload like every other, asked through `subject_matches`
+            # because "you control" is a seat comparison the object alone cannot
+            # answer (CR 109.5). `nontoken` stays its own key: it predates this
+            # and the two payloads are not the same shape.
+            described = entry.get("attacker_filter") or {}
             matching = [
                 perm for perm in attackers
                 if not (entry.get("nontoken") and perm.metadata.get("is_token"))
+                and subject_matches(
+                    self, perm, described,
+                    observer=int(entry.get("controller_index", controller_index)),
+                )
             ]
             if not matching:
                 continue

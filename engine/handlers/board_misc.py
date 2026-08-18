@@ -52,6 +52,12 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         "event": payload.get("event", "creatures_attack"),
         "batch": bool(payload.get("batch")),
         "nontoken": bool(payload.get("nontoken")),
+        # "…whenever **a creature you control with power 2 or less** deals
+        # combat damage to a player" (Subira). The narrowing travels as the same
+        # filter payload every other one does; both fire sites ask
+        # `subject_matches`, which has the seat "you control" needs. Empty means
+        # no narrowing, which is what Basri Ket's entries carry.
+        "attacker_filter": dict(payload.get("attacker_filter") or {}),
         "instruction": payload.get("instruction"),
         "source_name": context.card.name,
         "card": context.card,

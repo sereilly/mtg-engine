@@ -546,3 +546,112 @@ def test_a_counted_damage_goes_through_the_one_evaluator(set_pool):
         "zone": "battlefield", "owner": "you",
         "filter": {"type_filter": "creature", "subtype_filter": "dog"},
     }
+
+
+# --- Subira: a delayed trigger with a narrowed subject (round 119) ----------
+
+
+def _subira_board(set_pool, hand=("Mountain",)):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", life=20, hand=[pool[n] for n in hand],
+        library=[pool["Island"]] * 8,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    subira = Permanent(card=pool["Subira, Tulzidi Caravanner"])
+    small = Permanent(card=pool["Alpine Watchdog"])      # 2/2 — power 2, matches
+    big = Permanent(card=pool["Baneslayer Angel"])       # 5/5 — does not
+    for perm in (subira, small, big):
+        game._put_permanent_onto_battlefield(0, perm, None)
+        _nosick(perm)
+    game.active_player_index = 0
+    return game, p1
+
+
+def _swing(game):
+    game._set_phase_and_step("combat", "beginning_of_combat")
+    game.advance_combat_phase()
+    game.declare_attackers(0, [1, 2])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {})
+    game.advance_combat_phase()
+    game.resolve_combat_damage(0)
+    game._settle()
+
+
+def test_subira_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Subira, Tulzidi Caravanner"])
+    assert program.supported, program.reason
+
+
+def test_discarding_your_hand_is_a_cost_with_nothing_to_choose(set_pool):
+    """Not a count of "discard a card": there is no card for the payer to name
+    and no filter to narrow, and CR 601.2h still makes it payable with an empty
+    hand — discarding nothing is discarding your hand."""
+    game, p1 = _subira_board(set_pool, hand=("Mountain", "Island"))
+
+    result = game.activate_permanent_ability(
+        0, "Subira, Tulzidi Caravanner", ability_index=1,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert p1.hand == []
+    assert sorted(c.name for c in p1.graveyard) == ["Island", "Mountain"]
+
+
+def test_an_empty_hand_still_pays(set_pool):
+    game, p1 = _subira_board(set_pool, hand=())
+
+    result = game.activate_permanent_ability(
+        0, "Subira, Tulzidi Caravanner", ability_index=1,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.delayed_triggers
+
+
+def test_the_delayed_trigger_fires_only_for_the_creatures_it_names(set_pool):
+    """"Until end of turn, whenever a creature you control **with power 2 or
+    less** deals combat damage to a player, draw a card." Both creatures
+    connect; only the 2/2 answers the filter, so exactly one card is drawn."""
+    game, p1 = _subira_board(set_pool)
+
+    game.activate_permanent_ability(
+        0, "Subira, Tulzidi Caravanner", ability_index=1,
+    )
+    game._settle()
+    _swing(game)
+
+    assert game.players[1].life == 13, "both creatures connected"
+    assert [c.name for c in p1.hand] == ["Island"]
+
+
+def test_without_the_activation_nothing_is_drawn(set_pool):
+    game, p1 = _subira_board(set_pool)
+
+    _swing(game)
+
+    assert game.players[1].life == 13
+    assert [c.name for c in p1.hand] == ["Mountain"]
+
+
+def test_a_delayed_trigger_whose_event_has_no_fire_site_refuses(set_pool):
+    """Arming a trigger nothing will ever announce is the defect rounds 93 and
+    105 each found after the fact; asked here at the moment the trigger is
+    *created* instead. An event outside the table has no site, so the clause is
+    not read and the card refuses."""
+    from engine.oracle import _parse_delayed_attack_trigger
+
+    assert _parse_delayed_attack_trigger(
+        "Until end of turn, whenever a creature you control with power 2 or "
+        "less deals combat damage to a player, draw a card.",
+        "Subira, Tulzidi Caravanner",
+    ) is not None
+    assert _parse_delayed_attack_trigger(
+        "Until end of turn, whenever a creature you control with power 2 or "
+        "less becomes tapped, draw a card.",
+        "Invented Card",
+    ) is None

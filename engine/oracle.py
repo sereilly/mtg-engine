@@ -737,6 +737,10 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # already consumed above as mana; this is the spelled-out form, which taps
     # *other* permanents.
     tap_cost = _chargeable_tap_cost(cost_lower)
+    # "Discard your hand" (Subira). Matched here rather than folded into the
+    # phrase above, because it is not a count: there is no card for the payer to
+    # name and no filter to test, and it is payable with an empty hand.
+    discard_whole_hand = bool(re.search(r"\bdiscard your hand\b", cost_lower))
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         sacrifice_filter,
@@ -744,6 +748,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         tap_count=tap_cost[0] if tap_cost else 0,
         discard_cards=0 if discard_filters is None else 1,
         discard_filters=discard_filters or (),
+        discard_whole_hand=discard_whole_hand,
         pay_life=_life_payment_cost(cost_lower),
     )
 
@@ -1379,6 +1384,22 @@ def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedA
         return None
 
     effect_text = normalized.split(":", 1)[1].strip()
+    # "…: Until end of turn, whenever <subject> <event>, <effect>." (Subira.)
+    # A delayed triggered ability created on resolution (CR 603.7), read here
+    # for the same reason the loyalty path reads it: handed to the grammar, the
+    # clause classifies as a triggered ability *of the permanent* and its inner
+    # effect runs at once — a draw now instead of a draw when a creature
+    # connects.
+    delayed = _parse_delayed_attack_trigger(line.split(":", 1)[1].strip(), card_name)
+    if delayed is not None:
+        return ParsedActivatedAbility(
+            source_line=line,
+            normalized_effect=effect_text,
+            supported=True,
+            cost=parse_activated_ability_cost(line),
+            effect_kind="activated_delayed_trigger",
+            instruction=delayed,
+        )
     instruction, effect_kind = _reading(
         _line_instruction(line, card_name, activated=True)
     )
@@ -1485,6 +1506,27 @@ _DELAYED_ATTACK_RE = re.compile(
     r" this turn, (?P<effect>.+)$"
 )
 
+# The same delayed trigger with its duration printed *first* and its subject
+# narrowed: "Until end of turn, whenever a creature you control with power 2 or
+# less attacks, draw a card." (Subira, Tulzidi Caravanner.) The subject is a
+# printed noun phrase, delimited here and read by the noun parser — the
+# ``_subject`` convention this file already uses — so a card narrowing by a
+# different tribe, keyword or stat needs no code.
+_DELAYED_ATTACK_UNTIL_RE = re.compile(
+    r"^until end of turn, whenever (?P<attacker_subject>.+?) "
+    r"(?P<event>attacks|deals combat damage to a player), (?P<effect>.+)$"
+)
+
+#: Which fire site each delayed-trigger event belongs to. A phrase whose event
+#: is not here has nowhere to be announced, so the clause refuses rather than
+#: arming a trigger nothing will ever look at — the dispatcher question round 93
+#: wrote down, asked at the moment the trigger is *created* instead of at the
+#: moment it should have fired.
+_DELAYED_EVENTS: dict[str, str] = {
+    "attacks": "creatures_attack",
+    "deals combat damage to a player": "creature_deals_combat_damage_to_player",
+}
+
 
 def _parse_delayed_attack_trigger(
     effect_clause: str, card_name: str | None
@@ -1494,6 +1536,31 @@ def _parse_delayed_attack_trigger(
     effect fails to parse, so the card refuses rather than arming a trigger
     that fires into nothing."""
     normalized = normalize_creature_line(effect_clause)
+    narrowed = _DELAYED_ATTACK_UNTIL_RE.match(normalized)
+    if narrowed is not None:
+        from .grammar import subject_filter_payload
+
+        described = subject_filter_payload(narrowed.group("attacker_subject"))
+        if described is None:
+            # A phrase the matcher cannot test would arm a trigger firing on a
+            # strictly larger set than the card prints — the same refusal every
+            # other narrowed condition makes.
+            return None
+        inner = _line_instruction(narrowed.group("effect"), card_name, activated=True)
+        if inner is None:
+            return None
+        return OracleInstruction(
+            "create_delayed_trigger",
+            "",
+            {
+                "event": _DELAYED_EVENTS[narrowed.group("event")],
+                "batch": False,
+                "nontoken": False,
+                "attacker_filter": described,
+                "instruction": inner[0],
+                "duration": "end_of_turn",
+            },
+        )
     match = _DELAYED_ATTACK_RE.match(normalized)
     if match is None:
         return None

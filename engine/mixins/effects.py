@@ -45,6 +45,53 @@ class EffectsMixin:
                 )
                 break
 
+    def _fire_delayed_combat_damage_triggers(
+        self, attacker: "Permanent", defending_player: "PlayerState", amount: int
+    ) -> None:
+        """Delayed triggers armed on "whenever <subject> deals combat damage to
+        a player" (CR 603.7) — Subira, Tulzidi Caravanner.
+
+        Its own fire site beside the permanent-ability one rather than a branch
+        inside it: a delayed trigger has no source permanent to scan from, which
+        is exactly why the entry list exists, and the ability scan cannot reach
+        an entry that belongs to no permanent. Round 93 and round 105 both found
+        a trigger with nowhere to be announced; arming one whose event no site
+        reads is the same defect, so the compiler refuses an event that is not
+        in ``_DELAYED_EVENTS`` and this is the site that makes the combat-damage
+        entry true.
+        """
+        from ..subject_filters import subject_matches
+
+        if not self.delayed_triggers or amount <= 0:
+            return
+        defending_index = self.players.index(defending_player)
+        events: list[dict] = []
+        for entry in list(self.delayed_triggers):
+            if entry.get("event") != "creature_deals_combat_damage_to_player":
+                continue
+            seat = int(entry.get("controller_index", 0))
+            if not subject_matches(
+                self, attacker, entry.get("attacker_filter") or {}, observer=seat
+            ):
+                continue
+            instruction = entry.get("instruction")
+            if instruction is None:
+                continue
+            events.append({
+                "controller_index": seat,
+                "source_permanent": attacker,
+                "card": entry.get("card"),
+                "instruction": instruction,
+                "effect_kind": "triggered_delayed",
+                "ability_text": entry.get("source_name", "delayed trigger"),
+                "trigger_context": {
+                    "defending_player_index": defending_index,
+                    "amount": amount,
+                },
+            })
+        if events:
+            self._enqueue_triggered_batch(events)
+
     def _fire_combat_damage_to_player_triggers(
         self, attacker: Permanent, defending_player: PlayerState, amount: int = 0
     ) -> None:
