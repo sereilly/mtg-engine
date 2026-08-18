@@ -148,17 +148,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'creature if it attacked this turn':
             _line('berserk_pump', 'spell_pattern'),
     },
-    # The grammar refused this line in an earlier pass and the refusal still
-    # holds: `_add_mana_from_text`'s any-colour branch probes for the literal
-    # phrase "one mana of any color" and recognizes no other number, so lowering
-    # "three" would add **zero** mana while reporting success. The fused kind
-    # here is the reading the card has always had — one artifact, one handler
-    # that sacrifices it and adds three of a chosen colour.
-    'Black Lotus': {
-        '{t}, sacrifice this artifact: add three mana of any one color':
-            _line('sacrifice_self_for_mana', 'activated_mana', amount=3, color='G',
-                any_color=True),
-    },
     'Blaze of Glory': {
         'target creature defending player controls can block any number of '
         'creatures this turn. it blocks each attacking creature this turn if '

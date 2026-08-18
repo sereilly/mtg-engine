@@ -1101,3 +1101,40 @@ def test_black_vise_multiplayer_headless_defaults_without_prompt(all_cards):
     assert result.supported
     assert game.pending_enter_choice is None
     assert p1.battlefield[0].metadata.get("chosen_player_index") == 2
+
+
+# --- Round 95: Black Lotus without a hook -----------------------------------
+
+
+def test_black_lotus_runs_off_the_grammar(cards):
+    """It kept a fused ``sacrifice_self_for_mana`` card hook for exactly as long
+    as "three mana of any one color" had nowhere to put its number. The
+    sacrifice is an ordinary activation cost and the mana an ordinary
+    instruction, so the decomposition is the card as printed — and the hook is
+    gone rather than shadowed."""
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS
+    from engine.oracle import compile_card_oracle
+
+    assert "Black Lotus" not in CARD_LINE_INSTRUCTIONS
+
+    program = compile_card_oracle(cards["Black Lotus"])
+    (ability,) = program.activated_abilities
+    assert ability.cost.sacrifice_self
+    assert ability.instruction.payload["any_color_count"] == 3
+
+
+def test_black_lotus_still_adds_three_of_one_colour(cards):
+    from tests.helpers import _nosick
+
+    lotus = _nosick(Permanent(card=cards["Black Lotus"]))
+    p1 = PlayerState(name="P1", battlefield=[lotus])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = True
+
+    result = game.activate_permanent_ability(
+        0, "Black Lotus", permanent_index=0, mana_color="R"
+    )
+
+    assert result.supported, result.details
+    assert p1.mana_pool["R"] == 3
+    assert not game.is_on_battlefield(lotus), "sacrificed to pay its own cost"

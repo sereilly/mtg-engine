@@ -663,3 +663,59 @@ def test_the_picker_offers_only_what_the_charger_accepts(set_pool):
     assert [t["name"] for t in cost_spec["valid_targets"]] == [
         "Mountain", "Sanctum of Calm Waters",
     ]
+
+
+# --- Round 95: how much any-colour mana is data ----------------------------
+
+
+def _harvest_board(set_pool, shrines):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", battlefield=[Permanent(card=pool[name]) for name in shrines]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.active_player_index = 0
+    return game, p1
+
+
+_SHRINE_CYCLE = (
+    "Sanctum of Fruitful Harvest",
+    "Sanctum of Calm Waters",
+    "Sanctum of Stone Fangs",
+)
+
+
+def test_sanctum_of_fruitful_harvest_compiles_supported(set_pool):
+    """The whole card was one number. "Add X mana of any one color" refused
+    because the handler probed its clause *text* for the literal "one mana of
+    any color" and recognized no other count — right while that was true, and
+    the reason the refusal was written rather than a guess."""
+    program = compile_card_oracle(set_pool("M21")["Sanctum of Fruitful Harvest"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "main_phase_first"
+    assert trigger.instruction.payload["any_color_count"] == "x"
+
+
+@pytest.mark.parametrize("shrines", [1, 2, 3])
+def test_the_mana_counts_the_shrines(set_pool, shrines):
+    game, p1 = _harvest_board(set_pool, _SHRINE_CYCLE[:shrines])
+
+    game._fire_first_main_phase_triggers()
+    game._settle()
+
+    assert sum(p1.mana_pool.values()) == shrines
+
+
+def test_any_one_color_is_one_choice_for_the_whole_clause(set_pool):
+    """"Any **one** color" — the count multiplies a single symbol rather than
+    asking again per mana."""
+    game, p1 = _harvest_board(set_pool, _SHRINE_CYCLE)
+
+    game._fire_first_main_phase_triggers()
+    game._settle()
+
+    produced = [symbol for symbol, amount in p1.mana_pool.items() if amount]
+    assert len(produced) == 1
+    assert p1.mana_pool[produced[0]] == 3

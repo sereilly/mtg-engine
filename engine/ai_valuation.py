@@ -169,11 +169,17 @@ def mana_ability_amount(card: CardDefinition) -> int | None:
         instruction = ability.instruction
         if instruction is None or not is_mana_ability(instruction):
             continue
-        # Two payload shapes: a pip list ("Add {C}{C}") and a bare count
-        # ("Add three mana of any one color").
+        # Three payload shapes: a pip list ("Add {C}{C}"), the any-colour count
+        # ("Add three mana of any one color"), and the legacy fused handler's
+        # bare ``amount``. The any-colour count may be "x" or a spec, which is
+        # not a number this valuation can have — 1 is the honest floor there,
+        # since the ability does produce mana.
         pips = instruction.payload.get("pips")
         if pips:
             return sum(int(count) for _symbol, count in pips)
+        any_count = instruction.payload.get("any_color_count")
+        if isinstance(any_count, int):
+            return any_count
         amount = instruction.payload.get("amount")
         if isinstance(amount, int):
             return amount

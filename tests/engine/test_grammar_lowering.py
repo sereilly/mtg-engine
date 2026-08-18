@@ -2313,36 +2313,38 @@ def test_exile_cost_refuses_anything_but_the_source():
 # ---------------------------------------------------------------------------
 
 
-def test_one_mana_of_any_color_keeps_the_clause_text():
-    """The one place the grammar still hands a handler its own clause back.
-
-    ``add_mana_from_text``'s any-colour path is ``_add_mana_from_text`` probing
-    for the literal phrase, with the chosen symbol arriving separately as
-    ``color`` (injected by mixins/stack/activation when ``any_color`` is set).
-    Structured pips would say nothing that path can read, so the payload stays
-    byte-identical to the legacy rule's — which is what keeps Birds of
-    Paradise, City of Brass and Celestial Prism producing mana at all."""
+def test_any_colour_mana_carries_its_count():
+    """How many is *data*. The handler used to probe the clause text for the
+    literal "one mana of any color", which is why every other number had to
+    refuse — the clause still rides along, because the colour injection in
+    `mixins/stack/activation` and the AI's mana valuation both read it, but the
+    number is now the payload's."""
     for name in ("Birds of Paradise", "City of Brass"):
         assert _instructions("{T}: Add one mana of any color.", name) == [
             (
                 "add_mana_from_text",
-                {"oracle_text": "add one mana of any color", "any_color": True},
+                {
+                    "oracle_text": "add one mana of any color",
+                    "any_color": True,
+                    "any_color_count": 1,
+                },
             )
         ]
 
 
-def test_three_mana_of_any_one_color_refuses():
-    """Black Lotus. That text probe recognizes *one* mana and no other number,
-    so lowering three here would add nothing while reporting success. The card
-    keeps its own fused ``sacrifice_self_for_mana`` handler on the legacy
-    path."""
+def test_three_mana_of_any_one_color_lowers_and_retires_a_hook():
+    """Black Lotus. It kept a fused ``sacrifice_self_for_mana`` hook for exactly
+    as long as the number had nowhere to go; the sacrifice is an ordinary
+    activation cost and the mana is an ordinary instruction, so the decomposition
+    is the card as printed and the hook is gone."""
     result = compile_line(
         "{T}, Sacrifice this artifact: Add three mana of any one color.",
         card_name="Black Lotus",
     )
 
-    assert result.parsed and not result.lowered
-    assert "one mana of any colour" in result.failure_reason
+    assert result.lowered, result.failure_reason
+    (instruction,) = result.instructions
+    assert instruction.payload["any_color_count"] == 3
 
 
 # ---------------------------------------------------------------------------

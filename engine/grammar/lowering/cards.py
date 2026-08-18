@@ -316,18 +316,25 @@ def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:
     # refuses rather than adding unrestricted mana.
     if node.spend_only is not None:
         raise LoweringError(
-            "the any-colour mana branch is text-keyed and carries no restriction",
-            node=node,
+            "no handler restricts what any-colour mana may pay for", node=node
         )
-    if node.any_color != 1:
-        raise LoweringError(
-            "only one mana of any colour has a handler; "
-            f"{node.any_color} does not",
-            node=node,
-        )
+    # ``any_color`` is a *count* now, not a flag. The handler used to probe the
+    # clause text for the literal "one mana of any color", which is why every
+    # other number had to refuse; it reads the number, so "add two mana of any
+    # one color" and "add X mana" are the same instruction with different data.
+    #
+    # The clause text still rides along: ``activation.py`` keys the colour
+    # injection on the ``any_color`` payload key, and the AI's mana valuation
+    # reads the text. Both are the same string the legacy rule wrote.
+    amount = _amount_payload(node.any_color)
     return (
         OracleInstruction(
-            "add_mana_from_text", "", {"oracle_text": node.source_text, "any_color": True}
+            "add_mana_from_text", "",
+            {
+                "oracle_text": node.source_text,
+                "any_color": True,
+                "any_color_count": amount,
+            },
         ),
     )
 

@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 244/285) to the full release line - **137 sets, 33,594
+M21 measured at 245/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–91 — lives in git history at and before
-commit `2f8ac00`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–92 — lives in git history at and before
+commit `4c714ca`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,49 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 92: a trigger that fires when something points at you
-
-*(2026-08-17.)* M21 **241 → 242** — Warden of the Woods.
-
-> Whenever this creature becomes the target of a spell or ability an opponent
-> controls, you may draw two cards.
-
-**The condition was already in the table, and had never had a dispatcher.**
-`engine/oracle.py`'s WHEN table has carried `becomes_target` — "when this becomes
-the target" — since before the grammar existed, matching nothing in the pool and
-announced by nothing anywhere. That is precisely the class
-`tests/engine/test_trigger_dispatchers.py` was written for, and the reason it
-passed is the reason the guard asks its question of *conditions the pool
-produces*: no supported card produced one.
-
-This card produces the **whenever** wording, which is a different kind — a kind
-lives in one table — so `self_becomes_target` is new, and it arrives with the
-thing the old row never had.
-
-**The dispatcher is `_stack_push`, and that is not a convenience.** CR 601.2c has
-a spell choose its targets as it is cast and CR 602.2b an ability as it is
-activated; both are the moment the object is put on the stack, and `_stack_push`
-is the one place that happens. It is also where the targets have just been
-stamped from unstable slots into stable ids, so the announcement runs against the
-permanents the item really points at rather than whatever occupies those slots.
-The trigger fires on the *targeting*, so the Warden draws whether or not the
-Shock ever resolves — which is what CR 603.2 says and what the test pins.
-
-**Whose spell it must be is data.** "An opponent controls" is a named group on
-one condition, so the unnarrowed wording and "you control" are the same
-dispatcher asked a different question — the arrangement Lifetap's tapped trigger
-already uses. The announcement carries the caster's seat, because nothing
-downstream could recover from a targeted permanent who pointed at it.
-
-"**This** creature" is compared by identity, not by value: a look-alike on the
-same battlefield is a different permanent and would otherwise draw its controller
-two cards.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Four new tests, two watched to fail on the round-91 engine — the
-two negative ones pass there too, because an unsupported card also draws nothing.
-
 ## Round 93: a token printed by name, and a threshold on your own board
 
 *(2026-08-17.)* M21 **242 → 243** — Gadrak, the Crown-Scourge.
@@ -401,3 +358,47 @@ pins in both directions.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Ten new tests, seven watched to fail on the round-93 engine.
+
+## Round 95: how much any-colour mana is data
+
+*(2026-08-17.)* M21 **244 → 245** — Sanctum of Fruitful Harvest, and a card hook
+retired.
+
+> At the beginning of your first main phase, add X mana of any one color, where X
+> is the number of Shrines you control.
+
+**The whole card was one number.** Everything else compiled. "Add X mana of any
+one color" refused because `add_mana_from_text`'s any-colour path is
+`_add_mana_from_text` **probing the clause text** for the literal phrase "one
+mana of any color" — it recognizes one mana and no other count, so any other
+number lowered onto it would have added nothing while reporting success. That is
+why the refusal was written rather than a guess, and round 54's "an X nothing
+reads" guard is what found it before a card did.
+
+The count travels on the payload now. It is an `Amount`, so a printed digit, an
+X, and an X *defined by a where-clause* are the same instruction with different
+data — and the where-clause resolves through `count_from_payload`, the one
+evaluator every computed amount in the engine shares. "Any **one** color" stays
+one choice for the whole clause: the count multiplies a single symbol rather than
+asking again per mana.
+
+**Black Lotus was the card that had been paying for the old shape.** "{T},
+Sacrifice this artifact: Add three mana of any one color" kept a name-keyed
+`sacrifice_self_for_mana` hook for exactly as long as "three" had nowhere to go.
+The sacrifice is an ordinary activation cost and the mana an ordinary
+instruction, so the decomposition is the card as printed — and the guards said so
+before the ROADMAP did: `test_card_lines` failed on the entry as *dead* the
+moment the number could travel. **The hook is deleted**, and both ratchets
+tightened onto the improvement: hooked cards 24.2% → **24.0%**, entries per 100
+supported 26.0 → **25.8**, executed lines 41.6% → **41.8%**.
+
+The clause text still rides along, and that is not a leftover: `activation.py`
+injects the chosen colour by keying on the `any_color` payload flag, and the AI's
+mana valuation reads the number — which now comes off the payload, with 1 as the
+honest floor for a count that is an X the valuation cannot have.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **one
+hook removed**. Seven new tests, six watched to fail on the round-94 engine;
+three tests that asserted the old refusals were rewritten to state what replaced
+them.

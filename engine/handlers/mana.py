@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .registry import effect_handler
-from ._common import resolve_amount
+from ._common import count_from_payload, resolve_amount
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -164,6 +164,29 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             added.append(f"{{{symbol}}}" * int(count))
         suffix = f" (spendable only on {spend_only} spells)" if spend_only else ""
         game.log.append(f"{card.name} produced {''.join(added)}{suffix}")
+        return True, "resolved"
+
+    # "Add N mana of any one color" (Sanctum of Fruitful Harvest, Traitorous
+    # Greed). One symbol, N times — "any **one** color" is a single choice for
+    # the whole clause, which is why the count multiplies a symbol rather than
+    # asking again per mana.
+    any_count = instruction.payload.get("any_color_count")
+    if any_count is not None:
+        # "…where X is the number of Shrines you control" defines X through the
+        # one evaluator every computed amount shares, so the same printed clause
+        # means the same number here as it does on a pump or a CDA.
+        x_value = context.x_value
+        x_count = instruction.payload.get("x_from_count")
+        if x_count is not None:
+            x_value = count_from_payload(game, context, x_count)
+        amount = resolve_amount(any_count, x_value)
+        symbol = game._normalize_mana_color(
+            instruction.payload.get("color")
+            or (context.choices or {}).get("new_color")
+        ) or "G"
+        if amount > 0:
+            caster.mana_pool[symbol] += amount
+        game.log.append(f"{card.name} produced {amount} {symbol} mana")
         return True, "resolved"
 
     game._add_mana_from_text(

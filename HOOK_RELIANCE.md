@@ -12,21 +12,21 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**94 of 388 supported cards (24.2%)** carry at least one name-keyed entry, across **101 entries** in 7 registries. The pool is 388 cards, 100.0% supported.
+**93 of 388 supported cards (24.0%)** carry at least one name-keyed entry, across **100 entries** in 7 registries. The pool is 388 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **6,797 hand-written entries** covering **6,326 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **6,730 hand-written entries** covering **6,259 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 53 (18.3%) | 388 | 50 (12.9%) | 57 | 19.7 |
-| LEB | 292 | 292 (100.0%) | 53 (18.2%) | 389 | 50 (12.9%) | 57 | 19.5 |
-| 2ED | 292 | 292 (100.0%) | 53 (18.2%) | 389 | 50 (12.9%) | 57 | 19.5 |
+| LEA | 290 | 290 (100.0%) | 52 (17.9%) | 388 | 49 (12.6%) | 56 | 19.3 |
+| LEB | 292 | 292 (100.0%) | 52 (17.8%) | 389 | 49 (12.6%) | 56 | 19.2 |
+| 2ED | 292 | 292 (100.0%) | 52 (17.8%) | 389 | 49 (12.6%) | 56 | 19.2 |
 | ARN | 78 | 78 (100.0%) | 32 (41.0%) | 107 | 31 (29.0%) | 35 | 44.9 |
 | 3ED | 296 | 296 (100.0%) | 55 (18.6%) | 389 | 52 (13.4%) | 58 | 19.6 |
-| M21 *(measured)* | 285 | 244 (85.6%) | 0 (0.0%) | 412 | 0 (0.0%) | 0 | 0.0 |
-| **ALL (shipped, deduped)** | **388** | **388 (100.0%)** | **94 (24.2%)** | **519** | **89 (17.1%)** | **101** | **26.0** |
+| M21 *(measured)* | 285 | 245 (86.0%) | 0 (0.0%) | 413 | 0 (0.0%) | 0 | 0.0 |
+| **ALL (shipped, deduped)** | **388** | **388 (100.0%)** | **93 (24.0%)** | **519** | **88 (17.0%)** | **100** | **25.8** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -36,7 +36,7 @@ Held at this rate, supporting the 26,113-card release line would need about **6,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 88 | 90 |
+| `CARD_LINE_INSTRUCTIONS` | 87 | 89 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ENCHANTED_LAND_TAPPED_FOR_MANA` | 1 | 1 |
@@ -53,7 +53,6 @@ Held at this rate, supporting the 26,113-card release line would need about **6,
 - **Armageddon Clock** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Balance** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Berserk** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Black Lotus** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Blaze of Glory** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Camouflage** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Channel** (`CARD_LINE_INSTRUCTIONS`) — 1 line

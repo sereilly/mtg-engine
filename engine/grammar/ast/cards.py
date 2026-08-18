@@ -78,7 +78,10 @@ class Scry:
 @dataclass(frozen=True)
 class AddMana:
     pips: tuple[tuple[str, int], ...] = ()
-    any_color: int = 0
+    # "Add **X** mana of any one color" (Sanctum of Fruitful Harvest) — how many,
+    # as an :class:`Amount`, because the number can be a board count and not just
+    # a printed digit. Zero is "this clause names no any-colour mana".
+    any_color: "Amount | int" = 0
     # The clause verbatim. The current mana handler re-reads the text rather
     # than taking structured pips, so lowering passes it through unchanged;
     # this field goes away when the handler takes ``pips`` directly.

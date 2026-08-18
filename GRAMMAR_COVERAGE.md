@@ -16,13 +16,13 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 78.9% | 77.3% | 41.5% | 148 |
-| LEB | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
-| 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
+| LEA | 290 | 388 | 78.9% | 77.6% | 41.8% | 149 |
+| LEB | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
+| 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 75.7% | 72.6% | 49.7% | 203 |
-| **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
+| M21 *(measured)* | 285 | 503 | 75.9% | 72.8% | 49.9% | 204 |
+| **All (shipped)** | **1248** | **1663** | **78.1%** | **76.5%** | **41.8%** | **634** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -38,29 +38,29 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 32 | 32 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
+| 7 | 4 | expected 'the number of' in a where-clause |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
 | 7 | 4 | expected a keyword ability |  |
 | 6 | 3 | no lowering for RawEffect |  |
-| 6 | 3 | expected 'the number of' in a where-clause |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
 | 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 4 | 1 | expected 'mana' |  |
 | 4 | 1 | expected a quantity |  |
-| 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 3 | 2 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 3 | 3 | unrecognized discard cost |  |
 | 2 | 1 | expected a permanent to put counters on |  |
-| 2 | 2 | a variable count of any-colour mana has no representation |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
 | 2 | 2 | expected 'unless defending player controls' |  |
+| 2 | 2 | a where-clause pump needs a single target |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
-631 cards, 692 lines.
+634 cards, 695 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -138,6 +138,10 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{T}: Add one mana of any color.`
   - `{T}: Add one mana of any color.`
   - `{T}: Add one mana of any color.`
+- **Black Lotus**
+  - `{T}, Sacrifice this artifact: Add three mana of any one color.`
+  - `{T}, Sacrifice this artifact: Add three mana of any one color.`
+  - `{T}, Sacrifice this artifact: Add three mana of any one color.`
 - **Black Vise**
   - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
   - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
@@ -1022,6 +1026,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
 - **Sanctum of Calm Waters**
   - `At the beginning of your first main phase, you may draw X cards, where X is the number of Shrines you control. If you do, discard a card.`
+- **Sanctum of Fruitful Harvest**
+  - `At the beginning of your first main phase, add X mana of any one color, where X is the number of Shrines you control.`
 - **Sanctum of Shattered Heights**
   - `{1}, Discard a land card or Shrine card: Sanctum of Shattered Heights deals X damage to target creature or planeswalker, where X is the number of Shrines you control.`
 - **Sanctum of Stone Fangs**

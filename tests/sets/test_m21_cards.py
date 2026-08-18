@@ -488,18 +488,18 @@ def test_a_cast_is_recorded_even_when_the_spell_never_resolves(set_pool):
     assert p1.spells_cast_this_turn == [], "a 'this turn' record that never resets is a turn-two bug"
 
 
-def test_a_variable_count_of_any_colour_mana_refuses(set_pool):
-    """Found by round 54's "an X nothing reads" guard rather than by a card.
-    "Add X mana of any one color" was read as **one** mana: the parser took
-    ``count.value if isinstance(count, ast.Fixed) else 1``, so a card printing X
-    would have added a single mana and reported success. Nothing in the pool
-    reaches the grammar with that shape — both cards that print it keep their own
-    fused handlers — which is exactly why it had to refuse rather than wait for
-    the card that would have found it."""
+def test_a_variable_count_of_any_colour_mana_is_carried(set_pool):
+    """Found by round 54's "an X nothing reads" guard rather than by a card, and
+    refused from then until round 95: the parser took ``count.value if
+    isinstance(count, ast.Fixed) else 1``, so a card printing X would have added
+    a single mana and reported success. Refusing was right while the handler
+    could only recognize the literal "one mana of any color"; it reads the number
+    now, so the amount travels instead — and the where-clause beside it is what
+    defines the X."""
     result = compile_line("Add X mana of any one color.")
 
-    assert not result.parsed
-    assert "variable count of any-colour mana" in (result.failure_reason or "")
+    assert result.lowered, result.failure_reason
+    assert result.instructions[0].payload["any_color_count"] == "x"
 
 # --- Round 69: what the loyalty-activation trigger refuses ------------------
 
