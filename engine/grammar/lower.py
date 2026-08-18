@@ -339,6 +339,9 @@ def lower_statement(
     if isinstance(statement, ast.ExtraTurn):
         return _lower_extra_turn(statement)
 
+    if isinstance(statement, ast.EndTheTurn):
+        return (OracleInstruction("end_the_turn", "", {}),)
+
     if isinstance(statement, ast.LoseGame):
         return _lower_lose_game(statement)
 

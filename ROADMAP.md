@@ -256,45 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 107: the event's own creature, and a tax paid in life
-
-*(2026-08-18.)* M21 **256 → 257** — Terror of the Peaks.
-
-> Spells your opponents cast that target this creature cost an additional 3 life
-> to cast.
-> Whenever another creature you control enters, this creature deals damage equal
-> to that creature's power to any target.
-
-**"That creature's power" is a third referent**, and the two already there are
-why it needed its own key. "Its power" is the ability's *source* — read as that,
-the Dragon would deal its own 5, a number the card never mentions. "The damage
-dealt" is a value an earlier step of the same resolution recorded. This one is
-the **event's** object, so the only place it can be read is the firing event's
-captured context, and only under an event whose fire site records one: under any
-other trigger the words name a creature nobody recorded, and lowering refuses
-rather than resolving to zero.
-
-The number is **frozen as the creature enters**, not read at resolution. CR 608.2's
-value is the one the event had, and by the time the trigger resolves the creature
-may have been pumped, shrunk or destroyed. One integer on every entry, because the
-alternative is a fire site that knows which cards care.
-
-**A tax paid in life is not a tax paid in mana.** The cost-modifier table has
-always meant generic mana; this one is life (CR 118.3b) and its scope is a fact
-about the spell's **chosen targets** rather than about the spell — so it is its
-own template, its own reader, and skipped by the mana scan, where counting it
-would have quietly added three to the generic cost.
-
-The scope is answerable at exactly one moment: CR 601.2c chooses targets before
-601.2h pays costs, so the cast knows what it points at. Charged per taxing
-permanent the spell targets — each is its own ability, so a spell aimed at two
-Terrors pays six — and **refused** when the caster cannot pay, because CR 118.4
-makes an unpayable cost an uncastable spell and not a free one.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Seven new tests, six watched to fail on the round-106 engine.
-
 ## Round 108: a supertype is a restriction, not a decoration
 
 *(2026-08-18.)* M21 **257 → 258** — Niambi, Esteemed Speaker.
@@ -403,3 +364,58 @@ one card. A second `what` would have been the same producer check written twice.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Six new tests, all watched to fail on the round-108 engine.
+
+## Round 110: the turn ends, which is not the same as reaching its end
+
+*(2026-08-18.)* M21 **259 → 260** — Discontinuity.
+
+> During your turn, this spell costs {2}{U}{U} less to cast.
+> End the turn. (Exile all spells and abilities from the stack, including this
+> card. Discard down to your maximum hand size. Damage wears off, and "this
+> turn" and "until end of turn" effects end.)
+
+The cost line was already implemented, so the whole card was one sentence — and
+that sentence is CR 724.1, an **expedited process that replaces the rest of
+resolution** rather than an effect on any object. It gets one instruction kind
+whose handler is the process, and `Game.end_the_turn` lives on the
+turn-structure mixin beside the rest of the phase and step navigation.
+
+Each of 724.1's five parts is a way a card could otherwise cheat it, so each is
+written out rather than approximated by "advance to the ending phase":
+
+* **724.1a is vacuous in this engine, and says so** rather than being skipped. A
+  trigger here is announced straight onto the stack, so there is no window in
+  which one has triggered and is waiting to be put there. The moment that stops
+  being true, that comment is the bug report.
+* **724.1b** exiles every object on the stack **including the one resolving**.
+  That one was popped before its handler ran, so it is not in the list — it is
+  flagged, and the resolution tail bins it through the single site that decides
+  where a spell's card goes (CR 608.2n). Read as an ordinary resolution,
+  Discontinuity would land in its owner's graveyard and be recastable.
+* **724.1c** checks state-based actions with nobody receiving priority, which is
+  why the window is cleared *before* the check — a check that opened one would
+  hand a player exactly the response 724.1 exists to deny.
+* **724.1d** removes everything from combat and skips to cleanup. Marked damage
+  is deliberately **not** cleared here: CR 514.2 does that in the cleanup step
+  the game is now heading for, and doing it twice would wipe damage dealt by
+  something that fired during the process.
+* **724.1e** needs no code at all, and that is the design. The process leaves the
+  game at the *end step's* end, so the next advance resolves cleanup and
+  `resolve_end_step` — the function that fires "at the beginning of the end
+  step" — is never called. Furious Rise, bought last round, is the witness: it
+  would exile a card and grant a permission, and does neither.
+
+**"End the turn" is three words and every one is required.** "End of turn" is a
+duration and "at the beginning of the end step" is a trigger; both are read
+elsewhere, and a production consuming only "end" would pull either of them into
+a process that exiles the stack.
+
+CR **724 joined the tracked scope** in `scripts/rules_progress.py`. 724.2's
+end-the-*phase* half has no card in the pool and shows as untested, which is the
+honest reading rather than a section trimmed to what passes.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Eight new tests, seven watched to fail on the round-109 engine; the
+eighth documents the cost line that was already implemented, so the card is
+covered rather than half-covered.

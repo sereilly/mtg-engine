@@ -293,6 +293,54 @@ class PhaseStepsMixin:
             self.clear_priority_window()
         self._on_step_or_phase_end(phase, step)
 
+    def end_the_turn(self) -> None:
+        """CR 724.1 — the expedited process "End the turn." performs.
+
+        Deliberately not "advance to the ending phase": 724.1 differs from
+        ordinary turn structure at every step, and each difference is a way a
+        card could otherwise cheat the process.
+
+        * **724.1a** is vacuous in this engine and said so rather than skipped:
+          a trigger here is announced straight onto the stack, so there is no
+          window in which one has triggered and is waiting to be put there.
+          The moment that stops being true this comment is the bug report.
+        * **724.1b** exiles every object on the stack, *including the object
+          that is resolving*. The resolving item was popped before its handler
+          ran, so it is not in the list — it is flagged instead, and the
+          resolution tail bins it to exile through the one site that decides
+          where a spell's card goes (CR 608.2n).
+        * **724.1c** checks state-based actions with no player receiving
+          priority, which is why the window is cleared before the check rather
+          than after: a check that opened a priority window would hand a player
+          the response 724.1 exists to deny them.
+        * **724.1d** ends the current phase and step, removes every creature and
+          planeswalker from combat, and skips to the cleanup step. Marked
+          damage is *not* cleared here — CR 514.2 does that in the cleanup step
+          the game is now heading for, and clearing it twice would wipe damage
+          dealt by a trigger that fires during this process.
+        * **724.1e** falls out of where this leaves the game rather than needing
+          code: the position is the end of the *end step*, so the next
+          advance resolves cleanup and ``resolve_end_step`` — which is what
+          fires "at the beginning of the end step" — is never called.
+        """
+        exiled = []
+        for item in self.stack:
+            owner = self.players[item.caster_index]
+            self._bin_spell_card(owner, item.card, exile_instead=True, verb="was exiled")
+            exiled.append(item.card.name)
+        self.stack.clear()
+        # The resolving object is the one the list cannot hold.
+        self.exile_resolving_spell = True
+
+        self.clear_priority_window()
+        self.check_state_based_actions()
+
+        self._reset_combat_state(clear_damage_marked=False)
+        self._set_phase_and_step("ending", "end")
+        self.log.append(
+            "The turn ends" + (f"; exiled from the stack: {', '.join(exiled)}" if exiled else "")
+        )
+
     def _set_phase_and_step(self, phase: str, step: str) -> None:
         self.current_turn_phase = phase
         self.current_step = step

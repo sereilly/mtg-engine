@@ -96,6 +96,7 @@ from .game import (
     CreateEmblem,
     CreateToken,
     DrawGame,
+    EndTheTurn,
     ExtraTurn,
     FlipCoin,
     GainLife,
@@ -117,7 +118,7 @@ Effect = Union[
     AddManaForTappedLand, PreventDamage,
     SearchLibrary, SearchAndExile, ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
     RevealHandAndChoose,
-    Shuffle, ExtraTurn, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor,
+    Shuffle, ExtraTurn, EndTheTurn, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor,
     SacrificeUnlessPay, DamageUnlessPay, Fight, LookAtHand, CantBe, CombatRestriction,
     ChangeText, GainControl, RawEffect,
 ]

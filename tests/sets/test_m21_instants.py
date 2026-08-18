@@ -1301,3 +1301,35 @@ def test_the_protection_expires_with_the_turn(set_pool):
     game.resolve_cleanup_step(0)
 
     assert game._protection_qualities(mine) == set()
+
+
+# --- Discontinuity: the turn ends (round 110) -------------------------------
+
+
+def test_discontinuity_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Discontinuity"])
+    assert program.supported, program.reason
+    assert [i.kind for i in program.instructions][0] == "end_the_turn"
+
+
+def test_discontinuity_costs_less_during_your_turn(set_pool):
+    """The other line, which was already implemented and is checked here so the
+    card is covered rather than half-covered: "During your turn, this spell
+    costs {2}{U}{U} less to cast." reduces {3}{U}{U}{U} to {1}{U}."""
+    from engine.cost_modifiers import CostReduction, cost_reduction_for_cast
+
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Discontinuity"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.active_player_index = 0
+    reduction, names = cost_reduction_for_cast(game, 0, pool["Discontinuity"])
+    assert reduction == CostReduction(2, (("U", 2),))
+    assert names == ["Discontinuity"]
+
+    # "During **your** turn" is a fact about whose turn it is, not about who is
+    # casting: on the opponent's turn the same caster gets nothing off.
+    game.active_player_index = 1
+    assert cost_reduction_for_cast(game, 0, pool["Discontinuity"]) == (
+        CostReduction(0, ()), [],
+    )

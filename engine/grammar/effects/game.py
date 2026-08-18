@@ -249,3 +249,18 @@ def _parse_extra_turn(stream: TokenStream) -> ast.Statement:
     if not stream.accept_phrase("after", "this", "one"):
         raise stream.error("expected 'after this one'")
     return ast.ExtraTurn(ast.PlayerRef("you"), count)
+
+
+def _parse_end_the_turn(stream: TokenStream) -> ast.Statement:
+    """``End the turn.`` (Discontinuity.)
+
+    Three words and every one of them required. "End the turn" is CR 724.1's
+    expedited process; "end of turn" is a *duration* and "at the beginning of
+    the end step" is a trigger, and both are read elsewhere. Consuming only
+    "end" would let either of those reach this production and lower into a
+    process that exiles the stack.
+    """
+    stream.expect_word("end")
+    stream.expect_word("the")
+    stream.expect_word("turn")
+    return ast.EndTheTurn()

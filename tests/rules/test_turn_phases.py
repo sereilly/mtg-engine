@@ -338,3 +338,120 @@ def test_combat_step_advancement_logs_attacker_and_blocker_counts():
     assert ok
     game.advance_combat_phase()
     assert any("Declare blockers step complete: 1 blocker(s) declared" in entry for entry in game.log)
+
+
+# --- CR 724.1: ending the turn (round 110) ----------------------------------
+
+
+def _ending_board(pool):
+    """A mid-combat board with an opponent's spell waiting under the one that
+    ends the turn."""
+    from engine.game_types import StackItem
+
+    p1 = PlayerState(name="P1", hand=[pool["Discontinuity"]],
+                     library=[pool["Mountain"]] * 4)
+    p2 = PlayerState(name="P2", library=[pool["Mountain"]] * 4)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    attacker = Permanent(card=pool["Alpine Watchdog"])
+    game._put_permanent_onto_battlefield(0, attacker, None)
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    game.combat_attackers = {0: 1}
+    game.stack.append(StackItem(
+        card=pool["Shock"], caster_index=1, target_player_index=0,
+        target_permanent_index=None, x_value=None,
+    ))
+    return game, p1, p2, attacker
+
+
+@pytest.mark.cr("724.1b")
+def test_ending_the_turn_exiles_the_rest_of_the_stack(set_pool):
+    """Exiled, not countered and not resolved: the waiting Shock never deals
+    its damage and its card goes to exile rather than to a graveyard."""
+    game, p1, p2, _ = _ending_board(set_pool("M21"))
+
+    game.cast_from_hand(0, "Discontinuity")
+    game._settle()
+
+    assert game.stack == []
+    assert p1.life == 20
+    assert [c.name for c in p2.exile] == ["Shock"]
+    assert p2.graveyard == []
+
+
+@pytest.mark.cr("724.1b")
+def test_the_spell_that_ends_the_turn_exiles_itself(set_pool):
+    """"…including the object that's resolving." The resolving item is popped
+    before its handler runs, so it is not in the list the process exiles — and
+    binning it to the graveyard is the reading that leaves it recastable."""
+    game, p1, _, _ = _ending_board(set_pool("M21"))
+
+    game.cast_from_hand(0, "Discontinuity")
+    game._settle()
+
+    assert [c.name for c in p1.exile] == ["Discontinuity"]
+    assert p1.graveyard == []
+
+
+@pytest.mark.cr("724.1d")
+def test_ending_the_turn_removes_everything_from_combat(set_pool):
+    game, _, _, _ = _ending_board(set_pool("M21"))
+
+    game.cast_from_hand(0, "Discontinuity")
+    game._settle()
+
+    assert game.combat_attackers == {}
+    assert game.combat_blockers == {}
+
+
+@pytest.mark.cr("724.1d", "514.2")
+def test_ending_the_turn_skips_to_cleanup_without_clearing_damage(set_pool):
+    """The game skips straight to the cleanup step — so the position is the end
+    of the end step, and the next advance resolves cleanup. Marked damage is
+    *not* cleared here: CR 514.2 does that in the cleanup step this is heading
+    for, and doing it twice would wipe damage dealt during the process."""
+    game, _, _, attacker = _ending_board(set_pool("M21"))
+    attacker.metadata["damage_marked"] = 1
+
+    game.cast_from_hand(0, "Discontinuity")
+    game._settle()
+
+    assert (game.current_turn_phase, game.current_step) == ("ending", "end")
+    assert attacker.metadata["damage_marked"] == 1
+
+
+@pytest.mark.cr("724.1e")
+def test_ending_the_turn_skips_end_step_triggers(set_pool):
+    """"At the beginning of the end step" abilities don't trigger, because the
+    end step is skipped. Furious Rise would otherwise exile a card and grant a
+    permission — both observable, which is why it is the witness here."""
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", hand=[pool["Discontinuity"]],
+        battlefield=[Permanent(card=pool["Furious Rise"]),
+                     Permanent(card=pool["Baneslayer Angel"])],
+        library=[pool["Concordia Pegasus"], pool["Mountain"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._set_phase_and_step("postcombat_main", "postcombat_main")
+
+    game.cast_from_hand(0, "Discontinuity")
+    game._settle()
+
+    assert [c.name for c in p1.exile] == ["Discontinuity"]
+    assert game.cast_permissions == []
+
+
+@pytest.mark.cr("724.1c")
+def test_ending_the_turn_leaves_no_player_with_priority(set_pool):
+    """No player gets priority during the process — so the window is cleared
+    before state-based actions are checked, not after."""
+    game, _, _, _ = _ending_board(set_pool("M21"))
+
+    game.cast_from_hand(0, "Discontinuity")
+    game._settle()
+
+    assert not any(game.has_priority(seat) for seat in range(len(game.players)))

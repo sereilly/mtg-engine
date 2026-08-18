@@ -114,6 +114,11 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     "704": "all",  # State-Based Actions
     "705": "all",  # Flipping a Coin (ARN: Bottle of Suleiman, ...)
     "707": "all",  # Copying Objects (LEA: Vesuvan Doppelganger, ...)
+    # Ending Turns and Phases. Joined the scope with round 110's
+    # "End the turn." (M21: Discontinuity); 724.2's end-the-*phase*
+    # half has no card in the pool and shows as untested, which is the
+    # honest reading rather than a section trimmed to what passes.
+    "724": "all",
     # 8xx — Multiplayer rules the web app's free_for_all mode uses
     "800": "all",
     "802": "all",  # Attack Multiple Players Option

@@ -95,6 +95,24 @@ class FlipCoin:
 
 
 @dataclass(frozen=True)
+class EndTheTurn:
+    """``End the turn.`` (Discontinuity, Time Stop, Sundial of the Infinite.)
+
+    Not an effect on any object, and not a duration: CR 724.1 is an *expedited
+    process* that replaces the rest of resolution — the stack is exiled, state-
+    based actions are checked, the current step ends and the game skips to the
+    cleanup step with no player receiving priority. So it lowers to one
+    instruction whose handler is that process, and there is nothing for it to
+    target or count.
+
+    The node carries no fields on purpose. "End the turn" has one printed form
+    and no parameters; a card that ends a *phase* (Mandate of Peace, CR 724.2)
+    is a different process with a different endpoint and would be its own node
+    rather than a flag here.
+    """
+
+
+@dataclass(frozen=True)
 class ExtraTurn:
     player: PlayerRef
     # "Take two extra turns after this one." (Teferi, Master of Time.)

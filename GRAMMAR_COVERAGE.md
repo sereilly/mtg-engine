@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 78.9% | 76.3% | 53.3% | 218 |
+| M21 *(measured)* | 285 | 503 | 79.1% | 76.5% | 53.5% | 219 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 226 | 96 | expected a subject |  |
+| 225 | 95 | expected a subject |  |
 | 91 | 35 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
 | 31 | 31 | unrecognized activation cost |  |
@@ -359,6 +359,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
 - **Dire Fleet Warmonger**
   - `At the beginning of combat on your turn, you may sacrifice another creature. If you do, this creature gets +2/+2 and gains trample until end of turn. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
+- **Discontinuity**
+  - `End the turn. (Exile all spells and abilities from the stack, including this card. The player whose turn it is discards down to their maximum hand size. Damage wears off, and "this turn" and "until end of turn" effects end.)`
 - **Disenchant**
   - `Destroy target artifact or enchantment.`
   - `Destroy target artifact or enchantment.`

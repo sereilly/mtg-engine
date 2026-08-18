@@ -523,7 +523,17 @@ class StackResolutionMixin:
                 pending_woc.data["_spell_caster_index"] = caster_index
                 pending_woc.data["_spell_exile_instead"] = exile_instead_of_graveyard
                 return
-            self._bin_spell_card(caster, card, exile_instead=exile_instead_of_graveyard, verb="resolved")
+            # CR 724.1b: "End the turn" exiles every object on the stack
+            # *including the object that's resolving*. That object was popped
+            # before its handler ran, so the process flags it here instead of
+            # reaching back into a list it is no longer in.
+            ends_turn = getattr(self, "exile_resolving_spell", False)
+            self.exile_resolving_spell = False
+            self._bin_spell_card(
+                caster, card,
+                exile_instead=exile_instead_of_graveyard or ends_turn,
+                verb="resolved",
+            )
 
         # CR 608.2n puts the card into the graveyard as the *last* part of
         # resolution, which matters once a spell's effect can stop to ask the

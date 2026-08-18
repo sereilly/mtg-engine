@@ -38,6 +38,7 @@ from .effects import (
     _parse_reveal_hand_and_choose,
     _parse_exile_top_of_library,
     _parse_enchant,
+    _parse_end_the_turn,
     _parse_extra_turn,
     _parse_gain_control,
     _parse_gains,
@@ -214,6 +215,8 @@ def _parse_subject_verb(
         return _parse_reveal_top(stream)
     if stream.at_word("take"):
         return _parse_extra_turn(stream)
+    if stream.at_word("end"):
+        return _parse_end_the_turn(stream)
     if stream.at_word("draw"):
         return _parse_draw(stream, ast.PlayerRef("you"))
     # A bare "discard N cards" is the effect's *controller* discarding, the same

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**248 / 585 tracked rules covered (42%)** — 1122 tests, 0 unannotated.
+**249 / 587 tracked rules covered (42%)** — 1128 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -91,6 +91,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [704. State-Based Actions](#704-state-based-actions) | 4/8 | 50% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
 | [707. Copying Objects](#707-copying-objects) | 5/14 | 35% |
+| [724. Ending Turns and Phases](#724-ending-turns-and-phases) | 1/2 | 50% |
 | [800. General](#800-general) | 2/7 | 28% |
 | [802. Attack Multiple Players Option](#802-attack-multiple-players-option) | 4/5 | 80% |
 | [806. Free-for-All Variant](#806-free-for-all-variant) | 0/3 | 0% |
@@ -640,7 +641,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 514. Cleanup Step
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(6 tests)*
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(3 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(4 tests)*
 - [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(1 tests)*
 
 ### 601. Casting Spells
@@ -912,6 +913,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...
 - [ ] **707.13** One card (Garth One-Eye) instructs a player to create a copy of a card defined by name rather tha...
 - [ ] **707.14** One card (Magar of the Magic Strings) instructs a player to note the name of a particular card in...
+
+### 724. Ending Turns and Phases
+
+- [x] **724.1** Some cards end the turn. When an effect ends the turn, follow these steps in order, as they diffe... *(6 tests, subrules bcde)*
+- [ ] **724.2** One card (Mandate of Peace) ends the combat phase. When an effect ends the combat phase, follow t...
 
 ### 800. General
 

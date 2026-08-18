@@ -158,6 +158,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "search_and_exile_matching": "zones",
     "grant_cast_permission": "zones",
     "grant_extra_turn": "turns",
+    # CR 724.1: an expedited replacement for the rest of the turn, not an effect
+    # on any object - the same family as granting one.
+    "end_the_turn": "turns",
     # The planeswalker block's one-shot zone movers (M21 loyalty abilities).
     "each_player_discards_a_card": "zones",
     "opponents_who_could_not_discard_lose_life": "life",

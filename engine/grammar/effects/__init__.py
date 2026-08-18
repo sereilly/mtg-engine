@@ -92,6 +92,7 @@ from .game import (
     _parse_token_keywords,
     _parse_create_token,
     _parse_enchant,
+    _parse_end_the_turn,
     _parse_extra_turn,
 )
 
@@ -151,5 +152,6 @@ __all__ = [
     "_parse_token_keywords",
     "_parse_create_token",
     "_parse_enchant",
+    "_parse_end_the_turn",
     "_parse_extra_turn",
 ]

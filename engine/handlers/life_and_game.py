@@ -282,6 +282,15 @@ def arm_draw_step_life_loss_unless_pay(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
+@effect_handler("end_the_turn")
+def end_the_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"End the turn." (Discontinuity.) CR 724.1's whole process lives on the
+    turn-structure mixin, where the rest of the phase and step navigation is;
+    this is the instruction that asks for it."""
+    game.end_the_turn()
+    return True, "resolved"
+
+
 @effect_handler("grant_extra_turn")
 def grant_extra_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
