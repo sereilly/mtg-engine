@@ -177,6 +177,13 @@ def _card_matches_filter(card, filt: dict) -> bool:
         held = printed_supertypes(card.type_line)
         if not all(word in held for word in wanted_supertypes):
             return False
+    # "creature cards **with mana value 3 or less**" (Idol of Endurance). Mana
+    # value is one of the few characteristics a card has *everywhere* — CR 202.3
+    # computes it from the printed mana cost, so unlike power or a keyword it
+    # needs no battlefield object to be asked of. Same bound reader the permanent
+    # matcher uses, so "3 or less" means one thing in both zones.
+    if not _comparison_holds(filt.get("mana_value"), int(getattr(card, "cmc", 0) or 0)):
+        return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name
     # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —

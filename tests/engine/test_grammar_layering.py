@@ -8,8 +8,8 @@ not at all.
 
 Two properties, and they fail differently.
 
-**The layers are ordered.** `phrases -> effects -> statements -> costs ->
-parser` on the parsing side, `_common/categories -> the families -> statics -> lower` on the
+**The layers are ordered.** `phrases -> effects -> conditions -> statements ->
+costs -> parser` on the parsing side, `_common/categories -> the families -> statics -> lower` on the
 lowering side, `_core -> the families -> statements` inside the AST. An import that
 reaches back up would compile fine and would make the three files three files
 again with extra steps.
@@ -39,7 +39,12 @@ import pytest
 GRAMMAR = Path(__file__).resolve().parent.parent.parent / "engine" / "grammar"
 
 # Bottom to top. A module may import from any layer *below* it and none above.
-PARSE_LAYERS = ["phrases", "effects", "statements", "costs", "parser"]
+# `conditions` sits below `statements` because that is where its dependencies
+# put it: a condition describes an event and is built from nouns, amounts and
+# durations alone, so nothing in it can reach a statement production. The
+# order is therefore an assertion about the split, not a convention — a
+# condition that grew a need for an effect would fail here.
+PARSE_LAYERS = ["phrases", "effects", "conditions", "statements", "costs", "parser"]
 LOWER_LAYERS = ["lowering", "statics", "lower"]
 
 EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game"]

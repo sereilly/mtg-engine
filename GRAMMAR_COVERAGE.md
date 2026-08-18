@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 83.9% | 82.1% | 57.9% | 232 |
+| M21 *(measured)* | 285 | 503 | 84.3% | 82.5% | 58.3% | 233 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,9 +32,9 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 204 | 80 | expected a subject |  |
+| 203 | 79 | expected a subject |  |
 | 87 | 31 | unrecognized effect verb |  |
-| 43 | 24 | unconsumed text |  |
+| 42 | 23 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
 | 26 | 12 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
@@ -615,6 +615,9 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{1}, {T}: Tap target artifact, creature, or land.`
   - `{1}, {T}: Tap target artifact, creature, or land.`
   - `{1}, {T}: Tap target artifact, creature, or land.`
+- **Idol of Endurance**
+  - `When this artifact enters, exile all creature cards with mana value 3 or less from your graveyard until this artifact leaves the battlefield.`
+  - `{1}{W}, {T}: Until end of turn, you may cast a creature spell from among cards exiled with this artifact without paying its mana cost.`
 - **Ifh-Bíff Efreet**
   - `{G}: This creature deals 1 damage to each creature with flying and each player. Any player may activate this ability.`
 - **Igneous Cur**

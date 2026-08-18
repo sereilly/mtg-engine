@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**249 / 587 tracked rules covered (42%)** — 1130 tests, 0 unannotated.
+**249 / 587 tracked rules covered (42%)** — 1131 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -731,7 +731,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **610.1** A one-shot effect does something just once and doesn’t have a duration. Examples include dealing ... *(10 tests)*
 - [ ] **610.2** Some one-shot effects create a delayed triggered ability, which instructs a player to do somethin...
-- [x] **610.3** Some one-shot effects cause an object to change zones “until” a specified event occurs. A second ... *(4 tests, subrules cd)*
+- [x] **610.3** Some one-shot effects cause an object to change zones “until” a specified event occurs. A second ... *(5 tests, subrules cd)*
 - [ ] **610.4** Some one-shot effects cause a permanent to phase out “until” a specified event occurs. A second o...
 - [ ] **610.5** Some static abilities create one-shot effects that cause spells a player casts to gain an ability...
 

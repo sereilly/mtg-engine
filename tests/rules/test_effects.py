@@ -684,6 +684,36 @@ def test_610_3_exile_until_eot_moves_creature_to_exile():
 
 
 @pytest.mark.cr("610.3")
+def test_610_3_a_linked_exile_returns_the_card_to_the_zone_it_came_from():
+    """610.3: the second one-shot effect returns the object to its **previous
+    zone** — which is whichever zone the first effect took it from, not a zone
+    the engine picks.
+
+    Both zones are exercised on one board so the reading cannot be a constant
+    that happens to be right: one permanent takes a card from a hand, the other
+    takes one from a graveyard, and each card goes back where it was.
+    """
+    from_hand = Permanent(card=_mk_card("Hand Taker", "Artifact"))
+    from_yard = Permanent(card=_mk_card("Yard Taker", "Artifact"))
+    p1 = PlayerState(name="P1", battlefield=[from_hand, from_yard])
+    held, buried = _mk_creature("Held Bear", 2, 2), _mk_creature("Buried Bear", 2, 2)
+    p2 = PlayerState(name="P2", exile=[held, buried])
+    game = Game(players=[p1, p2])
+    from_hand.metadata["exiled_until_leaves"] = [
+        {"owner_index": 1, "card": held, "to": "hand"}
+    ]
+    from_yard.metadata["exiled_until_leaves"] = [
+        {"owner_index": 1, "card": buried, "to": "graveyard"}
+    ]
+
+    game.remove_all_from_battlefield([from_hand, from_yard])
+
+    assert [c.name for c in p2.hand] == ["Held Bear"]
+    assert [c.name for c in p2.graveyard] == ["Buried Bear"]
+    assert p2.exile == []
+
+
+@pytest.mark.cr("610.3")
 def test_610_3_exile_until_eot_returns_at_cleanup():
     """610.3: When an object is exiled 'until end of turn', a second one-shot
     effect is created at the end of the turn. This second effect returns the

@@ -1504,6 +1504,49 @@ def search_and_exile_matching(game: Game, instruction: OracleInstruction, contex
     return True, "pending_search_exile"
 
 
+@effect_handler("exile_graveyard_until_leaves")
+def exile_graveyard_until_leaves(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile all creature cards with mana value 3 or less from your graveyard
+    until this artifact leaves the battlefield." (Idol of Endurance.)
+
+    A **linked** exile (CR 400.7, CR 610.3): the pile is recorded on the
+    permanent, not on the game, because what returns it is the permanent leaving
+    and a record on the permanent goes wherever the permanent does. That is the
+    same store Kitesail Freebooter's single card uses, and the same one
+    ``remove_from_battlefield`` empties — the one transition out, so nothing has
+    to remember to unwind this.
+
+    Returning to the **graveyard** rather than the hand is the difference the
+    entry's ``to`` records: these cards were exiled from a graveyard, and a card
+    put back somewhere it never was is a card the effect created.
+    """
+    from ..subject_filters import card_matches_any
+
+    source = context.source_permanent
+    if source is None:
+        game.log.append("the linked exile has no permanent to be linked to")
+        return True, "resolved"
+    caster = context.caster
+    owner_index = game.players.index(caster)
+    described = dict(instruction.payload.get("filter") or {})
+    alternatives = (described,) if described else ()
+    taken = [card for card in caster.graveyard if card_matches_any(card, alternatives)]
+    if not taken:
+        game.log.append(f"{caster.name} has no matching card in their graveyard")
+        return True, "resolved"
+    held = list(source.metadata.get("exiled_until_leaves") or ())
+    for card in taken:
+        caster.graveyard.remove(card)
+        caster.exile.append(card)
+        held.append({"owner_index": owner_index, "card": card, "to": "graveyard"})
+    source.metadata["exiled_until_leaves"] = held
+    game.log.append(
+        f"{source.card.name} exiles {', '.join(card.name for card in taken)} "
+        f"from {caster.name}'s graveyard"
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_cast_permission")
 def grant_cast_permission(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """A cast-or-play permission (CR 601.3) over cards in a named zone —
@@ -1532,6 +1575,37 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         game.log.append(
             f"{caster.name} may {payload.get('mode', 'cast')} "
             f"{', '.join(card.name for card in cards)} from exile this turn"
+        )
+        return True, "resolved"
+
+    if payload.get("cards_from") == "exiled_with_source":
+        # "…from among cards exiled with this artifact" (Idol of Endurance).
+        # The pile is the permanent's own linked exile, read live: a card that
+        # has already been cast this turn has left the exile zone, and
+        # ``_covers`` refuses it there rather than needing this list pruned.
+        from ..subject_filters import card_matches_any
+
+        source = context.source_permanent
+        described = dict(payload.get("filter") or {})
+        alternatives = (described,) if described else ()
+        held = list((source.metadata.get("exiled_until_leaves") or ()) if source else ())
+        cards = [
+            entry["card"] for entry in held
+            if int(entry.get("owner_index", -1)) == caster_index
+            and card_matches_any(entry["card"], alternatives)
+        ]
+        if not cards:
+            game.log.append(f"{source_name} has exiled nothing to cast")
+            return True, "resolved"
+        grant_permission(
+            game, player_index=caster_index, zone="exile", mode="cast",
+            cards=cards, free=bool(payload.get("free")),
+            duration=duration, source_name=source_name,
+            source_permanent_id=game.permanent_id_of(source),
+        )
+        game.log.append(
+            f"{caster.name} may cast {', '.join(card.name for card in cards)} "
+            f"from exile this turn"
         )
         return True, "resolved"
 

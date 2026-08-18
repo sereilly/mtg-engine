@@ -105,7 +105,9 @@ from .lowering import (
     _lower_return_to_zone,
     _lower_sacrifice,
     _lower_sacrifice_unless_pay,
+    _lower_cast_from_exiled_with,
     _lower_cast_permission,
+    _lower_exile_graveyard_until_leaves,
     _lower_exile_top_of_library,
     _lower_look_top_pick,
     _lower_search_and_exile,
@@ -337,6 +339,12 @@ def lower_statement(
 
     if isinstance(statement, ast.SearchAndExile):
         return _lower_search_and_exile(statement)
+
+    if isinstance(statement, ast.ExileGraveyardUntilLeaves):
+        return _lower_exile_graveyard_until_leaves(statement)
+
+    if isinstance(statement, ast.CastFromExiledWith):
+        return _lower_cast_from_exiled_with(statement)
 
     if isinstance(statement, ast.CastPermission):
         return _lower_cast_permission(statement, produced)

@@ -18,6 +18,7 @@ from .nouns import (parse_object_filter, parse_player_ref, parse_recipient)
 from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, NUMBER_WORDS
 from .stream import TokenStream
 from .amounts import expect_pt
+from .conditions import _parse_condition
 from .phrases import (
     _parse_duration,
     _parse_mana_payment,
@@ -180,6 +181,15 @@ def _parse_subject_verb(
         if subject is None:
             raise stream.error("expected something to regenerate")
         return ast.Regenerate(subject)
+    # "Exile all … from your graveyard **until this artifact leaves the
+    # battlefield**" (Idol of Endurance). Read before the general exile, whose
+    # sweep is over battlefield permanents and whose match would strand the
+    # duration as unconsumed text.
+    mark_idol = stream.mark()
+    idol = _parse_exile_graveyard_until_leaves(stream)
+    if idol is not None:
+        return idol
+    stream.reset(mark_idol)
     if stream.at_word("exile"):
         # "Exile the top three cards of your library" moves library cards, not
         # a permanent — tried first because the recipient parser below refuses
@@ -433,6 +443,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # cast-or-play permission (CR 601.3). Tried before the "you may" wrapper
     # below: the permission IS the sentence's whole effect, where the wrapper
     # reads "you may <action>" as an optional action performed now.
+    # "Until end of turn, you may cast a creature spell **from among cards
+    # exiled with this artifact** without paying its mana cost" (Idol of
+    # Endurance). Read before the general permission, whose zone vocabulary is
+    # hand/graveyard/library and which would either refuse the line or claim it
+    # while dropping the pile it is actually about.
+    mark_idol = stream.mark()
+    idol = _parse_cast_from_exiled_with(stream)
+    if idol is not None:
+        return idol
+    stream.reset(mark_idol)
     if stream.at_word("until", "you"):
         permission = _parse_cast_permission(stream)
         if permission is not None:
@@ -638,6 +658,68 @@ def _parse_where_x(stream: TokenStream) -> ast.Amount | None:
     return ast.CountOf(filt)
 
 
+def _parse_exile_graveyard_until_leaves(stream: TokenStream) -> ast.Statement | None:
+    """``Exile all <filter> from your graveyard until this <permanent> leaves
+    the battlefield.`` (Idol of Endurance.)
+
+    Every word of the duration is required. Without it this is a *permanent*
+    exile of a graveyard, which is a different card — and the difference does
+    not show until the source leaves.
+    """
+    if not stream.accept_phrase("exile", "all"):
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not filt.is_card or filt.zone != "graveyard":
+        return None
+    if filt.zone_owner is None or filt.zone_owner.kind != "you":
+        return None
+    if not stream.accept_phrase("until", "this"):
+        return None
+    if stream.accept_kind(SELF) is None:
+        stream.accept_word("artifact", "creature", "enchantment", "permanent", "land")
+    if not stream.accept_phrase("leaves", "the", "battlefield"):
+        return None
+    return ast.ExileGraveyardUntilLeaves(filt)
+
+
+def _parse_cast_from_exiled_with(stream: TokenStream) -> ast.Statement | None:
+    """``Until end of turn, you may cast a <filter> spell from among cards
+    exiled with this <permanent> without paying its mana cost.``
+    (Idol of Endurance.)
+
+    The cost waiver is required: without it the permission is a different one
+    and strictly weaker, and a card that dropped the words would be cheaper to
+    misread than to notice.
+    """
+    if not stream.accept_phrase("until", "end", "of", "turn"):
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("you", "may", "cast", "a"):
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    # ``parse_object_filter`` reads "creature spell" whole, marking the zone as
+    # the stack. Requiring the word back would be asking it twice; requiring the
+    # *zone* is what actually distinguishes "cast a creature spell" from a card
+    # filter that would name some other zone.
+    if filt.zone != "stack":
+        return None
+    if not stream.accept_phrase("from", "among", "cards", "exiled", "with", "this"):
+        return None
+    if stream.accept_kind(SELF) is None:
+        stream.accept_word("artifact", "creature", "enchantment", "permanent", "land")
+    if not stream.accept_phrase(
+        "without", "paying", "its", "mana", "cost",
+    ):
+        return None
+    return ast.CastFromExiledWith(filt)
+
+
 def _parse_name_and_strip(stream: TokenStream) -> ast.Statement:
     """Necromentia's whole three-sentence effect.
 
@@ -751,198 +833,3 @@ def _parse_optional_action(stream: TokenStream) -> ast.Statement:
         options.append(parse_statement(stream, top_level=False))
         spans.append((start, stream.pos))
     return ast.OneOf(tuple(options), tuple(stream.text_between(a, b) for a, b in spans))
-
-
-def _parse_condition(stream: TokenStream) -> ast.Condition:
-    """Conditions the grammar models today. Anything else raises so the line
-    falls back rather than silently losing the condition — the legacy compiler
-    dropped intervening-ifs entirely, making conditional triggers always fire."""
-    mark = stream.mark()
-
-    # "you win the flip" / "you lose the flip" (CR 705.2). Read before the
-    # player reference below, which would consume the "you" and then reset — and
-    # read as a *back-reference* rather than a board state, because the answer is
-    # the value an earlier sentence of this same resolution recorded. Lowering
-    # refuses one with no flip in front of it.
-    if stream.accept_word("you"):
-        if stream.accept_phrase("win", "the", "flip"):
-            return ast.CoinFlipResult(won=True)
-        if stream.accept_phrase("lose", "the", "flip"):
-            return ast.CoinFlipResult(won=False)
-    stream.reset(mark)
-
-    # "it entered from your graveyard or you cast it from your graveyard"
-    # (Archfiend's Vessel). Both halves are required by this production, because
-    # the card prints both and either one alone is a narrower condition than the
-    # sentence states — an "or" that consumed only its first half would leave
-    # the rest as unaccounted text and fail the line, which is the safe
-    # direction, but reading it as the first half alone would not be.
-    # "two or more of those creatures are attacking you and/or planeswalkers
-    # you control" (Mangara). Every word required: "those creatures" is what
-    # binds the count to this attack's batch, and the aim clause is what makes
-    # it a question about *this* player rather than about attacking at large.
-    if stream.at_word("two") or stream.at_word("one") or stream.at_word("three"):
-        mark_aim = stream.mark()
-        word = stream.peek_word()
-        if word in NUMBER_WORDS:
-            stream.advance()
-            if stream.accept_phrase(
-                "or", "more", "of", "those", "creatures", "are", "attacking",
-                "you", "and", "or", "planeswalkers", "you", "control",
-            ):
-                return ast.AttackersAimedAtYou(NUMBER_WORDS[word])
-        stream.reset(mark_aim)
-    if stream.accept_phrase("it", "entered", "from"):
-        if stream.accept_word("your"):
-            zone = stream.peek_word()
-            if zone in ("graveyard", "exile", "hand", "library"):
-                stream.advance()
-                or_cast = False
-                after = stream.mark()
-                if stream.accept_phrase("or", "you", "cast", "it", "from", "your"):
-                    if stream.accept_word(zone):
-                        or_cast = True
-                    else:
-                        stream.reset(after)
-                return ast.EnteredFrom(zone, or_cast=or_cast)
-    stream.reset(mark)
-
-    player = parse_player_ref(stream)
-    if player is not None:
-        if stream.accept_word("control", "controls"):
-            # "if an opponent controls more creatures than you" (Garruk,
-            # Unleashed). The comparison is against the asker's own count, so
-            # it is an op of its own rather than a number to compare with.
-            if stream.accept_word("more"):
-                filt = parse_object_filter(stream)
-                if not stream.accept_phrase("than", "you"):
-                    raise stream.error("expected 'than you' after the count")
-                return ast.Controls(player, filt, ast.Comparison("more_than_you", ast.Fixed(0)))
-            negated = stream.accept_word("no")
-            # "you control **a** Swamp". The article carries no meaning of its
-            # own, but the noun parser refuses it as an unknown adjective, so
-            # leaving it would refuse every singular condition in the pool.
-            # "**another** creature…" (Turret Ogre) is an article carrying the
-            # source-exclusion — CR 109.5's "other", contracted — so it sets
-            # the same field the leading adjective "other" does.
-            another = stream.accept_word("another")
-            if not another:
-                stream.accept_word("a", "an")
-            # "you control **two or more** nonland, nontoken permanents…"
-            # (Chrome Replicator). Read where it is printed, in front of the
-            # noun phrase, and only when "or more" follows the number: a bare
-            # number here would be a different condition ("exactly two"), and no
-            # card in the pool prints one, so guessing which it meant is the
-            # kind of silent widening a threshold must never take.
-            at_least: int | None = None
-            if not negated and not another:
-                count_mark = stream.mark()
-                try:
-                    amount = parse_amount(stream)
-                except GrammarError:
-                    amount = None
-                if (
-                    isinstance(amount, ast.Fixed)
-                    and stream.accept_phrase("or", "more")
-                ):
-                    at_least = amount.value
-                else:
-                    stream.reset(count_mark)
-            filt = parse_object_filter(stream)
-            if another:
-                filt = dataclasses.replace(filt, other_than_source=True)
-            # "…**with the same name as one another**". A relation over the set
-            # just counted, so it is read after the noun phrase and kept off the
-            # filter — see `ast.Controls.shared_name`.
-            shared_name = bool(
-                stream.accept_phrase("with", "the", "same", "name", "as", "one", "another")
-            )
-            comparison = None
-            if negated:
-                comparison = ast.Comparison("eq", ast.Fixed(0))
-            elif at_least is not None:
-                comparison = ast.Comparison("ge", ast.Fixed(at_least))
-            return ast.Controls(player, filt, comparison, shared_name)
-        # "you gained 3 or more life this turn" (Indulging Patrician). "Or more"
-        # is the only printed comparison on this clause, so the threshold is a
-        # plain minimum rather than a Comparison: inventing "or less" here would
-        # be a production no card exercises.
-        if stream.accept_word("gained"):
-            amount = parse_amount(stream)
-            if isinstance(amount, ast.Fixed) and stream.accept_phrase(
-                "or", "more", "life", "this", "turn"
-            ):
-                return ast.LifeGainedThisTurn(player, amount.value)
-        stream.reset(mark)
-
-    # "if it was a creature card" (Scavenging Ooze). A back-reference, like the
-    # flip above and unlike everything below it: no read of the board can answer
-    # it, because the card it asks about has already left the zone the effect
-    # took it from (CR 608.2h). Which object "it" names is lowering's question,
-    # not the parser's — the parser cannot see the sentence in front of it.
-    if stream.accept_phrase("it", "was"):
-        stream.accept_word("a", "an")
-        return ast.ItWas(parse_object_filter(stream))
-
-    # "if it's a creature or land card" (Track Down) — the present-tense twin of
-    # the clause above, and a different question: that one asks what an object
-    # *was* before it left a zone, this one asks what a card revealed by an
-    # earlier sentence of this same effect *is*. Different producers, so
-    # different nodes.
-    #
-    # Guarded and reset, unlike the past-tense branch, because "it's" is not
-    # unambiguous the way "it was" is: "This creature gets +0/+3 **as long as
-    # it's untapped**" (Giant Tortoise) opens with the same two words and is a
-    # state test, not a card test. So this branch takes the sentence only when a
-    # noun phrase naming card *types* follows, and hands it back otherwise.
-    it_mark = stream.mark()
-    if stream.accept_phrase("it", "'s") or stream.accept_phrase("it", "is"):
-        stream.accept_word("a", "an")
-        try:
-            revealed_filter = parse_object_filter(stream)
-        except GrammarError:
-            revealed_filter = None
-        if revealed_filter is not None and revealed_filter.card_types:
-            return ast.RevealedCardIs(revealed_filter)
-    stream.reset(it_mark)
-
-    if stream.accept_phrase("a", "creature", "died"):
-        _parse_duration(stream)
-        return ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))
-
-    # "if a permanent was put into your hand from the battlefield this turn"
-    # (Barrin, Tolarian Archmage). Every word is read: "from the battlefield"
-    # is what keeps a draw or a graveyard return from satisfying it.
-    if stream.accept_phrase(
-        "a", "permanent", "was", "put", "into", "your", "hand",
-        "from", "the", "battlefield",
-    ):
-        _parse_duration(stream)
-        return ast.ReturnedToHandThisTurn()
-
-    # "if it had a +1/+1 counter on it" (Basri's Lieutenant). Past tense, and
-    # that is the whole point: "it" is the creature that just died, so the
-    # answer is last-known information (CR 603.10) recorded as the trigger
-    # fires rather than a board state anything could read afterwards.
-    # "+1/+1" lexes as a PT token, so the phrase is matched in two halves
-    # around it rather than as a word run.
-    counter_mark = stream.mark()
-    if stream.accept_phrase("it", "had", "a"):
-        token = stream.peek()
-        if token is not None and token.kind == PT and token.text == "+1/+1":
-            stream.advance()
-            if stream.accept_phrase("counter", "on", "it"):
-                return ast.HadPlus1Counter()
-    stream.reset(counter_mark)
-
-    # "it is untapped" and "it's untapped" are the same condition; the lexer
-    # splits the contraction into "it" + "'s", so both spellings are listed
-    # rather than the apostrophe being skipped wherever it turns up.
-    if stream.accept_phrase("it", "is", "untapped") or stream.accept_phrase(
-        "it", "'s", "untapped"
-    ):
-        return ast.IsState(ast.TargetSpec("this", ast.ObjectFilter(is_source=True)), "tapped", negated=True)
-    if stream.accept_phrase("this", "is", "untapped"):
-        return ast.IsState(ast.TargetSpec("this", ast.ObjectFilter(is_source=True)), "tapped", negated=True)
-
-    raise stream.error("unrecognized condition")

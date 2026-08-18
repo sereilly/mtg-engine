@@ -6,6 +6,8 @@ search filter fields the search flow can actually honour, which is a closed set
 because a filter it cannot honour must refuse rather than be dropped.
 """
 
+import dataclasses
+
 from ...oracle_types import X_FROM_COUNT, OracleInstruction
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from ...subject_filters import card_only_filter, object_only_filter
@@ -679,6 +681,74 @@ def _lower_search_and_exile(node: ast.SearchAndExile) -> tuple[OracleInstruction
         "colors": tuple(filt.colors),
     }
     return (OracleInstruction("search_and_exile_matching", "", payload),)
+
+
+def _linked_exile_filter(filt: ast.ObjectFilter) -> dict:
+    """The payload for a filter over cards in a **zone**, or a refusal.
+
+    The zone words are read by the production and so are honoured here; what is
+    left has to be answerable of a card that has no battlefield object behind it,
+    which is the one question ``chargeable_card_filter`` exists to settle. Going
+    through it rather than round the side means "creature cards with mana value 3
+    or less" narrows the same way whether it is being exiled, discarded as a cost,
+    or offered by a picker.
+    """
+    default = ast.ObjectFilter()
+    described = chargeable_card_filter(
+        dataclasses.replace(
+            filt, zone=default.zone, zone_owner=default.zone_owner, is_card=True
+        )
+    )
+    if described is None:
+        raise LoweringError(
+            "the linked exile cannot test this restriction on a card in a zone",
+            node=filt,
+        )
+    return described
+
+
+def _lower_exile_graveyard_until_leaves(
+    node: ast.ExileGraveyardUntilLeaves,
+) -> tuple[OracleInstruction, ...]:
+    """"Exile all creature cards with mana value 3 or less from your graveyard
+    **until this artifact leaves the battlefield**." (Idol of Endurance.)
+
+    A linked exile (CR 400.7): the cards are held by the *permanent*, so both
+    halves of the card read one pile — what comes back when the Idol dies is
+    what its ability could cast while it lived.
+    """
+    return (
+        OracleInstruction(
+            "exile_graveyard_until_leaves", "",
+            {"filter": _linked_exile_filter(node.filter)},
+        ),
+    )
+
+
+def _lower_cast_from_exiled_with(
+    node: ast.CastFromExiledWith,
+) -> tuple[OracleInstruction, ...]:
+    """"Until end of turn, you may cast a creature spell from among cards exiled
+    with this artifact without paying its mana cost." (Idol of Endurance.)
+
+    Not a new mechanism: this is CR 601.3 permission over the exile zone, which
+    ``grant_cast_permission`` already is. What differs is only which pile —
+    ``cards_from`` names it, where "exiled_cards" reads a step of this same
+    effect and "exiled_with_source" reads the permanent's own linked pile.
+    """
+    return (
+        OracleInstruction(
+            "grant_cast_permission", "",
+            {
+                "zone": "exile",
+                "mode": "cast",
+                "cards_from": "exiled_with_source",
+                "filter": _linked_exile_filter(node.filter),
+                "free": node.free,
+                "duration": "end_of_turn",
+            },
+        ),
+    )
 
 
 def _lower_cast_permission(

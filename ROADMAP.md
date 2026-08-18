@@ -256,57 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 130: a token that carries printed abilities
-
-*(2026-08-18.)* M21 **279 → 280** — Pursued Whale, scoped out of round 108 and
-finished here.
-
-> When this creature enters, each opponent creates a 1/1 red Pirate creature
-> token with "This token can't block" and "Creatures you control attack each
-> combat if able."
-> Spells your opponents cast that target this creature cost {3} more to cast.
-
-**A token's abilities can be printed lines, not just keywords.** They are
-carried as *text* and compiled when the token's card is built, so a token
-ability works exactly as the same words on a printed card do — one reading of
-one text. Gated at lowering: a line the compiler cannot read refuses the whole
-card, because a token silently lacking an ability is precisely the shape the
-support gate exists to stop.
-
-Testing that gate needed a probe that builds a throwaway token and compiles it,
-rather than asking `compile_line` — several abilities a token can carry are
-implemented by *text-keyed registries* that produce no instruction at all, and
-`compile_line` refuses those. The gate reads the same card the battlefield will.
-
-**"This token can't block" is the same self-reference as "this creature."** Both
-spellings are admitted rather than one normalized to the other, because the
-normalizer would have to know which cards are tokens.
-
-**"Creatures you control attack each combat if able" is a board-wide static**,
-and the global-static table already had the shape: the ability is appended to
-each affected permanent's effective card, so `combat_restrictions.py` reads it
-as though the creature printed it and the declare-attackers step needs no code.
-Its scope is *relative* — "you control" is a seat comparison (CR 109.5) — which
-no read of the affected permanent alone can answer, so the predicate now takes
-the source and refuses when handed neither.
-
-That table also had the round-113 problem one file over: the **creature** static
-gate never asked it, so a creature (or a token) printing a global static
-reported unsupported while the effect worked. Two guards were widened with it.
-
-**The mana tax is the twin of round 107's life tax**, sharing the scope and now
-the target list, which is computed once at the cast and handed to both — the
-same fact asked at CR 601.2f and again at 601.2h.
-
-`parser.py` crossed 1,000 lines and split along the **rider** family: a sentence
-that modifies the one before it. Every one of them reads a referent the previous
-step bound, which is why they are driven by the sentence loop and why that loop
-stays behind with the line-level productions.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Five new tests, all watched to fail on the round-129 engine.
-
 ## Round 131: the top of your library is a place you can play from
 
 *(2026-08-18.)* M21 **280 → 281** — Conspicuous Snoop.
@@ -381,3 +330,49 @@ pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Six new tests, five watched to fail on the round-131 engine; the sixth
 covers the pump line that already worked, so the card is covered rather than
 half-covered.
+
+## Round 133: an exile pile the permanent carries
+
+*(2026-08-18.)* M21 **282 → 283** — Idol of Endurance.
+
+> When this artifact enters, exile all creature cards with mana value 3 or less
+> from your graveyard until this artifact leaves the battlefield.
+> {1}{W}, {T}: Until end of turn, you may cast a creature spell from among cards
+> exiled with this artifact without paying its mana cost.
+
+Two lines that only work as one thing: the pile the first makes is the pile the
+second casts from, and both end when the Idol does. That is CR 610.3's linked
+exile, and the engine already had it — Kitesail Freebooter records its one card
+on the **permanent**, and `remove_from_battlefield`, the single transition out,
+is what gives it back. So the new work was a filter over a graveyard and a
+second reader of the same store, not a mechanism.
+
+**The card returns to the zone it came from.** CR 610.3 says *previous zone*,
+and the existing code said "hand" — right for Freebooter, and a card conjured
+out of nothing for anything that exiles a graveyard. The origin now rides the
+entry. That is one line of behaviour with two cards behind it, so it is tested
+in `tests/rules/` with both zones on one board: a constant that happens to be
+right for the case in front of it is exactly what the old code was.
+
+**A card in a zone has a mana value.** CR 202.3 computes it from the printed
+mana cost, so unlike power or a keyword it needs no battlefield object — which
+makes it the first `mana_value` entry in `CARD_ONLY_FILTER_KEYS`, read through
+the same bound comparator the permanent matcher uses so "3 or less" means one
+thing in both zones.
+
+**The permission is the one that already existed.** "Until end of turn, you may
+cast … without paying its mana cost" is CR 601.3 over the exile zone, which
+`grant_cast_permission` is; what is new is only *which pile*, so `cards_from`
+names it. Reading the zone instead of the permanent's own list would have made
+every exiled creature in the game castable, which is what the third test holds.
+
+`statements.py` crossed 1,000 lines and was split along **conditions** — the
+event half of a trigger or an intervening-if. A statement says what an effect
+will do; a condition describes what has happened, and nothing in the moved file
+builds an `ast.Effect` or can. That independence is its layer position, now
+asserted: `conditions` sits below `statements`, so a condition growing a need
+for an effect fails the guard.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Six new tests, all six watched to fail on the round-132 engine.

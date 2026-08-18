@@ -290,6 +290,39 @@ class CastPermission:
 
 
 @dataclass(frozen=True)
+class ExileGraveyardUntilLeaves:
+    """``Exile all creature cards with mana value 3 or less from your graveyard
+    until this artifact leaves the battlefield.`` (Idol of Endurance.)
+
+    A sweep of a *graveyard*, not of a battlefield, with a duration tied to the
+    source rather than to a turn — so the exiled cards are remembered **on the
+    permanent**: they come back when it leaves, and there is nothing to sweep
+    at cleanup.
+
+    The set it exiles is also the set its other ability casts from ("cards
+    exiled with this artifact"), which is why the pile is recorded rather than
+    merely moved: a second reading of "what did this exile?" could not answer.
+    """
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
+class CastFromExiledWith:
+    """``Until end of turn, you may cast a creature spell from among cards
+    exiled with this artifact without paying its mana cost.``
+    (Idol of Endurance.)
+
+    A CR 601.3 permission over the pile the line above recorded, with CR 118.9's
+    cost waiver. Its own node rather than a ``CastPermission`` variant because
+    the *source* of the pile is a permanent rather than a resolution: "cards
+    exiled with this artifact" names a set that outlives the effect that made
+    it.
+    """
+    filter: ObjectFilter
+    free: bool = True
+
+
+@dataclass(frozen=True)
 class NameAndStrip:
     """``Choose a card name other than a basic land card name. Search target
     opponent's graveyard, hand, and library for any number of cards with that

@@ -82,7 +82,7 @@ OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {"controller", "exclude
 #: that a card *can*: it is printed on the face, in the same words, and nothing
 #: could have changed it.
 CARD_ONLY_FILTER_KEYS = frozenset(
-    {"type_filter", "subtype_filter", "named", "supertypes"}
+    {"type_filter", "subtype_filter", "named", "supertypes", "mana_value"}
 )
 
 

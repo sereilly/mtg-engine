@@ -154,6 +154,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # grant over it. All zone work — the permission is about which zone a card
     # may be cast from — so no new category and GRAMMAR_CATEGORIES is unchanged.
     "exile_top_of_library": "zones",
+    "exile_graveyard_until_leaves": "zones",
     "look_top_pick_to_hand": "zones",
     "search_and_exile_matching": "zones",
     "grant_cast_permission": "zones",

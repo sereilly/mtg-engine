@@ -1005,11 +1005,17 @@ class GameHelpersMixin:
             for entry in perm.metadata.pop("exiled_until_leaves", ()) or ():
                 owner = self.players[int(entry["owner_index"])]
                 card = entry["card"]
+                # Back to the zone it was taken from. Kitesail Freebooter takes
+                # from a hand and Idol of Endurance from a graveyard, and a card
+                # returned to the wrong one is a card the effect created out of
+                # nothing — so the origin rides the entry rather than being a
+                # constant here.
+                destination = str(entry.get("to", "hand"))
                 if card in owner.exile:
                     owner.exile.remove(card)
-                    owner.hand.append(card)
+                    getattr(owner, destination).append(card)
                     self.log.append(
-                        f"{card.name} returns to {owner.name}'s hand "
+                        f"{card.name} returns to {owner.name}'s {destination} "
                         f"({perm.card.name} left the battlefield)"
                     )
         return removed

@@ -307,3 +307,106 @@ def test_an_inert_counter_does_not_touch_power_or_toughness(set_pool):
 
     assert counters_on(perm, "page") == 3
     assert (perm.effective_power, perm.effective_toughness) == (2, 2)
+
+
+# --- Round 133: a graveyard held by the permanent that exiled it ------------
+
+
+def test_idol_of_endurance_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Idol of Endurance"])
+    assert program.supported, program.reason
+
+
+def _idol_board(set_pool):
+    """One Idol about to enter, over a graveyard with a card of each kind the
+    printed phrase sorts on."""
+    pool = set_pool("M21")
+    idol = Permanent(card=pool["Idol of Endurance"])
+    p1 = PlayerState(name="P1", graveyard=[
+        pool["Alpine Watchdog"],     # creature, mana value 2 — taken
+        pool["Shock"],               # mana value 1, but not a creature
+        pool["Garruk's Gorehorn"], # creature, but mana value 5
+        pool["Llanowar Visionary"],  # creature, mana value 3 — the boundary
+    ])
+    p2 = PlayerState(name="P2", graveyard=[pool["Alpine Watchdog"]])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2, idol
+
+
+def test_idol_of_endurance_exiles_the_creature_cards_its_phrase_names(set_pool):
+    """"all creature cards with mana value 3 or less from **your** graveyard".
+
+    Both halves of the narrowing are checked against a card that fails only that
+    half, and the boundary is included: "3 or less" takes the 3. The opponent's
+    graveyard is the control for "your" — an identical card sits in it.
+    """
+    game, p1, p2, idol = _idol_board(set_pool)
+
+    game._put_permanent_onto_battlefield(0, idol, None)
+    game._settle()
+
+    assert [c.name for c in p1.exile] == ["Alpine Watchdog", "Llanowar Visionary"]
+    assert [c.name for c in p1.graveyard] == ["Shock", "Garruk's Gorehorn"]
+    assert [c.name for c in p2.graveyard] == ["Alpine Watchdog"]
+    assert p2.exile == []
+
+
+def test_idol_of_endurance_casts_from_its_own_pile_for_free(set_pool):
+    """CR 118.9: "without paying its mana cost" — the mana cost is skipped, with
+    costs enforced so the waiver is what is being read and not a relaxed
+    fixture."""
+    game, p1, p2, idol = _idol_board(set_pool)
+    game._put_permanent_onto_battlefield(0, idol, None)
+    game._settle()
+
+    assert game.activate_permanent_ability(0, "Idol of Endurance").supported
+    game._settle()
+
+    game.enforce_mana_costs = True
+    p1.mana_pool = {}
+    result = game.cast_from_hand(0, "Alpine Watchdog", from_zone="exile")
+    assert result.supported, result.details
+    game._settle()
+
+    assert "Alpine Watchdog" in [p.card.name for p in game.controlled_by(0)]
+
+
+def test_idol_of_endurance_grants_nothing_over_a_pile_it_did_not_exile(set_pool):
+    """The permission is over *this* permanent's linked pile. A card sitting in
+    the same exile zone from some other effect is not in it — otherwise the
+    ability would read the zone rather than the card, and every exiled creature
+    in the game would be castable."""
+    game, p1, p2, idol = _idol_board(set_pool)
+    stranger = p1.graveyard.pop(1)               # Shock, never linked to the Idol
+    p1.exile.append(stranger)
+    game._put_permanent_onto_battlefield(0, idol, None)
+    game._settle()
+
+    assert game.activate_permanent_ability(0, "Idol of Endurance").supported
+    game._settle()
+
+    game.enforce_mana_costs = True
+    p1.mana_pool = {}
+    assert not game.cast_from_hand(0, "Shock", from_zone="exile").supported
+    assert game.cast_from_hand(0, "Alpine Watchdog", from_zone="exile").supported
+
+
+def test_idol_of_endurance_returns_what_is_left_to_the_graveyard(set_pool):
+    """CR 610.3: the second one-shot effect returns the object to its **previous
+    zone**, which for these cards is the graveyard rather than the hand. A card
+    already cast off the pile has moved on and is not returned (CR 400.7)."""
+    game, p1, p2, idol = _idol_board(set_pool)
+    game._put_permanent_onto_battlefield(0, idol, None)
+    game._settle()
+    assert game.activate_permanent_ability(0, "Idol of Endurance").supported
+    game._settle()
+    assert game.cast_from_hand(0, "Alpine Watchdog", from_zone="exile").supported
+    game._settle()
+
+    game.remove_from_battlefield(idol)
+
+    assert [c.name for c in p1.graveyard] == ["Shock", "Garruk's Gorehorn", "Llanowar Visionary"]
+    assert p1.exile == []
+    assert p1.hand == [], "the cards came from a graveyard, so that is where they go back"
+    assert "Alpine Watchdog" in [p.card.name for p in game.controlled_by(0)]
