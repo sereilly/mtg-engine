@@ -617,6 +617,30 @@ class GameHelpersMixin:
         emit(self, "permanent_becomes_tapped", subject=permanent)
         return True
 
+    def become_untapped(self, permanent: "Permanent") -> bool:
+        """Turn *permanent* from tapped to untapped, firing "becomes untapped"
+        triggers (CR 701.26b). Returns whether it actually changed.
+
+        The twin of :meth:`become_tapped`, and it exists for the same reason
+        that one does: ``perm.tapped = False`` was written in eleven places, so
+        a "becomes untapped" trigger could only ever see whichever of them its
+        implementer happened to wire into. Ghostly Pilferer is the first card in
+        the pool to ask, and it would otherwise have fired on the untap step
+        alone — not on Twiddle, not on its own controller's untapper, not on any
+        of the nine other ways a permanent untaps.
+
+        CR 701.26b: only a tapped permanent can be untapped, so re-untapping is
+        no state change and no trigger. A permanent *entering* untapped never
+        becomes untapped either — it was never tapped on the battlefield — which
+        is why the entry path does not come through here, exactly as it does not
+        come through ``become_tapped``.
+        """
+        if not permanent.tapped:
+            return False
+        permanent.tapped = False
+        emit(self, "permanent_becomes_untapped", subject=permanent)
+        return True
+
     # ------------------------------------------------------------------
     # The control seam (CR 613 layer 2)
     #

@@ -286,7 +286,7 @@ class UpkeepEffectsMixin:
             if not self.can_pay_upkeep_mana(victim, {"generic": cost_per}):
                 continue
             self._spend_upkeep_mana(victim, {"generic": cost_per})
-            perm.tapped = False
+            ctx.game.become_untapped(perm)
             untapped_names.append(perm.card.name)
         if untapped_names:
             self.log.append(
@@ -419,7 +419,7 @@ class UpkeepEffectsMixin:
         paid = paid and self.can_pay_upkeep_mana(controller, mana)
         if paid and permanent.tapped:
             self._spend_upkeep_mana(controller, mana)
-            permanent.tapped = False
+            ctx.game.become_untapped(permanent)
             self.log.append(f"{controller.name} paid to untap {permanent.card.name}")
 
     @upkeep_effect("upkeep_enchanted_controller", "upkeep_pay_to_untap_enchanted")
@@ -445,7 +445,7 @@ class UpkeepEffectsMixin:
         paid = paid and self.can_pay_upkeep_mana(payer, mana)
         if paid and attached.tapped:
             self._spend_upkeep_mana(payer, mana)
-            attached.tapped = False
+            ctx.game.become_untapped(attached)
             self.log.append(f"{payer.name} paid to untap {attached.card.name}")
 
     @upkeep_effect("upkeep_self", "upkeep_pay_or_tap_and_sacrifice_opponent_land")

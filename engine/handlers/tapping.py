@@ -24,7 +24,7 @@ def untap_self(game: Game, instruction: OracleInstruction, context: OracleExecut
         return False, "ability not implemented"
     if not source_permanent.tapped:
         return False, f"{card.name} is already untapped"
-    source_permanent.tapped = False
+    game.become_untapped(source_permanent)
     game.log.append(f"{card.name} untapped itself")
     return True, "resolved"
 
@@ -58,7 +58,7 @@ def untap_target_land(game: Game, instruction: OracleInstruction, context: Oracl
         fallback_on_invalid_choice=False,
     )
     if perm is not None:
-        perm.tapped = False
+        game.become_untapped(perm)
     game.log.append("Untapped target land" if perm is not None else "No land to untap")
     return True, "resolved"
 
@@ -83,7 +83,7 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
             fallback_on_invalid_choice=False,
         )
         if perm is not None:
-            perm.tapped = False
+            game.become_untapped(perm)
         game.log.append(
             f"Untapped {perm.card.name}" if perm is not None
             else "No valid permanent to untap"
@@ -114,7 +114,7 @@ def untap_attacker_and_prevent_combat_damage(game: Game, instruction: OracleInst
     if perm is None:
         game.log.append(f"{context.card.name}: no attacking creature you control to untap")
         return True, "resolved"
-    perm.tapped = False
+    game.become_untapped(perm)
     perm.metadata["prevent_combat_damage_to_and_by_until_eot"] = True
     game.log.append(
         f"{context.card.name} untapped {perm.card.name}; all combat damage to and by it is prevented this turn"
@@ -130,7 +130,7 @@ def untap_enchanted_creature(game: Game, instruction: OracleInstruction, context
         return False, "ability not implemented"
     attached_to = source_permanent.metadata.get("attached_to")
     if attached_to is not None:
-        attached_to.tapped = False
+        game.become_untapped(attached_to)
         game.log.append(f"Untapped {attached_to.card.name} via {card.name}")
     return True, "resolved"
 

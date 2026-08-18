@@ -184,7 +184,9 @@ class OracleInstructionsMixin:
                         f"{perm.card.name} gets +1/+1 until end of turn (prowess)"
                     )
 
-    def _apply_spell_cast_any_triggers(self, caster_index: int, card: CardDefinition) -> None:
+    def _apply_spell_cast_any_triggers(
+        self, caster_index: int, card: CardDefinition, cast_from_zone: str = "hand",
+    ) -> None:
         """Fire "whenever a player casts a [color] spell" triggers on any
         player's battlefield (the Rod/Cup/Sphere cycle).
 
@@ -194,7 +196,13 @@ class OracleInstructionsMixin:
         cycle instead of five name-keyed hooks.
         """
         emit(self, "spell_cast", subject=card, caster_index=caster_index)
-        emit(self, "opponent_casts_spell", subject=card, caster_index=caster_index)
+        # The zone rides along so "…from anywhere other than their hand"
+        # (Ghostly Pilferer) has something to test. Every cast announces it;
+        # only a trigger that narrows on it reads it.
+        emit(
+            self, "opponent_casts_spell", subject=card, caster_index=caster_index,
+            cast_from_zone=cast_from_zone,
+        )
 
     def _apply_self_resolved_hook(
         self,

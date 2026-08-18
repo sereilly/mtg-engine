@@ -234,6 +234,16 @@ def _cast_card(event: Event) -> CardDefinition | None:
     return card if card is not None and hasattr(card, "colors") else None
 
 
+@event_filter("permanent_becomes_untapped")
+def _self_untapped_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever **this** creature becomes untapped" — the permanent's own
+    event and nobody else's, so a board of Pilferers does not all fire when one
+    untaps. By identity, because two of them compare equal by value."""
+    return event.subject is permanent
+
+
 @event_filter("spell_cast")
 def _spell_cast_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
@@ -366,7 +376,17 @@ def _opponent_cast_filter(
     caster_index = event.payload.get("caster_index")
     if caster_index is None:
         return False
-    return game.players.index(_controller_of(game, permanent)) != caster_index
+    if game.players.index(_controller_of(game, permanent)) == caster_index:
+        return False
+    # "…from anywhere other than their **hand**" (Ghostly Pilferer). The zone
+    # the spell was cast from, which the cast records on the event — the same
+    # field "if this spell was cast from anywhere other than your hand" (See the
+    # Truth) reads. An event with no zone recorded is treated as a cast from the
+    # hand, which is the ordinary case and the one that must not fire.
+    not_from = trig.condition.payload.get("not_from_zone")
+    if not_from and event.payload.get("cast_from_zone", "hand") == not_from:
+        return False
+    return True
 
 
 # The controller clause of a "whenever a <filter> becomes tapped" condition, as

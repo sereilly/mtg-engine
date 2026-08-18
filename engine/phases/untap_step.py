@@ -249,7 +249,7 @@ class UntapStepMixin:
                     continue
                 lands_untapped += 1
 
-            permanent.tapped = False
+            self.become_untapped(permanent)
             untapped += 1
 
         # The marker's whole lifetime ends here (CR 611.2a: the effect lasts as

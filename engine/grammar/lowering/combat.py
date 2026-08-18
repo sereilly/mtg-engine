@@ -9,6 +9,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _is_source,
     _REST_OF_TURN,
     _is_target,
     _restrictions_beyond,
@@ -89,6 +90,14 @@ def _lower_cant_be(node: ast.CantBe) -> tuple[OracleInstruction, ...]:
             "which needs the CR 613 layers engine",
             node=node,
         )
+    # "This creature can't be blocked this turn." (Ghostly Pilferer.) The
+    # ability's own source, which is not a target at all — nothing is chosen, so
+    # there is no picker and no legality check. Its own instruction kind rather
+    # than a flag on the targeted one, the same split "exile it" makes: a
+    # handler that resolves a target and one that reads
+    # ``context.source_permanent`` share nothing beyond the flag they set.
+    if _is_source(node.subject) and node.action == "blocked":
+        return (OracleInstruction("grant_unblockable_to_self", "", {}),)
     if not _is_target(node.subject):
         raise LoweringError("no handler for restricting a non-targeted subject", node=node)
     assert isinstance(node.subject, ast.TargetSpec)

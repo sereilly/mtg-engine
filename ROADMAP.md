@@ -256,44 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 125: a protection whose bearer is a player
-
-*(2026-08-18.)* M21 **274 → 275** — Runed Halo.
-
-> As this enchantment enters, choose a card name.
-> You have protection from the chosen card name.
-
-**The one protection in the engine whose bearer is not a permanent.**
-`engine/prevention.py` shields a recipient from an *amount* and
-`_protection_qualities` answers about a permanent; neither can be asked "does
-this player have protection from a card *name*?". So it is its own module, and
-each of CR 702.16i's three consequences is enforced where that question is
-already asked — the cast's target check, the player-damage path, the Aura
-attach — rather than by a fourth mechanism that would have to be remembered at
-each of them.
-
-Checked **before** any shield, because protection is not prevention: nothing is
-consumed and no replacement contends, so the damage simply is not dealt.
-
-**Derived, not stamped.** The names a player is protected from are read off
-their permanents' own text and metadata, so two Halos protect from two names and
-the protection ends when one leaves with nothing to clear.
-
-**The name is chosen as the permanent enters** (CR 614.1c), not by a trigger —
-by the time a trigger could resolve, the protection would already have failed to
-apply once. The default names a card the chooser can actually *see*: the top of
-an opponent's graveyard, else one of their permanents. Naming nothing is a legal
-choice no player would make, and an AI seat would be stuck with it.
-
-**The second line needed its own claim.** With only the entry effect claimed the
-card compiled *supported* and its protection was unaccounted for — the
-partial-implementation shape. The gate now asks the same reader the enforcement
-does, which is what the six tables beside it already do.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Six new tests, all watched to fail on the round-124 engine.
-
 ## Round 126: one choice, three zones, one subset
 
 *(2026-08-18.)* M21 **275 → 276** — Necromentia.
@@ -371,3 +333,45 @@ every `--check` gate green, shipped pool 388/388, AI simulation byte-identical
 at 443 interactions, **zero hooks added**. Five new tests plus two rewritten
 guards — the hollow-support probe, whose Mazemind-shaped example is now a cost
 the table really cannot charge, and the trigger-example table.
+
+## Round 128: the untap seam, eleven years late
+
+*(2026-08-18.)* M21 **277 → 278** — Ghostly Pilferer.
+
+> Whenever this creature becomes untapped, you may pay {2}. If you do, draw a card.
+> Whenever an opponent casts a spell from anywhere other than their hand, draw a card.
+> Discard a card: This creature can't be blocked this turn.
+
+**`become_tapped` has existed since the round that found Lifetap firing on one
+path out of seventeen. Its twin did not.** `perm.tapped = False` was written in
+eleven places, so a "becomes untapped" trigger could only ever have seen
+whichever one its implementer wired into — the untap step, probably, and not
+Twiddle, not an untapper's own ability, not the nine other ways a permanent
+untaps. Ghostly Pilferer is the first card in the pool to ask, so the seam came
+first and the trigger second.
+
+CR 701.26b gives the same two exclusions the tap seam records: re-untapping an
+untapped permanent is no state change and no trigger, and a permanent that
+*enters* untapped never becomes untapped — it was never tapped on the
+battlefield.
+
+**The condition kind is the event's name.** Naming it `self_becomes_untapped`
+while the seam emitted `permanent_becomes_untapped` compiled a trigger that
+collected nothing — the shape rounds 93, 105 and 119 each found a different way.
+The identity check that makes it "**this** creature" is an event filter, so a
+board of Pilferers does not all fire when one untaps.
+
+**"From anywhere other than their hand" is a narrowing on the cast's zone**,
+which the stack item has recorded since the cast-permission seam. It now rides
+the cast event too; an event with no zone counts as a cast from the hand, which
+is the ordinary case and the one that must not fire.
+
+**"This creature can't be blocked this turn" is not a target.** Its own
+instruction kind, the same split round 115's "exile it" makes — a handler that
+resolves a target and one that reads `context.source_permanent` share nothing
+beyond the flag they set — and a source already gone grants nothing rather than
+falling back to a scan that would free some other creature.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Six new tests, five watched to fail on the round-127 engine.

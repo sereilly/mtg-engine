@@ -78,9 +78,18 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_becomes_blocked", ("this", "creature", "becomes", "blocked")),
     ("creature_dealt_damage", ("this", "creature", "is", "dealt", "damage")),
     ("enchanted_land_tapped", ("enchanted", "land", "becomes", "tapped")),
+    ("permanent_becomes_untapped", ("this", "creature", "becomes", "untapped")),
+    ("permanent_becomes_untapped", ("this", "artifact", "becomes", "untapped")),
+    ("permanent_becomes_untapped", ("this", "permanent", "becomes", "untapped")),
     ("self_becomes_tapped", ("this", "land", "becomes", "tapped")),
     ("land_tapped_for_mana", ("a", "player", "taps", "a", "land", "for", "mana")),
     ("spell_cast", ("a", "player", "casts", "a", "spell")),
+    # Longest first: the bare phrase below is a strict prefix of this one, so
+    # matching it first would leave "from anywhere other than their hand"
+    # unaccounted and fail the line.
+    ("opponent_casts_spell",
+     ("an", "opponent", "casts", "a", "spell", "from", "anywhere", "other",
+      "than", "their", "hand")),
     ("opponent_casts_spell", ("an", "opponent", "casts", "a", "spell")),
     ("enchantment_cast", ("you", "cast", "an", "enchantment", "spell")),
     ("you_cast_spell", ("you", "cast", "a", "spell")),

@@ -2029,3 +2029,106 @@ def test_the_anthem_still_applies_on_the_battlefield(set_pool):
     game._recompute_continuous_effects()
 
     assert (theirs.effective_power, theirs.effective_toughness) == (1, 2)
+
+
+# --- Ghostly Pilferer: three lines and an untap seam (round 128) ------------
+
+
+def _pilferer_board(set_pool, mana=2):
+    pool = set_pool("M21")
+    pilferer = Permanent(card=pool["Ghostly Pilferer"])
+    p1 = PlayerState(name="P1", life=20, library=[pool["Mountain"]] * 6)
+    p1.mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": mana, "generic": 0}
+    p2 = PlayerState(
+        name="P2", life=20, hand=[pool["Shock"]], graveyard=[pool["Shock"]],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    game._put_permanent_onto_battlefield(0, pilferer, None)
+    _nosick(pilferer)
+    return game, p1, p2, pilferer, pool
+
+
+def test_ghostly_pilferer_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Ghostly Pilferer"])
+    assert program.supported, program.reason
+    assert {t.condition.kind for t in program.triggered_abilities} == {
+        "permanent_becomes_untapped", "opponent_casts_spell",
+    }
+
+
+def test_becoming_untapped_offers_the_payment(set_pool):
+    """CR 701.26b's event, announced by the one untap seam — which is why the
+    seam had to exist first: eleven places set the flag, and a trigger wired
+    into one of them would have missed the other ten."""
+    game, p1, _, pilferer, _ = _pilferer_board(set_pool)
+    pilferer.tapped = True
+
+    game.become_untapped(pilferer)
+    game._settle()
+
+    assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+    assert game.confirm_optional_pay(0, accept=True)
+    game._settle()
+    assert len(p1.hand) == 1
+
+
+def test_untapping_an_already_untapped_permanent_is_no_event(set_pool):
+    """CR 701.26b: only a tapped permanent can be untapped, so there is no
+    state change and no trigger."""
+    game, _, _, pilferer, _ = _pilferer_board(set_pool)
+
+    assert not game.become_untapped(pilferer)
+    game._settle()
+
+    assert game.pending_choices == []
+
+
+def test_the_cast_trigger_reads_the_zone_the_spell_came_from(set_pool):
+    """"…from anywhere other than their **hand**". The zone rides on the cast
+    event — the same field See the Truth's cast-zone conditional reads — and an
+    event with no zone recorded counts as a cast from the hand, which is the
+    ordinary case and the one that must not fire."""
+    from engine.cast_permissions import grant_permission
+
+    game, p1, p2, _, _ = _pilferer_board(set_pool)
+    grant_permission(
+        game, player_index=1, zone="graveyard", mode="cast",
+        cards=[p2.graveyard[0]], duration=None, source_name="test",
+    )
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(1, "Shock", target_player_index=0, from_zone="graveyard")
+    game._settle()
+
+    assert len(p1.hand) == 1
+
+
+def test_a_cast_from_hand_does_not_fire_it(set_pool):
+    game, p1, _, _, _ = _pilferer_board(set_pool)
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(1, "Shock", target_player_index=0)
+    game._settle()
+
+    assert p1.hand == []
+
+
+def test_the_discard_ability_makes_only_its_own_source_unblockable(set_pool):
+    """The ability's own source is not a target — nothing is chosen, so there is
+    no picker. A source already gone grants nothing rather than falling back to
+    a scan, which would make some other creature unblockable."""
+    game, p1, _, pilferer, pool = _pilferer_board(set_pool)
+    p1.hand = [pool["Island"]]
+    other = Permanent(card=pool["Alpine Watchdog"])
+    game._put_permanent_onto_battlefield(0, other, None)
+    blocker = Permanent(card=pool["Alpine Watchdog"])
+    game._put_permanent_onto_battlefield(1, blocker, None)
+
+    result = game.activate_permanent_ability(0, "Ghostly Pilferer")
+    game._settle()
+
+    assert result.supported, result.details
+    assert p1.hand == [], "the discard was paid"
+    assert not game._can_block_attacker(blocker, pilferer)
+    assert game._can_block_attacker(blocker, other), "and nobody else"

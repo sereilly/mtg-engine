@@ -48,7 +48,7 @@ class BeginningPhaseMixin:
         )
         if permanent is None:
             return False
-        permanent.tapped = False
+        self.become_untapped(permanent)
         self.skip_next_turn(player_index)
         self.log.append(
             f"{player.name} skipped their turn to untap {permanent_name}"
@@ -73,7 +73,7 @@ class BeginningPhaseMixin:
         )
         if permanent is None:
             return False
-        permanent.tapped = False
+        self.become_untapped(permanent)
         self.log.append(f"{player.name} skipped their turn to untap {permanent_name}")
         return True
 

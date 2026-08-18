@@ -498,7 +498,7 @@ class SpellCastingMixin:
             # fire now, as the spell is put on the stack, and go on the stack above
             # it (CR 603.3) — so the trigger resolves while the triggering spell is
             # still on the stack, not after it has already resolved.
-            self._apply_spell_cast_any_triggers(caster_index, card)
+            self._apply_spell_cast_any_triggers(caster_index, card, from_zone)
             self._apply_cast_triggers(caster_index, card)
             return SimulationResult(card.name, True, classification.effect_kind, "queued")
 

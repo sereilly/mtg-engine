@@ -75,6 +75,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "spell_cast": "whenever a player casts a spell",
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
+    "permanent_becomes_untapped": (
+        "whenever this creature becomes untapped",
+        "whenever this artifact becomes untapped",
+        "whenever this permanent becomes untapped",
+    ),
     "counters_reach_threshold":
         "when there are four or more page counters on this artifact",
     # Two rows share this kind — the union narrowing and the single-type one —

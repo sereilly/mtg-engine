@@ -284,6 +284,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever this creature becomes the target of a spell or ability"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     ("enchanted_land_tapped",       r"whenever enchanted land becomes tapped"),
+    # "Whenever this creature becomes untapped" (Ghostly Pilferer). CR 701.26b's
+    # event, announced by the one untap seam — which is why the seam had to
+    # exist first: eleven places set the flag, and a trigger wired into one of
+    # them would have missed the other ten.
+    ("permanent_becomes_untapped",
+     r"whenever this (?:creature|artifact|enchantment|land|permanent) becomes untapped"),
     ("self_becomes_tapped",         r"whenever this land becomes tapped"),
     # "Whenever a Forest an opponent controls becomes tapped" (Lifetap). The
     # type and the controller scope are named groups, so the restriction
@@ -304,6 +310,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # written this way; must precede the unnarrowed form below.
     ("spell_cast",                  r"whenever a player casts a (?P<color_word>white|blue|black|red|green) spell"),
     ("spell_cast",                  r"whenever a player casts a spell"),
+    # "…from anywhere other than their hand" (Ghostly Pilferer). A narrowing on
+    # the *zone the spell was cast from*, which the stack item already records
+    # — the field the cast-permission seam added. Longest first: the bare row
+    # below is its strict prefix.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts a spell from anywhere other than their (?P<not_from_zone>hand)"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
     # A colour-list narrowing ("…a spell that's white, blue, black, or red",
     # Quirion Dryad). The list is condition payload, read by the you_cast_spell

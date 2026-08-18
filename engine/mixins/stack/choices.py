@@ -566,7 +566,7 @@ class PendingChoicesMixin:
                 return False
             chosen.append(perm)
         for perm in chosen:
-            perm.tapped = False
+            self.become_untapped(perm)
         names = ", ".join(perm.card.name for perm in chosen) if chosen else "nothing"
         self.log.append(
             f"{self.players[choice.player_index].name} untapped {names} "

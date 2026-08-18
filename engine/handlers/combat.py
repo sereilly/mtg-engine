@@ -245,6 +245,23 @@ def force_active_player_creatures_to_attack(game: Game, instruction: OracleInstr
     return True, "resolved"
 
 
+@effect_handler("grant_unblockable_to_self")
+def grant_unblockable_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"This creature can't be blocked this turn." (Ghostly Pilferer.)
+
+    The ability's own source, so nothing is chosen and nothing is resolved. A
+    source that has already left the battlefield grants nothing rather than
+    falling back to a scan, which would make some other creature unblockable.
+    """
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{context.card.name}: nothing to make unblockable")
+        return True, "resolved"
+    source.metadata["cant_be_blocked_until_eot"] = True
+    game.log.append(f"{source.card.name} can't be blocked this turn")
+    return True, "resolved"
+
+
 @effect_handler("grant_unblockable_to_low_power_target")
 def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # Honor the specifically chosen creature (the player picked one in the UI);
