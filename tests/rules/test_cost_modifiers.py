@@ -185,6 +185,16 @@ def test_601_2f_a_self_reduction_refuses_a_condition_it_cannot_answer():
     assert self_cost_reduction(
         "This spell costs {2} less to cast if you've juggled three chainsaws."
     ) is None
+    # A {X} reduction *with* a "where X is …" clause the table knows is read
+    # since round 120 — the amount is a question, asked of the caster at
+    # CR 601.2f. A clause it does not know still refuses, for the reason above:
+    # an amount this cannot compute is not an amount of zero.
     assert self_cost_reduction(
         "This spell costs {X} less to cast, where X is the total power of creatures you control."
-    ) is None, "an amount this cannot compute is not an amount of zero"
+    ) is not None
+    assert self_cost_reduction(
+        "This spell costs {X} less to cast, where X is the number of chainsaws you have juggled."
+    ) is None
+    # And a bare {X} with no clause at all names no amount, so it refuses as it
+    # always did.
+    assert self_cost_reduction("This spell costs {X} less to cast.") is None

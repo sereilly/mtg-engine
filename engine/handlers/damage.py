@@ -65,6 +65,29 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     else:
         damage = resolve_amount(instruction.payload.get("amount", 0), x_value)
     target_perm_idx = context.target_permanent_index
+    # "…deals 6 damage to each of **up to two** target creatures and/or
+    # planeswalkers." (Volcanic Salvo.) The several-targets description says a
+    # list was collected. Resolved strictly — a departed target is dropped
+    # (CR 608.2b) rather than replaced by whatever a scan reaches first, which
+    # for "up to two" would be a creature the player never chose — and each
+    # surviving one takes the full amount, because the card divides nothing.
+    several = instruction.payload.get("targets") or {}
+    if (
+        isinstance(several, dict)
+        and isinstance(several.get("count"), int)
+        and several["count"] > 1
+    ):
+        filters = several.get("filter") or {}
+        chosen = resolve_target_permanents(
+            game, context,
+            predicate=lambda perm: permanent_matches_filter(perm, filters),
+        )
+        if not chosen:
+            game.log.append(f"{card.name}: nothing to deal damage to")
+            return True, "resolved"
+        for perm in chosen:
+            apply_damage_to_creature(game, perm, damage, card)
+        return True, "resolved"
     # "…and N damage to you": a second damage instruction in the same sequence
     # aimed at the source's controller rather than the spell's target. Reads the
     # same "recipient" key target_gains_life has always used. Without it, "deal

@@ -256,46 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 117: three sentences, one pile
-
-*(2026-08-18.)* M21 **266 → 267** — Transmogrify.
-
-> Exile target creature. That creature's controller reveals cards from the top
-> of their library until they reveal a creature card. That player puts that card
-> onto the battlefield, then shuffles the rest into their library.
-
-The exile already worked. The rest is **one procedure written as three
-sentences**, and it is lowered as one instruction for a reason that is not
-convenience: "that card" names what the reveal stopped on and "the rest" names
-exactly the cards it turned over first, so split apart the last two sentences
-would dangle referents into a pile nothing had recorded. Every word of both
-destinations is required by the production — a card that milled the rest instead
-of shuffling it back is a different card, and the difference does not appear
-until the third sentence.
-
-**"That creature's controller" is a back-reference, and it demands its
-producer.** The seat is the one the *exile* step recorded, which is the same
-channel "its controller creates a token" (Angelic Ascension, Secure the Scene)
-already reads. Without an exile in front of it the phrase names nobody, so the
-lowering refuses — reading the caster instead would aim the whole effect at the
-opposite player from the one the card names, and the card would still report
-supported.
-
-**A library with no match is not an error.** CR 701.20a's reveal is bounded by
-the library: an empty one ends the search, the player reveals everything, puts
-nothing onto the battlefield and shuffles it all back. Any other reading is an
-infinite loop on a real board, and this is a card an opponent can aim at a
-library they have seen.
-
-The creature enters through the ordinary seam with `from_zone="library"` and
-`was_cast` false, so it is a permanent put onto the battlefield rather than
-cast — which round 111's Containment Priest asks about and round 115's origin
-stamp records.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Four new tests, all watched to fail on the round-116 engine.
-
 ## Round 118: a token as big as a graveyard, and a spell that exiles itself
 
 *(2026-08-18.)* M21 **267 → 268** — Experimental Overload.
@@ -383,3 +343,46 @@ Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Six new tests, five watched to fail on the round-118 engine; the sixth
 is the no-activation baseline for the one above it.
+
+## Round 120: a cost that is a question
+
+*(2026-08-18.)* M21 **269 → 270** — Volcanic Salvo.
+
+> This spell costs {X} less to cast, where X is the total power of creatures you
+> control.
+> Volcanic Salvo deals 6 damage to each of up to two target creatures and/or
+> planeswalkers.
+
+**A {X} reduction was refused on purpose, and the refusal was right.** The
+self-reduction table computes a number from the printed pips, and `{X}` is not
+one — so it returned None rather than a reduction of zero, because a cost error
+in the cheap direction is the one that must never happen. What it was missing
+was not arithmetic but the **question**: "where X is …" names a count, and the
+clause is now read into a named question asked of the caster at CR 601.2f, when
+a cost is calculated. A `{X}` with no clause still refuses, and so does a clause
+naming a count the table does not know.
+
+The count is deliberately *not* an `ObjectFilter`. "Total power" is an aggregate
+rather than a tally, so it reads the **computed** power (CR 613) — a pumped
+creature counts for what it currently is — and floors each contribution at zero,
+because CR 107.1b has no negative amounts and a shrunk creature must not make the
+spell cost *more*.
+
+**"To each of up to two targets" is one instruction, opted into.** The
+several-targets description is what tells the picker to collect up to N and the
+handler to resolve a list; it is opted into at the call site rather than admitted
+by the quantifier check, which is the safety the ordinary description has — a
+handler resolving one permanent must never be handed a two-target picker, or the
+second choice is collected and dropped. Resolved strictly, so a departed target
+is dropped (CR 608.2b) rather than replaced by whatever a scan reaches first,
+which for "up to two" would be a creature the player never chose.
+
+Chandra's Incinerator prints the same first line with a different count — a turn
+history rather than a board aggregate — and is deliberately **not** claimed here:
+the history it needs is not tracked yet, and adding the clause without it would
+be a reduction that silently computes zero.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Five new tests plus a rewritten guard, all six watched to fail on the
+round-119 engine.

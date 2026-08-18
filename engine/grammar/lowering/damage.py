@@ -15,6 +15,8 @@ from ..errors import LoweringError
 from ...oracle_types import X_FROM_COUNT
 from ._common import (
     _REST_OF_TURN,
+    _describe_several_targets,
+    _names_several_targets,
     count_spec,
     _amount_payload,
     _describe_targets,
@@ -497,6 +499,23 @@ def _lower_damage(
         "target_player", "target_opponent", "that_player", "controller", "each_player"
     ):
         raise LoweringError(f"unsupported damage recipient {recipient.kind!r}", node=node)
+    elif (
+        isinstance(recipient, ast.TargetSpec)
+        and _names_several_targets(recipient)
+    ):
+        # "…deals 6 damage to each of **up to two** target creatures and/or
+        # planeswalkers." (Volcanic Salvo.) The same damage to each chosen
+        # object, so it is one instruction with the several-targets description
+        # rather than a second kind — and the description is what tells the
+        # picker to collect up to N and the handler to resolve a list.
+        #
+        # Opted into here rather than admitted by the quantifier check below,
+        # which is the safety the ordinary description has: a handler resolving
+        # one permanent must never be handed a two-target picker, because the
+        # second choice would be collected and dropped.
+        several: dict[str, object] = dict(payload)
+        _describe_several_targets(several, recipient)
+        return (OracleInstruction("deal_damage", "", several),)
     elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier not in (
         "any_target", "target", "this"
     ):

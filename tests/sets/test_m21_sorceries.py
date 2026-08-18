@@ -1256,3 +1256,87 @@ def test_a_token_with_two_different_variables_refuses(set_pool):
         "Create an X/Y blue and red Weird creature token, where X is the number "
         "of instant and sorcery cards in your graveyard."
     ).instructions == ()
+
+
+# --- Volcanic Salvo: a cost that is a question (round 120) ------------------
+
+
+def _salvo_board(set_pool, mine=(), theirs=()):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20, hand=[pool["Volcanic Salvo"]])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            game._put_permanent_onto_battlefield(seat, Permanent(card=pool[name]), None)
+    return game, p1, pool
+
+
+def test_volcanic_salvo_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Volcanic Salvo"])
+    assert program.supported, program.reason
+
+
+def test_the_reduction_is_the_total_power_you_control(set_pool):
+    """"{X} less to cast, where X is …" — the reduction is generic and its size
+    is not in the text, which is why a bare {X} was refused outright: an amount
+    this cannot compute is not an amount of zero."""
+    from engine.cost_modifiers import CostReduction, cost_reduction_for_cast
+
+    game, _, pool = _salvo_board(set_pool)
+    assert cost_reduction_for_cast(game, 0, pool["Volcanic Salvo"])[0] == CostReduction(0)
+
+    game, _, pool = _salvo_board(set_pool, mine=("Baneslayer Angel", "Alpine Watchdog"))
+    assert cost_reduction_for_cast(game, 0, pool["Volcanic Salvo"])[0] == CostReduction(7)
+
+
+def test_the_reduction_reads_computed_power(set_pool):
+    """CR 613: a pumped creature counts for what it currently is, and negative
+    power contributes nothing — CR 107.1b has no negative amounts, and a shrunk
+    creature must not make the spell cost *more*."""
+    from engine.cost_modifiers import cost_reduction_for_cast
+    from engine.pt import add_pt_modifier
+
+    game, _, pool = _salvo_board(set_pool, mine=("Alpine Watchdog",))
+    watchdog = next(iter(game.controlled_by(0)))
+
+    add_pt_modifier(watchdog, 3, 0)
+    assert cost_reduction_for_cast(game, 0, pool["Volcanic Salvo"])[0].generic == 5
+
+    add_pt_modifier(watchdog, -9, 0)
+    assert cost_reduction_for_cast(game, 0, pool["Volcanic Salvo"])[0].generic == 0
+
+
+def test_volcanic_salvo_hits_each_of_the_two_it_names(set_pool):
+    """"…to **each of** up to two target creatures and/or planeswalkers": the
+    full amount to each, because the card divides nothing. A third creature the
+    caster did not choose is untouched."""
+    game, _, pool = _salvo_board(
+        set_pool, theirs=("Baneslayer Angel", "Alpine Watchdog", "Pridemalkin"),
+    )
+    board = list(game.controlled_by(1))
+    chosen = [game.permanent_id_of(board[0]), game.permanent_id_of(board[1])]
+
+    result = game.cast_from_hand(
+        0, "Volcanic Salvo", target_player_index=1, target_permanent_ids=chosen,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in game.controlled_by(1)] == ["Pridemalkin"]
+
+
+def test_a_clause_the_table_cannot_compute_still_refuses(set_pool):
+    """The refusal side, unchanged: a "where X is …" naming a count this table
+    does not know leaves the card unsupported rather than quietly free."""
+    from engine.cost_modifiers import self_cost_reduction
+
+    assert self_cost_reduction(
+        "This spell costs {X} less to cast, where X is the total power of "
+        "creatures you control."
+    ) is not None
+    assert self_cost_reduction(
+        "This spell costs {X} less to cast, where X is the number of chainsaws "
+        "you have juggled."
+    ) is None

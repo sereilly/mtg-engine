@@ -307,8 +307,19 @@ def ability_cost_tax(game, controller_index: int, source) -> tuple[int, list[str
 # "[During your turn, ]this spell costs {…} less to cast[ if <condition>]."
 _SELF_REDUCTION = re.compile(
     r"(?:(?P<during>during your turn), )?this spell costs (?P<pips>(?:\{[^}]+\})+) "
-    r"less to cast(?: if (?P<condition>[^.]+))?\.?$"
+    r"less to cast(?: if (?P<condition>[^.]+))?"
+    r"(?:, where x is (?P<counted>[^.]+))?\.?$"
 )
+
+# The "where X is …" clauses a self-reduction may be sized by, mapped to the
+# question asked of the caster at CR 601.2f. A wording outside this table
+# refuses the line — an unrecognized count read as zero would merely fail to
+# discount, but read as anything else would under-charge, and refusing keeps the
+# card visibly unsupported instead of quietly mispriced.
+_SELF_REDUCTION_COUNTS: dict[str, str] = {
+    "the total power of creatures you control": "total_power_you_control",
+}
+
 
 # The conditions a self-reduction may be gated on, mapped to the question the
 # caster's own state answers. A wording outside this table refuses the line —
@@ -404,6 +415,14 @@ class SelfCostReduction:
     reduction: CostReduction
     condition: str | None = None
     during_your_turn: bool = False
+    #: "This spell costs **{X}** less to cast, where X is …" (Volcanic Salvo,
+    #: Chandra's Incinerator). The reduction is generic and its size is not in
+    #: the text — which is why {X} was refused outright above: a symbol this
+    #: table could not compute would have under-charged the spell, and a cost
+    #: error in that direction is the one that must never happen. Named here as
+    #: the *question* to ask rather than as a number, and answered against the
+    #: caster's board or history at CR 601.2f, when the cost is calculated.
+    counted: str | None = None
 
 
 @lru_cache(maxsize=None)
@@ -419,6 +438,21 @@ def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
             if key is None:
                 return None
             condition = key
+        # "{X} … where X is <count>" (Volcanic Salvo). A generic reduction whose
+        # size is a question rather than a number; the pips must be exactly
+        # "{X}" and the clause must name a count this table knows, or the line
+        # refuses as it always did.
+        counted_clause = match.group("counted")
+        if counted_clause is not None:
+            if match.group("pips").upper() != "{X}":
+                return None
+            counted = _SELF_REDUCTION_COUNTS.get(counted_clause.strip())
+            if counted is None:
+                return None
+            return SelfCostReduction(
+                CostReduction(0), condition=None,
+                during_your_turn=bool(match.group("during")), counted=counted,
+            )
         generic = 0
         colored: dict[str, int] = {}
         for symbol in re.findall(r"\{([^}]+)\}", match.group("pips").upper()):
@@ -428,7 +462,8 @@ def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
                 colored[symbol] = colored.get(symbol, 0) + 1
             else:
                 # {X} and the hybrid symbols reduce by an amount this cannot
-                # compute; refuse rather than under-charging.
+                # compute; refuse rather than under-charging. A "{X} … where X
+                # is <count>" clause is handled above and never reaches here.
                 return None
         return SelfCostReduction(
             reduction=CostReduction(generic, tuple(sorted(colored.items()))),
@@ -441,6 +476,29 @@ def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
 def self_reduction_claims_line(line: str) -> bool:
     """Whether *line* is, in its entirety, a self-reduction this can apply."""
     return self_cost_reduction(line.strip()) is not None
+
+
+def _counted_reduction(game, caster_index: int, counted: str) -> int:
+    """How large a "where X is …" self-reduction currently is.
+
+    One function per named count, and each is a *different* kind of question:
+    one reads the board, the other a turn history. Neither is an
+    ``ObjectFilter`` — "total power" is an aggregate rather than a tally, and
+    damage dealt this turn is not on any battlefield — which is why they are
+    named clauses here rather than routed through ``count_spec``.
+    """
+    caster = game.players[caster_index]
+    if counted == "total_power_you_control":
+        # The *computed* power (CR 613), so a pumped or animated permanent
+        # counts for what it currently is. Negative power contributes nothing:
+        # CR 107.1b has no negative amounts, and a -3/-3 creature must not make
+        # the spell cost more.
+        return sum(
+            max(0, perm.effective_power)
+            for perm in game.controlled_by(caster_index)
+            if perm.is_creature
+        )
+    return 0
 
 
 def self_cost_reduction_for_cast(game, caster_index: int, card) -> CostReduction:
@@ -460,6 +518,12 @@ def self_cost_reduction_for_cast(game, caster_index: int, card) -> CostReduction
     elif described.condition == "gained_three_life":
         if caster.life_gained_this_turn < 3:
             return CostReduction()
+    # "…where X is <count>": the size is asked of the caster now, at CR 601.2f,
+    # which is when a cost is calculated — not at announcement and not at
+    # resolution, so a creature entering in response does not change what was
+    # already paid.
+    if described.counted is not None:
+        return CostReduction(_counted_reduction(game, caster_index, described.counted))
     return described.reduction
 
 

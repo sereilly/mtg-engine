@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 80.5% | 78.1% | 54.7% | 223 |
+| M21 *(measured)* | 285 | 503 | 80.7% | 78.5% | 54.9% | 224 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,7 +33,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 222 | 92 | expected a subject |  |
-| 90 | 34 | unrecognized effect verb |  |
+| 89 | 33 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
 | 31 | 31 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -1378,6 +1378,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{T}: Add {C}. Spend this mana only to cast an instant or sorcery spell.`
 - **Volcanic Geyser**
   - `Volcanic Geyser deals X damage to any target.`
+- **Volcanic Salvo**
+  - `Volcanic Salvo deals 6 damage to each of up to two target creatures and/or planeswalkers.`
 - **Waker of Waves**
   - `Creatures your opponents control get -1/-0.`
 - **Wall of Bone**
