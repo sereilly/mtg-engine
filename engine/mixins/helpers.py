@@ -1467,4 +1467,13 @@ class GameHelpersMixin:
         # per path. After the recompute on purpose: a filter about power or type
         # asks what the board makes the permanent, and a lord that applied as it
         # entered is part of that (CR 611.3a).
-        emit(self, "matching_permanent_enters", subject=permanent)
+        emit(
+            self, "matching_permanent_enters", subject=permanent,
+            # "…deals damage equal to **that creature's** power" (Terror of the
+            # Peaks). Frozen here rather than read at resolution: the trigger
+            # resolves after the entry, and by then the creature may have been
+            # pumped, shrunk or destroyed — CR 608.2's number is the one the
+            # event had. Recorded on every entry because the cost is one integer
+            # and the alternative is a fire site that knows which cards care.
+            entering_power=max(0, permanent.effective_power),
+        )

@@ -24,6 +24,7 @@ from ...cast_restrictions import check_cast_timing
 from ...classifier import classify_card
 from ...cost_modifiers import (
     CostReduction, cost_reduction_for_cast, reduce_cost, spell_cost_tax,
+    spell_life_tax,
 )
 from ...game_types import SimulationResult, StackItem
 from ...handlers._common import graveyard_card_matches, permanent_matches_filter
@@ -230,6 +231,46 @@ class SpellCastingMixin:
         if spell_tax:
             extra_generic_tax += spell_tax
             self.log.append(f"{card.name} is taxed by {', '.join(taxing_names)}")
+
+        # "…that target this creature cost an additional 3 life to cast."
+        # (Terror of the Peaks.) A tax in life rather than mana, scoped to what
+        # the spell *targets* — so it is charged here, where the chosen targets
+        # are known (CR 601.2c chooses them before 601.2h pays), and refused
+        # rather than clamped when the caster cannot pay: CR 118.4 makes an
+        # unpayable cost an uncastable spell, not a free one.
+        aimed_at = [
+            found
+            for found in (
+                self.permanent_by_id(pid)
+                for pid in (target_permanent_ids or [])
+                if isinstance(pid, int)
+            )
+            if found is not None
+        ]
+        if not aimed_at and target_permanent_index is not None:
+            found = self.permanent_at(
+                target_player_index
+                if target_player_index is not None else caster_index,
+                target_permanent_index,
+            )
+            if found is not None:
+                aimed_at = [found]
+        life_tax, life_taxing_names = spell_life_tax(self, caster_index, aimed_at)
+        if life_tax:
+            if caster.life < life_tax:
+                details = (
+                    f"{caster.name} cannot pay {life_tax} life to cast {card.name} "
+                    f"({', '.join(life_taxing_names)})"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, details
+                )
+            caster.life -= life_tax
+            self.log.append(
+                f"{caster.name} paid {life_tax} life to cast {card.name} "
+                f"({', '.join(life_taxing_names)})"
+            )
 
         # CR 601.2f: increases first, then reductions.
         cost_reduction, reducing_names = cost_reduction_for_cast(self, caster_index, card)

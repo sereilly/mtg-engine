@@ -1371,3 +1371,114 @@ def test_other_excludes_the_source_itself(set_pool):
     game, hound = _houndmaster_swing(set_pool, other_attackers=0)
 
     assert hound.effective_power == 2, "attacking alone is +0/+0, not +1/+0"
+
+
+# --- Round 107: the event's own creature, and a tax paid in life ------------
+
+
+def _terror_board(set_pool, mine=(), theirs=(), their_life=20):
+    pool = set_pool("M21")
+    terror = _nosick(Permanent(card=pool["Terror of the Peaks"]))
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[terror] + [_nosick(Permanent(card=pool[n])) for n in mine],
+    )
+    p2 = PlayerState(name="P2", hand=[pool[n] for n in theirs], life=their_life)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2, terror
+
+
+def test_terror_of_the_peaks_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Terror of the Peaks"])
+    assert program.supported, program.reason
+
+    trigger = next(
+        t for t in program.triggered_abilities
+        if t.condition.kind == "matching_permanent_enters"
+    )
+    assert trigger.instruction.payload["amount_from_trigger"] == "entering_power"
+
+
+def test_it_pings_for_the_entering_creatures_power(set_pool):
+    """"That creature's power" is the *event's* creature, not the ability's
+    source — read as "its power" the Dragon would deal its own 5, a number the
+    card never mentions."""
+    pool = set_pool("M21")
+    game, p1, p2, _terror = _terror_board(set_pool)
+    p1.hand = [pool["Warden of the Woods"]]        # 5/7
+
+    game.cast_from_hand(0, "Warden of the Woods", target_player_index=1)
+    game._settle()
+
+    assert p2.life == 15
+
+
+def test_the_power_is_frozen_by_the_event(set_pool):
+    """CR 608.2's number is the one the event had. The fire site records it as
+    the creature enters, because by the time the trigger resolves that creature
+    may have been pumped, shrunk or destroyed."""
+    from engine.grammar import compile_line
+
+    (instruction,) = compile_line(
+        "Whenever another creature you control enters, this creature deals "
+        "damage equal to that creature's power to any target.",
+        card_name="Terror of the Peaks",
+    ).instructions
+
+    assert "amount_from_trigger" in instruction.payload
+    assert "amount" not in instruction.payload
+
+
+def test_an_opponents_spell_aimed_at_it_costs_three_life(set_pool):
+    """A tax in **life**, not mana (CR 118.3b), and scoped to the spell's chosen
+    targets — which CR 601.2c settles before 601.2h pays, so the answer exists
+    at the cast and only to a caller that has it."""
+    game, _p1, p2, terror = _terror_board(set_pool, theirs=("Shock",))
+
+    result = game.cast_from_hand(
+        1, "Shock", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert p2.life == 17
+    assert terror.damage_marked == 2, "the spell still resolves"
+
+
+def test_a_spell_aimed_elsewhere_is_untaxed(set_pool):
+    game, _p1, p2, _terror = _terror_board(
+        set_pool, mine=("Gale Swooper",), theirs=("Shock",)
+    )
+
+    game.cast_from_hand(1, "Shock", target_player_index=0, target_permanent_index=1)
+
+    assert p2.life == 20
+
+
+def test_a_caster_who_cannot_pay_the_life_cannot_cast(set_pool):
+    """CR 118.4: an unpayable cost makes the spell uncastable, not free."""
+    game, _p1, p2, _terror = _terror_board(set_pool, theirs=("Shock",), their_life=2)
+
+    result = game.cast_from_hand(
+        1, "Shock", target_player_index=0, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert p2.life == 2, "nothing was paid"
+
+
+def test_a_life_tax_is_not_counted_as_mana(set_pool):
+    """It is a different resource and a different rule. Counted by the mana
+    scan it would be added to the generic cost."""
+    from engine.cost_modifiers import cost_modifiers_for, spell_cost_tax
+
+    (modifier,) = cost_modifiers_for(
+        "Spells your opponents cast that target this creature cost an "
+        "additional 3 life to cast."
+    )
+    assert modifier.life and modifier.targets_source
+
+    game, _p1, _p2, _terror = _terror_board(set_pool, theirs=("Shock",))
+    generic, _names = spell_cost_tax(game, 1, set_pool("M21")["Shock"])
+    assert generic == 0

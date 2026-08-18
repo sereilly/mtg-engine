@@ -133,6 +133,14 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     if stream.accept_phrase("its", "power"):
         return ast.ThatMuch("its_power")
 
+    # "equal to **that creature's** power" (Terror of the Peaks) — the power of
+    # the creature the *trigger's event* was about, not of the ability's source.
+    # A different referent from "its power" above and so a different key: read
+    # as that one it would deal the Dragon's own power, which is a number the
+    # card never mentions.
+    if stream.accept_phrase("that", "creature", "'s", "power"):
+        return ast.ThatMuch("event_subject_power")
+
     stream.reset(mark)
     return None
 

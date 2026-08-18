@@ -55,7 +55,13 @@ class CostModifier:
     card_type  -- card type the affected object must have, or None for any;
                   a "non"-prefixed name excludes instead of requiring
     keyword    -- keyword the affected object must have, or None for any
-    controller -- "you" when the modifier says "you cast", or None for anyone's
+    controller -- "you" when the modifier says "you cast", "opponents" when it
+                  says "your opponents cast", or None for anyone's
+    life       -- the tax is paid in life rather than mana (CR 118.3b)
+    targets_source -- the affected spell must target the permanent printing
+                  this, which is a fact about the spell's *chosen targets* and
+                  so can only be answered once they are chosen (CR 601.2c,
+                  before costs are paid at 601.2h)
     """
 
     amount: int
@@ -65,6 +71,8 @@ class CostModifier:
     card_type: str | None = None
     keyword: str | None = None
     controller: str | None = None
+    life: bool = False
+    targets_source: bool = False
 
 
 @dataclass(frozen=True)
@@ -85,6 +93,17 @@ _SPELL_TAX = re.compile(
     r"\{(?P<amount>\d+)\} (?P<direction>more|less) to cast"
 )
 
+# "Spells your opponents cast that target this creature cost an additional N
+# life to cast." (Terror of the Peaks.) A tax in **life**, not mana, and scoped
+# to spells that target the permanent printing it — which is why it is its own
+# template rather than an amount on the one above: the payment is a different
+# resource and the scope is a fact about the *spell's targets*, not about the
+# spell.
+_TARGETING_LIFE_TAX = re.compile(
+    r"spells your opponents cast that target this creature cost an additional "
+    r"(?P<amount>\d+) life to cast"
+)
+
 # "activated abilities of <colour>? <type>s cost {N} more to activate"
 _ABILITY_TAX = re.compile(
     rf"activated abilities of (?:(?P<colour>{_COLOURS}) )?(?P<type>{_TYPES})s? cost "
@@ -98,7 +117,11 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
     immutable on a CardDefinition, so the per-permanent scan on each cast stays
     as cheap as the name-keyed lookup it replaced."""
     text = oracle_text.lower()
-    if "more to" not in text and "less to" not in text:
+    if (
+        "more to" not in text
+        and "less to" not in text
+        and "life to cast" not in text
+    ):
         return ()
     modifiers: list[CostModifier] = []
     for match in _SPELL_TAX.finditer(text):
@@ -111,6 +134,16 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
                 card_type=match.group("type"),
                 keyword=match.group("keyword"),
                 controller="you" if match.group("controller") else None,
+            )
+        )
+    for match in _TARGETING_LIFE_TAX.finditer(text):
+        modifiers.append(
+            CostModifier(
+                amount=int(match.group("amount")),
+                applies_to="cast",
+                life=True,
+                targets_source=True,
+                controller="opponents",
             )
         )
     for match in _ABILITY_TAX.finditer(text):
@@ -145,7 +178,7 @@ def cost_modifier_claims_line(line: str) -> bool:
         return True
     if any(
         (match := pattern.match(text)) is not None and match.end() == len(text)
-        for pattern in (_SPELL_TAX, _ABILITY_TAX)
+        for pattern in (_SPELL_TAX, _ABILITY_TAX, _TARGETING_LIFE_TAX)
     ):
         return True
     return self_reduction_claims_line(line)
@@ -188,6 +221,11 @@ def _tax(
         # layer 3) changes which spells this taxes, and the tax table should
         # not have to know that text can change.
         for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
+            # A life tax is not mana and is charged by its own reader: counted
+            # here it would be added to the generic cost, which is a different
+            # resource and a different rule (CR 118.3b).
+            if modifier.life:
+                continue
             if modifier.applies_to != applies_to or not _matches(modifier, card):
                 continue
             if modifier.reduces != (wanted == "less"):
@@ -206,6 +244,36 @@ def _tax(
 def spell_cost_tax(game, caster_index: int, card) -> tuple[int, list[str]]:
     """Extra generic mana for casting *card*, plus the taxing permanents' names."""
     return _tax(game, card, "cast", wanted="more", controller_index=caster_index)
+
+
+def spell_life_tax(game, caster_index: int, targeted) -> tuple[int, list[str]]:
+    """Life the caster must pay on top of *card*'s cost, and who is charging it.
+
+    "Spells your opponents cast **that target this creature** cost an additional
+    3 life to cast." (Terror of the Peaks.) The scope is a fact about the
+    spell's *chosen targets*, which is why this takes the permanents the spell
+    points at rather than the card: CR 601.2c chooses targets before 601.2h pays
+    costs, so the answer exists — but only at the cast, and only to a caller that
+    has it.
+
+    Charged per taxing permanent the spell targets, because each one is its own
+    ability. A spell targeting two Terrors pays six.
+    """
+    total = 0
+    names: list[str] = []
+    for seat, permanent in game.permanents_with_controller():
+        for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
+            if not modifier.life or modifier.applies_to != "cast":
+                continue
+            if modifier.controller == "opponents" and seat == caster_index:
+                continue
+            if modifier.targets_source and not any(
+                aimed is permanent for aimed in targeted
+            ):
+                continue
+            total += modifier.amount
+            names.append(permanent.card.name)
+    return total, names
 
 
 def spell_cost_reduction(game, caster_index: int, card) -> tuple[CostReduction, list[str]]:

@@ -297,6 +297,12 @@ def _amount_payload(amount: ast.Amount) -> int | str:
 # a row.)
 _EVENT_QUANTITIES: dict[str, str] = {
     "you_gain_life": "life_gained",
+    # "Whenever another creature you control enters, this creature deals damage
+    # equal to **that creature's** power…" (Terror of the Peaks). The entering
+    # creature's power, frozen by the fire site — by the time the trigger
+    # resolves the creature may have been pumped or destroyed, and CR 608.2's
+    # number is the one the event had.
+    "matching_permanent_enters": "entering_power",
     # "Whenever this creature **is dealt damage**, it deals that much damage to
     # target opponent." (Brash Taunter.) The number is frozen by the fire site,
     # because by resolution the marked damage may have been added to or wiped.
@@ -325,6 +331,19 @@ def _back_reference_payload(
     scratchpad silently yields zero, which is the failure this refuses on
     behalf of every caller.
     """
+    if amount.source == "event_subject_power":
+        # "That creature's power" names the *event's* object, so the only place
+        # it can be read is the firing event's captured context — and only under
+        # an event whose fire site records one. Under any other trigger the words
+        # name a creature nobody recorded, and the amount would silently be zero.
+        key = _EVENT_QUANTITIES.get(event or "")
+        if key is None:
+            raise LoweringError(
+                "\"that creature's power\" needs a trigger whose event records "
+                "one",
+                node=amount,
+            )
+        return {"amount_from_trigger": key}
     if amount.source is not None:
         # The words named the producer ("equal to the damage dealt"), so a step
         # of this same effect has to have recorded it.

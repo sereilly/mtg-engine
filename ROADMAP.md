@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 256/285) to the full release line - **137 sets, 33,594
+M21 measured at 257/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–103 — lives in git history at and before
-commit `431e0ac`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–104 — lives in git history at and before
+commit `57001f4`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,43 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 104: an exile that lasts as long as its source does
-
-*(2026-08-18.)* M21 **253 → 254** — Kitesail Freebooter, closing the batch.
-
-> When this creature enters, target opponent reveals their hand. You choose a
-> noncreature, nonland card from it. Exile that card until this creature leaves
-> the battlefield.
-
-**The node was built expecting this card.** `RevealHandAndChoose` has carried a
-`fate` field since Duress needed it, with a docstring naming Kitesail Freebooter
-as the one that exiles instead of discarding, and `_apply_revealed_hand_fate`
-said "the exile ending arrives with the card that needs it". It arrived.
-
-**The exiled card is held by the *source*, not by the game.** What returns it is
-the source leaving, so the record lives on the permanent — where it goes wherever
-the permanent does, and where nothing can hold a stale reference to a card that
-CR 400.7 will bring back as a new object.
-
-**The return is on `remove_all_from_battlefield`**, the one transition out, and
-that is the whole argument for that function existing: the battlefield used to be
-shortened in 41 places in three spellings, so anything that must happen when a
-permanent leaves had 41 places to be wired into and 41 to be forgotten. One
-return, every departure.
-
-The ending is expected **whole**, duration included. "Exile that card" with no
-duration is a permanent exile and a different card, and letting the clause be
-absent would let it be *deleted* with no change to the parse — the dropped-rider
-shape the full-consumption invariant exists for.
-
-A hand with nothing choosable queues no prompt at all: a choice with no legal
-answer is not a choice, and leaving it queued would block the caster on something
-they cannot satisfy.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Six new tests, four watched to fail on the round-103 engine.
-
 ## Round 105: the card the last round measured, and what it was hiding
 
 *(2026-08-18.)* M21 **254 → 255** — Feline Sovereign, scoped out of the last
@@ -370,3 +333,42 @@ key in the first place.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Four new tests, three watched to fail on the round-105 engine.
+
+## Round 107: the event's own creature, and a tax paid in life
+
+*(2026-08-18.)* M21 **256 → 257** — Terror of the Peaks.
+
+> Spells your opponents cast that target this creature cost an additional 3 life
+> to cast.
+> Whenever another creature you control enters, this creature deals damage equal
+> to that creature's power to any target.
+
+**"That creature's power" is a third referent**, and the two already there are
+why it needed its own key. "Its power" is the ability's *source* — read as that,
+the Dragon would deal its own 5, a number the card never mentions. "The damage
+dealt" is a value an earlier step of the same resolution recorded. This one is
+the **event's** object, so the only place it can be read is the firing event's
+captured context, and only under an event whose fire site records one: under any
+other trigger the words name a creature nobody recorded, and lowering refuses
+rather than resolving to zero.
+
+The number is **frozen as the creature enters**, not read at resolution. CR 608.2's
+value is the one the event had, and by the time the trigger resolves the creature
+may have been pumped, shrunk or destroyed. One integer on every entry, because the
+alternative is a fire site that knows which cards care.
+
+**A tax paid in life is not a tax paid in mana.** The cost-modifier table has
+always meant generic mana; this one is life (CR 118.3b) and its scope is a fact
+about the spell's **chosen targets** rather than about the spell — so it is its
+own template, its own reader, and skipped by the mana scan, where counting it
+would have quietly added three to the generic cost.
+
+The scope is answerable at exactly one moment: CR 601.2c chooses targets before
+601.2h pays costs, so the cast knows what it points at. Charged per taxing
+permanent the spell targets — each is its own ability, so a spell aimed at two
+Terrors pays six — and **refused** when the caster cannot pay, because CR 118.4
+makes an unpayable cost an uncastable spell and not a free one.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Seven new tests, six watched to fail on the round-106 engine.
