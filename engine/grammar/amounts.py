@@ -141,6 +141,17 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     if stream.accept_phrase("that", "creature", "'s", "power"):
         return ast.ThatMuch("event_subject_power")
 
+    # "equal to **that creature's mana value**" (Niambi, Esteemed Speaker) — the
+    # creature the *preceding step* moved, not the trigger's event object and not
+    # the ability's source. A third referent and so a third key: the step records
+    # what it bounced and this reads that record, which is why the producer check
+    # in ``_back_reference_payload`` is what makes the words legal rather than a
+    # phrase table. Mana value is the printed cost of the card that left the
+    # battlefield (CR 202.3, CR 400.7 — it is a new object in the hand, but its
+    # mana value is a printed characteristic and does not change).
+    if stream.accept_phrase("that", "creature", "'s", "mana", "value"):
+        return ast.ThatMuch("returned_mana_value")
+
     stream.reset(mark)
     return None
 

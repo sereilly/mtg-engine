@@ -256,52 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 105: the card the last round measured, and what it was hiding
-
-*(2026-08-18.)* M21 **254 → 255** — Feline Sovereign, scoped out of the last
-batch with its two obstacles written down. Both are gone, and the second one
-took a shipped card's silent bug with it.
-
-> Other Cats you control get +1/+1 and have protection from Dogs.
-> Whenever one or more Cats you control deal combat damage to a player, destroy
-> up to one target artifact or enchantment that player controls.
-
-**A lord may grant protection now, and it is still not a keyword.**
-`grantable_keywords()` excludes the word on purpose — "protection" names a
-*quality* and is read from its own channel — so the buff carries
-`protection_from` as its own field, and the channel **derives** it from the lord.
-That is the same arrangement an Aura's protection already had, and for the same
-reason: a lord buff is cleared and rebuilt on every recompute, so a grant stamped
-into metadata would be one nothing clears. The metadata channel (round 97's
-until-end-of-turn grant) now reads the same quality parser as a printed clause,
-so a granted "protection from Demons" means what a printed one means.
-
-`_lord_buff_matches` was a closure inside the layer-7c refresh; two readers ask it
-now, so it is a method. Two copies would be two answers to "does this lord reach
-this creature?".
-
-**"One or more … deal combat damage to a player" is a *batched* trigger**: one
-ability however many creatures dealt the damage, fired once per player damaged.
-It cannot ride the per-attacker fire site, which is called once per attacker and
-would fire the ability once per Cat — so the step records which creatures hit
-which player and fires the batch in its tail.
-
-**And the per-attacker site was filtered by instruction kind.** Three kinds — the
-shapes the pool's cards happened to have — so a card written with one of those
-conditions and *any other effect* parsed cleanly, reported supported, and fired
-**nowhere**. That is the dispatch-on-effect defect round 93 found in the end step,
-still live in combat. A whole-pool audit found one card in the gap: **Jeskai
-Elder**, "whenever this creature deals combat damage to a player, you may draw a
-card" — shipped, verified, and doing nothing on connect since it was added. It
-fires now, and its own test pins it.
-
-Whole-pool diff: **one card, one line** — the Jeskai Elder fix changes behaviour,
-not support, which is why it needed the audit rather than the diff to find.
-Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
-byte-identical at 443 interactions, **zero hooks added**. Eight new tests, five
-watched to fail on the round-104 engine; one guard that asserted the old refusal
-was rewritten to state what replaced it.
-
 ## Round 106: a computed pump on the ability's own source
 
 *(2026-08-18.)* M21 **255 → 256** — Alpine Houndmaster.
@@ -372,3 +326,68 @@ makes an unpayable cost an uncastable spell and not a free one.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Seven new tests, six watched to fail on the round-106 engine.
+
+## Round 108: a supertype is a restriction, not a decoration
+
+*(2026-08-18.)* M21 **257 → 258** — Niambi, Esteemed Speaker.
+
+> Flash
+> When Niambi enters, you may return another target creature you control to its
+> owner's hand. If you do, you gain life equal to that creature's mana value.
+> {1}{W}{U}, {T}, Discard a legendary card: Draw two cards.
+
+**The word was parsed, recorded, and then dropped.** The noun parser has read
+"legendary" into `ObjectFilter.supertypes` for as long as the field has existed,
+and `to_payload` has never emitted a key for it — so `"Destroy target legendary
+creature."` lowered **byte-identically** to `"Destroy target creature."`, a
+printed restriction consumed and silently discarded on the way to the dispatcher.
+Two gates knew: `subject_filter_payload` and `chargeable_card_filter` both name
+supertypes in their docstrings as the field that "reduces to a card" and refuse
+the phrase for it. The third reader, `_filter_payload`, is the one every ordinary
+effect goes through, and it had no such check.
+
+So the round is one key made real end to end — emitted by `to_payload`, tested by
+both matchers off the type line (CR 205.4a; nothing in layers 4–6 computes a
+supertype, so the answer is the line the permanent *effectively* has, which folds
+in a copy and a text change), and admitted by all three key sets.
+
+**"Token" is a supertype Scryfall reports and this engine cannot answer.** A
+token object's printed line reads "Token Creature — Goblin"; `make_token_card`
+prints no such word and the engine answers "is this a token?" from the
+permanent's identity. A type-line test would therefore match *no* token at all —
+a restriction silently matching nothing, which is the same failure as one
+silently matching everything, wearing the other coat. `TYPE_LINE_SUPERTYPES`
+splits it out of the fetched vocabulary rather than editing the data, so
+`fetch_vocabulary.py` stays free to re-download it and "a token creature"
+refuses loudly.
+
+**The one-off guard became a table, and immediately caught two more.** A field
+that emits *sometimes* falls between the two questions the gates ask —
+`_restrictions_beyond` says "honoured?" and answers yes, the key check says
+"testable?" and sees nothing, because a field that emitted nothing left no key to
+inspect. `mana_value` had a hand-written line for exactly this. `power` and
+`toughness` emit under the identical condition (a literal bound rides, a variable
+one does not) and had none, so `"with power X or greater"` dropped its bound and
+reached every creature. `CONDITIONALLY_EMITTED_FIELDS` is now one table asked by
+all three gates.
+
+**"If you do" is the rest of this resolution, and could not see it.** `_lower_may`
+lowered its `then` branch against the *outer* produced-values set, so a
+back-reference to what the optional action recorded had no producer and refused.
+The three sibling branches keep the outer set on purpose: `otherwise` runs
+precisely when the action did not happen, `reflexive` is a separate ability under
+CR 603.12 with a scratchpad of its own, and the offer's cost records nothing.
+
+Two smaller things the card needed. The bounce path refused a **controller**
+narrowing outright — its handler read a filter carrying `exclude_self` and
+`exclude_subtypes` and nothing relative — so "you control" now rides that same
+payload and is answered by `subject_matches`, which has the seat (CR 109.5). And
+the discard cost's shortfall message said "not enough cards in hand" when the
+hand was full of cards that simply were not legendary, sending a player to look
+for the wrong problem.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Nine new tests, all watched to fail on the round-107 engine; three
+guards that asserted the refusal this round removed were rewritten to state what
+replaced it.

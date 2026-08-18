@@ -586,6 +586,18 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
     return True, "resolved"
 
 
+def _mana_value_of(card) -> int:
+    """A card's mana value (CR 202.3), for the step that reads what a bounce
+    returned.
+
+    Off the printed cost, which is the only reading available: the object being
+    asked about has left the battlefield, so there is no permanent to put through
+    the layer system and no continuous effect that could have changed the number
+    anyway (CR 202.3b — mana value is computed from the mana cost as printed).
+    """
+    return int(card.cmc or 0)
+
+
 @effect_handler("bounce_target_creature")
 def bounce_target_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # "Return up to two target creatures to their owners' hands." (Read the
@@ -617,10 +629,21 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     if bounce_filter:
         source = context.source_permanent
 
+        # "another target creature **you control**" (Niambi, Esteemed Speaker).
+        # Through ``subject_matches`` rather than the pure matcher, because the
+        # controller question is a seat comparison the object alone cannot
+        # answer (CR 109.5) — and it carries ``exclude_self`` in the same call,
+        # so the two narrowings are one rule instead of one here and one there.
+        # Late import: ``subject_filters`` imports this package's ``_common``,
+        # so the edge is taken at call time rather than at module load.
+        from ..subject_filters import subject_matches
+
+        observer = game.players.index(context.caster)
+
         def _legal(perm) -> bool:
-            if bounce_filter.get("exclude_self") and perm is source:
-                return False
-            return permanent_matches_filter(perm, bounce_filter)
+            return subject_matches(
+                game, perm, bounce_filter, observer=observer, source=source
+            )
 
         perm = resolve_target_permanent(
             game, context, predicate=_legal, fallback_on_invalid_choice=False,
@@ -636,10 +659,24 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
                 game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
             )
         game.remove_from_battlefield(perm)
+        # "…you gain life equal to that creature's mana value" (Niambi). Read
+        # here, while the permanent is still in hand, because the next step of
+        # this same resolution has no way back to it — CR 400.7 makes the card in
+        # the hand a new object, and the battlefield no longer holds the old one.
+        # ``_PRODUCES`` names this kind as the producer, so every path of this
+        # handler that returns one creature records it.
+        context.results["returned_mana_value"] = _mana_value_of(perm.card)
         game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
         return True, "resolved"
     target = context.target
+    index = context.target_permanent_index
+    returned = (
+        game.permanent_at(game.players.index(target), index)
+        if isinstance(index, int) else None
+    )
     bounced = game._bounce_target_creature(target, context.target_permanent_index)
+    if bounced and returned is not None:
+        context.results["returned_mana_value"] = _mana_value_of(returned.card)
     game.log.append("Returned creature to hand" if bounced else "No creature to return")
     return True, "resolved"
 

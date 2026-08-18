@@ -38,6 +38,18 @@ ENCHANTMENT_TYPES: frozenset[str] = _load("enchantment_types")
 PLANESWALKER_TYPES: frozenset[str] = _load("planeswalker_types")
 SPELL_TYPES: frozenset[str] = _load("spell_types")
 SUPERTYPES: frozenset[str] = _load("supertypes")
+
+#: The supertypes a matcher can answer by reading a **type line** — which is all
+#: of them but one. Scryfall reports "token" as a supertype because a token
+#: object's printed line reads "Token Creature - Goblin"; this engine's
+#: ``make_token_card`` prints no such word and answers "is this a token?" from
+#: the permanent's identity instead (the ``nontoken`` key, CR 111.1). So a
+#: type-line test for "token" would answer False for every token there is — a
+#: restriction that silently matches nothing rather than one that matches too
+#: much, which is the same bug wearing the other coat. Splitting the set here
+#: rather than editing the fetched data keeps ``fetch_vocabulary.py`` free to
+#: re-download it, and leaves "a token creature" to refuse loudly.
+TYPE_LINE_SUPERTYPES: frozenset[str] = SUPERTYPES - {"token"}
 CARD_TYPES: frozenset[str] = _load("card_types")
 KEYWORD_ABILITIES: frozenset[str] = _load("keyword_abilities")
 KEYWORD_ACTIONS: frozenset[str] = _load("keyword_actions")
@@ -117,5 +129,5 @@ __all__ = [
     "COLOR_WORDS", "CREATURE_TYPES", "ENCHANTMENT_TYPES", "IMPLEMENTED_KEYWORDS",
     "KEYWORD_ABILITIES", "KEYWORD_ACTIONS", "KEYWORD_INDEX", "LAND_TYPES",
     "NUMBER_WORDS", "PLANESWALKER_TYPES", "SPELL_TYPES", "SUBTYPE_INDEX",
-    "SUPERTYPES", "manifest", "match_longest",
+    "SUPERTYPES", "TYPE_LINE_SUPERTYPES", "manifest", "match_longest",
 ]

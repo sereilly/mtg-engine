@@ -15,7 +15,7 @@ from ..oracle_types import X_FROM_COUNT
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
-from ..layer_bridge import printed_shape
+from ..layer_bridge import printed_shape, printed_supertypes
 from ..models import Permanent, PlayerState
 from ..search_filters import name_key
 
@@ -170,6 +170,13 @@ def _card_matches_filter(card, filt: dict) -> bool:
     )
     if wanted_subtypes and not any(s in subtypes for s in wanted_subtypes):
         return False
+    # "Discard a **legendary** card" (Niambi, Esteemed Speaker). Off the printed
+    # line, which for a card in a zone is the whole of what there is (CR 613.1).
+    wanted_supertypes = filt.get("supertypes") or ()
+    if wanted_supertypes:
+        held = printed_supertypes(card.type_line)
+        if not all(word in held for word in wanted_supertypes):
+            return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name
     # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —
@@ -393,6 +400,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # reading the bonus as the counter would let it qualify.
     if payload.get("with_plus1_counter") and int(perm.metadata.get("plus_counters", 0)) <= 0:
         return False
+    # "target **legendary** creature". CR 205.4: a supertype sits on the type
+    # line, and nothing in layers 4-6 computes one here — so the answer is the
+    # line the permanent *effectively* has, which folds in a copy (layer 1) and
+    # a text change (layer 3). ``perm.card`` would be the printed face and would
+    # miss both.
+    wanted_supertypes = payload.get("supertypes") or ()
+    if wanted_supertypes:
+        held = printed_supertypes(perm.effective_card.type_line)
+        if not all(word in held for word in wanted_supertypes):
+            return False
     # "nontoken permanent" (Lich). CR 111.1: not a card type, so it is its own
     # key rather than an ``exclude_types`` entry.
     if payload.get("nontoken") and perm.metadata.get("is_token", False):

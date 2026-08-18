@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 78.3% | 75.7% | 52.7% | 216 |
+| M21 *(measured)* | 285 | 503 | 78.7% | 76.1% | 53.1% | 217 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 227 | 97 | expected a subject |  |
+| 226 | 96 | expected a subject |  |
 | 92 | 36 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
 | 31 | 31 | unrecognized activation cost |  |
@@ -50,10 +50,10 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 3 | 2 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
-| 3 | 3 | unrecognized discard cost |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 2 | expected 'unless defending player controls' |  |
+| 2 | 2 | unrecognized discard cost |  |
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
 | 1 | 1 | no handler for doom counters |  |
@@ -837,6 +837,9 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
+- **Niambi, Esteemed Speaker**
+  - `When Niambi enters, you may return another target creature you control to its owner's hand. If you do, you gain life equal to that creature's mana value.`
+  - `{1}{W}{U}, {T}, Discard a legendary card: Draw two cards.`
 - **Nine Lives**
   - `When this enchantment leaves the battlefield, you lose the game.`
 - **Northern Paladin**

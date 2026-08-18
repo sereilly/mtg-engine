@@ -211,9 +211,9 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
     # Archmage). Stripped before the blanket refusal below so only these two —
     # not every adjective — pass; the graveyard handlers still see the full
     # filter and keep their own gates.
-    bounce_extras = (filt.excluded_subtypes, filt.other_than_source)
+    bounce_extras = (filt.excluded_subtypes, filt.other_than_source, filt.controller)
     bare_for_gate = dataclasses.replace(
-        filt, excluded_subtypes=(), other_than_source=False
+        filt, excluded_subtypes=(), other_than_source=False, controller=None
     )
     if node.from_zone is None and _reads_no_return_restriction(bare_for_gate):
         raise LoweringError("no return handler honours this restriction", node=node)
@@ -271,7 +271,9 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
             payload: dict[str, object] = {"filter": {
                 key: value
                 for key, value in _filter_payload(filt).items()
-                if key in ("type_filter", "exclude_subtypes", "exclude_self")
+                if key in (
+                    "type_filter", "exclude_subtypes", "exclude_self", "controller",
+                )
             }}
             _describe_targets(payload, subject)
             return (OracleInstruction("bounce_target_creature", "", payload),)

@@ -51,7 +51,7 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "type_filter", "subtype_filter", "color_filter",
     "exclude_colors", "exclude_types", "exclude_subtypes",
     "tapped_only", "mana_value", "power", "toughness", "with_plus1_counter",
-    "nontoken", "named",
+    "nontoken", "named", "supertypes",
     "with_keywords", "controller", "exclude_self",
 })
 
@@ -76,7 +76,13 @@ OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {"controller", "exclude
 #: through this set, and a phrase reaching outside it refuses the cost rather
 #: than charging the wider one — the same rule ``object_only_filter`` states for
 #: a sacrifice, in the same direction.
-CARD_ONLY_FILTER_KEYS = frozenset({"type_filter", "subtype_filter", "named"})
+#: ``supertypes`` is here and not in the paragraph above's list of things a
+#: card cannot answer, because it is the one restriction beyond type and name
+#: that a card *can*: it is printed on the face, in the same words, and nothing
+#: could have changed it.
+CARD_ONLY_FILTER_KEYS = frozenset(
+    {"type_filter", "subtype_filter", "named", "supertypes"}
+)
 
 
 def filter_head_noun(payload: dict | None) -> str:

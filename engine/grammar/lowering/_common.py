@@ -38,12 +38,11 @@ def _filter_payload(filt: ast.ObjectFilter) -> dict[str, object]:
         raise LoweringError(
             f"no handler reads a filter scoped to the {filt.zone}", node=filt
         )
-    if filt.mana_value is not None and "mana_value" not in payload:
-        # ``to_payload`` emits a literal mana-value bound and
-        # ``permanent_matches_filter`` tests it; a *variable* bound ("mana
-        # value X") has no payload form yet, and dropping it would widen the
-        # effect to every mana value — so the line refuses instead.
-        raise LoweringError("a variable mana-value bound has no payload form", node=filt)
+    dropped = dropped_narrowings(filt, payload)
+    if dropped:
+        raise LoweringError(
+            f"{', '.join(dropped)} has no payload form here", node=filt
+        )
     return payload
 
 
@@ -60,8 +59,43 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "excluded_types", "excluded_subtypes", "with_keywords", "without_keywords",
     "controller", "tapped", "attacking", "blocking", "other_than_source",
     "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
-    "colored", "with_plus1_counter",
+    "colored", "with_plus1_counter", "supertypes",
 })
+
+
+#: ``ObjectFilter`` fields ``to_payload`` emits **conditionally** — set on the
+#: AST but not always present in the payload — mapped to the key they emit.
+#:
+#: The pair is the whole point. ``_restrictions_beyond`` asks "is this field
+#: honoured at all?" and answers yes for every one of these, because each is
+#: honoured *sometimes*; the payload key check downstream asks "is every key
+#: testable?" and sees nothing, because a field that emitted nothing left no key
+#: to inspect. A narrowing falls between the two questions and is dropped in
+#: silence, which for a filter means an effect reaching further than the card
+#: prints.
+#:
+#: It was a hand-written line for ``mana_value`` alone. ``power`` and
+#: ``toughness`` emit under exactly the same condition (a literal bound rides,
+#: a variable one does not) and had no such line, so "with power X or greater"
+#: dropped its bound; ``supertypes`` joined them in round 108. One table, asked
+#: by all three gates, is why the next such field cannot repeat it.
+CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
+    "mana_value": "mana_value",
+    "power": "power",
+    "toughness": "toughness",
+    "supertypes": "supertypes",
+}
+
+
+def dropped_narrowings(
+    filt: ast.ObjectFilter, payload: dict[str, object]
+) -> tuple[str, ...]:
+    """Names of *filt*'s set narrowings that left no key in *payload*."""
+    return tuple(
+        field
+        for field, key in CONDITIONALLY_EMITTED_FIELDS.items()
+        if getattr(filt, field) and key not in payload
+    )
 
 
 def _restrictions_beyond(
@@ -116,7 +150,10 @@ def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:
     # honoured in the sense this check means.
     if _restrictions_beyond(filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card"}):
         return None
-    return card_only_filter(filt.to_payload())
+    payload = filt.to_payload()
+    if dropped_narrowings(filt, payload):
+        return None
+    return card_only_filter(payload)
 
 
 # Payload keys no EFFECT_HANDLERS entry reads. They are additive *descriptions*

@@ -105,6 +105,26 @@ def _printed_shape(
     return card_types, subtypes
 
 
+@lru_cache(maxsize=None)
+def printed_supertypes(type_line: str) -> frozenset[str]:
+    """The supertypes printed on *type_line* — "legendary", "basic", "snow".
+
+    Its own reader rather than a third return value from ``_printed_shape``,
+    because it answers for two different kinds of object and one of them is a
+    ``Permanent``: a supertype is not something layers 4 or 6 compute here, so
+    the answer is whatever line the object *effectively* has (a copy's, a text
+    change's) and there is no computed accessor to defer to. Callers pass the
+    line they mean and the difference stays visible at the call site.
+
+    Read against the vocabulary rather than a literal list, so a set printing a
+    new supertype needs ``fetch_vocabulary.py`` and nothing else.
+    """
+    from .grammar.vocabulary import TYPE_LINE_SUPERTYPES
+
+    head = type_line.replace("—", "-").split("-", 1)[0].lower()
+    return frozenset(word for word in head.split() if word in TYPE_LINE_SUPERTYPES)
+
+
 def printed_shape(card) -> tuple[frozenset[str], frozenset[str]]:
     """The card types and subtypes *card* is printed with.
 

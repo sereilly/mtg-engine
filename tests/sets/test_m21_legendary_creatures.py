@@ -303,3 +303,120 @@ def test_a_team_set_that_names_only_one_characteristic_refuses(set_pool):
     )
 
     assert not result.lowered
+
+
+# --- Niambi, Esteemed Speaker: a supertype is a restriction (round 108) -----
+
+
+def _niambi_board(set_pool, hand=(), library_size=6):
+    pool = set_pool("M21")
+    niambi = Permanent(card=pool["Niambi, Esteemed Speaker"])
+    p1 = PlayerState(
+        name="P1", hand=list(hand), life=20,
+        library=[pool["Mountain"]] * library_size,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(0, niambi, None)
+    _nosick(niambi)
+    return game, p1, niambi
+
+
+def test_niambi_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Niambi, Esteemed Speaker"])
+    assert program.supported, program.reason
+
+
+def test_niambi_gains_life_equal_to_the_returned_creatures_mana_value(set_pool):
+    """"That creature's mana value" is a third referent, distinct from "its
+    power" (the preceding step's object, computed by a fused handler) and from
+    "that creature's power" (the trigger *event's* object). Here it is the
+    creature the bounce in the same resolution returned — which by the time the
+    life gain runs is a card in a hand, so the bounce has to have recorded the
+    number (CR 202.3: mana value is read off the printed cost, and CR 400.7
+    makes the card in the hand a new object)."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Niambi, Esteemed Speaker"]], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    # {3}{W}{W} - mana value 5, which is the number the life gain has to find.
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Baneslayer Angel"]), None
+    )
+
+    game.cast_from_hand(
+        0, "Niambi, Esteemed Speaker",
+        target_player_index=0, target_permanent_index=0,
+    )
+    game._settle()
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert [c.name for c in p1.hand] == ["Baneslayer Angel"]
+    assert p1.life == 25
+
+
+def test_niambi_cannot_bounce_a_creature_you_do_not_control(set_pool):
+    """"another target creature **you control**" — a controller narrowing the
+    bounce path refused outright until this round, because its handler read no
+    filter that could carry one. Refused rather than widened: a bounce that
+    ignored the phrase would hand Niambi an opponent's blocker."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Niambi, Esteemed Speaker"]], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(1, Permanent(card=pool["Baneslayer Angel"]), None)
+
+    game.cast_from_hand(
+        0, "Niambi, Esteemed Speaker",
+        target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+    # The trigger really did offer, and the offer really was accepted. Without
+    # this the assertions below hold vacuously on any engine where the card is
+    # unsupported and nothing fires at all.
+    assert game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert [p.card.name for p in game.controlled_by(1)] == ["Baneslayer Angel"]
+    assert p1.life == 20
+
+
+def test_niambi_discards_the_legendary_card_and_not_another(set_pool):
+    """The cost names what pays it. The hand holds three cards and exactly one
+    answers the phrase, so the deterministic pick is that one — not hand
+    position zero, which is what a dropped narrowing would take."""
+    pool = set_pool("M21")
+    game, p1, niambi = _niambi_board(
+        set_pool,
+        hand=[pool["Alpine Watchdog"], pool["Gadrak, the Crown-Scourge"], pool["Mountain"]],
+    )
+
+    result = game.activate_permanent_ability(0, "Niambi, Esteemed Speaker")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [c.name for c in p1.graveyard] == ["Gadrak, the Crown-Scourge"]
+    assert niambi.tapped
+    # Two drawn, one legendary card gone, the other two untouched.
+    assert [c.name for c in p1.hand] == ["Alpine Watchdog", "Mountain", "Mountain", "Mountain"]
+
+
+def test_niambi_cannot_activate_with_no_legendary_card_in_hand(set_pool):
+    """CR 602.5c: an unpayable cost makes the ability unactivatable, not free.
+    A hand of two cards is not "not enough cards" — the shortfall is the phrase,
+    and the message says so."""
+    pool = set_pool("M21")
+    game, p1, niambi = _niambi_board(
+        set_pool, hand=[pool["Alpine Watchdog"], pool["Mountain"]],
+    )
+
+    result = game.activate_permanent_ability(0, "Niambi, Esteemed Speaker")
+    game._settle()
+
+    assert not result.supported
+    assert "no card in hand answers this cost" in result.details
+    assert [c.name for c in p1.hand] == ["Alpine Watchdog", "Mountain"]
+    assert not niambi.tapped
+    assert p1.graveyard == []

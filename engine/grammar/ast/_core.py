@@ -18,6 +18,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Union
 
+from ..vocabulary import TYPE_LINE_SUPERTYPES
+
 
 @dataclass(frozen=True)
 class Fixed:
@@ -303,6 +305,20 @@ class ObjectFilter:
         # byte-identical.
         if self.with_plus1_counter:
             payload["with_plus1_counter"] = True
+        # "a **legendary** card" (Niambi), "target **legendary** creature". A
+        # supertype is a restriction like any other and rides the payload like
+        # any other; until this key existed it rode nothing at all, and
+        # "Destroy target legendary creature." lowered byte-identically to
+        # "Destroy target creature." — the printed word consumed, recorded on
+        # the AST, and then dropped on the way to the dispatcher.
+        #
+        # All or nothing. A phrase naming a supertype no matcher can test emits
+        # no key rather than a narrowed one, so the field stays visibly set with
+        # nothing behind it and the three gates below refuse the line. Emitting
+        # the testable half would drop the other half silently, which is the
+        # thing being fixed.
+        if self.supertypes and set(self.supertypes) <= TYPE_LINE_SUPERTYPES:
+            payload["supertypes"] = list(self.supertypes)
         return payload
 
 

@@ -14,6 +14,7 @@ something a second copy of the list would also pass.
 
 from __future__ import annotations
 
+import dataclasses
 import pytest
 
 from engine import Game
@@ -50,6 +51,9 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     ("with_plus1_counter", {"with_plus1_counter": True}, "Grizzly Bears"),
     ("with_keywords", {"with_keywords": ["flying"]}, "Grizzly Bears"),
     ("named", {"named": "Hill Giant"}, "Grizzly Bears"),
+    # CR 205.4a. Read off the type line, which for a supertype is the whole of
+    # what there is — nothing in layers 4-6 computes one.
+    ("supertypes", {"supertypes": ["legendary"]}, "Grizzly Bears"),
 )
 
 
@@ -179,10 +183,12 @@ def test_a_card_filter_answers_only_what_is_printed_on_the_face():
     assert card_filter_payload("a Shrine card") == {"subtype_filter": "shrine"}
     assert card_filter_payload("a card") == {}
 
-    # A supertype has no payload key at all, so it would leave nothing behind
-    # for the key check to see: "a legendary card" reduces to "a card", and the
-    # cost would be payable with anything. Refused instead.
-    assert card_filter_payload("a legendary card") is None
+    # A supertype is printed on the face and nothing can have changed it
+    # (CR 205.4b), so it is one of the four things a card *can* answer — since
+    # round 108, when it grew a payload key and a matcher. Until then it had
+    # neither and "a legendary card" reduced to "a card", which is why the
+    # phrase was refused outright rather than charged.
+    assert card_filter_payload("a legendary card") == {"supertypes": ["legendary"]}
     # A key the card matcher cannot answer.
     assert card_filter_payload("a tapped creature card") is None
     # The word "card" has to be printed — "a land" is a phrase about permanents,
@@ -213,3 +219,83 @@ def test_alternatives_are_ord_not_anded(catalog_by_name, set_pool):
     assert not card_matches_any(catalog_by_name["Juggernaut"], printed)
     # No alternatives is no narrowing — the honest reading of "Discard a card".
     assert card_matches_any(catalog_by_name["Juggernaut"], ())
+
+
+# --- a supertype is a restriction, not a decoration (round 108) -------------
+
+
+def test_a_supertype_narrows_a_permanent(catalog_by_name, set_pool):
+    """CR 205.4a: a supertype sits on the type line, ahead of the card types.
+    Nothing in layers 4-6 computes one here, so the answer is read off the line
+    the permanent effectively has."""
+    from engine.grammar import subject_filter_payload
+    from engine.handlers._common import permanent_matches_filter
+    from engine.models import Permanent
+
+    described = subject_filter_payload("a legendary creature")
+    assert described == {"type_filter": "creature", "supertypes": ["legendary"]}
+
+    legend = Permanent(card=set_pool("M21")["Niambi, Esteemed Speaker"])
+    plain = Permanent(card=set_pool("M21")["Alpine Watchdog"])
+    assert permanent_matches_filter(legend, described)
+    assert not permanent_matches_filter(plain, described)
+
+
+def test_a_supertype_no_matcher_tests_refuses_the_line():
+    """Scryfall reports "token" as a supertype, because a token object's printed
+    line reads "Token Creature - Goblin". This engine prints no such word and
+    answers "is this a token?" from the permanent's identity, so a type-line test
+    would match *no* token at all — a restriction silently matching nothing,
+    which is the same failure as one silently matching everything.
+
+    So the field stays set on the AST with no key emitted, and the gate refuses
+    the line rather than charging the half it could read."""
+    from engine.grammar import compile_line, subject_filter_payload
+
+    assert subject_filter_payload("a token creature") is None
+    compiled = compile_line("Destroy target token creature.")
+    assert compiled.instructions == ()
+    assert "supertypes" in (compiled.lowering_error or "")
+
+
+def test_a_narrowing_that_emits_no_key_is_refused_rather_than_dropped():
+    """The bug class this round closed, stated directly.
+
+    ``_restrictions_beyond`` asks "is this field honoured at all?" and answers
+    yes for every conditionally-emitted field, because each is honoured
+    *sometimes*; the key check downstream asks "is every key testable?" and sees
+    nothing, because a field that emitted nothing left no key to inspect. A
+    narrowing falls between the two questions.
+
+    ``mana_value`` had a hand-written line guarding exactly this. ``power`` and
+    ``toughness`` emit under the identical condition and had none, so a variable
+    bound was dropped and the effect reached every creature."""
+    from engine.grammar import compile_line
+    from engine.grammar.lowering._common import CONDITIONALLY_EMITTED_FIELDS
+
+    for line in (
+        "Destroy target creature with power X or greater.",
+        "Destroy target creature with mana value X or less.",
+    ):
+        compiled = compile_line(line)
+        assert compiled.instructions == (), line
+    # Every field in the table is a real ``ObjectFilter`` field, so a rename
+    # cannot leave a silent hole where a guard used to be.
+    from engine.grammar import ast
+
+    fields = {f.name for f in dataclasses.fields(ast.ObjectFilter())}
+    assert set(CONDITIONALLY_EMITTED_FIELDS) <= fields
+
+
+def test_a_supertype_rides_the_payload_all_the_way_to_the_dispatcher():
+    """"Destroy target legendary creature." lowered byte-identically to
+    "Destroy target creature." — the word consumed, recorded on the AST, and
+    dropped on the way out. Both the filter the handler applies and the
+    description the picker offers from now carry it."""
+    from engine.grammar import compile_line
+
+    narrowed = compile_line("Destroy target legendary creature.").instructions[0]
+    plain = compile_line("Destroy target creature.").instructions[0]
+    assert narrowed.payload != plain.payload
+    assert narrowed.payload["supertypes"] == ["legendary"]
+    assert narrowed.payload["targets"]["filter"]["supertypes"] == ["legendary"]

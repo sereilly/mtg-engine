@@ -3593,34 +3593,43 @@ def test_several_cards_from_any_graveyard_still_has_no_handler():
     assert not result.lowered
 
 def test_a_trigger_subject_refuses_a_restriction_the_payload_cannot_carry():
-    """``ObjectFilter.to_payload`` has no key for a supertype, so "a
-    **legendary** creature you control" reduced to exactly the payload of "a
-    creature you control" â€” and the ``TESTABLE_SUBJECT_FILTER_KEYS`` gate over
-    that payload cannot see a restriction that left no key behind.
+    """A restriction that leaves no key behind is invisible to the
+    ``TESTABLE_SUBJECT_FILTER_KEYS`` gate over the payload, so the AST is asked
+    first: ``_restrictions_beyond`` names a field the payload does not carry,
+    and the condition refuses rather than announcing itself on a strictly larger
+    set than the card prints.
 
-    Round 68 found the same hole one layer down (a graveyard-scoped noun phrase
-    compiling into a battlefield picker) and paired the payload gate with
-    ``_restrictions_beyond`` over the AST. This is that pairing on the trigger
-    side, where the consequence is a condition announcing itself on a strictly
-    larger set than the card prints.
+    Round 68 found the hole one layer down (a graveyard-scoped noun phrase
+    compiling into a battlefield picker) and paired the two gates. Supertypes
+    were the worked example until round 108 gave them a key and a matcher, so
+    the example that still refuses here is ``is_enchanted``, which has neither.
     """
     from engine.grammar import subject_filter_payload
 
     assert subject_filter_payload("a creature you control") == {
         "type_filter": "creature", "controller": "you",
     }
-    for dropped in (
-        "a legendary creature you control",   # supertypes
-        "a snow creature you control",        # supertypes
-        "an enchanted creature",              # is_enchanted
-    ):
-        assert subject_filter_payload(dropped) is None, dropped
+    # Carried, since round 108 - read off the type line (CR 205.4a).
+    assert subject_filter_payload("a legendary creature you control") == {
+        "type_filter": "creature", "controller": "you",
+        "supertypes": ["legendary"],
+    }
+    assert subject_filter_payload("a snow creature you control") == {
+        "type_filter": "creature", "controller": "you", "supertypes": ["snow"],
+    }
+    # Still nothing behind it: "enchanted" is a relation to an Aura, not a
+    # property of the object, and no payload key names one.
+    assert subject_filter_payload("an enchanted creature") is None
 
 
-def test_a_supertype_narrowed_trigger_refuses_rather_than_firing_on_everything():
-    """The same hole, as a card. On the round-68 engine this compiled
-    *supported* with ``attacker_filter={'type_filter': 'creature', 'controller':
-    'you'}`` and gained life off a plain 2/2 attacking."""
+def test_a_supertype_narrowed_trigger_carries_the_word_into_its_condition():
+    """The same hole, as a card, now closed at the source.
+
+    On the round-68 engine this compiled *supported* with
+    ``attacker_filter={'type_filter': 'creature', 'controller': 'you'}`` and
+    gained life off a plain 2/2 attacking; from then until round 108 it refused,
+    which was correct but bought no card. It is now admitted **with** the word,
+    so what the trigger fires on is what the line prints."""
     from engine.oracle import compile_card_oracle
     from tests.helpers import _mk_creature_card
 
@@ -3629,15 +3638,13 @@ def test_a_supertype_narrowed_trigger_refuses_rather_than_firing_on_everything()
         "Whenever a legendary creature you control attacks, you gain 1 life.",
     ))
 
-    assert not program.supported, (
-        "the word 'legendary' has no payload key, so admitting this line gains "
-        "life off any attacker its controller has"
-    )
-
-
-# ---------------------------------------------------------------------------
-# "Another target": the two meanings of one printed word
-# ---------------------------------------------------------------------------
+    assert program.supported, program.reason
+    (trigger,) = program.triggered_abilities
+    described = trigger.condition.payload.get("attacker_filter")
+    assert described == {
+        "type_filter": "creature", "controller": "you",
+        "supertypes": ["legendary"],
+    }, "admitting the line without the word is the round-68 bug returning"
 
 
 def test_a_sentences_only_target_reads_another_as_the_source_exclusion():
@@ -3782,12 +3789,19 @@ def test_an_alternative_that_is_not_one_instruction_has_no_mode():
         lower_statement(node)
 
 
-def test_a_narrowed_discard_the_prompt_cannot_test_is_refused():
-    """"Discard a **legendary** card" — a supertype has no payload key, so it
-    would reduce to "discard a card" and the effect would take anything. The
-    same gate the discard *cost* runs through."""
+def test_a_narrowed_discard_carries_exactly_what_the_prompt_can_test():
+    """The discard effect and the discard *cost* run through one gate, so what
+    the prompt offers and what the payment accepts cannot disagree.
+
+    "Discard a **legendary** card" was the refusal side of that gate until round
+    108 gave the supertype a key and a matcher. The refusal side is now a phrase
+    with no matcher at all: a card in a hand is not tapped, because CR 613.1
+    applies the layers to permanents and the question does not reach it."""
     assert compile_line("Discard a creature card.").instructions[0].payload["filter"] == {
         "type_filter": "creature"
     }
-    result = compile_line("Discard a legendary card.")
+    assert compile_line("Discard a legendary card.").instructions[0].payload["filter"] == {
+        "supertypes": ["legendary"]
+    }
+    result = compile_line("Discard a tapped creature card.")
     assert result.parsed and not result.lowered

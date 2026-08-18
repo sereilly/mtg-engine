@@ -155,6 +155,12 @@ _PRODUCES: dict[str, str] = {
     # the conditional after it reads that record — not the library, which the
     # draw in its own branch would have changed underneath it.
     "reveal_top_of_library": "revealed_card",
+    # "Return another target creature you control to its owner's hand. If you
+    # do, you gain life equal to **that creature's** mana value." (Niambi,
+    # Esteemed Speaker.) The bounce records the mana value of what it returned,
+    # because by the time the life gain runs the permanent is gone — reading it
+    # off the battlefield would find nothing and gain nothing.
+    "bounce_target_creature": "returned_mana_value",
 }
 
 
@@ -616,7 +622,26 @@ def _lower_may(
     when the prompt moves to the general pending-choice queue (roadmap phase 4).
     """
     action = lower_statement(node.action, produced, event=event, whole_effect=False) if node.action else ()
-    then = lower_statement(node.then, produced, event=event, whole_effect=False) if node.then else ()
+    # "If you do" is the rest of *this* resolution, so it can read what the
+    # action just recorded: Niambi's "return another target creature you
+    # control…, if you do, you gain life equal to that creature's mana value"
+    # is the bounce's own record, read one instruction later. The three other
+    # branches deliberately keep the outer set —
+    #
+    # * ``otherwise`` runs precisely when the action did *not* happen, so its
+    #   records do not exist;
+    # * ``reflexive`` is a separate ability under CR 603.12, created by the
+    #   action and resolving later with a scratchpad of its own;
+    # * the offer's own cost records nothing at all.
+    #
+    # Threading the action's set into any of those would make a back-reference
+    # compile where nothing will have written it, and an unwritten quantity
+    # reads as zero.
+    after_action = produced | {
+        key for instruction in action
+        if (key := _PRODUCES.get(instruction.kind)) is not None
+    }
+    then = lower_statement(node.then, after_action, event=event, whole_effect=False) if node.then else ()
     otherwise = lower_statement(node.otherwise, produced, event=event, whole_effect=False) if node.otherwise else ()
     reflexive = (
         lower_statement(node.reflexive, produced, event=event, whole_effect=False)

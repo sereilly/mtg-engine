@@ -554,7 +554,17 @@ class AbilityActivationMixin:
                 if card_matches_any(card, ability.cost.discard_filters)
             ]
             if len(payable) < ability.cost.discard_cards:
-                details = f"{permanent.card.name}: not enough cards in hand to discard"
+                # Naming the phrase when there is one. "Not enough cards in
+                # hand" is the truth for a bare "Discard a card" and a plain
+                # falsehood for Niambi's, where the hand may be full of cards
+                # that simply are not legendary — a message that sends a player
+                # looking for the wrong problem.
+                shortfall = (
+                    "no card in hand answers this cost"
+                    if ability.cost.discard_filters
+                    else "not enough cards in hand to discard"
+                )
+                details = f"{permanent.card.name}: {shortfall}"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             # An index that names no card is an error, not a request for a
