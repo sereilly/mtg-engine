@@ -1580,6 +1580,7 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         filters=tuple(payload.get("filters") or ()),
         optional=bool(payload.get("optional")),
         rest_order=payload.get("rest_order", "any"),
+        rest_destination=payload.get("rest_destination", "library_bottom"),
     )
     game.log.append(f"{caster.name} is looking at the top {top_count} cards of their library")
     return True, "pending_look_top_pick"

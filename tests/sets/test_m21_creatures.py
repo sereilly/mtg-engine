@@ -74,11 +74,11 @@ def test_massacre_wurm_drains_the_dead_creatures_controller(set_pool):
     assert p1.life == 20
 
 
-def test_waker_of_waves_static_line_reads_even_though_the_card_does_not(set_pool):
-    """Its anthem line derives; the card stays unsupported on its other
-    ability ("Discard this card:" — activating from hand, a mechanic the
-    engine has no seam for), so it compiles to no instructions at all. The
-    behaviour of the scope is pinned with an invented card in
+def test_waker_of_waves_anthem_line_derives(set_pool):
+    """Its anthem line derives from the lord table. The card was unsupported on
+    its *other* ability until round 124 — "Discard this card:" is an ability
+    that functions from the hand (CR 113.6), which the engine had no seam for —
+    and the scope's behaviour is still pinned with an invented card in
     tests/rules/test_lord_buffs.py, where the table's properties live."""
     from engine.lord_buffs import lord_buff_for
     from engine.oracle import normalize_creature_line
@@ -88,7 +88,7 @@ def test_waker_of_waves_static_line_reads_even_though_the_card_does_not(set_pool
     )
     assert buff is not None and buff.filter.controller == "opponent"
     assert (buff.power, buff.toughness) == (-1, 0)
-    assert not compile_card_oracle(set_pool("M21")["Waker of Waves"]).supported
+    assert compile_card_oracle(set_pool("M21")["Waker of Waves"]).supported
 
 
 # --- Round 31: a counter placement becomes an event ---------------------------

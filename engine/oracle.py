@@ -760,6 +760,8 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # phrase above, because it is not a count: there is no card for the payer to
     # name and no filter to test, and it is payable with an empty hand.
     discard_whole_hand = bool(re.search(r"\bdiscard your hand\b", cost_lower))
+    # "Discard this card" (Waker of Waves) - the card itself, from the hand.
+    discard_self = bool(re.search(r"\bdiscard this card\b", cost_lower))
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         sacrifice_filter,
@@ -768,6 +770,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         discard_cards=0 if discard_filters is None else 1,
         discard_filters=discard_filters or (),
         discard_whole_hand=discard_whole_hand,
+        discard_self=discard_self,
         pay_life=_life_payment_cost(cost_lower),
     )
 

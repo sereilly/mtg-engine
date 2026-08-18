@@ -405,6 +405,15 @@ class PendingChoicesMixin:
         looked = caster.library[:top_count]
 
         def _bottom_the_rest(rest: list) -> None:
+            # "…and the other into your **graveyard**" (Waker of Waves). Where
+            # the unchosen cards go is the card's own statement, so it is read
+            # rather than assumed — a card that bottomed them instead is a
+            # different card, and the difference is invisible until the pile is
+            # looked at again.
+            if choice.data.get("rest_destination") == "graveyard":
+                for card in rest:
+                    caster.graveyard.append(card)
+                return
             # "…on the bottom of your library **in a random order**." (Garruk's
             # Harbinger.) A stated order, not the player's freedom: the cards
             # go down shuffled, through the module RNG `run_ai_simulation`

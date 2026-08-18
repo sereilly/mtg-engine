@@ -84,6 +84,14 @@ class ActivatedAbilityCost:
     # is the opposite: a count can be unpayable for want of cards, and this one
     # never is.
     discard_whole_hand: bool = False
+    # Waker of Waves: "{1}{U}, **Discard this card**: …". The card discards
+    # *itself* to pay, which is also what says the ability functions from the
+    # hand at all (CR 113.6 — an ability works only from the battlefield unless
+    # something says otherwise, and a cost the card can only pay from hand says
+    # exactly that). Its own field rather than a `discard_cards=1` with a
+    # self-filter: the payer chooses nothing, and the ability is unactivatable
+    # from anywhere else.
+    discard_self: bool = False
     # Shacklegeist: "Tap two untapped Spirits you control: …" — N permanents the
     # payer taps, named by the printed noun phrase. Distinct from
     # ``requires_tap``, which taps the *source* and is the {T} symbol: this taps

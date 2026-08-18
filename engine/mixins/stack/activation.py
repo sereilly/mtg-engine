@@ -935,6 +935,91 @@ class AbilityActivationMixin:
         )
         self.log.append(f"{permanent.card.name} ability added to stack")
         return SimulationResult(permanent.card.name, True, ability.effect_kind, "queued")
+    def activate_from_hand(
+        self,
+        controller_index: int,
+        card_name: str,
+        ability_index: int = 0,
+        hand_index: int | None = None,
+    ) -> SimulationResult:
+        """Activate an ability of a card **in hand** (Waker of Waves).
+
+        CR 113.6: an ability functions only from the battlefield unless
+        something says otherwise, and a cost the card can only pay from hand —
+        "Discard this card" — is what says otherwise. So this refuses any
+        ability without that cost rather than opening the hand generally: an
+        ability activatable from anywhere would let a creature card tap for its
+        own {T} ability before it was ever cast.
+
+        A parallel entry point rather than a branch in
+        ``activate_permanent_ability``, because almost everything that function
+        does is about a permanent — the controller check, the summoning
+        sickness, the "loses all abilities" read, the tap. None of it applies to
+        a card in a hand, and threading a None permanent through all of it would
+        make every one of those reads answer a question about nothing.
+        """
+        controller = self.players[controller_index]
+        matches = [
+            index for index, card in enumerate(controller.hand)
+            if card.name == card_name
+        ]
+        if hand_index is not None and hand_index in matches:
+            matches = [hand_index]
+        if not matches:
+            details = f"{card_name} is not in {controller.name}'s hand"
+            self.log.append(details)
+            return SimulationResult(card_name, False, "unsupported", details)
+        index = matches[0]
+        card = controller.hand[index]
+
+        program = compile_card_oracle(card)
+        if not 0 <= ability_index < len(program.activated_abilities):
+            details = f"{card.name} has no ability {ability_index}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, "unsupported", details)
+        ability = program.activated_abilities[ability_index]
+        if not ability.cost.discard_self:
+            details = f"{card.name}'s ability can only be activated from the battlefield"
+            self.log.append(details)
+            return SimulationResult(card.name, False, "unsupported", details)
+        if not ability.supported or ability.instruction is None:
+            details = f"{card.name}: ability not implemented"
+            self.log.append(details)
+            return SimulationResult(card.name, False, "unsupported", details)
+
+        # CR 601.2h: an unpayable cost makes the ability unactivatable, checked
+        # before anything is spent — the same order every other activation keeps.
+        if self.enforce_mana_costs and not self._pay_mana_cost(controller, ability.cost.mana):
+            details = f"{controller.name} cannot pay for {card.name}'s ability"
+            self.log.append(details)
+            return SimulationResult(card.name, False, "unsupported", details)
+
+        # The card leaves the hand as the cost is paid (CR 602.2b), before the
+        # ability is on the stack — so an effect that looks at the hand during
+        # resolution does not see the card that paid for it.
+        del controller.hand[index]
+        self._discard_card(controller, card)
+        self.log.append(f"{controller.name} discarded {card.name} to activate its ability")
+
+        self._stack_push(
+            StackItem(
+                card=card,
+                caster_index=controller_index,
+                target_player_index=None,
+                target_permanent_index=None,
+                x_value=None,
+                ability_instruction=ability.instruction,
+                ability_effect_kind=ability.effect_kind,
+                # No source permanent: the object is a card in a graveyard by
+                # now, and an ability activated from hand has none by
+                # construction. A handler that needs one refuses on its own.
+                source_permanent=None,
+                ability_text=ability.source_line,
+            )
+        )
+        self.log.append(f"{card.name} ability added to stack")
+        return SimulationResult(card.name, True, ability.effect_kind, "queued")
+
     def tap_permanent(
         self,
         controller_index: int,

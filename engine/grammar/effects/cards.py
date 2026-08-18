@@ -347,6 +347,18 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         # decides which card this is.
         if stream.at_word("you"):
             return _parse_look_pick_tail(stream, count, already_split=True)
+        # "Put one of **them** into your hand and the other into your
+        # graveyard." (Waker of Waves.) A compulsory, unfiltered pick like See
+        # the Truth's, differing only in where the rest go — which is a
+        # difference the sentence states and this production requires, because
+        # a card that bottomed them instead is a different card.
+        mark = stream.mark()
+        if stream.accept_phrase(
+            "put", "one", "of", "them", "into", "your", "hand",
+            "and", "the", "other", "into", "your", "graveyard",
+        ):
+            return ast.LookTopPickToHand(count, rest_destination="graveyard")
+        stream.reset(mark)
         for word in (
             "put", "one", "of", "those", "cards", "into", "your", "hand",
             "and", "the", "rest", "on", "the", "bottom", "of", "your",

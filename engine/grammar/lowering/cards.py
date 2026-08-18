@@ -822,6 +822,8 @@ def _lower_look_top_pick(
         payload["optional"] = True
     if node.rest_order != "any":
         payload["rest_order"] = node.rest_order
+    if node.rest_destination != "library_bottom":
+        payload["rest_destination"] = node.rest_destination
     if node.all_to_hand_if_cast_elsewhere:
         payload["all_to_hand_if_cast_elsewhere"] = True
     return (OracleInstruction("look_top_pick_to_hand", "", payload),)

@@ -426,6 +426,11 @@ class DiscardCost:
     #: makes it payable with an empty hand: discarding nothing is discarding
     #: your hand.
     whole_hand: bool = False
+    #: "Discard **this card**" (Waker of Waves) — the card the ability is
+    #: printed on, discarded from the hand to pay. Distinct from a narrowed
+    #: "discard a card" because nothing is chosen, and from ``whole_hand``
+    #: because it is exactly one card and a specific one.
+    self_card: bool = False
 
 
 @dataclass(frozen=True)

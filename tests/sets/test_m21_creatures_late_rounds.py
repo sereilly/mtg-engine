@@ -1942,3 +1942,90 @@ def test_the_planeswalker_half_has_its_own_fire_site(set_pool):
     game._settle()
 
     assert [c.kind for c in game.pending_choices] == ["look_top_pick"]
+
+
+# --- Waker of Waves: an ability that works from the hand (round 124) --------
+
+
+def _waker_board(set_pool, library=("Shock", "Island", "Forest")):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", life=20,
+        hand=[pool["Waker of Waves"], pool["Mountain"]],
+        library=[pool[n] for n in library],
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    return game, p1, pool
+
+
+def test_waker_of_waves_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Waker of Waves"])
+    assert program.supported, program.reason
+
+
+def test_the_ability_is_activated_from_the_hand(set_pool):
+    """CR 113.6: an ability works only from the battlefield unless something
+    says otherwise, and "Discard this card" is what says otherwise. The card
+    leaves the hand as the cost is paid (CR 602.2b), before the ability is on
+    the stack."""
+    game, p1, _ = _waker_board(set_pool)
+
+    result = game.activate_from_hand(0, "Waker of Waves")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [c.name for c in p1.hand] == ["Mountain"]
+    assert [c.name for c in p1.graveyard] == ["Waker of Waves"]
+    (choice,) = game.pending_choices
+    assert choice.kind == "look_top_pick"
+    assert choice.data["top_count"] == 2
+
+
+def test_the_unchosen_card_goes_to_the_graveyard(set_pool):
+    """"…and the other into your **graveyard**". Where the rest go is the
+    card's own statement — a card that bottomed them instead is a different
+    card, and the difference is invisible until the pile is looked at again."""
+    game, p1, _ = _waker_board(set_pool)
+
+    game.activate_from_hand(0, "Waker of Waves")
+    game._settle()
+    game.confirm_look_top_pick(0, 0)
+    game._settle()
+
+    assert [c.name for c in p1.hand] == ["Mountain", "Shock"]
+    assert [c.name for c in p1.graveyard] == ["Waker of Waves", "Island"]
+    assert [c.name for c in p1.library] == ["Forest"]
+
+
+def test_an_ability_without_that_cost_is_not_activatable_from_hand(set_pool):
+    """The refusal that keeps the hand from opening generally: an ability
+    activatable from anywhere would let a creature card tap for its own {T}
+    ability before it was ever cast."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20, hand=[pool["Shacklegeist"]])
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    result = game.activate_from_hand(0, "Shacklegeist")
+
+    assert not result.supported
+    assert "from the battlefield" in result.details
+    assert [c.name for c in p1.hand] == ["Shacklegeist"]
+
+
+def test_the_anthem_still_applies_on_the_battlefield(set_pool):
+    """The card's other half, unchanged: a lord buff scoped to the opponents'
+    creatures."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Waker of Waves"]), None,
+    )
+    theirs = Permanent(card=pool["Alpine Watchdog"])
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    game._recompute_continuous_effects()
+
+    assert (theirs.effective_power, theirs.effective_toughness) == (1, 2)

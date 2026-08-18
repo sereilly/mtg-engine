@@ -256,47 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 121: "that player" is not a seat you can compare against
-
-*(2026-08-18.)* M21 **270 → 271** — Chandra's Incinerator.
-
-> This spell costs {X} less to cast, where X is the total amount of noncombat
-> damage dealt to your opponents this turn.
-> Trample
-> Whenever a source you control deals noncombat damage to an opponent, this
-> creature deals that much damage to target creature or planeswalker that player
-> controls.
-
-The first line is round 120's template with a different count, and it is a
-**turn history** rather than a board read — the damage is gone the instant it is
-dealt, so nothing on any battlefield could answer it. The tally is kept at the
-one site that already knows both that the damage was noncombat and whose source
-it was; anywhere else would have to re-derive both.
-
-The trigger's condition and its fire site were already there, amount and damaged
-seat included. What was missing was the row letting an effect *name* the number,
-and one thing more interesting.
-
-**`controller: "that_player"` was being answered as "not you".** The filter
-matcher tests a controller by comparing a seat against the observer, so
-`"that_player"` fell through to the "an opponent" branch — right in a two-player
-game by coincidence, and wrong the moment there are three. It is not a property
-of the permanent at all: it names a player the *event* picked, and the only place
-that seat is known is the resolution holding the trigger's context.
-
-So the matcher now **refuses** it and the handler resolves it, which is the same
-split "another" and `attached_to` already make: a restriction the matcher cannot
-test must not be one it silently approximates. The refusal is what makes the
-split load-bearing — a key that quietly answered would let any future card
-carrying the phrase reach every opponent's board.
-
-Feline Sovereign (round 105) carries the same phrase and reaches its handler by
-a different road; its narrowing is applied there, so nothing changed for it.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Five new tests, all watched to fail on the round-120 engine.
-
 ## Round 122: one condition, two fire sites
 
 *(2026-08-18.)* M21 **271 → 272** — Garruk's Harbinger.
@@ -380,3 +339,45 @@ whatever else was up there would be a copy the card never promised.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Five new tests, all watched to fail on the round-122 engine.
+
+## Round 124: an ability that works from the hand
+
+*(2026-08-18.)* M21 **273 → 274** — Waker of Waves.
+
+> Creatures your opponents control get -1/-0.
+> {1}{U}, Discard this card: Look at the top two cards of your library. Put one
+> of them into your hand and the other into your graveyard.
+
+**CR 113.6: an ability functions only from the battlefield unless something says
+otherwise — and "Discard this card" is what says otherwise.** So the from-hand
+activation refuses any ability without that cost rather than opening the hand
+generally: an ability activatable from anywhere would let a creature card tap
+for its own {T} ability before it was ever cast.
+
+It is a parallel entry point rather than a branch in
+`activate_permanent_ability`, because nearly everything that function does is
+about a permanent — the controller check, the summoning sickness, the
+"loses all abilities" read, the tap. None of it applies to a card in a hand, and
+threading a `None` permanent through all of it would make every one of those
+reads answer a question about nothing. The card leaves the hand as the cost is
+paid (CR 602.2b), before the ability is on the stack, so an effect that looks at
+the hand during resolution does not see the card that paid for it.
+
+**"Discard this card" and "Discard your hand" are not counts.** Neither offers
+the payer a choice, and the first names a specific card — so each is its own
+field rather than a `discard_cards` with a filter, and
+`tests/engine/test_activation_costs.py` was taught to check each against the flag
+that charges it. That guard is the one that would otherwise have said the clause
+was parsed and never charged, which is exactly what it is for.
+
+**Where the unchosen cards go is stated, not defaulted.** Rounds 122 and 123
+grew the look-and-pick template a count, a filter, optionality and an order;
+this adds the destination, because "the other into your **graveyard**" is a
+different card from one that bottoms them and the difference is invisible until
+the pile is looked at again.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Five new tests plus two rewritten guards — one recording the old "no
+seam for activating from hand", the other the cost-charging check — all seven
+watched to fail on the round-123 engine.

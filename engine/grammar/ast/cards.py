@@ -185,6 +185,11 @@ class LookTopPickToHand:
     optional: bool = False
     #: "in a random order" vs "in any order".
     rest_order: str = "any"
+    #: Where the cards *not* taken go. "Put one of them into your hand and **the
+    #: other into your graveyard**" (Waker of Waves) is a different card from
+    #: one that bottoms them, and the difference is invisible until the pile is
+    #: looked at again — so the destination is stated rather than defaulted.
+    rest_destination: str = "library_bottom"
     #: See the Truth's third sentence, which is its whole reason to exist. A
     #: wording without it is a different card, so the two shapes cannot be
     #: allowed to collapse into one another.

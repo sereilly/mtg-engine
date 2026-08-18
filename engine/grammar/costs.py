@@ -194,6 +194,12 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             stream.advance()
             if stream.accept_phrase("the", "last", "card", "you", "drew", "this", "turn"):
                 costs.append(ast.DiscardCost(ast.Fixed(1), last_drawn=True))
+            elif stream.accept_phrase("this", "card"):
+                # "Discard this card" (Waker of Waves). The card itself, which
+                # is also what says the ability functions from the hand at all
+                # (CR 113.6) — so it is its own cost rather than a narrowed
+                # "discard a card": the payer chooses nothing.
+                costs.append(ast.DiscardCost(ast.Fixed(1), self_card=True))
             elif stream.accept_phrase("your", "hand"):
                 # "Discard your hand" (Subira). Every card at once — no choice
                 # for the payer, no filter to narrow, and payable with an empty

@@ -63,6 +63,19 @@ def test_every_admitted_cost_clause_is_charged(pool):
                             f"{cost.filter.to_payload()}"
                         )
                 if isinstance(cost, ast.DiscardCost) and not cost.last_drawn:
+                    # "Discard your hand" and "Discard this card" are their own
+                    # fields, not counts — one is never unpayable and the other
+                    # names a specific card the payer does not choose — so each
+                    # is checked against the flag that charges it rather than
+                    # against ``discard_cards``, which stays zero for both.
+                    if cost.whole_hand:
+                        if not charged.discard_whole_hand:
+                            unpaid.append(f"{card.name}: {ability.source_line}")
+                        continue
+                    if cost.self_card:
+                        if not charged.discard_self:
+                            unpaid.append(f"{card.name}: {ability.source_line}")
+                        continue
                     if not charged.discard_cards:
                         unpaid.append(f"{card.name}: {ability.source_line}")
                     # Not "is a discard charged" but "is *this* discard charged",
