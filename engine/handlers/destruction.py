@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
+from ._common import permanent_matches_filter
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -159,6 +160,63 @@ def destroy_creatures_in_combat_with_source(game: Game, instruction: OracleInstr
         )
     else:
         game.log.append(f"{context.card.name}: no creatures were blocking or blocked by it")
+    return True, "resolved"
+
+
+@effect_handler("destroy_all_matching")
+def destroy_all_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Destroy all Equipment attached to that creature." (Turn to Slag.)
+
+    A sweep over a filter rather than over a card type, so one handler covers
+    every narrowing the matcher can test — where the per-scope kinds beside it
+    each name one scope.
+
+    ``attached_to`` is resolved **here** rather than by the matcher, for the
+    reason the ``controls`` condition resolves "another" here: what an Equipment
+    is attached to is a relation, and ``permanent_matches_filter`` answers about
+    a permanent alone.
+
+    "That creature" is the spell's own target, and it is still on the
+    battlefield: CR 608.2b would have stopped the spell resolving at all if the
+    target had become illegal, and CR 704.3 checks state-based actions only when
+    a player would receive priority — so a creature this same spell has just
+    dealt lethal damage to is *there*, wearing its Equipment, and both are
+    destroyed. The host resolving to nothing is the case where it left in
+    response to something else, and then there is nothing attached to destroy.
+    """
+    filters = {
+        key: value for key, value in instruction.payload.items()
+        if key not in ("attached_to", "bypass_regeneration", "targets")
+    }
+    attached_to = instruction.payload.get("attached_to")
+    host = None
+    if attached_to == "target":
+        host = game.permanent_by_id(context.target_permanent_id)
+        if host is None:
+            game.log.append(
+                f"{context.card.name}: nothing is attached to a creature that is gone"
+            )
+            return True, "resolved"
+    matched = [
+        perm for perm in game.all_permanents()
+        if permanent_matches_filter(perm, filters)
+        and (host is None or perm.metadata.get("attached_to") is host)
+    ]
+    if not matched:
+        game.log.append(f"{context.card.name}: nothing to destroy")
+        return True, "resolved"
+    for perm in matched:
+        seat = game.controller_index_of(perm)
+        if seat is None:
+            continue
+        game._destroy_swept_permanents(
+            game.players[seat],
+            lambda candidate, target=perm: candidate is target,
+            allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+        )
+    game.log.append(
+        f"{context.card.name} destroyed " + ", ".join(p.card.name for p in matched)
+    )
     return True, "resolved"
 
 

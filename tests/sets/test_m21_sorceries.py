@@ -794,3 +794,96 @@ def test_round_up_each_time_needs_something_to_round():
     result = compile_line("Target player draws a card. Round up each time.", card_name="T")
 
     assert not result.parsed
+
+
+# --- Round 96: a sweep over what something is attached to -------------------
+
+
+def _slag_board(set_pool, attached=("Short Sword", "Malefic Scythe"), loose=("Short Sword",)):
+    pool = set_pool("M21")
+    victim = Permanent(card=pool["Warden of the Woods"])
+    bystander = Permanent(card=pool["Gale Swooper"])
+    worn = [Permanent(card=pool[name]) for name in attached]
+    for equipment in worn:
+        equipment.metadata["attached_to"] = victim
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Turn to Slag"]],
+        battlefield=[Permanent(card=pool[name]) for name in loose],
+    )
+    p2 = PlayerState(name="P2", battlefield=[victim, bystander] + worn)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2, victim, worn, bystander
+
+
+def test_turn_to_slag_compiles_supported(set_pool):
+    """A sweep over a *narrowed* set rather than a card type, so it carries the
+    filter instead of naming a per-scope handler. The attachment rides beside
+    the filter rather than in it: what an Equipment is attached to is a
+    relation, and ``permanent_matches_filter`` answers about a permanent
+    alone."""
+    program = compile_card_oracle(set_pool("M21")["Turn to Slag"])
+    assert program.supported, program.reason
+
+    sweep = next(
+        i for i in program.instructions[0].payload["steps"]
+        if i.kind == "destroy_all_matching"
+    ) if program.instructions[0].kind == "sequence" else program.instructions[1]
+    assert sweep.payload["subtype_filter"] == "equipment"
+    assert sweep.payload["attached_to"] == "target"
+
+
+def test_it_damages_the_creature_and_slags_its_equipment(set_pool):
+    game, _p1, _p2, victim, worn, _bystander = _slag_board(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Turn to Slag", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert victim.damage_marked == 5
+    assert all(not game.is_on_battlefield(equipment) for equipment in worn)
+
+
+def test_equipment_attached_to_nothing_survives(set_pool):
+    """"Attached to **that creature**" is read, not decoration."""
+    game, p1, _p2, _victim, _worn, _bystander = _slag_board(set_pool)
+    (loose,) = list(game.controlled_by(0))
+
+    game.cast_from_hand(0, "Turn to Slag", target_player_index=1, target_permanent_index=0)
+    game._settle()
+
+    assert game.is_on_battlefield(loose)
+
+
+def test_the_sweep_takes_nothing_else_on_the_board(set_pool):
+    game, _p1, _p2, _victim, _worn, bystander = _slag_board(set_pool)
+
+    game.cast_from_hand(0, "Turn to Slag", target_player_index=1, target_permanent_index=0)
+    game._settle()
+
+    assert game.is_on_battlefield(bystander)
+
+
+def test_a_creature_dying_to_the_damage_still_loses_its_equipment(set_pool):
+    """CR 704.3: state-based actions are checked only when a player would
+    receive priority, so the lethally damaged creature is **still on the
+    battlefield** while the rest of this spell resolves — and its Equipment is
+    still attached. Both die, in that order. This is the case worth pinning,
+    because "the creature is gone" is the intuitive reading and it is wrong."""
+    pool = set_pool("M21")
+    victim = Permanent(card=pool["Gale Swooper"])   # 3/2, dies to 5
+    sword = Permanent(card=pool["Short Sword"])
+    sword.metadata["attached_to"] = victim
+    p1 = PlayerState(name="P1", hand=[pool["Turn to Slag"]])
+    p2 = PlayerState(name="P2", battlefield=[victim, sword])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Turn to Slag", target_player_index=1, target_permanent_index=0)
+    game._settle()
+
+    assert not game.is_on_battlefield(victim)
+    assert not game.is_on_battlefield(sword)

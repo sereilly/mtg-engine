@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 245/285) to the full release line - **137 sets, 33,594
+M21 measured at 246/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–92 — lives in git history at and before
-commit `4c714ca`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–93 — lives in git history at and before
+commit `05642fa`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,62 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 93: a token printed by name, and a threshold on your own board
-
-*(2026-08-17.)* M21 **242 → 243** — Gadrak, the Crown-Scourge.
-
-> Gadrak can't attack unless you control four or more artifacts.
-> At the beginning of your end step, create a Treasure token for each nontoken
-> creature that died this turn.
-
-**Its own name was the reason the first line failed.** Magic templates a
-legendary card's static line with the card's name, not "this creature", and the
-combat-restriction table is anchored on the latter — so the clause matched
-nothing and the card reported "text too complex" for a template the engine
-implements. The lexer already collapses exactly these references for the grammar
-(CR 201.4c's short name included); `_restriction_line` is that rule on the
-static-line path, **scoped to this one consult** because
-`normalize_creature_line`'s output is *stored* on the program and matched on by
-several text-keyed readers.
-
-The threshold and the type are payload, as the land type beside them already is —
-and the printed *word* is read rather than compared, with an unreadable one
-refusing the whole line: a word that reached the comparison as a string would
-compare unequal to every count and quietly stop the creature attacking at all.
-What differs from the land clause is whose board is counted: this one is the
-attacker's own.
-
-**A Treasure is a token Magic prints by name alone** (CR 111.10). Its
-characteristics belong to the *token*, so they live in one table in
-`engine/tokens.py` rather than being transcribed onto every card that makes one —
-and it has **no P/T**, which took the token maker's first `None`: CR 208.1 gives
-power and toughness to creatures, and 0/0 would be a creature card that dies to
-state-based actions the moment anything animates it. Its own printed ability
-needed one word, too — "Sacrifice this **token**" is modern templating for a
-token's self-reference, and it is what the object *is*, exactly as "this
-permanent" is.
-
-**"Nontoken" is a second tally, not a filter.** A token dying is a real creature
-death, so `nontoken_creatures_died_this_turn` is a strictly smaller number than
-round 90's `creatures_died_this_turn` and a genuinely different question. Kept
-apart for the reason the per-seat tally is: a reader that wants one and gets the
-other is wrong by however many tokens died, silently.
-
-**What this found: the end step dispatched on instruction *kind*.** Three scans,
-each keyed to a list of kinds, plus a fourth for triggers gated by an
-intervening-if. Gadrak's trigger compiled to a perfectly good `create_token`, its
-condition matched, and it fired **nowhere** — because `create_token` was on none
-of the lists. A trigger's condition is what says when it fires; its effect is not
-a second condition. There is now a general scan behind the specific ones, deduped
-by the same set that already existed for that purpose. An audit of the whole pool
-found exactly one card in the gap, and it is this one.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Eight new tests, six watched to fail on the round-92 engine —
-including two that show the restriction absent rather than merely unread: Gadrak
-attacked freely there with no artifacts at all.
-
 ## Round 94: half a characteristic, and a count that is the answer to a prompt
 
 *(2026-08-17.)* M21 **243 → 244** — Kinetic Augur, closing the batch.
@@ -402,3 +346,40 @@ shipped pool 388/388, AI simulation byte-identical at 443 interactions, **one
 hook removed**. Seven new tests, six watched to fail on the round-94 engine;
 three tests that asserted the old refusals were rewritten to state what replaced
 them.
+
+## Round 96: a sweep over what something is attached to
+
+*(2026-08-17.)* M21 **245 → 246** — Turn to Slag.
+
+> Turn to Slag deals 5 damage to target creature. Destroy all Equipment attached
+> to that creature.
+
+**The damage already worked.** The second sentence needed two things: a sweep
+that takes a *filter* rather than a card type, and a way to say what the
+Equipment is attached to.
+
+`destroy_all_matching` is the first; the per-scope kinds beside it each name one
+scope ("all creatures", "all lands of a type"), and a narrowed set has no scope to
+name. It is gated on `object_only_filter`, so a phrase the matcher cannot test
+refuses rather than sweeping wider than the card says.
+
+**The attachment rides beside the filter, not in it.** What an Equipment is
+attached to is a *relation*, and `permanent_matches_filter` answers about a
+permanent alone — so the handler resolves it, the same split the `controls`
+condition already makes for "another". Only the referents the table names are
+admitted: an attachment clause whose object nothing can resolve would be dropped
+and the sweep would take every Equipment on the board.
+
+**The interesting case is the one the intuitive reading gets wrong.** "That
+creature" is the spell's own target, and after 5 damage it is usually dead — so
+the natural expectation is that its Equipment survives, unattached. It does not.
+CR 704.3 checks state-based actions only when a player would receive priority, so
+the lethally damaged creature is *still on the battlefield* while the rest of the
+spell resolves, still wearing its Equipment. Both die, in that order. I wrote the
+test the intuitive way first and the engine disagreed; the engine was right, and
+the case is pinned because that is exactly the reading a later edit would
+"fix" the wrong way.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Five new tests, three watched to fail on the round-95 engine.

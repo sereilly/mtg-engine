@@ -80,7 +80,17 @@ def _lower_destroy(node: ast.Destroy, event: str | None = None) -> tuple[OracleI
                         "destroy_all_lands_of_type", "", {"land_type": plural},
                     ),
                 )
-            raise LoweringError("no sweep handler for this subtype", node=node)
+            # "Destroy all Equipment attached to that creature." (Turn to
+            # Slag.) A sweep over a *narrowed* set rather than a card type, so
+            # it carries the filter instead of naming a per-scope handler.
+            described = _filter_payload(filt)
+            if object_only_filter(described) is None:
+                raise LoweringError("no sweep handler for this subtype", node=node)
+            if filt.attached_to is not None:
+                described["attached_to"] = filt.attached_to
+            if node.no_regen:
+                described["bypass_regeneration"] = True
+            return (OracleInstruction("destroy_all_matching", "", described),)
         kind = _DESTROY_ALL_KINDS.get(tuple(sorted(filt.card_types)))
         if kind is None:
             raise LoweringError("no sweep handler for this destroy scope", node=node)

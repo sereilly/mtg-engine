@@ -88,6 +88,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "destroy_all_enchantments": "destruction",
     "destroy_all_lands": "destruction",
     "destroy_all_lands_of_type": "destruction",
+    "destroy_all_matching": "destruction",
     "destroy_all_artifacts_creatures_enchantments": "destruction",
     "delayed_destroy_blocked_or_blocker": "destruction",
     "tap_target_permanent": "tapping",

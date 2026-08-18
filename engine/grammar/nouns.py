@@ -48,6 +48,12 @@ _SELF_NOUNS = frozenset({
     "token",
 })
 
+# "…attached to that creature" — the trailing clause naming what an Aura or
+# Equipment is on. Only "that creature" is admitted: it is the referent the
+# spell's own target supplies, and any other noun would be a set the handler has
+# no way to resolve.
+_ATTACHED_TO_REFERENTS = {("that", "creature"): "target"}
+
 _STATE_ADJECTIVES = {
     "tapped": ("tapped", True),
     "untapped": ("tapped", False),
@@ -215,6 +221,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     nontoken = False
     their_choice = False
     named: str | None = None
+    attached_to: str | None = None
     zone = "battlefield"
     zone_owner: ast.PlayerRef | None = None
     saw_head = False
@@ -555,6 +562,27 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 stream.reset(probe)
                 break
             continue
+        if stream.at_word("attached"):
+            # "all Equipment **attached to that creature**" (Turn to Slag). Only
+            # the referents the table names are admitted: an attachment clause
+            # whose object nothing can resolve would be dropped and the sweep
+            # would take every Equipment on the board.
+            probe = stream.mark()
+            stream.advance()
+            if stream.accept_word("to"):
+                matched = next(
+                    (
+                        (words, key)
+                        for words, key in _ATTACHED_TO_REFERENTS.items()
+                        if stream.accept_phrase(*words)
+                    ),
+                    None,
+                )
+                if matched is not None:
+                    attached_to = matched[1]
+                    continue
+            stream.reset(probe)
+            break
         if stream.at_word("of"):
             # "sacrifices a creature **of their choice** with flying" (Run
             # Afoul) — who picks, printed between the head noun and the rest of
@@ -609,6 +637,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         other_than_source=other_than_source,
         is_source=is_source,
         is_enchanted=is_enchanted,
+        attached_to=attached_to,
     )
 
 

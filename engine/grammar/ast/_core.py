@@ -199,6 +199,13 @@ class ObjectFilter:
     is_source: bool = False
     # "enchanted creature" — the permanent this Aura is attached to.
     is_enchanted: bool = False
+    # "all Equipment **attached to that creature**" (Turn to Slag). Which object
+    # it is attached to, as a referent rather than a filter: "that creature" is
+    # the spell's own target, and no read of the Equipment alone can say so.
+    # ``permanent_matches_filter`` is therefore not told about it — the handler
+    # that has the context resolves it, the split the ``controls`` condition
+    # already makes for "another".
+    attached_to: str | None = None
     # "that's one or more colors" (Ugin, the Spirit Dragon's −X): the object
     # has at least one color, read off its effective colors.
     colored: bool = False
