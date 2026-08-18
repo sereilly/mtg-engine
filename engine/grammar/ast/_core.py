@@ -396,6 +396,18 @@ class DiscardCost:
 
 
 @dataclass(frozen=True)
+class TapPermanentsCost:
+    """"Tap two untapped Spirits you control" (Shacklegeist).
+
+    N *other* permanents, named by a printed noun phrase — not the {T} symbol,
+    which taps the source and is :attr:`ActivatedAbilityCost.requires_tap`. The
+    count is printed, so it is data rather than part of the cost's identity.
+    """
+    count: int
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
 class PayLife:
     amount: Amount = field(default_factory=lambda: Fixed(1))
 

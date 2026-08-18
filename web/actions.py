@@ -563,6 +563,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 ability_index=req.ability_index,
                 x_value=req.x_value,
                 cost_permanent_index=req.cost_permanent_index,
+                cost_permanent_ids=req.cost_permanent_ids,
                 cost_hand_index=req.cost_hand_index,
                 source_seat=req.source_seat,
                 source_permanent_index=req.source_permanent_index,

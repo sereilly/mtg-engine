@@ -53,6 +53,10 @@ class AbilityActivationMixin:
         # before its cost was collected. A seat that names neither gets the
         # deterministic pick below, which keeps AI and headless play unblocked.
         cost_permanent_index: int | None = None,
+        # "Tap two untapped Spirits you control" — several permanents pay one
+        # cost, which one index cannot say. By id, because the list is chosen
+        # before anything taps and a slot renumbers as soon as one does.
+        cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
@@ -71,6 +75,7 @@ class AbilityActivationMixin:
             ability_index=ability_index,
             x_value=x_value,
             cost_permanent_index=cost_permanent_index,
+            cost_permanent_ids=cost_permanent_ids,
             cost_hand_index=cost_hand_index,
             source_seat=source_seat,
             source_permanent_index=source_permanent_index,
@@ -152,6 +157,7 @@ class AbilityActivationMixin:
         # before its cost was collected. A seat that names neither gets the
         # deterministic pick below, which keeps AI and headless play unblocked.
         cost_permanent_index: int | None = None,
+        cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
@@ -635,6 +641,51 @@ class AbilityActivationMixin:
                 else self.default_sacrifice_pick(candidates)
             )
 
+        # "Tap two untapped Spirits you control" (Shacklegeist). Chosen by the
+        # payer through `cost_permanent_ids`, and defaulted deterministically for
+        # a seat that names none — the same arrangement the sacrifice cost above
+        # makes, and for the same reason: a cost is paid during activation, so a
+        # queued prompt would put the ability on the stack before it was
+        # collected.
+        tap_cost_permanents: list = []
+        if ability.cost.tap_count:
+            described = ability.cost.tap_filter or {}
+            candidates = [
+                perm
+                for perm in self.controlled_by(controller_index)
+                # Untapped by construction — a tap cost can only be paid with a
+                # permanent that is not already tapped — and the source is
+                # eligible only if the printed phrase names it, which "another"
+                # would have excluded.
+                if not perm.tapped and subject_matches(self, perm, described)
+            ]
+            named = [
+                found
+                for found in (
+                    self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
+                )
+                if found is not None and any(c is found for c in candidates)
+            ]
+            # Deduplicated by identity: two references to one permanent do not
+            # pay a two-permanent cost.
+            chosen: list = []
+            for perm in named:
+                if not any(perm is already for already in chosen):
+                    chosen.append(perm)
+            for perm in candidates:
+                if len(chosen) >= ability.cost.tap_count:
+                    break
+                if not any(perm is already for already in chosen):
+                    chosen.append(perm)
+            if len(chosen) < ability.cost.tap_count:
+                details = (
+                    f"{permanent.card.name}: not enough untapped "
+                    f"{filter_head_noun(described)}s to tap for its cost"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            tap_cost_permanents = chosen[:ability.cost.tap_count]
+
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
         # Abilities with an "{X}" in their cost (e.g. Clockwork Beast's
@@ -677,6 +728,18 @@ class AbilityActivationMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             self.become_tapped(permanent)
+
+        # The spelled-out tap cost, collected above and paid here — beside the
+        # {T} symbol, because both are the same payment and CR 601.2h pays every
+        # cost at one moment.
+        for tapped_for_cost in tap_cost_permanents:
+            self.become_tapped(tapped_for_cost)
+        if tap_cost_permanents:
+            self.log.append(
+                f"{permanent.card.name}: tapped "
+                + ", ".join(p.card.name for p in tap_cost_permanents)
+                + " to pay its cost"
+            )
 
         # All guards/costs passed — mark a "once each turn" ability as used.
         if once_each_turn:

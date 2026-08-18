@@ -53,6 +53,7 @@ class CombatRestriction:
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
 #   cant_be_blocked_by_walls        phases/declare_blockers_step
 #   cant_block_power_n_or_greater   phases/declare_blockers_step
+#   can_block_only_with_keyword     phases/declare_blockers_step
 #   must_be_blocked                 phases/declare_blockers_step
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
@@ -94,6 +95,17 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"^this creature can't block creatures with power (?P<power>\d+) or greater$"
         ),
         "cant_block_power_n_or_greater",
+    ),
+    (
+        # "This creature can block only creatures with flying." (Shacklegeist.)
+        # The mirror of the restrictions above: those name what may *not* be
+        # blocked, this names the only thing that may. The keyword is payload for
+        # the reason the threshold beside it is — a card printed with any other
+        # evasion word is the same restriction.
+        re.compile(
+            r"^this creature can block only creatures with (?P<required_keyword>[a-z]+)$"
+        ),
+        "can_block_only_with_keyword",
     ),
 )
 

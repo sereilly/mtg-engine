@@ -635,3 +635,36 @@ def _lower_condition(
             "amount": condition.amount,
         }
     raise LoweringError(f"no lowering for condition {type(condition).__name__}", node=condition)
+
+
+def chargeable_tap_filter(filt: "ast.ObjectFilter") -> dict | None:
+    """The payload a "Tap N <noun phrase>" cost charges, or None to refuse it.
+
+    The one gate both readers of the clause run through — the grammar, which
+    admits the line, and ``engine/oracle.py``, which reads what is actually
+    charged. Two readers of one phrase drift, and the direction a cost drifts in
+    is a cost nobody pays.
+
+    "You control" is carried rather than tested: the charger scans the
+    activating seat's own battlefield, so the phrase would be no narrowing at all
+    there — but a phrase the charger silently agrees with is still a phrase it
+    did not read, which is why it is named here instead of ignored. Everything
+    else has to be answerable about a permanent alone.
+    """
+    from ...subject_filters import object_only_filter
+
+    if filt.controller not in (None, "you"):
+        return None
+    # "**Untapped** Spirits" is carried, not tested, and for a reason stronger
+    # than the controller's: a cost that taps a permanent can only ever be paid
+    # with an untapped one, so the charger performs the word by construction.
+    # `to_payload` has no key for it either — the payload says `tapped_only` for
+    # True and nothing at all for False — so a filter carrying it would silently
+    # reduce to the unnarrowed phrase, which is the case this names rather than
+    # drops.
+    if filt.tapped is True:
+        return None
+    payload = _filter_payload(filt)
+    return object_only_filter(
+        payload, carried_separately=frozenset({"controller", "tapped_only"})
+    )

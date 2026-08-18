@@ -584,6 +584,39 @@ def _chargeable_discard_filters(phrase: str) -> tuple[dict, ...] | None:
     return tuple(alternatives)
 
 
+_TAP_COST_RE = re.compile(r"\btap (\w+) ([^,:]+?)\s*(?=,|$)")
+
+
+def _chargeable_tap_cost(cost_lower: str) -> tuple[int, dict] | None:
+    """The ``(count, filter)`` a "Tap N <noun phrase>" cost charges, or None.
+
+    The regex only **delimits** the number and the noun phrase, to the end of
+    its comma-separated cost segment; ``_NUMBER_WORDS`` reads the one and the
+    noun parser the other — the split every other prose cost in this file makes,
+    and for the same reason: a regex approximating the noun parser is a second
+    reader of one clause, and the direction those drift in is a cost charged
+    more widely than the card prints.
+    """
+    from .grammar import subject_filter_payload
+    from .grammar.lowering._common import chargeable_tap_filter
+    from .grammar.phrases import parse_subject_filter
+
+    match = _TAP_COST_RE.search(cost_lower)
+    if match is None:
+        return None
+    word = match.group(1)
+    count = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+    if count <= 0:
+        return None
+    filt = parse_subject_filter(match.group(2), plural=True)
+    if filt is None:
+        return None
+    described = chargeable_tap_filter(filt)
+    if described is None:
+        return None
+    return count, described
+
+
 def _life_payment_cost(cost_lower: str) -> int:
     """The life a "Pay N life" activation cost charges, or 0 for no such cost.
 
@@ -675,9 +708,15 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     discard_filters = (
         _chargeable_discard_filters(discarded.group(1)) if discarded else None
     )
+    # "Tap two untapped Spirits you control" (Shacklegeist). The {T} symbol was
+    # already consumed above as mana; this is the spelled-out form, which taps
+    # *other* permanents.
+    tap_cost = _chargeable_tap_cost(cost_lower)
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         sacrifice_filter,
+        tap_filter=tap_cost[1] if tap_cost else None,
+        tap_count=tap_cost[0] if tap_cost else 0,
         discard_cards=0 if discard_filters is None else 1,
         discard_filters=discard_filters or (),
         pay_life=_life_payment_cost(cost_lower),

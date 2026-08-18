@@ -79,6 +79,14 @@ class ActivatedAbilityCost:
     # `_chargeable_discard_filters` refuses to read one, the same pairing
     # `sacrifice_filter` describes.
     discard_filters: tuple[dict, ...] = ()
+    # Shacklegeist: "Tap two untapped Spirits you control: …" — N permanents the
+    # payer taps, named by the printed noun phrase. Distinct from
+    # ``requires_tap``, which taps the *source* and is the {T} symbol: this taps
+    # other permanents and the source is not among them unless the phrase names
+    # it. None means "no such cost", never "any permanent", for the reason
+    # ``sacrifice_filter`` gives.
+    tap_filter: dict | None = None
+    tap_count: int = 0
     # Tavern Swindler: "{T}, Pay 3 life: …" — a life payment as an activation
     # cost (CR 118.3b, 119.4). A count rather than a flag, because the amount is
     # printed; 0 is the honest "no such cost", since CR 119.4b makes paying 0

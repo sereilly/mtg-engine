@@ -913,3 +913,107 @@ def test_the_planeswalker_half_of_the_union_is_read(set_pool):
     ).instructions
 
     assert instruction.payload["targets"]["kind"] == "player_or_planeswalker"
+
+
+# --- Round 102: blocking only one thing, and a cost paid by tapping ---------
+
+
+def _geist_board(set_pool, spirits=2):
+    pool = set_pool("M21")
+    geists = [_nosick(Permanent(card=pool["Shacklegeist"])) for _ in range(spirits)]
+    victim = _nosick(Permanent(card=pool["Gale Swooper"]))
+    p1 = PlayerState(name="P1", battlefield=geists)
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, geists, victim
+
+
+def test_shacklegeist_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Shacklegeist"])
+    assert program.supported, program.reason
+
+    (ability,) = program.activated_abilities
+    assert ability.cost.tap_count == 2
+    assert ability.cost.tap_filter == {"type_filter": "creature", "subtype_filter": "spirit"}
+
+
+@pytest.mark.parametrize(
+    "attacker,blockable", [("Gale Swooper", True), ("Alpine Watchdog", False)]
+)
+def test_it_can_block_only_fliers(set_pool, attacker, blockable):
+    """The mirror of "can't be blocked by …": that names what may not block,
+    this names the only thing that may — so an attacker *without* the word is
+    what fails. Asked of layer 6, so a granted flying counts."""
+    pool = set_pool("M21")
+    geist = _nosick(Permanent(card=pool["Shacklegeist"]))
+    att = _nosick(Permanent(card=pool[attacker]))
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[att]),
+            PlayerState(name="P2", battlefield=[geist]),
+        ]
+    )
+
+    assert game._can_block_attacker(geist, att) is blockable
+
+
+def test_tapping_two_spirits_pays_for_the_tap(set_pool):
+    game, geists, victim = _geist_board(set_pool, spirits=2)
+
+    result = game.activate_permanent_ability(
+        0, "Shacklegeist", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert victim.tapped
+    assert all(g.tapped for g in geists), "both Spirits paid the cost"
+
+
+def test_one_spirit_cannot_pay_a_two_spirit_cost(set_pool):
+    """CR 602.5c: an unpayable cost is an unactivatable ability, not a free
+    one."""
+    game, geists, victim = _geist_board(set_pool, spirits=1)
+
+    result = game.activate_permanent_ability(
+        0, "Shacklegeist", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+
+    assert not result.supported
+    assert not victim.tapped
+    assert not geists[0].tapped, "nothing was spent"
+
+
+def test_an_already_tapped_spirit_is_not_a_legal_payment(set_pool):
+    """"**Untapped** Spirits" is carried rather than tested, and for a reason
+    stronger than a filter key: a cost that taps a permanent can only ever be
+    paid with one that is not already tapped."""
+    game, geists, _victim = _geist_board(set_pool, spirits=2)
+    geists[1].tapped = True
+
+    result = game.activate_permanent_ability(
+        0, "Shacklegeist", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+
+    assert not result.supported
+
+
+def test_the_payer_may_name_which_spirits_tap(set_pool):
+    """By id, because the list is chosen before anything taps and a slot
+    renumbers as soon as one does."""
+    game, geists, victim = _geist_board(set_pool, spirits=3)
+    chosen = [game.permanent_id_of(geists[1]), game.permanent_id_of(geists[2])]
+
+    result = game.activate_permanent_ability(
+        0, "Shacklegeist", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+        cost_permanent_ids=chosen,
+    )
+    assert result.supported, result.details
+
+    assert not geists[0].tapped
+    assert geists[1].tapped and geists[2].tapped

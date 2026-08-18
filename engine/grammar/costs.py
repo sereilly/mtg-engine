@@ -21,7 +21,7 @@ from .amounts import parse_amount
 from .effects import _expect_counter_kind
 from .errors import GrammarError
 from .lexer import MANA, PUNCT
-from .lowering._common import chargeable_card_filter
+from .lowering._common import chargeable_card_filter, chargeable_tap_filter
 from .nouns import parse_object_filter, parse_target_spec
 from .stream import TokenStream
 
@@ -204,6 +204,27 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 stream.reset(mark)
                 raise stream.error("unrecognized activation cost")
             costs.append(ast.PayLife(amount))
+            stream.accept_punct(",")
+            continue
+        if stream.at_word("tap"):
+            # "Tap two untapped Spirits you control" (Shacklegeist). Not the {T}
+            # symbol — that is the source tapping itself and is lexed as mana —
+            # so this is only ever the spelled-out form naming other permanents.
+            mark = stream.mark()
+            stream.advance()
+            number = parse_amount(stream)
+            if not isinstance(number, ast.Fixed) or number.value <= 0:
+                stream.reset(mark)
+                raise stream.error("a tap cost taps a fixed, positive number")
+            try:
+                tapped = parse_object_filter(stream)
+            except GrammarError:
+                stream.reset(mark)
+                raise stream.error("expected what to tap as a cost")
+            if chargeable_tap_filter(tapped) is None:
+                stream.reset(mark)
+                raise stream.error("no cost path charges this tap")
+            costs.append(ast.TapPermanentsCost(number.value, tapped))
             stream.accept_punct(",")
             continue
         if stream.at_word("remove"):

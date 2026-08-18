@@ -477,6 +477,23 @@ class DeclareBlockersStepMixin:
         if power_block is not None and attacker.effective_power >= int(power_block.payload["power"]):
             return False
 
+        # "This creature can block only creatures with flying." (Shacklegeist.)
+        # The mirror of the restriction above: that one names what may not be
+        # blocked, this names the only thing that may — so an attacker *without*
+        # the word is what fails. Asked of layer 6, so a creature granted flying
+        # can be blocked by it and one that lost flying cannot.
+        only_with = next(
+            (
+                i for i in blocker_program.instructions
+                if i.kind == "can_block_only_with_keyword"
+            ),
+            None,
+        )
+        if only_with is not None and not self._has_keyword(
+            attacker, str(only_with.payload.get("required_keyword") or "")
+        ):
+            return False
+
         # Landwalk (CR 702.14): the attacker can't be blocked if the defending
         # player controls a land of the matching basic type. The blocker is one of
         # the defending player's creatures, so its controller is the defender.

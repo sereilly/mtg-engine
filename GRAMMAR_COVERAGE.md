@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 77.1% | 74.2% | 51.3% | 209 |
+| M21 *(measured)* | 285 | 503 | 77.3% | 74.4% | 51.5% | 210 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -35,7 +35,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 229 | 99 | expected a subject |  |
 | 94 | 38 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
-| 32 | 32 | unrecognized activation cost |  |
+| 31 | 31 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 4 | expected 'the number of' in a where-clause |  |
@@ -1099,6 +1099,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `At the beginning of your upkeep, this creature deals 1 damage to you.`
 - **Setessan Training**
   - `When this Aura enters, draw a card.`
+- **Shacklegeist**
+  - `Tap two untapped Spirits you control: Tap target creature you don't control.`
 - **Shatter**
   - `Destroy target artifact.`
   - `Destroy target artifact.`

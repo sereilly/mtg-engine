@@ -266,6 +266,10 @@ class GameActionRequest(BaseModel):
     # target field would make a cost eat the creature it was aimed at.
     cost_permanent_id: int | None = None
     cost_permanent_index: int | None = None
+    # "Tap two untapped Spirits you control" — several permanents pay one cost,
+    # which the singular field above cannot say. By id only: the list is chosen
+    # before anything taps and a slot renumbers as soon as one does.
+    cost_permanent_ids: list[int] | None = None
     # Which card in hand pays a "Discard a card" activation cost.
     cost_hand_index: int | None = None
     # Which zone `hand_index` addresses when a search may look in more than one

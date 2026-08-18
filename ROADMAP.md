@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 251/285) to the full release line - **137 sets, 33,594
+M21 measured at 252/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–98 — lives in git history at and before
-commit `3456ba0`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–99 — lives in git history at and before
+commit `8dc8725`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,53 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 99: a search that finds twice and splits its finds
-
-*(2026-08-18.)* M21 **248 → 249** — Cultivate, closing the batch.
-
-> Search your library for up to two basic land cards, reveal those cards, put one
-> onto the battlefield tapped and the other into your hand, then shuffle.
-
-**The search flow found exactly one card, into exactly one zone.** Its production
-said so out loud — "singular by construction: the article is *expected* rather
-than a general quantity being parsed" — and its resolver moved one card and
-discarded the prompt.
-
-**How many are found and where each goes are the same fact**, so they travel
-together: one destination per find, in the printed order. That is what makes the
-refusal honest in the other direction too — a card that names two destinations
-cannot lower to a search that finds one, because there would be a destination
-left over.
-
-The prompt is answered once per find and **consumes the front of the list**, so
-the second find cannot land where the first was meant to. Between the two, the
-library is deliberately *not* shuffled: CR 701.19d shuffles when the search is
-over, and shuffling between two finds of one search would hide the second from
-the player who is still looking.
-
-**Fail-to-find ends the search, not one find of it.** CR 701.19b makes it legal
-regardless of what the card says, and "up to two" says it too — declining is the
-player stating they are done, and the shuffle happens then.
-
-**"Basic" is a supertype**, which the search picker had no way to test. It is
-printed on the type line, and that is the whole test for what this predicate may
-honour: a card in a library has no computed characteristics at all (CR 613.1), so
-what is printed on the face is all there is. One clause in
-``engine/search_filters.py``, shared by the engine's re-check, the AI's pick and
-the web picker — which is what keeps a find from being legal in one seat and not
-another.
-
-The two-card production is split from the singular one rather than branched
-inside it: every clause after the count differs ("those cards" not "it", two
-destinations joined by "and the other", an entry state on the first), and sharing
-the code would mean a chain of `if two:` through a production whose whole job is
-to read one shape.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Six new tests, five watched to fail on the round-98 engine, and
-the single-find payload pinned unchanged.
-
 ## Round 100: a base P/T set over a whole team
 
 *(2026-08-18.)* M21 **249 → 250** — Jolrael, Mwonvuli Recluse.
@@ -375,3 +328,46 @@ computed power (CR 613) and a pump between activation and resolution counts.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Eight new tests, all eight watched to fail on the round-100 engine.
+
+## Round 102: blocking only one thing, and a cost paid by tapping
+
+*(2026-08-18.)* M21 **251 → 252** — Shacklegeist.
+
+> This creature can block only creatures with flying.
+> Tap two untapped Spirits you control: Tap target creature you don't control.
+
+**The restriction is the mirror of the ones already there.** "Can't be blocked
+by Walls" and "can't block creatures with power N or greater" name what may
+*not*; this names the only thing that *may*, so what fails is an attacker
+**without** the word. The keyword is payload for the reason the threshold beside
+it is — a card printed with any other evasion word is the same restriction — and
+it is asked of layer 6, so a creature granted flying can be blocked by it and one
+that lost flying cannot.
+
+**The cost is the round.** Every non-mana activation cost the engine charged gave
+up *one* thing: one permanent sacrificed, one card discarded, one life payment.
+This taps **two**, named by a printed noun phrase — and it is not the {T} symbol,
+which taps the source and is lexed as mana.
+
+Two readers, one gate, as ever: the grammar admits the clause and
+`engine/oracle.py` reads what is charged, and both ask `chargeable_tap_filter`.
+The regex only delimits the number and the noun phrase; `_NUMBER_WORDS` reads the
+one and the noun parser the other.
+
+**"Untapped" is carried, not tested, and named as carried.** `to_payload` has no
+key for it — it says `tapped_only` for True and *nothing at all* for False — so a
+filter carrying it would silently reduce to the unnarrowed phrase. The charger
+performs the word by construction (a cost that taps a permanent can only be paid
+with one that is not already tapped), which is exactly what `carried_separately`
+exists to say out loud rather than leave to a reader's confidence.
+
+Several permanents pay one cost, which the wire's singular `cost_permanent_index`
+cannot say, so the list travels as **ids**: it is chosen before anything taps, and
+a slot renumbers as soon as one does. A seat that names none gets the
+deterministic pick, the same arrangement the sacrifice cost makes — a cost is paid
+during activation, so a queued prompt would put the ability on the stack before
+it was collected.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Six new tests, four watched to fail on the round-101 engine.
