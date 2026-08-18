@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 81.9% | 79.9% | 55.9% | 228 |
+| M21 *(measured)* | 285 | 503 | 82.7% | 80.7% | 56.7% | 229 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,10 +32,10 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 210 | 86 | expected a subject |  |
+| 208 | 84 | expected a subject |  |
 | 88 | 32 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
-| 31 | 31 | unrecognized activation cost |  |
+| 29 | 29 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 4 | expected 'the number of' in a where-clause |  |
@@ -807,6 +807,10 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 - **Massacre Wurm**
   - `When this creature enters, creatures your opponents control get -2/-2 until end of turn.`
   - `Whenever a creature an opponent controls dies, that player loses 2 life.`
+- **Mazemind Tome**
+  - `{T}, Put a page counter on this artifact: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
+  - `{2}, {T}, Put a page counter on this artifact: Draw a card.`
+  - `When there are four or more page counters on this artifact, exile it. If you do, you gain 4 life.`
 - **Merchant Ship**
   - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
@@ -857,6 +861,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `When Niambi enters, you may return another target creature you control to its owner's hand. If you do, you gain life equal to that creature's mana value.`
   - `{1}{W}{U}, {T}, Discard a legendary card: Draw two cards.`
 - **Nine Lives**
+  - `When there are nine or more incarnation counters on this enchantment, exile it.`
   - `When this enchantment leaves the battlefield, you lose the game.`
 - **Northern Paladin**
   - `{W}{W}, {T}: Destroy target black permanent.`

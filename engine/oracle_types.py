@@ -92,6 +92,10 @@ class ActivatedAbilityCost:
     # self-filter: the payer chooses nothing, and the ability is unactivatable
     # from anywhere else.
     discard_self: bool = False
+    # Mazemind Tome: "Put a **page** counter on this artifact". A cost that adds
+    # an inert marker (CR 122.1) — never unpayable, and read by nothing but the
+    # card's own state trigger. The counter's printed word, or None.
+    put_counter: str | None = None
     # Shacklegeist: "Tap two untapped Spirits you control: …" — N permanents the
     # payer taps, named by the printed noun phrase. Distinct from
     # ``requires_tap``, which taps the *source* and is the {T} symbol: this taps

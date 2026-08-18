@@ -256,48 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 124: an ability that works from the hand
-
-*(2026-08-18.)* M21 **273 → 274** — Waker of Waves.
-
-> Creatures your opponents control get -1/-0.
-> {1}{U}, Discard this card: Look at the top two cards of your library. Put one
-> of them into your hand and the other into your graveyard.
-
-**CR 113.6: an ability functions only from the battlefield unless something says
-otherwise — and "Discard this card" is what says otherwise.** So the from-hand
-activation refuses any ability without that cost rather than opening the hand
-generally: an ability activatable from anywhere would let a creature card tap
-for its own {T} ability before it was ever cast.
-
-It is a parallel entry point rather than a branch in
-`activate_permanent_ability`, because nearly everything that function does is
-about a permanent — the controller check, the summoning sickness, the
-"loses all abilities" read, the tap. None of it applies to a card in a hand, and
-threading a `None` permanent through all of it would make every one of those
-reads answer a question about nothing. The card leaves the hand as the cost is
-paid (CR 602.2b), before the ability is on the stack, so an effect that looks at
-the hand during resolution does not see the card that paid for it.
-
-**"Discard this card" and "Discard your hand" are not counts.** Neither offers
-the payer a choice, and the first names a specific card — so each is its own
-field rather than a `discard_cards` with a filter, and
-`tests/engine/test_activation_costs.py` was taught to check each against the flag
-that charges it. That guard is the one that would otherwise have said the clause
-was parsed and never charged, which is exactly what it is for.
-
-**Where the unchosen cards go is stated, not defaulted.** Rounds 122 and 123
-grew the look-and-pick template a count, a filter, optionality and an order;
-this adds the destination, because "the other into your **graveyard**" is a
-different card from one that bottoms them and the difference is invisible until
-the pile is looked at again.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Five new tests plus two rewritten guards — one recording the old "no
-seam for activating from hand", the other the cost-charging check — all seven
-watched to fail on the round-123 engine.
-
 ## Round 125: a protection whose bearer is a player
 
 *(2026-08-18.)* M21 **274 → 275** — Runed Halo.
@@ -371,3 +329,45 @@ it reused an existing kind.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Five new tests, all watched to fail on the round-125 engine.
+
+## Round 127: a counter that means nothing, and a trigger with no event
+
+*(2026-08-18.)* M21 **276 → 277** — Mazemind Tome.
+
+> {T}, Put a page counter on this artifact: Scry 1.
+> {2}, {T}, Put a page counter on this artifact: Draw a card.
+> When there are four or more page counters on this artifact, exile it. If you
+> do, you gain 4 life.
+
+**A counter with no rules meaning (CR 122.1).** "Page" is a word the card
+invents: nothing in the rules reacts to it and the only thing that reads it is
+the card that put it there. That is exactly why it is not routed through
+`engine/pt.py`'s +1/+1 channel or the loyalty one — those counters *do* have
+rules meaning (layer 7d, CR 606), and an inert marker sent through either would
+change a creature's size or a walker's survival. One dict keyed by the printed
+word, so the next set's invented counter needs no code.
+
+**A cost that adds rather than spends.** It can never be unpayable, so it is its
+own cost node rather than a counter removal with the sign flipped — and there is
+nothing for the affordability check to ask of it.
+
+**A state trigger (CR 603.8) has no event to hang on.** It fires whenever the
+game state matches, so it is checked by the state-based sweep — the same place
+the draw and life-gain announcements went, and for the same reason: there is no
+call site. CR 603.8b makes it fire once and not again until the state stops
+matching, so the permanent records that it announced *and drops the record if
+the count ever falls back*. Remembering forever would be the other error.
+
+**Nine Lives came along with it.** Its "When there are nine or more incarnation
+counters on this enchantment, exile it" now compiles and would fire — but
+nothing puts an incarnation counter on it: its damage-prevention replacement is
+unimplemented, and the card has reported *supported* on its other two lines the
+whole time. The state trigger is real; its input is not. That is a card-shaped
+gap for a round of its own, and it is written down here rather than left to be
+rediscovered.
+
+Whole-pool diff: **one card supported, one trigger made real**. Suite green,
+every `--check` gate green, shipped pool 388/388, AI simulation byte-identical
+at 443 interactions, **zero hooks added**. Five new tests plus two rewritten
+guards — the hollow-support probe, whose Mazemind-shaped example is now a cost
+the table really cannot charge, and the trigger-example table.

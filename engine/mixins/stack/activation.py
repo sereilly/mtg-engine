@@ -822,6 +822,19 @@ class AbilityActivationMixin:
                 f"to activate {permanent.card.name}"
             )
 
+        # "Put a page counter on this artifact" (Mazemind Tome). A cost that
+        # *adds* rather than spends, so there was nothing to check above — and
+        # paid here with the rest, before the ability is on the stack, because
+        # CR 602.2b puts every cost at the same moment.
+        if ability.cost.put_counter:
+            from ...named_counters import add_counters
+
+            total = add_counters(permanent, ability.cost.put_counter)
+            self.log.append(
+                f"{permanent.card.name} has {total} "
+                f"{ability.cost.put_counter} counter(s)"
+            )
+
         # "Discard your hand" (Subira). Every card, snapshotted before the loop
         # because `_discard_card` may itself put something into the hand (Library
         # of Leng's replacement offers the top of the library instead) — iterating

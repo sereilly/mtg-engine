@@ -589,6 +589,7 @@ class GameEndingMixin:
         # and the trigger still enqueues before any player next gets priority,
         # which is when a triggered ability is noticed anyway (CR 603.3b).
         from ..events import emit
+        from ..named_counters import counters_on
 
         for seat, player in enumerate(self.players):
             if seat in self.second_draw_fired_this_turn or player.lost:
@@ -620,5 +621,46 @@ class GameEndingMixin:
             self.draws_announced_this_turn[seat] = drawn
             for _ in range(drawn - announced):
                 emit(self, "draws_card", seat=seat)
+
+        # "When there are four or more page counters on this artifact, …"
+        # (Mazemind Tome.) CR 603.8's *state* trigger: it fires whenever the
+        # game state matches rather than on an event, so this sweep is where it
+        # belongs — there is no call site to hang it on, and CR 603.8b says it
+        # fires only once until the state stops matching, which is why the
+        # permanent remembers that it announced.
+        for permanent in list(self.all_permanents()):
+            for trig in compile_card_oracle(
+                permanent.effective_card
+            ).triggered_abilities:
+                if trig.condition.kind != "counters_reach_threshold":
+                    continue
+                kind = str(trig.condition.payload.get("counter_kind", ""))
+                wanted = int(trig.condition.payload.get("counter_count", 0))
+                held = counters_on(permanent, kind)
+                announced = permanent.metadata.get("_state_trigger_announced") or set()
+                key = (kind, wanted)
+                if held < wanted:
+                    # CR 603.8b: the ability may fire again once the state stops
+                    # matching. Nothing in the pool undoes a page counter, but
+                    # forgetting is the rule and remembering forever is not.
+                    if key in announced:
+                        permanent.metadata["_state_trigger_announced"] = announced - {key}
+                    continue
+                if key in announced:
+                    continue
+                permanent.metadata["_state_trigger_announced"] = announced | {key}
+                seat = self.controller_index_of(permanent)
+                if seat is None or trig.instruction is None:
+                    continue
+                self._enqueue_triggered_batch([{
+                    "controller_index": seat,
+                    "source_permanent": permanent,
+                    "card": permanent.card,
+                    "instruction": trig.instruction,
+                    "effect_kind": trig.effect_kind,
+                    "ability_text": trig.source_line,
+                    "trigger_context": {},
+                }])
+                any_changed = True
 
         return any_changed

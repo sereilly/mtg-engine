@@ -21,7 +21,7 @@ from .amounts import parse_amount
 from .effects import _expect_counter_kind
 from .phrases import _parse_card_alternatives
 from .errors import GrammarError
-from .lexer import MANA, PUNCT
+from .lexer import MANA, PUNCT, SELF
 from .lowering._common import chargeable_card_filter, chargeable_tap_filter
 from .nouns import parse_object_filter, parse_target_spec
 from .stream import TokenStream
@@ -186,6 +186,22 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             costs.append(ast.TapPermanentsCost(number.value, tapped))
             stream.accept_punct(",")
             continue
+        if stream.at_word("put"):
+            # "Put a page counter on this artifact" — a cost that adds a marker
+            # rather than spending one, so it is never unpayable and the
+            # affordability check below has nothing to ask of it.
+            mark = stream.mark()
+            stream.advance()
+            if stream.accept_word("a", "an"):
+                kind = stream.peek_word()
+                if kind and kind not in ("counter",):
+                    stream.advance()
+                    if stream.accept_word("counter") and stream.accept_word("on"):
+                        if stream.accept_kind(SELF) or stream.accept_phrase("this", "artifact"):
+                            costs.append(ast.PutCounterCost(kind))
+                            stream.accept_punct(",")
+                            continue
+            stream.reset(mark)
         if stream.at_word("remove"):
             costs.append(_parse_counter_removal_cost(stream))
             stream.accept_punct(",")

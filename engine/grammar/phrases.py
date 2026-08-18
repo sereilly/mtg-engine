@@ -746,6 +746,29 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
     if stream.accept_word("when"):
         if stream.accept_phrase("this", "creature", "dies"):
             return ast.TriggerEvent("dies", "when")
+        # "When there are four or more page counters on this artifact"
+        # (Mazemind Tome). CR 603.8's state trigger. Read here as well as in
+        # `engine/oracle.py`'s table because both front ends see the whole line,
+        # and a condition only one of them reads leaves the other refusing the
+        # effect behind it.
+        if stream.accept_phrase("there", "are"):
+            count = stream.peek_word()
+            if count in NUMBER_WORDS:
+                stream.advance()
+                if stream.accept_phrase("or", "more"):
+                    kind = stream.peek_word()
+                    if kind:
+                        stream.advance()
+                        if stream.accept_word("counters") and stream.accept_word("on"):
+                            if stream.at_kind(SELF) or stream.at_word("this"):
+                                stream.advance()
+                                stream.accept_word(
+                                    "artifact", "creature", "enchantment",
+                                    "permanent", "land",
+                                )
+                                return ast.TriggerEvent(
+                                    "counters_reach_threshold", "when",
+                                )
         if stream.accept_phrase("you", "control", "no", "islands"):
             return ast.TriggerEvent("no_islands", "when")
         if stream.accept_phrase("you", "control", "no", "lands"):

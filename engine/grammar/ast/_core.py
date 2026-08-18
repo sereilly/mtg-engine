@@ -434,6 +434,19 @@ class DiscardCost:
 
 
 @dataclass(frozen=True)
+class PutCounterCost:
+    """"Put a **page** counter on this artifact" as part of an activation cost
+    (Mazemind Tome).
+
+    A cost that *adds* something rather than spending it, which is why it is its
+    own node and not a negative counter removal: it can never be unpayable, and
+    the thing it adds has no rules meaning of its own (CR 122.1) — only the
+    card's own state trigger reads it.
+    """
+    kind: str
+
+
+@dataclass(frozen=True)
 class TapPermanentsCost:
     """"Tap two untapped Spirits you control" (Shacklegeist).
 

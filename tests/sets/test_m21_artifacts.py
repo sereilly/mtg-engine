@@ -216,3 +216,94 @@ def test_tokens_sharing_a_name_do_not_count(set_pool):
     game._settle()
 
     assert _constructs(game) == []
+
+
+# --- Mazemind Tome: an inert counter and a state trigger (round 127) --------
+
+
+def _tome_board(set_pool, library=10):
+    pool = set_pool("M21")
+    tome = Permanent(card=pool["Mazemind Tome"])
+    p1 = PlayerState(name="P1", life=20, library=[pool["Mountain"]] * library)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(0, tome, None)
+    return game, p1, tome
+
+
+def _use(game, tome, ability_index):
+    tome.tapped = False
+    result = game.activate_permanent_ability(
+        0, "Mazemind Tome", ability_index=ability_index,
+    )
+    game._settle()
+    return result
+
+
+def test_mazemind_tome_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Mazemind Tome"])
+    assert program.supported, program.reason
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "counters_reach_threshold"
+    assert trigger.supported
+
+
+def test_the_counter_is_a_cost_that_adds(set_pool):
+    """"Put a page counter on this artifact" spends nothing, so it can never be
+    unpayable — which is why it is its own cost rather than a counter removal
+    with the sign flipped."""
+    from engine.named_counters import counters_on
+
+    game, p1, tome = _tome_board(set_pool)
+
+    assert _use(game, tome, 0).supported
+    assert counters_on(tome, "page") == 1
+    assert _use(game, tome, 1).supported
+    assert counters_on(tome, "page") == 2
+    assert len(p1.hand) == 1, "the second ability draws"
+
+
+def test_the_fourth_counter_exiles_the_tome_and_gains_four_life(set_pool):
+    """CR 603.8: a *state* trigger, checked by the state-based sweep rather than
+    announced from a call site — there is no event to hang it on."""
+    game, p1, tome = _tome_board(set_pool)
+
+    for _ in range(4):
+        _use(game, tome, 1)
+
+    assert [c.name for c in p1.exile] == ["Mazemind Tome"]
+    assert list(game.controlled_by(0)) == []
+    assert p1.life == 24
+
+
+def test_the_state_trigger_fires_once(set_pool):
+    """CR 603.8b: it fires once and not again until the state stops matching.
+    Remembering forever would be wrong too — the rule is forgetting — so the
+    permanent records that it announced and drops the record if the count ever
+    falls back."""
+    from engine.named_counters import add_counters
+
+    game, p1, tome = _tome_board(set_pool)
+    add_counters(tome, "page", 4)
+
+    game.check_state_based_actions()
+    game._settle()
+    first = len(p1.exile)
+    game.check_state_based_actions()
+    game._settle()
+
+    assert first == 1 and len(p1.exile) == 1
+
+
+def test_an_inert_counter_does_not_touch_power_or_toughness(set_pool):
+    """CR 122.1: a counter whose kind is a word the card invents has no rules
+    meaning. Routing it through the +1/+1 channel would change a creature's
+    size; through the loyalty one, a walker's survival."""
+    from engine.named_counters import add_counters, counters_on
+    from tests.helpers import _mk_creature_card
+
+    perm = Permanent(card=_mk_creature_card("Bear", 2, 2, ""))
+    add_counters(perm, "page", 3)
+
+    assert counters_on(perm, "page") == 3
+    assert (perm.effective_power, perm.effective_toughness) == (2, 2)

@@ -436,6 +436,14 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # canonical examples are keyed by kind and an example can only be a wording
     # of one trigger word.
     ("becomes_target",              r"when (?:this|.+) becomes the target"),
+    # "When there are four or more page counters on this artifact, …"
+    # (Mazemind Tome.) CR 603.8's *state* trigger: it fires whenever the game
+    # state matches, not on an event — so it is checked by the state-based
+    # sweep rather than announced from a call site, which is where every other
+    # "no single place this happens" condition already goes.
+    ("counters_reach_threshold",
+     r"when there are (?P<counter_count>[a-z]+) or more (?P<counter_kind>[a-z]+) counters on this "
+     r"(?:artifact|creature|enchantment|permanent|land)"),
     ("no_islands",                  r"when you control no islands"),
     ("no_lands",                    r"when you control no lands"),
 )
@@ -762,6 +770,9 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     discard_whole_hand = bool(re.search(r"\bdiscard your hand\b", cost_lower))
     # "Discard this card" (Waker of Waves) - the card itself, from the hand.
     discard_self = bool(re.search(r"\bdiscard this card\b", cost_lower))
+    # "Put a page counter on this artifact" (Mazemind Tome).
+    counter_cost = re.search(r"\bput an? ([a-z]+) counter on this ", cost_lower)
+    put_counter = counter_cost.group(1) if counter_cost else None
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         sacrifice_filter,
@@ -771,6 +782,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         discard_filters=discard_filters or (),
         discard_whole_hand=discard_whole_hand,
         discard_self=discard_self,
+        put_counter=put_counter,
         pay_life=_life_payment_cost(cost_lower),
     )
 

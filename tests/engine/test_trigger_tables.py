@@ -75,6 +75,8 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "spell_cast": "whenever a player casts a spell",
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
+    "counters_reach_threshold":
+        "when there are four or more page counters on this artifact",
     # Two rows share this kind — the union narrowing and the single-type one —
     # so both spellings are named, which is what the "one entry may hold
     # several" shape above exists for.

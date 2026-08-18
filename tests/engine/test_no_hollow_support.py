@@ -176,10 +176,12 @@ def _probe(text: str, type_line: str = "Artifact"):
 @pytest.mark.parametrize(
     "text",
     [
-        # Mazemind Tome's shape: "draw a card" is a whitelist substring, so the
-        # card-level marker matched, while the ability that would have done the
-        # drawing did not parse and carries no instruction.
-        "{T}, Put a page counter on this artifact: Draw a card.",
+        # Mazemind Tome's shape as it *was*: "draw a card" is a whitelist
+        # substring, so the card-level marker matched while the ability that
+        # would have done the drawing did not parse. Its real cost is read since
+        # round 127, so the probe now spells a counter kind the cost table
+        # cannot charge — the property under test is the shape, not the card.
+        "{T}, Put a page counter on target artifact: Draw a card.",
         # Same with a trigger rather than an activated ability: the condition is
         # read, the effect clause is not, and "gain" matched the whitelist.
         "When this artifact enters the battlefield, you gain 4 life for each "
