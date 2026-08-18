@@ -256,41 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 129: two events already announced, asked from the other side
-
-*(2026-08-18.)* M21 **278 → 279** — Mangara, the Diplomat.
-
-> Whenever an opponent attacks with creatures, if two or more of those creatures
-> are attacking you and/or planeswalkers you control, draw a card.
-> Whenever an opponent casts their second spell each turn, draw a card.
-
-Both events were already announced — the attack declaration and the cast — and
-both needed the *other* seat's version. Each gets its own condition kind rather
-than a flag, because the fire sites differ in who is asked: the existing cast
-ordinal is announced for the caster's own permanents, and this one for
-everyone's.
-
-**"Those creatures" binds the count to this declaration.** A board count of
-attacking creatures would include another opponent's, so the number is computed
-at the declaration and stamped into the trigger's context. CR 603.4 checks an
-intervening-if when the trigger would fire *and* again on resolution, and both
-readings want the number the declaration had — a recount at resolution asks
-about a combat that may have moved on.
-
-**"You and/or planeswalkers you control" is one question.** A creature attacking
-a planeswalker is attacking its controller for this purpose, and the card says
-so — so one lookup answers both halves, and the per-seat tally the declaration
-carries is keyed by that answer.
-
-**The ordinal counts, it does not flag.** "Their second spell" is `len(spells
-cast this turn) == 2` with the firing spell already on the list; CR 121.2's
-per-spell reading is what makes "their third" a different card and not this one.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Five new tests, all watched to fail on the round-128 engine — the two
-negative ones carry an in-test control.
-
 ## Round 130: a token that carries printed abilities
 
 *(2026-08-18.)* M21 **279 → 280** — Pursued Whale, scoped out of round 108 and
@@ -381,3 +346,38 @@ pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Five new tests, all watched to fail on the round-130 engine — with the
 stash taken `-u`, since the module under test is a new file and a tracked-only
 stash would have left it in place and three of the five passing.
+
+## Round 132: a timing clause is a condition
+
+*(2026-08-18.)* M21 **281 → 282** — Radha, Heart of Keld.
+
+> During your turn, Radha has first strike.
+> You may look at the top card of your library any time, and you may play lands
+> from the top of your library.
+> {4}{R}{G}: Radha gets +X/+X until end of turn, where X is the number of lands
+> you control.
+
+The third line already worked (rounds 106 and 116). The second is round 131's
+module answering its second and third permissions — the weaker "you may look",
+and the land play — with **one printed line stating two of them**, so the reader
+asks whether the clause is *in* the line rather than whether it *is* the line,
+matched at a clause boundary so a line merely mentioning the words grants
+nothing.
+
+**"During your turn" is a condition, not a duration.** Read as a duration the
+ability would be something a resolution grants; read as a condition it is
+something the permanent *has* while the clause holds, which is what a static
+ability is. The condition table already had the shape — this is a third printed
+word order for it, and the seat asked is the ability's controller (CR 109.5).
+
+**"Radha has first strike" is the card saying "this creature".** The static gate
+and its dispatch both now read through the same name-substituting reader the
+combat restrictions use. Without it, a legendary's own static parses as a
+sentence about some other permanent — and the card had been sitting on exactly
+that.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Six new tests, five watched to fail on the round-131 engine; the sixth
+covers the pump line that already worked, so the card is covered rather than
+half-covered.

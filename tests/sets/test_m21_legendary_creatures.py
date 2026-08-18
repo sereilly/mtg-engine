@@ -755,3 +755,90 @@ def test_your_own_attack_does_not_fire_it(set_pool):
     control, control_p1, _ = _mangara_board(set_pool, attackers=2)
     _opponent_attacks(control, 2)
     assert len(control_p1.hand) == 1
+
+
+# --- Radha, Heart of Keld: a timing clause is a condition (round 132) -------
+
+
+def _radha_board(set_pool, library=("Mountain", "Shock")):
+    pool = set_pool("M21")
+    radha = Permanent(card=pool["Radha, Heart of Keld"])
+    p1 = PlayerState(name="P1", life=20, library=[pool[n] for n in library])
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(0, radha, None)
+    _nosick(radha)
+    game.active_player_index = 0
+    game._recompute_continuous_effects()
+    return game, p1, radha, pool
+
+
+def test_radha_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Radha, Heart of Keld"])
+    assert program.supported, program.reason
+
+
+def test_first_strike_only_during_your_turn(set_pool):
+    """"During your turn" is a *condition*, not a duration: read as a duration
+    the ability would be something a resolution grants rather than something
+    the permanent has. The seat asked is the ability's controller (CR 109.5)."""
+    game, _, radha, _ = _radha_board(set_pool)
+
+    assert game._has_keyword(radha, "first strike")
+
+    game.active_player_index = 1
+    game._recompute_continuous_effects()
+    assert not game._has_keyword(radha, "first strike")
+
+
+def test_the_card_naming_itself_reads_as_this_creature(set_pool):
+    """"**Radha** has first strike" is the card saying "this creature". Without
+    the substitution a legendary's own static reads as a sentence about some
+    other permanent — which is why the gate and the dispatch both go through the
+    same name-substituting reader."""
+    from engine.oracle import _restriction_line
+    from engine.static_bonuses import static_bonus_for
+
+    printed = "During your turn, Radha has first strike."
+    assert static_bonus_for(printed.lower().rstrip(".")) is None
+    bonus = static_bonus_for(_restriction_line(printed, "Radha, Heart of Keld"))
+    assert bonus is not None
+    assert bonus.payload["condition"] == {"kind": "your_turn"}
+
+
+def test_the_top_card_is_visible_but_not_public(set_pool):
+    """"You may look at the top card any time" is the weaker of the two
+    permissions: its controller sees the card, everyone else does not."""
+    from engine.library_top import top_is_public, top_is_visible
+
+    game, _, _, _ = _radha_board(set_pool)
+
+    assert top_is_visible(game, 0)
+    assert not top_is_public(game, 0)
+
+
+def test_a_land_on_top_may_be_played_and_a_spell_may_not(set_pool):
+    """One printed line stating two permissions grants both, so the reader asks
+    whether the clause is in it — at a clause boundary, not as a bare
+    substring."""
+    from engine.library_top import top_castable
+
+    game, p1, _, _ = _radha_board(set_pool)
+    assert top_castable(game, 0, p1.library[0]), "a Mountain"
+
+    game, p1, _, _ = _radha_board(set_pool, library=("Shock", "Mountain"))
+    assert not top_castable(game, 0, p1.library[0]), "lands only"
+
+
+def test_the_pump_counts_lands(set_pool):
+    """Round 106's computed pump and round 116's counted amounts, unchanged —
+    the third line already worked and is checked so the card is covered rather
+    than half-covered."""
+    game, _, radha, pool = _radha_board(set_pool)
+    for _ in range(3):
+        game._put_permanent_onto_battlefield(0, Permanent(card=pool["Mountain"]), None)
+
+    game.activate_permanent_ability(0, "Radha, Heart of Keld")
+    game._settle()
+
+    assert (radha.effective_power, radha.effective_toughness) == (3 + 3, 3 + 3)

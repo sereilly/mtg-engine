@@ -228,9 +228,27 @@ def _keyword_list(text: str) -> list[str] | None:
 
 
 def conditional_static_for(normalized_line: str) -> StaticBonus | None:
-    """"<effect> as long as <condition>", in both printed word orders."""
+    """"<effect> as long as <condition>", in both printed word orders — and the
+    third spelling, where the condition is a *timing* clause printed first
+    ("During your turn, this creature has first strike", Radha).
+
+    That one is the same static wearing different words: "during your turn" is a
+    condition like any other, and reading it as a duration instead would make
+    the ability something a resolution grants rather than something the
+    permanent has.
+    """
     line = normalized_line.strip().rstrip(".")
     subject = "this creature "
+    if line.startswith("during your turn, "):
+        effect_clause = line[len("during your turn, "):]
+        if not effect_clause.startswith(subject):
+            return None
+        effect = _parse_effect_text(effect_clause[len(subject):])
+        if effect is None:
+            return None
+        return StaticBonus(
+            "conditional_static", {**effect, "condition": {"kind": "your_turn"}}
+        )
     if line.startswith("as long as "):
         # "As long as <condition>, this creature <effect>" (Gnarled Sage).
         rest = line[len("as long as "):]
@@ -262,6 +280,11 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
     permanent's own state are all it reads).
     """
     kind = condition.get("kind")
+    # "**During your turn**" (Radha). Whose turn it is, which is a fact about
+    # the game rather than about the permanent — and the seat asked is the
+    # ability's controller (CR 109.5), not the permanent's owner.
+    if kind == "your_turn":
+        return game.active_player_index == seat
     if kind == "drawn_cards_this_turn":
         player = game.players[seat]
         return len(player.cards_drawn_this_turn) >= int(condition.get("count", 0))

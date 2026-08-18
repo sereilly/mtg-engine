@@ -1860,7 +1860,11 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     normalized = normalize_creature_line(line)
     if normalized.startswith("protection from "):
         return True
-    if static_bonus_for(normalized) is not None:
+    # Through the same name-substituting reader the combat restrictions use:
+    # a card that says "**Radha** has first strike" is saying "this creature",
+    # and the table below is written against the self-reference. Without it a
+    # legendary's own static reads as a sentence about some other permanent.
+    if static_bonus_for(_restriction_line(line, card_name)) is not None:
         return True
     if normalized == _DOESNT_UNTAP_LINE:
         return True
@@ -2100,7 +2104,7 @@ def _parse_creature_program(
                 instructions.append(
                     OracleInstruction(dynamic_pt.kind, "", dynamic_pt.payload)
                 )
-            elif (bonus := static_bonus_for(normalized)) is not None:
+            elif (bonus := static_bonus_for(_restriction_line(line, card_name))) is not None:
                 instructions.append(OracleInstruction(bonus.kind, "", bonus.payload))
             elif (lord := lord_buff_for(normalized)) is not None:
                 # The lord line the gate just admitted, carried as data. The

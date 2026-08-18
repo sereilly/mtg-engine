@@ -103,7 +103,16 @@ def top_castable(game, player_index: int, card) -> bool:
         return False
     for perm in game.controlled_by(player_index):
         for line in _lines(perm.effective_card):
-            if line == _PLAY_LANDS_FROM_TOP and "land" in (card.type_line or "").lower():
+            # The clause, whether printed alone or as the second half of the
+            # compound line Radha carries ("You may look …, and you may play
+            # lands …"). One printed line stating two permissions grants both,
+            # so the reader asks whether the clause is *in* it — matched at a
+            # clause boundary, not as a bare substring, so a line merely
+            # mentioning the words does not grant it.
+            if (
+                line == _PLAY_LANDS_FROM_TOP
+                or line.endswith(f", and {_PLAY_LANDS_FROM_TOP}")
+            ) and "land" in (card.type_line or "").lower():
                 return True
             match = _CAST_FROM_TOP.match(line)
             if match is None:

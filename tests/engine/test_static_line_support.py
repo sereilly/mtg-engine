@@ -40,6 +40,7 @@ from engine.cost_modifiers import cost_modifier_claims_line
 from engine.land_play_allowance import land_play_line
 from engine.lord_buffs import lord_buff_for
 from engine.global_statics import global_static_for
+from engine.library_top import library_top_line
 from engine.replacements import replacement_claims_line
 from engine.oracle import (
     _is_supported_static_creature_line,
@@ -121,6 +122,11 @@ def _derived(normalized: str) -> bool:
         # affected permanent's effective card. The eighth derivation table, and
         # it reached the creature gate in round 130.
         or global_static_for(normalized) is not None
+        # "Play with the top card of your library revealed", "…you may play
+        # lands from the top of your library" — dispatched by
+        # engine/library_top.py, which reads every controlled permanent's own
+        # text through the same table the gate asks. The ninth derivation table.
+        or library_top_line(normalized)
     )
 
 
