@@ -206,6 +206,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # this turn", Destructive Tampering's second mode).
     "cant_block_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
+    # Double Vision. Its own category name would be a family of one; copying a
+    # spell on the stack is the same family as countering one.
+    "copy_triggering_spell": "counterspells",
     "tap_or_untap_target": "tapping",
     # "Those creatures don't untap during their controller's next untap step."
     # (Frost Breath.) The same category as the tap that names them: what the

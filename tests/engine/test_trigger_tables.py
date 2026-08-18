@@ -75,6 +75,13 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "spell_cast": "whenever a player casts a spell",
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
+    # Two rows share this kind — the union narrowing and the single-type one —
+    # so both spellings are named, which is what the "one entry may hold
+    # several" shape above exists for.
+    "you_cast_first_spell_each_turn": (
+        "whenever you cast your first instant or sorcery spell each turn",
+        "whenever you cast your first creature spell each turn",
+    ),
     "enchantment_cast": "whenever you cast an enchantment spell",
     "land_enters": "whenever a land enters the battlefield",
     "matching_permanent_enters": (

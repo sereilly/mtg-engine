@@ -86,6 +86,7 @@ from .cards import (
     Shuffle,
 )
 from .stack import (
+    CopyThatSpell,
     CounterSpell,
     ModalNode,
 )
@@ -112,7 +113,7 @@ Effect = Union[
     DoublePower,
     GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice, Exile, Tap, Untap,
     TapOrUntap, DoesntUntapNextStep,
-    Regenerate, CounterSpell, ModalNode, ReturnToZone, CreateToken, AddMana,
+    Regenerate, CopyThatSpell, CounterSpell, ModalNode, ReturnToZone, CreateToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     RevealTop, RevealUntil,
     PhaseOut,

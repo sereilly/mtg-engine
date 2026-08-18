@@ -157,6 +157,18 @@ class OracleInstructionsMixin:
         if 0 <= caster_index < len(self.players):
             self.players[caster_index].spells_cast_this_turn.append(card)
         emit(self, "you_cast_spell", subject=card, caster_index=caster_index)
+        # The ordinal form (Double Vision) is the *same* event asked a different
+        # question, so it is announced from the same place rather than given a
+        # fire site of its own — the filter is where "is this the first one?"
+        # is decided, because that is where the caster's record is.
+        emit(
+            self, "you_cast_first_spell_each_turn",
+            subject=card, caster_index=caster_index,
+            # "Copy **that spell**": the effect needs the object, not just the
+            # fact of the cast, so the card rides the trigger's captured context
+            # and the handler finds it on the stack by identity.
+            cast_card=card,
+        )
         emit(self, "enchantment_cast", subject=card, caster_index=caster_index)
         # Prowess (CR 702.108a): each creature the caster controls with the
         # keyword gets +1/+1 until end of turn on a noncreature cast. Asked of

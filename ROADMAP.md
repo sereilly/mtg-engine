@@ -256,49 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 120: a cost that is a question
-
-*(2026-08-18.)* M21 **269 → 270** — Volcanic Salvo.
-
-> This spell costs {X} less to cast, where X is the total power of creatures you
-> control.
-> Volcanic Salvo deals 6 damage to each of up to two target creatures and/or
-> planeswalkers.
-
-**A {X} reduction was refused on purpose, and the refusal was right.** The
-self-reduction table computes a number from the printed pips, and `{X}` is not
-one — so it returned None rather than a reduction of zero, because a cost error
-in the cheap direction is the one that must never happen. What it was missing
-was not arithmetic but the **question**: "where X is …" names a count, and the
-clause is now read into a named question asked of the caster at CR 601.2f, when
-a cost is calculated. A `{X}` with no clause still refuses, and so does a clause
-naming a count the table does not know.
-
-The count is deliberately *not* an `ObjectFilter`. "Total power" is an aggregate
-rather than a tally, so it reads the **computed** power (CR 613) — a pumped
-creature counts for what it currently is — and floors each contribution at zero,
-because CR 107.1b has no negative amounts and a shrunk creature must not make the
-spell cost *more*.
-
-**"To each of up to two targets" is one instruction, opted into.** The
-several-targets description is what tells the picker to collect up to N and the
-handler to resolve a list; it is opted into at the call site rather than admitted
-by the quantifier check, which is the safety the ordinary description has — a
-handler resolving one permanent must never be handed a two-target picker, or the
-second choice is collected and dropped. Resolved strictly, so a departed target
-is dropped (CR 608.2b) rather than replaced by whatever a scan reaches first,
-which for "up to two" would be a creature the player never chose.
-
-Chandra's Incinerator prints the same first line with a different count — a turn
-history rather than a board aggregate — and is deliberately **not** claimed here:
-the history it needs is not tracked yet, and adding the clause without it would
-be a reduction that silently computes zero.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Five new tests plus a rewritten guard, all six watched to fail on the
-round-119 engine.
-
 ## Round 121: "that player" is not a seat you can compare against
 
 *(2026-08-18.)* M21 **270 → 271** — Chandra's Incinerator.
@@ -388,3 +345,38 @@ Whole-pool diff: **one card supported, one payload made explicit**. Suite green,
 every `--check` gate green, shipped pool 388/388, AI simulation byte-identical at
 443 interactions, **zero hooks added**. Five new tests, all watched to fail on
 the round-121 engine.
+
+## Round 123: the same event, asked a different question
+
+*(2026-08-18.)* M21 **272 → 273** — Double Vision.
+
+> Whenever you cast your first instant or sorcery spell each turn, copy that
+> spell. You may choose new targets for the copy.
+
+**The ordinal is part of the condition, not of the effect.** A card that fired
+on every instant or sorcery is a different card, so "your **first** … each turn"
+gets its own condition kind — announced from the *same* place as the ordinary
+cast, because the event is the same cast and only the question differs. The
+question is asked where the answer lives: the caster's own record of what they
+have cast this turn.
+
+Counting and firing read the **same** narrowing. "Your first instant or sorcery
+spell" counts instants and sorceries and nothing else, so the ordinal asks the
+same reader the filter does rather than growing its own copy of the type tests —
+two copies would let the trigger fire on a set it did not count.
+
+**A printed union is a different test from a single type.** "This one" and "any
+of these" (CR 105.4) cannot share a key without one of them being silently
+wrong, so the union rides its own, and the single-type row keeps its exact
+meaning.
+
+**"That spell" is the object, not the top of the stack.** `copy_top_stack_spell`
+takes the topmost instant or sorcery, which is the same object only while
+nothing has been cast in response. This copies the spell the *event* recorded,
+found on the stack by identity — and copies nothing at all when it has already
+left, because CR 707.10 copies an object and by then there is none. Reaching for
+whatever else was up there would be a copy the card never promised.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Five new tests, all watched to fail on the round-122 engine.

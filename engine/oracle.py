@@ -316,6 +316,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # compile and fire on every spell. "enchantment" stays its own condition
     # kind ("…an enchantment spell", Verduran Enchantress) for the label's
     # sake; the article split ("a"/"an") keeps the two from colliding.
+    # "…your **first** instant or sorcery spell **each turn**" (Double Vision).
+    # An ordinal, so it is its own condition kind rather than a flag: the event
+    # is the same cast, but the question asked of it is "is this the first one?"
+    # — and a card that fired on every such spell is a different card. Longest
+    # first, as this table requires.
+    ("you_cast_first_spell_each_turn",
+     r"whenever you cast your first (?P<cast_types>instant or sorcery) spell each turn"),
+    ("you_cast_first_spell_each_turn",
+     r"whenever you cast your first (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell each turn"),
+    ("you_cast_spell",
+     r"whenever you cast an (?P<cast_types>instant or sorcery) spell"),
     ("you_cast_spell",
      r"whenever you cast a (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell"),
     # "…a **Dog** spell" (Rin and Seri, Inseparable). A creature *subtype*

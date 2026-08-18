@@ -217,6 +217,8 @@ def _parse_subject_verb(
         return _parse_extra_turn(stream)
     if stream.at_word("end"):
         return _parse_end_the_turn(stream)
+    if stream.at_word("copy"):
+        return _parse_copy_that_spell(stream)
     if stream.at_word("draw"):
         return _parse_draw(stream, ast.PlayerRef("you"))
     # A bare "discard N cards" is the effect's *controller* discarding, the same
@@ -622,6 +624,24 @@ def _parse_where_x(stream: TokenStream) -> ast.Amount | None:
         _parse_duration(stream)
         return ast.CountOfDeaths(filt)
     return ast.CountOf(filt)
+
+
+def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:
+    """``Copy that spell. You may choose new targets for the copy.``
+
+    Both sentences, every word. The second is CR 707.10's choice and part of
+    what the card does; consuming it is also what stops this production
+    claiming a bare "copy that spell" no card prints.
+    """
+    for word in ("copy", "that", "spell"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the new-targets sentence after the copy")
+    for word in (
+        "you", "may", "choose", "new", "targets", "for", "the", "copy",
+    ):
+        stream.expect_word(word)
+    return ast.CopyThatSpell()
 
 
 def _parse_optional_action(stream: TokenStream) -> ast.Statement:

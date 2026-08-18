@@ -344,6 +344,9 @@ def lower_statement(
     if isinstance(statement, ast.RevealUntil):
         return _lower_reveal_until(statement, produced)
 
+    if isinstance(statement, ast.CopyThatSpell):
+        return (OracleInstruction("copy_triggering_spell", "", {}),)
+
     if isinstance(statement, ast.ExtraTurn):
         return _lower_extra_turn(statement)
 

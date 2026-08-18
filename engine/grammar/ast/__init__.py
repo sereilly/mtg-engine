@@ -137,6 +137,7 @@ from .cards import (
     RevealTopToHandOrBottom,
 )
 from .stack import (
+    CopyThatSpell,
     CounterSpell,
     ModalNode,
 )
@@ -274,6 +275,7 @@ __all__ = [
     "RevealUntil",
     "RevealTopToHandOrBottom",
     # stack
+    "CopyThatSpell",
     "CounterSpell",
     "ModalNode",
     # combat

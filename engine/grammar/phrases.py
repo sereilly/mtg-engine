@@ -492,6 +492,15 @@ _CAST_TYPE_FILTERS: dict[str, "ast.ObjectFilter"] = {
     "sorcery": ast.ObjectFilter(card_types=("sorcery",)),
 }
 
+#: The printed type *unions* the same narrowing may name, longest first. A
+#: union is not a filter this table can hold as one word, and the event filter
+#: has to test "any of these" rather than "this one" — so it is its own table
+#: and its own key, and the filter reads them apart.
+_CAST_TYPE_UNIONS: tuple[tuple[tuple[str, ...], "ast.ObjectFilter"], ...] = (
+    (("instant", "or", "sorcery"),
+     ast.ObjectFilter(card_types=("instant", "sorcery"))),
+)
+
 
 def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
     """"Whenever **a Forest an opponent controls** becomes tapped" (Lifetap) /
@@ -598,6 +607,39 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # subtype word ("Dog spell") keeps refusing the line rather than
         # compiling a trigger that fires on every spell. Read before the
         # phrase table, whose bare "you cast a spell" entry is its prefix.
+        # "Whenever you cast **your first** instant or sorcery spell **each
+        # turn**" (Double Vision). An ordinal: the trigger fires on the first
+        # such spell of the turn and on no other, so the count is part of the
+        # condition rather than of the effect. Read before the bare forms, whose
+        # phrases are its strict prefixes.
+        mark = stream.mark()
+        if stream.accept_phrase("you", "cast", "your", "first"):
+            for phrase, narrowed in _CAST_TYPE_UNIONS:
+                if stream.accept_phrase(*phrase):
+                    if stream.accept_phrase("spell", "each", "turn"):
+                        return ast.TriggerEvent(
+                            "you_cast_first_spell_each_turn", "whenever",
+                            subject=narrowed,
+                        )
+                    break
+            word = stream.peek_word()
+            narrowed = _CAST_TYPE_FILTERS.get(word or "")
+            if narrowed is not None:
+                stream.advance()
+                if stream.accept_phrase("spell", "each", "turn"):
+                    return ast.TriggerEvent(
+                        "you_cast_first_spell_each_turn", "whenever",
+                        subject=narrowed,
+                    )
+        stream.reset(mark)
+        mark = stream.mark()
+        if stream.accept_phrase("you", "cast", "an"):
+            for phrase, narrowed in _CAST_TYPE_UNIONS:
+                if stream.accept_phrase(*phrase) and stream.accept_word("spell"):
+                    return ast.TriggerEvent(
+                        "you_cast_spell", "whenever", subject=narrowed,
+                    )
+        stream.reset(mark)
         mark = stream.mark()
         if stream.accept_phrase("you", "cast", "a"):
             word = stream.peek_word()

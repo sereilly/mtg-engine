@@ -12,6 +12,49 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+@effect_handler("copy_triggering_spell")
+def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Copy that spell. You may choose new targets for the copy."
+    (Double Vision.)
+
+    "That spell" is the one the trigger fired on. Located on the stack by the
+    card the event recorded — not by taking the topmost instant or sorcery,
+    which is the same object only while nothing has been cast in response, and a
+    different one the moment something has.
+
+    A spell that has already left the stack is copied by nothing: CR 707.10
+    copies an object, and by then there is none. That is the honest outcome
+    rather than reaching for whatever else is up there.
+    """
+    caster = context.caster
+    cast_card = (context.trigger_context or {}).get("cast_card")
+    copied = next(
+        (item for item in reversed(game.stack) if item.card is cast_card), None
+    )
+    if copied is None:
+        game.log.append(f"{context.card.name}: that spell is no longer on the stack")
+        return True, "resolved"
+    caster_index = game.players.index(caster)
+    game._stack_push(
+        StackItem(
+            card=copied.card,
+            caster_index=caster_index,
+            target_player_index=copied.target_player_index,
+            target_permanent_index=copied.target_permanent_index,
+            x_value=copied.x_value,
+            # CR 707.10: the copy has the original's choices. New targets are
+            # the copy controller's option and are not chosen here — the AI and
+            # the headless path keep the original's, which is the legal default.
+            choices=dict(copied.choices),
+            chosen_mode_index=copied.chosen_mode_index,
+            target_stack_item=copied.target_stack_item,
+            is_copy=True,
+        )
+    )
+    game.log.append(f"{context.card.name} copied {copied.card.name}")
+    return True, "resolved"
+
+
 @effect_handler("copy_top_stack_spell")
 def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # Fork: "Copy target instant or sorcery spell... You may choose new targets for

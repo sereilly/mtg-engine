@@ -1204,3 +1204,86 @@ def test_a_cost_clause_the_table_cannot_charge_refuses_the_whole_line():
         "You may cast this card from your graveyard by paying 3 life and "
         "sacrificing a Zombie in addition to paying its other costs."
     ) is None
+
+
+# --- Double Vision: an ordinal, a union, and "that spell" (round 123) -------
+
+
+def _vision_board(set_pool, hand):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20, hand=[pool[n] for n in hand])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Double Vision"]), None,
+    )
+    return game, p1, p2
+
+
+def test_double_vision_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Double Vision"])
+    assert program.supported, program.reason
+
+
+def test_the_first_instant_or_sorcery_is_copied_and_the_second_is_not(set_pool):
+    """The ordinal is part of the *condition*: a card that fired on every such
+    spell is a different card. Asked of the caster's own record of what they
+    have cast this turn, counting only what the narrowing admits."""
+    game, _, p2 = _vision_board(set_pool, ("Shock", "Shock"))
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game._settle()
+    assert p2.life == 16, "2 from the Shock and 2 from its copy"
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game._settle()
+    assert p2.life == 14, "the second one is not copied"
+
+
+def test_a_creature_spell_does_not_consume_the_ordinal(set_pool):
+    """"your first **instant or sorcery** spell" counts instants and sorceries
+    and nothing else — the narrowing and the count are the same set, which is
+    why the count asks the same reader the filter does."""
+    game, _, p2 = _vision_board(set_pool, ("Alpine Watchdog", "Shock"))
+
+    game.cast_from_hand(0, "Alpine Watchdog")
+    game._settle()
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game._settle()
+
+    assert p2.life == 16, "the Shock is still the first instant or sorcery"
+
+
+def test_the_union_narrowing_admits_either_type(set_pool):
+    """A printed union is read as "any of these" (CR 105.4), which is a
+    different test from the single-type row's "this one" — folding them would
+    make one of the two silently wrong."""
+    from engine.oracle import compile_card_oracle
+    from tests.helpers import _mk_creature_card
+
+    program = compile_card_oracle(_mk_creature_card(
+        "Watcher", 2, 2,
+        "Whenever you cast your first instant or sorcery spell each turn, draw a card.",
+    ))
+    (trigger,) = program.triggered_abilities
+
+    assert trigger.condition.kind == "you_cast_first_spell_each_turn"
+    assert trigger.condition.payload["cast_types"] == "instant or sorcery"
+    assert trigger.supported
+
+
+def test_copying_a_spell_that_has_left_the_stack_copies_nothing(set_pool):
+    """"That spell" is the object the trigger fired on, found on the stack by
+    identity. By the time nothing is there, CR 707.10 has nothing to copy —
+    which is the honest outcome rather than reaching for whatever else is up
+    there."""
+    from engine.grammar import compile_line
+
+    compiled = compile_line(
+        "Whenever you cast your first instant or sorcery spell each turn, copy "
+        "that spell. You may choose new targets for the copy."
+    )
+    (instruction,) = compiled.instructions
+
+    assert instruction.kind == "copy_triggering_spell"

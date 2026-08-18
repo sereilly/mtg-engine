@@ -44,6 +44,23 @@ class CounterSpell:
 
 
 @dataclass(frozen=True)
+class CopyThatSpell:
+    """``Copy that spell. You may choose new targets for the copy.``
+    (Double Vision.)
+
+    "That spell" is the one the trigger fired on, not "the topmost instant or
+    sorcery" — the two agree whenever nothing has been cast in response and
+    part company as soon as something has. So the copy names the event's own
+    spell, which the fire site records.
+
+    The new-targets sentence is required, not optional: CR 707.10 lets the
+    copy's controller choose new targets, and a card that did not offer the
+    choice would be a different card. Consuming it is also what keeps this
+    production from claiming a bare "copy that spell" nothing prints.
+    """
+
+
+@dataclass(frozen=True)
 class ModalNode:
     """The head of a modal spell or ability: "Choose one —" (CR 700.2).
 

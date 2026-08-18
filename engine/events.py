@@ -259,7 +259,29 @@ def _spell_cast_filter(
     return True
 
 
-@event_filter("you_cast_spell", "enchantment_cast")
+def _cast_narrowing_admits(trig: ParsedTriggeredAbility, card) -> bool:
+    """Whether *card* answers this cast trigger's printed narrowing.
+
+    The ordinal has to count the *same* set the trigger fires on — "your first
+    **instant or sorcery** spell" counts instants and sorceries and nothing
+    else — so the narrowing is asked once here and reused, rather than the
+    counting loop growing its own copy of the type tests below.
+    """
+    type_line = card.type_line.lower()
+    cast_types = trig.condition.payload.get("cast_types")
+    if cast_types and not any(word in type_line for word in cast_types.split(" or ")):
+        return False
+    cast_type = trig.condition.payload.get("cast_type")
+    if cast_type:
+        if cast_type.startswith("non"):
+            if cast_type[3:] in type_line:
+                return False
+        elif cast_type not in type_line:
+            return False
+    return True
+
+
+@event_filter("you_cast_spell", "enchantment_cast", "you_cast_first_spell_each_turn")
 def _controller_cast_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
 ) -> bool:
@@ -301,6 +323,29 @@ def _controller_cast_filter(
     # same reader the layer seed uses rather than as a substring of the type
     # line — a substring match would let "Dog" answer for a "Dogpile", and would
     # answer for a card *type* word too, which is the row above's job.
+    # "an **instant or sorcery** spell" — a printed union, so any of the listed
+    # types answers it (CR 105.4's reading of an "or" list). Its own key because
+    # the single-type row above tests "this one" and a union tests "any of
+    # these", and folding them would make one of the two silently wrong.
+    cast_types = trig.condition.payload.get("cast_types")
+    if cast_types:
+        type_line = card.type_line.lower()
+        if not any(word in type_line for word in cast_types.split(" or ")):
+            return False
+    # "…your **first** … spell each turn" (Double Vision). The ordinal is asked
+    # of the caster's own record of what they have cast this turn, counting only
+    # the spells this condition's narrowing admits — the spell that fired this
+    # event is already on that list, so being the first one means exactly one
+    # match. Asked here rather than by a separate fire site because the *event*
+    # is the ordinary cast; only the question differs.
+    if trig.condition.kind == "you_cast_first_spell_each_turn":
+        caster = game.players[caster_index]
+        matching = [
+            spell for spell in caster.spells_cast_this_turn
+            if _cast_narrowing_admits(trig, spell)
+        ]
+        if len(matching) != 1 or matching[0] is not card:
+            return False
     cast_subtype = trig.condition.payload.get("cast_subtype")
     if cast_subtype:
         from .layer_bridge import printed_shape
