@@ -1006,6 +1006,11 @@ class EffectsMixin:
         lets color-scoped prevention (Circle of Protection) match the source's
         color.
 
+        A player with protection from the source's *name* (Runed Halo, CR
+        702.16i) is dealt none of it — checked here, at the one path every
+        non-combat player-damage event runs through, rather than as a shield,
+        because protection is not prevention and produces no shield to consume.
+
         Returns the damage actually **dealt** (CR 120.4b), which is what a
         caller reporting "N damage" or gaining life equal to it wants. How much
         of that reduced the life total is a separate number (CR 120.4c) and does
@@ -1029,6 +1034,20 @@ class EffectsMixin:
         than this call: the combat damage step does, because it applies the life
         loss and tallies lifelink from the same outcome.
         """
+        # Protection from the source's *name* (Runed Halo, CR 702.16i): the
+        # player is dealt none of it. Before the face-up flip and before any
+        # shield, because protection is not prevention — nothing is consumed and
+        # no replacement contends; the damage simply is not dealt.
+        from ..named_protection import protected_from
+
+        if amount > 0 and protected_from(self, self.players.index(target), source):
+            self.log.append(
+                f"{target.name} has protection from "
+                f"{getattr(getattr(source, 'card', source), 'name', 'that source')}"
+            )
+            if then is not None:
+                then(0)
+            return 0
         # Illusionary Mask: a face-down creature that would deal damage (e.g.
         # unblocked combat damage to a player) is turned face up first.
         if amount > 0:

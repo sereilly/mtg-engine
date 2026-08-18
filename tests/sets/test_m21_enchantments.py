@@ -1287,3 +1287,102 @@ def test_copying_a_spell_that_has_left_the_stack_copies_nothing(set_pool):
     (instruction,) = compiled.instructions
 
     assert instruction.kind == "copy_triggering_spell"
+
+
+# --- Runed Halo: a player protected from a name (round 125) -----------------
+
+
+def _halo_board(set_pool, named=None, opponent_graveyard=()):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20, hand=[pool["Runed Halo"]])
+    p2 = PlayerState(
+        name="P2", life=20, hand=[pool["Shock"]],
+        graveyard=[pool[n] for n in opponent_graveyard],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Runed Halo")
+    game._settle()
+    halo = next(iter(game.controlled_by(0)))
+    if named is not None:
+        halo.metadata["chosen_card_name"] = named
+    return game, p1, p2, halo
+
+
+def test_runed_halo_compiles_supported(set_pool):
+    """Both lines are claimed: the entry choice by ``enter_effects`` and the
+    protection by its own derivation table. The first alone would leave the card
+    reporting supported with the protection unaccounted for."""
+    program = compile_card_oracle(set_pool("M21")["Runed Halo"])
+
+    assert program.supported, program.reason
+    claims = {i.value for i in program.instructions if i.kind == "derived_static_rule"}
+    assert claims == {"enter_effects", "named_protection"}
+
+
+def test_the_name_is_chosen_as_it_enters(set_pool):
+    """CR 614.1c: the choice is made *as* the permanent enters, so it is stamped
+    at entry rather than by a trigger — by the time a trigger could resolve, the
+    protection would already have failed to apply once."""
+    _, _, _, halo = _halo_board(set_pool, opponent_graveyard=("Shock",))
+
+    assert halo.metadata["chosen_card_name"] == "Shock"
+
+
+def test_the_named_spell_cannot_target_the_protected_player(set_pool):
+    """CR 702.16i's first consequence, and CR 601.2c makes an illegal choice
+    make the spell uncastable rather than ineffective."""
+    game, p1, _, _ = _halo_board(set_pool, named="Shock")
+
+    result = game.cast_from_hand(1, "Shock", target_player_index=0)
+
+    assert not result.supported
+    assert "protection from Shock" in result.details
+    assert p1.life == 20
+
+
+def test_a_spell_with_another_name_still_gets_through(set_pool):
+    game, p1, _, _ = _halo_board(set_pool, named="Lightning Bolt")
+
+    result = game.cast_from_hand(1, "Shock", target_player_index=0)
+    game._settle()
+
+    assert result.supported
+    assert p1.life == 18
+
+
+def test_the_named_source_deals_no_damage(set_pool):
+    """The second consequence. Checked on the player-damage path rather than as
+    a shield, because protection is not prevention: nothing is consumed and no
+    replacement contends — the damage simply is not dealt."""
+    from tests.helpers import _mk_creature_card
+
+    game, p1, _, _ = _halo_board(set_pool, named="Prodigal Sorcerer")
+    pinger = Permanent(card=_mk_creature_card(
+        "Prodigal Sorcerer", 1, 1,
+        "{T}: This creature deals 1 damage to any target.",
+    ))
+    game._put_permanent_onto_battlefield(1, pinger, None)
+    _nosick(pinger)
+
+    game.activate_permanent_ability(1, "Prodigal Sorcerer", target_player_index=0)
+    game._settle()
+
+    assert p1.life == 20
+
+
+def test_two_halos_protect_from_two_names(set_pool):
+    """The protection is derived from the controlling permanents, so it is a
+    *set* — and it ends when a Halo leaves, with nothing to clear."""
+    from engine.named_protection import names_protecting
+
+    pool = set_pool("M21")
+    game, _, _, halo = _halo_board(set_pool, named="Shock")
+    second = Permanent(card=pool["Runed Halo"])
+    game._put_permanent_onto_battlefield(0, second, None)
+    second.metadata["chosen_card_name"] = "Lightning Bolt"
+
+    assert names_protecting(game, 0) == frozenset({"Shock", "Lightning Bolt"})
+
+    game.remove_from_battlefield(second)
+    assert names_protecting(game, 0) == frozenset({"Shock"})

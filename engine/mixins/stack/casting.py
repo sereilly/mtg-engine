@@ -717,6 +717,23 @@ class SpellCastingMixin:
         For a "Choose one —" modal spell, the chosen mode's instruction (not the
         first one) determines what the spell targets.
         """
+        # Protection from this spell's *name* (Runed Halo, CR 702.16i): the
+        # player can't be chosen as a target, which under CR 601.2c makes the
+        # spell uncastable at them rather than ineffective. Asked of the chosen
+        # player before the per-type checks below, because it applies whatever
+        # the spell's type is.
+        from ...named_protection import protected_from
+
+        if (
+            target_player_index is not None
+            and 0 <= target_player_index < len(self.players)
+            and protected_from(self, target_player_index, card)
+        ):
+            details = (
+                f"{self.players[target_player_index].name} has protection from "
+                f"{card.name}"
+            )
+            return False, details
         if card.primary_type not in ("instant", "sorcery"):
             # Aura spells are always targeted: a legal enchant target must be
             # chosen when the spell is cast (MTG Rules 115.1b, 601.2c)

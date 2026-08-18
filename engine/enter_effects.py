@@ -46,6 +46,12 @@ CHOOSE_COLOR_AND_OPPONENT_ON_ENTER = (
     "as this enchantment enters, choose a color and an opponent"
 )
 
+# "As this enchantment enters, choose a card name." (Runed Halo.) A *name*
+# rather than a quality: nothing on any board constrains it, and the choice is
+# made from the whole card pool — which is why the default below is a name the
+# chooser can see rather than one derived from the battlefield.
+CHOOSE_CARD_NAME_ON_ENTER = "as this enchantment enters, choose a card name"
+
 # "This creature enters with seven +1/+0 counters on it." (Clockwork Beast) and
 # "… with X +1/+1 counters on it." (Rock Hydra).
 ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS = "enters with seven +1/+0 counters on it"
@@ -91,6 +97,7 @@ _ENTRY_LINES: tuple[tuple[str, str], ...] = (
     (ENTERS_TAPPED, ""),
     (CHOOSE_OPPONENT_ON_ENTER, ""),
     (CHOOSE_COLOR_AND_OPPONENT_ON_ENTER, ""),
+    (CHOOSE_CARD_NAME_ON_ENTER, ""),
     (ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS, ""),
     (ENTERS_WITH_X_PLUS_1_1_COUNTERS, ""),
     (COPY_CREATURE_ON_ENTER, ""),
@@ -154,6 +161,7 @@ def enter_effect_line(line: str) -> str | None:
 
 
 __all__ = [
+    "CHOOSE_CARD_NAME_ON_ENTER",
     "CHOOSE_COLOR_AND_OPPONENT_ON_ENTER",
     "CHOOSE_OPPONENT_ON_ENTER",
     "COPY_ARTIFACT_ON_ENTER",

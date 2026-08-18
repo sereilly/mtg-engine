@@ -2349,6 +2349,15 @@ def _derived_static_claims(
     # gap waited for a card whose whole text is one replacement.
     if any(replacement_claims_line(line) for line in oracle_text.splitlines()):
         claims.append("replacements")
+    # "You have protection from the chosen card name." (Runed Halo.) A player's
+    # protection, derived from the controlling permanents' own text at each of
+    # the three places CR 702.16i names — so like every table above it needs no
+    # instruction, and like every table above the gate has to ask it or the card
+    # reports supported with the line unaccounted for.
+    from .named_protection import named_protection_line
+
+    if any(named_protection_line(line) for line in oracle_text.splitlines()):
+        claims.append("named_protection")
     return claims
 
 

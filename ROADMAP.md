@@ -256,55 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 122: one condition, two fire sites
-
-*(2026-08-18.)* M21 **271 → 272** — Garruk's Harbinger.
-
-> Hexproof from black
-> Whenever this creature deals combat damage to a player or planeswalker, look
-> at that many cards from the top of your library. You may reveal a creature
-> card or Garruk planeswalker card from among them and put it into your hand.
-> Put the rest on the bottom of your library in a random order.
-
-"Hexproof from black" already worked — the keyword classifier and the
-targeting enforcement had both been there since the protection cycle, which is
-worth recording because it is the *reason* the card only needed two things.
-
-**"To a player or planeswalker" is its own condition, not a widening.** The two
-halves fire in different places: damage to a player comes from the player-damage
-path, damage to a planeswalker from the loyalty-removal one — a walker takes
-combat damage as a *permanent* and never reaches the first. So a card printed
-"to a player" alone must not start firing on walkers, and the union kind gets a
-second fire site of its own. Both record the amount, which is what makes one
-`_EVENT_QUANTITIES` row true for the whole condition.
-
-**The look-and-pick template grew three parameters, not a second node.** See the
-Truth's shape and this one differ in the count (a back-reference), the pick
-(optional and filtered) and where the rest go — and "in a **random** order" is a
-real distinction from "in any order": one is a stated shuffle, the other leaves
-the cards as they lay because the ordering is the player's by rule. A card that
-said one while the engine did the other would differ only where nothing looks.
-
-The filter, the optionality and the order all ride the *prompt*, so what is
-offered, what an answer is checked against and what a non-interactive seat takes
-are one rule — `live_look_top_candidates`, the arrangement `live_discard_candidates`
-already makes.
-
-**A fragment two families needed moved to `phrases`.** The reader for "a land
-card or Shrine card" lived in `costs.py`, which sits *above* `effects/`; the
-look-and-pick production needed the same phrase. Importing upward would have
-been the backward edge the layering exists to prevent, so it moved down to the
-shared layer, which is exactly what that rule is for.
-
-See the Truth is the second card in the whole-pool diff: its payload now states
-`all_to_hand_if_cast_elsewhere` explicitly, where the handler had assumed it.
-Same behaviour, and no longer an assumption once a second card shares the kind.
-
-Whole-pool diff: **one card supported, one payload made explicit**. Suite green,
-every `--check` gate green, shipped pool 388/388, AI simulation byte-identical at
-443 interactions, **zero hooks added**. Five new tests, all watched to fail on
-the round-121 engine.
-
 ## Round 123: the same event, asked a different question
 
 *(2026-08-18.)* M21 **272 → 273** — Double Vision.
@@ -381,3 +332,41 @@ pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Five new tests plus two rewritten guards — one recording the old "no
 seam for activating from hand", the other the cost-charging check — all seven
 watched to fail on the round-123 engine.
+
+## Round 125: a protection whose bearer is a player
+
+*(2026-08-18.)* M21 **274 → 275** — Runed Halo.
+
+> As this enchantment enters, choose a card name.
+> You have protection from the chosen card name.
+
+**The one protection in the engine whose bearer is not a permanent.**
+`engine/prevention.py` shields a recipient from an *amount* and
+`_protection_qualities` answers about a permanent; neither can be asked "does
+this player have protection from a card *name*?". So it is its own module, and
+each of CR 702.16i's three consequences is enforced where that question is
+already asked — the cast's target check, the player-damage path, the Aura
+attach — rather than by a fourth mechanism that would have to be remembered at
+each of them.
+
+Checked **before** any shield, because protection is not prevention: nothing is
+consumed and no replacement contends, so the damage simply is not dealt.
+
+**Derived, not stamped.** The names a player is protected from are read off
+their permanents' own text and metadata, so two Halos protect from two names and
+the protection ends when one leaves with nothing to clear.
+
+**The name is chosen as the permanent enters** (CR 614.1c), not by a trigger —
+by the time a trigger could resolve, the protection would already have failed to
+apply once. The default names a card the chooser can actually *see*: the top of
+an opponent's graveyard, else one of their permanents. Naming nothing is a legal
+choice no player would make, and an AI seat would be stuck with it.
+
+**The second line needed its own claim.** With only the entry effect claimed the
+card compiled *supported* and its protection was unaccounted for — the
+partial-implementation shape. The gate now asks the same reader the enforcement
+does, which is what the six tables beside it already do.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Six new tests, all watched to fail on the round-124 engine.

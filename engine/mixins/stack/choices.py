@@ -959,19 +959,41 @@ class PendingChoicesMixin:
     # -- "As this enters, choose an opponent [and a color]" -------------------
 
     def confirm_enter_choice(
-        self, player_index: int, opponent_index: int, mana_color: str | None = None
+        self, player_index: int, opponent_index: int | None = None,
+        mana_color: str | None = None, card_name: str | None = None,
     ) -> bool:
         """Resolve a pending "as this enters, choose an opponent [and a color]"
         prompt (Black Vise / Jihad), overwriting the provisional defaults
         stamped on the permanent at ETB."""
         return self.resolve_pending_choice(
-            "enter_choice", player_index, opponent_index=opponent_index, mana_color=mana_color
+            "enter_choice", player_index, opponent_index=opponent_index,
+            mana_color=mana_color, card_name=card_name,
         )
 
     def _resolve_enter_choice(
-        self, choice: PendingChoice, opponent_index: int, mana_color: str | None
+        self, choice: PendingChoice, opponent_index: int | None = None,
+        mana_color: str | None = None, card_name: str | None = None,
     ) -> bool:
         player_index = choice.player_index
+        # "…choose a card name" (Runed Halo). A different question from the
+        # opponent-and-colour one this prompt was written for, so it answers and
+        # returns rather than falling through the seat check below — there is no
+        # seat in this choice at all.
+        #
+        # Any name is legal: CR 202.1 lets a player name any card, and the
+        # choice is not bounded by what is on a board. An empty answer keeps the
+        # default rather than naming nothing, which would make the protection
+        # apply to nothing.
+        if choice.data.get("needs_card_name"):
+            permanent = choice.data["permanent"]
+            if card_name:
+                permanent.metadata["chosen_card_name"] = card_name
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{self.players[player_index].name} named "
+                f"{permanent.metadata.get('chosen_card_name') or 'nothing'}"
+            )
+            return True
         if opponent_index not in choice.data["opponents"]:
             return False
         permanent = choice.data["permanent"]
@@ -2199,7 +2221,7 @@ register_choice(
 register_choice(
     "enter_choice",
     resolve=lambda game, choice, r: game._resolve_enter_choice(
-        choice, r["opponent_index"], r["mana_color"]
+        choice, r.get("opponent_index"), r.get("mana_color"), r.get("card_name")
     ),
     # Black Vise / Jihad stamp their deterministic defaults on the permanent as
     # it enters, so a non-interactive controller has nothing left to apply.

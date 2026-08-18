@@ -5,6 +5,7 @@ import re
 
 from ..enter_effects import (
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
+    CHOOSE_CARD_NAME_ON_ENTER,
     CHOOSE_OPPONENT_ON_ENTER,
     COPY_ARTIFACT_ON_ENTER,
     COPY_CREATURE_ON_ENTER,
@@ -235,6 +236,37 @@ class PermanentStateMixin:
                     needs_color=needs_color, opponents=opponents,
                     default_seat=chosen, default_color=default_color,
                 )
+
+        # "As this enchantment enters, choose a card name." (Runed Halo.) The
+        # choice is made *as* the permanent enters (CR 614.1c), so it is stamped
+        # here rather than by a trigger — by the time a trigger could resolve,
+        # the protection would already have failed to apply once.
+        #
+        # The default names a card the chooser can actually see: the top card of
+        # an opponent's graveyard, else one of their permanents. Naming nothing
+        # would make the protection apply to nothing at all, which is a legal
+        # choice no player would make and an AI seat would be stuck with.
+        if CHOOSE_CARD_NAME_ON_ENTER in text:
+            opponents = [
+                i for i, p in enumerate(self.players)
+                if i != caster_index and not p.lost
+            ]
+            seen = [
+                card.name
+                for seat in opponents
+                for card in reversed(self.players[seat].graveyard)
+            ] + [
+                perm.card.name
+                for seat in opponents
+                for perm in self.controlled_by(seat)
+            ]
+            permanent.metadata["chosen_card_name"] = seen[0] if seen else ""
+            self.arm_pending_choice(
+                "enter_choice", caster_index,
+                card_name=permanent.card.name, permanent=permanent,
+                needs_card_name=True, choices=sorted(set(seen)),
+                default_card_name=permanent.metadata["chosen_card_name"],
+            )
 
         # enters with fixed counters (Clockwork Beast). Track the counter count so
         # the end-of-combat trigger and the upkeep activated ability can adjust it.
