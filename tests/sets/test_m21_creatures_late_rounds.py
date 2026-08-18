@@ -935,7 +935,13 @@ def test_shacklegeist_compiles_supported(set_pool):
 
     (ability,) = program.activated_abilities
     assert ability.cost.tap_count == 2
-    assert ability.cost.tap_filter == {"type_filter": "creature", "subtype_filter": "spirit"}
+    # "Tap two **untapped** Spirits you control": the word had no payload key
+    # until round 112, so it reduced to "Spirits you control" — harmless for a
+    # tap cost, which can only be paid by untapped permanents anyway, and a
+    # dropped restriction everywhere else.
+    assert ability.cost.tap_filter == {
+        "type_filter": "creature", "subtype_filter": "spirit", "untapped_only": True,
+    }
 
 
 @pytest.mark.parametrize(

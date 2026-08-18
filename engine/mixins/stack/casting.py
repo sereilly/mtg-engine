@@ -31,6 +31,7 @@ from ...handlers._common import graveyard_card_matches, permanent_matches_filter
 from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ...oracle_types import x_spend_color_from_text
+from ...target_restrictions import forbidden_target
 from ...targeting import graveyard_target_spec
 from ...subject_filters import filter_head_noun, subject_matches
 from ...targeting import derive_cast_spec
@@ -705,20 +706,35 @@ class SpellCastingMixin:
                     target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
                     if target_idx < 0 or target_idx >= len(self.players):
                         target_idx = 1 - caster_index
-                    battlefield = self.players[target_idx].battlefield
-                    if not (0 <= target_permanent_index < len(battlefield)) or not permanent_matches_enchant_noun(
-                        battlefield[target_permanent_index], enchant_noun
+                    # Resolved once, through the control seam, and then asked
+                    # four questions. It was four subscripts of the same slot:
+                    # the same permanent every time, so the repetition bought
+                    # nothing and each copy was another positional read of a
+                    # list whose indices move.
+                    chosen = self.permanent_at(target_idx, target_permanent_index)
+                    if chosen is None or not permanent_matches_enchant_noun(
+                        chosen, enchant_noun
                     ):
                         return False, f"no valid target for {card.name}"
+                    # "You can't choose an untapped creature as this spell's
+                    # target as you cast it." (Enthralling Hold.) CR 601.2c: an
+                    # illegal choice makes the spell uncastable, not merely
+                    # ineffective, so this refuses here rather than letting the
+                    # Aura resolve and do nothing.
+                    if forbidden_target(self, card, chosen, caster_index):
+                        return False, (
+                            f"{chosen.card.name} can't be chosen as "
+                            f"{card.name}'s target"
+                        )
                     # A permanent that "can't be enchanted by other Auras" (Consecrate
                     # Land) is an illegal target for any other Aura spell.
-                    if self._cant_be_enchanted(battlefield[target_permanent_index]):
-                        return False, f"{battlefield[target_permanent_index].card.name} can't be enchanted by other Auras"
+                    if self._cant_be_enchanted(chosen):
+                        return False, f"{chosen.card.name} can't be enchanted by other Auras"
                     # CR 702.16b/c: an Aura with a quality can't be cast targeting a
                     # permanent with protection from that quality (or hexproof
                     # from an opponent's side, CR 702.11b).
                     if not self._can_be_targeted(
-                        battlefield[target_permanent_index], card, caster_index=caster_index
+                        chosen, card, caster_index=caster_index
                     ):
                         return False, f"no valid target for {card.name}"
                 else:

@@ -69,6 +69,29 @@ def test_every_promised_key_actually_narrows(pool, key, payload, card_name):
     assert not subject_matches(game, perm, {"type_filter": "creature", **payload})
 
 
+def test_untapped_only_rejects_a_tapped_permanent(pool):
+    """The other half of a tri-state, and the reason it needed its own key:
+    ``tapped`` is None / True / False, only the True half had one, and False is
+    falsy — so "an untapped creature" emitted exactly the payload of "a
+    creature" and the restriction vanished between the two gates.
+
+    Its own demonstration rather than a row in ``_REJECTIONS`` because the table
+    builds an untapped permanent, and the permanent this key rejects is a tapped
+    one."""
+    perm = Permanent(card=pool["Grizzly Bears"], tapped=True)
+    untapped = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[perm, untapped]), PlayerState(name="P2"),
+    ])
+
+    assert subject_matches(game, perm, {"type_filter": "creature"}), (
+        "the control: the bare noun phrase must match, or the rejection below "
+        "proves nothing about the key"
+    )
+    assert not subject_matches(game, perm, {"untapped_only": True})
+    assert subject_matches(game, untapped, {"untapped_only": True})
+
+
 def test_nontoken_rejects_a_token(pool):
     """The one key with no card type of its own (CR 111.1), and the restriction
     Lich's sacrifice has always carried."""
@@ -150,6 +173,7 @@ def test_every_sacrifice_filter_in_the_pool_is_one_the_prompt_can_test():
 # a key can only be listed here by someone who wrote one.
 _COVERED_ELSEWHERE = {
     "nontoken": "test_nontoken_rejects_a_token",
+    "untapped_only": "test_untapped_only_rejects_a_tapped_permanent",
     "controller": "test_the_relative_keys_refuse_without_the_context_they_need",
     "exclude_self": "test_the_relative_keys_refuse_without_the_context_they_need",
 }

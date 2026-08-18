@@ -323,6 +323,7 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
     engine implements stay one table (`IMPLEMENTED_KEYWORDS`).
     """
     from .oracle import _is_supported_keyword_line
+    from .target_restrictions import target_restriction_line
 
     return [
         line
@@ -330,6 +331,15 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
         if line
         and not line.startswith("enchant ")
         and not _is_supported_keyword_line(line)
+        # "You can't choose an untapped creature as this spell's target as you
+        # cast it." (Enthralling Hold.) Not an effect the Aura has while it is
+        # attached — it is spent as the spell is cast (CR 601.2c) — so it is
+        # claimed by the table that enforces it rather than added to the effect
+        # templates, which would put a line with no continuous behaviour behind
+        # them. Asked as the same reader the cast path calls, so a phrase the
+        # matcher cannot answer leaves the line unclaimed and the card
+        # unsupported rather than admitted with the restriction absent.
+        and not target_restriction_line(line)
         and aura_effect_claim(line, card_name) is None
     ]
 

@@ -841,3 +841,79 @@ def test_furious_rise_lets_the_exiled_card_actually_be_played(set_pool):
     assert result.supported, result.details
     assert [p.card.name for p in game.controlled_by(0)][-1] == "Concordia Pegasus"
     assert p1.exile == []
+
+
+# --- Enthralling Hold: a restriction on the choice (round 112) --------------
+
+
+def _hold_board(set_pool, *, victim_tapped):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Enthralling Hold"]], life=20)
+    victim = Permanent(card=pool["Baneslayer Angel"], tapped=victim_tapped)
+    p2 = PlayerState(name="P2", battlefield=[victim], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2, victim
+
+
+def test_enthralling_hold_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Enthralling Hold"])
+    assert program.supported, program.reason
+
+
+def test_enthralling_hold_cannot_be_cast_at_an_untapped_creature(set_pool):
+    """CR 601.2c: an illegal choice makes the spell **uncastable**, not merely
+    ineffective — so the cast is refused rather than the Aura resolving and
+    doing nothing."""
+    game, p1, p2, victim = _hold_board(set_pool, victim_tapped=False)
+
+    result = game.cast_from_hand(
+        0, "Enthralling Hold", target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+
+    assert not result.supported
+    assert "can't be chosen" in result.details
+    assert [p.card.name for p in game.controlled_by(1)] == ["Baneslayer Angel"]
+    assert [c.name for c in p1.hand] == ["Enthralling Hold"]
+
+
+def test_enthralling_hold_takes_a_tapped_creature(set_pool):
+    game, p1, p2, _ = _hold_board(set_pool, victim_tapped=True)
+
+    result = game.cast_from_hand(
+        0, "Enthralling Hold", target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert "Baneslayer Angel" in [p.card.name for p in game.controlled_by(0)]
+    assert list(game.controlled_by(1)) == []
+
+
+def test_the_ai_is_not_offered_a_target_the_cast_would_refuse(set_pool):
+    """Two callers, one rule. A restriction only the cast path knew about is an
+    AI turn spent on an action the game then rejects."""
+    from engine.ai_policy import _choose_aura_target
+
+    pool = set_pool("M21")
+    game, _, _, victim = _hold_board(set_pool, victim_tapped=False)
+    assert _choose_aura_target(game, 0, pool["Enthralling Hold"]) is None
+
+    victim.tapped = True
+    assert _choose_aura_target(game, 0, pool["Enthralling Hold"]) == (1, 0)
+
+
+def test_a_restriction_the_matcher_cannot_test_leaves_the_card_unsupported(set_pool):
+    """The refusal side. The Aura gate asks the same reader the cast path calls,
+    so a printed phrase the matcher cannot answer leaves the line unclaimed and
+    the card unsupported — rather than admitted with the restriction absent,
+    which would let the spell take exactly the target the card forbids."""
+    from engine.target_restrictions import target_restriction_line
+
+    assert target_restriction_line(
+        "you can't choose an untapped creature as this spell's target as you cast it"
+    )
+    assert not target_restriction_line(
+        "you can't choose an enchanted creature as this spell's target as you cast it"
+    )

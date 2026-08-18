@@ -400,6 +400,10 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # reading the bonus as the counter would let it qualify.
     if payload.get("with_plus1_counter") and int(perm.metadata.get("plus_counters", 0)) <= 0:
         return False
+    # "an **untapped** creature" (Enthralling Hold). The twin of ``tapped_only``
+    # and a separate key for the reason stated on ``to_payload``.
+    if payload.get("untapped_only") and perm.tapped:
+        return False
     # "target **legendary** creature". CR 205.4: a supertype sits on the type
     # line, and nothing in layers 4-6 computes one here — so the answer is the
     # line the permanent *effectively* has, which folds in a copy (layer 1) and

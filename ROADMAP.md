@@ -256,50 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 109: a duration that is neither of the two
-
-*(2026-08-18.)* M21 **258 → 259** — Furious Rise.
-
-> At the beginning of your end step, if you control a creature with power 4 or
-> greater, exile the top card of your library. You may play that card until you
-> exile another card with this enchantment.
-
-**The first sentence already worked** — end-step trigger, CR 603.4 intervening-if
-over a power-4 filter, exile the top card. The whole card hung on the second one,
-and specifically on its duration.
-
-`cast_permissions.py` had exactly two: `"end_of_turn"`, swept at cleanup
-(CR 514.2), and `None`, lasting until end of game (CR 611.2a). Furious Rise's
-clause is neither, and reading it as either is wrong in a *stated* direction —
-end-of-turn discards the card at the very cleanup after the end step that exiled
-it, so it would never be playable at all; no-duration leaves every card the
-enchantment has ever exiled playable at once. So there is a third:
-`"until_source_grants_again"`, retired by the next grant from the same permanent.
-The ending event may simply never occur — the enchantment is destroyed, or no end
-step finds a creature with power 4 — and then the permission lasts, which is
-what the card says.
-
-**Retired where it ends, not swept where it would be convenient.** There is no
-turn step to sweep at: the event is another grant, so the retirement lives in
-`grant_permission` itself. A grant carrying no source id retires nothing, which
-is the safe direction — the alternative clears every unsourced permission the
-player holds.
-
-**Keyed by `permanent_id`, because "this enchantment" is one permanent.** Two
-Furious Rises are two independent permissions, and the name they share cannot
-say so; a battlefield slot cannot either, since anything leaving renumbers the
-rest. CR 400.7 makes the id right in the other direction too: a Furious Rise that
-leaves and returns is a new object that has granted nothing yet.
-
-**"That card" is a spelling, not a second referent.** It names the cards a step
-of this same resolution exiled — the identical back-reference "cards exiled this
-way" and "them" already make, with one member in the list because the exile took
-one card. A second `what` would have been the same producer check written twice.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Six new tests, all watched to fail on the round-108 engine.
-
 ## Round 110: the turn ends, which is not the same as reaching its end
 
 *(2026-08-18.)* M21 **259 → 260** — Discontinuity.
@@ -400,3 +356,55 @@ pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Eight new tests, all watched to fail on the round-110 engine — the
 three negative ones carry an in-test control, because "nothing was exiled" is
 also what an engine that does not know the card looks like.
+
+## Round 112: a restriction on the choice, and the falsy half of a tri-state
+
+*(2026-08-18.)* M21 **261 → 262** — Enthralling Hold.
+
+> Enchant creature
+> You can't choose an untapped creature as this spell's target as you cast it.
+> You control enchanted creature.
+
+The third line is Control Magic's and was already claimed; the card was one
+sentence, and that sentence is a **printed restriction on the spell's own
+targeting** (CR 601.2c) rather than a property of the thing aimed at. Protection,
+hexproof and shroud are asked of every spell alike; this applies to nothing else
+on the board, so it is its own text-keyed table — `engine/target_restrictions.py`,
+in the model `cast_restrictions.py` uses for timing gates. The printed noun
+phrase is read by the grammar's noun parser into the same filter payload every
+other narrowing travels as, so a card printed "a tapped artifact" or "a creature
+you control" needs no code.
+
+Refused at the cast, not at resolution: CR 601.2c makes an illegal choice make
+the spell **uncastable**, and letting the Aura resolve and do nothing is a
+different card. And asked in both places that decide a target — the cast path
+and the AI's Aura chooser — because a restriction only the first knows about is
+a turn spent on an action the game then rejects.
+
+**"Untapped" had no payload key, and the reason is worth stating.** Round 108
+made a set narrowing that emits nothing refuse the line; this one emitted nothing
+for a *different* reason. `ObjectFilter.tapped` is tri-state — None, True, False
+— and only the True half had a key, so "an untapped creature" reduced to exactly
+the payload of "a creature": the dropped-narrowing shape wearing a boolean
+instead of a missing key, and invisible to the round-108 table because
+`getattr(filt, "tapped")` is falsy for the half that was lost. `untapped_only` is
+its own key rather than `tapped_only: False`, because absent already means "no
+restriction" and a matcher reading a three-valued key with `.get()` would answer
+the wrong one of the two.
+
+No shipped card was mis-played by it: Castle's "Untapped creatures you control
+get +0/+2" travels the lord-buff qualifier channel, which reads the state
+directly, and Siege Striker's tap clause carried its own top-level flag. Siege
+Striker is the second card in the whole-pool diff for that reason — its filter is
+now *also* narrowed, which is strictly truer and changes nothing, since a tap
+cost could never be paid by a tapped permanent anyway.
+
+Four positional battlefield subscripts of the same slot became one
+`permanent_at` on the way past, dropping that module's ratcheted count from 9
+to 5.
+
+Whole-pool diff: **one card supported, one payload made truer**. Suite green,
+every `--check` gate green, shipped pool 388/388, AI simulation byte-identical at
+443 interactions, **zero hooks added**. Six new tests, all watched to fail on the
+round-111 engine; two guards that recorded the old reading were rewritten to
+state what replaced it.

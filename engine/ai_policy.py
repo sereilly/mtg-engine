@@ -19,6 +19,7 @@ from .classifier import classify_card
 from .game import Game
 from .handlers._common import permanent_matches_filter
 from .mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
+from .target_restrictions import forbidden_target
 from .auras import aura_restriction_active
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
@@ -763,6 +764,12 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
     )
     target_player_index = choose_attack_target(game, caster_index) if harmful else caster_index
     for permanent_index, permanent in enumerate(game.players[target_player_index].battlefield):
+        # The spell's own printed targeting restriction (CR 601.2c). Asked here
+        # as well as at the cast, and through the same function: a choice only
+        # the cast path refuses is an AI turn spent on an action the game then
+        # rejects, and a human seat offered a target it cannot take.
+        if forbidden_target(game, card, permanent, caster_index):
+            continue
         if permanent_matches_enchant_noun(permanent, noun):
             return target_player_index, permanent_index
     return None

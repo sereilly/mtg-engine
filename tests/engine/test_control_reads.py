@@ -318,7 +318,7 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "engine/mixins/effects.py": 2,
     "engine/mixins/permanent_state.py": 1,
     "engine/mixins/stack/activation.py": 3,
-    "engine/mixins/stack/casting.py": 9,
+    "engine/mixins/stack/casting.py": 5,
     "engine/mixins/stack/choices.py": 4,
     "engine/phases/combat_damage_step.py": 17,
     "engine/phases/combat_phase.py": 11,

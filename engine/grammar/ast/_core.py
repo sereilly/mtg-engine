@@ -239,6 +239,16 @@ class ObjectFilter:
             )
         if self.tapped:
             payload["tapped_only"] = True
+        # "an **untapped** creature" (Enthralling Hold). ``tapped`` is tri-state
+        # and only the True half had a key, so the False half was falsy all the
+        # way down and "untapped creature" emitted exactly the payload of
+        # "creature" — the round-108 dropped-narrowing shape, wearing a boolean
+        # instead of a missing key. Its own key rather than ``tapped_only:
+        # False``, because absent already means "no restriction" and a matcher
+        # reading a three-valued key with ``.get()`` would answer the wrong one
+        # of the two.
+        elif self.tapped is False:
+            payload["untapped_only"] = True
         if self.colors:
             payload["color_filter"] = self.colors[0]
         if self.excluded_colors:
