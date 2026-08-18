@@ -1054,6 +1054,12 @@ class EffectsMixin:
         seat = damage_source_seat(self, source)
         if seat is None or self.players[seat] is target:
             return
+        # The running total the cost reduction reads (Chandra's Incinerator).
+        # Recorded here rather than at each damage path for the same reason the
+        # announcement is: this is the one site that knows the damage was
+        # noncombat *and* whose source it was, and a tally kept anywhere else
+        # would have to re-derive both.
+        self.players[seat].noncombat_damage_dealt_to_opponents_this_turn += dealt
         emit(
             self,
             "source_you_control_damages_opponent",

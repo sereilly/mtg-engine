@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 80.7% | 78.5% | 54.9% | 224 |
+| M21 *(measured)* | 285 | 503 | 80.9% | 78.9% | 55.1% | 225 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,7 +33,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 222 | 92 | expected a subject |  |
-| 89 | 33 | unrecognized effect verb |  |
+| 88 | 32 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
 | 31 | 31 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -49,8 +49,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 4 | 1 | expected a quantity |  |
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
-| 3 | 2 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 1 | expected a permanent to put counters on |  |
+| 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 1 | expected something to shield |  |
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
@@ -216,6 +216,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{2}, {T}: Add one mana of any color.`
 - **Chandra's Firemaw**
   - `When this creature enters, you may search your library and/or graveyard for a card named Chandra, Flame's Catalyst, reveal it, and put it into your hand. If you search your library this way, shuffle.`
+- **Chandra's Incinerator**
+  - `Whenever a source you control deals noncombat damage to an opponent, this creature deals that much damage to target creature or planeswalker that player controls.`
 - **Chandra's Magmutt**
   - `{T}: This creature deals 1 damage to target player or planeswalker.`
 - **Chandra's Pyreling**

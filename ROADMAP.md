@@ -256,54 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 118: a token as big as a graveyard, and a spell that exiles itself
-
-*(2026-08-18.)* M21 **267 → 268** — Experimental Overload.
-
-> Create an X/X blue and red Weird creature token, where X is the number of
-> instant and sorcery cards in your graveyard. Then you may return an instant or
-> sorcery card from your graveyard to your hand. Exile Experimental Overload.
-
-Three sentences, three small gaps — and the third had been fixed three rounds
-earlier without the card noticing.
-
-**An X/X token.** `CreateToken` stored printed integers and the refusal beside
-it said so, which was true when it was written and had quietly stopped being the
-only option: the where-clause machinery stamps its count onto the instruction
-and the executor resolves it into the context's X *before any handler runs*, so
-the payload says "x" and the handler reads a number, exactly as a pump or a
-counted damage does. Both halves must be the **same** variable — "X/Y" is two
-counts and the clause defines one, so admitting it would give the token a
-toughness nothing stated.
-
-Taken at resolution and then fixed onto the token's card. A token has no
-characteristic-defining ability, so a card later leaving the graveyard does not
-shrink it; and Experimental Overload is still resolving while the count is
-taken, which is why it does not count itself (CR 608.2n bins it last).
-
-**A chosen card that is not a target.** "Return **an** instant or sorcery card
-from your graveyard" resolved nowhere: every graveyard return the engine had was
-targeted. Admitted in exactly the shape where the distinction cannot matter —
-the chooser's own graveyard — because there is nothing for targeting to protect
-there: no shroud, no protection, no "changes target" effect can reach a card in
-your own graveyard, and the picker is the one the targeted spelling already
-uses. A bare quantifier over anyone else's zone still refuses.
-
-**A spell exiling itself.** Round 115 gave "exile it" a handler, and that
-handler exiles the ability's *source permanent* — of which a sorcery has none.
-So the words compiled, the handler ran, and it exiled nothing. The object here is
-the spell on the stack, which makes this CR 608.2n's "where the card goes"
-rather than a zone change of something in play, and it routes through the same
-flag the "if that spell would be put into your graveyard, exile it instead"
-rider uses. Set rather than performed: the card is still resolving, and the
-resolution tail is the one place that bins it.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Six new tests, all watched to fail on the round-117 engine; one guard
-that recorded the old token refusal was rewritten to state what replaced it and
-what still refuses.
-
 ## Round 119: a trigger created by an ability, and asked where it will fire
 
 *(2026-08-18.)* M21 **268 → 269** — Subira, Tulzidi Caravanner.
@@ -386,3 +338,44 @@ Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Five new tests plus a rewritten guard, all six watched to fail on the
 round-119 engine.
+
+## Round 121: "that player" is not a seat you can compare against
+
+*(2026-08-18.)* M21 **270 → 271** — Chandra's Incinerator.
+
+> This spell costs {X} less to cast, where X is the total amount of noncombat
+> damage dealt to your opponents this turn.
+> Trample
+> Whenever a source you control deals noncombat damage to an opponent, this
+> creature deals that much damage to target creature or planeswalker that player
+> controls.
+
+The first line is round 120's template with a different count, and it is a
+**turn history** rather than a board read — the damage is gone the instant it is
+dealt, so nothing on any battlefield could answer it. The tally is kept at the
+one site that already knows both that the damage was noncombat and whose source
+it was; anywhere else would have to re-derive both.
+
+The trigger's condition and its fire site were already there, amount and damaged
+seat included. What was missing was the row letting an effect *name* the number,
+and one thing more interesting.
+
+**`controller: "that_player"` was being answered as "not you".** The filter
+matcher tests a controller by comparing a seat against the observer, so
+`"that_player"` fell through to the "an opponent" branch — right in a two-player
+game by coincidence, and wrong the moment there are three. It is not a property
+of the permanent at all: it names a player the *event* picked, and the only place
+that seat is known is the resolution holding the trigger's context.
+
+So the matcher now **refuses** it and the handler resolves it, which is the same
+split "another" and `attached_to` already make: a restriction the matcher cannot
+test must not be one it silently approximates. The refusal is what makes the
+split load-bearing — a key that quietly answered would let any future card
+carrying the phrase reach every opponent's board.
+
+Feline Sovereign (round 105) carries the same phrase and reaches its handler by
+a different road; its narrowing is applied there, so nothing changed for it.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Five new tests, all watched to fail on the round-120 engine.

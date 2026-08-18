@@ -88,6 +88,30 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         for perm in chosen:
             apply_damage_to_creature(game, perm, damage, card)
         return True, "resolved"
+    # "…to target creature or planeswalker **that player** controls."
+    # (Chandra's Incinerator.) "That player" is a referent the *event* picked —
+    # the opponent who was dealt the damage — so it is resolved here, where the
+    # trigger's context is, and `subject_matches` refuses it rather than
+    # reducing it to "any opponent". Two-player games make the two readings
+    # agree; three do not.
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    if described.get("controller") == "that_player":
+        seat = (context.trigger_context or {}).get("damaged_seat")
+        if seat is None:
+            game.log.append(f"{card.name}: no player for 'that player' to name")
+            return True, "resolved"
+        narrowed = {k: v for k, v in described.items() if k != "controller"}
+        perm = resolve_target_permanent(
+            game, context,
+            player=game.players[seat],
+            predicate=lambda p: permanent_matches_filter(p, narrowed),
+            fallback_on_invalid_choice=False,
+        )
+        if perm is None:
+            game.log.append(f"{card.name}: nothing of theirs to damage")
+            return True, "resolved"
+        apply_damage_to_creature(game, perm, damage, card)
+        return True, "resolved"
     # "…and N damage to you": a second damage instruction in the same sequence
     # aimed at the source's controller rather than the spell's target. Reads the
     # same "recipient" key target_gains_life has always used. Without it, "deal

@@ -1741,3 +1741,91 @@ def test_exiling_the_source_records_that_it_happened(set_pool):
     assert kinds == ["exile_self", "if_then"]
     condition = compiled.instructions[1].payload["condition"]
     assert condition == {"kind": "it_happened", "key": "exiled_self"}
+
+
+# --- Chandra's Incinerator: a history, and a player the event named (121) ---
+
+
+def _incinerator_board(set_pool, hand=("Shock",)):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20, hand=[pool[n] for n in hand])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2, pool
+
+
+def test_chandras_incinerator_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Chandra's Incinerator"])
+    assert program.supported, program.reason
+
+
+def test_the_reduction_tracks_noncombat_damage_dealt_this_turn(set_pool):
+    """A turn history rather than a board read: the damage is gone the instant
+    it is dealt, so nothing on any battlefield could answer it. Recorded at the
+    one site that knows both that the damage was noncombat and whose source it
+    was."""
+    from engine.cost_modifiers import cost_reduction_for_cast
+
+    game, _, p2, pool = _incinerator_board(set_pool)
+    card = pool["Chandra's Incinerator"]
+    assert cost_reduction_for_cast(game, 0, card)[0].generic == 0
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game._settle()
+
+    assert p2.life == 18
+    assert cost_reduction_for_cast(game, 0, card)[0].generic == 2
+
+
+def test_the_history_resets_between_turns(set_pool):
+    """"This turn" is the turn, so the tally goes back to nothing with the rest
+    of the turn histories."""
+    from engine.cost_modifiers import cost_reduction_for_cast
+
+    game, _, _, pool = _incinerator_board(set_pool)
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game._settle()
+    assert cost_reduction_for_cast(game, 0, pool["Chandra's Incinerator"])[0].generic == 2
+
+    game.begin_turn_bookkeeping(1)
+
+    assert cost_reduction_for_cast(game, 0, pool["Chandra's Incinerator"])[0].generic == 0
+
+
+def test_the_trigger_hits_the_board_of_the_player_who_was_damaged(set_pool):
+    """"…to target creature or planeswalker **that player** controls." "That
+    player" is a referent the *event* picked, resolved by the handler holding
+    the trigger's context — not a seat comparison, which would reduce it to
+    "any opponent"."""
+    game, _, p2, pool = _incinerator_board(set_pool)
+    incinerator = Permanent(card=pool["Chandra's Incinerator"])
+    game._put_permanent_onto_battlefield(0, incinerator, None)
+    _nosick(incinerator)
+    theirs = Permanent(card=pool["Baneslayer Angel"])
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    mine = Permanent(card=pool["Alpine Watchdog"])
+    game._put_permanent_onto_battlefield(0, mine, None)
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game._settle()
+
+    assert theirs.damage_marked == 2, "that much damage, to their creature"
+    assert mine.damage_marked == 0, "not to mine"
+
+
+def test_that_player_is_refused_as_a_seat_comparison():
+    """The matcher answers about a permanent and a seat; "that player" is
+    neither. Reduced to "not you" it means "any opponent" — right in a
+    two-player game by coincidence, wrong the moment there are three."""
+    from engine.subject_filters import subject_matches
+    from tests.helpers import _mk_creature_card
+
+    perm = Permanent(card=_mk_creature_card("Bear", 2, 2, ""))
+    game = Game(players=[
+        PlayerState(name="P1"), PlayerState(name="P2", battlefield=[perm]),
+    ])
+
+    assert subject_matches(game, perm, {"controller": "you"}, observer=1)
+    assert not subject_matches(game, perm, {"controller": "that_player"}, observer=0)
+    assert not subject_matches(game, perm, {"controller": "that_player"}, observer=1)

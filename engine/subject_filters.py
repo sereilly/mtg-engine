@@ -180,6 +180,17 @@ def subject_matches(
         return False
     controller = described.get("controller")
     if controller is not None:
+        # "**That player** controls" is not a seat this can compare against.
+        # It names a player the *event* picked — the one who was dealt damage,
+        # the one whose creature died — and the only place that seat is known is
+        # the resolution holding the trigger's context. Answered here it would
+        # reduce to "not you", which is "any opponent": right in a two-player
+        # game by coincidence and wrong the moment there are three.
+        #
+        # So it refuses, and the handler that has the context resolves it —
+        # the same split "another" and ``attached_to`` already make.
+        if controller == "that_player":
+            return False
         seat = game.controller_index_of(obj)
         if seat is None or observer is None:
             return False

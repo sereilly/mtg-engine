@@ -179,6 +179,7 @@ class TurnManagementMixin:
             # so when the next turn begins. Every seat resets here, which is why
             # this loop is over self.players rather than the active one.
             player.life_gained_this_turn = 0
+            player.noncombat_damage_dealt_to_opponents_this_turn = 0
             player.creatures_died_under_your_control_this_turn = 0
             player.spells_cast_this_turn = []
 

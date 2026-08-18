@@ -544,6 +544,12 @@ class PlayerState:
     # begin_turn_bookkeeping — a "this turn" counter that never resets is a bug
     # that only shows up on turn two.
     life_gained_this_turn: int = 0
+    # "…where X is the total amount of **noncombat damage dealt to your
+    # opponents** this turn." (Chandra's Incinerator.) A per-seat tally of what
+    # this player's sources dealt, kept because no zone holds it: the damage is
+    # gone the instant it is dealt, and CR 601.2f asks for the total at the
+    # moment a cost is calculated. Reset with the rest of the turn histories.
+    noncombat_damage_dealt_to_opponents_this_turn: int = 0
     # Creatures that died *under this player's control* this turn. The
     # game-wide Game.creatures_died_this_turn cannot answer "under your
     # control": it is one number for the table, so reading it per player would

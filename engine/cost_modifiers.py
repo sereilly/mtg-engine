@@ -318,6 +318,8 @@ _SELF_REDUCTION = re.compile(
 # card visibly unsupported instead of quietly mispriced.
 _SELF_REDUCTION_COUNTS: dict[str, str] = {
     "the total power of creatures you control": "total_power_you_control",
+    "the total amount of noncombat damage dealt to your opponents this turn":
+        "noncombat_damage_to_opponents_this_turn",
 }
 
 
@@ -498,6 +500,10 @@ def _counted_reduction(game, caster_index: int, counted: str) -> int:
             for perm in game.controlled_by(caster_index)
             if perm.is_creature
         )
+    if counted == "noncombat_damage_to_opponents_this_turn":
+        # A turn history rather than a board read: the damage is gone the
+        # instant it is dealt, so nothing on any battlefield could answer this.
+        return int(caster.noncombat_damage_dealt_to_opponents_this_turn)
     return 0
 
 

@@ -344,6 +344,12 @@ _EVENT_QUANTITIES: dict[str, str] = {
     # target opponent." (Brash Taunter.) The number is frozen by the fire site,
     # because by resolution the marked damage may have been added to or wiped.
     "creature_dealt_damage": "damage_dealt",
+    # "Whenever a source you control deals noncombat damage to an opponent,
+    # this creature deals **that much** damage to …" (Chandra's Incinerator).
+    # The fire site already carried the number — it is the damage *dealt*
+    # (CR 120.4b), not what the life total lost — and this is the row that lets
+    # an effect name it.
+    "source_you_control_damages_opponent": "amount",
 }
 
 # The scratchpad keys that are *quantities*. `lower._PRODUCES` also records
