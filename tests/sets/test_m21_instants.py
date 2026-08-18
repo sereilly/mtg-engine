@@ -1205,3 +1205,99 @@ def test_instead_refuses_on_a_freshly_chosen_spell():
     )
 
     assert not result.usable
+
+
+# --- Round 97: protection from a colour chosen as it resolves ---------------
+
+
+def _feat_board(set_pool):
+    pool = set_pool("M21")
+    mine = Permanent(card=pool["Gale Swooper"])
+    p1 = PlayerState(
+        name="P1", battlefield=[mine], hand=[pool["Feat of Resistance"]]
+    )
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=pool["Chandra's Magmutt"])]
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, mine
+
+
+def test_feat_of_resistance_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Feat of Resistance"])
+    assert program.supported, program.reason
+
+
+def test_a_granted_protection_was_refused_for_its_argument(set_pool):
+    """The defect this round found. "Protection from black" is the keyword
+    *protection* carrying a quality (CR 702.16a); the grant gate compared the
+    whole compound string against a registry that lists the ability — so **every**
+    granted protection was refused as an unimplemented keyword, while a printed
+    one had worked since the keyword gate was written."""
+    from engine.grammar import compile_line
+
+    result = compile_line("It gains protection from black until end of turn.")
+
+    assert result.lowered, result.failure_reason
+    assert result.instructions[0].payload["keywords"] == ("protection from black",)
+
+
+def test_the_counter_and_the_protection_both_land(set_pool):
+    game, _p1, mine = _feat_board(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Feat of Resistance",
+        target_player_index=0, target_permanent_index=0, new_color="R",
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert (mine.effective_power, mine.effective_toughness) == (4, 3)
+    assert ("color", "R") in game._protection_qualities(mine)
+
+
+def test_the_colour_is_the_one_chosen_and_not_a_default(set_pool):
+    """CR 609.3: the choice is made as the effect resolves, so the keyword
+    cannot name it — it names the *choice*, and the grant resolves it."""
+    game, _p1, mine = _feat_board(set_pool)
+
+    game.cast_from_hand(
+        0, "Feat of Resistance",
+        target_player_index=0, target_permanent_index=0, new_color="U",
+    )
+    game._settle()
+
+    assert ("color", "U") in game._protection_qualities(mine)
+    assert ("color", "R") not in game._protection_qualities(mine)
+
+
+def test_no_colour_chosen_protects_from_nothing(set_pool):
+    """A protection the player did not pick is a protection from the wrong
+    things, so nothing is granted rather than a default colour being invented.
+    The +1/+1 counter still happens — CR 608.2's "as much as it can"."""
+    game, _p1, mine = _feat_board(set_pool)
+
+    game.cast_from_hand(
+        0, "Feat of Resistance", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert (mine.effective_power, mine.effective_toughness) == (4, 3)
+    assert game._protection_qualities(mine) == set()
+
+
+def test_the_protection_expires_with_the_turn(set_pool):
+    """"Until end of turn" — swept by prefix at cleanup, because the key is one
+    per colour rather than a fixed name."""
+    game, _p1, mine = _feat_board(set_pool)
+    game.cast_from_hand(
+        0, "Feat of Resistance",
+        target_player_index=0, target_permanent_index=0, new_color="R",
+    )
+    game._settle()
+    assert game._protection_qualities(mine)
+
+    game.resolve_cleanup_step(0)
+
+    assert game._protection_qualities(mine) == set()

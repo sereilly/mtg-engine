@@ -1701,7 +1701,15 @@ function activatedAbilityRequiresTargetStackSpell(card) { return specKind(card) 
 function cardRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
-  return text.includes("any one color") || text.includes("one mana of any color");
+  // "…protection from the color of your choice" (Feat of Resistance) rides the
+  // same one-shot colour prompt: CR 609.3 makes the choice part of resolving
+  // the spell, and it reaches the engine as mana_color exactly as the
+  // any-one-color mana clauses do.
+  return (
+    text.includes("any one color")
+    || text.includes("one mana of any color")
+    || text.includes("the color of your choice")
+  );
 }
 
 function cardRequiresCastColorChoice(card) {

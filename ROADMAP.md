@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 246/285) to the full release line - **137 sets, 33,594
+M21 measured at 247/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–93 — lives in git history at and before
-commit `05642fa`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–94 — lives in git history at and before
+commit `bdd7e8b`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,53 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 94: half a characteristic, and a count that is the answer to a prompt
-
-*(2026-08-17.)* M21 **243 → 244** — Kinetic Augur, closing the batch.
-
-> Kinetic Augur's power is equal to the number of instant and sorcery cards in
-> your graveyard.
-> When this creature enters, discard up to two cards, then draw that many cards.
-
-**The CDA table had only ever seen whole P/Ts.** Every entry reads "power **and
-toughness are each** equal to", and the apply site wrote `set_base_pt(perm,
-value, value)`. Kinetic Augur is */4: it defines *half* a P/T, and the printed
-toughness stands. Which half it defines rides on the payload rather than in the
-kind — a card printed the other way round is the same template — and
-`set_base_pt` already took `None` for "leave this one tracking whatever else
-applies", so there was nothing to build, only something to stop assuming.
-
-**And it counts cards in a zone**, which the CDA tally cannot: a card in a
-graveyard has no computed characteristics at all (CR 613.1), so it is a different
-question of a different matcher. The payload carries the same `count_spec` every
-other computed amount uses and goes through `evaluate_count` — the evaluator the
-computed 7c bonus two lines below was already using, so "the number of instant
-and sorcery cards in your graveyard" means one number whichever sentence prints
-it.
-
-**"Then draw that many" is one instruction because the second number is the
-answer to the first.** How many are drawn is however many the player chose to
-discard, and that choice is a *pending prompt* — so decomposed, the draw would
-run while the prompt was still owed and draw nothing at all, with the card
-reporting supported. `_fused_discard_then_draw` is the mirror of the
-draw-then-discard fuser beside it and is fused for the opposite reason: that one
-because no controller-discard handler existed, this one because the pair cannot
-be separated in time.
-
-The follow-on rides the *prompt* rather than the resolution, which is the
-arrangement Library of Leng's `to_library` already uses: what happens when a
-discard is answered belongs to the discard.
-
-**"Up to" is a ceiling, not a count.** The discard prompt has always demanded its
-exact number; a ceiling read as an exact count is a card that forces its
-controller to pitch cards they were offered the choice of keeping. One flag makes
-fewer legal — none included — and a prompt without it is unchanged, which a test
-pins in both directions.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Ten new tests, seven watched to fail on the round-93 engine.
-
 ## Round 95: how much any-colour mana is data
 
 *(2026-08-17.)* M21 **244 → 245** — Sanctum of Fruitful Harvest, and a card hook
@@ -383,3 +336,41 @@ the case is pinned because that is exactly the reading a later edit would
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Five new tests, three watched to fail on the round-95 engine.
+
+## Round 97: protection from a colour chosen as it resolves
+
+*(2026-08-17.)* M21 **246 → 247** — Feat of Resistance.
+
+> Put a +1/+1 counter on target creature you control. It gains protection from
+> the color of your choice until end of turn.
+
+**A granted protection had never been possible, and the reason was one string.**
+"Protection from black" is the keyword *protection* carrying a quality
+(CR 702.16a). The grant gate compared the whole compound against
+`IMPLEMENTED_KEYWORDS`, which lists the **ability** — so every granted protection
+was refused as an unimplemented keyword, while a *printed* one had worked since
+the keyword gate was written. The asymmetry is exactly why it went unseen: the
+pool is full of printed protection and had no granted protection at all until
+this card.
+
+**Where the grant goes is not layer 6.** Layer 6 holds a word, and "protection
+from black" is not one — `_protection_qualities` reads its own channel, which has
+existed since protection was written with a comment saying no card in the pool
+used it yet. Feat of Resistance is that card. The channel is one key per colour
+rather than a fixed name, so cleanup sweeps it by **prefix**: listing five keys
+would work today and be one short the day something grants protection from a
+non-colour.
+
+**"The color of your choice" cannot be in the keyword**, because CR 609.3 makes
+the choice part of the resolution. So the keyword names the *choice*, and the
+grant resolves it — reading the colour through the same `mana_color` channel the
+any-one-color clauses already use, which is why the client needed one predicate
+widened rather than a new prompt.
+
+An unanswered choice grants **nothing**. A protection the player did not pick is
+a protection from the wrong things, and doing nothing is the honest failure; the
++1/+1 counter still lands, which is CR 608.2's "as much as it can".
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Six new tests, all six watched to fail on the round-96 engine.

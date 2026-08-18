@@ -109,6 +109,14 @@ class CleanupStepMixin:
                     permanent.toughness_bonus -= temp_toughness
                 for key in _EOT_METADATA_KEYS:
                     permanent.metadata.pop(key, None)
+                # A granted "protection from <colour>" is one key per colour
+                # rather than a fixed name, so it is swept by prefix. Listing
+                # five keys would work today and be one entry short the day a
+                # protection from something other than a colour is granted.
+                for key in [
+                    k for k in permanent.metadata if k.startswith("protection_from_")
+                ]:
+                    permanent.metadata.pop(key, None)
                 # Layer 6: until-end-of-turn ability grants and removals expire
                 # together, in one place, rather than needing a metadata key per
                 # keyword listed in _EOT_METADATA_KEYS.

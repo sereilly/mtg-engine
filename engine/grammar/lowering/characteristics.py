@@ -440,7 +440,7 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     # one sentence ("gains hexproof and indestructible") are one instruction
     # carrying them all.
     for keyword in node.keywords:
-        if keyword not in IMPLEMENTED_KEYWORDS:
+        if _granted_keyword_name(keyword) not in IMPLEMENTED_KEYWORDS:
             raise LoweringError(
                 f"granting {keyword!r} needs the keyword implemented", node=node
             )
@@ -450,6 +450,18 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     assert isinstance(node.subject, ast.TargetSpec)
     _describe_targets(payload, node.subject)
     return (OracleInstruction("grant_target_keyword_until_eot", "", payload),)
+
+
+def _granted_keyword_name(keyword: str) -> str:
+    """The registry name of a granted keyword, without its argument.
+
+    "Protection from black" is the keyword *protection* with a quality attached
+    (CR 702.16a); the registry lists the ability, not every quality it can name.
+    The gate compared the whole compound string, so **every** granted protection
+    was refused as an unimplemented keyword — a printed one has worked since the
+    keyword gate was written, which is what made the asymmetry invisible.
+    """
+    return "protection" if keyword.startswith("protection from ") else keyword
 
 
 def _lower_double_power(node: ast.DoublePower) -> tuple[OracleInstruction, ...]:

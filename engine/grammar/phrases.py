@@ -367,6 +367,13 @@ def _parse_where_x_is(stream: TokenStream) -> ast.BoardCount | None:
     return None
 
 
+#: "Protection from the color of your choice" — the keyword whose argument is
+#: not known until the effect resolves (CR 609.3). Named once here because the
+#: parser writes it, the grant gate reads it and the handler resolves it, and a
+#: third spelling of the same string is how those three come apart.
+PROTECTION_FROM_CHOSEN_COLOR = "protection from the color of your choice"
+
+
 def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
     keywords: list[str] = []
     while True:
@@ -377,10 +384,18 @@ def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
         stream.advance(consumed)
         # "protection from red" — the argument belongs to the keyword.
         if name == "protection" and stream.accept_word("from"):
-            colour = stream.peek_word()
-            if colour is not None:
-                stream.advance()
-                name = f"protection from {colour}"
+            # "…from **the color of your choice**" (Feat of Resistance). CR
+            # 609.3: the colour is chosen as the effect resolves, so the keyword
+            # cannot name it — it names the *choice*, and the grant resolves it.
+            # Read before the bare colour word, which would otherwise consume
+            # "the" and grant protection from a colour called "the".
+            if stream.accept_phrase("the", "color", "of", "your", "choice"):
+                name = PROTECTION_FROM_CHOSEN_COLOR
+            else:
+                colour = stream.peek_word()
+                if colour is not None:
+                    stream.advance()
+                    name = f"protection from {colour}"
         keywords.append(name)
         if not (stream.accept_word("and") or stream.accept_word("or")):
             break

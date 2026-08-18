@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 76.1% | 73.0% | 50.1% | 205 |
+| M21 *(measured)* | 285 | 503 | 76.3% | 73.2% | 50.3% | 206 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.5%** | **41.8%** | **634** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 230 | 100 | expected a subject |  |
+| 229 | 99 | expected a subject |  |
 | 94 | 38 | unrecognized effect verb |  |
 | 45 | 26 | unconsumed text |  |
 | 32 | 32 | unrecognized activation cost |  |
@@ -413,6 +413,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `When this Aura enters, you gain 4 life.`
 - **Falconer Adept**
   - `Whenever this creature attacks, create a 1/1 white Bird creature token with flying that's tapped and attacking.`
+- **Feat of Resistance**
+  - `Put a +1/+1 counter on target creature you control. It gains protection from the color of your choice until end of turn. (It can't be blocked, targeted, dealt damage, enchanted, or equipped by anything of that color.)`
 - **Feedback**
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`

@@ -636,11 +636,49 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
         return True, "resolved"
     keywords = tuple(instruction.payload.get("keywords") or ())
     for keyword in keywords:
-        grant_keyword(target_creature, keyword, until_eot=True)
+        _grant_one_keyword(game, target_creature, keyword, context)
     game.log.append(
         f"{target_creature.card.name} gains {' and '.join(keywords)} until end of turn ({card.name})"
     )
     return True, "resolved"
+
+
+def _grant_one_keyword(game, permanent, keyword: str, context) -> None:
+    """Put one granted keyword where its reader will find it.
+
+    Layer 6 holds a *word*, and "protection from black" is not one — it is the
+    keyword `protection` carrying a quality, which `_protection_qualities` reads
+    from its own channel. That channel has existed since protection was written,
+    with a comment saying no card in the pool used it yet; Feat of Resistance is
+    that card.
+
+    "The color of your choice" is resolved here because CR 609.3 makes the
+    choice part of the *resolution*. An unanswered choice grants nothing rather
+    than defaulting to a colour: a protection the player did not pick is a
+    protection from the wrong things, and doing nothing is the honest failure.
+    """
+    from ..grammar.phrases import PROTECTION_FROM_CHOSEN_COLOR
+
+    if not keyword.startswith("protection from "):
+        grant_keyword(permanent, keyword, until_eot=True)
+        return
+    if keyword == PROTECTION_FROM_CHOSEN_COLOR:
+        symbol = game._normalize_mana_color((context.choices or {}).get("new_color"))
+        if symbol is None:
+            game.log.append(
+                f"{context.card.name}: no colour was chosen, so nothing is protected from"
+            )
+            return
+        word = _COLOR_SYMBOL_TO_WORD.get(symbol)
+    else:
+        word = keyword[len("protection from "):].strip()
+    if word:
+        permanent.metadata[f"protection_from_{word}"] = True
+
+
+_COLOR_SYMBOL_TO_WORD = {
+    "W": "white", "U": "blue", "B": "black", "R": "red", "G": "green",
+}
 
 
 @effect_handler("remove_target_keyword_until_eot")
@@ -674,7 +712,7 @@ def grant_self_keyword_until_eot(game: Game, instruction: OracleInstruction, con
         return False, "ability not implemented"
     keywords = tuple(instruction.payload.get("keywords") or ())
     for keyword in keywords:
-        grant_keyword(source_permanent, keyword, until_eot=True)
+        _grant_one_keyword(game, source_permanent, keyword, context)
     game.log.append(
         f"{card.name} gains {' and '.join(keywords)} until end of turn"
     )
