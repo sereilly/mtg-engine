@@ -56,6 +56,12 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     from_trigger = instruction.payload.get("amount_from_trigger")
     if from_trigger is not None:
         damage = max(0, int((context.trigger_context or {}).get(from_trigger, 0)))
+    elif instruction.payload.get("amount_from_source_power"):
+        # "…deals damage equal to **its power**" (Leafkin Avenger). Read at
+        # resolution off the permanent, so a pump between activation and
+        # resolution counts — and read off the `Permanent`, not the card, so it
+        # is the computed power (CR 613) rather than the printed one.
+        damage = max(0, source_permanent.effective_power) if source_permanent else 0
     else:
         damage = resolve_amount(instruction.payload.get("amount", 0), x_value)
     target_perm_idx = context.target_permanent_index

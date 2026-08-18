@@ -39,6 +39,25 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     return ast.Draw(player, count)
 
 
+def _parse_mana_multiplier(stream: TokenStream) -> "ast.ObjectFilter | None":
+    """``for each <objects>`` after a mana clause (Leafkin Avenger).
+
+    A multiplier over the whole clause, read where the pips are so the two stay
+    one statement: parsed apart, the count would be a sentence nothing performs
+    and the mana would come out flat. Both pip spellings ask this, because
+    "Add {G} for each …" and "Add two {G} for each …" differ only in how the
+    symbols were written.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        return parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+
+
 def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     stream.expect_word("discards", "discard")
     # "Discard your hand" (Chandra, Heart of Fire) — no count to read, and
@@ -122,7 +141,11 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
                 stream.reset(mark)
                 break
     if pips:
-        return ast.AddMana(tuple(sorted(pips.items())), source_text=_clause())
+        return ast.AddMana(
+            tuple(sorted(pips.items())),
+            source_text=_clause(),
+            per_each=_parse_mana_multiplier(stream),
+        )
 
     count = parse_amount(stream)
     # "Add six {R}." (Chandra, Heart of Fire's −9) — a counted single symbol,
@@ -135,7 +158,11 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
         amount = count.value if isinstance(count, ast.Fixed) else 0
         if amount <= 0:
             raise stream.error("expected a fixed number of mana symbols")
-        return ast.AddMana(((symbol, amount),), source_text=_clause())
+        return ast.AddMana(
+            ((symbol, amount),),
+            source_text=_clause(),
+            per_each=_parse_mana_multiplier(stream),
+        )
 
     # "Add one mana of any color" / "Add three mana of any one color".
     stream.expect_word("mana")

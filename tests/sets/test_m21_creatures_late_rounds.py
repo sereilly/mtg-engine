@@ -807,3 +807,109 @@ def test_an_exact_discard_still_demands_its_whole_count(set_pool):
 
     assert not game.confirm_discard(0, [0])
     assert game.pending_choices, "still owed"
+
+
+# --- Round 101: mana by a board count, and damage equal to your own power ---
+
+
+def _leafkin_board(set_pool, friends=()):
+    pool = set_pool("M21")
+    leafkin = _nosick(Permanent(card=pool["Leafkin Avenger"]))
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[leafkin] + [_nosick(Permanent(card=pool[n])) for n in friends],
+    )
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2, leafkin
+
+
+def test_leafkin_avenger_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Leafkin Avenger"])
+    assert program.supported, program.reason
+
+
+@pytest.mark.parametrize(
+    "friends,green",
+    [
+        ((), 1),                          # Leafkin is 4/3 and counts itself
+        (("Gale Swooper",), 1),           # a 3/2 is not power 4 or greater
+        (("Warden of the Woods",), 2),    # a 5/7 is
+    ],
+)
+def test_the_mana_is_multiplied_by_the_board(set_pool, friends, green):
+    """"For each" multiplies the whole clause, so the count applies to every pip
+    rather than to one — and it is taken at resolution through the evaluator
+    every computed amount shares."""
+    game, p1, _p2, _leafkin = _leafkin_board(set_pool, friends)
+
+    game.activate_permanent_ability(
+        0, "Leafkin Avenger", permanent_index=0, ability_index=0
+    )
+    game._settle()
+
+    assert p1.mana_pool["G"] == green
+
+
+def test_the_multiplier_counts_only_your_own_board(set_pool):
+    """"You control" is performed by the count's owner, which scans one seat's
+    battlefield — carried rather than tested, which is what
+    ``carried_separately`` is for."""
+    pool = set_pool("M21")
+    game, p1, p2, _leafkin = _leafkin_board(set_pool)
+    p2.battlefield = [Permanent(card=pool["Warden of the Woods"])]
+
+    game.activate_permanent_ability(
+        0, "Leafkin Avenger", permanent_index=0, ability_index=0
+    )
+    game._settle()
+
+    assert p1.mana_pool["G"] == 1
+
+
+def test_it_deals_damage_equal_to_its_own_power_to_a_player(set_pool):
+    """The recipient is not an object, so the bites handler — which resolves a
+    permanent — cannot carry it. What is new is only where the *number* comes
+    from, which is one payload key rather than a kind."""
+    game, _p1, p2, _leafkin = _leafkin_board(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Leafkin Avenger", permanent_index=0, ability_index=1,
+        target_player_index=1,
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert p2.life == 16
+
+
+def test_the_power_is_read_at_resolution_not_printed(set_pool):
+    """Off the ``Permanent``, so it is the computed power (CR 613) and a pump
+    counts."""
+    from engine.pt import add_pt_modifier
+
+    game, _p1, p2, leafkin = _leafkin_board(set_pool)
+    add_pt_modifier(leafkin, 2, 0)
+
+    game.activate_permanent_ability(
+        0, "Leafkin Avenger", permanent_index=0, ability_index=1,
+        target_player_index=1,
+    )
+    game._settle()
+
+    assert p2.life == 14
+
+
+def test_the_planeswalker_half_of_the_union_is_read(set_pool):
+    """"Target player **or planeswalker**" — this word order (the amount before
+    the recipient) went through a reader that did not know the union, so the two
+    words were unconsumed and the whole line failed."""
+    from engine.grammar import compile_line
+
+    (instruction,) = compile_line(
+        "This creature deals damage equal to its power to target player or planeswalker.",
+        card_name="Leafkin Avenger",
+    ).instructions
+
+    assert instruction.payload["targets"]["kind"] == "player_or_planeswalker"

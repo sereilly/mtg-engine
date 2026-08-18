@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 250/285) to the full release line - **137 sets, 33,594
+M21 measured at 251/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–97 — lives in git history at and before
-commit `eadfa96`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–98 — lives in git history at and before
+commit `3456ba0`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,57 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 98: a control change with a lifetime of its own
-
-*(2026-08-17.)* M21 **247 → 248** — Traitorous Greed, and the last text fallback
-on the activation side.
-
-> Gain control of target creature until end of turn. Untap that creature. It
-> gains haste until end of turn. Add two mana of any one color.
-
-**Four sentences, and every one of them needed something.** The mana came free
-from round 95.
-
-*The control change is a lifetime, not a link.* Every control change the engine
-had was tied to a **permanent** — Aladdin's lasts as long as you control
-Aladdin, and ending it is watching that permanent. A sorcery has no permanent to
-watch: it is in a graveyard before the turn is over. So the contribution carries
-`until_eot` and cleanup drops it, which CR 611.2c is. Dropping the contribution
-*is* the reversion — the permanent never moved, so whatever contributions remain
-simply decide again, and `base_controller` is untouched throughout.
-
-*The pronoun sentences follow the creature across battlefields.* "Untap that
-creature" is the same creature one sentence later, and it is on a different
-battlefield by then. A target is deliberately scoped to the seat it was chosen
-from, so a stale id cannot resolve to a permanent that changed hands between the
-choice and the resolution — the docstring says so in as many words. This effect
-is what changed those hands, one step ago, so the scope **moves with it** rather
-than being widened: the id still has to name a permanent that seat controls.
-
-*"Untap that creature" is a verb bound to the previous target*, which needed a
-sibling to the pronoun-*grant* rider. One verb at a time, deliberately: each
-imperative has to be checked against the shape its handler implements.
-
-**And that untap retired the last shadow parser on the activation side.**
-`untap_target_permanent` ignored filters, so "untap target creature" refused at
-lowering, so `engine/legality.py` carried a regex fallback to derive the picker —
-whose acknowledgement said, in the test's own words, *"delete when that handler
-honours its filter"*. It honours it now. `_UNDERIVABLE_ABILITY_TARGETS` is
-**empty**, and every activation prompt in the pool is derived from the compiled
-program.
-
-**`lowering/board.py` crossed 1,000 lines**, so zone movement moved to
-`lowering/zones.py`. It has no twin in `effects/`, and the guard now says why:
-the parsing side of these templates is one production each, while the lowering
-side is where the work is — a near-empty `effects/zones.py` would buy back the
-symmetry and cost the thing symmetry is for.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**; executed lines 41.8% → **41.9%**. Five new tests, four watched to
-fail on the round-97 engine, and two obsolete fallback tests deleted with the
-fallback they described.
-
 ## Round 99: a search that finds twice and splits its finds
 
 *(2026-08-18.)* M21 **248 → 249** — Cultivate, closing the batch.
@@ -388,3 +337,41 @@ effect, and one nothing here performs.
 Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Six new tests, three watched to fail on the round-99 engine.
+
+## Round 101: mana by a board count, and damage equal to your own power
+
+*(2026-08-18.)* M21 **250 → 251** — Leafkin Avenger.
+
+> {T}: Add {G} for each creature with power 4 or greater you control.
+> {7}{R}: This creature deals damage equal to its power to target player or
+> planeswalker.
+
+**"For each" multiplies the clause, not a number.** Round 95 made *how much*
+any-colour mana is data; this is the other multiplier — a board count applied to
+every pip. Read where the pips are, because parsed apart the count would be a
+sentence nothing performs and the mana would come out flat. Both pip spellings
+ask the same reader: "Add {G} for each …" and "Add two {G} for each …" differ
+only in how the symbols were written.
+
+"You control" is *carried* rather than tested — the count's `owner` scans one
+seat's battlefield, which is what `carried_separately` exists to name. Everything
+else has to be answerable about a permanent alone, because that is what the
+evaluator's matcher is.
+
+**The second line found a dropped rider.** "Target player **or planeswalker**" is
+the one union damage prints, and it is read by `_parse_damage_recipient` —
+deliberately, so the flag exists only where the damage lowering can receive it.
+The *deferred-amount* word order ("deals damage equal to X **to** Y") called plain
+`parse_recipient` instead, so those two words were unconsumed and the whole line
+failed. One call site, and the failure was loud rather than silent, which is the
+invariant working.
+
+**Damage equal to the source's own power, at a player**, is one payload key
+rather than a kind. The two `…bites…` handlers beside it resolve a *permanent*
+recipient and so cannot carry a player; what is actually new here is only where
+the number comes from. Read off the `Permanent` at resolution, so it is the
+computed power (CR 613) and a pump between activation and resolution counts.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Eight new tests, all eight watched to fail on the round-100 engine.

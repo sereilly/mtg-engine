@@ -8,6 +8,7 @@ because a filter it cannot honour must refuse rather than be dropped.
 
 from ...oracle_types import X_FROM_COUNT, OracleInstruction
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
+from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -15,6 +16,7 @@ from ._common import (
     _amount_payload,
     halved_count_spec,
     _describe_targets,
+    _filter_payload,
     _is_you,
     _restrictions_beyond,
     _targets_only,
@@ -309,6 +311,30 @@ def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:
         payload: dict[str, object] = {"pips": node.pips}
         if node.spend_only is not None:
             payload["spend_only"] = node.spend_only
+        if node.per_each is not None:
+            # The count is taken at resolution through the one evaluator every
+            # computed amount shares, so "creature with power 4 or greater you
+            # control" means the same set here as it does anywhere else.
+            if node.per_each.controller != "you":
+                raise LoweringError(
+                    "the mana multiplier counts the producer's own board", node=node
+                )
+            described = _filter_payload(node.per_each)
+            # "You control" is performed by the count's `owner`, which scans one
+            # seat's battlefield — so it is carried rather than tested, the
+            # arrangement `carried_separately` exists to name. Everything else
+            # has to be answerable about a permanent alone, because that is what
+            # the evaluator's matcher is.
+            carried = object_only_filter(
+                described, carried_separately=frozenset({"controller"})
+            )
+            if carried is None:
+                raise LoweringError(
+                    "the mana multiplier cannot count this restriction", node=node
+                )
+            payload["per_each"] = {
+                "zone": "battlefield", "owner": "you", "filter": carried,
+            }
         return (OracleInstruction("add_mana_from_text", "", payload),)
     # The any-colour branch keeps its clause text for a *text-keyed* handler
     # probe, so a restriction folded onto it would be carried in the payload and

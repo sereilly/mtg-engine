@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 76.7% | 73.8% | 50.9% | 208 |
+| M21 *(measured)* | 285 | 503 | 77.1% | 74.2% | 51.3% | 209 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,7 +34,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | ---: | ---: | --- | --- |
 | 229 | 99 | expected a subject |  |
 | 94 | 38 | unrecognized effect verb |  |
-| 45 | 26 | unconsumed text |  |
+| 43 | 24 | unconsumed text |  |
 | 32 | 32 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
@@ -681,6 +681,9 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `All Swamps are 1/1 black creatures that are still lands.`
   - `All Swamps are 1/1 black creatures that are still lands.`
   - `All Swamps are 1/1 black creatures that are still lands.`
+- **Leafkin Avenger**
+  - `{T}: Add {G} for each creature with power 4 or greater you control.`
+  - `{7}{R}: This creature deals damage equal to its power to target player or planeswalker.`
 - **Legion's Judgment**
   - `Destroy target creature with power 4 or greater.`
 - **Ley Druid**

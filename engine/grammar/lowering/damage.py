@@ -378,6 +378,22 @@ def _lower_damage(
                 },
             ),
         )
+    # "This creature deals damage equal to its power to target **player** or
+    # planeswalker." (Leafkin Avenger.) The recipient is not an object, so the
+    # bites handler below — which resolves a permanent — cannot carry it. The
+    # generic damage instruction can: what is new is only where the *number*
+    # comes from, and that is one payload key rather than a kind.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and node.source is not None
+        and _is_source(node.source)
+        and len(node.recipients) == 1
+        and isinstance(node.recipients[0], ast.PlayerRef)
+    ):
+        payload: dict[str, object] = {"amount_from_source_power": True}
+        _describe_targets(payload, node.recipients[0])
+        return (OracleInstruction("deal_damage", "", payload),)
     # "It deals damage equal to **its power** to target creature or
     # planeswalker." (Heartfire Immolator.) The source is sacrificed to pay the
     # cost, so by resolution it is in a graveyard — its power is last-known

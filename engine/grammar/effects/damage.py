@@ -131,7 +131,11 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
         # (Garruk, Savage Herald's −2) — this word order puts the recipient
         # after the amount clause rather than before it.
         if not recipients and stream.accept_word("to"):
-            recipient = parse_recipient(stream)
+            # Through `_parse_damage_recipient`, not `parse_recipient`: this
+            # word order missed the "or planeswalker" union, so "deals damage
+            # equal to its power to target player **or planeswalker**" failed on
+            # the two words the other word order reads.
+            recipient = _parse_damage_recipient(stream)
             if recipient is None:
                 raise stream.error("expected a damage recipient")
             recipients.append(recipient)

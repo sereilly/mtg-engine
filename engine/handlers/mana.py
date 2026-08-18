@@ -146,6 +146,14 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
 
     pips = instruction.payload.get("pips")
     if pips:
+        # "Add {G} **for each** …" (Leafkin Avenger): the whole clause is
+        # multiplied, so the count is applied to every pip rather than to one.
+        # Zero matching permanents adds no mana, which is what "for each" of an
+        # empty set means.
+        per_each = instruction.payload.get("per_each")
+        multiplier = (
+            count_from_payload(game, context, per_each) if per_each is not None else 1
+        )
         # "Spend this mana only to cast an instant or sorcery spell." (Vodalian
         # Arcanist.) The mana goes into its own bucket rather than the pool;
         # `_pay_mana_cost` merges a bucket in only for a spell the restriction
@@ -160,8 +168,9 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         for symbol, count in pips:
             if symbol not in caster.mana_pool:
                 continue
-            bucket[symbol] = bucket.get(symbol, 0) + int(count)
-            added.append(f"{{{symbol}}}" * int(count))
+            produced = int(count) * multiplier
+            bucket[symbol] = bucket.get(symbol, 0) + produced
+            added.append(f"{{{symbol}}}" * produced)
         suffix = f" (spendable only on {spend_only} spells)" if spend_only else ""
         game.log.append(f"{card.name} produced {''.join(added)}{suffix}")
         return True, "resolved"

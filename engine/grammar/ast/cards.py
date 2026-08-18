@@ -91,6 +91,11 @@ class AddMana:
     # phrase: which spells it admits is that module's question, asked again by
     # the payer, so one rule answers "what may this pay for?" in both places.
     spend_only: str | None = None
+    # "Add {G} **for each creature with power 4 or greater you control**"
+    # (Leafkin Avenger). A board count multiplying the whole clause, the same
+    # shape a life gain and a counter placement already carry — so it is a
+    # filter here rather than a number, and the count is taken at resolution.
+    per_each: object | None = None
 
 
 @dataclass(frozen=True)
