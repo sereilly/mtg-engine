@@ -1529,6 +1529,17 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+def _merged_pick_filter(filters: tuple) -> dict:
+    """One payload for the single-alternative case, empty otherwise.
+
+    ``live_look_top_candidates`` OR's a tuple of alternatives; this keeps the
+    older single-filter key meaningful for a caller that reads it, and returns
+    nothing when the phrase named several — where no single dict can stand for
+    the union without narrowing it.
+    """
+    return dict(filters[0]) if len(filters) == 1 else {}
+
+
 @effect_handler("look_top_pick_to_hand")
 def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """See the Truth: look at the top N, put one into your hand and the rest
@@ -1537,12 +1548,20 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
     there is nothing to choose. ``context.cast_from_zone`` is the field the
     permission-seam round added for exactly this sentence."""
     caster = context.caster
-    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    payload = instruction.payload
+    # "Look at **that many** cards" (Garruk's Harbinger): the number the firing
+    # event carried, frozen by the fire site. An absent record looks at nothing
+    # rather than falling back to a count the card never printed.
+    from_trigger = payload.get("amount_from_trigger")
+    if from_trigger is not None:
+        amount = max(0, int((context.trigger_context or {}).get(from_trigger, 0)))
+    else:
+        amount = resolve_amount(payload.get("amount", 0), context.x_value)
     top_count = min(amount, len(caster.library))
     if top_count <= 0:
         game.log.append(f"{caster.name} has no cards to look at")
         return True, "resolved"
-    if context.cast_from_zone != "hand":
+    if payload.get("all_to_hand_if_cast_elsewhere") and context.cast_from_zone != "hand":
         taken = [caster.library.pop(0) for _ in range(top_count)]
         caster.hand.extend(taken)
         game.log.append(
@@ -1551,9 +1570,16 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         )
         return True, "resolved"
     caster_index = game.players.index(caster)
+    # The narrowing, the optionality and the order the rest go back in all ride
+    # the prompt, so what is offered, what an answer is checked against and what
+    # a non-interactive seat takes are one rule (``live_look_top_candidates``).
     game.arm_pending_choice(
         "look_top_pick", caster_index,
         top_count=top_count, amount=amount, card_name=context.card.name,
+        filter=_merged_pick_filter(payload.get("filters") or ()),
+        filters=tuple(payload.get("filters") or ()),
+        optional=bool(payload.get("optional")),
+        rest_order=payload.get("rest_order", "any"),
     )
     game.log.append(f"{caster.name} is looking at the top {top_count} cards of their library")
     return True, "pending_look_top_pick"

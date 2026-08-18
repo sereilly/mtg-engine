@@ -45,6 +45,37 @@ class EffectsMixin:
                 )
                 break
 
+    def _fire_combat_damage_to_walker_triggers(
+        self, attacker: "Permanent", walker: "Permanent", amount: int
+    ) -> None:
+        """"Whenever this creature deals combat damage to a player **or
+        planeswalker**" — the planeswalker half (Garruk's Harbinger).
+
+        Its own site because a planeswalker takes combat damage as a
+        *permanent*: the loyalty-removal path never reaches the player-damage
+        one, so a trigger naming both halves would have fired on exactly one of
+        them. Only the union kind is scanned here — a card printed "to a player"
+        alone must not start firing when a walker is hit.
+        """
+        controller_index = self._controller_index_of(attacker)
+        walker_seat = self.controller_index_of(walker)
+        events = [
+            make_trigger_event(
+                controller_index, attacker, trig,
+                trigger_context={
+                    "defending_player_index": walker_seat,
+                    "damaged_walker_id": walker.permanent_id,
+                    "amount": amount,
+                },
+            )
+            for trig in matching_triggers(
+                attacker.effective_card,
+                condition_kinds={"creature_deals_combat_damage_to_player_or_walker"},
+            )
+        ]
+        if events:
+            self._enqueue_triggered_batch(events)
+
     def _fire_delayed_combat_damage_triggers(
         self, attacker: "Permanent", defending_player: "PlayerState", amount: int
     ) -> None:
@@ -120,6 +151,11 @@ class EffectsMixin:
                     "creature_deals_damage_to_opponent",
                     "deals_damage_to_player",
                     "creature_deals_combat_damage",
+                    # The union form (Garruk's Harbinger). Fires here for the
+                    # player half; the planeswalker half has its own site in the
+                    # combat damage step, because the walker never reaches this
+                    # path — it takes damage as a permanent.
+                    "creature_deals_combat_damage_to_player_or_walker",
                 },
                 # No instruction-kind filter. It named three kinds — the shapes
                 # the cards in the pool happened to have — so a card written with

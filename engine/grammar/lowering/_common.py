@@ -350,6 +350,11 @@ _EVENT_QUANTITIES: dict[str, str] = {
     # (CR 120.4b), not what the life total lost — and this is the row that lets
     # an effect name it.
     "source_you_control_damages_opponent": "amount",
+    # "…deals combat damage to a player or planeswalker, look at **that many**
+    # cards" (Garruk's Harbinger). Both fire sites record the amount — the
+    # player half and the planeswalker half — which is what makes the one row
+    # true for the whole condition.
+    "creature_deals_combat_damage_to_player_or_walker": "amount",
 }
 
 # The scratchpad keys that are *quantities*. `lower._PRODUCES` also records

@@ -14,6 +14,7 @@ from ..errors import LoweringError
 from ._common import (
     chargeable_card_filter,
     _amount_payload,
+    _back_reference_payload,
     halved_count_spec,
     _describe_targets,
     _filter_payload,
@@ -788,14 +789,39 @@ def _lower_cast_permission(
     raise LoweringError(f"no cast-permission lowering for {node.what!r}", node=node)
 
 
-def _lower_look_top_pick(node: ast.LookTopPickToHand) -> tuple[OracleInstruction, ...]:
+def _lower_look_top_pick(
+    node: ast.LookTopPickToHand, event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
     """"Look at the top three cards of your library. Put one of those cards
     into your hand and the rest on the bottom of your library in any order.
     …" (See the Truth.) The handler asks its controller through the
     pending-choice queue when cast from the hand, and skips the choice
     entirely when the cast came from anywhere else — the conditional reads
     ``OracleExecutionContext.cast_from_zone``."""
-    amount = _amount_payload(node.count)
-    if not isinstance(amount, int) or amount <= 0:
-        raise LoweringError("the look-top pick takes a fixed count", node=node)
-    return (OracleInstruction("look_top_pick_to_hand", "", {"amount": amount}),)
+    payload: dict[str, object] = {}
+    # "Look at **that many** cards" (Garruk's Harbinger): the count is the
+    # firing event's number, read out of the trigger's captured context by the
+    # same channel every other back-reference uses. Demanded of the event rather
+    # than assumed: under a trigger that records no quantity the words name
+    # nothing, and a silent zero would look at no cards at all.
+    if isinstance(node.count, ast.ThatMuch):
+        payload.update(_back_reference_payload(node.count, frozenset(), event))
+    else:
+        amount = _amount_payload(node.count)
+        if not isinstance(amount, int) or amount <= 0:
+            raise LoweringError("the look-top pick takes a fixed count", node=node)
+        payload["amount"] = amount
+    if node.filters:
+        described = [chargeable_card_filter(filt) for filt in node.filters]
+        if any(entry is None for entry in described):
+            raise LoweringError(
+                "the pick cannot test this restriction on a card", node=node
+            )
+        payload["filters"] = tuple(described)
+    if node.optional:
+        payload["optional"] = True
+    if node.rest_order != "any":
+        payload["rest_order"] = node.rest_order
+    if node.all_to_hand_if_cast_elsewhere:
+        payload["all_to_hand_if_cast_elsewhere"] = True
+    return (OracleInstruction("look_top_pick_to_hand", "", payload),)

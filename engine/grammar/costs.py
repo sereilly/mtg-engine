@@ -19,6 +19,7 @@ from ..subject_filters import object_only_filter
 from . import ast
 from .amounts import parse_amount
 from .effects import _expect_counter_kind
+from .phrases import _parse_card_alternatives
 from .errors import GrammarError
 from .lexer import MANA, PUNCT
 from .lowering._common import chargeable_card_filter, chargeable_tap_filter
@@ -82,48 +83,6 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     return object_only_filter(
         filt.to_payload(), carried_separately=frozenset({"exclude_self"})
     ) is not None
-
-
-def _parse_discard_cost_alternatives(
-    stream: TokenStream,
-) -> tuple[ast.ObjectFilter, ...] | None:
-    """The card a "Discard …" cost may be paid with, as printed alternatives.
-
-    "Discard a card" is the whole hand and returns ``()``; "Discard a land card
-    or Shrine card" (Sanctum of Shattered Heights) returns one filter per side
-    of the "or". A union rather than one narrowed filter because the two sides
-    restrict *different* characteristics — a card type and a subtype — and an
-    ObjectFilter AND's its fields, so folding them together would name a card
-    that is both a land and a Shrine, which is nothing in the pool and a strictly
-    harder cost than the card prints.
-
-    None refuses the line, which is what a phrase the charger cannot test has to
-    do: dropped instead, the cost would be payable with any card at all. What
-    "cannot test" means is not decided here — ``chargeable_card_filter`` decides
-    it, and ``engine/oracle.py``'s reader of the same clause asks the same
-    function.
-    """
-    alternatives: list[ast.ObjectFilter] = []
-    while True:
-        stream.accept_word("a", "an")
-        mark = stream.mark()
-        try:
-            filt = parse_object_filter(stream)
-        except GrammarError:
-            stream.reset(mark)
-            return None
-        if chargeable_card_filter(filt) is None:
-            stream.reset(mark)
-            return None
-        alternatives.append(filt)
-        if not stream.accept_word("or"):
-            break
-    # A bare "Discard a card" narrows nothing, and an empty tuple is how the
-    # charger is told so — never a filter with no keys set, which would read as
-    # a narrowing the charger then ignores.
-    if len(alternatives) == 1 and not chargeable_card_filter(alternatives[0]):
-        return ()
-    return tuple(alternatives)
 
 
 def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
@@ -246,7 +205,7 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 # Only the singular is admitted: a counted "discard two cards"
                 # is a shape nothing charges, and admitting it would describe a
                 # payment that never happens.
-                narrowed = _parse_discard_cost_alternatives(stream)
+                narrowed = _parse_card_alternatives(stream)
                 if narrowed is None:
                     raise stream.error("unrecognized discard cost")
                 costs.append(ast.DiscardCost(ast.Fixed(1), filters=narrowed))

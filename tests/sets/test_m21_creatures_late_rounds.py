@@ -1829,3 +1829,116 @@ def test_that_player_is_refused_as_a_seat_comparison():
     assert subject_matches(game, perm, {"controller": "you"}, observer=1)
     assert not subject_matches(game, perm, {"controller": "that_player"}, observer=0)
     assert not subject_matches(game, perm, {"controller": "that_player"}, observer=1)
+
+
+# --- Garruk's Harbinger: two fire sites, one condition (round 122) ----------
+
+
+def _harbinger_board(set_pool, library=()):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20, library=[pool[n] for n in library])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    harbinger = Permanent(card=pool["Garruk's Harbinger"])
+    game._put_permanent_onto_battlefield(0, harbinger, None)
+    _nosick(harbinger)
+    game.active_player_index = 0
+    return game, p1, p2, harbinger, pool
+
+
+def _connect(game):
+    game._set_phase_and_step("combat", "beginning_of_combat")
+    game.advance_combat_phase()
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {})
+    game.advance_combat_phase()
+    game.resolve_combat_damage(0)
+    game._settle()
+
+
+def test_garruks_harbinger_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Garruk's Harbinger"])
+    assert program.supported, program.reason
+
+
+def test_the_trigger_looks_at_as_many_cards_as_it_dealt(set_pool):
+    """"Look at **that many** cards": the firing event's number, frozen by the
+    fire site. An absent record would look at nothing rather than at a count the
+    card never printed."""
+    game, p1, p2, harbinger, _ = _harbinger_board(
+        set_pool, library=("Mountain", "Alpine Watchdog", "Island", "Forest", "Shock"),
+    )
+
+    _connect(game)
+
+    assert p2.life == 20 - harbinger.effective_power
+    (choice,) = game.pending_choices
+    assert choice.kind == "look_top_pick"
+    assert choice.data["top_count"] == harbinger.effective_power
+
+
+def test_only_a_card_the_phrase_names_may_be_taken(set_pool):
+    """"a creature card **or** Garruk planeswalker card" — the alternatives are
+    OR'd, because the two sides restrict different characteristics and one
+    filter AND's its keys. The rest go to the bottom in a *random* order, which
+    is a stated shuffle rather than the player's freedom."""
+    game, p1, _, _, _ = _harbinger_board(
+        set_pool, library=("Mountain", "Alpine Watchdog", "Island", "Forest", "Shock"),
+    )
+
+    _connect(game)
+    (choice,) = game.pending_choices
+    assert game.live_look_top_candidates(choice) == [1]
+
+    game._default_look_top_pick(choice)
+
+    assert [c.name for c in p1.hand] == ["Alpine Watchdog"]
+    assert len(p1.library) == 4
+    assert p1.library[0].name == "Shock", "the card never looked at stays on top"
+
+
+def test_the_pick_is_optional(set_pool):
+    """"You **may** reveal": declining is a legal answer and not the same as an
+    illegal one — the rest still go to the bottom."""
+    game, p1, _, _, _ = _harbinger_board(
+        set_pool, library=("Mountain", "Island", "Forest", "Plains", "Shock"),
+    )
+
+    _connect(game)
+    (choice,) = game.pending_choices
+    assert choice.data["optional"] is True
+    assert game.live_look_top_candidates(choice) == [], "no creature among them"
+
+    game._default_look_top_pick(choice)
+
+    assert p1.hand == []
+    assert len(p1.library) == 5
+
+
+def test_the_planeswalker_half_has_its_own_fire_site(set_pool):
+    """A planeswalker takes combat damage as a *permanent*, so the loyalty path
+    never reaches the player-damage fire site. A trigger naming both halves
+    would otherwise fire on exactly one of them."""
+    pool = set_pool("M21")
+    game, p1, _, harbinger, _ = _harbinger_board(
+        set_pool, library=("Alpine Watchdog", "Island", "Forest", "Plains", "Shock"),
+    )
+    walker = Permanent(
+        card=pool["Garruk, Unleashed"], metadata={"loyalty_counters": 6},
+    )
+    game._put_permanent_onto_battlefield(1, walker, None)
+
+    game._set_phase_and_step("combat", "beginning_of_combat")
+    game.advance_combat_phase()
+    game.declare_attackers(
+        0, [0], attacker_planeswalker_ids={0: game.permanent_id_of(walker)},
+    )
+    game.advance_combat_phase()
+    game.declare_blockers(1, {})
+    game.advance_combat_phase()
+    game.resolve_combat_damage(0)
+    game._settle()
+
+    assert [c.kind for c in game.pending_choices] == ["look_top_pick"]

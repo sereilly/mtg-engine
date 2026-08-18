@@ -165,8 +165,30 @@ class LookTopPickToHand:
     conditional is part of the shape, not a separate statement: it reads the
     resolution context's ``cast_from_zone``, the field the stack object
     carries since the permission-seam round.
+
+    Garruk's Harbinger prints the same shape with three differences, and each is
+    a field rather than a second node because each is a *parameter* of the same
+    procedure: the count is a back-reference ("that many"), the pick is optional
+    and filtered ("you **may** reveal a creature card or Garruk planeswalker
+    card"), and the rest go down **in a random order** rather than in any order.
+    The last is a real distinction — "any order" leaves them as they lay because
+    the ordering is the player's by rule, where "a random order" is a stated
+    shuffle nobody may choose.
     """
     count: Amount
+    #: What the taken card must be, as filter payload alternatives OR'd
+    #: together. Empty means the See the Truth shape, where any of the looked-at
+    #: cards may be taken.
+    filters: tuple[dict, ...] = ()
+    #: "You **may** reveal …" — declining is a legal answer, and not the same as
+    #: an illegal one: the rest still go to the bottom.
+    optional: bool = False
+    #: "in a random order" vs "in any order".
+    rest_order: str = "any"
+    #: See the Truth's third sentence, which is its whole reason to exist. A
+    #: wording without it is a different card, so the two shapes cannot be
+    #: allowed to collapse into one another.
+    all_to_hand_if_cast_elsewhere: bool = False
 
 
 @dataclass(frozen=True)

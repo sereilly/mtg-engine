@@ -333,7 +333,7 @@ def lower_statement(
         return _lower_exile_top_of_library(statement)
 
     if isinstance(statement, ast.LookTopPickToHand):
-        return _lower_look_top_pick(statement)
+        return _lower_look_top_pick(statement, event)
 
     if isinstance(statement, ast.SearchAndExile):
         return _lower_search_and_exile(statement)

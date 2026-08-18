@@ -18,7 +18,7 @@ from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import (parse_object_filter, parse_player_ref, parse_target_spec)
 from ..stream import TokenStream
-from ..phrases import _parse_zone
+from ..phrases import _parse_card_alternatives, _parse_zone
 
 
 def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
@@ -273,6 +273,42 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     return ast.RevealTopToHandOrBottom(filt)
 
 
+def _parse_look_pick_tail(
+    stream: TokenStream, count, *, already_split: bool = False
+) -> ast.Statement:
+    """"You may reveal a <filter> card from among them and put it into your
+    hand. Put the rest on the bottom of your library in a random order."
+
+    Both sentences, because they describe one looked-at pile: "them" is what the
+    look turned up and "the rest" is exactly what is left after the pick. Every
+    word of the second is required — "in a random order" is a stated shuffle and
+    "in any order" leaves the cards as they lay, and a card that said one while
+    the engine did the other would differ only in a place no test looks.
+    """
+    if not already_split and not stream.accept_punct("."):
+        raise stream.error("expected the reveal sentence after the look")
+    for word in ("you", "may", "reveal"):
+        stream.expect_word(word)
+    # The same reader the discard *cost* uses for "a land card or Shrine card":
+    # one phrase, one filter vocabulary, and a restriction the card matcher
+    # cannot answer refuses here exactly as it does there.
+    filters = _parse_card_alternatives(stream)
+    if filters is None:
+        raise stream.error("the pick cannot test this restriction on a card")
+    for word in ("from", "among", "them", "and", "put", "it", "into", "your", "hand"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sorting sentence after the reveal")
+    for word in (
+        "put", "the", "rest", "on", "the", "bottom", "of", "your", "library",
+        "in", "a", "random", "order",
+    ):
+        stream.expect_word(word)
+    return ast.LookTopPickToHand(
+        count, filters=filters, optional=True, rest_order="random",
+    )
+
+
 def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     """``Look at <player>'s hand.`` (Glasses of Urza.)
 
@@ -292,12 +328,25 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     # sentences share one looked-at set, and the cast-zone conditional is the
     # card's whole reason to exist, so a wording without it must keep refusing
     # rather than quietly becoming the plain pick.
+    # "Look at **that many** cards from the top of your library." (Garruk's
+    # Harbinger.) The count is the firing event's number, and the word order is
+    # the other one this template prints — "cards from the top of" rather than
+    # "the top … cards of".
+    if stream.accept_phrase("that", "many"):
+        for word in ("cards", "from", "the", "top", "of", "your", "library"):
+            stream.expect_word(word)
+        return _parse_look_pick_tail(stream, ast.ThatMuch(None))
     if stream.accept_phrase("the", "top"):
         count = parse_amount(stream)
         for word in ("cards", "of", "your", "library"):
             stream.expect_word(word)
         if not stream.accept_punct("."):
             raise stream.error("expected the sorting sentence after the look")
+        # Garruk's Harbinger's optional, filtered pick shares this position with
+        # See the Truth's compulsory one; reading the second sentence is what
+        # decides which card this is.
+        if stream.at_word("you"):
+            return _parse_look_pick_tail(stream, count, already_split=True)
         for word in (
             "put", "one", "of", "those", "cards", "into", "your", "hand",
             "and", "the", "rest", "on", "the", "bottom", "of", "your",
@@ -314,7 +363,7 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         stream.accept_punct(",")
         for word in ("put", "each", "of", "those", "cards", "into", "your", "hand", "instead"):
             stream.expect_word(word)
-        return ast.LookTopPickToHand(count)
+        return ast.LookTopPickToHand(count, all_to_hand_if_cast_elsewhere=True)
     player = parse_player_ref(stream)
     if player is None:
         raise stream.error("expected the player whose hand is looked at")

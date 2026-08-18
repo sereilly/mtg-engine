@@ -45,6 +45,8 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "creature_opponent_controls_dies": "whenever a creature an opponent controls dies",
     "creature_deals_damage": "whenever this creature deals damage",
     "creature_deals_combat_damage": "whenever this creature deals combat damage to a player",
+    "creature_deals_combat_damage_to_player_or_walker":
+        "whenever this creature deals combat damage to a player or planeswalker",
     "creature_blocks_or_blocked_by_nonwall": "whenever this creature blocks or becomes blocked by a non-wall creature",
     "creature_deals_damage_to_opponent": "whenever this creature deals damage to an opponent",
     "creature_attacks": "whenever this creature attacks",

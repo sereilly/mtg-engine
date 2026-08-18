@@ -203,6 +203,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # that is a strict prefix of a later pattern's text would shadow it —
     # specific forms must precede their generic prefixes. Guarded by
     # tests/engine/test_trigger_tables.py.
+    # "…to a player **or planeswalker**" (Garruk's Harbinger). Its own kind
+    # rather than a widening of the row below, because the two fire in different
+    # places: damage to a player comes from the player-damage path, damage to a
+    # planeswalker from the loyalty-removal one, and a card naming only the
+    # first must not start firing on the second. Longest first, as the note
+    # above requires.
+    ("creature_deals_combat_damage_to_player_or_walker",
+     r"whenever this creature deals combat damage to a player or planeswalker"),
     ("creature_deals_combat_damage",r"whenever this creature deals combat damage to a player"),
     ("creature_deals_damage_to_opponent", r"whenever this creature deals damage to an opponent"),
     ("deals_damage_to_player",      r"whenever .+ deals damage to a player"),

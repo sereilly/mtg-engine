@@ -256,46 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 119: a trigger created by an ability, and asked where it will fire
-
-*(2026-08-18.)* M21 **268 → 269** — Subira, Tulzidi Caravanner.
-
-> {1}{R}, {T}, Discard your hand: Until end of turn, whenever a creature you
-> control with power 2 or less deals combat damage to a player, draw a card.
-
-**"Discard your hand" is not a count of "discard a card".** There is no card for
-the payer to name, no filter to narrow, and — the part that decides it belongs
-in its own field — it is *never unpayable*: discarding nothing is discarding your
-hand, where a count can fail for want of cards. The payment snapshots the hand
-before emptying it, because `_discard_card` can put something back (Library of
-Leng offers the top of the library instead) and iterating the live list would
-then skip or revisit a card.
-
-**A delayed triggered ability (CR 603.7), narrowed.** The machinery existed for
-Basri Ket — an entry on `game.delayed_triggers`, fired from the declare-attackers
-step — and it could express exactly one narrowing, `nontoken`. Subira's subject
-is a printed noun phrase, so it is read by the noun parser into the same filter
-payload every other narrowing travels as, and both fire sites ask
-`subject_matches`, which has the seat "you control" needs (CR 109.5).
-
-**Its event has its own fire site, and the compiler checks that first.** "Deals
-combat damage to a player" is not the attack event: the entry belongs to no
-permanent, so the ability scan that finds Hypnotic Specter's trigger cannot
-reach it, and it needs a site of its own in the combat damage step. Rounds 93 and
-105 each found a trigger with nowhere to be announced *after* shipping it; here
-the question is asked at the moment the trigger is **created** — an event outside
-`_DELAYED_EVENTS` has no site, so the clause is not read and the card refuses.
-
-The clause is read by `engine/oracle.py` rather than the grammar for the reason
-the loyalty path already records: handed to the grammar it classifies as a
-triggered ability *of the permanent*, and the inner effect runs at once — a draw
-now instead of a draw when a creature connects.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Six new tests, five watched to fail on the round-118 engine; the sixth
-is the no-activation baseline for the one above it.
-
 ## Round 120: a cost that is a question
 
 *(2026-08-18.)* M21 **269 → 270** — Volcanic Salvo.
@@ -379,3 +339,52 @@ a different road; its narrowing is applied there, so nothing changed for it.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Five new tests, all watched to fail on the round-120 engine.
+
+## Round 122: one condition, two fire sites
+
+*(2026-08-18.)* M21 **271 → 272** — Garruk's Harbinger.
+
+> Hexproof from black
+> Whenever this creature deals combat damage to a player or planeswalker, look
+> at that many cards from the top of your library. You may reveal a creature
+> card or Garruk planeswalker card from among them and put it into your hand.
+> Put the rest on the bottom of your library in a random order.
+
+"Hexproof from black" already worked — the keyword classifier and the
+targeting enforcement had both been there since the protection cycle, which is
+worth recording because it is the *reason* the card only needed two things.
+
+**"To a player or planeswalker" is its own condition, not a widening.** The two
+halves fire in different places: damage to a player comes from the player-damage
+path, damage to a planeswalker from the loyalty-removal one — a walker takes
+combat damage as a *permanent* and never reaches the first. So a card printed
+"to a player" alone must not start firing on walkers, and the union kind gets a
+second fire site of its own. Both record the amount, which is what makes one
+`_EVENT_QUANTITIES` row true for the whole condition.
+
+**The look-and-pick template grew three parameters, not a second node.** See the
+Truth's shape and this one differ in the count (a back-reference), the pick
+(optional and filtered) and where the rest go — and "in a **random** order" is a
+real distinction from "in any order": one is a stated shuffle, the other leaves
+the cards as they lay because the ordering is the player's by rule. A card that
+said one while the engine did the other would differ only where nothing looks.
+
+The filter, the optionality and the order all ride the *prompt*, so what is
+offered, what an answer is checked against and what a non-interactive seat takes
+are one rule — `live_look_top_candidates`, the arrangement `live_discard_candidates`
+already makes.
+
+**A fragment two families needed moved to `phrases`.** The reader for "a land
+card or Shrine card" lived in `costs.py`, which sits *above* `effects/`; the
+look-and-pick production needed the same phrase. Importing upward would have
+been the backward edge the layering exists to prevent, so it moved down to the
+shared layer, which is exactly what that rule is for.
+
+See the Truth is the second card in the whole-pool diff: its payload now states
+`all_to_hand_if_cast_elsewhere` explicitly, where the handler had assumed it.
+Same behaviour, and no longer an assumption once a second card shares the kind.
+
+Whole-pool diff: **one card supported, one payload made explicit**. Suite green,
+every `--check` gate green, shipped pool 388/388, AI simulation byte-identical at
+443 interactions, **zero hooks added**. Five new tests, all watched to fail on
+the round-121 engine.

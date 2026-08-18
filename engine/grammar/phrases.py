@@ -53,6 +53,11 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("self_becomes_target",
      ("this", "creature", "becomes", "the", "target", "of", "a", "spell",
       "or", "ability")),
+    # Longest first: the union form's phrase has the bare one as a strict
+    # prefix, so matching the bare one first would leave "or planeswalker"
+    # unaccounted and fail the line.
+    ("creature_deals_combat_damage_to_player_or_walker",
+     ("this", "creature", "deals", "combat", "damage", "to", "a", "player", "or", "planeswalker")),
     ("creature_deals_combat_damage", ("this", "creature", "deals", "combat", "damage", "to", "a", "player")),
     # Narrowed to an opponent (Hypnotic Specter). Must precede the unnarrowed
     # form below, which is a strict prefix of it: matching that first would name
@@ -717,3 +722,56 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         stream.reset(mark)
         return None
     return None
+
+
+def _parse_card_alternatives(
+    stream: TokenStream,
+) -> tuple[ast.ObjectFilter, ...] | None:
+    """A printed **card** noun phrase, as alternatives — "a land card or Shrine
+    card", "a creature card or Garruk planeswalker card".
+
+    Lives here because two families need it: the discard *cost* that named it
+    (Sanctum of Shattered Heights) and the look-and-pick effect that reads the
+    same phrase (Garruk's Harbinger). A fragment two families need goes in
+    ``phrases``, never in one of them — that coupling is what stops the grouping
+    being information.
+
+    "Discard a card" is the whole hand and returns ``()``; "Discard a land card
+    or Shrine card" (Sanctum of Shattered Heights) returns one filter per side
+    of the "or". A union rather than one narrowed filter because the two sides
+    restrict *different* characteristics — a card type and a subtype — and an
+    ObjectFilter AND's its fields, so folding them together would name a card
+    that is both a land and a Shrine, which is nothing in the pool and a strictly
+    harder cost than the card prints.
+
+    None refuses the line, which is what a phrase the charger cannot test has to
+    do: dropped instead, the cost would be payable with any card at all. What
+    "cannot test" means is not decided here — ``chargeable_card_filter`` decides
+    it, and ``engine/oracle.py``'s reader of the same clause asks the same
+    function.
+    """
+    alternatives: list[ast.ObjectFilter] = []
+    while True:
+        stream.accept_word("a", "an")
+        mark = stream.mark()
+        try:
+            filt = parse_object_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        from .lowering._common import chargeable_card_filter
+
+        if chargeable_card_filter(filt) is None:
+            stream.reset(mark)
+            return None
+        alternatives.append(filt)
+        if not stream.accept_word("or"):
+            break
+    # A bare "Discard a card" narrows nothing, and an empty tuple is how the
+    # charger is told so — never a filter with no keys set, which would read as
+    # a narrowing the charger then ignores.
+    from .lowering._common import chargeable_card_filter
+
+    if len(alternatives) == 1 and not chargeable_card_filter(alternatives[0]):
+        return ()
+    return tuple(alternatives)

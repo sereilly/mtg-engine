@@ -371,19 +371,73 @@ class PendingChoicesMixin:
             "look_top_pick", player_index, keep_index=keep_index
         )
 
-    def _resolve_look_top_pick(self, choice: PendingChoice, keep_index: int) -> bool:
+    def live_look_top_candidates(self, choice: PendingChoice) -> list[int]:
+        """Which of the looked-at positions may be taken, in library order.
+
+        Public because the prompt renderer is the second legitimate caller: what
+        is offered and what an answer is checked against have to be one rule
+        rather than two copies of it — the arrangement ``live_discard_candidates``
+        already makes, and for the same reason.
+        """
+        from ...subject_filters import card_matches_any
+
         caster = self.players[choice.player_index]
         top_count = min(int(choice.data.get("top_count", 0)), len(caster.library))
+        # "a creature card **or** Garruk planeswalker card" — the alternatives
+        # are OR'd, exactly as a narrowed discard cost's are, because the two
+        # sides restrict different characteristics and one filter AND's its
+        # keys. No alternatives means no narrowing: any looked-at card may be
+        # taken, which is See the Truth's shape.
+        alternatives = tuple(choice.data.get("filters") or ())
+        if not alternatives:
+            described = dict(choice.data.get("filter") or {})
+            alternatives = (described,) if described else ()
+        return [
+            index for index in range(top_count)
+            if card_matches_any(caster.library[index], alternatives)
+        ]
+
+    def _resolve_look_top_pick(
+        self, choice: PendingChoice, keep_index: int | None
+    ) -> bool:
+        caster = self.players[choice.player_index]
+        top_count = min(int(choice.data.get("top_count", 0)), len(caster.library))
+        looked = caster.library[:top_count]
+
+        def _bottom_the_rest(rest: list) -> None:
+            # "…on the bottom of your library **in a random order**." (Garruk's
+            # Harbinger.) A stated order, not the player's freedom: the cards
+            # go down shuffled, through the module RNG `run_ai_simulation`
+            # seeds so a given seed still replays exactly. "In any order" is the
+            # other spelling and leaves them as they lay, because there the
+            # ordering is the player's by rule and nothing reads it.
+            if choice.data.get("rest_order") == "random":
+                rest = list(rest)
+                random.shuffle(rest)
+            caster.library.extend(rest)
+
+        # "**You may** reveal a … card from among them" (Garruk's Harbinger).
+        # Declining is a legal answer, and it is not the same as an illegal one:
+        # the rest still go to the bottom.
+        if keep_index is None:
+            if not choice.data.get("optional"):
+                return False
+            del caster.library[:top_count]
+            _bottom_the_rest(looked)
+            self.discard_pending_choice(choice)
+            self.log.append(f"{caster.name} took nothing and put the rest on the bottom")
+            return True
+
         if not isinstance(keep_index, int) or not (0 <= keep_index < top_count):
             return False
-        kept = caster.library.pop(keep_index)
+        # A card the printed phrase does not name is not a legal answer, and is
+        # refused rather than slid onto one that is.
+        if keep_index not in self.live_look_top_candidates(choice):
+            return False
+        kept = caster.library[keep_index]
+        del caster.library[:top_count]
+        _bottom_the_rest([card for i, card in enumerate(looked) if i != keep_index])
         caster.hand.append(kept)
-        # "…and the rest on the bottom of your library in any order." The rest
-        # go down in the order they lay; the ordering freedom is the player's
-        # by rule, and a client that wants a specific order sends the cards it
-        # keeps caring about via future answers — nothing else reads it.
-        for _ in range(top_count - 1):
-            caster.library.append(caster.library.pop(0))
         self.discard_pending_choice(choice)
         self.log.append(
             f"{caster.name} put {kept.name} into their hand and the rest on the bottom"
@@ -391,8 +445,11 @@ class PendingChoicesMixin:
         return True
 
     def _default_look_top_pick(self, choice: PendingChoice) -> None:
-        """A non-interactive seat keeps the first card it looked at."""
-        if not self._resolve_look_top_pick(choice, 0):
+        """A non-interactive seat keeps the first card it *may* keep, and takes
+        nothing when the phrase names none of them."""
+        eligible = self.live_look_top_candidates(choice)
+        keep = eligible[0] if eligible else None
+        if not self._resolve_look_top_pick(choice, keep):
             self.discard_pending_choice(choice)
 
     # -- "Untap up to N <objects>" chosen on resolution (Rewind) --------------

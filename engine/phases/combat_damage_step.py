@@ -783,6 +783,13 @@ class CombatDamageStepMixin:
                     ),
                     asks=True,
                 )
+                # "…deals combat damage to a player **or planeswalker**"
+                # (Garruk's Harbinger). The walker took it as a permanent, so
+                # the player-damage fire site above never sees this event.
+                if damage > 0 and source_attacker is not None:
+                    self._fire_combat_damage_to_walker_triggers(
+                        source_attacker, walker, damage
+                    )
                 return
             defender = self.players[defending_idx]
 

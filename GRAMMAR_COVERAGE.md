@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 80.9% | 78.9% | 55.1% | 225 |
+| M21 *(measured)* | 285 | 503 | 81.1% | 79.1% | 55.3% | 226 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 222 | 92 | expected a subject |  |
+| 221 | 91 | expected a subject |  |
 | 88 | 32 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
 | 31 | 31 | unrecognized activation cost |  |
@@ -490,6 +490,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `At the beginning of your end step, create a Treasure token for each nontoken creature that died this turn. (It's an artifact with "{T}, Sacrifice this token: Add one mana of any color.")`
 - **Gale Swooper**
   - `When this creature enters, target creature gains flying until end of turn.`
+- **Garruk's Harbinger**
+  - `Whenever this creature deals combat damage to a player or planeswalker, look at that many cards from the top of your library. You may reveal a creature card or Garruk planeswalker card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.`
 - **Garruk's Uprising**
   - `When this enchantment enters, if you control a creature with power 4 or greater, draw a card.`
   - `Creatures you control have trample. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
