@@ -157,6 +157,29 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return len(matches) == len(wanted)
         return bool(matches)
 
+    # "Exile it. **If you do**, create a … token." (Archfiend's Vessel.) Whether
+    # the step before this one actually took place, read from the record that
+    # step wrote. An absent record is False, which is the honest reading: the
+    # handler writes it only on the path where the action happened.
+    # "if it entered from your graveyard or you cast it from your graveyard"
+    # (Archfiend's Vessel). Two records, because they are two events: the entry
+    # seam stamps where the permanent came from, and the cast stamps the zone
+    # the spell was cast from. A permanent that entered any other way answers
+    # False, which is the reading that leaves the Vessel a plain 1/1.
+    if kind == "entered_from":
+        source = context.source_permanent
+        if source is None:
+            return False
+        wanted = payload.get("zone")
+        if source.metadata.get("entered_from_zone") == wanted:
+            return True
+        return bool(payload.get("or_cast")) and (
+            source.metadata.get("cast_from_zone") == wanted
+        )
+
+    if kind == "it_happened":
+        return bool(context.results.get(payload.get("key")))
+
     if kind == "coin_flip":
         # CR 705.2. The flip recorded its result; asking again would flip a
         # second coin, so a card printing both branches could win *and* lose.

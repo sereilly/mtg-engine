@@ -1610,3 +1610,134 @@ def test_the_replaced_creature_never_enters_at_all(set_pool):
     assert len(game.stack) == before
     assert game.permanent_id_of(watcher) is None
     assert not game.is_on_battlefield(watcher)
+
+
+# --- Archfiend's Vessel: where it came from (round 115) ---------------------
+
+
+def _vessel_board(set_pool, *, zone):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", life=20,
+        hand=[pool["Archfiend's Vessel"]] if zone == "hand" else [],
+        graveyard=[pool["Archfiend's Vessel"]] if zone == "graveyard" else [],
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    return game, p1, pool
+
+
+def test_archfiends_vessel_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Archfiend's Vessel"])
+    assert program.supported, program.reason
+
+
+def test_archfiends_vessel_cast_from_hand_is_just_a_creature(set_pool):
+    """CR 603.4's intervening-if, checked when the trigger would fire. From the
+    hand the condition is false, so the Vessel stays a 1/1 and no Demon
+    arrives."""
+    game, p1, _ = _vessel_board(set_pool, zone="hand")
+
+    game.cast_from_hand(0, "Archfiend's Vessel")
+    game._settle()
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Archfiend's Vessel"]
+    assert p1.exile == []
+
+
+def test_archfiends_vessel_cast_from_the_graveyard_exiles_itself_for_a_demon(set_pool):
+    """"…or you cast it from your graveyard". The zone the *spell* was cast
+    from, which is a different record from the zone the permanent entered from —
+    a reanimation stamps the second and not the first."""
+    from engine.cast_permissions import grant_permission
+
+    game, p1, _ = _vessel_board(set_pool, zone="graveyard")
+    grant_permission(
+        game, player_index=0, zone="graveyard", mode="cast",
+        cards=[p1.graveyard[0]], duration=None, source_name="test",
+    )
+
+    game.cast_from_hand(0, "Archfiend's Vessel", from_zone="graveyard")
+    game._settle()
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Demon Token"]
+    assert [c.name for c in p1.exile] == ["Archfiend's Vessel"]
+
+
+def test_archfiends_vessel_reanimated_exiles_itself_for_a_demon(set_pool):
+    """The half the card is actually built for, and the one that needed the
+    entry seam to fire a permanent's own entry trigger at all."""
+    game, p1, _ = _vessel_board(set_pool, zone="graveyard")
+    card = p1.graveyard.pop()
+
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=card), None, from_zone="graveyard",
+    )
+    game._settle()
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Demon Token"]
+    assert [c.name for c in p1.exile] == ["Archfiend's Vessel"]
+
+
+def test_archfiends_vessel_put_into_play_from_nowhere_makes_no_demon(set_pool):
+    """A permanent put onto the battlefield without a stated origin answers the
+    condition False, which is the reading that leaves the Vessel a 1/1."""
+    game, p1, pool = _vessel_board(set_pool, zone="hand")
+    p1.hand.clear()
+    # The control, on the same board and one argument apart: stating the origin
+    # *does* make the Demon. Without it this holds on any engine where the card
+    # is unsupported and nothing fires at all.
+    control = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    control.enforce_mana_costs = False
+    control._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Archfiend's Vessel"]), None, from_zone="graveyard",
+    )
+    control._settle()
+    assert [p.card.name for p in control.controlled_by(0)] == ["Demon Token"]
+
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Archfiend's Vessel"]), None,
+    )
+    game._settle()
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Archfiend's Vessel"]
+    assert p1.exile == []
+
+
+def test_a_permanent_put_into_play_fires_its_own_entry_trigger(set_pool):
+    """The general defect the Vessel walked into.
+
+    A permanent's own "when this enters" trigger was fired from exactly one
+    place — the resolution of a permanent *spell* — so an entry by any other
+    route never fired it. Niambi is the witness because her entry trigger is
+    observable as a queued prompt."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Baneslayer Angel"]), None,
+    )
+
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Niambi, Esteemed Speaker"]), None,
+    )
+    game._settle()
+
+    assert game.pending_choices_of("optional_pay", 0)
+
+
+def test_exiling_the_source_records_that_it_happened(set_pool):
+    """"Exile it. **If you do**, …" after an action that was not optional. The
+    branch asks whether the step took place — a source already gone exiles
+    nothing (CR 608.2b) and the token must not arrive."""
+    from engine.grammar import compile_line
+
+    compiled = compile_line(
+        "Exile it. If you do, create a 5/5 black Demon creature token with flying."
+    )
+    kinds = [i.kind for i in compiled.instructions]
+
+    assert kinds == ["exile_self", "if_then"]
+    condition = compiled.instructions[1].payload["condition"]
+    assert condition == {"kind": "it_happened", "key": "exiled_self"}

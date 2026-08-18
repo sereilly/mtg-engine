@@ -429,8 +429,15 @@ class StackResolutionMixin:
             # a permanent spell resolving. Every other path puts a permanent
             # onto the battlefield without casting it, which is what
             # Containment Priest reads.
+            # "…or you cast it **from your graveyard**" (Archfiend's Vessel).
+            # The zone the spell was cast from, which for a permanent spell is
+            # also the zone the permanent came from — one call, two records,
+            # because a later card may ask either question and they are not the
+            # same one: a reanimation stamps the first and not the second.
+            permanent.metadata["cast_from_zone"] = cast_from_zone
             self._put_permanent_onto_battlefield(
-                caster_index, permanent, target_player_index, was_cast=True,
+                caster_index, permanent, target_player_index,
+                was_cast=True, from_zone=cast_from_zone,
             )
             self.log.append(f"{caster.name} put {card.name} onto battlefield")
             self._apply_global_buff(caster, card)

@@ -256,58 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 112: a restriction on the choice, and the falsy half of a tri-state
-
-*(2026-08-18.)* M21 **261 → 262** — Enthralling Hold.
-
-> Enchant creature
-> You can't choose an untapped creature as this spell's target as you cast it.
-> You control enchanted creature.
-
-The third line is Control Magic's and was already claimed; the card was one
-sentence, and that sentence is a **printed restriction on the spell's own
-targeting** (CR 601.2c) rather than a property of the thing aimed at. Protection,
-hexproof and shroud are asked of every spell alike; this applies to nothing else
-on the board, so it is its own text-keyed table — `engine/target_restrictions.py`,
-in the model `cast_restrictions.py` uses for timing gates. The printed noun
-phrase is read by the grammar's noun parser into the same filter payload every
-other narrowing travels as, so a card printed "a tapped artifact" or "a creature
-you control" needs no code.
-
-Refused at the cast, not at resolution: CR 601.2c makes an illegal choice make
-the spell **uncastable**, and letting the Aura resolve and do nothing is a
-different card. And asked in both places that decide a target — the cast path
-and the AI's Aura chooser — because a restriction only the first knows about is
-a turn spent on an action the game then rejects.
-
-**"Untapped" had no payload key, and the reason is worth stating.** Round 108
-made a set narrowing that emits nothing refuse the line; this one emitted nothing
-for a *different* reason. `ObjectFilter.tapped` is tri-state — None, True, False
-— and only the True half had a key, so "an untapped creature" reduced to exactly
-the payload of "a creature": the dropped-narrowing shape wearing a boolean
-instead of a missing key, and invisible to the round-108 table because
-`getattr(filt, "tapped")` is falsy for the half that was lost. `untapped_only` is
-its own key rather than `tapped_only: False`, because absent already means "no
-restriction" and a matcher reading a three-valued key with `.get()` would answer
-the wrong one of the two.
-
-No shipped card was mis-played by it: Castle's "Untapped creatures you control
-get +0/+2" travels the lord-buff qualifier channel, which reads the state
-directly, and Siege Striker's tap clause carried its own top-level flag. Siege
-Striker is the second card in the whole-pool diff for that reason — its filter is
-now *also* narrowed, which is strictly truer and changes nothing, since a tap
-cost could never be paid by a tapped permanent anyway.
-
-Four positional battlefield subscripts of the same slot became one
-`permanent_at` on the way past, dropping that module's ratcheted count from 9
-to 5.
-
-Whole-pool diff: **one card supported, one payload made truer**. Suite green,
-every `--check` gate green, shipped pool 388/388, AI simulation byte-identical at
-443 interactions, **zero hooks added**. Six new tests, all watched to fail on the
-round-111 engine; two guards that recorded the old reading were rewritten to
-state what replaced it.
-
 ## Round 113: three Auras that reported supported and did nothing
 
 *(2026-08-18.)* M21 **262 → 263** — Faith's Fetters.
@@ -420,3 +368,56 @@ than it prints.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Eight new tests, all watched to fail on the round-113 engine.
+
+## Round 115: a trigger that fired from one place only
+
+*(2026-08-18.)* M21 **264 → 265** — Archfiend's Vessel.
+
+> Lifelink
+> When this creature enters, if it entered from your graveyard or you cast it
+> from your graveyard, exile it. If you do, create a 5/5 black Demon creature
+> token with flying.
+
+Four pieces, and the fourth is a defect the card merely walked into.
+
+**"Exile it" is not a target.** Every exile the engine had resolved a *chosen*
+permanent, so an ability exiling its own source had no lowering at all. It gets
+its own instruction kind rather than a flag on the targeted exile — a handler
+that resolves a target and one that reads `context.source_permanent` share
+nothing beyond the move — and a source already gone exiles nothing rather than
+falling back to a scan, which would exile whichever look-alike it reached first.
+
+**"If you do" after an action that was not optional.** The fold existed only for
+a `May`, where the branch is a consequence of the player's decision. Here the
+exile is compulsory and the branch asks whether it *took place* (CR 608.2b's "as
+much as possible"), so it lowers to an ordinary `if_then` whose condition reads
+the record the exile wrote. The pairing with "the step before it" is made in
+`_lower_steps`, the one place that knows both which step that was and what it
+records — a field on the node would have been a second copy of `_PRODUCES`.
+
+**"Entered from" and "you cast it from" are two events, not one.** A permanent
+put onto the battlefield from a graveyard and a permanent spell cast from a
+graveyard leave the same card in the same place by different routes, and the
+card names both. So the entry seam stamps where the permanent came from, the
+cast stamps the zone the spell was cast from, and the condition asks each. `None`
+means the caller did not say — the same defaulting as round 111's `was_cast`,
+and one more fact about an entry that two different rules now ask.
+
+**And a permanent's own entry trigger fired from exactly one place: the
+resolution of a permanent *spell*.** Every other route onto the battlefield — a
+reanimation, a token, an effect putting a card into play — never fired it. So a
+reanimated Archfiend's Vessel made no Demon, and a Niambi put into play returned
+nothing; both compile the ability perfectly and nothing ran it. The seam now
+fires it, with the cast path keeping its own call because it has the caster's
+cast-time target choice to thread through (CR 601.2c) and an entry from a
+graveyard has no equivalent. `was_cast` is what keeps the two from both firing —
+the same flag CR 701.5a needed for Containment Priest, one fact about an entry
+asked by two rules.
+
+The suite passed that change unmodified and the AI simulation stayed
+byte-identical, which is the measurement that made it a fix rather than a
+gamble.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Seven new tests, all watched to fail on the round-114 engine.

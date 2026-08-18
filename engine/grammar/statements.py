@@ -669,6 +669,27 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
             return ast.CoinFlipResult(won=False)
     stream.reset(mark)
 
+    # "it entered from your graveyard or you cast it from your graveyard"
+    # (Archfiend's Vessel). Both halves are required by this production, because
+    # the card prints both and either one alone is a narrower condition than the
+    # sentence states — an "or" that consumed only its first half would leave
+    # the rest as unaccounted text and fail the line, which is the safe
+    # direction, but reading it as the first half alone would not be.
+    if stream.accept_phrase("it", "entered", "from"):
+        if stream.accept_word("your"):
+            zone = stream.peek_word()
+            if zone in ("graveyard", "exile", "hand", "library"):
+                stream.advance()
+                or_cast = False
+                after = stream.mark()
+                if stream.accept_phrase("or", "you", "cast", "it", "from", "your"):
+                    if stream.accept_word(zone):
+                        or_cast = True
+                    else:
+                        stream.reset(after)
+                return ast.EnteredFrom(zone, or_cast=or_cast)
+    stream.reset(mark)
+
     player = parse_player_ref(stream)
     if player is not None:
         if stream.accept_word("control", "controls"):

@@ -155,6 +155,10 @@ _PRODUCES: dict[str, str] = {
     # the conditional after it reads that record — not the library, which the
     # draw in its own branch would have changed underneath it.
     "reveal_top_of_library": "revealed_card",
+    # "Exile it. **If you do**, create a 5/5 black Demon creature token with
+    # flying." (Archfiend's Vessel.) The self-exile records that it happened, so
+    # the branch after it is the ordinary if-you-do rather than a fused kind.
+    "exile_self": "exiled_self",
     # "Return another target creature you control to its owner's hand. If you
     # do, you gain life equal to **that creature's** mana value." (Niambi,
     # Esteemed Speaker.) The bounce records the mana value of what it returned,
@@ -684,12 +688,43 @@ def _lower_steps(
 ) -> tuple[OracleInstruction, ...]:
     """Lower consecutive steps, threading what each one records forward."""
     instructions: tuple[OracleInstruction, ...] = ()
+    last_produced: str | None = None
     for step in steps:
+        # "…**If you do**, …" after an action that was not optional. The branch
+        # asks whether the step before it took place, and this is the one place
+        # that knows which step that was *and* what it records — so the pairing
+        # is made here rather than in a field on the node, where it would be a
+        # second copy of ``_PRODUCES`` free to disagree with the first.
+        if isinstance(step, ast.Conditional) and isinstance(
+            step.condition, ast.ItHappened
+        ):
+            if last_produced is None:
+                raise LoweringError(
+                    "\"if you do\" after a step that records nothing has no "
+                    "condition to test",
+                    node=step,
+                )
+            branch = lower_statement(
+                step.then, produced, event=event, whole_effect=False
+            )
+            instructions += (
+                OracleInstruction(
+                    "if_then", "",
+                    {
+                        "condition": {"kind": "it_happened", "key": last_produced},
+                        "then": branch,
+                    },
+                ),
+            )
+            last_produced = None
+            continue
         lowered = lower_statement(step, produced, event=event, whole_effect=False)
+        last_produced = None
         for instruction in lowered:
             result = _PRODUCES.get(instruction.kind)
             if result is not None:
                 produced = produced | {result}
+                last_produced = result
         instructions += lowered
     return instructions
 

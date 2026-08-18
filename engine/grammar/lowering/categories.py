@@ -223,6 +223,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # GRAMMAR_CATEGORIES is unchanged — exile is a zone change either way, and
     # a second switch would let one of the two be gated off without the other.
     "exile_target_permanent": "zones",
+    "exile_self": "zones",
     "exile_target_graveyard_card": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
     "reanimate_creature": "zones",

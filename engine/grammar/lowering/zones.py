@@ -364,6 +364,18 @@ def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
                 f"the exile sweep does not honour {leftovers[0]!r}", node=node
             )
         return (OracleInstruction("exile_all_matching", "", payload),)
+    # "Exile it." / "Exile this creature." (Archfiend's Vessel.) The ability's
+    # own source, which is not a chosen target at all — nothing is picked, so
+    # there is no picker, no legality check and nothing to re-resolve if it has
+    # moved. It gets its own instruction kind for that reason rather than a
+    # payload flag on the targeted exile: a handler that resolves a target and
+    # one that reads ``context.source_permanent`` share no code beyond the move.
+    if _is_source(subject):
+        if node.duration.kind is not None:
+            raise LoweringError(
+                "a timed exile of the source has no handler", node=node
+            )
+        return (OracleInstruction("exile_self", "", {}),)
     if (
         not isinstance(subject, ast.TargetSpec)
         or subject.quantifier != "target"

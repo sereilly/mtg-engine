@@ -709,6 +709,35 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("exile_self")
+def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile it." / "Exile this creature." (Archfiend's Vessel.)
+
+    The ability's own source, which is not a target: nothing is chosen, so there
+    is no picker, no legality check and nothing to re-resolve. A source that has
+    already left the battlefield exiles nothing rather than falling back to a
+    scan — CR 608.2b's "do as much as possible", and a scan here would exile
+    whichever look-alike it reached first.
+
+    Records whether it happened, so "**If you do**, create a 5/5 black Demon
+    creature token" is the ordinary if-you-do branch rather than a fused
+    instruction.
+    """
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{context.card.name}: nothing to exile")
+        return True, "resolved"
+    owner_index = game.owner_index_of(source)
+    owner = game.players[owner_index] if owner_index is not None else context.caster
+    game.remove_from_battlefield(source)
+    if not source.metadata.get("is_token", False):
+        # CR 111.7: a token ceases to exist rather than going to exile.
+        owner.exile.append(source.card)
+    context.results["exiled_self"] = True
+    game.log.append(f"{source.card.name} was exiled")
+    return True, "resolved"
+
+
 @effect_handler("exile_target_permanent")
 def exile_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile target creature or planeswalker." / "Exile target nonland

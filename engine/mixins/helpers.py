@@ -1445,6 +1445,7 @@ class GameHelpersMixin:
         target_player_index: int | None,
         *,
         was_cast: bool = False,
+        from_zone: str | None = None,
     ) -> None:
         """Put *permanent* onto the battlefield — the one entry path there is.
 
@@ -1481,6 +1482,15 @@ class GameHelpersMixin:
         )
         if consumed:
             return
+        # "…if it **entered from your graveyard**" (Archfiend's Vessel). Stamped
+        # on the permanent rather than kept on the game, because the question is
+        # asked of one object and a permanent that leaves takes the answer with
+        # it (CR 400.7 gives the next one a new identity and a fresh stamp).
+        # None means the caller did not say, which reads as "not from anywhere
+        # this asks about" — the same defaulting as ``was_cast``, and the same
+        # reason: most entries are not from a zone any card asks about.
+        if from_zone is not None:
+            permanent.metadata["entered_from_zone"] = from_zone
         # CR 400.7: what enters is a *new object*, so it gets a new identity —
         # nothing that held the old id may address it. Stamped before the append
         # so no reader can observe the permanent on the battlefield under an id
@@ -1514,3 +1524,22 @@ class GameHelpersMixin:
             # and the alternative is a fire site that knows which cards care.
             entering_power=max(0, permanent.effective_power),
         )
+        # **And the permanent's own "when this enters" trigger**, for every entry
+        # that is not a cast.
+        #
+        # That trigger was fired from exactly one place — the resolution of a
+        # permanent *spell* — so a permanent put onto the battlefield any other
+        # way never fired it at all. A reanimated Archfiend's Vessel made no
+        # Demon; a Niambi put into play returned nothing. Both reported
+        # supported, because the ability compiles perfectly and nothing ran it.
+        #
+        # The cast path keeps its own call rather than deferring to this one:
+        # it has the caster's cast-time target choice to thread through
+        # (CR 601.2c), which an entry from a graveyard or a token creation has
+        # no equivalent of. ``was_cast`` is what keeps the two from both firing,
+        # and it is the same flag CR 701.5a needed for Containment Priest — one
+        # fact about an entry, asked by two rules.
+        if not was_cast:
+            self._apply_self_enters_battlefield_triggers(
+                controller_index, permanent, target_player_index, None, None,
+            )

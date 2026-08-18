@@ -594,6 +594,18 @@ def _lower_condition(
                 node=condition,
             )
         return {"kind": "coin_flip", "won": condition.won}
+    if isinstance(condition, ast.EnteredFrom):
+        # CR 603.4's intervening-if, asked of the permanent that fired the
+        # trigger. Both halves ride the payload; the evaluator asks about the
+        # zone it came from and, when `or_cast` is set, about the zone the spell
+        # was cast from — two different records, because a reanimation and a
+        # cast are two different events that leave the same card in the same
+        # place.
+        return {
+            "kind": "entered_from",
+            "zone": condition.zone,
+            "or_cast": condition.or_cast,
+        }
     if isinstance(condition, ast.RevealedCardIs):
         # The pronoun's referent again, and the same discipline: a reveal
         # earlier in this same effect has to have recorded what it showed, or

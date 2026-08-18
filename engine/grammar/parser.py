@@ -528,8 +528,6 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     definition = target.definition if isinstance(target, ast.WhereX) else None
     if definition is not None:
         target = target.statement
-    if not isinstance(target, ast.May):
-        return False
     mark = stream.mark()
     if not stream.accept_word("if"):
         return False
@@ -551,6 +549,21 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     except GrammarError:
         stream.reset(mark)
         return False
+
+    if not isinstance(target, ast.May):
+        # "Exile it. **If you do**, create a … token." (Archfiend's Vessel.)
+        # The preceding action was not optional, so there is no decision to
+        # branch on — the branch asks whether the action *took place*, and the
+        # pairing with the step before it is made here, where "the step before
+        # it" is a fact rather than a guess.
+        # "If you **don't**" has no reading here: an action that was not
+        # optional has no declining, so the words are refused rather than
+        # folded onto a branch that could never be taken.
+        if declined:
+            stream.reset(mark)
+            return False
+        steps.append(ast.Conditional(ast.ItHappened(), branch))
+        return True
 
     may = target
     folded = ast.May(

@@ -573,9 +573,50 @@ class HadPlus1Counter:
     record rather than a board the creature has already left."""
 
 
+@dataclass(frozen=True)
+class EnteredFrom:
+    """"if it entered from your graveyard **or you cast it from your
+    graveyard**" (Archfiend's Vessel) — CR 603.4's intervening-if asking where
+    the permanent came from.
+
+    Both halves, because they are genuinely two events: a permanent put onto the
+    battlefield from a graveyard by a reanimation, and a permanent spell cast
+    from a graveyard that then resolved. The card names both and the Demon
+    arrives either way; implementing one would be a card that works under
+    Unearth and not under its own flashback, which is a difference no player
+    would attribute to the engine.
+
+    ``zone`` is where it came from; ``or_cast`` says the cast half is printed
+    too. A phrase naming only one is a different, narrower condition, so the
+    field is not defaulted to True.
+    """
+    zone: str
+    or_cast: bool = False
+
+
+@dataclass(frozen=True)
+class ItHappened:
+    """"…**If you do**, …" after an action that was not optional.
+
+    "Exile it. If you do, create a 5/5 black Demon creature token with flying."
+    (Archfiend's Vessel.) The exile is not a choice — the branch is conditional
+    on whether it actually *took place*, which for a source that has already
+    left the battlefield it did not (CR 608.2b's "as much as possible").
+
+    Distinct from the :class:`May` fold of the same words, which is a branch of a
+    decision the player made. Reading this one as that would need a prompt
+    nobody is owed; reading it as an unconditional next step would create the
+    Demon whether or not the Vessel was there to exile.
+
+    Carries no field: *which* step it refers to is always the one immediately
+    before, and the lowering pairs them where that is known rather than naming a
+    producer here, where it would be a second copy of ``_PRODUCES``.
+    """
+
+
 Condition = Union[
     CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter, ItWas,
-    RevealedCardIs,
+    EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
 ]
 
