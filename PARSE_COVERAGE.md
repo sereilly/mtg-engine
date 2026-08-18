@@ -49,7 +49,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | activation cost | 113 |
 | trigger table | 78 |
 | keyword table | 59 |
-| static-line table | 45 |
+| static-line table | 47 |
 | aura enchant noun (oracle_instructions attach) | 44 |
 | mixin text scan | 32 |
 | aura static (oracle_instructions/permanent_state) | 31 |
@@ -58,7 +58,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | untap_restrictions.py | 5 |
 | ante boilerplate (deck construction, not gameplay) | 4 |
 | modal machinery | 3 |
-| global_statics.py | 2 |
 | cost_modifiers.py | 2 |
 | cast_costs.py | 2 |
 | phases/draw_step.py (counter damage) | 1 |
@@ -66,4 +65,3 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | land_play_allowance.py | 1 |
 | draw_step_modifiers.py | 1 |
 | handler ← counter_top_stack_spell | 1 |
-| global_statics.py (lingering rider) | 1 |

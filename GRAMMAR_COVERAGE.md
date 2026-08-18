@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 83.5% | 81.7% | 57.7% | 231 |
+| M21 *(measured)* | 285 | 503 | 83.9% | 82.1% | 57.9% | 232 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,10 +33,10 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 204 | 80 | expected a subject |  |
-| 88 | 32 | unrecognized effect verb |  |
+| 87 | 31 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
-| 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
+| 26 | 12 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 4 | expected 'the number of' in a where-clause |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
@@ -972,6 +972,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
+- **Pursued Whale**
+  - `When this creature enters, each opponent creates a 1/1 red Pirate creature token with "This token can't block" and "Creatures you control attack each combat if able."`
 - **Quirion Dryad**
   - `Whenever you cast a spell that's white, blue, black, or red, put a +1/+1 counter on this creature.`
 - **Radha, Heart of Keld**

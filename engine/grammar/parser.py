@@ -47,6 +47,7 @@ from .lexer import (BULLET, MANA, PT, PUNCT, QUOTE, SELF, tokenize)
 from .costs import _parse_costs
 from .nouns import (parse_object_filter, parse_target_spec)
 from .registries import registry_for_line
+from .riders import (_RIDER_FOLDED, _attach_if_you_do, _attach_riders, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .stream import TokenStream
 from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, match_longest)
 from .phrases import (
@@ -144,319 +145,50 @@ def _split_on_colon(tokens: tuple) -> int | None:
 # event filter can test against a cast card's type line — mirroring the oracle
 # trigger table's alternation — and deliberately without "enchantment", whose
 # printed article ("an") belongs to its own condition kind.
-def _statement_bound_target(statement: ast.Statement) -> ast.TargetSpec | None:
-    """The chosen target a following pronoun sentence refers back to, or None.
 
-    "Put a +1/+1 counter on up to one target creature. **It** gains
-    indestructible until end of turn." — the pronoun names the previous
-    sentence's target, not the ability's source. Walks a Sequence or
-    Conjunction from its last step, because the pronoun binds to the nearest
-    preceding choice.
+
+
+
+
+
+
+
+
+
+def _parse_quoted_token_line(stream: TokenStream) -> ast.Statement | None:
+    """A token-creating sentence whose ``with`` clause holds quoted abilities,
+    or None when the line is something else.
+
+    Its own entry point because the quote guard above runs before the ordinary
+    statement dispatch: without this, every such line would be refused for
+    containing a quote at all.
     """
-    if isinstance(statement, (ast.Sequence,)):
-        for step in reversed(statement.steps):
-            found = _statement_bound_target(step)
-            if found is not None:
-                return found
-        return None
-    if isinstance(statement, ast.Conjunction):
-        for step in reversed(statement.effects):
-            found = _statement_bound_target(step)
-            if found is not None:
-                return found
-        return None
-    # "Soul Sear deals 5 damage to target creature or planeswalker. It loses
-    # indestructible…" — the damage sentence's chosen recipient is what the
-    # pronoun names. Recipients live in their own tuple on DealDamage, which
-    # the field scan below cannot see.
-    if isinstance(statement, ast.DealDamage):
-        for recipient in reversed(statement.recipients):
-            if isinstance(recipient, ast.TargetSpec) and recipient.quantifier in ("target", "up_to"):
-                return recipient
-        return None
-    for field_name in ("subject", "target"):
-        candidate = getattr(statement, field_name, None)
-        if isinstance(candidate, ast.TargetSpec) and candidate.quantifier in ("target", "up_to"):
-            return candidate
-    return None
-
-
-def _parse_pronoun_verb_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``Untap that creature.`` after a sentence that chose one.
-
-    The sibling of :func:`_parse_pronoun_grant_rider`: that one binds the
-    previous target to a *grant*, this one to a plain imperative verb. "Untap
-    that creature" (Traitorous Greed) has no target of its own — the spell chose
-    one sentence ago, and re-parsing it as a fresh target would raise a second
-    picker for a choice CR 601.2c says was made once.
-
-    Only "untap" today, and one verb at a time deliberately: each imperative has
-    to be checked against the shape its handler implements, and a table of verbs
-    admitted wholesale would claim sentences nothing performs.
-    """
-    target = _statement_bound_target(steps[-1]) if steps else None
-    if target is None:
-        return None
     mark = stream.mark()
-    if not stream.accept_word("untap"):
-        return None
-    if not (
-        stream.accept_phrase("that", "creature")
-        or stream.accept_phrase("that", "permanent")
-        or stream.accept_word("it")
-    ):
-        stream.reset(mark)
-        return None
-    return ast.Untap(target)
-
-
-def _parse_pronoun_grant_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``It gains <keywords> [duration].`` after a sentence that chose a target.
-
-    Re-uses the previous sentence's own :class:`ast.TargetSpec` as the grant's
-    subject, so both instructions describe — and resolve — the same choice.
-    Without this the sentence parses on its own with "it" read as the source,
-    which is the trigger-remainder reading and grants the ability's *source*
-    the keyword (Basri Ket +1 would make Basri indestructible, not the
-    creature).
-    """
-    target = _statement_bound_target(steps[-1]) if steps else None
-    if target is None:
-        return None
-    mark = stream.mark()
-    # "It gains …" / "That permanent loses …" (Soul Sear) — two spellings of
-    # the same back-reference. The noun spelling is only claimed when a
-    # grant/loss verb follows, so "that creature's controller …" (a different
-    # referent) keeps its own reading.
-    if not stream.accept_word("it"):
-        if not stream.accept_word("that"):
-            return None
-        if not stream.accept_word("creature", "permanent", "planeswalker"):
-            stream.reset(mark)
-            return None
-        if not stream.at_word("gains", "gain", "loses", "lose"):
-            stream.reset(mark)
-            return None
-    # "It loses indestructible until end of turn." (Soul Sear) — the negative
-    # half of the same pronoun binding: the previous sentence's target loses a
-    # keyword, not the ability's source.
-    if stream.at_word("loses", "lose"):
-        try:
-            loss = _parse_loses(stream, target)
-        except GrammarError:
-            stream.reset(mark)
-            return None
-        if not isinstance(loss, ast.LoseKeyword):
-            # "It loses 2 life" would be a pronoun for a player, which this
-            # binding cannot mean — leave the sentence to fail loudly.
-            stream.reset(mark)
-            return None
-        return loss
-    if not stream.at_word("gains", "gain"):
-        stream.reset(mark)
-        return None
+    # The quoted token may be the whole line ("Create a … token with …") or the
+    # effect half of a trigger ("When this creature enters, each opponent
+    # creates a … token with …"), and Pursued Whale prints the second. The
+    # trigger prefix is read first so the statement behind it sees the sentence
+    # it would have seen on a line of its own.
+    event = _parse_trigger_event(stream)
+    if event is not None:
+        stream.accept_punct(",")
     try:
-        grant = _parse_gains(stream, target)
+        statement = parse_statement(stream)
     except GrammarError:
         stream.reset(mark)
         return None
-    # "Put target creature card from a graveyard onto the battlefield under
-    # your control. It gains haste." (Liliana, Waker of the Dead's emblem.)
-    # A durationless grant to a reanimated card folds into the reanimation —
-    # the permanent does not exist until that step runs, so a separate grant
-    # instruction would have nothing to grant to.
-    if (
-        isinstance(grant, ast.GainKeyword)
-        and grant.duration.kind is None
-        and isinstance(steps[-1], ast.PutOntoBattlefield)
-    ):
-        steps[-1] = replace(steps[-1], gains=steps[-1].gains + grant.keywords)
-        return _RIDER_FOLDED
-    return grant
-
-
-# Sentinel: the rider was folded into the previous step, nothing to append.
-_RIDER_FOLDED = ast.RawEffect("rider-folded")
-
-
-def _parse_exile_instead_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> bool:
-    """``If that spell would be put into your graveyard, exile it instead.``
-    after a cast-permission sentence (Chandra, Flame's Catalyst's −2).
-
-    Folded onto the permission rather than parsed as a step, because it is a
-    property of the cast the permission allows — the engine stamps it onto the
-    stack object at cast time — and as a standalone sentence "that spell"
-    would dangle with nothing binding it.
-    """
-    last = steps[-1] if steps else None
-    if not isinstance(last, ast.CastPermission) or last.what != "target_card":
-        return False
-    mark = stream.mark()
-    if not stream.accept_phrase(
-        "if", "that", "spell", "would", "be", "put", "into", "your", "graveyard"
-    ):
-        stream.reset(mark)
-        return False
-    stream.accept_punct(",")
-    if not stream.accept_phrase("exile", "it", "instead"):
-        stream.reset(mark)
-        return False
-    steps[-1] = replace(last, exile_instead=True)
-    return True
-
-
-def _parse_its_controller_creates_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``Its controller creates a <token>.`` after a sentence that chose a
-    target (Angelic Ascension, Secure the Scene — both after an exile).
-
-    "Its" names the previous sentence's chosen permanent, which is gone by the
-    time the token arrives — so the token rides the controller the exile step
-    recorded, and the lowering demands that producer. Parsed as its own
-    sentence, "its controller" would name nobody at all.
-    """
-    if not steps or _statement_bound_target(steps[-1]) is None:
-        return None
-    mark = stream.mark()
-    if not stream.accept_phrase("its", "controller"):
-        return None
-    if not stream.at_word("creates"):
+    if not stream.exhausted and not stream.at_punct(".", ";"):
         stream.reset(mark)
         return None
-    try:
-        token = _parse_create_token(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    assert isinstance(token, ast.CreateToken)
-    return replace(token, recipient="exiled_permanent_controller")
+    if event is not None:
+        return ast.TriggeredAbilityNode(event, statement)
+    return statement
 
 
-def _parse_that_controller_reveals_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``That creature's controller reveals cards from the top of their library
-    until they reveal a creature card. That player puts that card onto the
-    battlefield, then shuffles the rest into their library.`` (Transmogrify.)
-
-    The same shape as the "its controller creates a token" rider beside it, and
-    for the same reason: "that creature" names the permanent the previous
-    sentence exiled, which is gone by the time this runs, so the library read
-    rides the controller that step recorded. Parsed as its own sentence it names
-    nobody.
-
-    All three sentences are consumed here. They describe one procedure over one
-    revealed pile — "that card" is what the reveal stopped on and "the rest" is
-    exactly what it turned over first — so parsed apart the last two would
-    dangle referents nothing binds.
-    """
-    if not steps or _statement_bound_target(steps[-1]) is None:
-        return None
-    mark = stream.mark()
-    if not stream.accept_phrase("that", "creature", "'s", "controller"):
-        return None
-    if not stream.accept_phrase(
-        "reveals", "cards", "from", "the", "top", "of", "their", "library",
-        "until", "they", "reveal",
-    ):
-        stream.reset(mark)
-        return None
-    try:
-        stream.accept_word("a", "an")
-        filt = parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not filt.is_card:
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    # Every word of the destination and of what happens to the rest. A card
-    # that milled the pile instead of shuffling it back is a different card, and
-    # the difference does not show until this sentence.
-    if not stream.accept_phrase(
-        "that", "player", "puts", "that", "card", "onto", "the", "battlefield",
-    ):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(",")
-    if not stream.accept_phrase(
-        "then", "shuffles", "the", "rest", "into", "their", "library",
-    ):
-        stream.reset(mark)
-        return None
-    return ast.RevealUntil("exiled_permanent_controller", filt)
 
 
-def _parse_conditional_instead_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> bool:
-    """``You gain 4 life. If a creature died this turn, you gain 8 life
-    instead.`` (Life Goes On.)
-
-    The second sentence *replaces* the first when its condition holds, so the
-    pair folds into one ``Conditional`` — then the bigger gain, otherwise the
-    printed base. Parsed apart, the two sentences would gain 12 life on a
-    death; the "instead" is the whole content of the sentence, so it is
-    required, and only a same-shaped statement may replace the last step.
-    """
-    last = steps[-1] if steps else None
-    if not isinstance(last, ast.GainLife):
-        return False
-    mark = stream.mark()
-    if not stream.accept_word("if"):
-        return False
-    try:
-        condition = _parse_condition(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return False
-    stream.accept_punct(",")
-    try:
-        replacement = parse_statement(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return False
-    if not isinstance(replacement, ast.GainLife) or not stream.accept_word("instead"):
-        stream.reset(mark)
-        return False
-    steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
-    return True
 
 
-def _parse_who_cant_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``Each opponent who can't loses N life.`` after an each-player discard
-    (Liliana, Waker of the Dead). The loss applies only to opponents who could
-    not perform the previous sentence's action, so it is recorded as a
-    back-reference the lowering turns into a reader of that step's result."""
-    last = steps[-1] if steps else None
-    if not (isinstance(last, ast.Discard) and last.player.kind == "each_player"):
-        return None
-    mark = stream.mark()
-    if not (
-        stream.accept_word("each")
-        and stream.accept_word("opponent")
-        and stream.accept_phrase("who", "can't")
-    ):
-        stream.reset(mark)
-        return None
-    try:
-        stream.expect_word("loses", "lose")
-        amount = parse_amount(stream)
-        stream.expect_word("life")
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    return ast.LoseLife(ast.PlayerRef("each_opponent"), amount, who_could_not="discard")
 
 
 def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
@@ -572,180 +304,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     return steps[0] if len(steps) == 1 else ast.Sequence(tuple(steps))
 
 
-def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
-    """Fold "If you do, …" / "If you don't, …" into the preceding ``May``.
-
-    These are branches of the optional action, not steps of their own: "You may
-    pay {1}. If you do, you gain 1 life." is one decision with a consequence.
-    Parsing them as separate sentences would make the life gain unconditional —
-    the same class of mistake as treating "you may pay {2}" as a plain cost.
-    """
-    # "You may draw X cards, where X is …. If you do, discard a card."
-    # (Sanctum of Calm Waters.) The where-clause wraps the whole sentence, so
-    # the May is one level down — lifted off here and put back on outside the
-    # fold, because the definition binds the branch as well as the offer.
-    target = steps[-1]
-    definition = target.definition if isinstance(target, ast.WhereX) else None
-    if definition is not None:
-        target = target.statement
-    mark = stream.mark()
-    if not stream.accept_word("if"):
-        return False
-    if not stream.accept_word("you"):
-        stream.reset(mark)
-        return False
-
-    if stream.accept_word("do"):
-        declined = False
-    elif stream.accept_word("don't") or stream.accept_phrase("do", "not"):
-        declined = True
-    else:
-        stream.reset(mark)
-        return False
-
-    stream.accept_punct(",")
-    try:
-        branch = parse_statement(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return False
-
-    if not isinstance(target, ast.May):
-        # "Exile it. **If you do**, create a … token." (Archfiend's Vessel.)
-        # The preceding action was not optional, so there is no decision to
-        # branch on — the branch asks whether the action *took place*, and the
-        # pairing with the step before it is made here, where "the step before
-        # it" is a fact rather than a guess.
-        # "If you **don't**" has no reading here: an action that was not
-        # optional has no declining, so the words are refused rather than
-        # folded onto a branch that could never be taken.
-        if declined:
-            stream.reset(mark)
-            return False
-        steps.append(ast.Conditional(ast.ItHappened(), branch))
-        return True
-
-    may = target
-    folded = ast.May(
-        actor=may.actor,
-        cost=may.cost,
-        action=may.action,
-        then=branch if not declined else may.then,
-        otherwise=branch if declined else may.otherwise,
-    )
-    steps[-1] = ast.WhereX(folded, definition) if definition is not None else folded
-    return True
 
 
-def _attach_when_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
-    """Fold "When you do, …" into the preceding ``May`` as its reflexive branch.
-
-    One word apart from ``_attach_if_you_do`` and a different rule (CR 603.12):
-    "if you do" is the rest of this resolution, "when you do" is a *new*
-    triggered ability the payment creates, which chooses its own targets as it is
-    created. Tolarian Kraken is the difference — "you may tap or untap target
-    creature" has a target the drawing of a card never named, so folded onto the
-    ``then`` branch it would run against whatever the producing action happened
-    to point at.
-
-    Read as its own production rather than as a flag on the other so that the
-    two cannot be conflated by a later edit to either.
-    """
-    target = steps[-1]
-    definition = target.definition if isinstance(target, ast.WhereX) else None
-    if definition is not None:
-        target = target.statement
-    if not isinstance(target, ast.May):
-        return False
-    mark = stream.mark()
-    if not stream.accept_phrase("when", "you", "do"):
-        stream.reset(mark)
-        return False
-    stream.accept_punct(",")
-    try:
-        branch = parse_statement(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return False
-
-    folded = ast.May(
-        actor=target.actor,
-        cost=target.cost,
-        action=target.action,
-        then=target.then,
-        otherwise=target.otherwise,
-        reflexive=branch,
-    )
-    steps[-1] = ast.WhereX(folded, definition) if definition is not None else folded
-    return True
 
 
-def _attach_spend_only(stream: TokenStream, steps: list[ast.Statement]) -> bool:
-    """Fold "Spend this mana only to …" into the mana production before it.
-
-    A rider and not a step: the sentence adds nothing to the game, it says what
-    the *previous* sentence's mana may pay for (CR 106.6b). Parsed as its own
-    step it would be an effect nothing performs, and the mana would go into the
-    unrestricted pool with the restriction reported as understood.
-
-    Which restrictions exist is `engine/restricted_mana.py`'s question, asked
-    through its own matcher over the sentence's printed text — the delegation
-    round 85 established for a registry-claimed sentence, and for its reason: a
-    copy of the phrase here would be free to drift from the predicate that
-    enforces it, and mana spent more freely than the card allows is the
-    direction that drift goes.
-    """
-    from ..restricted_mana import mana_restriction_for
-
-    if not isinstance(steps[-1], ast.AddMana):
-        return False
-    mark = stream.mark()
-    start = stream.pos
-    while not stream.exhausted and not stream.at_punct(".", ";"):
-        stream.advance()
-    sentence = stream.text_between(start, stream.pos)
-    restriction = mana_restriction_for(sentence)
-    if restriction is None:
-        stream.reset(mark)
-        return False
-    steps[-1] = dataclasses.replace(steps[-1], spend_only=restriction.key)
-    return True
 
 
-def _attach_unpaid_penalty(statement: ast.Statement, penalty: str) -> ast.Statement:
-    """Fold "If that player doesn't, …" into the "unless … pays" it belongs to.
-
-    Raises when there is no such effect to attach to. A penalty for declining a
-    cost that was never offered is not something the grammar can place, and
-    consuming the sentence anyway is precisely the dropped-rider bug the
-    full-consumption invariant exists to prevent.
-    """
-    if isinstance(statement, ast.CounterSpell) and statement.unless_pays is not None:
-        return ast.CounterSpell(statement.subject, statement.unless_pays, penalty)
-    raise GrammarError("an unpaid-cost penalty with no cost to decline")
 
 
-def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.Statement:
-    """Fold damage riders into the most recent DealDamage of *statement*."""
-    if isinstance(statement, ast.DealDamage):
-        merged = ast.DamageRiders(
-            no_regen=statement.riders.no_regen or riders.no_regen,
-            exile_if_dies=statement.riders.exile_if_dies or riders.exile_if_dies,
-            divided=statement.riders.divided,
-            divided_evenly=statement.riders.divided_evenly,
-        )
-        return ast.DealDamage(
-            statement.source, statement.amount, statement.recipients, merged, statement.chooser
-        )
-    if isinstance(statement, ast.Sequence) and statement.steps:
-        steps = list(statement.steps)
-        steps[-1] = _attach_riders(steps[-1], riders)
-        return ast.Sequence(tuple(steps))
-    if isinstance(statement, ast.Conjunction) and statement.effects:
-        effects = list(statement.effects)
-        effects[0] = _attach_riders(effects[0], riders)
-        return ast.Conjunction(tuple(effects))
-    raise GrammarError("damage rider with no damage effect to attach to")
 
 
 def _looks_static(statement: ast.Statement) -> bool:
@@ -913,6 +479,21 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
             return ast.SpellEffectLine(
                 ast.RawEffect("grant_team_assign_unblocked_until_eot")
             )
+        # "…creates a 1/1 red Pirate creature token **with "This token can't
+        # block" and "Creatures you control attack each combat if able.""**
+        # (Pursued Whale.) A token whose abilities are printed lines rather than
+        # keywords, which the token production reads — so the line is given to
+        # the ordinary parser rather than refused for containing a quote.
+        #
+        # Tried last, after the emblem shape above: both carry quoted text, and
+        # the difference is which production claims the words around it.
+        token_line = _parse_quoted_token_line(TokenStream(lexed.tokens[start:], line))
+        if token_line is not None:
+            # Already a whole ability line when a trigger prefix was read;
+            # otherwise a bare effect that still needs wrapping.
+            if isinstance(token_line, ast.TriggeredAbilityNode):
+                return token_line
+            return ast.SpellEffectLine(token_line)
         raise GrammarError("granted ability in quotes", line=line)
 
     body = lexed.tokens[start:]

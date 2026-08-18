@@ -2132,3 +2132,81 @@ def test_the_discard_ability_makes_only_its_own_source_unblockable(set_pool):
     assert p1.hand == [], "the discard was paid"
     assert not game._can_block_attacker(blocker, pilferer)
     assert game._can_block_attacker(blocker, other), "and nobody else"
+
+
+# --- Pursued Whale: a token with printed abilities (round 130) --------------
+
+
+def _whale_board(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20, hand=[pool["Pursued Whale"]])
+    p2 = PlayerState(name="P2", life=20, hand=[pool["Shock"]])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Pursued Whale")
+    game._settle()
+    whale = next(p for p in game.controlled_by(0) if p.card.name == "Pursued Whale")
+    return game, p1, p2, whale, pool
+
+
+def test_pursued_whale_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Pursued Whale"])
+    assert program.supported, program.reason
+
+
+def test_each_opponent_gets_a_pirate(set_pool):
+    """"**Each opponent** creates …" is payload on the same token maker — the
+    sentence is otherwise identical, so the recipient is data rather than a
+    second production."""
+    game, _, _, _, _ = _whale_board(set_pool)
+
+    pirates = list(game.controlled_by(1))
+
+    assert [p.card.name for p in pirates] == ["Pirate Token"]
+    assert list(game.controlled_by(0))[0].card.name == "Pursued Whale"
+
+
+def test_the_token_carries_both_printed_abilities(set_pool):
+    """The token's abilities are printed *lines*, not keywords, and they are
+    carried as text so the compiler reads them exactly as it reads any card's.
+    A line nothing implements refuses the whole card at lowering — a token
+    silently lacking an ability is the shape the support gate exists to stop."""
+    game, _, _, whale, _ = _whale_board(set_pool)
+    pirate = next(iter(game.controlled_by(1)))
+
+    assert "can't block" in pirate.card.oracle_text
+    assert "attack each combat if able" in pirate.card.oracle_text
+    assert not game._can_block_attacker(pirate, whale)
+
+
+def test_the_tokens_static_grants_its_controllers_creatures_a_requirement(set_pool):
+    """"Creatures you control attack each combat if able" is a board-wide static
+    granted through the layer bridge — appended to each affected permanent's
+    effective card, so `combat_restrictions.py` reads it as though the creature
+    printed it and the declare-attackers step needs no new code."""
+    from engine.combat_restrictions import combat_restriction_for
+    from engine.oracle import normalize_creature_line
+
+    game, _, _, _, pool = _whale_board(set_pool)
+    theirs = Permanent(card=pool["Alpine Watchdog"])
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    game._recompute_continuous_effects()
+
+    assert "attacks each combat if able" in theirs.effective_card.oracle_text.lower()
+    assert combat_restriction_for(
+        normalize_creature_line("This creature attacks each combat if able.")
+    ) is not None
+
+
+def test_the_tax_applies_only_to_an_opponents_spell_aimed_at_the_whale(set_pool):
+    """The mana twin of round 107's life tax, sharing its scope: a fact about
+    the spell's *chosen targets*, answered at CR 601.2f when the cost is
+    calculated."""
+    from engine.cost_modifiers import spell_cost_tax
+
+    game, _, _, whale, pool = _whale_board(set_pool)
+    shock = pool["Shock"]
+
+    assert spell_cost_tax(game, 1, shock, [whale]) == (3, ["Pursued Whale"])
+    assert spell_cost_tax(game, 1, shock, []) == (0, [])
+    assert spell_cost_tax(game, 0, shock, [whale]) == (0, []), "not the controller's own"

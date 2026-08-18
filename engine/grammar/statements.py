@@ -220,6 +220,15 @@ def _parse_subject_verb(
         return _parse_end_the_turn(stream)
     if stream.at_word("copy"):
         return _parse_copy_that_spell(stream)
+    # "**Each opponent** creates a … token" (Pursued Whale). The token maker
+    # with a different recipient, which is payload rather than a second
+    # production — everything else about the sentence is identical.
+    mark_recipient = stream.mark()
+    if stream.accept_phrase("each", "opponent") and stream.at_word("creates"):
+        token = _parse_create_token(stream)
+        assert isinstance(token, ast.CreateToken)
+        return dataclasses.replace(token, recipient_players="each_opponent")
+    stream.reset(mark_recipient)
     if stream.at_word("choose"):
         return _parse_name_and_strip(stream)
     if stream.at_word("draw"):

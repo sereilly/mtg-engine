@@ -497,9 +497,19 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         count = int(getattr(game, str(raw_count["history"]), 0) or 0)
     else:
         count = resolve_amount(raw_count, context.x_value)
-    for _ in range(count):
+    # "**Each opponent** creates …" (Pursued Whale). Who gets the tokens, which
+    # for every earlier token card is the effect's own controller. A seat that
+    # has left the game gets none (CR 800.4a).
+    recipients = [controller_index]
+    who = payload.get("recipient_players")
+    if who == "each_opponent":
+        recipients = list(game.opponents_of(controller_index))
+    elif who == "each_player":
+        recipients = [i for i, p in enumerate(game.players) if not p.lost]
+    for seat in recipients:
+      for _ in range(count):
         token = Permanent(card=token_card, metadata={"is_token": True})
-        game._put_permanent_onto_battlefield(controller_index, token, None)
+        game._put_permanent_onto_battlefield(seat, token, None)
         # "…that are tapped and attacking" (Basri Ket): entry state, not an
         # attack declaration — the tokens join the combat the trigger saw
         # (CR 111.10c-style entry), attacking whatever seat is already under

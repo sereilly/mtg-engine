@@ -104,6 +104,18 @@ _TARGETING_LIFE_TAX = re.compile(
     r"(?P<amount>\d+) life to cast"
 )
 
+# "spells your opponents cast that target this creature cost {N} more to cast"
+# (Pursued Whale). The *mana* twin of the life tax above, sharing its scope: the
+# same "that target this creature" fact about the spell's chosen targets, paid
+# in mana rather than in life. Its own pattern because the two are charged at
+# different moments — mana at CR 601.2f's cost calculation, life at 601.2h's
+# payment — and reading one as the other would put the wrong number in the
+# wrong place.
+_TARGETING_MANA_TAX = re.compile(
+    r"spells your opponents cast that target this creature cost "
+    r"\{(?P<amount>\d+)\} more to cast"
+)
+
 # "activated abilities of <colour>? <type>s cost {N} more to activate"
 _ABILITY_TAX = re.compile(
     rf"activated abilities of (?:(?P<colour>{_COLOURS}) )?(?P<type>{_TYPES})s? cost "
@@ -146,6 +158,15 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
                 controller="opponents",
             )
         )
+    for match in _TARGETING_MANA_TAX.finditer(text):
+        modifiers.append(
+            CostModifier(
+                amount=int(match.group("amount")),
+                applies_to="cast",
+                targets_source=True,
+                controller="opponents",
+            )
+        )
     for match in _ABILITY_TAX.finditer(text):
         modifiers.append(
             CostModifier(
@@ -178,7 +199,9 @@ def cost_modifier_claims_line(line: str) -> bool:
         return True
     if any(
         (match := pattern.match(text)) is not None and match.end() == len(text)
-        for pattern in (_SPELL_TAX, _ABILITY_TAX, _TARGETING_LIFE_TAX)
+        for pattern in (
+            _SPELL_TAX, _ABILITY_TAX, _TARGETING_LIFE_TAX, _TARGETING_MANA_TAX,
+        )
     ):
         return True
     return self_reduction_claims_line(line)
@@ -205,7 +228,8 @@ def _matches(modifier: CostModifier, card) -> bool:
 
 
 def _tax(
-    game, card, applies_to: str, *, wanted: str, controller_index: int | None = None
+    game, card, applies_to: str, *, wanted: str,
+    controller_index: int | None = None, targeted=(),
 ) -> tuple[int, list[str]]:
     """The total *wanted* ("more" or "less") change to *card*'s cost from every
     permanent on any battlefield, and those permanents' names for the log.
@@ -236,14 +260,38 @@ def _tax(
                 controller_index is None or seat != controller_index
             ):
                 continue
+            # "…**your opponents** cast" — the modifier's controller is not the
+            # caster (CR 109.5 again, the other way round).
+            if modifier.controller == "opponents" and seat == controller_index:
+                continue
+            # "…**that target this creature**": a fact about the spell's chosen
+            # targets, so the tax applies only when one of them is this
+            # permanent. Charged once per taxing permanent the spell points at,
+            # because each is its own ability.
+            if modifier.targets_source and not any(
+                aimed is permanent for aimed in targeted
+            ):
+                continue
             total += modifier.amount
             names.append(permanent.card.name)
     return total, names
 
 
-def spell_cost_tax(game, caster_index: int, card) -> tuple[int, list[str]]:
-    """Extra generic mana for casting *card*, plus the taxing permanents' names."""
-    return _tax(game, card, "cast", wanted="more", controller_index=caster_index)
+def spell_cost_tax(
+    game, caster_index: int, card, targeted=(),
+) -> tuple[int, list[str]]:
+    """Extra generic mana for casting *card*, plus the taxing permanents' names.
+
+    *targeted* is what the spell points at, for the modifiers whose scope is a
+    fact about the chosen targets ("spells your opponents cast **that target
+    this creature**", Pursued Whale). It defaults to empty, which is what makes
+    every other caller's answer unchanged: a targets-scoped modifier simply does
+    not apply when nothing is aimed at its source.
+    """
+    return _tax(
+        game, card, "cast", wanted="more", controller_index=caster_index,
+        targeted=targeted,
+    )
 
 
 def spell_life_tax(game, caster_index: int, targeted) -> tuple[int, list[str]]:

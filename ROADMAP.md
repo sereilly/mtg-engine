@@ -256,48 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 127: a counter that means nothing, and a trigger with no event
-
-*(2026-08-18.)* M21 **276 → 277** — Mazemind Tome.
-
-> {T}, Put a page counter on this artifact: Scry 1.
-> {2}, {T}, Put a page counter on this artifact: Draw a card.
-> When there are four or more page counters on this artifact, exile it. If you
-> do, you gain 4 life.
-
-**A counter with no rules meaning (CR 122.1).** "Page" is a word the card
-invents: nothing in the rules reacts to it and the only thing that reads it is
-the card that put it there. That is exactly why it is not routed through
-`engine/pt.py`'s +1/+1 channel or the loyalty one — those counters *do* have
-rules meaning (layer 7d, CR 606), and an inert marker sent through either would
-change a creature's size or a walker's survival. One dict keyed by the printed
-word, so the next set's invented counter needs no code.
-
-**A cost that adds rather than spends.** It can never be unpayable, so it is its
-own cost node rather than a counter removal with the sign flipped — and there is
-nothing for the affordability check to ask of it.
-
-**A state trigger (CR 603.8) has no event to hang on.** It fires whenever the
-game state matches, so it is checked by the state-based sweep — the same place
-the draw and life-gain announcements went, and for the same reason: there is no
-call site. CR 603.8b makes it fire once and not again until the state stops
-matching, so the permanent records that it announced *and drops the record if
-the count ever falls back*. Remembering forever would be the other error.
-
-**Nine Lives came along with it.** Its "When there are nine or more incarnation
-counters on this enchantment, exile it" now compiles and would fire — but
-nothing puts an incarnation counter on it: its damage-prevention replacement is
-unimplemented, and the card has reported *supported* on its other two lines the
-whole time. The state trigger is real; its input is not. That is a card-shaped
-gap for a round of its own, and it is written down here rather than left to be
-rediscovered.
-
-Whole-pool diff: **one card supported, one trigger made real**. Suite green,
-every `--check` gate green, shipped pool 388/388, AI simulation byte-identical
-at 443 interactions, **zero hooks added**. Five new tests plus two rewritten
-guards — the hollow-support probe, whose Mazemind-shaped example is now a cost
-the table really cannot charge, and the trigger-example table.
-
 ## Round 128: the untap seam, eleven years late
 
 *(2026-08-18.)* M21 **277 → 278** — Ghostly Pilferer.
@@ -374,3 +332,54 @@ Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Five new tests, all watched to fail on the round-128 engine — the two
 negative ones carry an in-test control.
+
+## Round 130: a token that carries printed abilities
+
+*(2026-08-18.)* M21 **279 → 280** — Pursued Whale, scoped out of round 108 and
+finished here.
+
+> When this creature enters, each opponent creates a 1/1 red Pirate creature
+> token with "This token can't block" and "Creatures you control attack each
+> combat if able."
+> Spells your opponents cast that target this creature cost {3} more to cast.
+
+**A token's abilities can be printed lines, not just keywords.** They are
+carried as *text* and compiled when the token's card is built, so a token
+ability works exactly as the same words on a printed card do — one reading of
+one text. Gated at lowering: a line the compiler cannot read refuses the whole
+card, because a token silently lacking an ability is precisely the shape the
+support gate exists to stop.
+
+Testing that gate needed a probe that builds a throwaway token and compiles it,
+rather than asking `compile_line` — several abilities a token can carry are
+implemented by *text-keyed registries* that produce no instruction at all, and
+`compile_line` refuses those. The gate reads the same card the battlefield will.
+
+**"This token can't block" is the same self-reference as "this creature."** Both
+spellings are admitted rather than one normalized to the other, because the
+normalizer would have to know which cards are tokens.
+
+**"Creatures you control attack each combat if able" is a board-wide static**,
+and the global-static table already had the shape: the ability is appended to
+each affected permanent's effective card, so `combat_restrictions.py` reads it
+as though the creature printed it and the declare-attackers step needs no code.
+Its scope is *relative* — "you control" is a seat comparison (CR 109.5) — which
+no read of the affected permanent alone can answer, so the predicate now takes
+the source and refuses when handed neither.
+
+That table also had the round-113 problem one file over: the **creature** static
+gate never asked it, so a creature (or a token) printing a global static
+reported unsupported while the effect worked. Two guards were widened with it.
+
+**The mana tax is the twin of round 107's life tax**, sharing the scope and now
+the target list, which is computed once at the cast and handed to both — the
+same fact asked at CR 601.2f and again at 601.2h.
+
+`parser.py` crossed 1,000 lines and split along the **rider** family: a sentence
+that modifies the one before it. Every one of them reads a referent the previous
+step bound, which is why they are driven by the sentence loop and why that loop
+stays behind with the line-level productions.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Five new tests, all watched to fail on the round-129 engine.

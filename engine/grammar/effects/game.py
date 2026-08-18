@@ -12,7 +12,7 @@ family.
 from ...tokens import PREDEFINED_TOKENS
 from .. import ast
 from ..amounts import expect_pt, parse_amount
-from ..lexer import (WORD)
+from ..lexer import (QUOTE, WORD)
 from ..nouns import (parse_object_filter)
 from ..phrases import _parse_for_each
 from ..stream import TokenStream
@@ -55,6 +55,32 @@ def _parse_flip_coin(stream: TokenStream) -> ast.Statement | None:
         return ast.FlipCoin()
     stream.reset(mark)
     return None
+
+
+def _parse_token_quoted_lines(stream: TokenStream) -> tuple[str, ...]:
+    """The ``with "<line>"[ and "<line>"]`` tail — printed abilities in quotes.
+
+    Sliced back out of the source through the tokens' own offsets, so the token
+    is built from the words the card prints and the compiler reads them exactly
+    as it reads any other card's. A line the compiler cannot read is refused
+    here (see the lowering), because a token carrying an ability nothing
+    implements is a token that silently lacks it.
+    """
+    lines: list[str] = []
+    while True:
+        if stream.accept_kind(QUOTE) is None:
+            raise stream.error("expected a quoted ability on the token")
+        opened = stream.pos
+        while not stream.exhausted and not stream.at_kind(QUOTE):
+            stream.advance()
+        text = stream.text_between(opened, stream.pos)
+        if stream.accept_kind(QUOTE) is None:
+            raise stream.error("unterminated quoted ability on the token")
+        lines.append(text)
+        if stream.accept_word("and"):
+            continue
+        break
+    return tuple(lines)
 
 
 def _parse_token_keywords(stream: TokenStream) -> tuple[str, ...]:
@@ -179,8 +205,15 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     stream.expect_word("token", "tokens")
 
     keywords: tuple[str, ...] = ()
+    granted_lines: tuple[str, ...] = ()
     if stream.accept_word("with"):
-        keywords = _parse_token_keywords(stream)
+        # A quoted line is a printed *ability*; a bare word is a keyword. The
+        # quote decides, which is why the two readers are separate rather than
+        # one trying both.
+        if stream.at_kind(QUOTE):
+            granted_lines = _parse_token_quoted_lines(stream)
+        else:
+            keywords = _parse_token_keywords(stream)
 
     # "…that are tapped and attacking" (Basri Ket): the tokens' entry state.
     # Both words are recorded — a token entering merely tapped, or merely
@@ -210,6 +243,7 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
         power=power.value if power is not None else None,
         toughness=toughness.value if toughness is not None else None,
         counted_pt=counted_pt,
+        granted_lines=granted_lines,
         name=name,
         colors=tuple(colors),
         types=tuple(card_types),

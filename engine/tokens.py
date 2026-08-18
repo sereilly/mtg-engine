@@ -75,6 +75,22 @@ PREDEFINED_TOKENS: dict[str, dict] = {
 }
 
 
+def token_line_supported(line: str) -> bool:
+    """Whether the compiler implements *line* as a token's printed ability.
+
+    Asked by building a throwaway token card and compiling it, rather than by
+    handing the line to ``compile_line``: several of the abilities a token can
+    carry are implemented by *text-keyed registries* — a combat restriction, an
+    untap modifier — which produce no instruction at all and which
+    ``compile_line`` therefore refuses. The support gate reads the same card the
+    battlefield will, so what is admitted here is exactly what will work.
+    """
+    from .oracle import compile_card_oracle
+
+    probe = make_token_card("Probe", 1, 1, "Creature — Probe", oracle_text=line)
+    return compile_card_oracle(probe).supported
+
+
 def make_token_card(
     name: str,
     power: int | None,

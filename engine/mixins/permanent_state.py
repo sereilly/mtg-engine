@@ -659,7 +659,8 @@ class PermanentStateMixin:
             applying = [
                 source
                 for source, static in sources
-                if source is not perm and self._global_static_applies(static, perm)
+                if source is not perm
+                and self._global_static_applies(static, perm, source, self)
             ]
             if applying:
                 perm.metadata["global_static_sources"] = applying
@@ -667,19 +668,33 @@ class PermanentStateMixin:
                 perm.metadata.pop("global_static_sources", None)
 
     @staticmethod
-    def _global_static_applies(static, permanent: Permanent) -> bool:
+    def _global_static_applies(static, permanent: Permanent, source=None, game=None) -> bool:
         """Whether *static* covers *permanent*.
 
         "Noncreature artifact" reads the **printed** type line for the creature
         half: asking whether it is currently a creature would include the type
         this very effect adds, and the answer would then depend on whether it
         had already been asked.
+
+        *source* and *game* are needed only by a scope that is **relative** —
+        "creatures **you** control" is a comparison between two seats (CR 109.5),
+        which no read of the affected permanent alone can answer. A scope that
+        needs them and is handed neither answers False, which is the safe
+        direction: a board-wide effect applying to the wrong side is worse than
+        one that does not apply.
         """
         if static.applies_to == "artifact":
             return permanent.has_type("artifact")
         if static.applies_to == "noncreature_artifact":
             printed = permanent.card.type_line.lower()
             return "artifact" in printed and "creature" not in printed
+        if static.applies_to == "creature_you_control":
+            if source is None or game is None or not permanent.is_creature:
+                return False
+            return (
+                game.controller_index_of(permanent)
+                == game.controller_index_of(source)
+            )
         return False
 
     def _refresh_land_animation(

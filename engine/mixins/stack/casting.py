@@ -228,17 +228,10 @@ class SpellCastingMixin:
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)
 
-        spell_tax, taxing_names = spell_cost_tax(self, caster_index, card)
-        if spell_tax:
-            extra_generic_tax += spell_tax
-            self.log.append(f"{card.name} is taxed by {', '.join(taxing_names)}")
-
-        # "…that target this creature cost an additional 3 life to cast."
-        # (Terror of the Peaks.) A tax in life rather than mana, scoped to what
-        # the spell *targets* — so it is charged here, where the chosen targets
-        # are known (CR 601.2c chooses them before 601.2h pays), and refused
-        # rather than clamped when the caster cannot pay: CR 118.4 makes an
-        # unpayable cost an uncastable spell, not a free one.
+        # What the spell points at, computed once: both taxes whose scope is
+        # "that target this creature" need it, and the mana one is charged at
+        # CR 601.2f while the life one is charged at 601.2h — the same fact,
+        # asked at two moments.
         aimed_at = [
             found
             for found in (
@@ -256,6 +249,18 @@ class SpellCastingMixin:
             )
             if found is not None:
                 aimed_at = [found]
+
+        spell_tax, taxing_names = spell_cost_tax(self, caster_index, card, aimed_at)
+        if spell_tax:
+            extra_generic_tax += spell_tax
+            self.log.append(f"{card.name} is taxed by {', '.join(taxing_names)}")
+
+        # "…that target this creature cost an additional 3 life to cast."
+        # (Terror of the Peaks.) A tax in life rather than mana, scoped to what
+        # the spell *targets* — so it is charged here, where the chosen targets
+        # are known (CR 601.2c chooses them before 601.2h pays), and refused
+        # rather than clamped when the caster cannot pay: CR 118.4 makes an
+        # unpayable cost an uncastable spell, not a free one.
         life_tax, life_taxing_names = spell_life_tax(self, caster_index, aimed_at)
         if life_tax:
             if caster.life < life_tax:

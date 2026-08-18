@@ -75,6 +75,16 @@ class CreateToken:
     # ``toughness`` stay None when this is set, because there is no printed
     # number for them to hold.
     counted_pt: object | None = None
+    #: Printed abilities the token has, each as its own quoted line — "…with
+    #: **"This token can't block"** and **"Creatures you control attack each
+    #: combat if able."**" (the Pirate Pursued Whale makes). Text rather than
+    #: parsed nodes, because the token's card is built at resolution and the
+    #: compiler reads it then: one reading of one text, and a token ability
+    #: therefore works exactly as the same words on a printed card do.
+    granted_lines: tuple[str, ...] = ()
+    #: "**Each opponent** creates …" — who gets the tokens. None is the effect's
+    #: own controller, which every earlier token card is.
+    recipient_players: str | None = None
     # The printed text a *predefined* token carries (CR 111.10). Transcribed
     # from `engine/tokens.py`'s table at parse time rather than left for the
     # handler to look up again, so the AST says everything the token is.

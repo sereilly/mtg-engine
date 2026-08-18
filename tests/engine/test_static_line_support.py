@@ -39,6 +39,7 @@ from engine.combat_restrictions import combat_restriction_for
 from engine.cost_modifiers import cost_modifier_claims_line
 from engine.land_play_allowance import land_play_line
 from engine.lord_buffs import lord_buff_for
+from engine.global_statics import global_static_for
 from engine.replacements import replacement_claims_line
 from engine.oracle import (
     _is_supported_static_creature_line,
@@ -114,6 +115,12 @@ def _derived(normalized: str) -> bool:
         # replacement constant to the whole registry, and these two lines
         # arrived with it.
         or replacement_claims_line(normalized)
+        # "All artifacts have …" (Energy Flux), "Creatures you control attack
+        # each combat if able" (the Pirate Pursued Whale makes) — dispatched by
+        # the CR 613 layer bridge, which appends the granted ability to each
+        # affected permanent's effective card. The eighth derivation table, and
+        # it reached the creature gate in round 130.
+        or global_static_for(normalized) is not None
     )
 
 

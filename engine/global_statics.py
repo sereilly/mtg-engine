@@ -57,6 +57,20 @@ class GlobalStatic:
 
 _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
     (
+        # "Creatures you control attack each combat if able." (the Pirate
+        # Pursued Whale makes.) A board-wide *requirement* granted to its
+        # controller's creatures — which this module already has the shape for:
+        # the ability is appended to each affected permanent's effective card,
+        # so `combat_restrictions.py` reads it as though the creature printed
+        # it, and the declare-attackers step needs no new code at all.
+        re.compile(r"^creatures you control attack each combat if able$"),
+        GlobalStatic(
+            name="team_must_attack",
+            applies_to="creature_you_control",
+            grants_ability="This creature attacks each combat if able.",
+        ),
+    ),
+    (
         # Energy Flux. The granted ability is a whole printed sentence, so it is
         # captured and re-emitted rather than described: anything else would be
         # this module deciding what "sacrifice unless you pay" means, which the

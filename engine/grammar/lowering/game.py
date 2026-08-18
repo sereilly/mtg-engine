@@ -213,6 +213,22 @@ def _lower_create_token(
         payload["colors"] = node.colors
     if node.keywords:
         payload["keywords"] = tuple(_title(word) for word in node.keywords)
+    # Printed abilities in quotes. Gated on the compiler being able to read
+    # them: a token carrying an ability nothing implements is a token that
+    # silently lacks it, which is exactly the shape the support gate exists to
+    # refuse — and it is refused *here*, so the whole card reports unsupported
+    # rather than the token arriving half-built.
+    if node.granted_lines:
+        from ...tokens import token_line_supported
+
+        for line in node.granted_lines:
+            if not token_line_supported(line):
+                raise LoweringError(
+                    f"nothing implements the token's ability {line!r}", node=node
+                )
+        payload["oracle_text"] = chr(10).join(node.granted_lines)
+    if node.recipient_players:
+        payload["recipient_players"] = node.recipient_players
     count = _stamp_token_count(payload, node)
     # "…that are tapped and attacking" (Basri Ket): entry state the handler
     # stamps as the tokens arrive.

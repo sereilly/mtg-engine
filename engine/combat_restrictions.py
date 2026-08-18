@@ -76,7 +76,12 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "cant_attack_without_controlled_count",
     ),
     (re.compile(r"^this creature can't attack$"), "cant_attack"),
-    (re.compile(r"^this creature can't block$"), "cant_block"),
+    # "This **token** can't block" (the Pirate Pursued Whale makes). A token is
+    # a creature and "this token" is the same self-reference "this creature" is
+    # — the word differs only because the card printing it is a token. Both
+    # spellings, rather than normalizing one to the other, because the normalizer
+    # would have to know which cards are tokens.
+    (re.compile(r"^this (?:creature|token) can't block$"), "cant_block"),
     (re.compile(r"^this creature attacks each combat if able$"), "must_attack_each_combat"),
     (re.compile(r"^this creature can't be blocked by walls$"), "cant_be_blocked_by_walls"),
     # A blocking *requirement* rather than a restriction (CR 509.1c), and
