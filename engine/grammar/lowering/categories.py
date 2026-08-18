@@ -176,6 +176,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # sentences then do about it.
     "reveal_top_of_library": "zones",
     "reveal_until_match": "zones",
+    "name_and_strip": "zones",
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
     "add_loyalty_counters": "counters",

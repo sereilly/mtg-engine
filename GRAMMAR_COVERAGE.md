@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 81.7% | 79.7% | 55.7% | 227 |
+| M21 *(measured)* | 285 | 503 | 81.9% | 79.9% | 55.9% | 228 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 215 | 88 | expected a subject |  |
+| 210 | 86 | expected a subject |  |
 | 88 | 32 | unrecognized effect verb |  |
 | 43 | 24 | unconsumed text |  |
 | 31 | 31 | unrecognized activation cost |  |
@@ -46,6 +46,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 5 | 2 | expected something to destroy |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
+| 4 | 1 | expected 'a' |  |
 | 4 | 1 | expected 'mana' |  |
 | 4 | 1 | expected a quantity |  |
 | 3 | 1 | expected 'your' |  |
@@ -56,7 +57,6 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
 | 1 | 1 | no handler for doom counters |  |
-| 1 | 1 | expected 'be' |  |
 
 ## Cards executing through the grammar
 
@@ -846,6 +846,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{T}: Add {U}.`
 - **Mystic Skyfish**
   - `Whenever you draw your second card each turn, this creature gains flying until end of turn.`
+- **Necromentia**
+  - `Choose a card name other than a basic land card name. Search target opponent's graveyard, hand, and library for any number of cards with that name and exile them. That player shuffles, then creates a 2/2 black Zombie creature token for each card exiled from their hand this way.`
 - **Nevinyrral's Disk**
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`

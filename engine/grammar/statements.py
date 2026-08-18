@@ -15,8 +15,9 @@ from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import (PT, SELF, WORD)
 from .nouns import (parse_object_filter, parse_player_ref, parse_recipient)
-from .vocabulary import CARD_TYPES
+from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES
 from .stream import TokenStream
+from .amounts import expect_pt
 from .phrases import (
     _parse_duration,
     _parse_mana_payment,
@@ -219,6 +220,8 @@ def _parse_subject_verb(
         return _parse_end_the_turn(stream)
     if stream.at_word("copy"):
         return _parse_copy_that_spell(stream)
+    if stream.at_word("choose"):
+        return _parse_name_and_strip(stream)
     if stream.at_word("draw"):
         return _parse_draw(stream, ast.PlayerRef("you"))
     # A bare "discard N cards" is the effect's *controller* discarding, the same
@@ -624,6 +627,76 @@ def _parse_where_x(stream: TokenStream) -> ast.Amount | None:
         _parse_duration(stream)
         return ast.CountOfDeaths(filt)
     return ast.CountOf(filt)
+
+
+def _parse_name_and_strip(stream: TokenStream) -> ast.Statement:
+    """Necromentia's whole three-sentence effect.
+
+    Every word is required. The zone list is what the search reaches and the
+    token clause names which of those zones the count comes from — "each card
+    exiled from their **hand** this way" is a strict subset of what was exiled,
+    and a card counting the whole pile would make far more Zombies.
+
+    "other than a basic land card name" is consumed and *honoured*: it is the
+    one restriction on the choice, and a name it forbids has to be refused where
+    the choice is made rather than dropped here.
+    """
+    for word in ("choose", "a", "card", "name", "other", "than", "a", "basic",
+                 "land", "card", "name"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the search sentence after the choice")
+    for word in ("search", "target", "opponent", "'s"):
+        stream.expect_word(word)
+    zones: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word not in ("graveyard", "hand", "library"):
+            break
+        stream.advance()
+        zones.append(word)
+        if stream.accept_punct(","):
+            stream.accept_word("and")
+            continue
+        if stream.accept_word("and"):
+            continue
+        break
+    if len(zones) < 2:
+        raise stream.error("expected the zones the search reaches")
+    for word in ("for", "any", "number", "of", "cards", "with", "that", "name",
+                 "and", "exile", "them"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the shuffle sentence after the search")
+    for word in ("that", "player", "shuffles"):
+        stream.expect_word(word)
+    stream.accept_punct(",")
+    for word in ("then", "creates", "a"):
+        stream.expect_word(word)
+    power, _, toughness, _ = expect_pt(stream)
+    colors: list[str] = []
+    while (word := stream.peek_word()) in COLOR_WORDS:
+        colors.append(COLOR_WORDS[word])
+        stream.advance()
+    subtypes: list[str] = []
+    while (word := stream.peek_word()) and word in CREATURE_TYPES:
+        subtypes.append(word)
+        stream.advance()
+    for word in ("creature", "token", "for", "each", "card", "exiled", "from", "their"):
+        stream.expect_word(word)
+    token_zone = stream.peek_word()
+    if token_zone not in ("hand", "graveyard", "library"):
+        raise stream.error("expected the zone the token count comes from")
+    stream.advance()
+    for word in ("this", "way"):
+        stream.expect_word(word)
+    if not (isinstance(power, ast.Fixed) and isinstance(toughness, ast.Fixed)):
+        raise stream.error("the token's printed power/toughness is a number")
+    return ast.NameAndStrip(
+        zones=tuple(zones), token_zone=token_zone,
+        token_power=power.value, token_toughness=toughness.value,
+        token_colors=tuple(colors), token_subtypes=tuple(subtypes),
+    )
 
 
 def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:

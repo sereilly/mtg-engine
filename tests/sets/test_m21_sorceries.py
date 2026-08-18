@@ -1340,3 +1340,99 @@ def test_a_clause_the_table_cannot_compute_still_refuses(set_pool):
         "This spell costs {X} less to cast, where X is the number of chainsaws "
         "you have juggled."
     ) is None
+
+
+# --- Necromentia: one choice, three zones, one subset (round 126) -----------
+
+
+def _necromentia_board(set_pool, hand=(), graveyard=(), library=()):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", life=20, hand=[pool["Necromentia"]])
+    p2 = PlayerState(
+        name="P2", life=20,
+        hand=[pool[n] for n in hand],
+        graveyard=[pool[n] for n in graveyard],
+        library=[pool[n] for n in library],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def test_necromentia_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Necromentia"])
+    assert program.supported, program.reason
+
+
+def test_necromentia_strips_every_copy_from_three_zones(set_pool):
+    """One choice and one pile: "that name" is what the first sentence chose,
+    and the search reaches all three zones in the printed order."""
+    game, _, p2 = _necromentia_board(
+        set_pool,
+        hand=("Shock", "Shock", "Mountain"),
+        graveyard=("Shock",),
+        library=("Shock", "Island", "Forest"),
+    )
+
+    game.cast_from_hand(0, "Necromentia", target_player_index=1)
+    game._settle()
+    assert game.confirm_name_and_strip(0, "Shock")
+    game._settle()
+
+    assert [c.name for c in p2.exile] == ["Shock"] * 4
+    assert [c.name for c in p2.hand] == ["Mountain"]
+    assert p2.graveyard == []
+    assert sorted(c.name for c in p2.library) == ["Forest", "Island"]
+
+
+def test_only_the_cards_taken_from_hand_make_zombies(set_pool):
+    """"…for each card exiled from their **hand** this way" is a strict subset
+    of what was exiled. Counting the whole pile would make far more Zombies
+    than the card promises."""
+    game, _, p2 = _necromentia_board(
+        set_pool,
+        hand=("Shock", "Shock"),
+        graveyard=("Shock",),
+        library=("Shock",),
+    )
+
+    game.cast_from_hand(0, "Necromentia", target_player_index=1)
+    game._settle()
+    game.confirm_name_and_strip(0, "Shock")
+    game._settle()
+
+    tokens = [p for p in game.controlled_by(1) if p.metadata.get("is_token")]
+    assert len(tokens) == 2, "four exiled, two of them from hand"
+    assert all(
+        (t.effective_power, t.effective_toughness) == (2, 2) for t in tokens
+    )
+
+
+def test_a_basic_lands_name_cannot_be_chosen(set_pool):
+    """The one printed restriction on the choice, enforced where the choice is
+    made — CR 202.1 otherwise lets a player name any card at all."""
+    game, _, p2 = _necromentia_board(set_pool, hand=("Mountain",), library=("Mountain",))
+
+    game.cast_from_hand(0, "Necromentia", target_player_index=1)
+    game._settle()
+
+    assert not game.confirm_name_and_strip(0, "Mountain")
+    assert [c.name for c in p2.hand] == ["Mountain"]
+
+
+def test_the_default_names_the_commonest_card_it_can_see(set_pool):
+    """A non-interactive seat picks the name appearing most often in the
+    searched zones — the choice a player would actually make — and never a
+    basic land's, because the default has to obey the same restriction the
+    prompt does."""
+    game, _, _ = _necromentia_board(
+        set_pool,
+        hand=("Mountain", "Mountain", "Mountain"),
+        library=("Shock", "Shock"),
+    )
+
+    game.cast_from_hand(0, "Necromentia", target_player_index=1)
+    game._settle()
+
+    (choice,) = game.pending_choices
+    assert choice.data["default_name"] == "Shock"

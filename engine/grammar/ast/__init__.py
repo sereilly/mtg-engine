@@ -133,6 +133,7 @@ from .cards import (
     Shuffle,
     LookAtHand,
     RevealTop,
+    NameAndStrip,
     RevealUntil,
     RevealTopToHandOrBottom,
 )
@@ -272,6 +273,7 @@ __all__ = [
     "Shuffle",
     "LookAtHand",
     "RevealTop",
+    "NameAndStrip",
     "RevealUntil",
     "RevealTopToHandOrBottom",
     # stack

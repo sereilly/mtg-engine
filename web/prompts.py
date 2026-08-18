@@ -222,6 +222,33 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("name_and_strip")
+def _name_and_strip(ctx: PromptContext, choices: list) -> dict:
+    """Necromentia's "choose a card name".
+
+    The names offered are the ones in the searched player's *public* zones plus
+    their hand — which the chooser is not entitled to see, so the list is a
+    convenience for the common case and never the rule: CR 202.1 lets a player
+    name any card at all, and the engine accepts a name outside the list. Only
+    the basic-land restriction is enforced, because only that one is printed.
+    """
+    choice = choices[0]
+    target = ctx.game.players[choice.data["target_seat"]]
+    seen = sorted({
+        card.name
+        for zone in choice.data.get("zones") or ()
+        for card in getattr(target, zone, [])
+        if "basic" not in (card.type_line or "").lower()
+    })
+    return {
+        "caster_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "target_seat": choice.data["target_seat"],
+        "suggestions": seen,
+        "default_name": choice.data.get("default_name", ""),
+    }
+
+
 @prompt_renderer("reflexive_target")
 def _reflexive_target(ctx: PromptContext, choices: list) -> dict:
     """"When you do, you may tap or untap target creature." (Tolarian Kraken.)

@@ -341,6 +341,23 @@ def lower_statement(
     if isinstance(statement, ast.CastPermission):
         return _lower_cast_permission(statement, produced)
 
+    if isinstance(statement, ast.NameAndStrip):
+        return (
+            OracleInstruction(
+                "name_and_strip", "",
+                {
+                    "zones": list(statement.zones),
+                    "token_zone": statement.token_zone,
+                    "token": {
+                        "power": statement.token_power,
+                        "toughness": statement.token_toughness,
+                        "colors": list(statement.token_colors),
+                        "subtypes": list(statement.token_subtypes),
+                    },
+                },
+            ),
+        )
+
     if isinstance(statement, ast.RevealUntil):
         return _lower_reveal_until(statement, produced)
 

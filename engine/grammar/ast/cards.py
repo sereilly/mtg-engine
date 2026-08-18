@@ -290,6 +290,32 @@ class CastPermission:
 
 
 @dataclass(frozen=True)
+class NameAndStrip:
+    """``Choose a card name other than a basic land card name. Search target
+    opponent's graveyard, hand, and library for any number of cards with that
+    name and exile them. That player shuffles, then creates a 2/2 black Zombie
+    creature token for each card exiled from their hand this way.``
+    (Necromentia.)
+
+    One node for the whole three-sentence effect, because the sentences share
+    one choice and one pile: "that name" is what the first sentence chose, and
+    "each card exiled from their hand **this way**" counts exactly the subset
+    the second sentence took from one of the three zones. Parsed apart, the
+    third sentence would count a pile nobody had recorded.
+
+    The zone list is data rather than three booleans: a card searching two of
+    them is the same effect over a shorter list, and the *order* is the printed
+    one because it is the order the cards are found in.
+    """
+    zones: tuple[str, ...]
+    token_zone: str
+    token_power: int
+    token_toughness: int
+    token_colors: tuple[str, ...]
+    token_subtypes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class RevealUntil:
     """``…reveals cards from the top of their library until they reveal a
     creature card. That player puts that card onto the battlefield, then

@@ -1069,6 +1069,23 @@ def do_action(session_id: str, req: GameActionRequest):
         if not ok:
             raise HTTPException(status_code=400, detail="invalid card index")
 
+    elif req.action == "name_and_strip_confirm":
+        pending = next(
+            (c for c in session.game.pending_choices_of("name_and_strip")),
+            None,
+        )
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no name choice pending")
+        if req.seat != pending.player_index:
+            raise HTTPException(status_code=400, detail="not your choice")
+        if not req.card_name:
+            raise HTTPException(status_code=400, detail="card_name is required")
+        ok = session.game.confirm_name_and_strip(req.seat, req.card_name)
+        if not ok:
+            raise HTTPException(
+                status_code=400, detail="a basic land's name cannot be chosen"
+            )
+
     elif req.action == "reflexive_target_confirm":
         pending = next(
             (c for c in session.game.pending_choices_of("reflexive_target")),

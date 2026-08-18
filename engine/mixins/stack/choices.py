@@ -958,6 +958,79 @@ class PendingChoicesMixin:
 
     # -- "As this enters, choose an opponent [and a color]" -------------------
 
+    def confirm_name_and_strip(self, player_index: int, card_name: str) -> bool:
+        """Answer Necromentia's "choose a card name" prompt."""
+        return self.resolve_pending_choice(
+            "name_and_strip", player_index, card_name=card_name
+        )
+
+    def _resolve_name_and_strip(self, choice: PendingChoice, card_name: str) -> bool:
+        """Strip every copy of *card_name* from the named zones and pay the
+        Zombies.
+
+        CR 202.1 lets a player name any card; the one printed restriction is
+        that it may not be a basic land's name, and that is enforced here rather
+        than by the prompt's option list — the list is a convenience, the rule
+        is the rule.
+
+        The zones are searched in the printed order, and only the count from
+        ``token_zone`` feeds the tokens: "each card exiled from their **hand**
+        this way" is a strict subset of what was exiled, and counting the whole
+        pile would make far more Zombies than the card promises.
+        """
+        from ...tokens import make_token_card
+
+        data = choice.data
+        target = self.players[data["target_seat"]]
+        named = (card_name or "").strip()
+        if not named:
+            self.discard_pending_choice(choice)
+            self.log.append("nothing was named, so nothing was exiled")
+            return True
+        if any(
+            "basic" in (card.type_line or "").lower() and card.name == named
+            for zone in data["zones"] for card in getattr(target, zone, [])
+        ):
+            return False
+
+        taken_from: dict[str, int] = {}
+        for zone in data["zones"]:
+            cards = getattr(target, zone, [])
+            kept = [card for card in cards if card.name != named]
+            taken = [card for card in cards if card.name == named]
+            if taken:
+                taken_from[zone] = len(taken)
+                cards[:] = kept
+                target.exile.extend(taken)
+        # "That player shuffles" — once, after the search, and only their
+        # library is disturbed (CR 701.24).
+        random.shuffle(target.library)
+
+        spec = data["token"]
+        made = taken_from.get(data["token_zone"], 0)
+        for _ in range(made):
+            token_card = make_token_card(
+                " ".join(w.title() for w in spec["subtypes"]) + " Token",
+                int(spec["power"]), int(spec["toughness"]),
+                "Creature — " + " ".join(w.title() for w in spec["subtypes"]),
+                colors=tuple(spec["colors"]),
+            )
+            self._put_permanent_onto_battlefield(
+                data["target_seat"],
+                Permanent(card=token_card, metadata={"is_token": True}),
+                None,
+            )
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{target.name} lost {sum(taken_from.values())} copies of {named} "
+            f"and made {made} token(s)"
+        )
+        return True
+
+    def _default_name_and_strip(self, choice: PendingChoice) -> None:
+        if not self._resolve_name_and_strip(choice, choice.data.get("default_name", "")):
+            self.discard_pending_choice(choice)
+
     def confirm_enter_choice(
         self, player_index: int, opponent_index: int | None = None,
         mana_color: str | None = None, card_name: str | None = None,
@@ -2216,6 +2289,15 @@ register_choice(
     prompt_key="opponent_damage_choice",
     blocked_detail="choose a target for the opponent-choice damage before other actions",
     default_at_arm=True,
+)
+
+register_choice(
+    "name_and_strip",
+    resolve=lambda game, choice, r: game._resolve_name_and_strip(choice, r["card_name"]),
+    default=lambda game, choice: game._default_name_and_strip(choice),
+    action="name_and_strip_confirm",
+    prompt_key="name_and_strip",
+    blocked_detail="name a card for the search before other actions",
 )
 
 register_choice(

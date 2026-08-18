@@ -256,41 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 123: the same event, asked a different question
-
-*(2026-08-18.)* M21 **272 → 273** — Double Vision.
-
-> Whenever you cast your first instant or sorcery spell each turn, copy that
-> spell. You may choose new targets for the copy.
-
-**The ordinal is part of the condition, not of the effect.** A card that fired
-on every instant or sorcery is a different card, so "your **first** … each turn"
-gets its own condition kind — announced from the *same* place as the ordinary
-cast, because the event is the same cast and only the question differs. The
-question is asked where the answer lives: the caster's own record of what they
-have cast this turn.
-
-Counting and firing read the **same** narrowing. "Your first instant or sorcery
-spell" counts instants and sorceries and nothing else, so the ordinal asks the
-same reader the filter does rather than growing its own copy of the type tests —
-two copies would let the trigger fire on a set it did not count.
-
-**A printed union is a different test from a single type.** "This one" and "any
-of these" (CR 105.4) cannot share a key without one of them being silently
-wrong, so the union rides its own, and the single-type row keeps its exact
-meaning.
-
-**"That spell" is the object, not the top of the stack.** `copy_top_stack_spell`
-takes the topmost instant or sorcery, which is the same object only while
-nothing has been cast in response. This copies the spell the *event* recorded,
-found on the stack by identity — and copies nothing at all when it has already
-left, because CR 707.10 copies an object and by then there is none. Reaching for
-whatever else was up there would be a copy the card never promised.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Five new tests, all watched to fail on the round-122 engine.
-
 ## Round 124: an ability that works from the hand
 
 *(2026-08-18.)* M21 **273 → 274** — Waker of Waves.
@@ -370,3 +335,39 @@ does, which is what the six tables beside it already do.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Six new tests, all watched to fail on the round-124 engine.
+
+## Round 126: one choice, three zones, one subset
+
+*(2026-08-18.)* M21 **275 → 276** — Necromentia.
+
+> Choose a card name other than a basic land card name. Search target
+> opponent's graveyard, hand, and library for any number of cards with that name
+> and exile them. That player shuffles, then creates a 2/2 black Zombie creature
+> token for each card exiled from their hand this way.
+
+Three sentences, one node, one handler — the same reason round 117's reveal is
+one: they share a choice and a pile. "That name" is what the first sentence
+chose, and "each card exiled from their **hand** this way" counts exactly the
+subset the search took from *one* of the three zones. Split apart, the last
+sentence would count a pile nobody had recorded, and a handler counting the
+whole pile makes far more Zombies than the card promises.
+
+**The zones are data, in printed order.** A card searching two of them is the
+same effect over a shorter list, and the order is the order the cards are found
+in.
+
+**CR 202.1 lets a player name any card**, so the prompt's list of suggestions is
+a convenience and never the rule: the engine accepts a name outside it. The one
+printed restriction — not a basic land's name — *is* enforced, at the choice
+rather than in the list. A non-interactive seat names the commonest card it can
+see among the searched zones and obeys the same restriction, because a headless
+game must not make a choice a player could not.
+
+Adding the prompt was one `register_choice`, one renderer and one action, and
+`tests/engine/test_pending_choices.py` failed until all three existed — which is
+exactly what that guard is for. Round 125's choice needed none of them because
+it reused an existing kind.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Five new tests, all watched to fail on the round-125 engine.

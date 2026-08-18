@@ -709,6 +709,63 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("name_and_strip")
+def name_and_strip(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Necromentia: name a card, strip every copy from an opponent's three
+    zones, then pay them a Zombie for each one taken from their **hand**.
+
+    One handler for the whole effect because the three printed sentences share
+    one choice and one pile — "each card exiled from their hand this way" counts
+    exactly the subset the search took from one of the zones, and split apart
+    the last sentence would count a pile nobody recorded.
+
+    The name is chosen as the spell resolves (CR 608.2), and CR 202.1 lets a
+    player name any card — bounded here only by the printed restriction, which
+    is that it may not be a basic land's name. A seat that names nothing strips
+    nothing, which is legal and useless; the default names the commonest card
+    among what it can see, which is the choice a player would actually make.
+    """
+    caster = context.caster
+    target = context.target
+    if target is None or target is caster:
+        game.log.append(f"{context.card.name}: no opponent to search")
+        return True, "resolved"
+    seat = game.players.index(target)
+    game.arm_pending_choice(
+        "name_and_strip", game.players.index(caster),
+        card_name=context.card.name,
+        target_seat=seat,
+        zones=list(instruction.payload.get("zones") or ()),
+        token_zone=instruction.payload.get("token_zone", "hand"),
+        token=dict(instruction.payload.get("token") or {}),
+        default_name=_commonest_visible_name(game, seat, instruction.payload),
+    )
+    return True, "pending_name_and_strip"
+
+
+def _commonest_visible_name(game, seat: int, payload: dict) -> str:
+    """The name a non-interactive seat picks: the one appearing most often in
+    the zones the search reaches, ties broken by name so a seed replays exactly.
+
+    Basic land names are excluded because the card forbids them — the default
+    has to obey the same restriction the prompt does, or a headless game would
+    make a choice a player could not.
+    """
+    from collections import Counter
+
+    player = game.players[seat]
+    counts: Counter = Counter()
+    for zone in payload.get("zones") or ():
+        for card in getattr(player, zone, []):
+            if "basic" in (card.type_line or "").lower():
+                continue
+            counts[card.name] += 1
+    if not counts:
+        return ""
+    best = max(counts.values())
+    return sorted(name for name, n in counts.items() if n == best)[0]
+
+
 @effect_handler("reveal_until_match")
 def reveal_until_match(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…reveals cards from the top of their library until they reveal a
