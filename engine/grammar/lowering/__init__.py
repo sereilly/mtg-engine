@@ -107,6 +107,7 @@ from .board import (
 )
 from .cards import (
     _lower_reveal_top,
+    _lower_reveal_until,
     _DAMAGED_PLAYER_EVENTS,
     _lower_discard,
     _fused_discard_then_draw,
@@ -214,6 +215,7 @@ __all__ = [
     "_lower_put_onto_battlefield",
     "_lower_return_to_zone",
     "_lower_reveal_top",
+    "_lower_reveal_until",
     "_lower_tap_or_untap",
     "_lower_regenerate",
     "_lower_sacrifice_unless_pay",

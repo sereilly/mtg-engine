@@ -45,7 +45,7 @@ from .derived import derived_instruction_for_line
 from .errors import GrammarError
 from .lexer import (BULLET, MANA, PT, PUNCT, QUOTE, SELF, tokenize)
 from .costs import _parse_costs
-from .nouns import (parse_target_spec)
+from .nouns import (parse_object_filter, parse_target_spec)
 from .registries import registry_for_line
 from .stream import TokenStream
 from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, match_longest)
@@ -339,6 +339,62 @@ def _parse_its_controller_creates_rider(
     return replace(token, recipient="exiled_permanent_controller")
 
 
+def _parse_that_controller_reveals_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``That creature's controller reveals cards from the top of their library
+    until they reveal a creature card. That player puts that card onto the
+    battlefield, then shuffles the rest into their library.`` (Transmogrify.)
+
+    The same shape as the "its controller creates a token" rider beside it, and
+    for the same reason: "that creature" names the permanent the previous
+    sentence exiled, which is gone by the time this runs, so the library read
+    rides the controller that step recorded. Parsed as its own sentence it names
+    nobody.
+
+    All three sentences are consumed here. They describe one procedure over one
+    revealed pile — "that card" is what the reveal stopped on and "the rest" is
+    exactly what it turned over first — so parsed apart the last two would
+    dangle referents nothing binds.
+    """
+    if not steps or _statement_bound_target(steps[-1]) is None:
+        return None
+    mark = stream.mark()
+    if not stream.accept_phrase("that", "creature", "'s", "controller"):
+        return None
+    if not stream.accept_phrase(
+        "reveals", "cards", "from", "the", "top", "of", "their", "library",
+        "until", "they", "reveal",
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        stream.accept_word("a", "an")
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not filt.is_card:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    # Every word of the destination and of what happens to the rest. A card
+    # that milled the pile instead of shuffling it back is a different card, and
+    # the difference does not show until this sentence.
+    if not stream.accept_phrase(
+        "that", "player", "puts", "that", "card", "onto", "the", "battlefield",
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "then", "shuffles", "the", "rest", "into", "their", "library",
+    ):
+        stream.reset(mark)
+        return None
+    return ast.RevealUntil("exiled_permanent_controller", filt)
+
+
 def _parse_conditional_instead_rider(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> bool:
@@ -492,6 +548,10 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if _parse_exile_instead_rider(stream, steps):
                 continue
             if _parse_conditional_instead_rider(stream, steps):
+                continue
+            reveals = _parse_that_controller_reveals_rider(stream, steps)
+            if reveals is not None:
+                steps.append(reveals)
                 continue
             controller_token = _parse_its_controller_creates_rider(stream, steps)
             if controller_token is not None:

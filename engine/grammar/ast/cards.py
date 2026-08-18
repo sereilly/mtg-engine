@@ -263,6 +263,31 @@ class CastPermission:
 
 
 @dataclass(frozen=True)
+class RevealUntil:
+    """``…reveals cards from the top of their library until they reveal a
+    creature card. That player puts that card onto the battlefield, then
+    shuffles the rest into their library.`` (Transmogrify.)
+
+    One node for the whole search, not three: the reveal, the destination and
+    the shuffle are a single procedure whose steps cannot be separated — "that
+    card" names what the reveal stopped on, and "the rest" names exactly the
+    cards it turned over before that. Lowered apart they would need two
+    back-references into a list nothing had recorded.
+
+    *whose* is the library read: "your" or the referent of a previous step
+    ("that creature's controller"). *filter* is what the reveal stops on.
+    *destination* is where the found card goes, and *rest* where the others do —
+    both stated, because a card that milled the rest instead of shuffling them
+    back is a different card and the difference is invisible in the first two
+    sentences.
+    """
+    whose: str
+    filter: ObjectFilter
+    destination: str = "battlefield"
+    rest: str = "shuffle_into_library"
+
+
+@dataclass(frozen=True)
 class RevealTop:
     """``Reveal the top card of your library.`` (Track Down.)
 

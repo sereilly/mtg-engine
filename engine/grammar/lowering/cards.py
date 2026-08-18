@@ -8,7 +8,7 @@ because a filter it cannot honour must refuse rather than be dropped.
 
 from ...oracle_types import X_FROM_COUNT, OracleInstruction
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
-from ...subject_filters import object_only_filter
+from ...subject_filters import card_only_filter, object_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -410,6 +410,38 @@ def _lower_add_mana_for_tapped_land(
     if node.additional:
         payload["additional"] = True
     return (OracleInstruction("add_mana_for_tapped_land", "", payload),)
+
+
+def _lower_reveal_until(
+    node: ast.RevealUntil, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """Transmogrify's reveal-until-match, as one instruction.
+
+    Demands the producer, like every other back-reference: "that creature's
+    controller" is the seat the *exile* step recorded, and without that step
+    there is nobody to read the library of — the effect would silently fall back
+    to the caster, which is the opposite player from the one the card names.
+    """
+    if node.whose == "exiled_permanent_controller" and node.whose not in produced:
+        raise LoweringError(
+            "\"that creature's controller\" with no exile before it", node=node,
+        )
+    described = card_only_filter(node.filter.to_payload())
+    if described is None:
+        raise LoweringError(
+            "the reveal cannot test this restriction on a card", node=node,
+        )
+    return (
+        OracleInstruction(
+            "reveal_until_match", "",
+            {
+                "whose": node.whose,
+                "filter": described,
+                "destination": node.destination,
+                "rest": node.rest,
+            },
+        ),
+    )
 
 
 def _lower_reveal_top(node: ast.RevealTopToHandOrBottom) -> tuple[OracleInstruction, ...]:

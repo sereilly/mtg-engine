@@ -100,6 +100,7 @@ from .lowering import (
     _lower_put_onto_battlefield,
     _lower_regenerate,
     _lower_reveal_top,
+    _lower_reveal_until,
     _lower_remove_counter,
     _lower_return_to_zone,
     _lower_sacrifice,
@@ -339,6 +340,9 @@ def lower_statement(
 
     if isinstance(statement, ast.CastPermission):
         return _lower_cast_permission(statement, produced)
+
+    if isinstance(statement, ast.RevealUntil):
+        return _lower_reveal_until(statement, produced)
 
     if isinstance(statement, ast.ExtraTurn):
         return _lower_extra_turn(statement)

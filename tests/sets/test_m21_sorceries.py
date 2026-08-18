@@ -1070,3 +1070,84 @@ def test_a_single_find_search_is_unchanged(set_pool):
     ).instructions
 
     assert search.payload == {"count": 1, "card_type": "any"}
+
+
+# --- Transmogrify: reveal until, as one procedure (round 117) ---------------
+
+
+def _transmogrify_board(set_pool, library):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Transmogrify"]], life=20)
+    p2 = PlayerState(name="P2", life=20, library=[pool[n] for n in library])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(1, Permanent(card=pool["Alpine Watchdog"]), None)
+    return game, p1, p2
+
+
+def _transmogrify(game):
+    result = game.cast_from_hand(
+        0, "Transmogrify", target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+    return result
+
+
+def test_transmogrify_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Transmogrify"])
+    assert program.supported, program.reason
+
+
+def test_transmogrify_exiles_and_replaces_from_the_library(set_pool):
+    """Three sentences, one procedure: "that card" is what the reveal stopped
+    on and "the rest" is exactly what it turned over first."""
+    game, _, p2 = _transmogrify_board(
+        set_pool, ["Mountain", "Mountain", "Baneslayer Angel", "Mountain"],
+    )
+
+    assert _transmogrify(game).supported
+
+    assert [c.name for c in p2.exile] == ["Alpine Watchdog"]
+    assert [p.card.name for p in game.controlled_by(1)] == ["Baneslayer Angel"]
+    # Four cards in, one onto the battlefield, three shuffled back.
+    assert len(p2.library) == 3
+
+
+def test_transmogrify_on_a_library_with_no_creature_finds_nothing(set_pool):
+    """CR 701.20a's reveal is bounded by the library, so an empty one ends the
+    search — anything else is an infinite loop on a real board. The player
+    reveals everything, puts nothing into play, and shuffles it all back."""
+    game, _, p2 = _transmogrify_board(set_pool, ["Mountain", "Mountain", "Mountain"])
+
+    assert _transmogrify(game).supported
+
+    assert [c.name for c in p2.exile] == ["Alpine Watchdog"]
+    assert list(game.controlled_by(1)) == []
+    assert len(p2.library) == 3
+
+
+def test_the_replacement_reaches_the_exiled_creatures_controller(set_pool):
+    """"That creature's controller" is the seat the *exile* step recorded, not
+    the caster. The lowering demands that producer, because without it the
+    effect would read the caster's library — the opposite player from the one
+    the card names."""
+    from engine.grammar import compile_line
+
+    compiled = compile_line(
+        "Exile target creature. That creature's controller reveals cards from "
+        "the top of their library until they reveal a creature card. That "
+        "player puts that card onto the battlefield, then shuffles the rest "
+        "into their library."
+    )
+    kinds = [i.kind for i in compiled.instructions]
+
+    assert kinds == ["exile_target_permanent", "reveal_until_match"]
+    assert compiled.instructions[1].payload["whose"] == "exiled_permanent_controller"
+
+    # Without the exile in front of it the back-reference names nobody.
+    orphan = compile_line(
+        "That creature's controller reveals cards from the top of their library "
+        "until they reveal a creature card. That player puts that card onto the "
+        "battlefield, then shuffles the rest into their library."
+    )
+    assert orphan.instructions == ()

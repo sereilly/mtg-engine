@@ -709,6 +709,63 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("reveal_until_match")
+def reveal_until_match(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…reveals cards from the top of their library until they reveal a
+    creature card. That player puts that card onto the battlefield, then
+    shuffles the rest into their library." (Transmogrify.)
+
+    One handler for the whole procedure, because the three sentences describe
+    one pile: "that card" is what the reveal stopped on and "the rest" is
+    exactly what it turned over first, so nothing between them can be a separate
+    instruction without recording a list for the next one to read.
+
+    **A library that never produces a match is not an error.** CR 701.20a's
+    reveal is bounded by the library, so an empty one ends the search — the
+    player reveals their whole library, puts nothing onto the battlefield, and
+    shuffles it back. Anything else here is an infinite loop on a real board.
+    """
+    payload = instruction.payload
+    seat = context.results.get(payload.get("whose"))
+    if seat is None:
+        game.log.append(f"{context.card.name}: nobody to reveal from")
+        return True, "resolved"
+    player = game.players[seat]
+    described = dict(payload.get("filter") or {})
+
+    revealed: list = []
+    found = None
+    while player.library:
+        card = player.library.pop(0)
+        if _card_matches_filter(card, described):
+            found = card
+            break
+        revealed.append(card)
+
+    if found is not None:
+        game.log.append(f"{player.name} revealed {found.name}")
+        if payload.get("destination") == "battlefield":
+            game._put_permanent_onto_battlefield(
+                seat, Permanent(card=found), None, from_zone="library",
+            )
+        else:
+            player.hand.append(found)
+    else:
+        game.log.append(f"{player.name} revealed their library and found nothing")
+
+    # "…then shuffles the rest into their library." The revealed cards go back
+    # and the library is shuffled, which is why they were held aside rather than
+    # put back one at a time — CR 701.24 shuffles once, at the end.
+    if payload.get("rest") == "shuffle_into_library":
+        player.library.extend(revealed)
+        # Through the module RNG `run_ai_simulation` seeds, like every other
+        # shuffle in the engine, so a given seed still replays exactly.
+        random.shuffle(player.library)
+    else:
+        player.graveyard.extend(revealed)
+    return True, "resolved"
+
+
 @effect_handler("exile_self")
 def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile it." / "Exile this creature." (Archfiend's Vessel.)

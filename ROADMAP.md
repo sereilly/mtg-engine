@@ -256,54 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 114: one card, two prices
-
-*(2026-08-18.)* M21 **263 → 264** — Demonic Embrace.
-
-> Enchant creature
-> Enchanted creature gets +3/+1, has flying, and is a Demon in addition to its
-> other types.
-> You may cast this card from your graveyard by paying 3 life and discarding a
-> card in addition to paying its other costs.
-
-The first two lines were already claimed; the card was that third sentence, and
-it is **two different things said once**: a permission to cast from a zone the
-rules close, and the costs of doing so.
-
-**A permission the card grants itself.** Every grant `cast_permissions.py` held
-was a `CastPermission` some effect put on `game.cast_permissions` and something
-later took away. This one is a static ability of the card while it sits in the
-graveyard (CR 113.6d) — nothing grants it, nothing expires it, and there is no
-state at all — so it is derived from the text on demand, the shape
-`cast_restrictions.py` already uses for a printed timing gate. Asked *after* the
-stored grants, because a granted permission may waive a cost or open a wider
-zone and answering with this first would hide it.
-
-**The cost belongs to the zone, not to the card.** Demonic Embrace costs
-{1}{B}{B} from the hand and {1}{B}{B} plus 3 life plus a card from the
-graveyard — the same card, so `AdditionalCost` grew a `from_zone`, and an
-unmarked cost ("as an additional cost to cast this spell") still applies
-wherever the spell is cast from. It also grew `pay_life`: CR 118.4 lets a player
-pay life down to 0 and no further, and CR 601.2h then makes an unpayable cost an
-uncastable spell rather than a free one, so exactly 3 life pays and 2 refuses.
-
-**Two readers of one sentence, which is normally the bug.** The zone half is
-read by `cast_permissions.self_permission_zone` and the cost half by
-`cast_costs._self_permission_cost`. They are allowed to share a line because
-they answer different questions of it — *is the zone open?*, which the cast path
-needs before it will look outside the hand, and *what must be paid?*, which it
-needs after — and a test holds both to the same line, so there can be no
-permission with no costs attached nor costs with no permission behind them.
-
-Every clause of the cost list must be read or the whole line is refused. A
-sentence naming something the table cannot charge ("…and sacrificing a Zombie")
-leaves the card unsupported rather than castable from the graveyard for less
-than it prints.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Eight new tests, all watched to fail on the round-113 engine.
-
 ## Round 115: a trigger that fired from one place only
 
 *(2026-08-18.)* M21 **264 → 265** — Archfiend's Vessel.
@@ -402,3 +354,43 @@ pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Seven new tests, six watched to fail on the round-115 engine; the
 seventh states the printed-subtype reader's contract, which the new filter asks
 and which predates it.
+
+## Round 117: three sentences, one pile
+
+*(2026-08-18.)* M21 **266 → 267** — Transmogrify.
+
+> Exile target creature. That creature's controller reveals cards from the top
+> of their library until they reveal a creature card. That player puts that card
+> onto the battlefield, then shuffles the rest into their library.
+
+The exile already worked. The rest is **one procedure written as three
+sentences**, and it is lowered as one instruction for a reason that is not
+convenience: "that card" names what the reveal stopped on and "the rest" names
+exactly the cards it turned over first, so split apart the last two sentences
+would dangle referents into a pile nothing had recorded. Every word of both
+destinations is required by the production — a card that milled the rest instead
+of shuffling it back is a different card, and the difference does not appear
+until the third sentence.
+
+**"That creature's controller" is a back-reference, and it demands its
+producer.** The seat is the one the *exile* step recorded, which is the same
+channel "its controller creates a token" (Angelic Ascension, Secure the Scene)
+already reads. Without an exile in front of it the phrase names nobody, so the
+lowering refuses — reading the caster instead would aim the whole effect at the
+opposite player from the one the card names, and the card would still report
+supported.
+
+**A library with no match is not an error.** CR 701.20a's reveal is bounded by
+the library: an empty one ends the search, the player reveals everything, puts
+nothing onto the battlefield and shuffles it all back. Any other reading is an
+infinite loop on a real board, and this is a card an opponent can aim at a
+library they have seen.
+
+The creature enters through the ordinary seam with `from_zone="library"` and
+`was_cast` false, so it is a permanent put onto the battlefield rather than
+cast — which round 111's Containment Priest asks about and round 115's origin
+stamp records.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Four new tests, all watched to fail on the round-116 engine.
