@@ -56,6 +56,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     LAND_ANIMATION_KIND: "land_statics",
     STATIC_LAND_TYPE_KIND: "land_statics",
     "set_base_pt_target_until_eot": "pump",
+    "set_team_base_pt_until_eot": "pump",
     "grant_target_flying_until_eot": "pump",
     "grant_self_flying_until_eot": "pump",
     "grant_target_keyword_until_eot": "pump",

@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 249/285) to the full release line - **137 sets, 33,594
+M21 measured at 250/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–96 — lives in git history at and before
-commit `4b5b545`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–97 — lives in git history at and before
+commit `eadfa96`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,44 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 97: protection from a colour chosen as it resolves
-
-*(2026-08-17.)* M21 **246 → 247** — Feat of Resistance.
-
-> Put a +1/+1 counter on target creature you control. It gains protection from
-> the color of your choice until end of turn.
-
-**A granted protection had never been possible, and the reason was one string.**
-"Protection from black" is the keyword *protection* carrying a quality
-(CR 702.16a). The grant gate compared the whole compound against
-`IMPLEMENTED_KEYWORDS`, which lists the **ability** — so every granted protection
-was refused as an unimplemented keyword, while a *printed* one had worked since
-the keyword gate was written. The asymmetry is exactly why it went unseen: the
-pool is full of printed protection and had no granted protection at all until
-this card.
-
-**Where the grant goes is not layer 6.** Layer 6 holds a word, and "protection
-from black" is not one — `_protection_qualities` reads its own channel, which has
-existed since protection was written with a comment saying no card in the pool
-used it yet. Feat of Resistance is that card. The channel is one key per colour
-rather than a fixed name, so cleanup sweeps it by **prefix**: listing five keys
-would work today and be one short the day something grants protection from a
-non-colour.
-
-**"The color of your choice" cannot be in the keyword**, because CR 609.3 makes
-the choice part of the resolution. So the keyword names the *choice*, and the
-grant resolves it — reading the colour through the same `mana_color` channel the
-any-one-color clauses already use, which is why the client needed one predicate
-widened rather than a new prompt.
-
-An unanswered choice grants **nothing**. A protection the player did not pick is
-a protection from the wrong things, and doing nothing is the honest failure; the
-+1/+1 counter still lands, which is CR 608.2's "as much as it can".
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Six new tests, all six watched to fail on the round-96 engine.
-
 ## Round 98: a control change with a lifetime of its own
 
 *(2026-08-17.)* M21 **247 → 248** — Traitorous Greed, and the last text fallback
@@ -391,3 +353,38 @@ Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Six new tests, five watched to fail on the round-98 engine, and
 the single-find payload pinned unchanged.
+
+## Round 100: a base P/T set over a whole team
+
+*(2026-08-18.)* M21 **249 → 250** — Jolrael, Mwonvuli Recluse.
+
+> {4}{G}{G}: Until end of turn, creatures you control have base power and
+> toughness X/X, where X is the number of cards in your hand.
+
+**The line parsed already; the refusal was one word.** "Base P/T change on a
+non-target subject" — every base-P/T set the engine had was aimed at one chosen
+permanent (Sorceress Queen, Singing Tree), and its handler asks a *picker* which
+one.
+
+A sweep is a second kind rather than a flag on that one, because the two resolve
+completely differently: one asks a picker which permanent, the other asks the
+board which permanents. Sharing a handler would mean a resolution that sometimes
+consults a target it was never given.
+
+**X is fixed as the ability resolves**, and that is the part worth pinning.
+CR 608.2 calculates the value on resolution; it does not track the hand
+afterwards, so drawing a card later in the turn does not grow the team. Carrying
+the count as a *spec* for the layer refresh to re-evaluate would have said the
+opposite, and the layers recompute constantly — the test draws a fourth card and
+asserts nothing moves.
+
+The affected set is snapshotted for the same reason (CR 611.2c): a creature
+entering after this resolves was never affected by it.
+
+The team form refuses to set only one characteristic. "Creatures you control have
+base power 0" would leave toughness tracking whatever else applies — a different
+effect, and one nothing here performs.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Six new tests, three watched to fail on the round-99 engine.

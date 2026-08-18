@@ -214,3 +214,92 @@ def test_vito_reads_the_life_a_replacement_left_and_not_the_life_intended(set_po
     assert len(p1.hand) == 3, "Lich drew that many cards instead"
     assert p1.life == before, "the gain was replaced, so no life arrived"
     assert p2.life == 20, "no life was gained, so nothing triggered"
+
+
+# --- Round 100: a base P/T set over a whole team ----------------------------
+
+
+def _jolrael_board(set_pool, hand=("Shock", "Island", "Forest")):
+    pool = set_pool("M21")
+    jolrael = _nosick(Permanent(card=pool["Jolrael, Mwonvuli Recluse"]))
+    friend = _nosick(Permanent(card=pool["Gale Swooper"]))
+    p1 = PlayerState(
+        name="P1", battlefield=[jolrael, friend],
+        hand=[pool[name] for name in hand],
+    )
+    theirs = Permanent(card=pool["Alpine Watchdog"])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, jolrael, friend, theirs
+
+
+def test_jolrael_compiles_supported(set_pool):
+    """A sweep rather than a target, so it is its own instruction kind: the
+    targeted base-P/T handler asks a picker *which* permanent, and this one asks
+    the board *which permanents*."""
+    program = compile_card_oracle(set_pool("M21")["Jolrael, Mwonvuli Recluse"])
+    assert program.supported, program.reason
+
+    (ability,) = program.activated_abilities
+    assert ability.instruction.kind == "set_team_base_pt_until_eot"
+
+
+def test_every_creature_you_control_takes_the_new_base(set_pool):
+    game, _p1, jolrael, friend, theirs = _jolrael_board(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Jolrael, Mwonvuli Recluse", permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert (jolrael.effective_power, jolrael.effective_toughness) == (3, 3)
+    assert (friend.effective_power, friend.effective_toughness) == (3, 3)
+
+
+def test_the_opponents_creatures_are_untouched(set_pool):
+    game, _p1, _jolrael, _friend, theirs = _jolrael_board(set_pool)
+
+    game.activate_permanent_ability(0, "Jolrael, Mwonvuli Recluse", permanent_index=0)
+    game._settle()
+
+    assert (theirs.effective_power, theirs.effective_toughness) == (2, 2)
+
+
+def test_x_is_fixed_as_the_ability_resolves(set_pool):
+    """CR 608.2: the value is calculated on resolution and does not track the
+    hand afterwards. Drawing later in the turn does not grow the team — which is
+    exactly what a continuous recompute of the count would have said."""
+    game, p1, jolrael, _friend, _theirs = _jolrael_board(set_pool)
+    game.activate_permanent_ability(0, "Jolrael, Mwonvuli Recluse", permanent_index=0)
+    game._settle()
+
+    p1.hand.append(set_pool("M21")["Mountain"])
+    game._recompute_continuous_effects()
+
+    assert (jolrael.effective_power, jolrael.effective_toughness) == (3, 3)
+
+
+def test_the_base_reverts_at_cleanup(set_pool):
+    game, _p1, jolrael, friend, _theirs = _jolrael_board(set_pool)
+    game.activate_permanent_ability(0, "Jolrael, Mwonvuli Recluse", permanent_index=0)
+    game._settle()
+
+    game.resolve_cleanup_step(0)
+
+    assert (jolrael.effective_power, jolrael.effective_toughness) == (1, 2)
+    assert (friend.effective_power, friend.effective_toughness) == (3, 2)
+
+
+def test_a_team_set_that_names_only_one_characteristic_refuses(set_pool):
+    """The handler writes both. "Creatures you control have base power 0" would
+    leave toughness tracking whatever else applies, which is a different effect
+    and one nothing here performs."""
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Until end of turn, creatures you control have base power 0."
+    )
+
+    assert not result.lowered

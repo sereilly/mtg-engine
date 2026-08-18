@@ -345,6 +345,32 @@ def _fused_two_target_pump(
 def _lower_set_base_pt(node: ast.SetBasePT) -> tuple[OracleInstruction, ...]:
     if node.duration.kind != "until_end_of_turn":
         raise LoweringError("base P/T change needs an end-of-turn duration", node=node)
+    # "…**creatures you control** have base power and toughness X/X" (Jolrael).
+    # A sweep rather than a target, and the same layer-7b write applied to each
+    # — so it is a second kind rather than a flag, because the two resolve
+    # completely differently: one asks a picker which permanent, the other asks
+    # the board which permanents.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("all", "each")
+    ):
+        filt = node.subject.filter
+        leftover = _restrictions_beyond(filt, frozenset({"card_types", "controller"}))
+        if leftover or filt.card_types != ("creature",) or filt.controller != "you":
+            raise LoweringError(
+                "the team base-P/T handler covers the creatures you control",
+                node=node,
+            )
+        if node.power is None or node.toughness is None:
+            raise LoweringError(
+                "the team base-P/T handler sets both characteristics", node=node
+            )
+        return (
+            OracleInstruction("set_team_base_pt_until_eot", "", {
+                "power": _amount_payload(node.power),
+                "toughness": _amount_payload(node.toughness),
+            }),
+        )
     if not _is_target(node.subject):
         raise LoweringError("base P/T change on a non-target subject", node=node)
     assert isinstance(node.subject, ast.TargetSpec)

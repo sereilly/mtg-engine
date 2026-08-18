@@ -806,3 +806,39 @@ def grant_flying_and_delayed_destruction(game: Game, instruction: OracleInstruct
     else:
         game.log.append("No valid target for Stone Giant effect")
     return True, "resolved"
+
+
+@effect_handler("set_team_base_pt_until_eot")
+def set_team_base_pt_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, creatures you control have base power and toughness
+    X/X, where X is the number of cards in your hand." (Jolrael, Mwonvuli
+    Recluse.)
+
+    CR 613 layer 7b applied to a *set* rather than to a chosen permanent, which
+    is why it is its own kind: the targeted handler beside it asks a picker which
+    permanent, and this one asks the board which permanents.
+
+    **X is fixed once, as the ability resolves.** CR 608.2's value is calculated
+    on resolution and does not track the hand afterwards — drawing a card later
+    in the turn does not grow the team, and a continuous recompute would say it
+    does. That is the whole reason the amount is resolved here and stamped,
+    rather than carried as a spec for the layer refresh to re-evaluate.
+
+    The set is snapshotted for the same reason: a creature entering after this
+    resolves was never affected (CR 611.2c).
+    """
+    x_value = context.x_value
+    x_count = instruction.payload.get("x_from_count")
+    if x_count is not None:
+        x_value = count_from_payload(game, context, x_count)
+    power = resolve_amount(instruction.payload.get("power", 0), x_value)
+    toughness = resolve_amount(instruction.payload.get("toughness", 0), x_value)
+    seat = game.players.index(context.caster)
+    affected = [perm for perm in game.controlled_by(seat) if perm.is_creature]
+    for perm in affected:
+        set_base_pt(perm, power, toughness, until_eot=True)
+    game.log.append(
+        f"{context.card.name}: {len(affected)} creature(s) have base power and "
+        f"toughness {power}/{toughness} until end of turn"
+    )
+    return True, "resolved"
