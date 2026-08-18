@@ -336,6 +336,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("matching_permanent_enters",
      r"whenever (?P<enterer_subject>(?:a|another) [^,]+) enters(?: the battlefield)?"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
+    # "Whenever one or more Cats you control deal combat damage to a player"
+    # (Feline Sovereign). A **batched** trigger: however many creatures dealt
+    # the damage, it fires once per player damaged — which is the difference
+    # from the per-attacker condition below, not a wording of it. The subject is
+    # counted rather than quantified, so the plural group.
+    ("one_or_more_deal_combat_damage",
+     r"whenever one or more (?P<damagers_subjects>.+?) deal combat damage to a player"),
     # "…are put on another non-Hydra creature you control" (Wildwood Scourge).
     # The excluded subtype is captured as condition payload, so a card printed
     # with any other tribe needs no code; "another" and "you control" are

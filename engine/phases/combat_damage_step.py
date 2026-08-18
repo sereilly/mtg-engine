@@ -608,6 +608,12 @@ class CombatDamageStepMixin:
         # anyone's life, and `finish` reconstructs the before-life total by
         # adding these numbers back.
         life_lost_by_defender: dict[int, int] = {}
+        # Which of the attacking side's creatures dealt combat damage to each
+        # player this step, for the batched "one or more … deal combat damage"
+        # triggers below. Per *player*, because that is what the trigger is once
+        # per — and by permanent, because the trigger's subject is a noun phrase
+        # tested against each one.
+        damagers_by_defender: dict[int, list] = {}
         report: dict[str, str | None] = {"message": None}
 
         def add_lifelink(controller_index: int, amount: int) -> None:
@@ -819,6 +825,15 @@ class CombatDamageStepMixin:
                     self._fire_combat_damage_to_player_triggers(
                         source_attacker, defender, outcome.dealt
                     )
+                    # "Whenever **one or more** … deal combat damage to a
+                    # player" is one trigger however many creatures dealt it, so
+                    # the pairs are recorded here and fired once each at the end
+                    # of the step — the per-attacker call above cannot batch
+                    # what it is called once per attacker for.
+                    if outcome.dealt > 0:
+                        damagers_by_defender.setdefault(
+                            self.players.index(defender), []
+                        ).append(source_attacker)
 
             hit()
 
@@ -828,6 +843,14 @@ class CombatDamageStepMixin:
         # -- the step's own tail, as its last step ---------------------------
 
         def finish() -> None:
+            # The batched "one or more … deal combat damage to a player"
+            # triggers, once per player damaged (CR 603.3: the ability triggers
+            # once however many creatures dealt the damage). Fired before the
+            # state-based check below for the same reason every other trigger in
+            # this step is: they go on the stack and resolve in the priority
+            # window after it.
+            self._fire_batched_combat_damage_triggers(damagers_by_defender)
+
             # CR 702.15b: apply lifelink life gain for damage dealt this step.
             for controller_index, amount in lifelink_gain.items():
                 if 0 <= controller_index < len(self.players):

@@ -1200,3 +1200,118 @@ def test_a_bare_exile_ending_is_not_this_card(set_pool):
     )
 
     assert not result.lowered
+
+
+# --- Round 105: a lord that grants protection, and a batched trigger --------
+
+
+def _sovereign_board(set_pool):
+    pool = set_pool("M21")
+    sovereign = _nosick(Permanent(card=pool["Feline Sovereign"]))
+    lion = _nosick(Permanent(card=pool["Sabertooth Mauler"]))
+    dog = _nosick(Permanent(card=pool["Alpine Watchdog"]))
+    crypt = Permanent(card=pool["Tormod's Crypt"])
+    p1 = PlayerState(name="P1", battlefield=[sovereign, lion])
+    p2 = PlayerState(name="P2", battlefield=[dog, crypt])
+    game = Game(players=[p1, p2])
+    game._settle()
+    return game, sovereign, lion, dog, crypt
+
+
+def test_feline_sovereign_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Feline Sovereign"])
+    assert program.supported, program.reason
+
+
+def test_the_lord_grants_protection_as_well_as_the_buff(set_pool):
+    """"Protection" is not a layer-6 word — it names a *quality* and is read
+    from its own channel, which is why `grantable_keywords` excludes it. The
+    grant is **derived** from the lord, exactly as an Aura's is: a lord buff is
+    rebuilt on every recompute, so a stamped grant would be one nothing
+    clears."""
+    game, _sovereign, lion, _dog, _crypt = _sovereign_board(set_pool)
+
+    assert (lion.effective_power, lion.effective_toughness) == (4, 4)
+    assert ("subtype", "dog") in game._protection_qualities(lion)
+
+
+def test_the_lord_does_not_buff_itself(set_pool):
+    """"**Other** Cats" — and the same filter decides both halves, because both
+    ask the one matcher."""
+    game, sovereign, _lion, _dog, _crypt = _sovereign_board(set_pool)
+
+    assert (sovereign.effective_power, sovereign.effective_toughness) == (2, 3)
+    assert game._protection_qualities(sovereign) == set()
+
+
+def test_a_dog_cannot_block_a_protected_cat(set_pool):
+    game, _sovereign, lion, dog, _crypt = _sovereign_board(set_pool)
+
+    assert not game._can_block_attacker(dog, lion)
+
+
+def _swing(game, attackers):
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game.declare_attackers(0, attackers)
+    game.current_step = "declare_blockers"
+    game.declare_blockers(1, {})
+    game.current_step = "combat_damage"
+    game.resolve_combat_damage(0)
+    game._settle()
+
+
+def test_the_batched_trigger_fires_once_for_two_cats(set_pool):
+    """"Whenever **one or more** Cats … deal combat damage to a player" is one
+    trigger however many dealt it — which is why it cannot ride the per-attacker
+    fire site, called once per attacker."""
+    game, _sovereign, _lion, _dog, crypt = _sovereign_board(set_pool)
+
+    _swing(game, [0, 1])
+
+    assert not game.is_on_battlefield(crypt)
+    assert [p.card.name for p in game.controlled_by(1)] == ["Alpine Watchdog"]
+
+
+def test_no_cat_connecting_fires_nothing(set_pool):
+    """The subject is tested against the creatures that actually dealt damage to
+    that player, so a board with no Cat among them triggers nothing."""
+    pool = set_pool("M21")
+    sovereign = _nosick(Permanent(card=pool["Feline Sovereign"]))
+    crypt = Permanent(card=pool["Tormod's Crypt"])
+    p1 = PlayerState(name="P1", battlefield=[sovereign])
+    p2 = PlayerState(name="P2", battlefield=[crypt])
+    game = Game(players=[p1, p2])
+    game._settle()
+
+    # The Sovereign is itself a Cat, so it *would* fire — swing with nothing.
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game.declare_attackers(0, [])
+    game.current_step = "combat_damage"
+    game.resolve_combat_damage(0)
+    game._settle()
+
+    assert game.is_on_battlefield(crypt)
+
+
+def test_a_combat_damage_trigger_with_any_effect_now_fires(set_pool):
+    """The defect this round found. The per-attacker fire site filtered by a
+    hard-coded list of *instruction* kinds, so Jeskai Elder — "whenever this
+    creature deals combat damage to a player, you may draw a card" — compiled
+    cleanly, reported supported, and fired nowhere. A trigger's condition is what
+    says when it fires; its effect is not a second condition."""
+    pool = set_pool("M21")
+    elder = _nosick(Permanent(card=pool["Jeskai Elder"]))
+    p1 = PlayerState(
+        name="P1", battlefield=[elder], library=[pool["Island"]] * 5,
+        hand=[pool["Shock"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.interactive_seats = {0}
+
+    _swing(game, [0])
+
+    assert [c.kind for c in game.pending_choices] == ["optional_pay"]

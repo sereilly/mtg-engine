@@ -645,6 +645,20 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # because that table's entries are the specific readings: "a land
         # enters" is Ankh of Mishra's own event with its own fire site, and this
         # production would otherwise claim it as a generic entry.
+        # "Whenever **one or more** Cats you control deal combat damage to a
+        # player" (Feline Sovereign). Counted rather than quantified, which is
+        # what the plural subject reading is for — and read before the
+        # subject-led table below, whose productions expect the phrase to lead.
+        batch_mark = stream.mark()
+        if stream.accept_phrase("one", "or", "more"):
+            batched = parse_subject_filter_at(stream, plural=True)
+            if batched is not None and stream.accept_phrase(
+                "deal", "combat", "damage", "to", "a", "player"
+            ):
+                return ast.TriggerEvent(
+                    "one_or_more_deal_combat_damage", "whenever", subject=batched
+                )
+        stream.reset(batch_mark)
         mark = stream.mark()
         # "Whenever **this creature or** another Rogue you control enters"
         # (Thieves' Guild Enforcer) — the source's own entry spelled out. The

@@ -74,13 +74,54 @@ class EffectsMixin:
                     "deals_damage_to_player",
                     "creature_deals_combat_damage",
                 },
-                instruction_kinds={
-                    "opponent_discards_random_card_on_damage",
-                    "gain_life_equal_to_damage_dealt",
-                    "arm_draw_step_life_loss_unless_pay",
-                },
+                # No instruction-kind filter. It named three kinds — the shapes
+                # the cards in the pool happened to have — so a card written with
+                # any of these conditions and any other effect parsed cleanly and
+                # then fired **nowhere**. That is the dispatch-on-effect defect
+                # round 93 found in the end step, still live here: a trigger's
+                # condition is what says when it fires, and its effect is not a
+                # second condition.
             )
         ]
+        self._enqueue_triggered_batch(events)
+
+    def _fire_batched_combat_damage_triggers(self, damagers_by_defender: dict) -> None:
+        """"Whenever **one or more** <subject> deal combat damage to a player."
+        (Feline Sovereign.)
+
+        One trigger per player damaged, however many creatures dealt it — which
+        is why this cannot ride the per-attacker fire site: that one is called
+        once per attacker, and calling it for a batched condition would fire the
+        ability once per Cat.
+
+        The subject is the trigger's own parsed noun phrase, tested against each
+        creature that actually dealt damage to that player — so a Cat that was
+        blocked and dealt none does not count, and neither does a creature the
+        phrase does not name. The damaged player rides the trigger context as
+        `defending_player_index`, which is what the effect's "that player" reads.
+        """
+
+        from ..subject_filters import subject_matches
+        from ..trigger_utils import iter_triggered_abilities, make_trigger_event
+
+        events = []
+        for defender_index, damagers in sorted(damagers_by_defender.items()):
+            for controller_index, permanent, trig in iter_triggered_abilities(
+                self, condition_kinds={"one_or_more_deal_combat_damage"}
+            ):
+                described = trig.condition.payload.get("damagers_filter") or {}
+                if not any(
+                    subject_matches(
+                        self, damager, described,
+                        observer=controller_index, source=permanent,
+                    )
+                    for damager in damagers
+                ):
+                    continue
+                events.append(make_trigger_event(
+                    controller_index, permanent, trig,
+                    trigger_context={"defending_player_index": defender_index},
+                ))
         self._enqueue_triggered_batch(events)
 
     def _fire_dealt_damage_triggers(self, permanent: Permanent, amount: int = 0) -> None:

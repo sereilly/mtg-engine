@@ -100,6 +100,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "creature you control"
     ),
     "deals_damage_to_player": "whenever this creature deals damage to a player",
+    # The batched form: one trigger however many creatures dealt the damage,
+    # fired once per player damaged — which is the difference from the
+    # per-attacker condition, not a wording of it.
+    "one_or_more_deal_combat_damage":
+        "whenever one or more Cats you control deal combat damage to a player",
     # Both wordings, because the narrowing is data on one condition: the
     # unnarrowed form fires on anyone's spell and the narrowed one only on an
     # opponent's, and a table holding just one of them would let the other drift.

@@ -175,13 +175,25 @@ def test_the_spells_keep_their_own_instruction_kind(catalog_by_name):
          "nothing charges {5} for the granted ability"),
         ("Other Goblins get +1/+1 as long as you control a Mountain.",
          "an unmodelled condition would become permanent if dropped"),
-        ("Other Goblins get +1/+1 and have protection from blue.",
-         "protection is a channel of its own, not layer 6"),
         ("Creatures with flying get +1/+1.", "no keyword restriction on the buffed set"),
     ],
 )
 def test_an_unimplemented_shape_refuses_rather_than_partly_matching(line, why):
     assert _derive(line) is None, why
+
+
+def test_a_granted_protection_rides_its_own_channel_not_layer_6():
+    """It refused until round 105, with the reason "protection is a channel of
+    its own, not layer 6" — which was true and is still the reason it is a
+    *separate field* rather than a keyword. What changed is that the channel now
+    reads a lord's grant: derived on every recompute, exactly as an Aura's is,
+    because a stamped grant would be one nothing clears."""
+    buff = _derive("Other Cats you control get +1/+1 and have protection from Dogs.")
+
+    assert buff is not None
+    assert buff.protection_from == ("dogs",)
+    assert buff.keywords == (), "protection is not among the layer-6 words"
+    assert (buff.power, buff.toughness) == (1, 1)
 
 
 def test_an_unsupported_shape_makes_the_whole_card_unsupported():

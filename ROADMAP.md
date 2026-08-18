@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 254/285) to the full release line - **137 sets, 33,594
+M21 measured at 255/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–101 — lives in git history at and before
-commit `95242d6`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–102 — lives in git history at and before
+commit `c72cf96`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,49 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 102: blocking only one thing, and a cost paid by tapping
-
-*(2026-08-18.)* M21 **251 → 252** — Shacklegeist.
-
-> This creature can block only creatures with flying.
-> Tap two untapped Spirits you control: Tap target creature you don't control.
-
-**The restriction is the mirror of the ones already there.** "Can't be blocked
-by Walls" and "can't block creatures with power N or greater" name what may
-*not*; this names the only thing that *may*, so what fails is an attacker
-**without** the word. The keyword is payload for the reason the threshold beside
-it is — a card printed with any other evasion word is the same restriction — and
-it is asked of layer 6, so a creature granted flying can be blocked by it and one
-that lost flying cannot.
-
-**The cost is the round.** Every non-mana activation cost the engine charged gave
-up *one* thing: one permanent sacrificed, one card discarded, one life payment.
-This taps **two**, named by a printed noun phrase — and it is not the {T} symbol,
-which taps the source and is lexed as mana.
-
-Two readers, one gate, as ever: the grammar admits the clause and
-`engine/oracle.py` reads what is charged, and both ask `chargeable_tap_filter`.
-The regex only delimits the number and the noun phrase; `_NUMBER_WORDS` reads the
-one and the noun parser the other.
-
-**"Untapped" is carried, not tested, and named as carried.** `to_payload` has no
-key for it — it says `tapped_only` for True and *nothing at all* for False — so a
-filter carrying it would silently reduce to the unnarrowed phrase. The charger
-performs the word by construction (a cost that taps a permanent can only be paid
-with one that is not already tapped), which is exactly what `carried_separately`
-exists to say out loud rather than leave to a reader's confidence.
-
-Several permanents pay one cost, which the wire's singular `cost_permanent_index`
-cannot say, so the list travels as **ids**: it is chosen before anything taps, and
-a slot renumbers as soon as one does. A seat that names none gets the
-deterministic pick, the same arrangement the sacrifice cost makes — a cost is paid
-during activation, so a queued prompt would put the ability on the stack before
-it was collected.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Six new tests, four watched to fail on the round-101 engine.
-
 ## Round 103: a trigger that includes its own source, and a zone threshold
 
 *(2026-08-18.)* M21 **252 → 253** — Thieves' Guild Enforcer.
@@ -373,24 +330,48 @@ Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green
 shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Six new tests, four watched to fail on the round-103 engine.
 
-### Measured and left: Feline Sovereign
+## Round 105: the card the last round measured, and what it was hiding
 
-Scoped out of this batch after measurement, so the next attempt starts from the
-number rather than from scratch. Two lines, and the second is the wall:
+*(2026-08-18.)* M21 **254 → 255** — Feline Sovereign, scoped out of the last
+batch with its two obstacles written down. Both are gone, and the second one
+took a shipped card's silent bug with it.
 
-* *"Other Cats you control get +1/+1 and have protection from Dogs."* —
-  `grantable_keywords()` excludes "protection" **on purpose** ("protection has
-  its own metadata channel with its own checks"), so a lord granting it needs
-  that channel *derived* rather than stamped: a lord buff is rebuilt on every
-  recompute, and a stamped grant would be one nothing clears. Round 97's
-  colour-keyed metadata generalises to any quality by reading
-  `_protection_quality_of` instead of the colour map — small, and the right
-  first step.
-* *"Whenever one or more Cats you control deal combat damage to a player…"* — a
-  **batched** combat-damage trigger. The fire site
-  (`mixins/effects.py::_fire_combat_damage_triggers`) is per-attacker *and*
-  filtered by a hard-coded `instruction_kinds` list — the same dispatch-on-effect
-  defect round 93 fixed in the end step, still live here. Widening it is worth a
-  round of its own; the batch shape ("one or more X", fired once per damaged
-  player) needs a fire site that runs after the damage step rather than per
-  creature.
+> Other Cats you control get +1/+1 and have protection from Dogs.
+> Whenever one or more Cats you control deal combat damage to a player, destroy
+> up to one target artifact or enchantment that player controls.
+
+**A lord may grant protection now, and it is still not a keyword.**
+`grantable_keywords()` excludes the word on purpose — "protection" names a
+*quality* and is read from its own channel — so the buff carries
+`protection_from` as its own field, and the channel **derives** it from the lord.
+That is the same arrangement an Aura's protection already had, and for the same
+reason: a lord buff is cleared and rebuilt on every recompute, so a grant stamped
+into metadata would be one nothing clears. The metadata channel (round 97's
+until-end-of-turn grant) now reads the same quality parser as a printed clause,
+so a granted "protection from Demons" means what a printed one means.
+
+`_lord_buff_matches` was a closure inside the layer-7c refresh; two readers ask it
+now, so it is a method. Two copies would be two answers to "does this lord reach
+this creature?".
+
+**"One or more … deal combat damage to a player" is a *batched* trigger**: one
+ability however many creatures dealt the damage, fired once per player damaged.
+It cannot ride the per-attacker fire site, which is called once per attacker and
+would fire the ability once per Cat — so the step records which creatures hit
+which player and fires the batch in its tail.
+
+**And the per-attacker site was filtered by instruction kind.** Three kinds — the
+shapes the pool's cards happened to have — so a card written with one of those
+conditions and *any other effect* parsed cleanly, reported supported, and fired
+**nowhere**. That is the dispatch-on-effect defect round 93 found in the end step,
+still live in combat. A whole-pool audit found one card in the gap: **Jeskai
+Elder**, "whenever this creature deals combat damage to a player, you may draw a
+card" — shipped, verified, and doing nothing on connect since it was added. It
+fires now, and its own test pins it.
+
+Whole-pool diff: **one card, one line** — the Jeskai Elder fix changes behaviour,
+not support, which is why it needed the audit rather than the diff to find.
+Suite green, every `--check` gate green, shipped pool 388/388, AI simulation
+byte-identical at 443 interactions, **zero hooks added**. Eight new tests, five
+watched to fail on the round-104 engine; one guard that asserted the old refusal
+was rewritten to state what replaced it.

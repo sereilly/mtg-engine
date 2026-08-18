@@ -143,6 +143,11 @@ class LordBuff:
     power: int = 0
     toughness: int = 0
     keywords: tuple[str, ...] = ()
+    # "…and have **protection from Dogs**" (Feline Sovereign). Its own field
+    # rather than a keyword, because "protection" is not one: it names a
+    # *quality* and is read from its own channel, which is exactly why
+    # `grantable_keywords` excludes the word.
+    protection_from: tuple[str, ...] = ()
     # A quoted activated ability the lord grants (Zombie Master), as a key into
     # GRANTED_ACTIVATED_ABILITIES.
     granted_ability: str | None = None
@@ -190,6 +195,31 @@ def _parse_keywords(text: str) -> tuple[str, ...] | None:
     if not words or any(word not in grantable for word in words):
         return None
     return tuple(words)
+
+
+_PROTECTION_FROM_RE = re.compile(r"^protection from (?P<quality>.+)$")
+
+
+def _split_protection(text: str) -> tuple[str, tuple[str, ...]]:
+    """*text* with any "protection from X" clauses lifted out.
+
+    Returns the remaining keyword text and the qualities. Split rather than
+    parsed together because they end up in different places: a keyword goes into
+    layer 6 and protection into its own channel, and a word in the wrong one is
+    a grant nothing reads.
+    """
+    kept: list[str] = []
+    qualities: list[str] = []
+    for part in re.split(r",| and ", text):
+        part = part.strip()
+        if not part:
+            continue
+        match = _PROTECTION_FROM_RE.match(part)
+        if match is not None:
+            qualities.append(match.group("quality").strip())
+        else:
+            kept.append(part)
+    return " and ".join(kept), tuple(qualities)
 
 
 def _parse_subject(words: list[str]) -> LordBuffFilter | None:
@@ -309,6 +339,7 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
     effect = clause[match.start():].strip()
 
     keywords: tuple[str, ...] = ()
+    protection_from: tuple[str, ...] = ()
     granted_ability: str | None = None
     power = toughness = 0
 
@@ -320,21 +351,26 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
         granted_ability = ability
     elif (both := _PT_AND_KEYWORD_RE.match(effect)) is not None:
         power, toughness = int(both.group("power")), int(both.group("toughness"))
-        found = _parse_keywords(both.group("keywords"))
+        rest, protection_from = _split_protection(both.group("keywords"))
+        found = _parse_keywords(rest) if rest else ()
         if found is None:
             return None
         keywords = found
     elif (pt := _PT_RE.match(effect)) is not None:
         power, toughness = int(pt.group("power")), int(pt.group("toughness"))
     elif (kw := _KEYWORD_RE.match(effect)) is not None:
-        found = _parse_keywords(kw.group("keywords"))
+        rest, protection_from = _split_protection(kw.group("keywords"))
+        found = _parse_keywords(rest) if rest else ()
         if found is None:
             return None
         keywords = found
     else:
         return None
 
-    return LordBuff(subject, power, toughness, keywords, granted_ability, condition)
+    return LordBuff(
+        subject, power, toughness, keywords, protection_from, granted_ability,
+        condition,
+    )
 
 
 def lord_buff_in_text(normalized_text: str) -> LordBuff | None:
@@ -372,6 +408,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["with_plus1_counter"] = True
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
+    if buff.protection_from:
+        payload["protection_from"] = list(buff.protection_from)
     if buff.granted_ability:
         payload["granted_ability"] = buff.granted_ability
     if buff.condition:
@@ -393,6 +431,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),
         keywords=tuple(payload.get("keywords") or ()),
+        protection_from=tuple(payload.get("protection_from") or ()),
         granted_ability=payload.get("granted_ability"),
         condition=payload.get("condition"),
     )

@@ -768,6 +768,37 @@ class PermanentStateMixin:
             return ("subtype", singular)
         return None
 
+    def _lord_buff_matches(self, target_perm, source_perm, buff) -> bool:
+        """Whether *buff*, contributed by *source_perm*, reaches *target_perm*.
+
+        Every field of the derived filter, checked through the CR 613 accessors
+        — an animated Swamp is a creature by layer 4 before a creature anthem is
+        considered in layer 7c, and the printed type line is not the authority on
+        either that or the subtype.
+
+        A method rather than a local because two readers ask it now: the layer-7c
+        refresh that applies the P/T, and the protection reader that derives a
+        granted quality from the same buff. Two copies would be two answers to
+        "does this lord reach this creature?".
+        """
+        filt = buff.filter
+        if not target_perm.is_creature:
+            return False
+        if filt.other_than_source and target_perm is source_perm:
+            return False
+        if filt.colors and not (set(filt.colors) & self._effective_colors(target_perm)):
+            return False
+        if any(not target_perm.has_type(subtype) for subtype in filt.subtypes):
+            return False
+        # "…with a +1/+1 counter on it" (Pridemalkin): the counter record, not
+        # the P/T bonus — a pump writes power_bonus and places no counter, so
+        # reading the bonus would buff the wrong creatures.
+        if filt.with_plus1_counter and int(
+            target_perm.metadata.get("plus_counters", 0)
+        ) <= 0:
+            return False
+        return True
+
     def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:
         """The qualities this permanent has protection from (CR 702.16).
 
@@ -813,15 +844,35 @@ class PermanentStateMixin:
                 symbol = _COLOR_WORD_TO_SYMBOL.get(word)
                 if symbol:
                     qualities.add(("color", symbol))
-        # The metadata channel remains for protection granted with a lifetime of
-        # its own (a spell granting it until end of turn). No card in the pool
-        # uses it today; it is how such a grant would be expressed, and CR
-        # 702.16c does not care where the protection came from.
+        # A lord's grant ("Other Cats you control … have protection from Dogs",
+        # Feline Sovereign). **Derived**, exactly as the Aura grant above is: a
+        # lord buff is cleared and rebuilt on every recompute, so a grant stamped
+        # into metadata would be one nothing clears — and reading it off the
+        # lord means it ends when the lord leaves with nothing having to remove
+        # it.
+        for _seat, lord in self.permanents_with_controller():
+            for instr in compile_card_oracle(lord.effective_card).instructions:
+                if instr.kind != LORD_BUFF_KIND:
+                    continue
+                buff = lord_buff_from_payload(instr.payload)
+                if not buff.protection_from:
+                    continue
+                if not self._lord_buff_matches(permanent, lord, buff):
+                    continue
+                for word in buff.protection_from:
+                    quality = self._protection_quality_of(word)
+                    if quality is not None:
+                        qualities.add(quality)
+        # The metadata channel, for protection granted with a lifetime of its own
+        # (Feat of Resistance, until end of turn). Any quality, not just a
+        # colour: the key is written from the same reader that parses a printed
+        # clause, so a granted "protection from Demons" reads the same as a
+        # printed one.
         for key in permanent.metadata:
             if key.startswith("protection_from_"):
-                symbol = _COLOR_WORD_TO_SYMBOL.get(key[len("protection_from_"):])
-                if symbol:
-                    qualities.add(("color", symbol))
+                quality = self._protection_quality_of(key[len("protection_from_"):])
+                if quality is not None:
+                    qualities.add(quality)
         # No Sleight of Mind step here: the clause above was read off
         # ``effective_card``, whose text layer 3 has already rewritten, so
         # "protection from blue" already reads "protection from red". Remapping
@@ -980,30 +1031,7 @@ class PermanentStateMixin:
         # from the changed line and already says islandwalk. Patching the
         # derived keywords a second time was the layer-3-at-each-reader shape.
 
-        def _matches(target_perm: Permanent, source_perm: Permanent, buff: LordBuff) -> bool:
-            """Every field of the derived filter, checked through the CR 613
-            accessors — an animated Swamp is a creature by layer 4 before a
-            creature anthem is considered in layer 7c, and the printed type line
-            is not the authority on either that or the subtype."""
-            filt = buff.filter
-            if not target_perm.is_creature:
-                return False
-            if filt.other_than_source and target_perm is source_perm:
-                return False
-            if filt.colors and not (
-                set(filt.colors) & self._effective_colors(target_perm)
-            ):
-                return False
-            if any(not target_perm.has_type(subtype) for subtype in filt.subtypes):
-                return False
-            # "…with a +1/+1 counter on it" (Pridemalkin): the counter record,
-            # not the P/T bonus — a pump writes power_bonus and places no
-            # counter, so reading the bonus would buff the wrong creatures.
-            if filt.with_plus1_counter and int(
-                target_perm.metadata.get("plus_counters", 0)
-            ) <= 0:
-                return False
-            return True
+        _matches = self._lord_buff_matches
 
         # Step 2: re-apply from every permanent currently on the battlefield.
         for ctrl_seat, source_perm in self.permanents_with_controller():
