@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 65.7% | 62.0% | 39.8% | 35 |
 | 3ED | 296 | 389 | 79.2% | 77.1% | 42.2% | 150 |
-| M21 *(measured)* | 285 | 503 | 75.5% | 72.4% | 49.5% | 202 |
+| M21 *(measured)* | 285 | 503 | 75.7% | 72.6% | 49.7% | 203 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.3%** | **41.6%** | **631** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -44,9 +44,9 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 6 | 3 | expected 'the number of' in a where-clause |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
-| 5 | 2 | expected a quantity |  |
 | 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 4 | 1 | expected 'mana' |  |
+| 4 | 1 | expected a quantity |  |
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
@@ -660,6 +660,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Whenever you activate a loyalty ability of a Chandra planeswalker, this creature deals 1 damage to each opponent.`
 - **Khabál Ghoul**
   - `At the beginning of each end step, put a +1/+1 counter on this creature for each creature that died this turn.`
+- **Kinetic Augur**
+  - `When this creature enters, discard up to two cards, then draw that many cards.`
 - **King Suleiman**
   - `{T}: Destroy target Djinn or Efreet.`
 - **Kormus Bell**

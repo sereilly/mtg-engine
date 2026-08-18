@@ -405,6 +405,9 @@ def _discard(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_seat": choice.player_index,
         "count": choice.data["count"],
+        # "Up to" — the count is a ceiling, not a floor, so the client lets the
+        # player confirm with fewer (none included).
+        "up_to": bool(choice.data.get("up_to")),
         "allow_top_of_library": bool(choice.data.get("allow_top_of_library")),
         "cards": [ctx.serialize_card(card) for card in discarder.hand],
         "eligible": ctx.game.live_discard_candidates(choice),

@@ -184,6 +184,41 @@ def _fused_draw_then_discard(
     )
 
 
+def _fused_discard_then_draw(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"Discard up to two cards, then draw that many cards." (Kinetic Augur.)
+
+    The mirror of :func:`_fused_draw_then_discard`, and fused for a *different*
+    reason. That one is fused because no controller-discard handler existed;
+    this one because **the second number is the answer to the first**. "That
+    many" is however many cards the player chose to discard, and the choice is a
+    pending prompt — so decomposed, the draw would run while the prompt was
+    still owed and draw nothing at all, with the card reporting supported.
+
+    One instruction arms the prompt and records what to do when it is answered.
+    That is also why the pair must be exactly this shape: any other second step
+    has no reason to wait, and any other count has nothing to read.
+    """
+    if len(steps) != 2:
+        return None
+    discard, draw = steps
+    if not (isinstance(discard, ast.Discard) and isinstance(draw, ast.Draw)):
+        return None
+    if not (_is_you(discard.player) and _is_you(draw.player)):
+        return None
+    if discard.at_random or discard.whole_hand or discard.filter is not None:
+        return None
+    if not isinstance(discard.count, ast.Fixed) or not isinstance(draw.count, ast.ThatMuch):
+        return None
+    return (
+        OracleInstruction(
+            "discard_then_draw_that_many", "",
+            {"amount": discard.count.value, "up_to": discard.up_to},
+        ),
+    )
+
+
 def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
     """"You draw" and "target player draws" are different handlers, not one
     handler with a recipient flag: ``draw_controller_cards`` draws for the

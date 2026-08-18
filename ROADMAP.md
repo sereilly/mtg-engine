@@ -1,14 +1,14 @@
 # Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 243/285) to the full release line - **137 sets, 33,594
+M21 measured at 244/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
 before them — the founding audit, the parser migration (finished:
 `engine/parsing/` is deleted and `engine/grammar/` is the only parser), the
-per-set narratives, and M21 rounds 1–90 — lives in git history at and before
-commit `f5457ac`. What those rounds established that outlives their narrative is
+per-set narratives, and M21 rounds 1–91 — lives in git history at and before
+commit `2f8ac00`. What those rounds established that outlives their narrative is
 kept below under **Carried forward**. The process a set follows is
 `SET_PLAYBOOK.md`.
 
@@ -256,57 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 91: mana that may only pay for some spells
-
-*(2026-08-17.)* M21 **240 → 241** — Vodalian Arcanist.
-
-> {T}: Add {C}. Spend this mana only to cast an instant or sorcery spell.
-
-**The engine already had this feature, for exactly one wording.** Metamorphosis's
-"spend this mana only to cast creature spells" was a `PlayerState` field named
-`creature_only_mana`, a `spend_only == "creature"` branch in the mana handler, and
-a `creature_spell: bool` threaded to `_pay_mana_cost`. A second wording had
-nowhere to go in that shape but a second field, a second bool and a second branch
-— which is the arrangement `engine/shields.py` was built to stop repeating, and
-the reason this round is a module rather than a flag.
-
-`engine/restricted_mana.py` is the registry: a printed phrase, the key it
-produces, and a predicate over the **card being cast**. The parser claims the
-phrase, the payer asks the predicate, so what is admitted and what is enforced
-cannot drift. `PlayerState.restricted_mana` is one bucket per key;
-`creature_only_mana` survives as a **view** over the `"creature"` bucket, because
-the web payload, the AI simulator and four existing tests read it by name — the
-same arrangement, and the same reason, as the prevention fields.
-
-**The restriction is a rider, not a step.** "Spend this mana only to …" adds
-nothing to the game; it says what the *previous* sentence's mana may pay for
-(CR 106.6b). Parsed as its own sentence it would be an effect nothing performs,
-and the mana would land in the unrestricted pool with the restriction reported as
-understood. So it folds onto the `AddMana` before it, through the registry's own
-matcher over the sentence's printed text — round 85's delegation, for round 85's
-reason.
-
-**Two refusals worth stating.** The any-colour mana branch is *text-keyed* (the
-handler probes the clause for "one mana of any color"), so a restriction folded
-onto it would ride the payload and be ignored; no card prints the pair, and it
-refuses rather than adding unrestricted mana. And an unknown restriction key
-admits **nothing** — mana whose restriction the engine cannot test must not be
-spendable on anything, which is the opposite of the usual "unknown means
-unrestricted" default and is the only safe direction here.
-
-An activated ability is not cast (CR 602.2), so no "only to cast" bucket pays for
-one. The payer is handed `None` for the spell, and None admitting nothing is that
-rule rather than a missing argument.
-
-The client now reads the whole collection and labels each bucket by its key,
-falling back to a generic "restricted" chip for a key it has no label for —
-honest about what the mana is rather than folding it into the pool, which would
-overstate what is spendable.
-
-Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
-shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
-hooks added**. Seven new tests, six watched to fail on the round-90 engine.
-
 ## Round 92: a trigger that fires when something points at you
 
 *(2026-08-17.)* M21 **241 → 242** — Warden of the Woods.
@@ -405,3 +354,50 @@ shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
 hooks added**. Eight new tests, six watched to fail on the round-92 engine —
 including two that show the restriction absent rather than merely unread: Gadrak
 attacked freely there with no artifacts at all.
+
+## Round 94: half a characteristic, and a count that is the answer to a prompt
+
+*(2026-08-17.)* M21 **243 → 244** — Kinetic Augur, closing the batch.
+
+> Kinetic Augur's power is equal to the number of instant and sorcery cards in
+> your graveyard.
+> When this creature enters, discard up to two cards, then draw that many cards.
+
+**The CDA table had only ever seen whole P/Ts.** Every entry reads "power **and
+toughness are each** equal to", and the apply site wrote `set_base_pt(perm,
+value, value)`. Kinetic Augur is */4: it defines *half* a P/T, and the printed
+toughness stands. Which half it defines rides on the payload rather than in the
+kind — a card printed the other way round is the same template — and
+`set_base_pt` already took `None` for "leave this one tracking whatever else
+applies", so there was nothing to build, only something to stop assuming.
+
+**And it counts cards in a zone**, which the CDA tally cannot: a card in a
+graveyard has no computed characteristics at all (CR 613.1), so it is a different
+question of a different matcher. The payload carries the same `count_spec` every
+other computed amount uses and goes through `evaluate_count` — the evaluator the
+computed 7c bonus two lines below was already using, so "the number of instant
+and sorcery cards in your graveyard" means one number whichever sentence prints
+it.
+
+**"Then draw that many" is one instruction because the second number is the
+answer to the first.** How many are drawn is however many the player chose to
+discard, and that choice is a *pending prompt* — so decomposed, the draw would
+run while the prompt was still owed and draw nothing at all, with the card
+reporting supported. `_fused_discard_then_draw` is the mirror of the
+draw-then-discard fuser beside it and is fused for the opposite reason: that one
+because no controller-discard handler existed, this one because the pair cannot
+be separated in time.
+
+The follow-on rides the *prompt* rather than the resolution, which is the
+arrangement Library of Leng's `to_library` already uses: what happens when a
+discard is answered belongs to the discard.
+
+**"Up to" is a ceiling, not a count.** The discard prompt has always demanded its
+exact number; a ceiling read as an exact count is a card that forces its
+controller to pitch cards they were offered the choice of keeping. One flag makes
+fewer legal — none included — and a prompt without it is unchanged, which a test
+pins in both directions.
+
+Whole-pool diff: **one card, one line**. Suite green, every `--check` gate green,
+shipped pool 388/388, AI simulation byte-identical at 443 interactions, **zero
+hooks added**. Ten new tests, seven watched to fail on the round-93 engine.

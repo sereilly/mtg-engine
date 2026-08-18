@@ -699,7 +699,10 @@ class PendingChoicesMixin:
 
         count = int(choice.data["count"])
         chosen = [i for i in dict.fromkeys(hand_indices)][:count]
-        if len(chosen) != count:
+        # "Discard **up to** two cards" (Kinetic Augur): fewer is a legal answer,
+        # none included. A ceiling read as an exact count would force the player
+        # to pitch cards they were offered the choice of keeping.
+        if len(chosen) != count and not choice.data.get("up_to"):
             return False
         # "Discard a **creature** card": a card the phrase does not name is not
         # a legal answer, and is refused rather than slid onto one that is — a
@@ -712,7 +715,23 @@ class PendingChoicesMixin:
             if not _resolve_one_discard(self, choice.player_index, hand_index, to_library):
                 return False
         self.discard_pending_choice(choice)
+        self._draw_that_many_after_discard(choice, len(chosen))
         return True
+
+    def _draw_that_many_after_discard(self, choice: PendingChoice, discarded: int) -> None:
+        """"…then draw that many cards" — the follow-on the discard prompt was
+        armed with (Kinetic Augur).
+
+        Here rather than in a later instruction because "that many" is the
+        prompt's own answer: nothing downstream of a queued choice can read a
+        number the player has not given yet. Discarding nothing draws nothing,
+        which is what "that many" says.
+        """
+        if not choice.data.get("draw_that_many") or discarded <= 0:
+            return
+        player = self.players[choice.player_index]
+        drawn = self._draw_with_replacements(player, discarded)
+        self.log.append(f"{player.name} drew {drawn} card(s) for the cards discarded")
 
     def confirm_revealed_hand_pick(self, player_index: int, hand_index: int) -> bool:
         return self.resolve_pending_choice(
@@ -774,6 +793,7 @@ class PendingChoicesMixin:
         """
         from ...handlers.zones import _resolve_one_discard
 
+        discarded = 0
         for _ in range(int(choice.data["count"])):
             eligible = self.live_discard_candidates(choice)
             if not eligible:
@@ -782,7 +802,12 @@ class PendingChoicesMixin:
                 self, choice.player_index, eligible[0], to_library=False
             ):
                 break
+            discarded += 1
         self.discard_pending_choice(choice)
+        # The stated policy for "up to" is to take the whole offer: this pairing
+        # only ever prints with a draw behind it, so discarding fewer is
+        # strictly less card selection for the same cards.
+        self._draw_that_many_after_discard(choice, discarded)
 
     def auto_resolve_pending_discard(self) -> None:
         """Resolve a pending discard with a default choice (the lowest-index cards,

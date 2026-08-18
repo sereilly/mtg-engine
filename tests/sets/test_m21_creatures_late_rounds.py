@@ -691,3 +691,119 @@ def test_the_treasure_is_a_noncreature_token_that_makes_mana(set_pool):
     assert result.supported, result.details
     assert p1.mana_pool["R"] == 1
     assert not game.is_on_battlefield(treasure), "sacrificed to pay its own cost"
+
+
+# --- Round 94: half a CDA, and a count that is the answer to a prompt -------
+
+
+def _augur_board(set_pool, graveyard=()):
+    pool = set_pool("M21")
+    augur = Permanent(card=pool["Kinetic Augur"])
+    p1 = PlayerState(
+        name="P1", battlefield=[augur],
+        graveyard=[pool[name] for name in graveyard],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game._settle()
+    return game, p1, augur
+
+
+def test_kinetic_augur_compiles_supported(set_pool):
+    """"**Power** is equal to", not "power and toughness are each" — the one
+    printed CDA that defines half of a P/T, so which half it defines rides on
+    the payload rather than in the kind. The count is over *cards in a zone*, so
+    it goes through the shared evaluator: a card in a graveyard has no computed
+    characteristics at all (CR 613.1)."""
+    program = compile_card_oracle(set_pool("M21")["Kinetic Augur"])
+    assert program.supported, program.reason
+
+    cda = next(i for i in program.instructions if i.kind == "dynamic_pt_count")
+    assert cda.payload["defines"] == "power"
+    assert cda.payload["count_spec"]["zone"] == "graveyard"
+
+
+@pytest.mark.parametrize(
+    "graveyard,power",
+    [
+        ((), 0),
+        (("Shock",), 1),
+        (("Shock", "Scorching Dragonfire"), 2),
+        # A creature card in the graveyard is not counted; a CDA is recomputed
+        # continuously (CR 604.3), so this is the same read at a different board.
+        (("Shock", "Scorching Dragonfire", "Gale Swooper"), 2),
+    ],
+)
+def test_the_power_tracks_the_graveyard(set_pool, graveyard, power):
+    _game, _p1, augur = _augur_board(set_pool, graveyard)
+
+    assert augur.effective_power == power
+
+
+def test_the_printed_toughness_is_left_alone(set_pool):
+    """Kinetic Augur is */4. ``set_base_pt`` takes None for "leave this one
+    tracking whatever else applies", which is exactly the difference between
+    defining one characteristic and defining both."""
+    _game, _p1, augur = _augur_board(set_pool, ("Shock",))
+
+    assert augur.effective_toughness == 4
+
+
+def _augur_enters(set_pool, hand=()):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Kinetic Augur"]] + [pool[name] for name in hand],
+        library=[pool["Island"]] * 5,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.cast_from_hand(0, "Kinetic Augur")
+    game._settle()
+    return game, p1
+
+
+def test_the_entry_trigger_arms_one_prompt_that_knows_what_follows(set_pool):
+    """One instruction, because the second number *is* the answer to the first.
+    Decomposed, the draw would run while the discard prompt was still owed and
+    draw nothing at all — with the card reporting supported."""
+    game, _p1 = _augur_enters(set_pool, ["Shock", "Island"])
+
+    (choice,) = game.pending_choices
+    assert choice.kind == "discard"
+    assert choice.data["count"] == 2
+    assert choice.data["up_to"] and choice.data["draw_that_many"]
+
+
+def test_discarding_fewer_draws_fewer(set_pool):
+    game, p1 = _augur_enters(set_pool, ["Shock", "Island"])
+
+    assert game.confirm_discard(0, [0])
+
+    assert [c.name for c in p1.graveyard] == ["Shock"]
+    assert len(p1.hand) == 2, "one discarded, one drawn"
+
+
+def test_discarding_nothing_is_a_legal_answer_and_draws_nothing(set_pool):
+    """"Up to" — a ceiling read as an exact count would force the player to
+    pitch cards they were offered the choice of keeping."""
+    game, p1 = _augur_enters(set_pool, ["Shock", "Island"])
+
+    assert game.confirm_discard(0, [])
+
+    assert p1.graveyard == []
+    assert [c.name for c in p1.hand] == ["Shock", "Island"]
+    assert game.pending_choices == []
+
+
+def test_an_exact_discard_still_demands_its_whole_count(set_pool):
+    """The "up to" flag is what makes fewer legal, so a prompt without it is
+    unchanged — a plain "discard two cards" is not a choice about how many."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Shock"], pool["Island"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.interactive_seats = {0}
+    game.arm_pending_choice("discard", 0, count=2)
+
+    assert not game.confirm_discard(0, [0])
+    assert game.pending_choices, "still owed"

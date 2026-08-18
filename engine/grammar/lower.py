@@ -50,6 +50,7 @@ from .lowering import (
     GRAMMAR_ONLY_PAYLOAD_KEYS,
     INSTRUCTION_CATEGORIES,
     _full_mana_payload,
+    _fused_discard_then_draw,
     _fused_draw_then_discard,
     _fused_exile_then_controller_life,
     _is_source,
@@ -367,6 +368,11 @@ def lower_statement(
 
     if isinstance(statement, ast.Sequence):
         for fuse in (
+            # Before its mirror: both take (Discard, Draw)-shaped pairs in the
+            # opposite order, and this one additionally requires "that many",
+            # so neither can claim the other's sentence — the order is stated
+            # rather than relied on.
+            _fused_discard_then_draw,
             _fused_draw_then_discard,
             _fused_exile_then_controller_life,
             _fused_prepare_then_interact,

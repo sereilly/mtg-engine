@@ -67,6 +67,28 @@ def _creature_count(match: re.Match) -> dict[str, object]:
     return payload
 
 
+def _graveyard_type_count(match: re.Match) -> dict[str, object]:
+    """"…equal to the number of instant and sorcery cards in your graveyard."
+    (Kinetic Augur.)
+
+    Counted through ``evaluate_count`` rather than the battlefield tally beside
+    it, because the objects are *cards in a zone*: they have no computed
+    characteristics at all (CR 613.1), so the question is a different one asked
+    of a different matcher. Emitting the spec every other computed amount uses
+    is what keeps "the number of instant and sorcery cards in your graveyard"
+    meaning one thing whichever sentence prints it.
+    """
+    types = [word.strip() for word in match.group("types").split(" and ")]
+    return {
+        "defines": "power",
+        "count_spec": {
+            "zone": "graveyard",
+            "owner": "you",
+            "filter": {"type_filter": types},
+        },
+    }
+
+
 def _same_name_count(match: re.Match) -> dict[str, object]:
     return {"count": "same_name", "scope": "all"}
 
@@ -109,6 +131,17 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             rf"^(?P<subject>.+?)'s {_PT} creatures named (?P<named>.+?) on the battlefield$"
         ),
         _same_name_count,
+    ),
+    (
+        # Kinetic Augur. "**Power** is", not "power and toughness are each": the
+        # printed toughness stands, so this is the one entry that defines half a
+        # CDA — and the half it defines is on the payload rather than in the
+        # kind, because a card printed the other way round is the same template.
+        re.compile(
+            rf"^{_SUBJECT} power is equal to the number of "
+            rf"(?P<types>[a-z]+(?: and [a-z]+)*) cards in your graveyard$"
+        ),
+        _graveyard_type_count,
     ),
     (
         # Keldon Warlord, and the unqualified "creatures you control" form.

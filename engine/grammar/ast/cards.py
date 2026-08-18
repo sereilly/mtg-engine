@@ -36,6 +36,10 @@ class Discard:
     at_random: bool = False
     # "Discard your hand" (Chandra, Heart of Fire) — every card, however many.
     whole_hand: bool = False
+    # "Discard **up to** two cards" (Kinetic Augur) — fewer is a legal answer,
+    # including none. Not a second count: the number is the same, what changes
+    # is whether it is a floor as well as a ceiling.
+    up_to: bool = False
     # "Discard a **creature** card" (Crypt Lurker) — what the discarded card has
     # to be. None is "any card", which is what the bare template means; an empty
     # filter would say the same thing in a way a reader could mistake for a

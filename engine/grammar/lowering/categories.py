@@ -79,6 +79,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Pestilent Haze's second mode: loyalty stripped from every walker at once.
     "remove_loyalty_from_each_planeswalker": "counters",
     "draw_then_discard_self": "zones",
+    "discard_then_draw_that_many": "zones",
     "target_gains_life": "life",
     "target_loses_life": "life",
     "destroy_target_permanent": "destruction",

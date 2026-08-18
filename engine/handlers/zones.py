@@ -1439,6 +1439,40 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     return True, "pending_discard"
 
 
+@effect_handler("discard_then_draw_that_many")
+def discard_then_draw_that_many(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Discard up to two cards, then draw that many cards." (Kinetic Augur.)
+
+    One instruction because the second number *is* the answer to the first: how
+    many are drawn is however many the player chose to discard, and that choice
+    is a pending prompt. Two instructions would run the draw while the prompt was
+    still owed and draw nothing at all.
+
+    The prompt carries the follow-on rather than the resolution carrying it,
+    which is the same arrangement Library of Leng's ``to_library`` already rides
+    on: what happens when a discard is answered belongs to the discard.
+    """
+    caster = context.caster
+    amount = min(
+        resolve_amount(instruction.payload.get("amount", 0), context.x_value),
+        len(caster.hand),
+    )
+    if amount <= 0:
+        game.log.append(f"{caster.name} has no cards to discard")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "discard", game.players.index(caster),
+        count=amount,
+        up_to=bool(instruction.payload.get("up_to")),
+        draw_that_many=True,
+        allow_top_of_library=game._controls_top_of_library_discard(caster),
+    )
+    game.log.append(
+        f"{caster.name} may discard up to {amount} card(s), then draws that many"
+    )
+    return True, "pending_discard"
+
+
 @effect_handler("put_graveyard_card_on_library_bottom")
 def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put target card from your graveyard on the bottom of your library."

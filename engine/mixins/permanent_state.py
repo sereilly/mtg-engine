@@ -471,8 +471,25 @@ class PermanentStateMixin:
                 (i for i in prog.instructions if i.kind == "dynamic_pt_count"), None
             )
             if dynamic_pt is not None:
-                value = _count_dynamic_pt(self, player, permanent, dynamic_pt.payload)
-                set_base_pt(permanent, value, value)
+                spec = dynamic_pt.payload.get("count_spec")
+                # A CDA counting *cards in a zone* asks the shared evaluator, not
+                # the battlefield tally: a card in a graveyard has no computed
+                # characteristics (CR 613.1), so it is a different question of a
+                # different matcher — and the same evaluator the computed 7c
+                # bonus below uses, so one phrase means one number wherever it
+                # is printed.
+                value = (
+                    evaluate_count(self, player, spec) if spec is not None
+                    else _count_dynamic_pt(self, player, permanent, dynamic_pt.payload)
+                )
+                # "…**power** is equal to" leaves the printed toughness alone
+                # (Kinetic Augur is */4). ``set_base_pt`` takes None for "leave
+                # this one tracking whatever else applies", which is exactly the
+                # difference and is why it is not two instruction kinds.
+                if dynamic_pt.payload.get("defines") == "power":
+                    set_base_pt(permanent, value, None)
+                else:
+                    set_base_pt(permanent, value, value)
 
             # A layer-7c bonus whose *size* is computed (Carrion Grub). The
             # spec is the one every reader of a computed amount shares, so the

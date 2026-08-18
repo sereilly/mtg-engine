@@ -46,6 +46,11 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # wording no card prints) stays unparsed.
     if stream.accept_phrase("your", "hand"):
         return ast.Discard(player, ast.AllOf(), whole_hand=True)
+    # "Discard **up to** two cards" (Kinetic Augur). Read before the amount, and
+    # recorded rather than consumed: a ceiling read as an exact count is a card
+    # that forces its controller to pitch two cards they were offered the choice
+    # of keeping.
+    up_to = bool(stream.accept_phrase("up", "to"))
     count = parse_amount(stream)
     # "Discard a **creature** card" (Crypt Lurker). The noun parser reads the
     # whole phrase including its "card", so it is tried before the bare
@@ -65,7 +70,7 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
         stream.reset(mark)
         stream.expect_word("card", "cards")
     at_random = stream.accept_phrase("at", "random")
-    return ast.Discard(player, count, at_random, filter=narrowed)
+    return ast.Discard(player, count, at_random, up_to=up_to, filter=narrowed)
 
 
 def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
