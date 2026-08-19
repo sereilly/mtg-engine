@@ -14,6 +14,8 @@ as a test failure rather than as an ImportError at startup.
 LAYERS = (
     # Pre-existing leaves: request/response models and the three stores.
     "schemas",
+    # The ActionKind -> handler registry the action dispatch reads.
+    "action_registry",
     "verification_store",
     "deck_legality",
     "deck_builder",
@@ -44,7 +46,15 @@ LAYERS = (
     "state_view",
     # Debug-menu board manipulation and raw-state injection.
     "debug_actions",
-    # The one dispatch over ActionKind.
+    # The cast plumbing the normal cast and the debug free-casts share.
+    "action_helpers",
+    # One module of registered handlers per group of ActionKinds.
+    "action_prompt_answers",
+    "action_turn",
+    "action_combat",
+    "action_debug",
+    "action_pregame",
+    # The shared preamble, the registry dispatch, and the core priority actions.
     "actions",
     # The FastAPI app: the one place a route is declared.
     "app",
