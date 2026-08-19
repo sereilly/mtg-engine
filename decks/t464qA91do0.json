@@ -1,0 +1,64 @@
+{
+  "id": "t464qA91do0",
+  "name": "M21 Teferi's Tutelage",
+  "description": "Mono-blue draw-go: every card drawn mills the opponent, with counterspells and Teferi to survive the wait. (Core Set 2021 / Blue)",
+  "format": "casual",
+  "cards": [
+    {
+      "name": "Wall of Runes",
+      "count": 4
+    },
+    {
+      "name": "Teferi's Protege",
+      "count": 4
+    },
+    {
+      "name": "Tolarian Kraken",
+      "count": 2
+    },
+    {
+      "name": "Spined Megalodon",
+      "count": 2
+    },
+    {
+      "name": "Opt",
+      "count": 4
+    },
+    {
+      "name": "Frantic Inventory",
+      "count": 4
+    },
+    {
+      "name": "Teferi's Tutelage",
+      "count": 4
+    },
+    {
+      "name": "Cancel",
+      "count": 3
+    },
+    {
+      "name": "Frost Breath",
+      "count": 3
+    },
+    {
+      "name": "Rain of Revelation",
+      "count": 2
+    },
+    {
+      "name": "Teferi's Ageless Insight",
+      "count": 2
+    },
+    {
+      "name": "Teferi, Master of Time",
+      "count": 2
+    },
+    {
+      "name": "Island",
+      "count": 24
+    }
+  ],
+  "sideboard": [],
+  "commander": [],
+  "created_at": 1787112603.0645096,
+  "updated_at": 1787112603.0645096
+}

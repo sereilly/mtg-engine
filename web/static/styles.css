@@ -2055,6 +2055,65 @@ h2.targeting-valid {
   cursor: not-allowed;
 }
 
+/* Planeswalker loyalty menu: one row per loyalty ability, the cost symbol as
+   the button on the left (the card's own layout) and the ability beside it. A
+   row whose cost can't be paid greys the whole row, not just its button — the
+   greyed cost beside the loyalty in the header is the explanation, and the
+   button's title carries the rule for a hover. */
+.loyalty-ability-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.loyalty-ability-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.loyalty-cost-btn {
+  flex: 0 0 auto;
+  min-width: 46px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: #2b2b30;
+  color: #f4f1e8;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.loyalty-cost-btn.loyalty-up {
+  background: #2f5233;
+  border-color: rgba(150, 220, 160, 0.5);
+}
+
+.loyalty-cost-btn.loyalty-down {
+  background: #57262a;
+  border-color: rgba(230, 150, 150, 0.5);
+}
+
+.loyalty-cost-btn:hover:not(:disabled) {
+  filter: brightness(1.25);
+}
+
+.loyalty-cost-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+.loyalty-ability-row.is-disabled .loyalty-ability-text {
+  opacity: 0.5;
+}
+
+.loyalty-ability-text {
+  flex: 1 1 auto;
+  line-height: 1.35;
+}
+
 /* Jihad's enter-choice color picker: the currently selected color. */
 .prompt-choice-btn.selected {
   outline: 2px solid #e8c15a;

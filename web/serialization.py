@@ -16,7 +16,7 @@ import re
 from engine import Game
 from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
-from engine.oracle import compile_card_oracle
+from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
 from engine.targeting import usable_activated_abilities
 from engine.text_changes import changed_words
 
@@ -155,6 +155,21 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
             attached_to_index = game.battlefield_index_of(attached_to)
             attached_to_id = game.permanent_id_of(attached_to)
 
+    # Planeswalker loyalty state the UI's loyalty-ability menu gates on. The
+    # loyalty *counters* already ride along in ``counters``; these are the two
+    # halves of CR 606.3 a client cannot see — whether this permanent has
+    # already used a loyalty ability this turn, and whether the card widens the
+    # sorcery-speed window itself ("You may activate loyalty abilities of ~ on
+    # any player's turn any time you could cast an instant", Teferi, Master of
+    # Time). Read from the same metadata key and the same canonical static line
+    # the activation gate reads, so the greyed-out button and the engine's
+    # refusal cannot disagree.
+    is_planeswalker = perm.has_type("planeswalker")
+    loyalty_any_time = is_planeswalker and (
+        LOYALTY_ANY_TIME_STATIC
+        in compile_card_oracle(perm.effective_card).static_lines
+    )
+
     # A color override (Thoughtlace/Lifelace) replaces the printed colors
     # entirely; a copied color (Clone) replaces them too, while Vesuvan
     # Doppelganger's "doesn't copy that creature's color" keeps its own blue.
@@ -255,6 +270,12 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # Name of the creature this permanent is a copy of (Clone / Vesuvan
         # Doppelganger), so the UI can badge the copy.
         "copied_from": perm.copied_from,
+        "is_planeswalker": is_planeswalker,
+        "loyalty_ability_used_this_turn": bool(
+            is_planeswalker
+            and perm.metadata.get("loyalty_ability_used_turn") == game.turn
+        ),
+        "loyalty_any_time": loyalty_any_time,
     }
 
 

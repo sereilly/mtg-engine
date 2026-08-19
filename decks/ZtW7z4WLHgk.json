@@ -1,0 +1,80 @@
+{
+  "id": "ZtW7z4WLHgk",
+  "name": "M21 Gruul Stampede",
+  "description": "Red-green beef: ramp into four-power threats, then Garruk's Uprising and Terror of the Peaks make them draw cards and throw damage. (Core Set 2021 / Red-Green)",
+  "format": "casual",
+  "cards": [
+    {
+      "name": "Llanowar Visionary",
+      "count": 4
+    },
+    {
+      "name": "Wildwood Patrol",
+      "count": 4
+    },
+    {
+      "name": "Ornery Dilophosaur",
+      "count": 3
+    },
+    {
+      "name": "Turret Ogre",
+      "count": 3
+    },
+    {
+      "name": "Terror of the Peaks",
+      "count": 2
+    },
+    {
+      "name": "Colossal Dreadmaw",
+      "count": 2
+    },
+    {
+      "name": "Elder Gargaroth",
+      "count": 2
+    },
+    {
+      "name": "Radha, Heart of Keld",
+      "count": 2
+    },
+    {
+      "name": "Shock",
+      "count": 4
+    },
+    {
+      "name": "Scorching Dragonfire",
+      "count": 3
+    },
+    {
+      "name": "Garruk's Uprising",
+      "count": 3
+    },
+    {
+      "name": "Primal Might",
+      "count": 2
+    },
+    {
+      "name": "Garruk, Unleashed",
+      "count": 2
+    },
+    {
+      "name": "Rugged Highlands",
+      "count": 4
+    },
+    {
+      "name": "Forest",
+      "count": 10
+    },
+    {
+      "name": "Mountain",
+      "count": 8
+    },
+    {
+      "name": "Fabled Passage",
+      "count": 2
+    }
+  ],
+  "sideboard": [],
+  "commander": [],
+  "created_at": 1787112603.0653365,
+  "updated_at": 1787112603.0653365
+}

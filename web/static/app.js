@@ -5394,28 +5394,44 @@ function renderActivationPrompt() {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     title.textContent = `Choose X for ${pendingCastX.cardName}`;
-    // Recompute the ceiling from the live mana pool: tapping more lands while
+    // A loyalty "−X" is paid in counters, so its ceiling is the loyalty on the
+    // permanent (CR 606.6) and no amount of tapping raises it. Everything else
+    // recomputes the ceiling from the live mana pool: tapping more lands while
     // the prompt is open grows the range of X choices on the next render.
-    if (pendingCastX.costString !== undefined) {
-      const liveMax = getMaxAffordableX(me?.mana_pool, pendingCastX.costString, pendingCastX.costCard);
-      pendingCastX.maxX = Math.max(0, liveMax - Math.max(0, pendingCastX.extraTargetTax || 0));
+    if (pendingCastX.loyalty) {
+      pendingCastX.maxX = currentLoyaltyOf(pendingCastX.card);
+      body.textContent =
+        `${pendingCastX.cardName} has ${pendingCastX.maxX} loyalty, and X counters are removed to pay for this ability.`;
+    } else {
+      if (pendingCastX.costString !== undefined) {
+        const liveMax = getMaxAffordableX(me?.mana_pool, pendingCastX.costString, pendingCastX.costCard);
+        pendingCastX.maxX = Math.max(0, liveMax - Math.max(0, pendingCastX.extraTargetTax || 0));
+      }
+      const xColor = xSpendColorForCard(pendingCastX.card);
+      const xColorName = xColor ? { W: "white", U: "blue", B: "black", R: "red", G: "green" }[xColor] : null;
+      body.textContent = xColorName
+        ? `You have ${pendingCastX.maxX} ${xColorName} mana available for X (only ${xColorName} mana may be spent on X). Tap more mana sources to raise the limit.`
+        : `You have ${pendingCastX.maxX} mana available for X after paying the colored cost. Tap more mana sources to raise the limit.`;
     }
-    const xColor = xSpendColorForCard(pendingCastX.card);
-    const xColorName = xColor ? { W: "white", U: "blue", B: "black", R: "red", G: "green" }[xColor] : null;
-    body.textContent = xColorName
-      ? `You have ${pendingCastX.maxX} ${xColorName} mana available for X (only ${xColorName} mana may be spent on X). Tap more mana sources to raise the limit.`
-      : `You have ${pendingCastX.maxX} mana available for X after paying the colored cost. Tap more mana sources to raise the limit.`;
     const choiceButtons = [];
     for (let value = 0; value <= pendingCastX.maxX; value += 1) {
       choiceButtons.push(`<button type="button" class="prompt-choice-btn" data-x-choice="${value}">${value}</button>`);
     }
     choiceButtons.push('<button type="button" class="prompt-choice-btn" data-x-choice="custom">Custom...</button>');
-    steps.innerHTML = [
-      `<div>Cost: ${renderSymbolsInline(pendingCastX.card.mana_cost || "none")}</div>`,
-      `<div>Needed: ${formatManaSymbolsHtml(pendingCastX.manaRequirement || {})}</div>`,
-      `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
-      `<div class="prompt-choice-row">${choiceButtons.join("")}</div>`,
-    ].join("");
+    steps.innerHTML = (
+      pendingCastX.loyalty
+        ? [
+          `<div>Cost: ${escapeHtml(loyaltySymbolText(loyaltyCostOfChosenAbility(pendingCastX.card)))}</div>`,
+          `<div>Loyalty: ${currentLoyaltyOf(pendingCastX.card)}</div>`,
+          `<div class="prompt-choice-row">${choiceButtons.join("")}</div>`,
+        ]
+        : [
+          `<div>Cost: ${renderSymbolsInline(pendingCastX.card.mana_cost || "none")}</div>`,
+          `<div>Needed: ${formatManaSymbolsHtml(pendingCastX.manaRequirement || {})}</div>`,
+          `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
+          `<div class="prompt-choice-row">${choiceButtons.join("")}</div>`,
+        ]
+    ).join("");
     customRow.classList.toggle("hidden", !pendingCastX.awaitingCustomValue);
     customValue.max = String(pendingCastX.maxX);
     customValue.value = String(Math.min(Number(customValue.value || 0), pendingCastX.maxX));
@@ -5430,23 +5446,49 @@ function renderActivationPrompt() {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
-    title.textContent = `Choose an ability for ${pendingAbilityChoice.cardName}`;
-    body.textContent = "This permanent has more than one activated ability. Pick which one to activate.";
-    steps.innerHTML = [
-      `<div>Card: ${escapeHtml(pendingAbilityChoice.cardName)}</div>`,
-      `<div class="prompt-choice-row">${pendingAbilityChoice.options
-        .map(
-          (opt) => {
-            const disabledReason = abilityOptionDisabledReason(opt);
+    const choiceCard = pendingAbilityChoice.card;
+    if (pendingAbilityChoice.loyalty) {
+      // A loyalty menu reads like the card does: the cost symbol on the left as
+      // the button, the ability it buys spelled out beside it.
+      title.textContent = `Activate a loyalty ability of ${pendingAbilityChoice.cardName}`;
+      body.textContent = `Loyalty: ${currentLoyaltyOf(choiceCard)}`;
+      steps.innerHTML = [
+        `<div class="loyalty-ability-list">${pendingAbilityChoice.options
+          .map((opt) => {
+            const disabledReason = abilityOptionDisabledReason(opt, choiceCard);
             const disabledAttrs = disabledReason
               ? ` disabled title="${escapeHtml(disabledReason)}"`
               : "";
-            return `<button type="button" class="prompt-choice-btn" data-ability-choice="${opt.index}"${disabledAttrs}>` +
-              `${renderSymbolsInline(opt.cost)}: ${escapeHtml(opt.text)}</button>`;
-          },
-        )
-        .join("")}</div>`,
-    ].join("");
+            const sign = opt.loyalty && opt.loyalty.delta !== null && opt.loyalty.delta > 0 ? "up" : "down";
+            // The reason stays on the button's title so a hover still explains
+            // the greying, but it is not spelled out under the ability: a card
+            // that reads "−6" beside a loyalty of 4 has already said it.
+            return `<div class="loyalty-ability-row${disabledReason ? " is-disabled" : ""}">`
+              + `<button type="button" class="loyalty-cost-btn loyalty-${sign}" `
+              + `data-ability-choice="${opt.index}"${disabledAttrs}>${escapeHtml(opt.cost)}</button>`
+              + `<div class="loyalty-ability-text">${escapeHtml(opt.text)}</div></div>`;
+          })
+          .join("")}</div>`,
+      ].join("");
+    } else {
+      title.textContent = `Choose an ability for ${pendingAbilityChoice.cardName}`;
+      body.textContent = "This permanent has more than one activated ability. Pick which one to activate.";
+      steps.innerHTML = [
+        `<div>Card: ${escapeHtml(pendingAbilityChoice.cardName)}</div>`,
+        `<div class="prompt-choice-row">${pendingAbilityChoice.options
+          .map(
+            (opt) => {
+              const disabledReason = abilityOptionDisabledReason(opt, choiceCard);
+              const disabledAttrs = disabledReason
+                ? ` disabled title="${escapeHtml(disabledReason)}"`
+                : "";
+              return `<button type="button" class="prompt-choice-btn" data-ability-choice="${opt.index}"${disabledAttrs}>` +
+                `${renderSymbolsInline(opt.cost)}: ${escapeHtml(opt.text)}</button>`;
+            },
+          )
+          .join("")}</div>`,
+      ].join("");
+    }
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
     customOkBtn.disabled = true;
@@ -5626,18 +5668,81 @@ function resolveChannel(amount) {
     .catch((e) => updateActionHint(e.message, true));
 }
 
-// Parse the activated-ability lines ("{cost}: effect") of a card's oracle text.
+// A loyalty-ability cost line: "+1: …", "−2: …", "0: …", "−X: …" (CR 606.2).
+// Mirrors the engine's _LOYALTY_LINE_RE, and like it reads only a planeswalker's
+// lines: everything left of the colon must be the one loyalty symbol, so an
+// ordinary "{2}, {T}:" cost is never mistaken for one. Both minus signs are
+// accepted — printed oracle text uses U+2212, hand-typed text a hyphen.
+const LOYALTY_COST_RE = /^([+\-−]?\s*(?:\d+|[xX]))\s*:\s*(.+)$/;
+
+function isPlaneswalkerCard(card) {
+  if (!card || typeof card === "string") return false;
+  if (card.is_planeswalker === true) return true;
+  return /planeswalker/i.test(String(card.type || card.type_line || ""));
+}
+
+// The signed cost a loyalty symbol names (CR 606.4): how many counters
+// activating puts on (positive) or removes (negative). `xSign` is set instead of
+// `delta` when the amount is X, whose value the player chooses on activation.
+function loyaltyCostOf(costText) {
+  const m = String(costText || "").trim().match(/^([+\-−]?)\s*(\d+|[xX])$/);
+  if (!m) return null;
+  const sign = (m[1] === "-" || m[1] === "−") ? -1 : 1;
+  if (/^[xX]$/.test(m[2])) return { delta: null, xSign: sign };
+  return { delta: sign * Number(m[2]), xSign: null };
+}
+
+// Loyalty counters currently on a planeswalker, off the generic counters map.
+function currentLoyaltyOf(card) {
+  if (!card || typeof card === "string") return 0;
+  return Number(card.counters?.loyalty ?? 0);
+}
+
+// A loyalty cost back as the symbol the card prints it as ("+1", "−2", "0",
+// "−X"), for hints and log lines.
+function loyaltySymbolText(cost) {
+  if (!cost) return "";
+  if (cost.xSign !== null) return `${cost.xSign < 0 ? "−" : "+"}X`;
+  if (cost.delta > 0) return `+${cost.delta}`;
+  if (cost.delta < 0) return `−${-cost.delta}`;
+  return "0";
+}
+
+// The loyalty symbol on the ability being activated, for the flows below that
+// must not treat it as a mana cost. `__abilityIndex` is set on the synthetic
+// single-ability card resolveAbilityChoice builds, so this reads that one line.
+function loyaltyCostOfChosenAbility(card) {
+  if (!isPlaneswalkerCard(card)) return null;
+  if (card?.__loyaltyCost) return card.__loyaltyCost;
+  const options = getActivatedAbilityOptions(card);
+  return options.length === 1 ? (options[0].loyalty || null) : null;
+}
+
+// Parse the activated-ability lines ("{cost}: effect") of a card's oracle text,
+// plus a planeswalker's loyalty lines ("+1: effect").
 // Index matches the engine's order of supported activated abilities, so it can be
 // sent back as `ability_index` (Rock Hydra: 0 = {R} prevention, 1 = {R}{R}{R} +1/+1).
 function getActivatedAbilityOptions(card) {
   if (!card || typeof card === "string") return [];
   const options = [];
+  const planeswalker = isPlaneswalkerCard(card);
   let index = 0;
   const lines = activatedAbilityText(card).split("\n");
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
     const m = line.match(/^\s*((?:\{[^}]+\}[,\s]*)+):\s*(.+)$/);
-    if (!m) continue;
+    if (!m) {
+      // A loyalty cost is counters rather than mana, so its half of the line
+      // carries no symbols and the brace pattern above never matches it.
+      const lm = planeswalker ? line.trim().match(LOYALTY_COST_RE) : null;
+      if (!lm) continue;
+      const cost = lm[1].replace(/\s+/g, "");
+      options.push({
+        index, cost, text: lm[2].trim(), line: line.trim(), loyalty: loyaltyCostOf(cost),
+      });
+      index += 1;
+      continue;
+    }
     // Modal activated ability (Pyramids: "{2}: Choose one —" + bullets):
     // one option per bullet, sharing the cost — matching the engine, which
     // compiles each bullet as its own activated ability.
@@ -5730,8 +5835,48 @@ function abilityLineDisabledReason(line) {
   return activationTimingDisabledReason(line);
 }
 
+// Why one loyalty ability of `card` can't be activated right now, or null.
+// Mirrors the engine's gate in mixins/stack/activation.py, so a button this
+// greys out and a request the engine would refuse are the same set: the
+// sorcery-speed window and the once-per-turn limit (CR 606.3) rule out every
+// ability on the permanent, and a minus cost bigger than the loyalty on it
+// rules out that one (CR 606.6). The two pieces of state a client can't derive
+// — whether a loyalty ability was already used this turn, and whether the card
+// widens its own timing window — ride along on the permanent payload.
+//
+// The whole-permanent halves are also refused up front, before the menu opens,
+// so in practice this answers the per-ability half. Both stay here because
+// resolveAbilityChoice checks this one function before sending anything, and a
+// mirror missing a rule the engine has is how a button starts promising more
+// than the engine will do.
+function loyaltyAbilityDisabledReason(card, opt) {
+  const cost = opt?.loyalty;
+  if (!cost || !currentState || seat === null) return null;
+
+  if (!card?.loyalty_any_time) {
+    const myTurn = currentState.current_turn === seat;
+    const stackEmpty = !(currentState.stack || []).length;
+    if (!(myTurn && currentState.current_phase === "main" && stackEmpty)) {
+      return "Loyalty abilities can only be activated during a main phase of your turn with the stack empty (CR 606.3).";
+    }
+  }
+  if (card?.loyalty_ability_used_this_turn) {
+    return "This planeswalker has already activated a loyalty ability this turn (CR 606.3).";
+  }
+  // "−X" is affordable at X = 0 whatever the loyalty is; the X prompt caps the
+  // value at the counters actually on the permanent.
+  if (cost.delta !== null && cost.delta < 0) {
+    const loyalty = currentLoyaltyOf(card);
+    if (loyalty < -cost.delta) {
+      return `Not enough loyalty: this ability costs ${-cost.delta} and ${normalizeCardName(card)} has ${loyalty} (CR 606.6).`;
+    }
+  }
+  return null;
+}
+
 // Per-option gate for the multi-ability menu.
-function abilityOptionDisabledReason(opt) {
+function abilityOptionDisabledReason(opt, card) {
+  if (opt?.loyalty) return loyaltyAbilityDisabledReason(card, opt);
   return abilityLineDisabledReason(opt.line);
 }
 
@@ -5740,10 +5885,26 @@ function resolveAbilityChoice(optionIndex) {
   const pending = pendingAbilityChoice;
   const opt = pending.options.find((o) => o.index === optionIndex);
   if (!opt) return;
+  // The button was greyed out, so this is a keyboard or stale-render route into
+  // an option the engine would refuse. Say why instead of sending it.
+  const disabledReason = abilityOptionDisabledReason(opt, pending.card);
+  if (disabledReason) {
+    SFX.onError();
+    updateActionHint(`${pending.cardName}: ${disabledReason}`, true);
+    return;
+  }
   pendingAbilityChoice = null;
   // Recurse with a single-ability synthetic card so the normal target/cost flow
   // handles just the chosen ability; __abilityIndex is threaded into the action.
-  const singleAbilityCard = { ...pending.card, oracle_text: opt.line, __abilityIndex: opt.index };
+  // __loyaltyCost carries the chosen line's loyalty symbol, which the synthetic
+  // card's own text can no longer be indexed for — it holds one line, so
+  // re-parsing it would number that line 0 whichever ability was picked.
+  const singleAbilityCard = {
+    ...pending.card,
+    oracle_text: opt.line,
+    __abilityIndex: opt.index,
+    __loyaltyCost: opt.loyalty || null,
+  };
   // Multi-ability cards whose abilities target differently (Pyramids) carry a
   // per-ability spec; swap it in so the target flow prompts for THIS ability.
   const perAbilitySpecs = pending.card?.ability_target_specs;
@@ -5758,11 +5919,28 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   if (!cardName) return;
 
   // Cards with more than one activated ability (Rock Hydra, Basalt Monolith) must
-  // let the player choose which ability to use before paying any cost.
+  // let the player choose which ability to use before paying any cost. A
+  // planeswalker asks even when it has only one loyalty ability: the cost is
+  // spent out of the walker's own loyalty and the once-per-turn limit means
+  // there is no second chance, so it is never a choice to make on the player's
+  // behalf.
   if (!Number.isInteger(card?.__abilityIndex)) {
     const abilityOptions = getActivatedAbilityOptions(card);
-    if (abilityOptions.length >= 2) {
-      pendingAbilityChoice = { card, cardName, targetSeat, permanentIndex, options: abilityOptions };
+    const loyaltyMenu = abilityOptions.some((opt) => opt.loyalty);
+    // The once-per-turn half of CR 606.3 rules out every ability at once, so it
+    // is a refusal rather than a menu — a walker that has already gone this
+    // turn says so on selection instead of opening a list of dead buttons.
+    if (loyaltyMenu && card?.loyalty_ability_used_this_turn) {
+      SFX.onError();
+      updateActionHint(
+        `${cardName} has already activated a loyalty ability this turn (CR 606.3).`, true,
+      );
+      return;
+    }
+    if (abilityOptions.length >= (loyaltyMenu ? 1 : 2)) {
+      pendingAbilityChoice = {
+        card, cardName, targetSeat, permanentIndex, options: abilityOptions, loyalty: loyaltyMenu,
+      };
       renderActivationPrompt();
       return;
     }
@@ -5962,6 +6140,63 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       sourcePermanentIndex: permanentIndex, abilityIndex, ...pendingTargetFields(card),
     };
     renderActivationPrompt();
+    return;
+  }
+
+  // A loyalty cost is paid in counters, not mana (CR 606.4), so it skips both
+  // the {X} mana prompt and the pay-the-cost prompt below — those read the text
+  // left of the colon as mana symbols, and "+1" or "−X" is neither payable nor
+  // refusable that way. The engine moves the counters itself as the ability is
+  // activated, so all this has to send is which ability.
+  const loyaltyCost = loyaltyCostOfChosenAbility(card);
+  if (loyaltyCost) {
+    // "−X" (Ugin): X is chosen on activation and CR 606.6 caps it at the
+    // counters actually on the permanent, so the loyalty is the ceiling here —
+    // not the mana available, which is what the {X} prompt below computes.
+    if (loyaltyCost.xSign !== null) {
+      // A "+X" cost has no such ceiling — 606.6 bounds only removal — and no
+      // printed card carries one, so there is nothing to derive a range from.
+      // Refuse by name rather than offer a range of X = 0 that looks like an
+      // answer; a card that prints it can bring its own bound.
+      if (loyaltyCost.xSign > 0) {
+        SFX.onError();
+        updateActionHint(`${cardName}: a "+X" loyalty cost has no supported range of X.`, true);
+        return;
+      }
+      pendingCastX = {
+        kind: "cast_x",
+        card,
+        cardName,
+        targetSeat,
+        targetPermanentIndex: null,
+        targetStackIndex: null,
+        castAction: "activate",
+        activatePermanentIndex: permanentIndex,
+        activateAbilityIndex: abilityIndex,
+        manaRequirement: {},
+        costString: "",
+        costCard: null,
+        loyalty: true,
+        maxX: currentLoyaltyOf(card),
+        awaitingCustomValue: false,
+      };
+      renderActivationPrompt();
+      return;
+    }
+    const loyaltyBody = withPermanentId(
+      {
+        seat,
+        action: "activate",
+        permanent_name: cardName,
+        permanent_index: permanentIndex,
+        target_seat: targetSeat,
+      },
+      "permanent_id", seat, permanentIndex,
+    );
+    if (Number.isInteger(abilityIndex)) loyaltyBody.ability_index = abilityIndex;
+    sendAction(loyaltyBody)
+      .then(() => updateActionHint(`Activated ${cardName}'s ${loyaltySymbolText(loyaltyCost)} ability.`))
+      .catch((e) => updateActionHint(e.message, true));
     return;
   }
 

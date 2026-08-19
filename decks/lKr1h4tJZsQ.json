@@ -1,0 +1,68 @@
+{
+  "id": "lKr1h4tJZsQ",
+  "name": "M21 Basri's Battalion",
+  "description": "Mono-white soldiers that grow: +1/+1 counters, anthems and two Basri planeswalkers. (Core Set 2021 / White)",
+  "format": "casual",
+  "cards": [
+    {
+      "name": "Selfless Savior",
+      "count": 4
+    },
+    {
+      "name": "Speaker of the Heavens",
+      "count": 4
+    },
+    {
+      "name": "Adherent of Hope",
+      "count": 4
+    },
+    {
+      "name": "Daybreak Charger",
+      "count": 4
+    },
+    {
+      "name": "Makeshift Battalion",
+      "count": 4
+    },
+    {
+      "name": "Basri's Lieutenant",
+      "count": 2
+    },
+    {
+      "name": "Baneslayer Angel",
+      "count": 2
+    },
+    {
+      "name": "Feat of Resistance",
+      "count": 4
+    },
+    {
+      "name": "Basri's Solidarity",
+      "count": 2
+    },
+    {
+      "name": "Glorious Anthem",
+      "count": 2
+    },
+    {
+      "name": "Basri Ket",
+      "count": 2
+    },
+    {
+      "name": "Basri, Devoted Paladin",
+      "count": 2
+    },
+    {
+      "name": "Plains",
+      "count": 23
+    },
+    {
+      "name": "Fabled Passage",
+      "count": 1
+    }
+  ],
+  "sideboard": [],
+  "commander": [],
+  "created_at": 1787112603.0640013,
+  "updated_at": 1787112603.0640013
+}

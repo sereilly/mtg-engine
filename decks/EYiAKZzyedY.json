@@ -1,0 +1,64 @@
+{
+  "id": "EYiAKZzyedY",
+  "name": "M21 Vito's Bloodline",
+  "description": "Mono-black sacrifice and drain: lifelink and Radiant Fountain turn every point gained into life lost across the table. (Core Set 2021 / Black)",
+  "format": "casual",
+  "cards": [
+    {
+      "name": "Archfiend's Vessel",
+      "count": 4
+    },
+    {
+      "name": "Spirit of Malevolence",
+      "count": 4
+    },
+    {
+      "name": "Deathbloom Thallid",
+      "count": 4
+    },
+    {
+      "name": "Vito, Thorn of the Dusk Rose",
+      "count": 3
+    },
+    {
+      "name": "Blood Glutton",
+      "count": 3
+    },
+    {
+      "name": "Goremand",
+      "count": 2
+    },
+    {
+      "name": "Village Rites",
+      "count": 4
+    },
+    {
+      "name": "Eliminate",
+      "count": 4
+    },
+    {
+      "name": "Grasp of Darkness",
+      "count": 3
+    },
+    {
+      "name": "Witch's Cauldron",
+      "count": 3
+    },
+    {
+      "name": "Sanctum of Stone Fangs",
+      "count": 2
+    },
+    {
+      "name": "Swamp",
+      "count": 22
+    },
+    {
+      "name": "Radiant Fountain",
+      "count": 2
+    }
+  ],
+  "sideboard": [],
+  "commander": [],
+  "created_at": 1787112603.0649729,
+  "updated_at": 1787112603.064973
+}
