@@ -16,13 +16,13 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 79.1% | 78.1% | 42.3% | 150 |
-| LEB | 292 | 389 | 79.2% | 78.1% | 42.4% | 151 |
-| 2ED | 292 | 389 | 79.2% | 78.1% | 42.4% | 151 |
+| LEA | 290 | 388 | 79.4% | 78.4% | 42.3% | 150 |
+| LEB | 292 | 389 | 79.4% | 78.4% | 42.4% | 151 |
+| 2ED | 292 | 389 | 79.4% | 78.4% | 42.4% | 151 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
-| 3ED | 296 | 389 | 79.7% | 78.4% | 43.4% | 152 |
+| 3ED | 296 | 389 | 79.9% | 78.7% | 43.4% | 152 |
 | M21 | 285 | 503 | 86.7% | 85.7% | 60.6% | 236 |
-| **All (shipped)** | **1533** | **2166** | **80.3%** | **79.2%** | **46.7%** | **876** |
+| **All (shipped)** | **1533** | **2166** | **80.5%** | **79.4%** | **46.7%** | **876** |
 
 ## Backlog — failure reasons
 
@@ -30,7 +30,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 194 | 73 | expected a subject |  |
+| 190 | 72 | expected a subject |  |
 | 84 | 28 | unrecognized effect verb |  |
 | 40 | 21 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**267 / 603 tracked rules covered (44%)** — 1250 tests, 0 unannotated.
+**267 / 603 tracked rules covered (44%)** — 1252 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -157,7 +157,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **106.1** Mana is the primary resource in the game. Players spend mana to pay costs, usually when casting s... *(2 tests, subrules b)*
 - [ ] **106.2** Mana is represented by mana symbols (see rule 107.4). Mana symbols also represent mana costs (see...
 - [x] **106.3** Mana is produced by the effects of mana abilities (see rule 605). It may also be produced by the ... *(2 tests)*
-- [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(3 tests)*
+- [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(4 tests)*
 - [ ] **106.5** If an ability would produce one or more mana of an undefined type, it produces no mana instead.
 - [ ] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona...
 - [ ] **106.7** Some abilities produce mana based on the type of mana another permanent or permanents “could prod...
@@ -722,7 +722,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(14 tests, subrules bchn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(16 tests, subrules bcdhn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
