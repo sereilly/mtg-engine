@@ -407,3 +407,61 @@ the chosen modes through their ordinary targeting prompts one at a time.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Fifteen new tests, all fifteen watched to fail on the round-134 engine.
+
+## M21 is 285 of 285, and the promotion gate is not clean
+
+*(2026-08-18.)* Every M21 card is supported. The Phase 4 rehearsal — move the
+manifest entry to `sets`, run everything before committing — was done and then
+**taken back out**, because it found three cards the promotion would have
+shipped a false claim about. Recorded here rather than half-applied, the way
+Sublime Epiphany was before round 135.
+
+Promotion widens every `load_catalog()`-driven guard at once and lets
+`scripts/parse_coverage.py` see the set for the first time, so this is where the
+debt surfaces by construction. What it found, in the order it fell out:
+
+**Mechanical, and done in the rehearsal.** The two ratchets and the
+behaviour-class snapshot want `--accept` (grammar coverage rises to
+**parsed 79.7% / executed 46.1%**, and hook reliance *falls* from 24.0% to
+**13.9%** — M21 is a modern set the grammar reads well, so the hooked share of
+the pool drops sharply). `test_no_hollow_support.py`'s "the scan reaches the
+measured set" is superseded once nothing is measured, and wants rewriting to ask
+about the manifest's **roles** rather than about one of them.
+
+**Real gaps in the shared tables, each with a card behind it.**
+
+* 29 triggered and 16 activated instruction kinds fall back to the category
+  default in `engine/effect_labels.py`. M21 is the first set whose abilities the
+  grammar reads wholesale, so this is where the vocabulary the shipped pool
+  built gets applied to a set it did not come from.
+* `engine/targeting.py` has no **planeswalker** picker ("target planeswalker",
+  Sparkhunter Masticore) and no spec for `target_loses_life` or
+  `name_and_strip`. The cast-target guard also over-matched: a loyalty ability,
+  a modal bullet and a static "spells that **target** this creature cost more"
+  are all lines whose target is not a cast target, and M21 brought the first
+  planeswalkers into the pool.
+* `legality._ACTIVATED_LINE_RE` requires a leading mana symbol, so
+  "Sacrifice this creature:" (Selfless Savior) and "Tap two untapped Spirits you
+  control:" (Shacklegeist) read as cast-time effects.
+* `scripts/parse_coverage.py` has no channel for a **loyalty ability**, for an
+  Aura or Equipment's attached-effect line, or for
+  `target_restrictions` / `named_protection` / `enter_effects`. Adding those
+  five took the unclaimed list from ~70 sentences to three.
+
+**The blocker.** Those three are not channel gaps — they are cards that compile
+**supported while carrying a dead ability**, which is the hollow-support
+contract's own failure mode:
+
+* Animal Sanctuary — `{2}, {T}: Put a +1/+1 counter on target Bird, Cat, Dog,
+  Goat, Ox, or Snake.` (a six-subtype union)
+* Chromatic Orrery — `{5}, {T}: Draw a card for each color among permanents you
+  control.`
+* Fabled Passage — `{T}, Sacrifice this land: Search your library for a basic
+  land card, put it onto the battlefield tapped, then shuffle. Then if you
+  control four or more lands, untap that land.`
+
+Each has a second ability the grammar does read, which is why the card passes
+the gate at all: the artifact/land support gate is **any-of**, where the
+planeswalker gate is all-of. Two things to decide before promotion, and they are
+not the same decision — write the three productions, or make the permanent gate
+all-of and let the cards report unsupported until someone does.
