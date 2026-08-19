@@ -8689,6 +8689,10 @@ function renderHandFan(containerId, cards, options = {}) {
 
     const slot = document.createElement("div");
     slot.className = "hand-fan-slot";
+    // The hand index, not the fan position: the viewer's carousel fans a window
+    // of the hand, so a card arriving at index 9 may sit in slot 5 or in no slot
+    // at all. Zone -> hand flights land on the slot addressed this way.
+    slot.dataset.handIndex = String(index);
     // Top-anchored opponent fans tuck their face-down cards into the top edge
     // (mirror of the viewer's bottom tuck): only the bottom half shows until a
     // card is revealed (rendered face-up), which drops the tuck for full view.
@@ -8708,7 +8712,15 @@ function renderHandFan(containerId, cards, options = {}) {
 
     container.appendChild(slot);
     slots.push(slot);
-    if (newIndexSet.has(index)) enteringCardEls.push(cardEl);
+    // A card whose zone -> hand flight is still in the air belongs to the clone
+    // until it lands. One state change renders the hand several times over, and
+    // every render builds a fresh element that knows nothing about the flight —
+    // so the hold is re-applied here rather than held on the element.
+    if (window.FX && handSlotsInFlight.has(handFlightKey(containerId, index))) {
+      FX.holdForFlight(cardEl);
+    } else if (newIndexSet.has(index)) {
+      enteringCardEls.push(cardEl);
+    }
   });
 
   if (enteringCardEls.length && window.FX) FX.handEnter(enteringCardEls);
@@ -10653,6 +10665,283 @@ function animateDiscards(prev, next, viewerSeat) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Zone -> hand flights (the mirror of the discard flight above)
+// ---------------------------------------------------------------------------
+
+// Public zones a card can arrive in hand from, in the order an arriving card
+// looks for the zone it left. The battlefield comes first because a bounce is
+// both the commonest source and the only one with a per-card screen position;
+// the library is not here because nothing names the card that left it — a draw
+// is inferred from the deck count instead.
+const HAND_SOURCE_ZONES = ["battlefield", "graveyard", "exile", "ante", "sideboard"];
+// A mass return (Evacuation-style) would otherwise fire one clone per card.
+const HAND_FLIGHT_MAX = 8;
+const HAND_FLIGHT_STAGGER_MS = 90;
+const HAND_FLIGHT_MS = 460;
+
+// Indices of cards present in nextHand that weren't in prevHand, matched
+// greedily by name so duplicates resolve correctly — the arrival half of
+// removedHandIndices, used to pick which hand slot a zone card flies into.
+function addedHandIndices(prevHand, nextHand) {
+  const prevCounts = {};
+  for (const c of prevHand || []) {
+    const k = normalizeCardName(c) || "<hidden>";
+    prevCounts[k] = (prevCounts[k] || 0) + 1;
+  }
+  const added = [];
+  (nextHand || []).forEach((c, i) => {
+    const k = normalizeCardName(c) || "<hidden>";
+    if (prevCounts[k] > 0) prevCounts[k] -= 1;
+    else added.push(i);
+  });
+  return added;
+}
+
+// The same multiset diff over a public zone list: {index, card} for every entry
+// of `before` that `after` no longer has. `index` is the position in `before`,
+// which for a battlefield list is the permanent index the canvas keys by.
+function removedZoneEntries(before, after) {
+  const afterCounts = new Map();
+  for (const c of after || []) {
+    const k = normalizeCardName(c);
+    afterCounts.set(k, (afterCounts.get(k) || 0) + 1);
+  }
+  const out = [];
+  (before || []).forEach((card, index) => {
+    const k = normalizeCardName(card);
+    const n = afterCounts.get(k) || 0;
+    if (n > 0) afterCounts.set(k, n - 1);
+    else out.push({ index, card });
+  });
+  return out;
+}
+
+// Where on screen a card leaving `zone` departs from: the permanent's own slot
+// for a bounce, the zone's canvas pile for everything else.
+function handFlightSourcePoint(seat, zone, index) {
+  if (!battlefieldCanvas) return null;
+  if (zone === "battlefield") return battlefieldCanvas.getCardPageCenter(seat, index);
+  return battlefieldCanvas.getZonePileClientPoint(seat, zone);
+}
+
+// Detect cards that arrived in a hand between two states and work out where
+// each one flies from. Must be called BEFORE renderBoard, while the canvas
+// still holds the previous state: the bounced permanent is still at its slot,
+// and a graveyard the return just emptied still has a pile to leave from (a
+// pile disappears the moment its zone is empty).
+function collectHandArrivalFlights(prev, next, viewerSeat) {
+  if (!prev || !next || next.pregame || prev.pregame) return [];
+  const seatCount = Array.isArray(next.players) ? next.players.length : 0;
+  if (!seatCount) return [];
+
+  // What every seat lost from every public zone, so an arrival can be matched
+  // to the card that left. Claimed entries are struck off, so two copies
+  // arriving together take two different sources.
+  const removals = [];
+  for (let s = 0; s < seatCount; s++) {
+    for (const zone of HAND_SOURCE_ZONES) {
+      for (const gone of removedZoneEntries(prev.players?.[s]?.[zone], next.players?.[s]?.[zone])) {
+        removals.push({ seat: s, zone, index: gone.index, card: gone.card });
+      }
+    }
+  }
+  const claimed = new Set();
+  const takeRemoval = (match) => {
+    const i = removals.findIndex((r, idx) => !claimed.has(idx) && match(r));
+    if (i < 0) return null;
+    claimed.add(i);
+    return removals[i];
+  };
+
+  const flights = [];
+  for (let s = 0; s < seatCount; s++) {
+    const added = addedHandIndices(prev.players?.[s]?.hand, next.players?.[s]?.hand);
+    if (added.length === 0) continue;
+    // How many of this seat's arrivals the deck can account for. Only the count
+    // is public, so this is all a draw ever leaves behind.
+    let draws = Math.max(
+      0,
+      (prev.players?.[s]?.library_count ?? 0) - (next.players?.[s]?.library_count ?? 0)
+    );
+
+    for (const handIndex of added) {
+      if (flights.length >= HAND_FLIGHT_MAX) break;
+      const card = next.players?.[s]?.hand?.[handIndex];
+      const name = normalizeCardName(card);
+      // An opponent's hand is card backs, so a hidden arrival can only be
+      // matched by seat: a draw first, then anything else that seat lost.
+      const hidden = !name || name === "<hidden>";
+      let source = null;
+      if (hidden) {
+        if (draws > 0) {
+          draws -= 1;
+          source = { seat: s, zone: "library", index: null, card: null };
+        } else {
+          source = takeRemoval((r) => r.seat === s);
+        }
+      } else {
+        // Prefer this seat's own zones, then anyone else's: a card returns to
+        // its OWNER's hand, so an opponent's board can be where it comes from.
+        source =
+          takeRemoval((r) => r.seat === s && normalizeCardName(r.card) === name) ||
+          takeRemoval((r) => normalizeCardName(r.card) === name);
+        if (!source && draws > 0) {
+          draws -= 1;
+          source = { seat: s, zone: "library", index: null, card: null };
+        }
+      }
+      if (!source) continue;
+      const point = handFlightSourcePoint(source.seat, source.zone, source.index);
+      // Nothing on screen to leave from (a zone with no pile, a permanent the
+      // canvas never placed): no flight, and the ordinary hand entrance plays.
+      if (!point) continue;
+      flights.push({
+        seat: s,
+        handIndex,
+        point,
+        // Face-up only where the viewer was already entitled to it: their own
+        // arriving card, or a card that was public in the zone it left. A card
+        // drawn into an opponent's hand flies as a back.
+        imageUri: hidden ? normalizeImageUri(source.card) : normalizeImageUri(card),
+      });
+    }
+  }
+  return flights;
+}
+
+// The pose a flight has to land in: where the hand slot's card sits, how big it
+// is, and how far the fan has rotated it. Size comes from the layout box and
+// position from the rendered one — the slot is fanned and tilted, so its
+// bounding rect is the box AROUND the card, a good third wider than the card.
+// Landing on the bounding rect instead would visibly shrink the card at the
+// moment the clone hands off to the real one.
+function handSlotLandingPose(slot, cardEl) {
+  const box = cardEl.getBoundingClientRect();
+  const w = cardEl.offsetWidth || box.width;
+  const h = cardEl.offsetHeight || box.height;
+  return {
+    cx: box.left + box.width / 2,
+    cy: box.top + box.height / 2,
+    w,
+    h,
+    angle: parseFloat(slot.style.getPropertyValue("--fan-angle")) || 0,
+  };
+}
+
+// Animate one card flying from a screen point into its hand slot, then hand the
+// slot back to the real card. Built in the landing pose and animated back from
+// the source, so the last frame is exactly the card it replaces.
+function flyCardToHand(point, pose, imageUri, onLand) {
+  const fly = document.createElement("div");
+  fly.className = "hand-fly card";
+  fly.style.position = "fixed";
+  fly.style.left = `${pose.cx - pose.w / 2}px`;
+  fly.style.top = `${pose.cy - pose.h / 2}px`;
+  fly.style.width = `${pose.w}px`;
+  fly.style.height = `${pose.h}px`;
+  fly.style.margin = "0";
+  fly.style.zIndex = "9999";
+  fly.style.pointerEvents = "none";
+
+  const img = document.createElement("img");
+  img.src = imageUri || "/images/card_back.webp";
+  img.alt = "";
+  fly.appendChild(img);
+  document.body.appendChild(fly);
+
+  const dx = point.x - pose.cx;
+  const dy = point.y - pose.cy;
+  // Zone piles and battlefield slots render much smaller than a hand card, so
+  // the card grows over the flight instead of arriving the size it left at.
+  const startScale = pose.w > 0 ? Math.min(1, 46 / pose.w) : 0.55;
+
+  const anim = fly.animate(
+    [
+      {
+        transform: `translate(${dx}px, ${dy}px) scale(${startScale}) rotate(${pose.angle + 14}deg)`,
+        opacity: 0.35,
+      },
+      { transform: `translate(0px, 0px) scale(1) rotate(${pose.angle}deg)`, opacity: 1 },
+    ],
+    // The discard flight's easing, run the other way: the card pulls out of the
+    // zone slowly enough to be read, then settles into the fan.
+    { duration: HAND_FLIGHT_MS, easing: "cubic-bezier(0.4, 0.1, 0.3, 1)", fill: "forwards" }
+  );
+  const land = () => {
+    onLand();
+    fly.remove();
+  };
+  anim.onfinish = land;
+  anim.oncancel = land;
+}
+
+// Hand slots whose card is currently mid-flight, as `fan#index`. Read by
+// renderHandFan on every render, which is the point: the DOM element is not a
+// place to keep this, because the renders that arrive during a flight replace
+// it. Held here rather than on the flight so a slot re-rendered five times
+// stays hidden all five.
+const handSlotsInFlight = new Set();
+
+function handFlightKey(containerId, handIndex) {
+  return `${containerId}#${handIndex}`;
+}
+
+// The elements currently showing a seat's hand index, or null when the hand no
+// longer has one (scrolled out of the viewer's carousel, or the card left again
+// before its flight landed).
+//
+// Two of them, because createCardElement returns a WRAPPER — the card plus its
+// mana-cost badge. `holdEl` is that wrapper, everything the slot shows and so
+// everything a flight has to hide; hiding the `.card` alone leaves the cost
+// badge hanging in an apparently empty slot. `cardEl` is the card face itself,
+// which is what the landing pose is measured from.
+function handSlotParts(containerId, handIndex) {
+  const container = document.getElementById(containerId);
+  const slot = container?.querySelector(`.hand-fan-slot[data-hand-index="${handIndex}"]`);
+  if (!slot) return null;
+  const holdEl = slot.firstElementChild || slot;
+  return { slot, holdEl, cardEl: slot.querySelector(".card") || holdEl };
+}
+
+// Launch the collected flights. Must be called AFTER renderBoard: the slot each
+// card lands on only exists once the hand has been re-rendered.
+function playHandArrivalFlights(flights, state, viewerSeat) {
+  if (!flights || flights.length === 0) return;
+  flights.forEach((flight, i) => {
+    const containerId = handContainerIdForSeat(state, viewerSeat, flight.seat);
+    const found = handSlotParts(containerId, flight.handIndex);
+    // Nothing on screen to land on (a hand scrolled out of its carousel window).
+    if (!found) return;
+    const key = handFlightKey(containerId, flight.handIndex);
+    handSlotsInFlight.add(key);
+    if (window.FX) FX.holdForFlight(found.holdEl);
+    // Measured after the hold, which clears the entrance animation's first
+    // frame — otherwise the flight would aim at a slot mid-tween.
+    const pose = handSlotLandingPose(found.slot, found.cardEl);
+
+    // Released against whatever element holds the slot when the flight lands,
+    // never the one measured above: renders in between will have replaced it.
+    const land = () => {
+      if (!handSlotsInFlight.delete(key)) return;
+      const current = handSlotParts(containerId, flight.handIndex);
+      if (!current) return;
+      if (window.FX) FX.releaseFlight(current.holdEl);
+      else current.holdEl.style.opacity = "";
+    };
+
+    if (pose.w === 0 || pose.h === 0) {
+      land();
+      return;
+    }
+    const delay = i * HAND_FLIGHT_STAGGER_MS;
+    setTimeout(() => flyCardToHand(flight.point, pose, flight.imageUri, land), delay);
+    // A hold that outlived its flight would leave a card invisible in the hand,
+    // which is a worse failure than a missed animation — so it always expires.
+    setTimeout(land, delay + HAND_FLIGHT_MS + 500);
+  });
+}
+
 function renderState(state, { skipStaleCheck = false } = {}) {
   // Discard stale responses: when a slow HTTP response arrives after a faster SSE+getState
   // has already applied newer state, log length is monotonically increasing so we can use
@@ -10728,7 +11017,12 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     );
   }
   animateDiscards(prevStateForDiscard, state, viewerSeat);
+  // Collected before the render (the source zone is still on the canvas as it
+  // was) and played after it (the hand slot to land on only exists once the
+  // hand has been rebuilt).
+  const handArrivals = collectHandArrivalFlights(prevStateForDiscard, state, viewerSeat);
   renderBoard(state);
+  playHandArrivalFlights(handArrivals, state, viewerSeat);
   updateLobbyOverlay(state);
   if (wasInPregame && !state?.pregame) {
     updateActionHint("Drag from your hand to cast. The battlefield arranges itself automatically.");

@@ -190,6 +190,31 @@
     });
   };
 
+  // A card arriving in hand from a zone flies there as a clone (see
+  // flyCardToHand in app.js), and that flight IS its entrance — so the real
+  // slot underneath must not also play FX.handEnter, or the card appears twice.
+  // Cancels that tween and holds the slot invisible until the flight lands.
+  //
+  // The caller re-applies this on every render while the flight is in the air:
+  // one state change re-renders the hand several times, and each render builds
+  // a fresh element that knows nothing about the flight.
+  FX.holdForFlight = function (el) {
+    if (!el) return;
+    if (hasAnime) anime.remove(el);
+    // Clear before hiding: handEnter may already have written its first frame's
+    // transform, and the caller measures the slot's settled rect right after.
+    clearAnimStyles(el);
+    el.style.opacity = "0";
+  };
+
+  // Hand the slot back to the real card. Instant, not a fade: the clone lands
+  // on the slot at the same size and angle, so the swap must not be visible.
+  FX.releaseFlight = function (el) {
+    if (!el) return;
+    if (hasAnime) anime.remove(el);
+    clearAnimStyles(el);
+  };
+
   // Delegated tactile press feedback for all buttons (one listener).
   FX.pressFeedback = function () {
     if (!hasAnime) return;

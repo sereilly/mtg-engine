@@ -12,8 +12,15 @@
 // through its OWN automatic camera so every quadrant independently fits its
 // permanents and zone piles regardless of how crowded the other seats are.
 
-const BF_CARD_W = 80;
+// The battlefield face is drawn deliberately WIDER than a printed card's 5:7.
+// It isn't a photo of a card: the art window is a landscape art_crop cover-fit
+// into a portrait hole, so every pixel of extra width is art that was being
+// cropped away. BF_FULL_CARD_W is the true printed ratio, used by the renders
+// that draw the whole printed card image (the stack cascade, cards in flight),
+// where the same stretch would distort a real frame instead of revealing art.
+const BF_CARD_W = 100;
 const BF_CARD_H = 112;
+const BF_FULL_CARD_W = Math.round((BF_CARD_H * 5) / 7);
 // Glow tint for each mana symbol's wedge in the land mana-choice fan.
 const BF_MANA_GLOW = { W: "#f4eec6", U: "#4a90d9", B: "#9a6bbf", R: "#e0483b", G: "#46b95f", C: "#c2c6cf" };
 // Mana fan layout (world units / ms).
@@ -587,7 +594,7 @@ class BattlefieldCanvas {
   _hitTestStack(wx, wy) {
     const hitAt = (i) => {
       const v = this.stackVisuals[i];
-      const w = BF_CARD_W * v.scale;
+      const w = BF_FULL_CARD_W * v.scale;
       const h = BF_CARD_H * v.scale;
       return wx >= v.cx - w / 2 && wx <= v.cx + w / 2 && wy >= v.cy - h / 2 && wy <= v.cy + h / 2
         ? { index: i, item: v.item }
@@ -1379,7 +1386,7 @@ class BattlefieldCanvas {
     if (!n) return;
     const rect = this._visibleWorldRect();
     const sc = BF_STACK_SCALE / this.zoom;
-    const w = BF_CARD_W * sc;
+    const w = BF_FULL_CARD_W * sc;
     const offX = BF_STACK_OFFSET_X / this.zoom;
     const offY = BF_STACK_OFFSET_Y / this.zoom;
     // Extra right margin keeps the cascade clear of the DOM mana column
@@ -1789,10 +1796,13 @@ class BattlefieldCanvas {
         const hover = { x: slot.x, y: slot.y - BF_RESOLVE_HOVER_LIFT };
         const camSeat = this._isFfa() ? this._seatForWorldPoint(slot.x, slot.y) : null;
         this.suppressedKeys.add(landed.key);
+        // The card grows into its permanent shape over the flight, so it is
+        // already wearing the battlefield face while it hovers and slams — and
+        // the fx it hands over to at the end is the same picture.
         spawn(camSeat, (sx, sy, ss) => [
-          { x0: sx, y0: sy, s0: ss, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_FLY_MS, ease: _easeOutCubic, lifted: true },
-          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_HOVER_MS, ease: null, lifted: true },
-          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: slot.x, y1: slot.y, s1: 1, a1: 1, dur: BF_RESOLVE_SLAM_MS, ease: _easeInQuad },
+          { x0: sx, y0: sy, s0: ss, a0: 1, m0: 0, m1: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_FLY_MS, ease: _easeOutCubic, lifted: true },
+          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, m0: 1, m1: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_HOVER_MS, ease: null, lifted: true },
+          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, m0: 1, m1: 1, x1: slot.x, y1: slot.y, s1: 1, a1: 1, dur: BF_RESOLVE_SLAM_MS, ease: _easeInQuad },
         ], { suppressKey: landed.key, impactAt: slot });
         return;
       }
@@ -1838,9 +1848,9 @@ class BattlefieldCanvas {
         type: "card", card: item.card, camSeat, suppressKey: item.key, impactAt: slot,
         stageIdx: 0, stageStart: null, x: from.x, y: from.y, scale: from.scale, alpha: 1,
         stages: [
-          { x0: from.x, y0: from.y, s0: from.scale, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_FLY_MS, ease: _easeOutCubic, lifted: true },
-          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_HOVER_MS, ease: null, lifted: true },
-          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: slot.x, y1: slot.y, s1: 1, a1: 1, dur: BF_RESOLVE_SLAM_MS, ease: _easeInQuad },
+          { x0: from.x, y0: from.y, s0: from.scale, a0: 1, m0: 0, m1: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_FLY_MS, ease: _easeOutCubic, lifted: true },
+          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, m0: 1, m1: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_HOVER_MS, ease: null, lifted: true },
+          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, m0: 1, m1: 1, x1: slot.x, y1: slot.y, s1: 1, a1: 1, dur: BF_RESOLVE_SLAM_MS, ease: _easeInQuad },
         ],
       });
     }
@@ -1877,6 +1887,10 @@ class BattlefieldCanvas {
       fx.y = p.y;
       fx.scale = _lerp(stage.s0, stage.s1, e);
       fx.alpha = _lerp(stage.a0, stage.a1, e);
+      // Stages that never reach the battlefield (a fizzle to the graveyard, an
+      // ability fading out, a card sitting out its stack dwell) declare no
+      // m0/m1 and so stay the printed card the whole way.
+      fx.morph = _lerp(stage.m0 || 0, stage.m1 || 0, e);
       fx.lifted = !!stage.lifted;
       if (t >= 1 && fx.stageIdx === fx.stages.length - 1) done.push(fx);
     }
@@ -2534,6 +2548,11 @@ class BattlefieldCanvas {
   }
 
   // Returns {x, y} in page (client) coordinates for the center of a card.
+  // Lets app.js aim DOM animations (a bounce flying back to hand) at the
+  // permanent's real on-screen position. Projected through the camera of the
+  // viewport the card RENDERS in, not the viewer's: in Free-For-All a world
+  // point only means anything through its own quadrant's camera, and an aura
+  // rides into the quadrant of whatever it enchants.
   getCardPageCenter(seat, idx) {
     const key = `${seat}-${idx}`;
     const pos = this._renderPos(key);
@@ -2542,7 +2561,8 @@ class BattlefieldCanvas {
     const tapped = item?.card?.tapped;
     const wx = tapped ? pos.x + BF_CARD_H / 2 : pos.x + BF_CARD_W / 2;
     const wy = tapped ? pos.y + BF_CARD_W / 2 : pos.y + BF_CARD_H / 2;
-    const canvasPos = this.worldToCanvas(wx, wy);
+    const camSeat = item ? this._itemRegionSeat(item) : seat;
+    const canvasPos = this._withCam(this._camFor(camSeat ?? seat), () => this.worldToCanvas(wx, wy));
     return this._canvasToPage(canvasPos.x, canvasPos.y);
   }
 
@@ -2817,7 +2837,7 @@ class BattlefieldCanvas {
   // state glow. Used for spells in flight and sitting on the stack — where the
   // full Magic card reads better than the Arena battlefield face.
   _drawFullCardFace(ctx, x, y, w, h, card, flags) {
-    const { hovered, selected, targeting } = flags || {};
+    const { hovered, selected, targeting, noShadow } = flags || {};
     const url = card?.large_image_uri || card?.image_uri || null;
     const img = url ? this._loadImage(url) : null;
     const R = 5;
@@ -2825,14 +2845,16 @@ class BattlefieldCanvas {
     ctx.save();
 
     // ---- Drop shadow ----
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.6)";
-    ctx.shadowBlur = (hovered ? 26 : 13) / this.zoom;
-    ctx.shadowOffsetY = (hovered ? 11 : 6) / this.zoom;
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    this._roundRect(ctx, x, y, w, h, R);
-    ctx.fill();
-    ctx.restore();
+    if (!noShadow) {
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.6)";
+      ctx.shadowBlur = (hovered ? 26 : 13) / this.zoom;
+      ctx.shadowOffsetY = (hovered ? 11 : 6) / this.zoom;
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      this._roundRect(ctx, x, y, w, h, R);
+      ctx.fill();
+      ctx.restore();
+    }
 
     // ---- Clipped full card image ----
     ctx.save();
@@ -2874,7 +2896,7 @@ class BattlefieldCanvas {
   }
 
   _drawCardFace(ctx, x, y, w, h, card, flags, creatureCard) {
-    const { selected, attacking, hovered, targeting, pileCount, emblem, enchantTargetHover, fullImage } = flags || {};
+    const { selected, attacking, hovered, targeting, pileCount, emblem, enchantTargetHover, fullImage, noShadow } = flags || {};
     // Spells in flight and on the stack render as their original full card image
     // (printed frame/art/text baked in) rather than the Arena battlefield face.
     if (fullImage) {
@@ -2900,17 +2922,22 @@ class BattlefieldCanvas {
     // face can fade together when the creature is unblockable (a "phasing" look),
     // while the state-glow border and status badges below stay full opacity.
     ctx.save();
-    if (isUnblockable) ctx.globalAlpha = 0.5;
+    // Multiplied, not assigned: a card mid-flight is already drawing under an
+    // fx alpha, and an unblockable one must fade with it rather than jump to
+    // half opacity of its own.
+    if (isUnblockable) ctx.globalAlpha *= 0.5;
 
     // ---- Drop shadow onto the table ----
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.6)";
-    ctx.shadowBlur = (hovered ? 26 : 13) / this.zoom;
-    ctx.shadowOffsetY = (hovered ? 11 : 6) / this.zoom;
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    this._roundRect(ctx, x, y, w, h, R);
-    ctx.fill();
-    ctx.restore();
+    if (!noShadow) {
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.6)";
+      ctx.shadowBlur = (hovered ? 26 : 13) / this.zoom;
+      ctx.shadowOffsetY = (hovered ? 11 : 6) / this.zoom;
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      this._roundRect(ctx, x, y, w, h, R);
+      ctx.fill();
+      ctx.restore();
+    }
 
     // ---- Frame panel: beveled gradient in the card's color ----
     const panel = ctx.createLinearGradient(0, y, 0, y + h);
@@ -4245,7 +4272,7 @@ class BattlefieldCanvas {
       ? this._withCam(viewerCam, () => this.worldToCanvas(v.cx, v.cy))
       : { x: v.cx, y: v.cy };
     // Half the stack card, in whichever space we're drawing in.
-    const fromR = BF_CARD_W * v.scale * 0.5 * (screenSpace ? viewerCam.zoom : 1);
+    const fromR = BF_FULL_CARD_W * v.scale * 0.5 * (screenSpace ? viewerCam.zoom : 1);
     // An identity camera keeps _drawArrow's /zoom sizing screen-constant.
     const screenCam = { x: 0, y: 0, zoom: 1 };
     const now = performance.now();
@@ -4310,7 +4337,7 @@ class BattlefieldCanvas {
       // hovered card, so it needs the viewer's camera like the origin does.
       const tv = this.stackVisuals[t.index];
       if (!tv) return null;
-      return project(this.viewerSeat, { x: tv.cx, y: tv.cy }, BF_CARD_W * tv.scale * 0.5);
+      return project(this.viewerSeat, { x: tv.cx, y: tv.cy }, BF_FULL_CARD_W * tv.scale * 0.5);
     }
     if (t.kind === "player") {
       // Players have no canvas presence: aim at their DOM life pill, projected
@@ -4749,7 +4776,7 @@ class BattlefieldCanvas {
         ctx.stroke();
         ctx.restore();
       } else {
-        this._drawFloatingCard(ctx, fx.card, fx.x, fx.y, fx.scale, fx.alpha, fx.lifted);
+        this._drawFloatingCard(ctx, fx.card, fx.x, fx.y, fx.scale, fx.alpha, fx.lifted, fx.rot || 0, fx.morph || 0);
       }
     }
   }
@@ -4759,7 +4786,7 @@ class BattlefieldCanvas {
   // old sidebar stack panel's .stack-targetable highlight.
   _drawStackTargetableGlow(ctx, v, index) {
     if (!this.stackTargetableIndices || !this.stackTargetableIndices.has(index)) return;
-    const w = BF_CARD_W * v.scale;
+    const w = BF_FULL_CARD_W * v.scale;
     const h = BF_CARD_H * v.scale;
     const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 300);
     ctx.save();
@@ -4779,7 +4806,7 @@ class BattlefieldCanvas {
   _drawStackHoldUi(ctx) {
     const heldVisual = this.stackHeldIndex != null ? this.stackVisuals[this.stackHeldIndex] : null;
     if (heldVisual) {
-      const w = BF_CARD_W * heldVisual.scale;
+      const w = BF_FULL_CARD_W * heldVisual.scale;
       const h = BF_CARD_H * heldVisual.scale;
       ctx.save();
       ctx.strokeStyle = "rgba(126, 196, 255, 0.95)";
@@ -4838,18 +4865,40 @@ class BattlefieldCanvas {
 
   // Draw a card centered at (cx, cy) at an arbitrary scale/alpha; `lifted`
   // borrows the hover treatment (bigger drop shadow) to sell height.
-  _drawFloatingCard(ctx, card, cx, cy, scale, alpha, lifted, rot = 0) {
+  //
+  // `morph` (0..1) is how far along the card is in *becoming a permanent*. A
+  // spell in flight is the printed card image at the printed 5:7 ratio; the
+  // permanent it lands as is the wider battlefield face (see BF_CARD_W), so at
+  // morph 0 those are two different shapes wearing two different faces and the
+  // handover would be a cut. Instead the box widens with `morph` while the
+  // battlefield face dissolves in over the printed one — at morph 1 the fx is
+  // pixel-identical to the permanent that replaces it, so nothing snaps.
+  _drawFloatingCard(ctx, card, cx, cy, scale, alpha, lifted, rot = 0, morph = 0) {
     if (!(scale > 0) || !(alpha > 0)) return;
-    const w = BF_CARD_W * scale;
+    const m = Math.min(1, Math.max(0, morph));
+    const w = _lerp(BF_FULL_CARD_W, BF_CARD_W, m) * scale;
     const h = BF_CARD_H * scale;
+    // The printed image stays fully opaque underneath and the battlefield face
+    // fades in on top: cross-fading both would let the table show through the
+    // card at the midpoint. The incoming face drops its drop shadow until it
+    // is alone, so the two don't stack one dark rim on the other.
+    const draw = (x, y) => {
+      if (m < 1) this._drawCardFace(ctx, x, y, w, h, card, { hovered: !!lifted, fullImage: true });
+      if (m > 0) {
+        ctx.save();
+        ctx.globalAlpha *= m;
+        this._drawCardFace(ctx, x, y, w, h, card, { hovered: !!lifted, noShadow: m < 1 }, null);
+        ctx.restore();
+      }
+    };
     ctx.save();
     ctx.globalAlpha = Math.min(1, alpha);
     if (rot) {
       ctx.translate(cx, cy);
       ctx.rotate(rot);
-      this._drawCardFace(ctx, -w / 2, -h / 2, w, h, card, { hovered: !!lifted, fullImage: true });
+      draw(-w / 2, -h / 2);
     } else {
-      this._drawCardFace(ctx, cx - w / 2, cy - h / 2, w, h, card, { hovered: !!lifted, fullImage: true });
+      draw(cx - w / 2, cy - h / 2);
     }
     ctx.restore();
   }
