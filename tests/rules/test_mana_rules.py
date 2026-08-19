@@ -414,3 +414,37 @@ def test_605_5b_mana_producing_spell_uses_the_stack_like_any_other_spell():
     assert p1.mana_pool.get("B", 0) == 3
 
 
+
+
+@pytest.mark.cr("608.2d", "106.4")
+def test_an_or_mana_line_adds_only_the_chosen_alternative():
+    """"Add {B} or {R}" offers a choice while the ability resolves (CR 608.2d);
+    the chosen mana — and only it — reaches the pool (CR 106.4). The parse used
+    to fold the "or" away, leaving the same pips as "Add {B}{R}", whose handler
+    adds *everything listed* — two mana off a line that makes one."""
+    prism = _mk_card("Test Prism", "{2}", "Artifact", "{T}: Add {B} or {R}.")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=prism)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.start_turn(0)
+
+    game.activate_permanent_ability(0, "Test Prism", permanent_index=0, mana_color="R")
+
+    assert p1.mana_pool.get("R", 0) == 1
+    assert p1.mana_pool.get("B", 0) == 0
+    assert sum(p1.mana_pool.values()) == 1, "one mana, never both alternatives"
+
+
+@pytest.mark.cr("608.2d")
+def test_an_or_mana_line_defaults_to_one_printed_alternative():
+    """With no colour chosen (a non-interactive caller), the handler still adds
+    exactly one mana, from the printed alternatives — and an off-list request
+    is held to the list rather than minting a colour the card cannot make."""
+    prism = _mk_card("Test Prism", "{2}", "Artifact", "{T}: Add {B} or {R}.")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=prism)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.start_turn(0)
+
+    game.activate_permanent_ability(0, "Test Prism", permanent_index=0, mana_color="G")
+
+    assert p1.mana_pool.get("G", 0) == 0, "not an alternative the line prints"
+    assert sum(p1.mana_pool.values()) == 1

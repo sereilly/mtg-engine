@@ -162,22 +162,27 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
         return render(stream.tokens[start:stream.pos])
 
     pips: dict[str, int] = {}
+    choice = False
     while stream.at_kind(MANA):
         token = stream.next()
         symbol = token.text.strip("{}")
         if symbol.isdigit() or symbol in ("T", "Q", "X"):
             raise stream.error(f"unsupported mana symbol {token.text!r}")
         pips[symbol] = pips.get(symbol, 0) + 1
-        # "{B} or {R}" — a dual land's choice, not two mana.
+        # "{B} or {R}" — a dual land's choice, not two mana. The word is
+        # *recorded* on the node, because a parse that merely consumed it would
+        # read "Add {B} or {R}" and "Add {B}{R}" as the same clause.
         if stream.at_word("or"):
             mark = stream.mark()
             stream.advance()
             if not stream.at_kind(MANA):
                 stream.reset(mark)
                 break
+            choice = True
     if pips:
         return ast.AddMana(
             tuple(sorted(pips.items())),
+            choice=choice,
             source_text=_clause(),
             per_each=_parse_mana_multiplier(stream),
         )

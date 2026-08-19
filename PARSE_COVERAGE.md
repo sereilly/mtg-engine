@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **666**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **50**
+- With deletion-probe findings (ignored words): **28**
 
 ## Acknowledged simplifications
 
@@ -31,56 +31,33 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | --- | --- | --- |
 | Animal Sanctuary | `put a +1/+1 counter on target bird, cat, dog, goat, ox, or snake` | or |
 | Armageddon | `destroy all lands` | all |
-| Barrin, Tolarian Archmage | `return up to one other target creature or planeswalker to its owner's ` | target |
-| Basri Ket | `put a +1/+1 counter on up to one target creature. it gains indestructi` | target |
 | Basri's Solidarity | `put a +1/+1 counter on each creature you control` | each |
-| Basri, Devoted Paladin | `put a +1/+1 counter on up to one target creature. it gains vigilance u` | target |
 | Battle-Rattle Shaman | `you may have target creature get +2/+0 until end of turn` | have |
-| Bloodfell Caves | `add {b} or {r}` | or |
-| Blossoming Sands | `add {g} or {w}` | or |
 | Chandra, Flame's Catalyst | `you may cast target red instant or sorcery card from your graveyard. i` | or card |
 | Chandra, Heart of Fire | `search your graveyard and library for any number of red instant and/or` | and/or |
-| Dismal Backwater | `add {u} or {b}` | or |
 | Experimental Overload | `create an x/x blue and red weird creature token, where x is the number` | cards or |
-| Feline Sovereign | `destroy up to one target artifact or enchantment that player controls` | target |
 | Fireball | `fireball deals x damage divided evenly, rounded down, among any number` | evenly, down, |
 | Flashfires | `destroy all plains` | all |
 | Fungal Rebirth | `return target permanent card from your graveyard to your hand. if a cr` | permanent |
-| Garruk, Unleashed | `up to one target creature gets +3/+3 and gains trample until end of tu` | target |
 | Goblin Arsonist | `you may have it deal 1 damage to any target` | have |
 | Icy Manipulator | `tap target artifact, creature, or land` | or |
 | Idol of Endurance | `exile all creature cards with mana value 3 or less from your graveyard` | artifact |
 | Idol of Endurance | `until end of turn, you may cast a creature spell from among cards exil` | artifact |
-| Jungle Hollow | `add {b} or {g}` | or |
-| Liliana, Death Mage | `return up to one target creature card from your graveyard to your hand` | target |
 | Liliana, Death Mage | `target opponent loses 2 life for each creature card in their graveyard` | card |
 | Mana Vault | `if this artifact is tapped, it deals 1 damage to you` | artifact |
 | Miscast | `counter target instant or sorcery spell unless its controller pays {3}` | spell |
 | Nevinyrral's Disk | `destroy all artifacts, creatures, and enchantments` | all |
 | Pestilent Haze | `all creatures get -2/-2 until end of turn` | all |
-| Primal Might | `target creature you control gets +x/+x until end of turn. then it figh` | target |
 | Riddleform | `you may have this enchantment become a 3/3 sphinx creature with flying` | have |
-| Roaming Ghostlight | `return up to one target non-spirit creature to its owner's hand` | target |
-| Rugged Highlands | `add {r} or {g}` | or |
-| Scoured Barrens | `add {w} or {b}` | or |
 | Shatterstorm | `destroy all artifacts. they can't be regenerated` | all |
 | Shipwreck Dowser | `return target instant or sorcery card from your graveyard to your hand` | or |
 | Subira, Tulzidi Caravanner | `another target creature with power 2 or less can't be blocked this tur` | another |
-| Swiftwater Cliffs | `add {u} or {r}` | or |
-| Temple of Epiphany | `add {u} or {r}` | or |
-| Temple of Malady | `add {b} or {g}` | or |
-| Temple of Mystery | `add {g} or {u}` | or |
-| Temple of Silence | `add {w} or {b}` | or |
-| Temple of Triumph | `add {r} or {w}` | or |
-| Thornwood Falls | `add {g} or {u}` | or |
 | Track Down | `scry 3, then reveal the top card of your library. if it's a creature o` | card, |
-| Tranquil Cove | `add {w} or {u}` | or |
 | Tranquility | `destroy all enchantments` | all |
 | Tsunami | `destroy all islands` | all |
 | Turn to Slag | `turn to slag deals 5 damage to target creature. destroy all equipment ` | all |
 | Ugin, the Spirit Dragon | `exile each permanent with mana value x or less that's one or more colo` | each |
 | Ugin, the Spirit Dragon | `you gain 7 life, draw seven cards, then put up to seven permanent card` | permanent |
-| Wind-Scarred Crag | `add {r} or {w}` | or |
 | Wrath of God | `destroy all creatures. they can't be regenerated` | all |
 
 ## Claims by channel

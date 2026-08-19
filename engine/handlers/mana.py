@@ -144,6 +144,27 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
     caster = context.caster
     card = context.card
 
+    # "Add {B} or {R}" — one of the listed symbols, the player's choice
+    # (``pips_choice``, its own key so nothing reads it as add-everything).
+    # The chosen colour arrives exactly as the any-colour shape's does —
+    # injected as ``color`` by the activation path — and is honoured only when
+    # it names one of the printed alternatives; otherwise the first printed
+    # symbol is the default, so a non-interactive caller still gets one mana
+    # and never two.
+    pips_choice = instruction.payload.get("pips_choice")
+    if pips_choice:
+        alternatives = [symbol for symbol, _count in pips_choice]
+        chosen = game._normalize_mana_color(
+            instruction.payload.get("color")
+            or (context.choices or {}).get("new_color")
+        )
+        if chosen not in alternatives:
+            chosen = alternatives[0]
+        count = next(int(c) for s, c in pips_choice if s == chosen)
+        caster.mana_pool[chosen] = caster.mana_pool.get(chosen, 0) + count
+        game.log.append(f"{card.name} produced {'{' + chosen + '}' * count}")
+        return True, "resolved"
+
     pips = instruction.payload.get("pips")
     if pips:
         # "Add {G} **for each** …" (Leafkin Avenger): the whole clause is

@@ -444,15 +444,24 @@ def _names_several_targets(subject: ast.Recipient) -> bool:
 def _is_target(subject: ast.Recipient) -> bool:
     """Whether *subject* names exactly **one** chosen target.
 
-    "Up to one" qualifies: it picks a single target or none, which is what
-    every handler reading ``context.target_permanent_id`` already does. "Up to
-    two" does not, and must not — see :func:`_names_several_targets`.
+    "Up to one **target**" qualifies: it picks a single target or none, which
+    is what every handler reading ``context.target_permanent_id`` already
+    does. "Up to two" does not, and must not — see
+    :func:`_names_several_targets`. Neither does an "up to one" that prints no
+    "target" at all: the parser records the word (``TargetSpec.targeted``)
+    because CR 115.1b makes the untargeted spelling a *resolution* choice, and
+    answering it with a cast-time picker would be the same wider-than-printed
+    reading :func:`_describe_several_targets` refuses for "up to four lands".
     """
     if not isinstance(subject, ast.TargetSpec):
         return False
     if subject.quantifier == "target":
         return True
-    return subject.quantifier == "up_to" and not _names_several_targets(subject)
+    return (
+        subject.quantifier == "up_to"
+        and subject.targeted
+        and not _names_several_targets(subject)
+    )
 
 
 def _is_you(recipient: ast.Recipient) -> bool:

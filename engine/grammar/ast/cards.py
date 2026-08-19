@@ -79,6 +79,11 @@ class Scry:
 @dataclass(frozen=True)
 class AddMana:
     pips: tuple[tuple[str, int], ...] = ()
+    # The printed "or" (``Add {B} or {R}``): *one* of the pips, chosen as the
+    # mana is made, never all of them. Recorded rather than folded away —
+    # without it "Add {B} or {R}" and "Add {B}{R}" are the same node, and the
+    # add-everything reading is exactly the mana a dual land does not make.
+    choice: bool = False
     # "Add **X** mana of any one color" (Sanctum of Fruitful Harvest) — how many,
     # as an :class:`Amount`, because the number can be a board count and not just
     # a printed digit. Zero is "this clause names no any-colour mana".

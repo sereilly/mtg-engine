@@ -3842,3 +3842,24 @@ def test_a_narrowed_discard_carries_exactly_what_the_prompt_can_test():
     }
     result = compile_line("Discard a tapped creature card.")
     assert result.parsed and not result.lowered
+
+
+def test_up_to_one_without_target_is_not_a_cast_time_target():
+    """"Up to one **target** creature" is chosen at cast (CR 601.2c); "up to
+    one creature" prints no "target" and so is a resolution choice (CR 608.2d).
+    The parser records the word — this holds the *lowering* to reading it,
+    because a spec that treated the two spellings alike would raise a cast-time
+    picker in front of a choice the card defers, and the deletion probe found
+    exactly that on seven cards."""
+    from engine.grammar import compile_line
+
+    targeted = compile_line("put a +1/+1 counter on up to one target creature.")
+    assert targeted.lowered
+    [instruction] = targeted.instructions
+    assert instruction.payload["targets"]["quantifier"] == "up_to"
+
+    untargeted = compile_line("put a +1/+1 counter on up to one creature.")
+    assert not untargeted.lowered, (
+        "an 'up to one' that prints no 'target' must refuse rather than be "
+        "read as targeted"
+    )

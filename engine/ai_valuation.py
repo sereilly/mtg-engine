@@ -177,6 +177,11 @@ def mana_ability_amount(card: CardDefinition) -> int | None:
         pips = instruction.payload.get("pips")
         if pips:
             return sum(int(count) for _symbol, count in pips)
+        # "Add {B} or {R}": one of the alternatives, so the ability is worth
+        # the best single option, never the sum of them.
+        pips_choice = instruction.payload.get("pips_choice")
+        if pips_choice:
+            return max(int(count) for _symbol, count in pips_choice)
         any_count = instruction.payload.get("any_color_count")
         if isinstance(any_count, int):
             return any_count

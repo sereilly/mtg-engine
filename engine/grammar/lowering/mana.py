@@ -38,7 +38,12 @@ def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:
     ``sacrifice_self_for_mana`` handler on the legacy path.
     """
     if node.pips:
-        payload: dict[str, object] = {"pips": node.pips}
+        # A printed "or" ships under its own key, never as bare ``pips``: a
+        # reader that has not learned ``pips_choice`` then adds *nothing*
+        # rather than every alternative, which is the failing-safe direction —
+        # "Add {B} or {R}" making two mana is strictly worse than making none.
+        key = "pips_choice" if node.choice else "pips"
+        payload: dict[str, object] = {key: node.pips}
         if node.spend_only is not None:
             payload["spend_only"] = node.spend_only
         if node.per_each is not None:

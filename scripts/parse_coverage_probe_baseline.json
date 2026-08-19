@@ -14,20 +14,6 @@
   ]
  },
  {
-  "card": "Barrin, Tolarian Archmage",
-  "clause": "return up to one other target creature or planeswalker to its owner's hand",
-  "ignored": [
-   "target"
-  ]
- },
- {
-  "card": "Basri Ket",
-  "clause": "put a +1/+1 counter on up to one target creature. it gains indestructible until end of turn",
-  "ignored": [
-   "target"
-  ]
- },
- {
   "card": "Basri's Solidarity",
   "clause": "put a +1/+1 counter on each creature you control",
   "ignored": [
@@ -35,31 +21,10 @@
   ]
  },
  {
-  "card": "Basri, Devoted Paladin",
-  "clause": "put a +1/+1 counter on up to one target creature. it gains vigilance until end of turn",
-  "ignored": [
-   "target"
-  ]
- },
- {
   "card": "Battle-Rattle Shaman",
   "clause": "you may have target creature get +2/+0 until end of turn",
   "ignored": [
    "have"
-  ]
- },
- {
-  "card": "Bloodfell Caves",
-  "clause": "add {b} or {r}",
-  "ignored": [
-   "or"
-  ]
- },
- {
-  "card": "Blossoming Sands",
-  "clause": "add {g} or {w}",
-  "ignored": [
-   "or"
   ]
  },
  {
@@ -78,25 +43,11 @@
   ]
  },
  {
-  "card": "Dismal Backwater",
-  "clause": "add {u} or {b}",
-  "ignored": [
-   "or"
-  ]
- },
- {
   "card": "Experimental Overload",
   "clause": "create an x/x blue and red weird creature token, where x is the number of instant and sorcery cards in your graveyard. then you may return an instant or sorcery card from your graveyard to your hand. exile experimental overload",
   "ignored": [
    "cards",
    "or"
-  ]
- },
- {
-  "card": "Feline Sovereign",
-  "clause": "destroy up to one target artifact or enchantment that player controls",
-  "ignored": [
-   "target"
   ]
  },
  {
@@ -119,13 +70,6 @@
   "clause": "return target permanent card from your graveyard to your hand. if a creature died this turn, create two 1/1 green saproling creature tokens",
   "ignored": [
    "permanent"
-  ]
- },
- {
-  "card": "Garruk, Unleashed",
-  "clause": "up to one target creature gets +3/+3 and gains trample until end of turn",
-  "ignored": [
-   "target"
   ]
  },
  {
@@ -154,20 +98,6 @@
   "clause": "until end of turn, you may cast a creature spell from among cards exiled with this artifact without paying its mana cost",
   "ignored": [
    "artifact"
-  ]
- },
- {
-  "card": "Jungle Hollow",
-  "clause": "add {b} or {g}",
-  "ignored": [
-   "or"
-  ]
- },
- {
-  "card": "Liliana, Death Mage",
-  "clause": "return up to one target creature card from your graveyard to your hand",
-  "ignored": [
-   "target"
   ]
  },
  {
@@ -206,38 +136,10 @@
   ]
  },
  {
-  "card": "Primal Might",
-  "clause": "target creature you control gets +x/+x until end of turn. then it fights up to one target creature you don't control",
-  "ignored": [
-   "target"
-  ]
- },
- {
   "card": "Riddleform",
   "clause": "you may have this enchantment become a 3/3 sphinx creature with flying in addition to its other types until end of turn",
   "ignored": [
    "have"
-  ]
- },
- {
-  "card": "Roaming Ghostlight",
-  "clause": "return up to one target non-spirit creature to its owner's hand",
-  "ignored": [
-   "target"
-  ]
- },
- {
-  "card": "Rugged Highlands",
-  "clause": "add {r} or {g}",
-  "ignored": [
-   "or"
-  ]
- },
- {
-  "card": "Scoured Barrens",
-  "clause": "add {w} or {b}",
-  "ignored": [
-   "or"
   ]
  },
  {
@@ -262,66 +164,10 @@
   ]
  },
  {
-  "card": "Swiftwater Cliffs",
-  "clause": "add {u} or {r}",
-  "ignored": [
-   "or"
-  ]
- },
- {
-  "card": "Temple of Epiphany",
-  "clause": "add {u} or {r}",
-  "ignored": [
-   "or"
-  ]
- },
- {
-  "card": "Temple of Malady",
-  "clause": "add {b} or {g}",
-  "ignored": [
-   "or"
-  ]
- },
- {
-  "card": "Temple of Mystery",
-  "clause": "add {g} or {u}",
-  "ignored": [
-   "or"
-  ]
- },
- {
-  "card": "Temple of Silence",
-  "clause": "add {w} or {b}",
-  "ignored": [
-   "or"
-  ]
- },
- {
-  "card": "Temple of Triumph",
-  "clause": "add {r} or {w}",
-  "ignored": [
-   "or"
-  ]
- },
- {
-  "card": "Thornwood Falls",
-  "clause": "add {g} or {u}",
-  "ignored": [
-   "or"
-  ]
- },
- {
   "card": "Track Down",
   "clause": "scry 3, then reveal the top card of your library. if it's a creature or land card, draw a card",
   "ignored": [
    "card,"
-  ]
- },
- {
-  "card": "Tranquil Cove",
-  "clause": "add {w} or {u}",
-  "ignored": [
-   "or"
   ]
  },
  {
@@ -357,13 +203,6 @@
   "clause": "you gain 7 life, draw seven cards, then put up to seven permanent cards from your hand onto the battlefield",
   "ignored": [
    "permanent"
-  ]
- },
- {
-  "card": "Wind-Scarred Crag",
-  "clause": "add {r} or {w}",
-  "ignored": [
-   "or"
   ]
  },
  {

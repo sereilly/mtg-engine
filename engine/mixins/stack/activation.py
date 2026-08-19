@@ -840,7 +840,13 @@ class AbilityActivationMixin:
         instruction = ability.instruction
         if (
             instruction.kind in {"sacrifice_self_for_mana", "add_mana_from_text"}
-            and instruction.payload.get("any_color", False)
+            and (
+                instruction.payload.get("any_color", False)
+                # "Add {B} or {R}": the chosen alternative rides the same
+                # ``color`` key the any-colour shape uses; the handler holds it
+                # to the printed alternatives.
+                or instruction.payload.get("pips_choice")
+            )
         ):
             selected_color = self._normalize_mana_color(mana_color)
             if selected_color is not None:
