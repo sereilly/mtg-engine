@@ -10,6 +10,8 @@ the card each test is about.
 
 from __future__ import annotations
 
+import pytest
+
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
@@ -410,3 +412,68 @@ def test_idol_of_endurance_returns_what_is_left_to_the_graveyard(set_pool):
     assert p1.exile == []
     assert p1.hand == [], "the cards came from a graveyard, so that is where they go back"
     assert "Alpine Watchdog" in [p.card.name for p in game.controlled_by(0)]
+
+
+# --- The dead-ability round: a colour count, and a comma-separated union ----
+
+
+def test_chromatic_orrery_compiles_both_abilities(set_pool):
+    """The mana ability compiled and the draw did not, and the card reported
+    supported on the strength of the first — which is the any-of permanent gate
+    hiding a dead ability. Asked of the abilities, not of the card."""
+    program = compile_card_oracle(set_pool("M21")["Chromatic Orrery"])
+    assert [a.supported for a in program.activated_abilities] == [True, True]
+
+
+@pytest.mark.parametrize(
+    "colors, expected",
+    [
+        # CR 105.1: colourless is not a colour, so a board of artifacts draws
+        # nothing at all — the case a "count the permanents" reading would get
+        # most wrong.
+        ([], 0),
+        (["Llanowar Visionary"], 1),                            # green
+        (["Llanowar Visionary", "Alpine Watchdog"], 2),         # green + white
+        # Two permanents, one colour: the count is of *colours*, not of objects.
+        (["Llanowar Visionary", "Llanowar Visionary"], 1),
+    ],
+)
+def test_chromatic_orrery_draws_one_card_per_colour(set_pool, colors, expected):
+    """"Draw a card for each **color among** permanents you control."
+
+    Five permanents can be one colour and one permanent can be five (CR 105.2b),
+    so this is a different question from counting them — which is why the
+    parametrization pairs two-of-one-colour with one-each.
+    """
+    pool = set_pool("M21")
+    orrery = Permanent(card=pool["Chromatic Orrery"])
+    board = [orrery] + [Permanent(card=pool[name]) for name in colors]
+    p1 = PlayerState(
+        name="P1", battlefield=board,
+        library=[pool["Shock"] for _ in range(6)],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    _nosick(orrery)
+
+    assert game.activate_permanent_ability(0, "Chromatic Orrery", ability_index=1).supported
+    game._settle()
+
+    assert len(p1.hand) == expected
+
+
+def test_animal_sanctuary_reads_the_whole_printed_subtype_list(set_pool):
+    """"target Bird, Cat, Dog, Goat, Ox, or Snake" — six alternatives, printed
+    with commas because English punctuates a list of six differently from a list
+    of two. The card means one union either way, and reading only the first
+    alternative would refuse five of the creatures it names."""
+    program = compile_card_oracle(set_pool("M21")["Animal Sanctuary"])
+    counter = next(
+        a for a in program.activated_abilities
+        if a.instruction is not None and a.instruction.kind == "add_counter_to_target"
+    )
+    assert counter.supported
+    assert counter.instruction.payload["targets"]["filter"]["subtype_filter"] == [
+        "bird", "cat", "dog", "goat", "ox", "snake",
+    ]

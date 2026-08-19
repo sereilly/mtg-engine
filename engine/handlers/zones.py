@@ -282,6 +282,12 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # second find cannot land where the first was meant to.
         destinations=list(instruction.payload.get("destinations") or ()),
         tapped=list(instruction.payload.get("tapped") or ()),
+        # The single-find spelling of the same fact, plus the conditional untap
+        # rider that rides with it (Fabled Passage) — both belong to the search
+        # rather than to a later sentence, because they are about the card it
+        # finds.
+        enters_tapped=bool(instruction.payload.get("enters_tapped")),
+        untap_found_if=instruction.payload.get("untap_found_if"),
         up_to=bool(instruction.payload.get("up_to")),
     )
     game.log.append(f"{caster.name} is searching their " + " and ".join(zones))

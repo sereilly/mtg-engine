@@ -120,6 +120,12 @@ _TYPE_FILTER_TO_KIND = {
     "enchantment": "permanent",
     "permanent": "permanent",
     "artifact_or_enchantment": "permanent",
+    # "…deals 1 damage to target planeswalker." (Sparkhunter Masticore.) Its own
+    # picker rather than the general permanent one: a planeswalker is the only
+    # permanent type a printed phrase names this often *without* also admitting
+    # creatures, and offering every permanent would be a prompt the resolution
+    # then refuses.
+    "planeswalker": "planeswalker",
 }
 
 
@@ -282,6 +288,16 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "mill_target_player": {"kind": "player"},
     "look_at_target_hand": {"kind": "player"},
     "discard_target_cards": {"kind": "player"},
+    # "Search **target opponent's** graveyard, hand, and library …"
+    # (Necromentia). The searched player is a target chosen as the spell is cast
+    # (CR 601.2c); the *card name* is chosen on resolution and is not a target at
+    # all, which is why the kind is a plain player rather than something
+    # card-shaped.
+    "name_and_strip": {"kind": "player"},
+    # "Target opponent loses 2 life for each creature card in their graveyard."
+    # (Liliana, Death Mage's ultimate.) The recipient is a seat; the per-each
+    # count is read at resolution and names nothing.
+    "target_loses_life": {"kind": "player"},
     # Cuombajj Witches. Its handler delegates the controller's half to
     # `deal_damage`, which takes a player or a permanent; the opponent's half is
     # a pending choice made after resolution, not a target chosen here.

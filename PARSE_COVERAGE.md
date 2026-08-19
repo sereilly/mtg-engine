@@ -45,16 +45,18 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Channel | Sentences claimed |
 | --- | --- |
 | parse rule | 210 |
-| card_hooks bespoke (name-keyed) | 137 |
+| card_hooks bespoke (name-keyed) | 135 |
 | activation cost | 113 |
 | trigger table | 78 |
 | keyword table | 59 |
 | static-line table | 47 |
 | aura enchant noun (oracle_instructions attach) | 44 |
-| mixin text scan | 32 |
 | aura static (oracle_instructions/permanent_state) | 31 |
+| mixin text scan | 20 |
 | activation gate (stack/activation) | 15 |
+| enter_effects.py | 9 |
 | cast_restrictions.py | 5 |
+| auras.py (attached effect) | 5 |
 | untap_restrictions.py | 5 |
 | ante boilerplate (deck construction, not gameplay) | 4 |
 | modal machinery | 3 |

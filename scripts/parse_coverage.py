@@ -53,13 +53,21 @@ from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
 from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import draw_step_bonus_for  # noqa: E402
 from engine.global_statics import global_static_for  # noqa: E402
+from engine.auras import (  # noqa: E402
+    aura_effect_claim,
+    aura_static_pt_grant,
+)
+from engine.enter_effects import enter_effect_line  # noqa: E402
 from engine.extra_triggers import extra_trigger_line  # noqa: E402
+from engine.named_protection import named_protection_line  # noqa: E402
+from engine.target_restrictions import target_restriction_line  # noqa: E402
 from engine.land_play_allowance import land_play_line  # noqa: E402
 from engine.untap_restrictions import untap_restriction_for  # noqa: E402
 from engine.oracle import (  # noqa: E402
     _is_supported_keyword_line,
     _is_supported_static_creature_line,
     _parse_activated_ability,
+    _parse_loyalty_ability,
     _parse_trigger_condition,
     _parse_triggered_ability,
     compile_card_oracle,
@@ -185,6 +193,27 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # predicate now calls the same derivation the land-drop path and the support
     # gate call.
     ("land_play_allowance.py", lambda s: land_play_line(s) is not None),
+    # An **Aura or Equipment effect line**. `engine/auras.py` reads these off
+    # the attached permanent's own text on every recompute and contributes them
+    # through the CR 613 layer bridge, so there is no instruction to point at —
+    # which is why the compound forms ("gets +2/+2, has first strike, and is a
+    # Knight in addition to its other types") read as unclaimed until now. The
+    # shipped pool prints only the simple ones; M21 prints the compounds, and
+    # Equipment, whose "Equipped creature gets +1/+1" is the same reader.
+    ("auras.py (attached effect)",
+     lambda s: aura_effect_claim(s) is not None or aura_static_pt_grant(s) is not None),
+    # "You can't choose an untapped creature as this spell's target as you cast
+    # it" (Enthralling Hold) — a CR 601.2c printed targeting restriction, read by
+    # the cast path and the AI's Aura chooser from engine/target_restrictions.py.
+    ("target_restrictions.py", target_restriction_line),
+    # "You have protection from the chosen card name" (Runed Halo) — the one
+    # protection whose bearer is a player, enforced at the cast target check and
+    # the player-damage path from engine/named_protection.py.
+    ("named_protection.py", named_protection_line),
+    # "As this enchantment enters, choose a card name" (Runed Halo) — an entry
+    # state `_initialize_permanent_state` carries out, from the same table the
+    # support gate reads.
+    ("enter_effects.py", lambda s: enter_effect_line(s) is not None),
     # CR 603.2d extra triggers (Sanctum of All), counted where an ability is put
     # onto the stack from the permanent's own text. Same shape as the entry
     # above and claimed through the same derivation the fire site and the
@@ -546,6 +575,13 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         return coverage
 
     acknowledged_map = ACKNOWLEDGED.get(card.name, {})
+    # Every printed line the compiled program kept an ability for, normalized the
+    # same way the sentences below are, so the two can be compared at all.
+    compiled_lines = {
+        normalize_creature_line(ability.source_line or "").strip(" .")
+        for ability in (*program.activated_abilities, *program.triggered_abilities)
+        if ability.supported and ability.source_line
+    }
     # Instruction kinds this card's rules actually produced, for the card-wide
     # HANDLER_CLAIMS pass below (a handler may implement a rider sentence that
     # sits on a DIFFERENT oracle line than the rule's anchor — Siren's Call's
@@ -583,6 +619,20 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             return
         if card.name in hooked:
             coverage.claims.append((sentence, "card_hooks bespoke (name-keyed)"))
+            return
+        # The last question, and the strongest evidence there is: **did the
+        # compiler build an ability out of this line?** Every channel above
+        # attributes a sentence to the module that carries it out, which is what
+        # the report is for; this one only says that something did.
+        #
+        # It is asked last because it is the least informative answer, and asked
+        # at all because the readers above are each written against one line in
+        # isolation while the compiler reads a line *in its card*. A trigger
+        # whose condition needs the permanent's own type, a modal head whose
+        # modes are the lines below it, an ability whose cost is on the line
+        # before — each is unsupported alone and compiled in place.
+        if sentence in compiled_lines:
+            coverage.claims.append((sentence, "compiled ability"))
             return
         coverage.unclaimed.append(sentence)
 
@@ -702,6 +752,28 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
                 remainder.lstrip(": "), activated=False,
                 trigger_prefix=condition.raw_text,
             )
+            continue
+
+        # A **loyalty** ability (CR 606.3). Read before the ordinary activated
+        # one because the ordinary reader wants a mana cost and a loyalty symbol
+        # is not one — without this, every "+1: …" line on every planeswalker
+        # falls through to the spell-clause claim, fails there, and the whole
+        # line reads as unclaimed. M21 is the first set in the pool with
+        # planeswalkers in it, so this is the first run where that showed.
+        #
+        # The split is the compiler's own: the symbol is the cost, the rest is
+        # the effect, and the effect goes to the same front ends every other
+        # clause does.
+        loyalty = _parse_loyalty_ability(line, card.name)
+        if loyalty is not None:
+            if not loyalty.supported:
+                if normalized in acknowledged_map:
+                    coverage.acknowledged.append((normalized, acknowledged_map[normalized]))
+                else:
+                    coverage.unclaimed.append(normalized)
+                continue
+            coverage.claims.append((normalized.split(":", 1)[0], "loyalty cost"))
+            claim_clause(loyalty.normalized_effect, activated=True)
             continue
 
         ability = _parse_activated_ability(line, card.name)

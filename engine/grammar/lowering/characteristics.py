@@ -54,6 +54,8 @@ def _x_definition_spec(definition: ast.Amount, node) -> dict:
     """The spec behind a where-clause's X, whichever aggregate it names."""
     if isinstance(definition, ast.GreatestPowerAmong):
         return count_spec(definition.filter, node, aggregate="greatest_power")
+    if isinstance(definition, ast.ColorsAmong):
+        return count_spec(definition.filter, node, aggregate="distinct_colors")
     if isinstance(definition, ast.CountOf):
         return count_spec(definition.filter, node)
     raise LoweringError("only a count or a maximum can define X here", node=node)

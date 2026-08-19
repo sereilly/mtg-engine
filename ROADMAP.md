@@ -256,52 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 133: an exile pile the permanent carries
-
-*(2026-08-18.)* M21 **282 → 283** — Idol of Endurance.
-
-> When this artifact enters, exile all creature cards with mana value 3 or less
-> from your graveyard until this artifact leaves the battlefield.
-> {1}{W}, {T}: Until end of turn, you may cast a creature spell from among cards
-> exiled with this artifact without paying its mana cost.
-
-Two lines that only work as one thing: the pile the first makes is the pile the
-second casts from, and both end when the Idol does. That is CR 610.3's linked
-exile, and the engine already had it — Kitesail Freebooter records its one card
-on the **permanent**, and `remove_from_battlefield`, the single transition out,
-is what gives it back. So the new work was a filter over a graveyard and a
-second reader of the same store, not a mechanism.
-
-**The card returns to the zone it came from.** CR 610.3 says *previous zone*,
-and the existing code said "hand" — right for Freebooter, and a card conjured
-out of nothing for anything that exiles a graveyard. The origin now rides the
-entry. That is one line of behaviour with two cards behind it, so it is tested
-in `tests/rules/` with both zones on one board: a constant that happens to be
-right for the case in front of it is exactly what the old code was.
-
-**A card in a zone has a mana value.** CR 202.3 computes it from the printed
-mana cost, so unlike power or a keyword it needs no battlefield object — which
-makes it the first `mana_value` entry in `CARD_ONLY_FILTER_KEYS`, read through
-the same bound comparator the permanent matcher uses so "3 or less" means one
-thing in both zones.
-
-**The permission is the one that already existed.** "Until end of turn, you may
-cast … without paying its mana cost" is CR 601.3 over the exile zone, which
-`grant_cast_permission` is; what is new is only *which pile*, so `cards_from`
-names it. Reading the zone instead of the permanent's own list would have made
-every exiled creature in the game castable, which is what the third test holds.
-
-`statements.py` crossed 1,000 lines and was split along **conditions** — the
-event half of a trigger or an intervening-if. A statement says what an effect
-will do; a condition describes what has happened, and nothing in the moved file
-builds an `ast.Effect` or can. That independence is its layer position, now
-asserted: `conditions` sits below `statements`, so a condition growing a need
-for an effect fails the guard.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Six new tests, all six watched to fail on the round-132 engine.
-
 ## Round 134: an upkeep trigger takes the ordinary route
 
 *(2026-08-18.)* M21 **283 → 284** — Sanctum of All.
@@ -408,60 +362,60 @@ Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Fifteen new tests, all fifteen watched to fail on the round-134 engine.
 
-## M21 is 285 of 285, and the promotion gate is not clean
+## Round 136: three abilities that compiled and did nothing
 
-*(2026-08-18.)* Every M21 card is supported. The Phase 4 rehearsal — move the
-manifest entry to `sets`, run everything before committing — was done and then
-**taken back out**, because it found three cards the promotion would have
-shipped a false claim about. Recorded here rather than half-applied, the way
-Sublime Epiphany was before round 135.
+*(2026-08-18.)* The three cards the promotion rehearsal named. Each compiled
+`supported` on the strength of a *different* ability — the permanent support
+gate is any-of, where the planeswalker gate is all-of — so a working line hid a
+dead one on the same card.
 
-Promotion widens every `load_catalog()`-driven guard at once and lets
-`scripts/parse_coverage.py` see the set for the first time, so this is where the
-debt surfaces by construction. What it found, in the order it fell out:
+**Animal Sanctuary** — `{2}, {T}: Put a +1/+1 counter on target Bird, Cat, Dog,
+Goat, Ox, or Snake.` The union already parsed with "or"; it did not with commas,
+which is how English punctuates a list of six rather than a list of two. The
+card means one union either way, and the first alternative alone would have
+refused five of the creatures it names. A comma is only consumed when a subtype
+follows it, so "destroy target Wall, then draw a card" keeps its comma.
 
-**Mechanical, and done in the rehearsal.** The two ratchets and the
-behaviour-class snapshot want `--accept` (grammar coverage rises to
-**parsed 79.7% / executed 46.1%**, and hook reliance *falls* from 24.0% to
-**13.9%** — M21 is a modern set the grammar reads well, so the hooked share of
-the pool drops sharply). `test_no_hollow_support.py`'s "the scan reaches the
-measured set" is superseded once nothing is measured, and wants rewriting to ask
-about the manifest's **roles** rather than about one of them.
+**Chromatic Orrery** — `{5}, {T}: Draw a card for each color among permanents
+you control.` A third aggregate beside "the number of" and "the greatest power
+among", and its own node for the reason those are each other's: five permanents
+can be one colour and one permanent can be five (CR 105.2b). Colourless
+contributes nothing (CR 105.1), so a board of artifacts draws nothing — the case
+a count-the-permanents reading gets most wrong. One evaluator, so the
+where-clause spelling of this phrase and the per-each spelling cannot disagree.
 
-**Real gaps in the shared tables, each with a card behind it.**
+**Fabled Passage** — `{T}, Sacrifice this land: Search your library for a basic
+land card, put it onto the battlefield **tapped**, then shuffle. **Then if you
+control four or more lands, untap that land.**` Two riders, and both were being
+dropped: the single-find search had read "tapped" since Cultivate but had
+nowhere to put it, and the second sentence is not a second statement — "that
+land" is the card this search just found, and a statement after the search would
+run before the player has answered its prompt. Both ride the search; the count
+is taken after the land has entered, so it counts itself.
 
-* 29 triggered and 16 activated instruction kinds fall back to the category
-  default in `engine/effect_labels.py`. M21 is the first set whose abilities the
-  grammar reads wholesale, so this is where the vocabulary the shipped pool
-  built gets applied to a set it did not come from.
-* `engine/targeting.py` has no **planeswalker** picker ("target planeswalker",
-  Sparkhunter Masticore) and no spec for `target_loses_life` or
-  `name_and_strip`. The cast-target guard also over-matched: a loyalty ability,
-  a modal bullet and a static "spells that **target** this creature cost more"
-  are all lines whose target is not a cast target, and M21 brought the first
-  planeswalkers into the pool.
-* `legality._ACTIVATED_LINE_RE` requires a leading mana symbol, so
-  "Sacrifice this creature:" (Selfless Savior) and "Tap two untapped Spirits you
-  control:" (Shacklegeist) read as cast-time effects.
-* `scripts/parse_coverage.py` has no channel for a **loyalty ability**, for an
-  Aura or Equipment's attached-effect line, or for
-  `target_restrictions` / `named_protection` / `enter_effects`. Adding those
-  five took the unclaimed list from ~70 sentences to three.
+Whole-pool diff: **no card changed support status**, and exactly three changed
+what their abilities do — which is the shape of this round. Suite green, every
+`--check` gate green, shipped pool 388/388, AI simulation byte-identical at 443
+interactions, **zero hooks added**. Nine new tests, all nine watched to fail on
+the round-135 engine.
 
-**The blocker.** Those three are not channel gaps — they are cards that compile
-**supported while carrying a dead ability**, which is the hollow-support
-contract's own failure mode:
+**M21 still does not promote, and the reason moved.** The rehearsal was run
+again with these three fixed, and it found the same weakness one level up: the
+permanent gate is any-of for **triggered** abilities too. Three M21 cards carry
+a dead trigger behind a working line, and driving them confirms the ability does
+nothing —
 
-* Animal Sanctuary — `{2}, {T}: Put a +1/+1 counter on target Bird, Cat, Dog,
-  Goat, Ox, or Snake.` (a six-subtype union)
-* Chromatic Orrery — `{5}, {T}: Draw a card for each color among permanents you
-  control.`
-* Fabled Passage — `{T}, Sacrifice this land: Search your library for a basic
-  land card, put it onto the battlefield tapped, then shuffle. Then if you
-  control four or more lands, untap that land.`
+* Teferi's Tutelage — "Whenever you draw a card, target opponent mills two
+  cards" does not mill (the mill lowering refuses a `target_opponent` recipient);
+* Alpine Houndmaster — its enters-the-battlefield search for two *named* cards
+  never arms a prompt;
+* Riddleform — "you may have this enchantment become a 3/3 Sphinx …" never
+  animates.
 
-Each has a second ability the grammar does read, which is why the card passes
-the gate at all: the artifact/land support gate is **any-of**, where the
-planeswalker gate is all-of. Two things to decide before promotion, and they are
-not the same decision — write the three productions, or make the permanent gate
-all-of and let the cards report unsupported until someone does.
+Three shipped LEA cards appear in the same scan (Creature Bond, Howling Mine,
+Paralyze) and are **not** hollow: each is carried out by a derivation table or a
+hook, which is why the scan is a starting point and not a verdict. The rest of
+the rehearsal's findings — the label tables, the planeswalker picker, the
+activated-line reader, five parse-coverage channels, the compiled-ability
+channel — are done and in this round, because none of them needed the promotion
+to be right.

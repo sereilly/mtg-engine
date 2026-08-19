@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 from ._core import (
     Amount,
+    Comparison,
     Fixed,
     ObjectFilter,
     PlayerRef,
@@ -146,6 +147,14 @@ class SearchLibrary:
     #: "Up to" — finding fewer, none included, is a legal answer (CR 701.19b's
     #: fail-to-find is always legal, but this says so on the card).
     up_to: bool = False
+    #: "Then if you control four or more lands, untap that land." (Fabled
+    #: Passage.) A rider on *this* search rather than a second statement,
+    #: because "that land" is the card this search just found — a sentence after
+    #: the search would run before the player has answered its prompt, and would
+    #: have nothing to refer to. The filter is what is counted; the threshold is
+    #: how many are needed.
+    untap_found_if: "Comparison | None" = None
+    untap_found_filter: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

@@ -238,6 +238,18 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
         # (Peer into the Abyss). The same spec a plain count travels on, with the
         # division recorded on it — see `halved_count_spec`.
         payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: halved}
+    elif isinstance(node.count, ast.ColorsAmong):
+        # "Draw a card **for each color among** permanents you control"
+        # (Chromatic Orrery). The same spec a plain count travels on, with the
+        # aggregate that says colours rather than objects — one evaluator, so
+        # the where-clause form of this phrase and the per-each form cannot
+        # disagree about what "colour" counts.
+        payload: dict[str, object] = {
+            "amount": "x",
+            X_FROM_COUNT: count_spec(
+                node.count.filter, node, aggregate="distinct_colors"
+            ),
+        }
     elif isinstance(node.count, ast.CountOf):
         # "Draw cards equal to the number of …" (Frantic Inventory). The count
         # is taken at *resolution* (CR 608.2), so it travels as the same
@@ -637,6 +649,24 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         payload["zones"] = ("library", "graveyard")
     if to_battlefield and len(destinations) == 1:
         payload["destination"] = "battlefield"
+        # "…put it onto the battlefield **tapped**" (Fabled Passage). Emitted
+        # only when the card prints it, so every search written before this
+        # keeps a byte-identical payload — and emitted at all, because a word
+        # the production consumes and the payload drops is a land that enters
+        # untapped while the card says otherwise.
+        if any(node.tapped):
+            payload["enters_tapped"] = True
+        # "Then if you control four or more lands, untap that land." (Fabled
+        # Passage.) The rider travels with the search because the land it
+        # untaps is the one the search found; the count is taken when the find
+        # is made (CR 608.2), which is after the land has entered — so the land
+        # counts itself, and four means three plus this one.
+        if node.untap_found_if is not None:
+            counted = node.untap_found_filter or ast.ObjectFilter()
+            payload["untap_found_if"] = {
+                "threshold": _amount_payload(node.untap_found_if.value),
+                "filter": count_spec(counted, node),
+            }
     return (OracleInstruction("search_library", "", payload),)
 
 

@@ -138,7 +138,18 @@ def test_no_permanent_is_supported_by_a_whitelist_substring_alone():
     hollow = []
     for card in load_catalog():
         type_line = card.type_line.lower()
-        if any(t in type_line for t in ("instant", "sorcery", "creature", "land", "aura")):
+        # "equipment" beside "aura", and for the same reason: an Equipment's
+        # "Equipped creature gets +1/+1" is read off its own text by
+        # `auras.aura_static_pt_grant` and applied through the CR 613 layer 7c
+        # bridge, so it leaves no instruction here while working perfectly. The
+        # scan is about permanents whose behaviour is a *string comparison*, and
+        # a permanent whose behaviour is a derivation table is not one — which is
+        # exactly what `test_no_hollow_support.py`'s control test says about
+        # these same two cards.
+        if any(
+            t in type_line
+            for t in ("instant", "sorcery", "creature", "land", "aura", "equipment")
+        ):
             continue
         program = compile_card_oracle(card)
         if not program.supported:

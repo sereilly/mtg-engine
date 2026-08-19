@@ -2730,16 +2730,21 @@ def test_a_variable_discard_that_is_not_random_refuses():
 
 
 def test_every_executed_end_step_trigger_lands_on_a_kind_the_step_enqueues(catalog):
-    """The upkeep guard's twin, for the other step that dispatches by kind.
+    """The upkeep guard's twin, for the other step that dispatches triggers.
 
-    ``resolve_end_step`` scans for a fixed set of instruction kinds under the
-    ``end_step`` condition and enqueues nothing at all for anything else — so
-    the same silent-death failure is available here: a trigger phrase the
-    grammar already knows, plus a perfectly reasonable effect lowering, gives a
-    card that compiles cleanly, reports as supported, and never fires. The
-    dispatched set lives in ``engine/phases/end_step.py`` as data precisely so
-    this check can read it rather than restate it.
+    ``resolve_end_step`` used to scan for a fixed set of instruction kinds and
+    enqueue nothing at all for anything else — the silent-death failure this
+    whole family of guards exists for. Gadrak, the Crown-Scourge is the card it
+    cost, and the step answered with a **catch-all**: after the four keyed
+    scans, everything else with an end-step condition is enqueued too.
+
+    So "is this kind on a list?" can no longer fail, and asking it would only
+    produce false alarms. What is left to check is the half the catch-all does
+    not settle — that the enqueued instruction has somewhere to *run*. A trigger
+    put on the stack with a kind ``EFFECT_HANDLERS`` does not answer dies just as
+    quietly as one that was never enqueued.
     """
+    from engine.handlers import EFFECT_HANDLERS
     from engine.oracle import compile_card_oracle
     from engine.phases.end_step import (
         END_STEP_CONDITIONS,
@@ -2772,13 +2777,20 @@ def test_every_executed_end_step_trigger_lands_on_a_kind_the_step_enqueues(catal
             # it could only ever be run somewhere they do not exist.
             if instruction.payload.get(END_STEP_INTERVENING_IF) is not None:
                 continue
-            if instruction.kind not in END_STEP_DISPATCHED_KINDS:
+            # A kind one of the four keyed scans handles is dispatched by
+            # that scan, with the trigger context or the re-checked guard it
+            # needs; everything else goes through the catch-all and then
+            # through EFFECT_HANDLERS like any other resolving object.
+            if (
+                instruction.kind not in END_STEP_DISPATCHED_KINDS
+                and instruction.kind not in EFFECT_HANDLERS
+            ):
                 undispatched.append(
                     f"{card.name}: {trig.source_line}\n    kind: {instruction.kind}"
                 )
 
     assert not undispatched, (
-        "the grammar executes an end-step trigger the step never enqueues, so "
+        "an end-step trigger is enqueued with a kind nothing resolves, so "
         "the card compiles cleanly and does nothing:\n" + "\n".join(undispatched)
     )
 

@@ -325,12 +325,29 @@ class PendingChoicesMixin:
             enters_tapped = bool(tapped_flags.pop(0)) if tapped_flags else False
         else:
             destination = choice.data.get("destination", "hand")
-            enters_tapped = False
+            # The single-find spelling of the same fact the destination list
+            # carries per entry (Fabled Passage).
+            enters_tapped = bool(choice.data.get("enters_tapped"))
         if destination == "battlefield":
             from ...models import Permanent as _Permanent
 
             found = _Permanent(card=card, tapped=enters_tapped)
             self._put_permanent_onto_battlefield(choice.player_index, found, None)
+            # "Then if you control four or more lands, untap that land."
+            # (Fabled Passage.) Counted *after* the land has entered, which is
+            # when the printed "then" happens — so the land counts itself. Through
+            # `become_untapped`, because anything that must happen when a
+            # permanent untaps has one place to be.
+            rider = choice.data.get("untap_found_if")
+            if rider and found.tapped:
+                from ...handlers._common import evaluate_count
+
+                held = evaluate_count(self, caster, rider["filter"])
+                if held >= int(rider["threshold"]):
+                    self.become_untapped(found)
+                    self.log.append(
+                        f"{card.name} untaps ({held} counted)"
+                    )
         else:
             caster.hand.append(card)
         self.log.append(

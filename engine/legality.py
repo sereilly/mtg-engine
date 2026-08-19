@@ -46,13 +46,24 @@ from .targeting import (
     usable_activated_abilities,
 )
 
-# An oracle line that begins with a mana/tap cost followed by a colon is an
-# activated ability ("{T}: ..."), not a cast-time effect. The cost may mix
-# symbols with prose ("{T}, Sacrifice a creature:", "{2}, {T}, Discard the
-# last card you drew this turn:"), so after the leading symbol accept anything
-# up to the colon — barring a period, which would mean the colon belongs to a
-# later sentence rather than to a cost.
-_ACTIVATED_LINE_RE = re.compile(r"^\s*\{[^}]+\}[^:.]*:")
+# An oracle line whose cost is followed by a colon is an activated ability
+# (CR 602.1), not a cast-time effect. The cost may mix symbols with prose
+# ("{T}, Sacrifice a creature:", "{2}, {T}, Discard the last card you drew this
+# turn:"), so after the cost accept anything up to the colon — barring a period,
+# which would mean the colon belongs to a later sentence rather than to a cost.
+#
+# **The cost need not open with a mana symbol.** "Sacrifice this creature:"
+# (Selfless Savior) and "Tap two untapped Spirits you control:" (Shacklegeist)
+# are activated abilities with no symbol in them at all, and requiring one read
+# both as cast-time effects — so a guard asking "does this card name a target as
+# it is cast?" answered yes about an ability's target. Two shapes, both anchored:
+# a leading symbol, or a leading verb from the closed list of cost actions the
+# pool prints. A bare prose prefix is deliberately *not* admitted, because
+# "Enchant creature" and a reminder line would join it.
+_COST_VERBS = r"sacrifice|tap|discard|exile|pay|remove|return|reveal|untap"
+_ACTIVATED_LINE_RE = re.compile(
+    r"^\s*(?:\{[^}]+\}|(?:" + _COST_VERBS + r")\b)[^:.]*:", re.I
+)
 
 
 def _oracle_lines(card: CardDefinition) -> list[str]:
@@ -547,6 +558,12 @@ class LegalityMixin:
             # "Target player or planeswalker" (Chandra's Magmutt): the only
             # permanents in the union are planeswalkers — the player faces were
             # already added by the seat loop above.
+            return perm.has_type("planeswalker")
+        if kind == "planeswalker":
+            # "target planeswalker" alone (Sparkhunter Masticore), with no player
+            # face in the union. Through `has_type` rather than the printed line,
+            # because a planeswalker is a computed type like any other (CR 613
+            # layer 4).
             return perm.has_type("planeswalker")
         if kind in ("creature", "any", "divided"):
             # Volcanic Eruption: a divided spell that targets Mountains, not creatures.

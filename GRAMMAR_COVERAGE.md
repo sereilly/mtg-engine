@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.9% | 42.2% | 151 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.6% | 42.7% | 152 |
-| M21 *(measured)* | 285 | 503 | 84.9% | 83.7% | 59.0% | 234 |
+| M21 *(measured)* | 285 | 503 | 85.7% | 84.5% | 59.8% | 235 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.8%** | **42.2%** | **640** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,8 +33,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 202 | 78 | expected a subject |  |
-| 87 | 31 | unrecognized effect verb |  |
-| 42 | 23 | unconsumed text |  |
+| 86 | 30 | unrecognized effect verb |  |
+| 40 | 21 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
 | 26 | 12 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
@@ -83,6 +83,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Exile target creature or planeswalker. Its controller creates a 4/4 white Angel creature token with flying.`
 - **Animal Sanctuary**
   - `{T}: Add {C}.`
+  - `{2}, {T}: Put a +1/+1 counter on target Bird, Cat, Dog, Goat, Ox, or Snake.`
 - **Ankh of Mishra**
   - `Whenever a land enters, this artifact deals 2 damage to that land's controller.`
   - `Whenever a land enters, this artifact deals 2 damage to that land's controller.`
@@ -229,6 +230,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
 - **Chromatic Orrery**
   - `{T}: Add {C}{C}{C}{C}{C}.`
+  - `{5}, {T}: Draw a card for each color among permanents you control.`
 - **Chrome Replicator**
   - `When this creature enters, if you control two or more nonland, nontoken permanents with the same name as one another, create a 4/4 colorless Construct artifact creature token.`
 - **Circle of Protection: Black**
@@ -423,6 +425,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{2}: Put target card from your graveyard on the bottom of your library.`
 - **Experimental Overload**
   - `Create an X/X blue and red Weird creature token, where X is the number of instant and sorcery cards in your graveyard. Then you may return an instant or sorcery card from your graveyard to your hand. Exile Experimental Overload.`
+- **Fabled Passage**
+  - `{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle. Then if you control four or more lands, untap that land.`
 - **Faith's Fetters**
   - `When this Aura enters, you gain 4 life.`
 - **Falconer Adept**
@@ -1204,6 +1208,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{T}: Add {C}{C}.`
   - `{T}: Add {C}{C}.`
 - **Solemn Simulacrum**
+  - `When this creature enters, you may search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.`
   - `When this creature dies, you may draw a card.`
 - **Sorceress Queen**
   - `{T}: Target creature other than this creature has base power and toughness 0/2 until end of turn.`

@@ -144,6 +144,37 @@ _REMINDER = re.compile(r"\([^)]*\)")
 _TRIGGER_PREFIX = re.compile(r"^\s*(when|whenever|at the beginning)\b")
 _TARGET_WORD = re.compile(r"\btargets?\b")
 
+# Three more line shapes whose target is not a *cast* target, each excluded for
+# the reason the trigger prefix above is. `_cast_lines` cannot drop them: it
+# splits on the activated-ability cost syntax, which none of these three has.
+#
+# * A **loyalty ability** ("+1:", "−3:") is activated (CR 606.3), so its target
+#   is chosen when the ability goes on the stack — `derive_activation_spec`
+#   answers for it, and the guard in test_activation_targeting.py is the one
+#   that holds it. M21 brought the first planeswalkers into the pool and every
+#   one of them landed here.
+# * A **modal bullet** is one alternative, and a mode derives its own spec
+#   (`graveyard_target_spec(..., mode_index=)`); the card as a whole names no
+#   single target, which is exactly what "Choose one" means.
+# * A **static** cost tax that says "spells your opponents cast that **target**
+#   this creature cost more" (Pursued Whale, Terror of the Peaks) uses the word
+#   about somebody else's spell. Nothing about this card is targeted.
+_LOYALTY_PREFIX = re.compile(r"^\s*[+−-]?\s*[0-9x]+\s*:", re.I)
+_MODAL_BULLET = re.compile(r"^\s*•")
+_TAXES_TARGETING_SPELLS = re.compile(r"spells .*that target .*cost")
+
+
+def _names_a_cast_target(line: str) -> bool:
+    """Whether *line* names a target the caster chooses as the spell is cast."""
+    if not _TARGET_WORD.search(line):
+        return False
+    return not (
+        _TRIGGER_PREFIX.match(line)
+        or _LOYALTY_PREFIX.match(line)
+        or _MODAL_BULLET.match(line)
+        or _TAXES_TARGETING_SPELLS.search(line)
+    )
+
 # Cards that name a target the UI has no picker for, with the reason. An entry
 # here is a card the engine resolves without asking, not one whose prompt went
 # missing.
@@ -171,9 +202,7 @@ def test_every_card_that_targets_as_it_is_cast_derives_its_own_prompt(supported_
         if card.name in _NO_PICKER:
             continue
         lines = [_REMINDER.sub("", line) for line in _cast_lines(card)]
-        if not any(
-            _TARGET_WORD.search(line) and not _TRIGGER_PREFIX.match(line) for line in lines
-        ):
+        if not any(_names_a_cast_target(line) for line in lines):
             continue
         if derive_cast_target(card, compile_card_oracle(card)) in (None, "none"):
             gaps.append(card.name)

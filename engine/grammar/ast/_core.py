@@ -54,6 +54,21 @@ class CountOfDeaths:
 
 
 @dataclass(frozen=True)
+class ColorsAmong:
+    """"for each color among permanents you control" — how many *colours* the
+    named objects have between them (Chromatic Orrery).
+
+    A third aggregate beside :class:`CountOf` and :class:`GreatestPowerAmong`,
+    and its own node for the same reason they are each other's: five permanents
+    can be one colour and one permanent can be five (CR 105.2b), so counting
+    the objects answers a different question from counting the colours among
+    them. A colourless permanent contributes nothing — colourless is not a
+    colour (CR 105.1).
+    """
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class GreatestPowerAmong:
     """"the greatest power among creature cards in your graveyard" — a
     *maximum*, not a count.

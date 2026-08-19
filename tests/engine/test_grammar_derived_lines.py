@@ -114,6 +114,15 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
     # prevent.
     unclaimed_kinds = {
         "must_attack_each_combat", "cant_be_blocked_by_walls", "cant_attack", "cant_block",
+        # "This creature can block only creatures with flying." (Shacklegeist,
+        # M21's first printing of the shape.) The derivation table implements it
+        # and the declare-blockers step dispatches on it; the grammar has no
+        # production, so the line fails the parser — which is what the assertion
+        # below checks, and is the safe direction.
+        "can_block_only_with_keyword",
+        # "This creature must be blocked if able." (Canopy Stalker.) Same
+        # position: the table implements it, the grammar does not read it.
+        "must_be_blocked",
     }
 
     compared = 0

@@ -421,10 +421,21 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             name, consumed = matched
             subtypes.append(name)
             stream.advance(consumed)
-            # "Djinn or Efreet" — collect alternatives.
-            while stream.at_word("or"):
+            # "Djinn or Efreet", and the comma-separated form a longer list is
+            # printed in: "Bird, Cat, Dog, Goat, Ox, or Snake" (Animal
+            # Sanctuary). Both spellings are one union — English punctuates a
+            # list of six differently from a list of two, and the card means the
+            # same thing either way.
+            #
+            # A comma is only consumed when a subtype follows it, so a phrase
+            # that ends its noun and goes on ("destroy target Wall, then draw a
+            # card") keeps the comma for whatever reads the rest.
+            while stream.at_word("or") or stream.at_punct(","):
                 probe = stream.mark()
                 stream.advance()
+                # "…, or Snake" — the final item carries both, and the comma
+                # above already moved past its own token.
+                stream.accept_word("or")
                 alternative = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
                 if alternative is None:
                     stream.reset(probe)

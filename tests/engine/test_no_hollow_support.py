@@ -266,10 +266,24 @@ def test_equipment_is_left_to_its_own_gate_like_an_aura():
         )
 
 
-def test_the_pool_scan_reaches_the_measured_set():
+def test_the_pool_scan_reaches_every_manifest_role():
     """The other half of why this was never found: the scan read the shipped
     pool alone, which is the half held at 100% support and looked at constantly.
-    All three cards live in M21."""
+    All three cards lived in M21, which was measured at the time.
+
+    M21 ships now, so "wider than the catalog" has nothing left to be wider
+    *than* — and asserting a strict superset would make this guard fail every
+    time a set is promoted, which is the moment it matters least. What is
+    actually being held is that the scan reads the manifest's **roles** rather
+    than one of them, so it is asked that way: every shipped card is scanned,
+    and every measured card would be too.
+    """
     names = {c.name for c in _whole_pool()}
     assert "Sanctum of Stone Fangs" in names
-    assert names > {c.name for c in load_catalog()}
+    assert names >= {c.name for c in load_catalog()}
+    measured = {
+        card.name
+        for path in manifest_set_paths(include_measured=True)
+        for card in load_cards(path)
+    }
+    assert names >= measured

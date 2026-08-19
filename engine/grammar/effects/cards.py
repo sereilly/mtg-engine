@@ -36,7 +36,42 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
         stream.reset(mark)
     count = parse_amount(stream)
     stream.expect_word("card", "cards")
+    # "draw a card **for each color among permanents you control**" (Chromatic
+    # Orrery) — a multiplier over the count just read, in the trailing position
+    # where "equal to" sits in front. Read here rather than as a wrapper around
+    # the whole statement: a "for each" after a draw multiplies the cards, and
+    # a production claiming it at statement level would take it away from the
+    # mana clause and the counter placement that print it too.
+    multiplier = _parse_draw_multiplier(stream)
+    if multiplier is not None:
+        # Only the plain "a card" spelling composes: "draw two cards for each …"
+        # is a product this AST has no node for, and reading it as the
+        # multiplier alone would halve the card's effect.
+        if not (isinstance(count, ast.Fixed) and count.value == 1):
+            raise stream.error("a per-each draw multiplies one card")
+        return ast.Draw(player, multiplier)
     return ast.Draw(player, count)
+
+
+def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":
+    """``for each color among <objects>`` after a draw, or None.
+
+    One aggregate today, and the words are what name it — the same way the
+    where-clause tells "the number of" from "the greatest power among". A "for
+    each <objects>" with no aggregate word is a plain count and is *not* claimed
+    here: the ordinary noun-phrase reading of it belongs to whatever production
+    already handles a per-each, and adding a second reader is how the two come
+    to disagree.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each", "color", "among"):
+        stream.reset(mark)
+        return None
+    try:
+        return ast.ColorsAmong(parse_object_filter(stream))
+    except GrammarError:
+        stream.reset(mark)
+        return None
 
 
 def _parse_mana_multiplier(stream: TokenStream) -> "ast.ObjectFilter | None":
@@ -476,6 +511,11 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # unparsed search rather than an unimplemented destination.
     stream.expect_word("into", "onto")
     destination = _parse_zone(stream)
+    # "…put it onto the battlefield **tapped**" (Fabled Passage). The two-card
+    # search has read this word since Cultivate; the single-find spelling had
+    # nowhere to put it and so failed the line on the word after the zone. Same
+    # field, one entry — how a find enters is part of where it goes.
+    tapped = bool(stream.accept_word("tapped"))
     if graveyard:
         # "…into your hand. If you search your library this way, shuffle."
         # A printed sentence break, but not a second effect: the shuffle is the
@@ -495,7 +535,56 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         stream.accept_punct(",")
         stream.accept_word("then")
         stream.expect_word("shuffle")
-    return ast.SearchLibrary(ast.PlayerRef("you"), filt, destination, graveyard)
+    condition, counted = _parse_search_untap_rider(stream)
+    return ast.SearchLibrary(
+        ast.PlayerRef("you"), filt, destination, graveyard, tapped=(tapped,),
+        untap_found_if=condition, untap_found_filter=counted,
+    )
+
+
+def _parse_search_untap_rider(stream: TokenStream):
+    """``Then if you control <n> or more <objects>, untap that <noun>.``
+    (Fabled Passage.) Returns (comparison, counted filter), or (None, None).
+
+    Read as a rider on the search rather than as the next sentence, because
+    "that land" is the card the search just found: the search arms a prompt and
+    resolves when the player answers it, so a following statement would run with
+    nothing chosen yet. Consuming the interior full stop here is the same move
+    the conditional-shuffle tail above makes, for the same reason.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None, None
+    if not stream.accept_phrase("then", "if", "you", "control"):
+        stream.reset(mark)
+        return None, None
+    amount = parse_amount(stream)
+    if not isinstance(amount, ast.Fixed) or not stream.accept_phrase("or", "more"):
+        stream.reset(mark)
+        return None, None
+    try:
+        counted = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None, None
+    stream.accept_punct(",")
+    if not stream.accept_word("untap"):
+        stream.reset(mark)
+        return None, None
+    # "untap **that land**" — the referent is the found card, and the noun has
+    # to agree with what was searched for. Read and required rather than
+    # skipped: a card saying "untap that creature" after a land search is a
+    # different sentence, and consuming the words without checking them is how a
+    # rider gets silently repointed.
+    if not stream.accept_word("that"):
+        stream.reset(mark)
+        return None, None
+    if stream.peek_word() is None:
+        stream.reset(mark)
+        return None, None
+    stream.advance()
+    return ast.Comparison("ge", amount), counted
 
 
 def _parse_two_card_search(stream: TokenStream, graveyard: bool) -> ast.Statement:

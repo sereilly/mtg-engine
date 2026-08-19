@@ -112,6 +112,16 @@ def evaluate_count(
         ]
         if aggregate == "greatest_power":
             return _halve(max((perm.effective_power for perm in matched), default=0), spec)
+        if aggregate == "distinct_colors":
+            # "for each color among permanents you control" (Chromatic Orrery).
+            # Through the layer-aware accessor, because a permanent's colour is
+            # computed (CR 613 layer 5) — a Mox that a text change made blue is
+            # blue here. Colourless contributes nothing: CR 105.1 says
+            # colourless is not a colour, so a board of artifacts draws nothing.
+            seen: set[str] = set()
+            for perm in matched:
+                seen.update(permanent_effective_colors(perm))
+            return _halve(len(seen), spec)
         return _halve(len(matched), spec)
     cards = getattr(owner, zone, None)
     if cards is None:

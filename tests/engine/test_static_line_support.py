@@ -42,6 +42,8 @@ from engine.lord_buffs import lord_buff_for
 from engine.global_statics import global_static_for
 from engine.library_top import library_top_line
 from engine.replacements import replacement_claims_line
+from engine.enter_effects import enter_effect_line
+from engine.grammar import compile_line
 from engine.oracle import (
     _is_supported_static_creature_line,
     compile_card_oracle,
@@ -127,6 +129,24 @@ def _derived(normalized: str) -> bool:
         # engine/library_top.py, which reads every controlled permanent's own
         # text through the same table the gate asks. The ninth derivation table.
         or library_top_line(normalized)
+        # "This creature enters tapped" (Forgotten Sentinel) — carried out by
+        # `_initialize_permanent_state`, from the same table the gate reads. The
+        # tenth derivation table, and the first entry-state one to reach here:
+        # M21 prints the phrase on a creature, where the shipped pool only had
+        # it on lands.
+        or enter_effect_line(normalized) is not None
+        # The strongest claim of all, and the last asked: **the grammar lowered
+        # this line to an instruction**. "This creature gets +X/+0, where X is
+        # the greatest power among creature cards in your graveyard" (Carrion
+        # Grub) is a `dynamic_pt_bonus` the parser produces directly, so no
+        # derivation table names it and every table above answers no — while the
+        # card carries a real instruction a real handler dispatches.
+        #
+        # Asked last on purpose: a table's claim says *which* code implements
+        # the line, which is what the map above this function is for, and an
+        # instruction only says that some code does. Both are backing; one is
+        # more informative.
+        or bool(compile_line(normalized).instructions)
     )
 
 

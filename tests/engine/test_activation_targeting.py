@@ -244,6 +244,14 @@ def test_a_shield_on_yourself_or_on_the_source_targets_nothing(by_name):
 _FALLBACK_ABILITIES: dict[tuple[str, int], str] = {}
 
 _REMINDER = re.compile(r"\([^)]*\)")
+# A **quoted** ability is not this ability's text. "You get an emblem with 'At
+# the beginning of combat on your turn, put target creature card from a
+# graveyard onto the battlefield…'" (Liliana, Waker of the Dead) targets nothing
+# when the loyalty ability resolves — the emblem it creates has an ability that
+# will, and that ability is compiled and asked separately when it triggers
+# (CR 114.2, CR 603.3d). Stripped for the same reason the reminder text above
+# is: it is text about something other than what this line does.
+_QUOTED = re.compile('[' + chr(34) + chr(0x201c) + '][^' + chr(34) + chr(0x201d) + ']*[' + chr(34) + chr(0x201d) + ']')
 # "of your choice" covers the Circle of Protection / Forcefield / Jade Monolith
 # style choices, which need the same picker as a target.
 _TARGETY = re.compile(r"\btargets?\b|\bof your choice\b")
@@ -252,7 +260,7 @@ _TARGETY = re.compile(r"\btargets?\b|\bof your choice\b")
 def _targeting_abilities(cards):
     for card in cards:
         for index, ability in enumerate(_abilities(card)):
-            line = _REMINDER.sub("", ability.source_line or "").lower()
+            line = _QUOTED.sub("", _REMINDER.sub("", ability.source_line or "")).lower()
             if _TARGETY.search(line):
                 yield card, index, ability, line
 
