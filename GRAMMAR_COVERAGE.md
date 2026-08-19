@@ -21,7 +21,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.9% | 42.2% | 151 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.6% | 42.7% | 152 |
-| M21 *(measured)* | 285 | 503 | 85.7% | 84.5% | 59.8% | 235 |
+| M21 *(measured)* | 285 | 503 | 86.1% | 85.1% | 60.4% | 235 |
 | **All (shipped)** | **1248** | **1663** | **78.1%** | **76.8%** | **42.2%** | **640** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,13 +33,13 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 202 | 78 | expected a subject |  |
-| 86 | 30 | unrecognized effect verb |  |
+| 84 | 28 | unrecognized effect verb |  |
 | 40 | 21 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
 | 26 | 12 | granted ability in quotes | phase 3 (quoted abilities) |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 4 | expected 'the number of' in a where-clause |  |
-| 7 | 2 | expected a colour after 'becomes' |  |
+| 7 | 2 | expected a colour or a creature body after 'becomes' |  |
 | 7 | 4 | expected a keyword ability |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
@@ -74,6 +74,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 - **Ali Baba**
   - `{R}: Tap target Wall.`
 - **Alpine Houndmaster**
+  - `When this creature enters, you may search your library for a card named Alpine Watchdog and/or a card named Igneous Cur, reveal them, put them into your hand, then shuffle.`
   - `Whenever this creature attacks, it gets +X/+0 until end of turn, where X is the number of other attacking creatures.`
 - **Ancestral Recall**
   - `Target player draws three cards.`
@@ -1043,6 +1044,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 - **Rewind**
   - `Counter target spell. Untap up to four lands.`
 - **Riddleform**
+  - `Whenever you cast a noncreature spell, you may have this enchantment become a 3/3 Sphinx creature with flying in addition to its other types until end of turn.`
   - `{2}{U}: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
 - **Righteousness**
   - `Target blocking creature gets +7/+7 until end of turn.`
@@ -1283,6 +1285,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{1}{U}, {T}: Draw a card, then discard a card.`
 - **Teferi's Tutelage**
   - `When this enchantment enters, draw a card, then discard a card.`
+  - `Whenever you draw a card, target opponent mills two cards. (They put the top two cards of their library into their graveyard.)`
 - **Teferi's Wavecaster**
   - `When this creature enters, you may search your library and/or graveyard for a card named Teferi, Timeless Voyager, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Tempered Veteran**

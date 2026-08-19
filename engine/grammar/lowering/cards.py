@@ -278,7 +278,14 @@ def _lower_mill(node: ast.Mill) -> tuple[OracleInstruction, ...]:
     which is the original reason this function refused everything.
     """
     payload: dict[str, object] = {"amount": _amount_payload(node.count)}
-    if node.player.kind == "target_player":
+    if node.player.kind in ("target_player", "target_opponent"):
+        # "Target **opponent** mills two cards" (Teferi's Tutelage). The handler
+        # already mills ``context.target``, whoever that is; what "opponent"
+        # changes is which seats the picker may offer (CR 115.4), and that rides
+        # on the targets description `_describe_targets` builds — the same
+        # `opponents_only` flag every other opponent-targeted effect carries.
+        # Reading it as a plain target player would have let the caster mill
+        # themselves.
         _describe_targets(payload, node.player)
         return (OracleInstruction("mill_target_player", "", payload),)
     if node.player.kind == "you":
@@ -634,11 +641,26 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
                 node=node,
             )
         destinations.append(_SEARCH_DESTINATIONS[zone.name])
+    # "a card named A **and/or** a card named B" (Alpine Houndmaster): one find
+    # per printed name, each optional. The names replace the single `named`
+    # restriction rather than joining it — the flow drops each name as it is
+    # used, so a `named` alongside them would narrow every find to the first.
+    if node.named_alternatives:
+        restrictions.pop("named", None)
+        restrictions["named_among"] = list(node.named_alternatives)
+        destinations = destinations * len(node.named_alternatives)
     payload: dict[str, object] = {"count": len(destinations), "card_type": card_type}
     if len(destinations) > 1:
         payload["destinations"] = destinations
-        payload["tapped"] = list(node.tapped) or [False] * len(destinations)
-        if node.up_to:
+        # One flag per destination, whatever the printed spelling gave: the
+        # named-alternatives form multiplied the destinations above and prints no
+        # "tapped" at all, and a short list would leave the last find reading a
+        # flag that is not there.
+        flags = list(node.tapped)
+        payload["tapped"] = (flags + [False] * len(destinations))[:len(destinations)]
+        # "and/or" is an "up to" in two words: either, both or neither is a
+        # legal answer, so the flow must let the player stop.
+        if node.up_to or node.named_alternatives:
             payload["up_to"] = True
     # Both keys are emitted only when the card carries them, so the payload of
     # every search printed before this change — Demonic Tutor's — stays

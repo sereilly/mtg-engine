@@ -489,12 +489,42 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # "a card named X" is read by the noun parser, like every other restriction
     # on what may be found — `_restrictions_beyond` sees it on the filter.
     filt = parse_object_filter(stream)
+    # "…**and/or** a card named Igneous Cur" (Alpine Houndmaster): a second
+    # find with its own name, and the "and/or" is what makes each one optional.
+    # Collected here because the names are the only thing that differs between
+    # the finds — everything else about them is the phrase already read.
+    alternatives: list[str] = []
+    while filt.named is not None and stream.at_word("and"):
+        probe = stream.mark()
+        if not stream.accept_phrase("and", "or", "a") and not stream.accept_phrase(
+            "and", "or", "an"
+        ):
+            stream.reset(probe)
+            break
+        try:
+            second = parse_object_filter(stream)
+        except GrammarError:
+            stream.reset(probe)
+            break
+        if second.named is None or dataclasses.replace(
+            second, named=filt.named
+        ) != filt:
+            # A second find that differs by more than its name is a different
+            # sentence: the flow below gives every find the same shape, so a
+            # phrase narrowing one of them differently would be dropped.
+            stream.reset(probe)
+            break
+        if not alternatives:
+            alternatives.append(filt.named)
+        alternatives.append(second.named)
     stream.accept_punct(",")
-    # "reveal it," — honoured rather than dropped: the search flow's log names
-    # the found card publicly ("searched library and put X into hand"), which
-    # is what revealing one card means to this engine.
+    # "reveal it," / "reveal them," — honoured rather than dropped: the search
+    # flow's log names the found card publicly ("searched library and put X into
+    # hand"), which is what revealing one card means to this engine. The plural
+    # is the two-name spelling of the same word.
     if stream.accept_word("reveal"):
-        stream.expect_word("it")
+        if not stream.accept_word("them"):
+            stream.expect_word("it")
         stream.accept_punct(",")
     # ", and put it into your hand" — the conjunction is the graveyard
     # template's punctuation, not a second effect: "put" must follow either way.
@@ -502,7 +532,7 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     stream.expect_word("put")
     # "put that card into your hand" / "put it into your hand" — one referent,
     # two printed spellings.
-    if not stream.accept_word("it"):
+    if not stream.accept_word("it", "them"):
         stream.expect_word("that")
         stream.expect_word("card")
     # "into your hand" / "onto the battlefield" — both prepositions are read so
@@ -538,6 +568,7 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     condition, counted = _parse_search_untap_rider(stream)
     return ast.SearchLibrary(
         ast.PlayerRef("you"), filt, destination, graveyard, tapped=(tapped,),
+        named_alternatives=tuple(alternatives),
         untap_found_if=condition, untap_found_filter=counted,
     )
 

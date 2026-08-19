@@ -352,6 +352,18 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
     if perm.metadata.get("has_deathtouch"):
         effects.append(grant_abilities(only, ["deathtouch"], timestamp=0, label="deathtouch"))
 
+    # "…becomes a 3/3 Sphinx creature **with flying**…" (Riddleform). The other
+    # half of the same record the type collector reads: one animation, two
+    # layers, and each half collected where its layer is — a grant recorded in
+    # the layer-4 collector is a grant `computed_abilities` never sees, which is
+    # what this comment is here to stop happening again.
+    animation = perm.metadata.get("animate_until_end_of_turn") or {}
+    granted = animation.get("keywords") or ()
+    if granted:
+        effects.append(grant_abilities(
+            only, granted, timestamp=0, label="animated until end of turn"
+        ))
+
     for walk in _LANDWALKS:
         if perm.metadata.get(f"has_{walk}"):
             effects.append(grant_abilities(only, [walk], timestamp=0, label=f"granted {walk}"))
@@ -421,6 +433,20 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             add_types(only, card_types=["creature"], timestamp=0, label="animated")
         )
 
+    # "…becomes a 3/3 Sphinx creature with flying **in addition to its other
+    # types** until end of turn." (Riddleform.) One record, three layers: the
+    # creature type and its subtypes are layer 4, the keyword is layer 6, and
+    # the P/T was set through `engine/pt.py` when the ability resolved. Added
+    # rather than replacing, which is what the printed phrase says.
+    animation = meta.get("animate_until_end_of_turn")
+    if animation:
+        effects.append(add_types(
+            only,
+            card_types=["creature"],
+            subtypes=animation.get("subtypes") or (),
+            timestamp=0,
+            label="animated until end of turn",
+        ))
     # Animate Artifact (CR 613.1d). Derived from the attached Aura, so the
     # artifact stops being a creature the moment the Aura leaves — where the
     # card-rebuilding version had to stash the original and restore it.

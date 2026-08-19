@@ -153,6 +153,12 @@ class SearchLibrary:
     #: the search would run before the player has answered its prompt, and would
     #: have nothing to refer to. The filter is what is counted; the threshold is
     #: how many are needed.
+    #: "a card named Alpine Watchdog **and/or** a card named Igneous Cur"
+    #: (Alpine Houndmaster). One find per printed name, each optional — the
+    #: "and/or" is what says a player may take either, both or neither. Its own
+    #: field rather than a filter, because the filter carries what *one* find may
+    #: be and this is a list of them.
+    named_alternatives: tuple[str, ...] = ()
     untap_found_if: "Comparison | None" = None
     untap_found_filter: "ObjectFilter | None" = None
 

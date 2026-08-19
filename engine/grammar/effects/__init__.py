@@ -46,7 +46,7 @@ from .characteristics import (
     _parse_remove_counter,
     _TEXT_CHANGE_MODES,
     _parse_change_text,
-    _parse_become_color,
+    _parse_becomes,
 )
 from .board import (
     _parse_sacrifice,
@@ -114,7 +114,7 @@ __all__ = [
     "_parse_remove_counter",
     "_TEXT_CHANGE_MODES",
     "_parse_change_text",
-    "_parse_become_color",
+    "_parse_becomes",
     "_parse_gain_control",
     "_parse_return",
     "_parse_destroy",

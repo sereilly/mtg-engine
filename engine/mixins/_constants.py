@@ -2,6 +2,9 @@ from __future__ import annotations
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
+    # Riddleform's self-animation: the record *is* the effect, so sweeping it
+    # here is what ends it — nothing was stashed and nothing is restored.
+    "animate_until_end_of_turn",
     "assign_combat_damage_as_unblocked_until_eot",
     "cant_be_blocked_until_eot",
     "must_attack_until_eot",

@@ -312,6 +312,20 @@ class PendingChoicesMixin:
         if not search_matches(card, choice.data):
             return False
         source.pop(library_index)
+        # "a card named A **and/or** a card named B" (Alpine Houndmaster): each
+        # printed name is one find. The name just used is dropped, so a library
+        # holding two copies of the first card cannot answer both finds with it
+        # — the union is what the *picker* may offer, not what one search may
+        # take twice.
+        among = list((choice.data.get("restrictions") or {}).get("named_among") or ())
+        if among:
+            from ...search_filters import name_key
+
+            remaining_names = [n for n in among if name_key(n) != name_key(card.name)]
+            choice.data["restrictions"] = {
+                **(choice.data.get("restrictions") or {}),
+                "named_among": remaining_names,
+            }
         # "…put it onto the battlefield, then shuffle" (Garruk, Unleashed's
         # emblem) — the found card enters play instead of the hand. The
         # destination was fixed when the search was armed; the wire cannot

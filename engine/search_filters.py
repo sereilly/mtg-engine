@@ -22,7 +22,7 @@ import re
 # set from the first and validates against the second, so a field added here
 # without a test — or a test added without the field — cannot drift apart:
 # there is one copy and the lowering imports it.
-SEARCH_RESTRICTIONS = frozenset({"mana_value", "named", "subtypes"})
+SEARCH_RESTRICTIONS = frozenset({"mana_value", "named", "named_among", "subtypes"})
 SEARCH_COMPARISONS = frozenset({"eq", "ge", "gt", "le", "lt"})
 
 _COMPARE = {
@@ -88,6 +88,14 @@ def search_matches(card, data: dict) -> bool:
             return False
     named = restrictions.get("named")
     if named is not None and name_key(card.name) != name_key(named):
+        return False
+    # "a card named Alpine Watchdog **and/or** a card named Igneous Cur"
+    # (Alpine Houndmaster). Each find has its own name; this is the union the
+    # *picker* offers, and which name each find actually consumed is settled by
+    # the find flow, which drops the name it used. Without the union the picker
+    # would offer only the first name and the second find could never be made.
+    among = restrictions.get("named_among")
+    if among and not any(name_key(card.name) == name_key(one) for one in among):
         return False
     mana_value = restrictions.get("mana_value")
     if mana_value is not None:

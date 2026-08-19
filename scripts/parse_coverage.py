@@ -720,7 +720,12 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         if cost_modifiers_for(normalized):
             coverage.claims.append((normalized, "cost_modifiers.py"))
             continue
-        if _is_supported_static_creature_line(line):
+        # With the card's **name**, because the gate collapses a legendary's
+        # self-reference ("Gadrak can't attack unless…", "during your turn,
+        # Radha has first strike") before matching. Called without it, every
+        # such line read as unclaimed while the compiler admitted it — the same
+        # name the two ability parsers below are already given.
+        if _is_supported_static_creature_line(line, card.name):
             coverage.claims.append((normalized, "static-line table"))
             continue
 

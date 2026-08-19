@@ -25,7 +25,7 @@ from .phrases import (
 )
 from .effects import (
     _parse_add_mana,
-    _parse_become_color,
+    _parse_becomes,
     _parse_cant_attack_or_block,
     _parse_cast_permission,
     _parse_change_text,
@@ -333,8 +333,8 @@ def _parse_subject_verb(
         if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):
             stream.advance()
             return _parse_sacrifice(stream, source_spec)
-        if token.text == "becomes":
-            return _parse_become_color(stream, source_spec)
+        if token.text in ("becomes", "become"):
+            return _parse_becomes(stream, source_spec)
         if token.text in ("phases", "phase"):
             # "Target creature you don't control phases out." (Teferi, Master
             # of Time) / "Each creature target opponent controls phases out.

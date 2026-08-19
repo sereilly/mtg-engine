@@ -256,55 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 134: an upkeep trigger takes the ordinary route
-
-*(2026-08-18.)* M21 **283 → 284** — Sanctum of All.
-
-> At the beginning of your upkeep, you may search your library and/or graveyard
-> for a Shrine card and put it onto the battlefield. If you search your library
-> this way, shuffle.
-> If a triggered ability of another Shrine you control triggers while you
-> control six or more Shrines, that ability triggers an additional time.
-
-Three refusals, and the largest was not about this card at all.
-
-**An upkeep trigger had exactly one dispatcher.** `engine/phases/upkeep_effects.py`
-keys handlers by `(condition, instruction kind)` and the upkeep step did nothing
-when the pair was absent, so the lowering *refused* every decomposed upkeep
-trigger rather than let it compile cleanly and be silent. The step now puts an
-ordinary trigger on the stack (CR 603.3) when the registry answers nothing, and
-the refusal has nothing left to protect. The registry keeps the interactive
-pay-or-consequence shapes and is asked first.
-
-That moved one shipped card. Living Artifact's "you may remove a vitality
-counter … if you do, you gain 1 life" was read as one fused kind and resolved
-inline; it is now read as the `may` it is and asks through the general
-`optional_pay` prompt. Same outcome, general seam — and its bespoke registry
-entry and its bespoke surfacing block are both gone, on the reachability guard's
-insistence. The move also surfaced a live bug: with **no** counter the offer was
-still made and the life still gained, because "removing from zero is a no-op" is
-right for a mandatory removal and wrong in front of an "if you do". It is an
-entry in `_action_is_takeable` now, beside sacrifice and discard.
-
-**A search may name a subtype.** "a **Shrine** card" — off the printed type line
-for the same reason a supertype is (CR 613.1: a card in a library has no
-computed characteristics). Adding the field to the honoured set and *emitting*
-the key are two things, and I did only the first: the deletion probe caught the
-dropped narrowing, which is what it is for.
-
-**CR 603.2d is a table, not a card.** "That ability triggers an additional time"
-is counted where an ability is put onto the stack — one site, so a fire site
-added later is covered by construction. Two restrictions the rule states and
-`engine/extra_triggers.py` enforces: a delayed or reflexive trigger has no
-source permanent to be an ability *of*, and counting once rather than recursing
-is the rule's "doesn't invoke itself repeatedly".
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Ten new tests, nine watched to fail on the round-133 engine; the two
-that pass are the below-threshold controls, each paired with an
-above-threshold twin on the same board.
-
 ## Round 135: a spell that takes several of its modes
 
 *(2026-08-18.)* M21 **284 → 285**, and the set is complete — Sublime Epiphany,
@@ -419,3 +370,61 @@ the rehearsal's findings — the label tables, the planeswalker picker, the
 activated-line reader, five parse-coverage channels, the compiled-ability
 channel — are done and in this round, because none of them needed the promotion
 to be right.
+
+## Round 137: three triggers that compiled and did nothing
+
+*(2026-08-18.)* The three cards round 136's second rehearsal named. Same shape
+as that round's three, one level up: the permanent support gate is any-of for
+**triggered** abilities too, so a working line hid a dead one.
+
+**Teferi's Tutelage** — "Whenever you draw a card, **target opponent** mills two
+cards." The handler already milled `context.target`; the lowering refused the
+recipient. What "opponent" changes is which seats the picker may offer
+(CR 115.4), and that rides on the targets description every other
+opponent-targeted effect already carries — read as a plain target player, the
+caster could have milled themselves.
+
+**Riddleform** — "…you may have this enchantment become a 3/3 Sphinx creature
+with flying **in addition to its other types** until end of turn." Three layers
+off one record: the creature type and the Sphinx subtype are layer 4, the flying
+is layer 6, the P/T goes through `engine/pt.py`. The record *is* the effect, so
+cleanup sweeping it is the whole of ending it — nothing stashed, nothing
+restored. Both printed clauses are required by the production: "in addition to
+its other types" is the difference between animating the permanent and replacing
+what it is, and "until end of turn" is the difference between this and a
+permanent animation.
+
+The keyword half taught its own lesson. Written into the *type* collector it did
+nothing at all, because `computed_abilities` reads the layer-6 collector — a
+grant recorded in the wrong collector is a grant nothing sees, and the comment
+beside it now says so.
+
+**Alpine Houndmaster** — "search your library for a card named Alpine Watchdog
+**and/or** a card named Igneous Cur". One find per printed name, each optional,
+which is what "and/or" says. The union is what the *picker* offers; the name a
+find used is dropped, so a library holding two Watchdogs cannot answer both
+finds with them and never reach the Cur — which is what the test puts on the
+board.
+
+Whole-pool diff: **no card changed support status**, and exactly three changed
+what their abilities do. Suite green, every `--check` gate green, shipped pool
+388/388, AI simulation byte-identical at 443 interactions, **zero hooks added**.
+Six new tests, all six watched to fail on the round-136 engine.
+
+**M21 still does not promote, and the blocker is now one thing.** The dead-ability
+scan is clean for M21 — the only entry left is Capture Sphere, whose "When this
+Aura enters, tap enchanted creature" is carried out by the Aura entry path
+exactly as its shipped LEA twin Paralyze is, and both were driven to confirm it.
+What remains is a **printed restriction nobody enforces**: "Activate only if a
+creature died this turn" (Caged Zombie), "…only if you control a creature with
+flying" (Celestial Enforcer), "…only if you have at least 7 life more than your
+starting life total and only as a sorcery" (Speaker of the Heavens). Driving
+Caged Zombie with no creature dead activates the ability and drains two life.
+
+That is not a dead ability — it is an ability that works *more often than the
+card allows* — and it wants the twin of `engine/cast_restrictions.py`: a
+text-keyed activation-restriction table, read by `mixins/stack/activation.py`,
+which today hard-codes two LEA phrases. Thirteen further parse-coverage
+sentences are attribution gaps rather than behaviour gaps (delayed triggers,
+modal trigger heads, equip, Nine Lives' replacement, three statics) and want
+channels, not code.

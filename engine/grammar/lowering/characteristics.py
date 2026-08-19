@@ -61,6 +61,34 @@ def _x_definition_spec(definition: ast.Amount, node) -> dict:
     raise LoweringError("only a count or a maximum can define X here", node=node)
 
 
+def _lower_become_creature(
+    node: ast.BecomeCreature,
+) -> tuple[OracleInstruction, ...]:
+    """"…becomes a 3/3 Sphinx creature with flying in addition to its other
+    types until end of turn." (Riddleform.)
+
+    Only the source animates. The handler sets the P/T on ``source_permanent``
+    and the layer bridge reads the rest off one metadata record, so a sentence
+    animating anything else would be pointed at the wrong permanent — refused
+    rather than silently redirected.
+    """
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "only the source animates itself until end of turn", node=node
+        )
+    return (
+        OracleInstruction(
+            "animate_self_until_eot", "",
+            {
+                "power": node.power,
+                "toughness": node.toughness,
+                "subtypes": list(node.subtypes),
+                "keywords": list(node.keywords),
+            },
+        ),
+    )
+
+
 def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     if node.per_each_tapped_this_way:
         # "…for each creature tapped **this way**" reaching here means no fuser

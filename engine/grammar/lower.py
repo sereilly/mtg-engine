@@ -94,6 +94,7 @@ from .lowering import (
     _lower_scry,
     _lower_modal_head,
     _lower_prevent_damage,
+    _lower_become_creature,
     _lower_pump,
     _lower_put_counter,
     _lower_phase_out,
@@ -265,6 +266,9 @@ def lower_statement(
 
     if isinstance(statement, ast.SacrificeUnlessPay):
         return _lower_sacrifice_unless_pay(statement)
+
+    if isinstance(statement, ast.BecomeCreature):
+        return _lower_become_creature(statement)
 
     if isinstance(statement, ast.BecomeColor):
         return _lower_become_color(statement)

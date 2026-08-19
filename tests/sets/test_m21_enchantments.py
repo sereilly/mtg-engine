@@ -1534,3 +1534,82 @@ def test_sanctum_of_all_does_not_double_an_opponents_shrine(set_pool):
         effect_kind="triggered_life",
     )
     assert len(game.stack) == 3
+
+
+# --- Round 137: three triggers that compiled and did nothing ----------------
+
+
+def test_riddleform_compiles_its_animation_trigger(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Riddleform"])
+    assert [t.supported for t in program.triggered_abilities] == [True]
+
+
+def test_riddleform_becomes_a_sphinx_and_stays_an_enchantment(set_pool):
+    """"…becomes a 3/3 Sphinx creature with flying **in addition to its other
+    types** until end of turn."
+
+    Three layers off one record: the creature type and the Sphinx subtype are
+    layer 4, the flying is layer 6, the P/T went through `engine/pt.py`. "In
+    addition" is the half a replacement reading would get wrong — an enchantment
+    that stopped being an enchantment is a different card.
+    """
+    pool = set_pool("M21")
+    riddleform = Permanent(card=pool["Riddleform"])
+    p1 = PlayerState(name="P1", battlefield=[riddleform], hand=[pool["Shock"]])
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game._settle()
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert riddleform.is_creature
+    assert (riddleform.effective_power, riddleform.effective_toughness) == (3, 3)
+    assert riddleform.has_keyword("flying")
+    assert riddleform.has_type("sphinx")
+    assert riddleform.has_type("enchantment"), "in addition to its other types"
+
+
+def test_riddleform_stops_being_a_creature_at_cleanup(set_pool):
+    """"Until end of turn" — and the record *is* the effect, so sweeping it is
+    the whole of ending it. Nothing was stashed and nothing is restored."""
+    pool = set_pool("M21")
+    riddleform = Permanent(card=pool["Riddleform"])
+    p1 = PlayerState(name="P1", battlefield=[riddleform], hand=[pool["Shock"]])
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game._settle()
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+    assert riddleform.is_creature
+
+    game.resolve_cleanup_step(0)
+
+    assert not riddleform.is_creature
+    assert not riddleform.has_keyword("flying")
+    assert riddleform.has_type("enchantment")
+
+
+def test_teferis_tutelage_mills_the_targeted_opponent(set_pool):
+    """"Whenever you draw a card, **target opponent** mills two cards." The
+    handler already milled `context.target`; what "opponent" changes is which
+    seats the picker may offer (CR 115.4), and a plain target-player reading
+    would have let the caster mill themselves."""
+    pool = set_pool("M21")
+    tutelage = Permanent(card=pool["Teferi's Tutelage"])
+    p1 = PlayerState(name="P1", battlefield=[tutelage], library=[pool["Shock"], pool["Island"]])
+    p2 = PlayerState(name="P2", library=[pool["Shock"], pool["Island"], pool["Forest"]])
+    game = Game(players=[p1, p2])
+    game._sync_control()
+
+    p1.draw(1)
+    game._settle()
+
+    assert [c.name for c in p2.graveyard] == ["Shock", "Island"]
+    assert p1.graveyard == [], "the caster is not a legal target for their own opponent-mill"

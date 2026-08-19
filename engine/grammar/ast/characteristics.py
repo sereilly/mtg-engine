@@ -125,6 +125,29 @@ class ChangeText:
 
 
 @dataclass(frozen=True)
+class BecomeCreature:
+    """"…becomes a 3/3 Sphinx creature with flying **in addition to its other
+    types** until end of turn." (Riddleform, CR 205.1b / CR 613 layer 4.)
+
+    An *addition*, not a replacement, which is the difference between this and
+    :class:`BecomeColor` below and the difference the printed words state: the
+    enchantment is still an enchantment while it is a creature, so anything that
+    destroys enchantments still reaches it. The phrase is required rather than
+    defaulted, because a card that replaced its types would be a different card
+    and the words are the only thing that says which.
+
+    ``until_end_of_turn`` is likewise required by the production: without a
+    duration this is a permanent animation, and the two differ by everything
+    that happens after the turn ends.
+    """
+    subject: Recipient
+    power: int
+    toughness: int
+    subtypes: tuple[str, ...] = ()
+    keywords: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class BecomeColor:
     """"Target spell or permanent becomes red." (the Lace cycle, CR 105.)
 

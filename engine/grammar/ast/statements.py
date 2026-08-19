@@ -39,6 +39,7 @@ from .damage import (
 )
 from .characteristics import (
     BecomeColor,
+    BecomeCreature,
     ChangeText,
     GainKeyword,
     LoseKeyword,
@@ -126,7 +127,7 @@ Effect = Union[
     AddManaForTappedLand, PreventDamage,
     SearchLibrary, SearchAndExile, ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
     RevealHandAndChoose,
-    Shuffle, ExtraTurn, EndTheTurn, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor,
+    Shuffle, ExtraTurn, EndTheTurn, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
     SacrificeUnlessPay, DamageUnlessPay, Fight, LookAtHand, CantBe, CombatRestriction,
     ChangeText, GainControl, RawEffect,
 ]

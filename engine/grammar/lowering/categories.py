@@ -56,6 +56,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     LAND_ANIMATION_KIND: "land_statics",
     STATIC_LAND_TYPE_KIND: "land_statics",
     "set_base_pt_target_until_eot": "pump",
+    # "…becomes a 3/3 Sphinx creature … until end of turn" (Riddleform).
+    # The "pump" family, because what the sentence does is set a P/T — the
+    # type change beside it is the layer bridge reading the same record.
+    "animate_self_until_eot": "pump",
     "set_team_base_pt_until_eot": "pump",
     "grant_target_flying_until_eot": "pump",
     "grant_self_flying_until_eot": "pump",

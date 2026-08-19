@@ -15,7 +15,8 @@ from ..errors import GrammarError
 from ..lexer import (GToken, PT, WORD)
 from ..nouns import (parse_object_filter, parse_recipient)
 from ..stream import TokenStream
-from ..vocabulary import (COLOR_WORDS)
+from ..vocabulary import (COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX, match_longest)
+
 from ..phrases import _COUNTER_KINDS, _parse_duration, _parse_for_each, _parse_keywords
 
 
@@ -448,13 +449,87 @@ def _parse_change_text(stream: TokenStream) -> ast.ChangeText:
     raise stream.error("no text substitution replaces this")
 
 
-def _parse_become_color(stream: TokenStream, subject: ast.Recipient) -> ast.BecomeColor:
-    """"<subject> becomes <colour>." The colour is the whole effect, so an
-    unrecognized word after "becomes" must fail rather than be skipped."""
-    stream.expect_word("becomes")
+def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
+    """"<subject> becomes <colour>" or "<subject> becomes a P/T <types> creature
+    …". One production, because the word is the same and what follows it is what
+    tells the two apart — a colour word, or a P/T.
+
+    The colour form is a *replacement* and the creature form is an *addition*,
+    which is the whole reason they are different nodes; both are the sentence's
+    entire effect, so a word after "becomes" that starts neither must fail
+    rather than be skipped.
+    """
+    # "…**become** a 3/3 Sphinx creature" is the same verb after the "you may
+    # have" wrapper has taken its subject; English changes the inflection and
+    # the card does not change what it does.
+    stream.expect_word("becomes", "become")
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
-    if word not in COLOR_WORDS:
-        raise stream.error("expected a colour after 'becomes'")
-    stream.advance()
-    return ast.BecomeColor(subject, COLOR_WORDS[word])
+    if word in COLOR_WORDS:
+        stream.advance()
+        return ast.BecomeColor(subject, COLOR_WORDS[word])
+    animated = _parse_become_creature(stream, subject)
+    if animated is not None:
+        return animated
+    raise stream.error("expected a colour or a creature body after 'becomes'")
+
+
+def _parse_become_creature(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.BecomeCreature | None":
+    """``a <P>/<T> <subtypes> creature [with <keywords>] in addition to its
+    other types until end of turn`` (Riddleform).
+
+    Every clause after the P/T is required, and each one is a way the sentence
+    would otherwise be silently narrowed:
+
+    * **"in addition to its other types"** is the difference between animating
+      the permanent and *replacing* what it is — an enchantment that stopped
+      being an enchantment is a different card;
+    * **"until end of turn"** is the difference between this and a permanent
+      animation, which is everything that happens after the turn ends.
+    """
+    mark = stream.mark()
+    stream.accept_word("a", "an")
+    try:
+        power, power_negative, toughness, toughness_negative = expect_pt(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if power_negative or toughness_negative or not (
+        isinstance(power, ast.Fixed) and isinstance(toughness, ast.Fixed)
+    ):
+        stream.reset(mark)
+        return None
+    subtypes: list[str] = []
+    while True:
+        matched = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
+        if matched is None:
+            break
+        subtypes.append(matched[0])
+        stream.advance(matched[1])
+    if not stream.accept_word("creature"):
+        stream.reset(mark)
+        return None
+    keywords: list[str] = []
+    if stream.accept_word("with"):
+        while True:
+            keyword = stream.peek_word()
+            if keyword is None or keyword not in IMPLEMENTED_KEYWORDS:
+                break
+            keywords.append(keyword)
+            stream.advance()
+            if not (stream.accept_word("and") or stream.accept_punct(",")):
+                break
+        if not keywords:
+            stream.reset(mark)
+            return None
+    if not stream.accept_phrase("in", "addition", "to", "its", "other", "types"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("until", "end", "of", "turn"):
+        stream.reset(mark)
+        return None
+    return ast.BecomeCreature(
+        subject, power.value, toughness.value, tuple(subtypes), tuple(keywords)
+    )

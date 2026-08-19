@@ -421,6 +421,42 @@ def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+#: The one record a self-animation leaves, read by the CR 613 layer bridge and
+#: swept at cleanup. A dict rather than a flag because the animation carries what
+#: the permanent *becomes* — a creature, of some subtypes, with some keywords —
+#: and a flag could only say that it became something.
+ANIMATE_UNTIL_EOT = "animate_until_end_of_turn"
+
+
+@effect_handler("animate_self_until_eot")
+def animate_self_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…becomes a 3/3 Sphinx creature with flying in addition to its other
+    types until end of turn." (Riddleform, CR 613 layers 4, 6 and 7b.)
+
+    The P/T is set through `engine/pt.py`, the single write API; everything else
+    is *recorded* and read back by the layer bridge, so nothing is stashed and
+    restored — the animation ends by the record being swept at cleanup, and the
+    permanent's own types were never touched.
+
+    "In addition to its other types" is why the record adds rather than
+    replaces: the enchantment is still an enchantment while it is a creature.
+    """
+    source = context.source_permanent
+    if source is None:
+        return False, "ability not implemented"
+    payload = instruction.payload
+    set_base_pt(source, int(payload.get("power", 0)), int(payload.get("toughness", 0)))
+    source.metadata[ANIMATE_UNTIL_EOT] = {
+        "subtypes": list(payload.get("subtypes") or ()),
+        "keywords": list(payload.get("keywords") or ()),
+    }
+    game.log.append(
+        f"{context.card.name} becomes a "
+        f"{payload.get('power', 0)}/{payload.get('toughness', 0)} creature until end of turn"
+    )
+    return True, "resolved"
+
+
 @effect_handler("animate_self_until_end_of_combat")
 def animate_self_until_end_of_combat(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card

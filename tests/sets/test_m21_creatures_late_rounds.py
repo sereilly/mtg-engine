@@ -2293,3 +2293,54 @@ def test_only_activated_abilities_are_granted(set_pool):
     game, _, snoop, _ = _snoop_board(set_pool, top="Goblin Arsonist")
 
     assert granted_top_abilities(game, snoop) == ()
+
+
+# --- Round 137: a search for two named cards, each optional -----------------
+
+
+def test_alpine_houndmaster_compiles_its_entry_search(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Alpine Houndmaster"])
+    assert [t.supported for t in program.triggered_abilities] == [True, True]
+
+
+def test_alpine_houndmaster_finds_each_named_card_once(set_pool):
+    """"a card named Alpine Watchdog **and/or** a card named Igneous Cur" — one
+    find per printed name. The library holds two Watchdogs, so a search that
+    read the names as a union without dropping the one it used could answer both
+    finds with the same card and never find the Cur."""
+    from engine.search_filters import search_matches
+
+    pool = set_pool("M21")
+    hound = Permanent(card=pool["Alpine Houndmaster"])
+    p1 = PlayerState(
+        name="P1",
+        library=[
+            pool["Alpine Watchdog"], pool["Igneous Cur"],
+            pool["Forest"], pool["Alpine Watchdog"],
+        ],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game._put_permanent_onto_battlefield(0, hound, None)
+    game._settle()
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    first = game.pending_choices[0]
+    assert [c.name for c in p1.library if search_matches(c, first.data)] == [
+        "Alpine Watchdog", "Igneous Cur", "Alpine Watchdog",
+    ]
+    game.confirm_search_library(0, 0, zone="library")
+    game._settle()
+
+    second = game.pending_choices[0]
+    assert [c.name for c in p1.library if search_matches(c, second.data)] == ["Igneous Cur"], (
+        "the name already used is no longer on offer"
+    )
+    game.confirm_search_library(
+        0, next(i for i, c in enumerate(p1.library) if c.name == "Igneous Cur"), zone="library"
+    )
+    game._settle()
+
+    assert sorted(c.name for c in p1.hand) == ["Alpine Watchdog", "Igneous Cur"]
