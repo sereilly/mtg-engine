@@ -1283,6 +1283,23 @@ class GameHelpersMixin:
         slot in a different list, so the battlefield stamping below answers a
         question the item never asked: Raise Dead naming graveyard slot 1 was
         handed the id of whatever permanent sat in battlefield slot 1."""
+        # Each chosen mode of a multi-mode spell names its own object, so each
+        # one is stamped here for the same reason the item's own target is: the
+        # index was chosen while it still meant what it said, and this is the
+        # boundary it stops being safe to hold one across (CR 400.7).
+        for mode in item.chosen_modes:
+            if mode.target_permanent_index is None or mode.target_permanent_id is not None:
+                continue
+            seat = mode.target_player_index
+            if seat is None:
+                seat = (
+                    1 - item.caster_index if len(self.players) == 2
+                    else item.caster_index
+                )
+            if 0 <= seat < len(self.players):
+                mode.target_permanent_id = self.permanent_ids_at(
+                    seat, mode.target_permanent_index
+                )
         spec = graveyard_target_spec(
             item.card,
             compile_card_oracle(item.card),

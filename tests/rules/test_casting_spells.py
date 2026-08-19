@@ -813,20 +813,64 @@ def test_700_2_a_single_bulleted_option_is_not_a_modal_spell():
 
 
 @pytest.mark.cr("700.2")
-def test_700_2_a_head_choosing_several_modes_is_not_reduced_to_one():
-    """"Choose one or more —" asks for a number of modes the engine cannot
-    announce or resolve — it carries one chosen mode. Reading it as plain
-    "choose one" would make the card a strictly weaker spell that still reported
-    itself as working, which is worse than refusing it."""
+def test_700_2_a_head_choosing_a_fixed_several_is_not_reduced_to_one():
+    """"Choose two -" asks for a number of modes the engine cannot announce or
+    resolve, and reading it as plain "choose one" would make the card a strictly
+    weaker spell that still reported itself as working.
+
+    "Choose one **or more**" was this test's example until the stack learned to
+    carry a list of chosen modes, and is read now (Sublime Epiphany). An exact
+    count above one is not: nothing in the pool prints one, so the bound would
+    ship unexercised, and a wrong bound is a spell performing a mode nobody
+    chose. The rule the test states has not moved - the head's number is either
+    understood or the card is refused.
+    """
     several = _mk_card(
         "Several Modes Test",
         "Instant",
-        "Choose one or more —\n• Target player gains 3 life.\n• Target player loses 2 life.",
+        "Choose two —\n• Target player gains 3 life.\n• Target player loses 2 life.",
     )
     program = compile_card_oracle(several)
 
     assert program.modes == ()
     assert program.supported is False
+
+
+@pytest.mark.cr("700.2d")
+def test_700_2d_a_head_choosing_one_or_more_may_take_several_modes():
+    """700.2d: "some spells ... instruct a player to choose one or more". The
+    modes are read, the program records that more than one may be taken, and
+    the cast path performs every one chosen — in **printed** order
+    (CR 608.2c), whatever order they were named in.
+
+    The refusal above and this pair on the same card shape: what separates them
+    is the printed count, which is the whole thing being read.
+    """
+    card = _mk_card(
+        "Several Modes Test",
+        "Instant",
+        "Choose one or more —\n• Target player gains 3 life.\n• Target player loses 2 life.",
+    )
+    p1 = PlayerState(name="P1", hand=[card], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    program = compile_card_oracle(card)
+    assert program.modes_at_least is True
+
+    # Named in the *reverse* printed order, so the order the effects happen in
+    # is the card's and not the caller's.
+    result = game.cast_from_hand(
+        0, "Several Modes Test",
+        mode_choices=[
+            {"index": 1, "target_player_index": 1},
+            {"index": 0, "target_player_index": 0},
+        ],
+    )
+
+    assert result.supported, result.details
+    assert (p1.life, p2.life) == (23, 18)
 
 
 @pytest.mark.cr("601.2c")
@@ -898,3 +942,110 @@ def test_601_2c_each_announced_slot_names_its_own_object():
     assert result.supported, result.details
     assert sorted(c.name for c in p1.hand) == ["First Bear", "Second Bear"]
     assert [c.name for c in p1.graveyard] == ["Third Bear", "Dredge Up"]
+
+
+# ---------------------------------------------------------------------------
+# CR 700.2d / 608.2c - a spell that takes several of its modes
+# ---------------------------------------------------------------------------
+
+_TWO_MODES = "• Target player gains 3 life.\n• Target player loses 2 life."
+
+
+def _modal_pair(head: str):
+    """A two-mode instant with *head* above its bullets, and a duel to cast it."""
+    card = _mk_card("Modal Probe", "Instant", head + "\n" + _TWO_MODES)
+    p1 = PlayerState(name="P1", hand=[card, card], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+@pytest.mark.cr("601.2b", "700.2d")
+def test_601_2b_a_choose_one_head_refuses_a_second_mode():
+    """"Choose one —" is a bound, and the cast path enforces it. Without this a
+    caller could hand any modal spell every bullet it prints, which is the same
+    spell only strictly better.
+
+    Paired with the head below, so what the pair reads is the printed count and
+    not the number of modes offered.
+    """
+    game, p1, p2 = _modal_pair("Choose one —")
+
+    result = game.cast_from_hand(
+        0, "Modal Probe",
+        mode_choices=[
+            {"index": 0, "target_player_index": 0},
+            {"index": 1, "target_player_index": 1},
+        ],
+    )
+
+    assert not result.supported
+    assert "chooses one mode" in result.details
+    assert (p1.life, p2.life) == (20, 20), "refused before anything happened"
+
+
+@pytest.mark.cr("700.2d")
+def test_700_2d_a_choose_one_or_more_head_takes_both():
+    """The same two modes under the head that allows them."""
+    game, p1, p2 = _modal_pair("Choose one or more —")
+
+    result = game.cast_from_hand(
+        0, "Modal Probe",
+        mode_choices=[
+            {"index": 0, "target_player_index": 0},
+            {"index": 1, "target_player_index": 1},
+        ],
+    )
+
+    assert result.supported, result.details
+    assert (p1.life, p2.life) == (23, 18)
+
+
+@pytest.mark.cr("700.2d")
+def test_700_2d_the_same_mode_cannot_be_chosen_twice():
+    """700.2d: the same mode may be chosen again only if the card says so, and
+    nothing in this pool does. Refused rather than deduplicated - a caller
+    asking for a mode twice is asking for something the card does not offer, and
+    silently giving them one is the wrong half of the answer."""
+    game, p1, p2 = _modal_pair("Choose one or more —")
+
+    result = game.cast_from_hand(
+        0, "Modal Probe",
+        mode_choices=[
+            {"index": 0, "target_player_index": 0},
+            {"index": 0, "target_player_index": 0},
+        ],
+    )
+
+    assert not result.supported
+    assert "chosen twice" in result.details
+    assert p1.life == 20
+
+
+@pytest.mark.cr("608.2c")
+def test_608_2c_chosen_modes_resolve_in_printed_order():
+    """608.2c: a modal spell's chosen modes resolve in the order written on the
+    card, not the order the caster named them.
+
+    Both modes point at the same player, so the *order* is what the life total
+    and the log record; a test asserting only that both happened would pass
+    either way round.
+    """
+    game, p1, p2 = _modal_pair("Choose one or more —")
+
+    result = game.cast_from_hand(
+        0, "Modal Probe",
+        mode_choices=[
+            {"index": 1, "target_player_index": 0},
+            {"index": 0, "target_player_index": 0},
+        ],
+    )
+
+    assert result.supported, result.details
+    assert p1.life == 21
+    # Gained first, then lost - which is what the card prints, where the caster
+    # named them the other way round.
+    gained = next(i for i, line in enumerate(game.log) if "gained 3 life" in line)
+    lost = next(i for i, line in enumerate(game.log) if "lost 2 life" in line)
+    assert gained < lost

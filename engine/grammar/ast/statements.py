@@ -90,6 +90,7 @@ from .cards import (
 )
 from .stack import (
     CopyThatSpell,
+    CounterAbility,
     CounterSpell,
     ModalNode,
 )
@@ -99,6 +100,7 @@ from .combat import (
 )
 from .game import (
     CreateEmblem,
+    CreateCopyToken,
     CreateToken,
     DrawGame,
     EndTheTurn,
@@ -116,7 +118,7 @@ Effect = Union[
     DoublePower,
     GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice, Exile, Tap, Untap,
     TapOrUntap, DoesntUntapNextStep,
-    Regenerate, CopyThatSpell, CounterSpell, ModalNode, ReturnToZone, CreateToken, AddMana,
+    Regenerate, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     RevealTop, RevealUntil, NameAndStrip,
     ExileGraveyardUntilLeaves, CastFromExiledWith,

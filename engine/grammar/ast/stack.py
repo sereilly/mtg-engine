@@ -21,6 +21,23 @@ from ._core import (
 
 
 @dataclass(frozen=True)
+class CounterAbility:
+    """``Counter target activated or triggered ability.`` (Sublime Epiphany.)
+
+    CR 701.5a removes the object from the stack and it does nothing. Separate
+    from :class:`CounterSpell` because the object is different: a spell has a
+    card that goes to its owner's graveyard (CR 701.5a's second sentence), and
+    an ability on the stack has no card at all (CR 113.7a) — nothing to move,
+    nothing to exile instead, and no "unless its controller pays" flow, which
+    is offered to a spell's controller while the *spell* waits.
+
+    Which kinds are named lives on the subject's filter, so "counter target
+    activated ability" is the same node with a narrower phrase.
+    """
+    subject: TargetSpec
+
+
+@dataclass(frozen=True)
 class CounterSpell:
     subject: TargetSpec
     # "unless its controller pays {X}" (Power Sink) — CR 118.3c: the spell is

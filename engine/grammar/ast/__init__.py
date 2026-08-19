@@ -143,6 +143,7 @@ from .cards import (
 )
 from .stack import (
     CopyThatSpell,
+    CounterAbility,
     CounterSpell,
     ModalNode,
 )
@@ -154,6 +155,7 @@ from .game import (
     CreateEmblem,
     GainLife,
     LoseLife,
+    CreateCopyToken,
     CreateToken,
     EndTheTurn,
     ExtraTurn,
@@ -286,6 +288,7 @@ __all__ = [
     "RevealTopToHandOrBottom",
     # stack
     "CopyThatSpell",
+    "CounterAbility",
     "CounterSpell",
     "ModalNode",
     # combat
@@ -295,6 +298,7 @@ __all__ = [
     "CreateEmblem",
     "GainLife",
     "LoseLife",
+    "CreateCopyToken",
     "CreateToken",
     "EndTheTurn",
     "ExtraTurn",

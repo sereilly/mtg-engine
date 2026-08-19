@@ -13,7 +13,7 @@ from ...tokens import PREDEFINED_TOKENS
 from .. import ast
 from ..amounts import expect_pt, parse_amount
 from ..lexer import (QUOTE, WORD)
-from ..nouns import (parse_object_filter)
+from ..nouns import (parse_object_filter, parse_target_spec)
 from ..phrases import _parse_for_each
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX, match_longest)
@@ -125,6 +125,20 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     # alone: its characteristics belong to the token and live in
     # `engine/tokens.py`, so the card states nothing but which one. Read before
     # the P/T, which such a token has none of.
+    # "Create a token **that's a copy of** target creature you control."
+    # (Sublime Epiphany.) Read before the P/T, which a copy has none of: its
+    # characteristics come from the permanent it copies (CR 707.2), not from
+    # this sentence.
+    mark_copy = stream.mark()
+    if stream.accept_word("token", "tokens") and stream.accept_phrase(
+        "that", "'s", "a", "copy", "of"
+    ):
+        subject = parse_target_spec(stream)
+        if subject is None:
+            raise stream.error("expected what the token copies")
+        return ast.CreateCopyToken(count, subject)
+    stream.reset(mark_copy)
+
     named = stream.peek_word()
     predefined = PREDEFINED_TOKENS.get(named or "")
     if predefined is not None:

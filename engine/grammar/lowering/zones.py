@@ -238,9 +238,13 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
     # Archmage). Stripped before the blanket refusal below so only these two —
     # not every adjective — pass; the graveyard handlers still see the full
     # filter and keep their own gates.
-    bounce_extras = (filt.excluded_subtypes, filt.other_than_source, filt.controller)
+    bounce_extras = (
+        filt.excluded_subtypes, filt.other_than_source, filt.controller,
+        filt.excluded_types,
+    )
     bare_for_gate = dataclasses.replace(
-        filt, excluded_subtypes=(), other_than_source=False, controller=None
+        filt, excluded_subtypes=(), other_than_source=False, controller=None,
+        excluded_types=(),
     )
     if node.from_zone is None and _reads_no_return_restriction(bare_for_gate):
         raise LoweringError("no return handler honours this restriction", node=node)
@@ -289,7 +293,14 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
             raise LoweringError("the bounce handler returns a permanent to its owner", node=node)
         if filt.is_card:
             raise LoweringError("no handler bounces a card that is not in play", node=node)
-        if set(filt.card_types) not in ({"creature"}, {"creature", "planeswalker"}):
+        # "target **nonland** permanent" (Sublime Epiphany) names no card type
+        # at all — the phrase is an exclusion. The handler's filter path already
+        # answers it through ``subject_matches``, so what has to hold is that
+        # the phrase leaves *something* behind for that path to test: a bare
+        # "target permanent" would be admitted here and then bounce a land,
+        # which is the case this refusal was written for.
+        widened = set(filt.card_types) in ({"creature"}, {"creature", "planeswalker"})
+        if not widened and not filt.excluded_types:
             raise LoweringError("the bounce handler only returns creatures", node=node)
         if any(bounce_extras) or filt.card_types != ("creature",):
             # A narrowed or widened bounce carries what the handler's
@@ -299,7 +310,8 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
                 key: value
                 for key, value in _filter_payload(filt).items()
                 if key in (
-                    "type_filter", "exclude_subtypes", "exclude_self", "controller",
+                    "type_filter", "exclude_types", "exclude_subtypes",
+                    "exclude_self", "controller",
                 )
             }}
             _describe_targets(payload, subject)

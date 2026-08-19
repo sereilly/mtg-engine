@@ -9,6 +9,7 @@ changes what a permanent is, and all of them change the state a player is in.
 """
 
 from ...oracle_types import OracleInstruction, X_FROM_COUNT
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
@@ -18,6 +19,7 @@ from ._common import (
     count_spec,
     halved_count_spec,
     _describe_targets,
+    _filter_payload,
     _restrictions_beyond,
 )
 
@@ -135,6 +137,34 @@ def _lower_gain_life(
 def _title(words: str) -> str:
     """Title-case a lexed vocabulary word, preserving multiword entries."""
     return " ".join(part.capitalize() for part in words.split())
+
+
+def _lower_create_copy_token(
+    node: ast.CreateCopyToken,
+) -> tuple[OracleInstruction, ...]:
+    """"Create a token that's a copy of target creature you control."
+    (Sublime Epiphany.)
+
+    The filter is carried, not collapsed: "**you control**" is half the card,
+    and a copy token made from an opponent's creature is a different and much
+    better spell. Checked against what the resolver can test, the same gate
+    every targeted effect goes through — a phrase the matcher cannot answer
+    would be a restriction the handler silently ignores.
+    """
+    if node.subject.quantifier != "target":
+        raise LoweringError("the copy token copies a chosen permanent", node=node)
+    payload: dict[str, object] = {"count": _amount_payload(node.count)}
+    described = _filter_payload(node.subject.filter)
+    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
+    if leftover:
+        raise LoweringError(
+            "the copy token cannot test this restriction: " + ", ".join(sorted(leftover)),
+            node=node,
+        )
+    if described:
+        payload["filter"] = described
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("create_copy_token", "", payload),)
 
 
 def _lower_create_token(

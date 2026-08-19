@@ -209,6 +209,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # this turn", Destructive Tampering's second mode).
     "cant_block_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
+    "counter_stack_ability": "counterspells",
     # Double Vision. Its own category name would be a family of one; copying a
     # spell on the stack is the same family as countering one.
     "copy_triggering_spell": "counterspells",
@@ -246,6 +247,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # stack, because CR 605.4a says a triggered mana ability never uses it.
     "add_mana_for_tapped_land": "mana",
     "create_token": "tokens",
+    "create_copy_token": "tokens",
     # Flipping a coin (CR 705). Its own category rather than sharing one with
     # the effect it gates: the flip is a randomiser, and every branch behind it
     # keeps the category of whatever that branch does — a coin flip over a

@@ -239,11 +239,27 @@ def test_the_mode_count_is_read_rather_than_assumed():
 def test_a_head_the_engine_cannot_carry_out_is_read_then_refused():
     """Parsed in full and refused at *lowering*, which is where "the engine has
     no way to do this" belongs — the alternative is a card that compiles
-    cleanly and picks one mode where the text says several."""
-    result = compile_line("Choose one or more —")
+    cleanly and picks one mode where the text says several.
+
+    "Choose one **or more**" was the example until the stack learned to carry a
+    list of chosen modes; it is read now. An exact count above one still is not,
+    and for the reason the refusal was always about: nothing in the pool prints
+    it, so the bound would ship unexercised, and a wrong bound is a spell
+    performing a mode its controller never chose.
+    """
+    result = compile_line("Choose two —")
     assert result.parsed
     assert not result.lowered
-    assert "one chosen mode" in result.lowering_error
+    assert "has no representation" in result.lowering_error
+
+
+def test_a_head_choosing_one_or_more_is_carried():
+    """The counterpart: parsed, lowered, and marked as the multi-mode head it
+    is. Paired with the refusal above so the difference between the two counts
+    is what the pair reads, not the presence of a head."""
+    result = compile_line("Choose one or more —")
+    assert result.parsed and result.lowered
+    assert result.node.statement.at_least is True
 
 
 @pytest.mark.parametrize(

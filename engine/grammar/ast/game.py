@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from ._core import (
     Amount,
     PlayerRef,
+    TargetSpec,
 )
 
 
@@ -89,6 +90,21 @@ class CreateToken:
     # from `engine/tokens.py`'s table at parse time rather than left for the
     # handler to look up again, so the AST says everything the token is.
     oracle_text: str | None = None
+
+
+@dataclass(frozen=True)
+class CreateCopyToken:
+    """``Create a token that's a copy of target creature you control.``
+    (Sublime Epiphany.)
+
+    Its own node rather than a field on :class:`CreateToken`, because none of
+    that node's fields apply: a copy has no printed P/T, colour, type line,
+    name or keyword list of its own — CR 707.2 gives it the copied permanent's
+    *copiable* values, and every one of those fields would be a second,
+    disagreeing answer to a question the copy effect already settles.
+    """
+    count: Amount
+    subject: TargetSpec
 
 
 @dataclass(frozen=True)

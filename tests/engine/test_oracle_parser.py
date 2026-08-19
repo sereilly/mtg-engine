@@ -117,12 +117,34 @@ def test_a_mode_nothing_reads_refuses_the_whole_card():
     assert "Ponder the infinite" in program.reason
 
 
-def test_a_head_asking_for_more_than_one_mode_is_not_read_as_choose_one():
-    """Sublime Epiphany. "choose one" is a substring of "choose one or more",
-    and the test this replaced matched it — so a spell whose controller picks
-    several modes compiled as one that picks the first. The grammar reads the
-    count, refuses it, and the refusal reaches here as a head with no modes at
-    all rather than as a wrong number of them."""
+def test_a_head_asking_for_a_count_the_engine_cannot_carry_is_not_read_as_choose_one():
+    """"choose one" is a substring of "choose one or more", and the test this
+    replaced matched it, so a spell whose controller picks several modes
+    compiled as one that picks the first. The grammar reads the *count*, and a
+    count it refuses reaches here as a head with no modes at all rather than as
+    a wrong number of them.
+
+    "One or more" is carried now (Sublime Epiphany); an exact count above one is
+    still refused, so that is what this asks about. The point is unchanged: the
+    number the head printed is either understood or the card is unsupported.
+    """
+    card = _mk_card(
+        "Epiphany Test",
+        "Instant",
+        "Choose two —\n• Counter target spell.\n• Target player draws a card.",
+    )
+
+    program = compile_card_oracle(card)
+
+    assert program.modes == ()
+    assert program.supported is False
+
+
+def test_a_head_choosing_one_or_more_carries_its_modes_and_says_so():
+    """The counterpart, on the same card shape: the modes are read *and* the
+    program records that more than one may be chosen. Recording the bound is the
+    half that matters — a mode list without it is a spell the cast path would
+    still hold to one mode."""
     card = _mk_card(
         "Epiphany Test",
         "Instant",
@@ -131,8 +153,11 @@ def test_a_head_asking_for_more_than_one_mode_is_not_read_as_choose_one():
 
     program = compile_card_oracle(card)
 
-    assert program.modes == ()
-    assert program.supported is False
+    assert [m.label for m in program.modes] == [
+        "Counter target spell", "Target player draws a card",
+    ]
+    assert program.modes_at_least is True
+    assert program.supported is True
 
 
 def test_a_lone_bullet_under_a_head_is_not_a_mode_list():

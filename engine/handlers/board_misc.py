@@ -437,6 +437,53 @@ def animate_self_until_end_of_combat(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+@effect_handler("create_copy_token")
+def create_copy_token(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Create a token that's a copy of target creature you control."
+    (Sublime Epiphany.)
+
+    What a token is and what a copy is are two rules, and both live one layer
+    down: ``Game.create_token_copy`` performs them, because CR 613 layer 1 is
+    applied in exactly one module and this handler is not it.
+
+    What is decided *here* is the printed phrase. The filter is enforced rather
+    than trusted, and the target is strict (CR 608.2b): a target that has left,
+    or that no longer answers "creature you control", makes no token at all.
+    There is nothing sensible to fall back to — a copy of some other creature is
+    not a smaller version of this effect, it is a different one.
+    """
+    from ..subject_filters import subject_matches
+
+    caster = context.caster
+    controller_index = game.players.index(caster)
+    described = dict(instruction.payload.get("filter") or {})
+
+    def _legal(perm) -> bool:
+        return not described or subject_matches(
+            game, perm, described,
+            observer=controller_index, source=context.source_permanent,
+        )
+
+    # No ``fallback_players``: a scan for *some* legal creature is what makes an
+    # illegal choice quietly succeed, and CR 608.2b says an illegal target makes
+    # that part of the spell do nothing. Copying a different creature is not a
+    # smaller version of this effect.
+    source = resolve_target_permanent(
+        game, context, fallback_on_invalid_choice=False, predicate=_legal,
+    )
+    if source is None:
+        game.log.append(f"{context.card.name}: no legal creature to copy")
+        return True, "resolved"
+
+    count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
+    for _ in range(max(0, count)):
+        game.create_token_copy(controller_index, source)
+        game.log.append(
+            f"{context.card.name} created a token copy of {source.card.name}"
+        )
+    return True, "resolved"
+
+
 @effect_handler("create_token")
 def create_token(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Generic token creation: payload carries name / P/T / type_line / colors /

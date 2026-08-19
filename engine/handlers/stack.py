@@ -107,6 +107,66 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
     return True, "resolved"
 
 
+#: How a stack object's recorded ``ability_effect_kind`` says which kind of
+#: ability it is. `engine/effect_labels.py` produces these prefixes and
+#: `web/serialization.py` already reads the triggered one to set `is_triggered`;
+#: reading them here rather than keeping a third opinion is what stops the
+#: three drifting.
+_ABILITY_KIND_PREFIXES = {"triggered": "triggered_", "activated": "activated_"}
+
+
+def _stack_ability_kind(item) -> str | None:
+    """Which kind of ability *item* is, or None when it is not one.
+
+    A spell is not an ability however it was put on the stack, and the test is
+    the presence of an ``ability_instruction`` rather than the absence of a
+    card: a triggered ability carries the source permanent's card for its
+    display name (CR 113.7a gives the ability no card of its own).
+    """
+    if item.ability_instruction is None:
+        return None
+    label = item.ability_effect_kind or ""
+    for kind, prefix in _ABILITY_KIND_PREFIXES.items():
+        if label.startswith(prefix):
+            return kind
+    # An ability whose label says neither. It is still an ability on the stack,
+    # and "activated or triggered" is every ability a player can respond to
+    # (CR 113.3a–c: the third kind is static and never uses the stack), so
+    # reporting None here would make a real object uncounterable.
+    return "triggered" if item.trigger_context is not None else "activated"
+
+
+@effect_handler("counter_stack_ability")
+def counter_stack_ability(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Counter target activated or triggered ability." (Sublime Epiphany.)
+
+    CR 701.5a: the object is removed from the stack and does nothing. Nothing
+    else happens — an ability has no card, so there is no graveyard move to
+    make and no "exile it instead" rider to honour.
+
+    Strict about its target (CR 608.2b): the chosen object is countered or
+    nothing is. Falling back to the top of the stack, the way the spell counter
+    does, would let this counter the *ability that put this spell's own effect
+    there* on a board where the chosen one had already resolved.
+    """
+    card = context.card
+    chosen = context.stack_target
+    if chosen is None or chosen not in game.stack:
+        game.log.append(f"{card.name}: the targeted ability is no longer on the stack")
+        return True, "resolved"
+    kind = _stack_ability_kind(chosen)
+    wanted = tuple(instruction.payload.get("ability_kinds") or ())
+    if kind is None or (wanted and kind not in wanted):
+        game.log.append(
+            f"{card.name}: {chosen.card.name} is not "
+            f"{' or '.join(wanted) if wanted else 'an'} ability, cannot counter"
+        )
+        return True, "resolved"
+    game.stack.remove(chosen)
+    game.log.append(f"{card.name} countered {chosen.card.name}'s {kind} ability")
+    return True, "resolved"
+
+
 @effect_handler("counter_top_stack_spell")
 def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card

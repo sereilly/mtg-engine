@@ -170,6 +170,27 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
     return (OracleInstruction("counter_top_stack_spell", "", payload),)
 
 
+def _lower_counter_ability(
+    node: ast.CounterAbility,
+) -> tuple[OracleInstruction, ...]:
+    """"Counter target activated or triggered ability." (Sublime Epiphany.)
+
+    The printed kinds ride the payload, so "counter target **triggered**
+    ability" is the same instruction with a narrower list — and the handler
+    tests them, because an effect that countered an activated ability when the
+    card says triggered is countering something its controller could not have
+    chosen.
+    """
+    if node.subject.quantifier != "target":
+        raise LoweringError("an ability is countered by targeting it", node=node)
+    return (
+        OracleInstruction(
+            "counter_stack_ability", "",
+            {"ability_kinds": tuple(node.subject.filter.ability_kinds)},
+        ),
+    )
+
+
 def _lower_modal_head(node: ast.ModalNode) -> tuple[OracleInstruction, ...]:
     """"Choose one —" performs nothing, so it lowers to no instructions.
 
@@ -184,19 +205,24 @@ def _lower_modal_head(node: ast.ModalNode) -> tuple[OracleInstruction, ...]:
     classification, and it needs the lines *around* this one, which a parser
     handed one line at a time cannot see.
 
-    **A count other than one refuses.** The engine carries a single chosen mode
-    (`StackItem.chosen_mode_index` is one index into `OracleProgram.modes`, and
-    `_select_executable_instruction` resolves that one mode's instruction), so
-    "Choose two —" and "Choose one or more —" have nowhere to put the second
-    choice. Refusing names that; the alternative — lowering them like a
-    choose-one — is what the substring match this replaces did to Sublime
+    **"Choose one or more" is carried; an exact count above one is not.** The
+    stack item holds a *list* of chosen modes now (CR 700.2d), each with its own
+    targets, so "one or more" has somewhere to put the second choice. "Choose
+    two —" would too, arithmetically, and is still refused: no card in the pool
+    prints it, so admitting it would ship a bound nothing exercises — and the
+    direction a wrong bound fails in is a spell that performs a mode its
+    controller never chose.
+
+    Refusing at all is the part that matters. Lowering a multi-mode head like a
+    choose-one is what the substring match this replaces did to Sublime
     Epiphany, quietly turning a spell that picks several modes into one that
     picks one.
     """
-    if node.at_least or node.choose_count != 1:
+    if node.choose_count != 1:
         printed = f"choose {node.choose_count}" + (" or more" if node.at_least else "")
         raise LoweringError(
-            f"the engine resolves one chosen mode; {printed!r} has no representation",
+            f"the engine resolves one chosen mode or any number; {printed!r} "
+            "has no representation",
             node=node,
         )
     return ()

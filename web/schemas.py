@@ -186,6 +186,29 @@ class SearchPickRef(BaseModel):
     index: int = Field(ge=0)
 
 
+class ModeChoice(BaseModel):
+    """One chosen mode of a multi-mode spell, with its own targets.
+
+    Every target field is optional because the modes differ: "Target player
+    draws a card" names a seat, "Return target nonland permanent" names a
+    permanent on one, and "Counter target spell" names an object on the stack.
+    """
+
+    index: int = Field(ge=0)
+    target_seat: int | None = Field(default=None, ge=0)
+    # The permanent that mode chose, on `target_seat`'s battlefield. Named
+    # `permanent_index` because that is what the client already sends for a
+    # single-permanent cast target, so a mode's target and the spell's are
+    # spelled the same on the wire.
+    permanent_index: int | None = Field(default=None, ge=0)
+    # And by stable id, preferred when the client resolved one (CR 400.7): an
+    # index is a slot and a slot is not an identity.
+    permanent_id: int | None = Field(default=None, ge=1)
+    # Top-first into the serialized stack, exactly as `target_stack_index` is;
+    # converted to an engine index by the same helper.
+    target_stack_index: int | None = Field(default=None, ge=0)
+
+
 class GameActionRequest(BaseModel):
     seat: int = Field(ge=0)
     action: ActionKind
@@ -327,6 +350,14 @@ class GameActionRequest(BaseModel):
     # "Choose one —" modal spells (Healing Salve, the Elemental Blasts): which
     # mode the caster picked, as an index into the card's serialized `modes`.
     mode_index: int | None = Field(default=None, ge=0)
+    # "Choose one **or more** —" (Sublime Epiphany): every mode the caster
+    # picked, each with the targets *that mode* chose (CR 601.2c). Its own field
+    # rather than a list-valued `mode_index`, for the reason the cost fields are
+    # their own: a mode's target and the spell's target are different questions,
+    # and one field answering both would let a mode eat the other's choice.
+    # The engine sorts them into printed order (CR 608.2c), so the order they
+    # arrive in is the order the player clicked and means nothing.
+    mode_choices: list[ModeChoice] | None = None
     # Yes/No answer for an optional ("you may") trigger prompt, sent with the
     # `resolve_optional_trigger` action (true = let the trigger happen).
     accept: bool | None = None

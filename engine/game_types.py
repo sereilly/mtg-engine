@@ -69,6 +69,29 @@ class GraveyardTarget:
 
 
 @dataclass
+class ChosenMode:
+    """One mode of a "Choose one or more —" spell, with the targets it chose.
+
+    CR 601.2b picks the modes as the spell is cast and CR 601.2c picks each
+    mode's targets right after, so a mode and its targets are chosen together
+    and have to travel together: two modes of Sublime Epiphany may name two
+    different objects on two different boards, which the item's single
+    ``target_player_index`` cannot say.
+
+    ``index`` is a position in the card's compiled ``OracleProgram.modes``.
+    """
+
+    index: int
+    target_player_index: int | None = None
+    target_permanent_index: int | None = None
+    target_permanent_id: int | None = None
+    # Resolved against the stack at cast time, exactly as the item's own
+    # ``target_stack_item`` is: a stack index is a position in a list that
+    # anything resolving in response renumbers.
+    target_stack_item: "StackItem | None" = None
+
+
+@dataclass
 class StackItem:
     card: CardDefinition
     caster_index: int
@@ -100,7 +123,18 @@ class StackItem:
     ability_text: str | None = None
     # Chosen mode of a "Choose one —" modal spell, as an index into the card's
     # compiled OracleProgram.modes. None for non-modal spells (resolve mode 0).
+    #
+    # Still here, and still one index, because everything that reads a *single*
+    # mode reads it: the graveyard-target stamp, the copy handlers, the AI. For
+    # a multi-mode spell it holds the first chosen mode, so those readers see
+    # what they always saw rather than a shape they were never written for.
     chosen_mode_index: int | None = None
+    # "Choose one **or more** —" (Sublime Epiphany, CR 700.2d). Every chosen
+    # mode with its own targets, in **printed** order — CR 608.2c resolves the
+    # modes in the order they are written on the card, not the order the caster
+    # named them. Empty for every spell that is not multi-mode, which is what
+    # keeps the single-mode path byte-identical.
+    chosen_modes: tuple[ChosenMode, ...] = ()
     # A copy of a spell (Fork): it resolves like the original but ceases to exist
     # afterward rather than going to a graveyard, and was never cast from a hand.
     is_copy: bool = False

@@ -400,6 +400,12 @@ def _serialize_card(card, game: Game | None = None, caster_index: int | None = N
         "cost_increased": tax > 0,
         "colors": list(card.colors),
         "modes": _serialize_modes(card, game, caster_index),
+        # "Choose one **or more** —" (Sublime Epiphany, CR 700.2d). Sent
+        # alongside the modes because the mode list alone cannot say it: a
+        # client reading five modes has no way to know whether it may offer two
+        # of them, and guessing from the label text would be the substring match
+        # the compiler stopped making.
+        "modes_at_least": compile_card_oracle(card).modes_at_least,
     })
     # The viewer's own hand cards carry a backend-computed target spec (kind +
     # enumerated legal targets) so the UI never re-derives targeting from text.
@@ -413,6 +419,7 @@ def _serialize_card_summary(card) -> dict:
     serialized.update({
         "mana_cost": card.mana_cost,
         "modes": _serialize_modes(card),
+        "modes_at_least": compile_card_oracle(card).modes_at_least,
     })
     return serialized
 

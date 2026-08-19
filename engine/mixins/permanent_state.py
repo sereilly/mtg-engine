@@ -19,6 +19,7 @@ from ..enter_effects import (
 )
 from ..auras import aura_protection_colors, auras_attached_to
 from .. import copies
+from ..tokens import make_token_card
 from ..keywords import add_derived_grant, clear_derived_grants
 from ..land_animation import (
     LAND_ANIMATION_KIND,
@@ -359,6 +360,44 @@ class PermanentStateMixin:
             **copies.copy_exceptions(compile_card_oracle(permanent.card).normalized_text),
         )
         self._recalculate_lord_buffs()
+
+    def create_token_copy(self, controller_index: int, source: Permanent) -> Permanent:
+        """A token that is a copy of *source*, under *controller_index*.
+
+        Two rules, kept apart. CR 111.1 says what a token is — an object on the
+        battlefield with no card, stamped ``is_token`` so it ceases to exist
+        rather than going to a graveyard (CR 111.7). CR 707.2 says what a copy
+        is, and that is recorded as a layer 1a contribution here rather than
+        stamped onto the token: everything a *non-copy* effect has done to the
+        original — a +1/+1 counter, an Aura, an animation, a text change — is
+        excluded by construction, because what is stored is the copiable values
+        and not the current ones.
+
+        Beside ``_apply_copy`` rather than in the handler, because this module
+        is where layer 1 is applied and the guard in
+        ``tests/engine/test_copy_reads.py`` says so. It is *not* ``_apply_copy``
+        itself: that reads the copy exceptions off the copying permanent's own
+        text (Vesuvan Doppelganger's colour, Copy Artifact's added type), and
+        here the copier is a spell — the token's own text is the **copied**
+        card's, so reading exceptions from it would apply the copied creature's
+        printed quirks as if Sublime Epiphany had printed them.
+        """
+        # The base card carries **nothing but a name**, and the name only so a
+        # log line reads like the board. Every characteristic comes from the
+        # copy contribution below: seeding the base from the source's copiable
+        # values as well would be a second statement of what the token is, free
+        # to disagree with layer 1 the moment anything reads `perm.card`
+        # directly — which is the whole reason layer 1 has one reader.
+        token = Permanent(
+            card=make_token_card(source.effective_card.name, None, None, "Token"),
+            metadata={"is_token": True},
+        )
+        self._put_permanent_onto_battlefield(controller_index, token, None)
+        # Recorded after entry: the contribution is what layer 1 reads, and the
+        # entry is what gives the token its permanent id (CR 400.7).
+        copies.become_copy(token, source)
+        self._recalculate_lord_buffs()
+        return token
 
     def _resolve_copy_target(self, permanent: Permanent, primary_type: str) -> Permanent | None:
         """Return the player-chosen permanent for a "copy as it enters" effect.

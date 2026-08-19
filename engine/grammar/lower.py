@@ -61,8 +61,10 @@ from .lowering import (
     _lower_cant_be,
     _lower_change_text,
     _lower_combat_restriction,
+    _lower_counter_ability,
     _lower_counter_spell,
     _lower_create_emblem,
+    _lower_create_copy_token,
     _lower_create_token,
     _lower_damage,
     _lower_damage_conjunction,
@@ -245,6 +247,9 @@ def lower_statement(
         return _lower_add_mana(statement)
     if isinstance(statement, ast.AddManaForTappedLand):
         return _lower_add_mana_for_tapped_land(statement, dispatch_event)
+    if isinstance(statement, ast.CreateCopyToken):
+        return _lower_create_copy_token(statement)
+
     if isinstance(statement, ast.CreateToken):
         return _lower_create_token(statement, produced)
 
@@ -275,6 +280,9 @@ def lower_statement(
 
     if isinstance(statement, ast.Regenerate):
         return _lower_regenerate(statement)
+
+    if isinstance(statement, ast.CounterAbility):
+        return _lower_counter_ability(statement)
 
     if isinstance(statement, ast.CounterSpell):
         return _lower_counter_spell(statement)

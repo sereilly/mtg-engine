@@ -92,6 +92,12 @@ class SpellCastingMixin:
         new_color: str | None = None,
         target_stack_index: int | None = None,
         mode_index: int | None = None,
+        # "Choose one **or more** —" (Sublime Epiphany). Every chosen mode, with
+        # each one's own targets: a list of dicts shaped like ``ChosenMode``'s
+        # fields (``index`` plus optional ``target_player_index`` /
+        # ``target_permanent_index`` / ``target_stack_index``). None or one entry
+        # behaves exactly as ``mode_index`` alone always has.
+        mode_choices: list[dict] | None = None,
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
         from_zone: str = "hand",
@@ -115,6 +121,7 @@ class SpellCastingMixin:
             new_color=new_color,
             target_stack_index=target_stack_index,
             mode_index=mode_index,
+            mode_choices=mode_choices,
             old_color=old_color,
             divided_targets=divided_targets,
             from_zone=from_zone,
@@ -130,6 +137,58 @@ class SpellCastingMixin:
         self._settle()
         self.clear_priority_window()
         return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
+    def _resolve_chosen_modes(
+        self, card, mode_choices: list[dict] | None
+    ) -> tuple[tuple, str | None]:
+        """The ``ChosenMode`` list for this cast, or a refusal naming the fault.
+
+        CR 601.2b: the modes are chosen as the spell is cast, and how many is
+        what the head printed. Three things are checked, because each is a way a
+        caller could otherwise get a spell the card does not describe:
+
+        * a card whose head is not "one **or more**" gets at most one mode —
+          otherwise any modal spell would perform every bullet;
+        * every index names a real mode of *this* card;
+        * no mode is chosen twice (CR 700.2d: the same mode may be chosen again
+          only if the card says so, and none in this pool does).
+
+        The list comes back in **printed** order whatever order it arrived in,
+        because that is the order the modes resolve in (CR 608.2c) — sorting
+        once here is what lets the resolution loop be a loop rather than a sort.
+        """
+        from ...game_types import ChosenMode
+
+        if not mode_choices:
+            return (), None
+        program = compile_card_oracle(card)
+        if not program.modes:
+            return (), f"{card.name} has no modes to choose"
+        if len(mode_choices) > 1 and not program.modes_at_least:
+            return (), f"{card.name} chooses one mode, not {len(mode_choices)}"
+        seen: set[int] = set()
+        chosen: list[ChosenMode] = []
+        for entry in mode_choices:
+            index = entry.get("index")
+            if not isinstance(index, int) or not 0 <= index < len(program.modes):
+                return (), f"{card.name}: no mode {index!r}"
+            if index in seen:
+                return (), f"{card.name}: mode {index} was chosen twice"
+            seen.add(index)
+            stack_index = entry.get("target_stack_index")
+            stack_item = (
+                self.stack[stack_index]
+                if isinstance(stack_index, int) and 0 <= stack_index < len(self.stack)
+                else None
+            )
+            chosen.append(ChosenMode(
+                index=index,
+                target_player_index=entry.get("target_player_index"),
+                target_permanent_index=entry.get("target_permanent_index"),
+                target_stack_item=stack_item,
+            ))
+        chosen.sort(key=lambda mode: mode.index)
+        return tuple(chosen), None
+
     def queue_from_hand(self, *args, **kwargs) -> SimulationResult:
         """Cast a spell — CR 601, start to finish — leaving it on the stack.
 
@@ -157,6 +216,12 @@ class SpellCastingMixin:
         new_color: str | None = None,
         target_stack_index: int | None = None,
         mode_index: int | None = None,
+        # "Choose one **or more** —" (Sublime Epiphany). Every chosen mode, with
+        # each one's own targets: a list of dicts shaped like ``ChosenMode``'s
+        # fields (``index`` plus optional ``target_player_index`` /
+        # ``target_permanent_index`` / ``target_stack_index``). None or one entry
+        # behaves exactly as ``mode_index`` alone always has.
+        mode_choices: list[dict] | None = None,
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
         from_zone: str = "hand",
@@ -345,6 +410,20 @@ class SpellCastingMixin:
             self.log.append(cost_denial)
             return SimulationResult(card.name, False, classification.effect_kind, cost_denial)
 
+        # "Choose one or more —": the modes are chosen as the spell is cast
+        # (CR 601.2b) and are checked here, before any mana leaves the pool, so
+        # a card that does not print the head cannot be handed two modes.
+        chosen_modes, mode_denial = self._resolve_chosen_modes(card, mode_choices)
+        if mode_denial is not None:
+            self.log.append(mode_denial)
+            return SimulationResult(card.name, False, classification.effect_kind, mode_denial)
+        if chosen_modes:
+            # Everything that reads one mode reads the first chosen one
+            # (CR 608.2c resolves them in printed order, and the list is held in
+            # that order), so a single-mode reader sees a mode this spell really
+            # has rather than None.
+            mode_index = chosen_modes[0].index
+
         # Resolve an explicitly chosen target spell on the stack (Counterspell,
         # Fork). target_stack_index indexes into self.stack (bottom-first).
         target_stack_item = None
@@ -479,6 +558,7 @@ class SpellCastingMixin:
                     x_value=resolved_x_value,
                     target_stack_item=target_stack_item_val,
                     chosen_mode_index=mode_index,
+                    chosen_modes=chosen_modes,
                     cast_from_zone=from_zone,
                     exile_instead_of_graveyard=bool(
                         permission is not None and permission.exile_instead

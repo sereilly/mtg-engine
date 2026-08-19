@@ -186,6 +186,32 @@ def _default_target(card_name: str, caster_index: int) -> int:
     return 1 - caster_index
 
 
+def _mode_target_index(game, mode):
+    """The battlefield slot one chosen mode named, preferring its stable id.
+
+    A mode is chosen as the spell is cast and the spell then waits on the stack,
+    so the slot it names can renumber underneath it (CR 400.7). The client sends
+    the id when it resolved one; an id that no longer names a permanent yields
+    None rather than the index beside it, because the index is a *position* and
+    the permanent that position now holds is a different object.
+    """
+    if mode.permanent_id is not None:
+        found = game.find_permanent_by_id(mode.permanent_id)
+        if found is None:
+            # A 404, exactly as the preamble makes for the spell's own target:
+            # returning None here would leave the mode with the *index* beside
+            # it, which by now addresses whichever permanent slid into the
+            # vacated slot. Refusing the whole cast is the honest answer, and
+            # it is the one the rest of this protocol already gives.
+            raise HTTPException(
+                status_code=404,
+                detail="that permanent is no longer on the battlefield",
+            )
+        _seat, permanent = found
+        return game.battlefield_index_of(permanent)
+    return mode.permanent_index
+
+
 def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
     """Queue a spell from ``seat``'s hand using every targeting field on the
     request, so the normal ``cast`` action and the debug free-cast paths share
@@ -193,10 +219,34 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
     for text-change spells, the chosen stack target, modal mode, X, multi-target
     lists). Callers prepare ``x_value`` and, for the free casts, inject the card
     into hand and toggle ``enforce_mana_costs`` around this call."""
-    engine_stack_index = None
-    if req.target_stack_index is not None:
-        # The client sends a top-first stack index; the engine stack is bottom-first.
-        engine_stack_index = len(game.stack) - 1 - req.target_stack_index
+    def _engine_stack_index(top_first):
+        # The client sends a top-first stack index; the engine stack is
+        # bottom-first. One converter, because a multi-mode spell may name a
+        # stack object per mode and a second spelling of this arithmetic is a
+        # second chance to get the direction wrong.
+        if top_first is None:
+            return None
+        return len(game.stack) - 1 - top_first
+
+    engine_stack_index = _engine_stack_index(req.target_stack_index)
+    # "Choose one or more —": each mode's own targets (CR 601.2c), forwarded as
+    # the plain dicts the engine's ``_resolve_chosen_modes`` reads. The seat and
+    # index keep the engine's names here rather than the wire's, so the
+    # translation happens once, at the boundary.
+    mode_choices = None
+    if getattr(req, "mode_choices", None):
+        mode_choices = [
+            {
+                "index": mode.index,
+                "target_player_index": mode.target_seat,
+                # The id is resolved to a slot here, at the boundary, exactly as
+                # the spell's own target is: a stale id is a refusal further in,
+                # never a fall back to whatever now sits at the index.
+                "target_permanent_index": _mode_target_index(game, mode),
+                "target_stack_index": _engine_stack_index(mode.target_stack_index),
+            }
+            for mode in req.mode_choices
+        ]
     # Fireball-style multi-target spells send a list; it wins over permanent_index.
     # ``target_permanent_index`` is accepted as the same thing: it is what
     # ``target_permanent_id`` normalizes to, and a cast's target has no reason to
@@ -232,6 +282,7 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         new_color=req.mana_color,
         target_stack_index=engine_stack_index,
         mode_index=req.mode_index,
+        mode_choices=mode_choices,
         old_color=req.old_color,
         divided_targets=divided,
         from_zone=req.from_zone or "hand",

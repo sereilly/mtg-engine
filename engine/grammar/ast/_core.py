@@ -172,6 +172,13 @@ class ObjectFilter:
     mana_value: Comparison | None = None
     named: str | None = None
     zone: str = "battlefield"
+    # "target **activated or triggered ability**" (Sublime Epiphany). An ability
+    # on the stack is an object (CR 113.7a/608.2) but not a spell, so it is not
+    # ``zone == "stack"`` with a type line — it has no card at all. The printed
+    # kinds are carried rather than collapsed to "an ability", because "counter
+    # target activated ability" and "counter target triggered ability" are
+    # different cards and the difference is exactly this tuple.
+    ability_kinds: tuple[str, ...] = ()
     # Whose zone, when *zone* names one ("from **your** graveyard"). "Return
     # target creature card from your graveyard" and "…from a graveyard" are
     # different cards, and the handlers only ever look in the caster's own

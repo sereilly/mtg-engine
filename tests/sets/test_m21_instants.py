@@ -1333,3 +1333,147 @@ def test_discontinuity_costs_less_during_your_turn(set_pool):
     assert cost_reduction_for_cast(game, 0, pool["Discontinuity"]) == (
         CostReduction(0, ()), [],
     )
+
+
+# --- Round 135: a spell that takes several of its modes ---------------------
+
+
+def test_sublime_epiphany_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Sublime Epiphany"])
+    assert program.supported, program.reason
+
+
+def test_sublime_epiphany_reads_five_modes_and_says_several_may_be_taken(set_pool):
+    """All five, and the bound beside them. The mode list alone cannot say the
+    card takes more than one, and the cast path refuses a second mode without
+    it — so a program with the modes and not the bound is a spell that reads
+    right and plays as "Choose one"."""
+    program = compile_card_oracle(set_pool("M21")["Sublime Epiphany"])
+
+    assert [m.instruction.kind for m in program.modes] == [
+        "counter_top_stack_spell",
+        "counter_stack_ability",
+        "bounce_target_creature",
+        "create_copy_token",
+        "draw_target_cards",
+    ]
+    assert program.modes_at_least is True
+
+
+def _epiphany_board(set_pool):
+    pool = set_pool("M21")
+    mine = Permanent(card=pool["Alpine Watchdog"])          # 2/2 vigilance
+    theirs = Permanent(card=pool["Garruk's Gorehorn"])      # 5 mana value
+    p1 = PlayerState(name="P1", hand=[pool["Sublime Epiphany"]], battlefield=[mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs], library=[pool["Shock"]])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    return game, p1, p2, mine, theirs
+
+
+def test_sublime_epiphany_performs_every_mode_it_was_given(set_pool):
+    """Three modes in one cast, each with its own target (CR 601.2c): the bounce
+    names the opponent's permanent, the copy names the caster's, and the draw
+    names a seat. One target field could not have said all three."""
+    game, p1, p2, mine, theirs = _epiphany_board(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Sublime Epiphany",
+        mode_choices=[
+            {"index": 2, "target_player_index": 1, "target_permanent_index": 0},
+            {"index": 3, "target_player_index": 0, "target_permanent_index": 0},
+            {"index": 4, "target_player_index": 1},
+        ],
+    )
+    assert result.supported, result.details
+
+    assert [c.name for c in p2.hand] == ["Garruk's Gorehorn", "Shock"]
+    assert [p.card.name for p in game.controlled_by(0)] == [
+        "Alpine Watchdog", "Alpine Watchdog",
+    ]
+    assert list(game.controlled_by(1)) == []
+
+
+def test_sublime_epiphanys_token_is_a_copy_and_a_token(set_pool):
+    """CR 707.2 and CR 111.1 are both true of it: the copied creature's power,
+    toughness and keywords, and ``is_token`` so it ceases to exist rather than
+    going to a graveyard."""
+    game, p1, p2, mine, theirs = _epiphany_board(set_pool)
+
+    game.cast_from_hand(
+        0, "Sublime Epiphany",
+        mode_choices=[{"index": 3, "target_player_index": 0, "target_permanent_index": 0}],
+    )
+
+    token = next(p for p in game.controlled_by(0) if p.metadata.get("is_token"))
+    assert token.effective_card.name == "Alpine Watchdog"
+    assert (token.effective_power, token.effective_toughness) == (2, 2)
+    assert token.has_keyword("vigilance")
+
+
+def test_sublime_epiphany_copies_only_a_creature_you_control(set_pool):
+    """"target creature **you control**" is half the mode: a copy of an
+    opponent's creature is a different and much better spell. The same board
+    copies the caster's own, so what is being read is the seat."""
+    game, p1, p2, mine, theirs = _epiphany_board(set_pool)
+
+    game.cast_from_hand(
+        0, "Sublime Epiphany",
+        mode_choices=[{"index": 3, "target_player_index": 1, "target_permanent_index": 0}],
+    )
+    assert not any(p.metadata.get("is_token") for p in game.controlled_by(0))
+
+    p1.hand.append(set_pool("M21")["Sublime Epiphany"])
+    game.cast_from_hand(
+        0, "Sublime Epiphany",
+        mode_choices=[{"index": 3, "target_player_index": 0, "target_permanent_index": 0}],
+    )
+    assert any(p.metadata.get("is_token") for p in game.controlled_by(0))
+
+
+def test_sublime_epiphany_counters_an_ability_on_the_stack(set_pool):
+    """CR 701.5a: the ability is removed from the stack and does nothing. Not a
+    spell — an ability has no card, so there is nothing to put in a graveyard."""
+    from engine.oracle_types import OracleInstruction
+
+    game, p1, p2, mine, theirs = _epiphany_board(set_pool)
+    game._enqueue_triggered_ability(
+        controller_index=1, source_permanent=theirs,
+        instruction=OracleInstruction("gain_life", "", {"amount": 5}),
+        effect_kind="triggered_life",
+    )
+    assert len(game.stack) == 1
+
+    game.cast_from_hand(
+        0, "Sublime Epiphany", mode_choices=[{"index": 1, "target_stack_index": 0}],
+    )
+
+    assert game.stack == []
+    assert p2.life == 20, "countered, so it never resolved"
+    assert p2.graveyard == [], "an ability has no card to bin"
+
+
+def test_sublime_epiphanys_ability_counter_refuses_a_spell(set_pool):
+    """The two counter modes are different cards' worth of effect, and the
+    difference is what the phrase names. Mode 1 aimed at a spell counters
+    nothing; mode 0 on the same board counters it."""
+    pool = set_pool("M21")
+    for mode, expect_countered in ((1, False), (0, True)):
+        p1 = PlayerState(name="P1", hand=[pool["Sublime Epiphany"]])
+        p2 = PlayerState(name="P2", hand=[pool["Shock"]], life=20)
+        game = Game(players=[p1, p2])
+        game.enforce_mana_costs = False
+        game.active_player_index = 1
+        game.queue_from_hand(1, "Shock", target_player_index=0)
+
+        game.cast_from_hand(
+            0, "Sublime Epiphany",
+            mode_choices=[{"index": mode, "target_stack_index": 0}],
+        )
+        game._settle()
+
+        assert (p1.life == 20) is expect_countered, (
+            f"mode {mode} should {'' if expect_countered else 'not '}counter a spell"
+        )

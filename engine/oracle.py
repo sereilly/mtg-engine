@@ -1324,6 +1324,25 @@ def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption
     return ()
 
 
+def _modal_at_least(oracle_text: str) -> bool:
+    """Whether the head above the bullets is "Choose one **or more** —".
+
+    Read through the same :func:`_modal_head` the mode list is, so the bound and
+    the modes cannot disagree about which head they came from — the failure the
+    substring matcher had, where "choose one" matched inside "choose one or
+    more" and the card read as a one-mode spell.
+    """
+    if "choose" not in oracle_text.lower() or "•" not in oracle_text:
+        return False
+    lines = oracle_text.splitlines()
+    for index, raw in enumerate(lines):
+        head = _modal_head(raw.strip(), grammar_ast.SpellEffectLine)
+        if head is None or not _bullets_after(lines, index):
+            continue
+        return bool(head.at_least)
+    return False
+
+
 def _modal_trigger_ability(
     lines: list[str], index: int, card_name: str | None,
 ) -> tuple[ParsedTriggeredAbility, int] | str | None:
@@ -2704,6 +2723,7 @@ def _compile_card_oracle(
                 activated_abilities,
                 triggered_abilities,
                 modes=modes,
+                modes_at_least=_modal_at_least(oracle_text),
             )
 
         return OracleProgram(False, "unsupported", "effect not in basic pattern set", normalized_text)

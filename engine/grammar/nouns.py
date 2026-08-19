@@ -190,6 +190,36 @@ def _parse_comparison(stream: TokenStream) -> ast.Comparison:
     return ast.Comparison("eq", amount)
 
 
+#: The printed kinds of ability a spell may name on the stack, longest first so
+#: "activated or triggered" is read whole rather than as its first half.
+_ABILITY_KIND_PHRASES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
+    (("activated", "or", "triggered"), ("activated", "triggered")),
+    (("triggered", "or", "activated"), ("activated", "triggered")),
+    (("activated",), ("activated",)),
+    (("triggered",), ("triggered",)),
+)
+
+
+def _accept_ability_noun(stream: TokenStream) -> tuple[str, ...]:
+    """The ability kinds a phrase like "activated or triggered ability" names,
+    or () when the cursor is not at one.
+
+    The word "ability" is required. Without it "triggered" is an adjective
+    looking for a noun and the phrase is somebody else's — and a phrase that
+    consumed "activated" and then found no "ability" would have eaten a word
+    the rest of the parse needs.
+    """
+    for phrase, kinds in _ABILITY_KIND_PHRASES:
+        mark = stream.mark()
+        if not stream.accept_phrase(*phrase):
+            stream.reset(mark)
+            continue
+        if stream.accept_word("ability", "abilities"):
+            return kinds
+        stream.reset(mark)
+    return ()
+
+
 def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast.ObjectFilter:
     """Parse the noun phrase describing a set of objects.
 
@@ -226,6 +256,16 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     zone_owner: ast.PlayerRef | None = None
     saw_head = False
     type_match = "any"
+
+    # --- an ability on the stack ----------------------------------------
+    # "activated or triggered ability" / "activated ability" / "triggered
+    # ability" (Sublime Epiphany). Read first and whole, because none of the
+    # machinery below applies: an ability on the stack has no card, no type
+    # line and no permanent behind it (CR 113.7a), so every adjective the loop
+    # further down collects would be a question with no object to ask it of.
+    ability_kinds = _accept_ability_noun(stream)
+    if ability_kinds:
+        return ast.ObjectFilter(zone="stack", ability_kinds=ability_kinds)
 
     # --- self / enchanted references ------------------------------------
     if stream.at_word("this"):

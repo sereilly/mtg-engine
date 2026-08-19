@@ -24,6 +24,13 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
     """
     stream.expect_word("counter")
     subject = parse_target_spec(stream)
+    if subject is not None and subject.filter.ability_kinds:
+        # "counter target activated or triggered ability" (Sublime Epiphany).
+        # Its own node: CR 701.5a removes the object from the stack either way,
+        # but a spell's card goes to a graveyard and an ability has no card to
+        # send anywhere, so one handler cannot do both without asking which it
+        # has — and asking is the branch this avoids.
+        return ast.CounterAbility(subject)
     replaces_prior = False
     if subject is None:
         # "counter **that spell**" (Lofty Denial's second sentence) — the spell

@@ -395,6 +395,7 @@ class StackResolutionMixin:
             new_color=item.choices.get("new_color"),
             stack_target=item.target_stack_item,
             chosen_mode_index=item.chosen_mode_index,
+            chosen_modes=item.chosen_modes,
             old_color=item.choices.get("old_color"),
             divided_targets=item.choices.get("divided_targets"),
             exile_instead_of_graveyard=item.exile_instead_of_graveyard,
@@ -414,6 +415,10 @@ class StackResolutionMixin:
         new_color: str | None = None,
         stack_target=None,
         chosen_mode_index: int | None = None,
+        # Every chosen mode of a "Choose one or more —" spell, each with its own
+        # targets, in printed order (CR 608.2c). Empty for every other spell,
+        # which is what keeps the single-mode path below untouched.
+        chosen_modes: tuple = (),
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
         exile_instead_of_graveyard: bool = False,
@@ -530,6 +535,45 @@ class StackResolutionMixin:
         target = self.players[target_idx]
 
         def apply_text() -> None:
+            # "Choose one **or more** —" (Sublime Epiphany, CR 700.2d). Each
+            # chosen mode is its own application, with the targets it chose
+            # (CR 601.2c) and the seat those targets sit on — two modes may name
+            # objects on two different boards, which the spell's single
+            # ``target_player_index`` cannot say. Printed order, because
+            # CR 608.2c resolves the modes in the order the card writes them
+            # rather than the order the caster named them; the list arrives
+            # sorted from ``_resolve_chosen_modes``.
+            #
+            # Any non-empty list takes this path, one mode included: a caller
+            # that named modes named their targets on them, and the branch below
+            # reads the *item's* target fields, which such a cast never sets.
+            # A cast that named no modes at all — the legacy `mode_index=`
+            # spelling, and every non-modal spell — leaves the list empty and
+            # takes the branch below exactly as it always has.
+            if chosen_modes:
+                for mode in chosen_modes:
+                    seat = (
+                        mode.target_player_index
+                        if mode.target_player_index is not None else target_idx
+                    )
+                    if not 0 <= seat < len(self.players):
+                        seat = target_idx
+                    self._apply_spell_text(
+                        caster,
+                        self.players[seat],
+                        card,
+                        target_permanent_index=mode.target_permanent_index,
+                        target_permanent_id=mode.target_permanent_id,
+                        x_value=x_value,
+                        new_color=new_color,
+                        stack_target=mode.target_stack_item,
+                        mode_index=mode.index,
+                        old_color=old_color,
+                        divided_targets=divided_targets,
+                        cast_from_zone=cast_from_zone,
+                        choices=choices,
+                    )
+                return
             self._apply_spell_text(
                 caster,
                 target,

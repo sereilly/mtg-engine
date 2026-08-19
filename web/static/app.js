@@ -52,6 +52,12 @@ let camouflagePromptSig = null;
 let ragingRiverPromptSig = null;
 // Chosen mode index for the cast in progress, injected into the cast action.
 let pendingCastModeIndex = null;
+// "Choose one or more —" (Sublime Epiphany, CR 700.2d). The modes the caster
+// picked, walked one at a time through the ordinary per-mode targeting prompts:
+// each prompt ends by calling sendAction with that mode's target, and sendAction
+// captures it here instead of sending until every chosen mode has one. Null
+// whenever a cast is not collecting mode targets, which is every other spell.
+let pendingModeCollection = null;
 // Casting from the graveyard or exile (a cast permission, e.g. Chandra's
 // "you may cast them this turn"): which zone the pending cast's card leaves.
 // Rides sendAction the same way pendingCastModeIndex does, so every cast path
@@ -2620,6 +2626,12 @@ function beginPendingHandCast(card, handIndex = null) {
 }
 
 function clearPendingHandCast() {
+  // While a multi-mode cast is collecting targets, each per-mode prompt ends by
+  // calling sendAction — which captures instead of sending and opens the *next*
+  // prompt. The caller's own .finally() then lands here, after that prompt is
+  // already open, and clearing would take its card away. The collection's own
+  // finish clears itself first, so this only ever holds mid-walk.
+  if (pendingModeCollection) return;
   pendingCastHandCard = null;
   pendingModalChoice = null;
   pendingCastModeIndex = null;
@@ -5090,17 +5102,33 @@ function renderActivationPrompt() {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
-    title.textContent = `Choose one — ${pendingModalChoice.cardName}`;
-    body.textContent = "Select which mode to cast.";
+    const several = pendingModalChoice.atLeast === true;
+    const picked = pendingModalChoice.picked || [];
+    title.textContent = several
+      ? `Choose one or more — ${pendingModalChoice.cardName}`
+      : `Choose one — ${pendingModalChoice.cardName}`;
+    body.textContent = several
+      ? "Select every mode to cast, then confirm. Each one picks its own target."
+      : "Select which mode to cast.";
     const modeButtons = pendingModalChoice.modes
       .map((mode, index) => {
         const disabled = mode.supported === false ? " disabled" : "";
         const suffix = mode.supported === false ? " (unsupported)" : "";
-        return `<button type="button" class="prompt-choice-btn" data-mode-choice="${index}"${disabled}>${escapeHtml(mode.label)}${suffix}</button>`;
+        const on = several && picked.includes(index) ? " prompt-choice-btn-on" : "";
+        const tick = several && picked.includes(index) ? "✓ " : "";
+        return `<button type="button" class="prompt-choice-btn${on}" data-mode-choice="${index}"${disabled}>${tick}${escapeHtml(mode.label)}${suffix}</button>`;
       })
       .join("");
     steps.innerHTML = `<div class="prompt-choice-column">${modeButtons}</div>`;
-    okBtn.disabled = true;
+    // A multi-select needs a confirm, because "I am done choosing" is not
+    // something a click on a mode can say — the next click might be another
+    // mode. A single-mode prompt is finished by the click itself and keeps its
+    // disabled OK button.
+    if (several) {
+      okBtn.classList.remove("hidden");
+      okBtn.textContent = picked.length > 1 ? `Cast ${picked.length} modes` : "Cast";
+    }
+    okBtn.disabled = !several || picked.length === 0;
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
     customOkBtn.disabled = true;
@@ -6206,9 +6234,70 @@ function startModalChoicePrompt(card, castAction = "cast") {
   const modes = cardModeOptions(card);
   if (modes.length < 2) return false;
 
-  pendingModalChoice = { card, cardName, castAction, modes };
+  // "Choose one **or more** —" (CR 700.2d). The bound comes from the server
+  // beside the mode list, because a client reading five modes has no way to
+  // know whether it may offer two of them — and reading it off the label text
+  // would be the substring match the compiler stopped making.
+  const atLeast = card && card.modes_at_least === true;
+  pendingModalChoice = { card, cardName, castAction, modes, atLeast, picked: [] };
   renderActivationPrompt();
   return true;
+}
+
+// Confirm a multi-select mode prompt: begin walking the chosen modes through
+// their own targeting prompts, in the order the caster clicked them. The engine
+// sorts them into printed order (CR 608.2c), so this order only decides which
+// target is asked for first.
+function confirmModalModes() {
+  const choice = pendingModalChoice;
+  if (!choice || !choice.atLeast || !choice.picked.length) return;
+  pendingModalChoice = null;
+  pendingCastModeIndex = null;
+  pendingModeCollection = {
+    card: choice.card,
+    cardName: choice.cardName,
+    castAction: choice.castAction,
+    modes: choice.modes,
+    order: choice.picked.slice(),
+    collected: [],
+    cursor: 0,
+  };
+  promptNextModeTarget();
+}
+
+// Open the targeting prompt for the mode the collection is currently on. A mode
+// that targets nothing records an entry with no target and moves straight on,
+// which is what makes "Target player draws a card" and "Counter target spell"
+// compose in one cast.
+function promptNextModeTarget() {
+  const run = pendingModeCollection;
+  if (!run) return;
+  if (run.cursor >= run.order.length) {
+    finishModeCollection();
+    return;
+  }
+  const index = run.order[run.cursor];
+  const mode = run.modes[index];
+  updateActionHint(`${run.cardName} — ${mode.label}.`);
+  dispatchModalCast(run.card, run.castAction, mode.target_kind, mode.valid_targets);
+}
+
+// Send the accumulated modes as one cast. Cleared first, so the sendAction below
+// is an ordinary cast rather than the last mode's capture.
+function finishModeCollection() {
+  const run = pendingModeCollection;
+  if (!run) return;
+  pendingModeCollection = null;
+  updateActionHint(`Casting ${run.cardName}...`);
+  sendAction({
+    seat,
+    action: run.castAction || "cast",
+    card_name: run.cardName,
+    mode_choices: run.collected,
+  })
+    .then(() => updateActionHint(`Cast ${run.cardName}.`))
+    .catch((e) => updateActionHint(e.message, true))
+    .finally(() => clearPendingHandCast());
 }
 
 // Apply the caster's mode pick: record the index, then continue into the normal
@@ -6220,6 +6309,17 @@ function chooseModalMode(index) {
   if (!mode) return;
   if (mode.supported === false) {
     updateActionHint("That mode isn't supported yet — pick another.", true);
+    return;
+  }
+
+  // A multi-select prompt toggles and waits for the confirm; a single-mode one
+  // is finished by this click, which is the difference between "which mode" and
+  // "which modes".
+  if (choice.atLeast) {
+    const at = choice.picked.indexOf(index);
+    if (at >= 0) choice.picked.splice(at, 1);
+    else choice.picked.push(index);
+    renderActivationPrompt();
     return;
   }
 
@@ -11539,6 +11639,30 @@ async function sendAction(actionBody) {
   if (_CAST_ACTIONS.has(body.action) && body.mode_index == null && pendingCastModeIndex != null) {
     body.mode_index = pendingCastModeIndex;
   }
+  // "Choose one or more —": while a collection is open, a cast body is not a
+  // cast — it is the target the current mode's own prompt just produced. Capture
+  // it and open the next mode's prompt instead of sending. Intercepted here
+  // because this is the one place every targeting prompt ends up, the same
+  // reason the single mode index rides through it.
+  if (pendingModeCollection && _CAST_ACTIONS.has(body.action)) {
+    const run = pendingModeCollection;
+    const entry = { index: run.order[run.cursor] };
+    if (Number.isInteger(body.target_seat)) entry.target_seat = body.target_seat;
+    if (Number.isInteger(body.permanent_index)) entry.permanent_index = body.permanent_index;
+    if (Number.isInteger(body.target_permanent_index)) entry.permanent_index = body.target_permanent_index;
+    // Prefer the identity over the slot, for the reason every other target
+    // does: a permanent that leaves between the click and the cast must be a
+    // refusal, not whichever permanent slid into its place (CR 400.7).
+    if (Number.isInteger(entry.target_seat) && Number.isInteger(entry.permanent_index)) {
+      const pid = permanentIdAt(entry.target_seat, entry.permanent_index);
+      if (Number.isInteger(pid)) entry.permanent_id = pid;
+    }
+    if (Number.isInteger(body.target_stack_index)) entry.target_stack_index = body.target_stack_index;
+    run.collected.push(entry);
+    run.cursor += 1;
+    promptNextModeTarget();
+    return;
+  }
   // Same trick for a cast permission's zone: whichever cast path fires, the
   // engine learns which zone the card leaves.
   if (body.action === "cast" && body.from_zone == null && pendingCastFromZone != null) {
@@ -11776,6 +11900,7 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingManaColor = null;
   pendingAutoTap = null;
   pendingModalChoice = null;
+  pendingModeCollection = null;
   pendingDiscardCost = null;
   pendingAbilityChoice = null;
   pendingChannel = null;
@@ -11811,6 +11936,13 @@ q("promptOkBtn").addEventListener("click", async () => {
     // button through okBtn.onclick; without this guard the fallback chain below
     // also fires and sends a stray pass_priority the server 400s on.
     if (getPregameInfo()) return;
+    // A multi-select mode prompt is finished by its own confirm, before every
+    // fallback below — the cascade would otherwise read the open prompt as a
+    // pending activation and send a cast with no modes at all.
+    if (pendingModalChoice && pendingModalChoice.atLeast) {
+      confirmModalModes();
+      return;
+    }
     const handledUntap = await handleUntapPromptOk();
     if (handledUntap) {
       return;

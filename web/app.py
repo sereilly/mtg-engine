@@ -58,6 +58,7 @@ from .runtime import (
 )
 from .events import _notify_session_change, _stream_session_events
 from .seats import _loser, _rematch_human_seats, _seat_type, _winner
+from engine.oracle import compile_card_oracle
 from .serialization import _serialize_modes
 from .catalog import (
     CATALOG_PAYLOAD,
@@ -500,6 +501,10 @@ def get_card_target_spec(
         "name": card.name,
         "target_spec": session.game.cast_target_spec(seat, card),
         "modes": _serialize_modes(card, session.game, seat),
+        # Whether more than one of those modes may be chosen (CR 700.2d). The
+        # client fetches the spec before it opens the mode prompt, so this is
+        # where the prompt learns to be a multi-select.
+        "modes_at_least": compile_card_oracle(card).modes_at_least,
     }
 
 

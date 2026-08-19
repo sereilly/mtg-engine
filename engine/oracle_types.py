@@ -207,6 +207,13 @@ class OracleProgram:
     # Modes of a "Choose one —" modal spell, in bullet order. Empty for
     # non-modal cards. The player chooses one mode when the spell is cast.
     modes: tuple[ModalOption, ...] = ()
+    # "Choose one **or more** —" (Sublime Epiphany, CR 700.2d). How many of the
+    # modes above may be taken, not merely how many the UI should offer: the
+    # cast path refuses a second mode without it, because a spell that let its
+    # controller pick two modes it does not have is a spell doing something the
+    # card never said. Default False keeps every "Choose one —" exactly as it
+    # was.
+    modes_at_least: bool = False
 
 
 # Number words, shared with the text-keyed derivation tables that read a count

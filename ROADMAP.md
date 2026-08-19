@@ -256,41 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 132: a timing clause is a condition
-
-*(2026-08-18.)* M21 **281 → 282** — Radha, Heart of Keld.
-
-> During your turn, Radha has first strike.
-> You may look at the top card of your library any time, and you may play lands
-> from the top of your library.
-> {4}{R}{G}: Radha gets +X/+X until end of turn, where X is the number of lands
-> you control.
-
-The third line already worked (rounds 106 and 116). The second is round 131's
-module answering its second and third permissions — the weaker "you may look",
-and the land play — with **one printed line stating two of them**, so the reader
-asks whether the clause is *in* the line rather than whether it *is* the line,
-matched at a clause boundary so a line merely mentioning the words grants
-nothing.
-
-**"During your turn" is a condition, not a duration.** Read as a duration the
-ability would be something a resolution grants; read as a condition it is
-something the permanent *has* while the clause holds, which is what a static
-ability is. The condition table already had the shape — this is a third printed
-word order for it, and the seat asked is the ability's controller (CR 109.5).
-
-**"Radha has first strike" is the card saying "this creature".** The static gate
-and its dispatch both now read through the same name-substituting reader the
-combat restrictions use. Without it, a legendary's own static parses as a
-sentence about some other permanent — and the card had been sitting on exactly
-that.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Six new tests, five watched to fail on the round-131 engine; the sixth
-covers the pump line that already worked, so the card is covered rather than
-half-covered.
-
 ## Round 133: an exile pile the permanent carries
 
 *(2026-08-18.)* M21 **282 → 283** — Idol of Endurance.
@@ -386,11 +351,10 @@ added**. Ten new tests, nine watched to fail on the round-133 engine; the two
 that pass are the below-threshold controls, each paired with an
 above-threshold twin on the same board.
 
-## Measured, not built: Sublime Epiphany
+## Round 135: a spell that takes several of its modes
 
-*(2026-08-18.)* The last M21 card, left at **284 of 285** with what it needs
-written down rather than half-built. Recorded here the way Pursued Whale was
-before round 130 — a measurement is the thing a round starts from.
+*(2026-08-18.)* M21 **284 → 285**, and the set is complete — Sublime Epiphany,
+measured and scoped out one commit ago, built here.
 
 > Choose one or more —
 > • Counter target spell.
@@ -399,32 +363,47 @@ before round 130 — a measurement is the thing a round starts from.
 > • Create a token that's a copy of target creature you control.
 > • Target player draws a card.
 
-Two of the five modes already compile. The other three, and the head, are four
-independent pieces:
+Four pieces, and the head gated the other three: because "Choose one or more"
+refused at lowering, `_modal_options` returned nothing at all, so the bullets
+were not modes either.
 
-1. **"Choose one or more"** (CR 700.2d). `_lower_modal_head` refuses it and says
-   why: `StackItem.chosen_mode_index` is *one* index and
-   `_select_executable_instruction` resolves that one mode. Because the head
-   refuses, `_modal_options` returns nothing at all for this card — so the
-   bullets are not modes yet either, and this piece gates the other three.
-   **It cannot be done as a count alone.** Modes are chosen as the spell is cast
-   (CR 601.2b) and each chosen mode picks its own targets (CR 601.2c), so two
-   targeting modes chosen together need two targets: the change reaches
-   `StackItem`, the casting path, resolution, `web/schemas.py`'s single
-   `mode_index`, `web/actions.py` and the AI's chooser. A count without
-   per-mode targets would make the card supported and wrong.
-2. **"Counter target activated or triggered ability"** (CR 701.5a). The engine
-   counters *spells*; a stack object that is an ability is not one, and
-   `counter_top_stack_spell` is named for what it does.
-3. **"Return target nonland permanent"** — the smallest. The bounce handler
-   already tests its payload filter through `subject_matches`, which reads
-   `exclude_types`; what refuses is the lowering's gate, which asks the phrase
-   to *name* a card type. Widening it to accept an exclusion (so a bare "target
-   permanent" still refuses, since that would bounce a land) is a few lines, and
-   was measured working before being taken back out: on its own it buys no card,
-   and this project lands a widening with the card that exercises it.
-4. **"Create a token that's a copy of target creature you control"** (CR 111.4,
-   707.2). `copies.become_copy` already records a copy contribution from a
-   permanent's *copiable* values, which is exactly what the token needs; the
-   piece is a `create_token` payload that names a target to copy rather than a
-   printed P/T, plus the production for the phrase.
+**A count is not enough.** Modes are chosen as the spell is cast (CR 601.2b) and
+each one picks its own targets right after (CR 601.2c), so a mode and its targets
+travel together — two modes of this card name a permanent on the opponent's
+board, one on the caster's, and a seat, which the stack item's single
+`target_player_index` cannot say. `ChosenMode` carries the pair; resolution runs
+one application per mode in **printed** order (CR 608.2c), whatever order the
+caster named them; and `chosen_mode_index` stays as the first chosen mode, so
+every reader written for one mode sees a mode the spell really has. A cast that
+named no modes leaves the list empty and takes the old path unchanged — which is
+why the AI simulation is byte-identical.
+
+**"Choose two —" is still refused**, and for the reason the refusal was always
+about rather than an arithmetic one: nothing in the pool prints it, so the bound
+would ship unexercised, and a wrong bound is a spell performing a mode its
+controller never chose.
+
+**An ability on the stack is an object, not a spell.** CR 701.5a removes either
+from the stack, but a spell's card goes to a graveyard and an ability has no card
+at all (CR 113.7a) — so `counter_stack_ability` is its own kind, strict about its
+target, where the spell counter falls back to the top of the stack. The printed
+kinds ride the payload, so "counter target **triggered** ability" is the same
+instruction with a narrower list.
+
+**A token copy is two rules.** CR 111.1 says what a token is; CR 707.2 says what
+a copy is, and `copies.become_copy` already records exactly that. The token's
+base card therefore carries **nothing but a name**: seeding it from the source's
+copiable values as well would be a second statement of what the token is, free to
+disagree with layer 1 the moment anything read `perm.card` — which is why layer 1
+has one reader, and why the guard that says so sent this through
+`permanent_state.py` rather than the handler.
+
+The wire carries the modes too, each with its own target by stable id, and a
+stale one is a **404** rather than a fall back to the index beside it — the
+contract every other target on this protocol already holds to (CR 400.7). The
+browser's mode prompt becomes a multi-select when the card says so, then walks
+the chosen modes through their ordinary targeting prompts one at a time.
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Fifteen new tests, all fifteen watched to fail on the round-134 engine.
