@@ -385,3 +385,46 @@ pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Ten new tests, nine watched to fail on the round-133 engine; the two
 that pass are the below-threshold controls, each paired with an
 above-threshold twin on the same board.
+
+## Measured, not built: Sublime Epiphany
+
+*(2026-08-18.)* The last M21 card, left at **284 of 285** with what it needs
+written down rather than half-built. Recorded here the way Pursued Whale was
+before round 130 — a measurement is the thing a round starts from.
+
+> Choose one or more —
+> • Counter target spell.
+> • Counter target activated or triggered ability.
+> • Return target nonland permanent to its owner's hand.
+> • Create a token that's a copy of target creature you control.
+> • Target player draws a card.
+
+Two of the five modes already compile. The other three, and the head, are four
+independent pieces:
+
+1. **"Choose one or more"** (CR 700.2d). `_lower_modal_head` refuses it and says
+   why: `StackItem.chosen_mode_index` is *one* index and
+   `_select_executable_instruction` resolves that one mode. Because the head
+   refuses, `_modal_options` returns nothing at all for this card — so the
+   bullets are not modes yet either, and this piece gates the other three.
+   **It cannot be done as a count alone.** Modes are chosen as the spell is cast
+   (CR 601.2b) and each chosen mode picks its own targets (CR 601.2c), so two
+   targeting modes chosen together need two targets: the change reaches
+   `StackItem`, the casting path, resolution, `web/schemas.py`'s single
+   `mode_index`, `web/actions.py` and the AI's chooser. A count without
+   per-mode targets would make the card supported and wrong.
+2. **"Counter target activated or triggered ability"** (CR 701.5a). The engine
+   counters *spells*; a stack object that is an ability is not one, and
+   `counter_top_stack_spell` is named for what it does.
+3. **"Return target nonland permanent"** — the smallest. The bounce handler
+   already tests its payload filter through `subject_matches`, which reads
+   `exclude_types`; what refuses is the lowering's gate, which asks the phrase
+   to *name* a card type. Widening it to accept an exclusion (so a bare "target
+   permanent" still refuses, since that would bounce a land) is a few lines, and
+   was measured working before being taken back out: on its own it buys no card,
+   and this project lands a widening with the card that exercises it.
+4. **"Create a token that's a copy of target creature you control"** (CR 111.4,
+   707.2). `copies.become_copy` already records a copy contribution from a
+   permanent's *copiable* values, which is exactly what the token needs; the
+   piece is a `create_token` payload that names a target to copy rather than a
+   printed P/T, plus the production for the phrase.
