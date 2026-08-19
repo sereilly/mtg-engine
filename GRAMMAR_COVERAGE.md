@@ -21,10 +21,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 78.9% | 77.9% | 42.2% | 151 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.2% | 77.6% | 42.7% | 152 |
-| M21 *(measured)* | 285 | 503 | 86.1% | 85.1% | 60.4% | 235 |
-| **All (shipped)** | **1248** | **1663** | **78.1%** | **76.8%** | **42.2%** | **640** |
-
-*(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
+| M21 | 285 | 503 | 86.1% | 85.1% | 60.4% | 235 |
+| **All (shipped)** | **1533** | **2166** | **80.0%** | **78.8%** | **46.4%** | **875** |
 
 ## Backlog — failure reasons
 
@@ -60,7 +58,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 ## Cards executing through the grammar
 
-640 cards, 701 lines.
+875 cards, 1005 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`

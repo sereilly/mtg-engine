@@ -50,12 +50,15 @@ from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
 from engine.oracle_types import OracleInstruction  # noqa: E402
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
-from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
+from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import draw_step_bonus_for  # noqa: E402
 from engine.global_statics import global_static_for  # noqa: E402
 from engine.auras import (  # noqa: E402
     aura_effect_claim,
     aura_static_pt_grant,
+)
+from engine.activation_restrictions import (  # noqa: E402
+    activation_restriction_line,
 )
 from engine.enter_effects import enter_effect_line  # noqa: E402
 from engine.extra_triggers import extra_trigger_line  # noqa: E402
@@ -67,6 +70,8 @@ from engine.oracle import (  # noqa: E402
     _is_supported_keyword_line,
     _is_supported_static_creature_line,
     _parse_activated_ability,
+    _parse_delayed_attack_trigger,
+    _planeswalker_static_line,
     _parse_loyalty_ability,
     _parse_trigger_condition,
     _parse_triggered_ability,
@@ -219,6 +224,42 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # above and claimed through the same derivation the fire site and the
     # support gate call.
     ("extra_triggers.py", extra_trigger_line),
+    # CR 602.5 "Activate only …" clauses (Caged Zombie, Jade Statue), enforced by
+    # engine/activation_restrictions.py from the ability's own printed line. Not
+    # an instruction — a restriction is not an effect — so the sentence would
+    # read as unclaimed without this.
+    ("activation_restrictions.py", activation_restriction_line),
+    # A **delayed** triggered ability the resolving effect creates (CR 603.7):
+    # "Whenever a creature attacks this turn, put a +1/+1 counter on it" (Basri,
+    # Devoted Paladin). The sentence is that trigger's own text, not this line's
+    # effect, which is why no parse rule matches it — `_parse_delayed_attack_
+    # trigger` is what reads it and `create_delayed_trigger` is what the card
+    # carries.
+    ("oracle.py (delayed trigger)",
+     lambda s: _parse_delayed_attack_trigger(s, None) is not None),
+    # An Aura or Equipment's own attachment line. "Equip {1}" is a cost rather
+    # than an effect and "This Equipment enters with a soul counter on it" is
+    # entry state; both are read by engine/auras.py's gate, which is the
+    # stricter reader and the one that decides support.
+    ("auras.py (attachment line)",
+     lambda s: s.startswith("equip") or s.startswith("this equipment enters with")),
+    # A modal **trigger** head, whose modes are the bullet lines below it
+    # (Trufflesnout, Elder Gargaroth). `_modal_trigger_ability` groups the head
+    # with its bullets and compiles one `choose_one`; the head read alone is a
+    # sentence with no effect in it, which is exactly what it should be.
+    # "This ability costs {1} less to activate for each Shrine you control."
+    # (Sanctum of Tranquil Light.) A CR 601.2f *reduction*, which the whole-card
+    # scan above does not claim because it looks for taxes on spells; this is
+    # the per-line reader the same module exposes.
+    ("cost_modifiers.py (ability reduction)", cost_modifier_claims_line),
+    # "You may activate loyalty abilities of <this planeswalker> on any player's
+    # turn any time you could cast an instant." (Teferi, Master of Time.) CR
+    # 306.5d relaxed by the card itself, read by the planeswalker compiler off
+    # this exact sentence and enforced by the activation timing check.
+    ("oracle.py (loyalty timing static)",
+     lambda s: bool(_LOYALTY_TIMING.match(s))),
+    ("oracle.py (modal trigger head)",
+     lambda s: s.rstrip(" —-").endswith("choose one")),
     # A board-wide static contributes through the CR 613 layer bridge and,
     # for a granted ability, through the affected permanent's effective
     # card. There is no instruction to point at, so without this channel a
@@ -365,7 +406,53 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
 }
 
 
+#: CR 306.5d relaxed by the card itself. The sentence names the planeswalker,
+#: and the compiler collapses that to "this planeswalker" before matching —
+#: which a channel predicate handed one sentence and no card name cannot do, so
+#: the shape is matched instead of the canonical form.
+_LOYALTY_TIMING = re.compile(
+    r"^you may activate loyalty abilities of .+ on any player's turn any time "
+    r"you could cast an instant$"
+)
+
+
 ACKNOWLEDGED: dict[str, dict[str, str]] = {
+    "Chromatic Orrery": {
+        "you may spend mana as though it were mana of any color": (
+            "NOT IMPLEMENTED, and recorded rather than claimed. The card "
+            "compiles supported on its two activated abilities (the five "
+            "colourless mana, and the per-colour draw round 136 built); this "
+            "line is a static permission over how mana may be *spent* and "
+            "nothing reads it. `PlayerState.can_spend_white_as_red` is the only "
+            "spend-as permission the engine has and it is one colour pair wide. "
+            "The effect of the omission is narrow and always in the opponent's "
+            "favour: a player with the Orrery out simply cannot pay a coloured "
+            "cost with the wrong colour, exactly as if the line were not there."
+        ),
+    },
+    "Malefic Scythe": {
+        "whenever equipped creature dies, put a soul counter on this equipment": (
+            "NOT IMPLEMENTED, and recorded rather than claimed. The Equipment "
+            "works — it enters with its counter and grants +1/+1 for each one "
+            "(engine/auras.py reads both) — but the trigger that *adds* further "
+            "counters produces no instruction: no trigger condition names the "
+            "death of the creature an Equipment is attached to. So the Scythe "
+            "is a permanent +1/+1 rather than a growing one, which is strictly "
+            "weaker than the card and never stronger."
+        ),
+    },
+    "Nine Lives": {
+        "if a source would deal damage to you, prevent that damage and put an "
+        "incarnation counter on this enchantment": (
+            "NOT IMPLEMENTED, and recorded rather than claimed since round 127. "
+            "The card's other two lines compile — the state trigger that exiles "
+            "it at eight counters, and the leaves-the-battlefield loss — so it "
+            "reports supported. This one is a CR 614 replacement that also "
+            "*places a counter*, and engine/replacements.py has no interceptor "
+            "that does both. Until it does, Nine Lives prevents nothing and "
+            "never reaches eight counters: it is an enchantment that sits there."
+        ),
+    },
     "Mana Vault": {
         "at the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you": (
             "NOT IMPLEMENTED, and recorded here rather than claimed. The card "

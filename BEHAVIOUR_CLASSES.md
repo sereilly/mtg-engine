@@ -4,19 +4,20 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **388**
-- Distinct behaviours: **341**
-- Cards sharing a behaviour with another: **65** in **18** classes
-- Unverified cards covered by a verified peer: **0**
+- Cards in the catalog: **668**
+- Distinct behaviours: **610**
+- Cards sharing a behaviour with another: **80** in **22** classes
+- Unverified cards covered by a verified peer: **10**
 
 | Size | Cards |
 | --- | --- |
-| 14 | **Craw Wurm**, **Earth Elemental**, **Fire Elemental**, **Gray Ogre**, **Grizzly Bears**, **Hill Giant**, **Hurloon Minotaur**, **Ironroot Treefolk**, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, **Pearled Unicorn**, **Savannah Lions**, **Scathe Zombies**, **Water Elemental** |
-| 6 | **Air Elemental**, **Bird Maiden**, **Flying Men**, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites** |
+| 19 | **Craw Wurm**, **Earth Elemental**, **Fire Elemental**, Garruk's Gorehorn, **Gray Ogre**, **Grizzly Bears**, **Hill Giant**, **Hurloon Minotaur**, **Ironroot Treefolk**, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Onakke Ogre, **Pearled Unicorn**, **Savannah Lions**, **Scathe Zombies**, Staunch Shieldmate, Walking Corpse, **Water Elemental**, Wishcoin Crab |
+| 7 | **Air Elemental**, **Bird Maiden**, Concordia Pegasus, **Flying Men**, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites** |
 | 5 | **Black Ward**, **Blue Ward**, **Green Ward**, **Red Ward**, **White Ward** |
 | 5 | **Circle of Protection: Black**, **Circle of Protection: Blue**, **Circle of Protection: Green**, **Circle of Protection: Red**, **Circle of Protection: White** |
 | 5 | **Crystal Rod**, **Iron Star**, **Ivory Cup**, **Throne of Bone**, **Wooden Sphere** |
 | 4 | **Deathlace**, **Lifelace**, **Purelace**, **Thoughtlace** |
+| 3 | **Granite Gargoyle**, Hellkite Punisher, **Shivan Dragon** |
 | 3 | **Ice Storm**, **Sinkhole**, **Stone Rain** |
 | 3 | **Wall of Ice**, **Wall of Stone**, **Wall of Wood** |
 | 2 | **Aladdin's Ring**, **Rod of Ruin** |
@@ -24,10 +25,13 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Benalish Hero**, **Timber Wolves** |
 | 2 | **Black Knight**, **White Knight** |
 | 2 | **Blue Elemental Blast**, **Red Elemental Blast** |
+| 2 | Cancel, **Counterspell** |
+| 2 | Colossal Dreadmaw, Wildwood Patrol |
 | 2 | **Dandân**, **Sea Serpent** |
 | 2 | **Elvish Archers**, **Stone-Throwing Devils** |
-| 2 | **Granite Gargoyle**, **Shivan Dragon** |
+| 2 | **Giant Growth**, Titanic Growth |
 | 2 | **Holy Strength**, **Unholy Strength** |
 | 2 | **Moorish Cavalry**, **War Mammoth** |
+| 2 | **Resurrection**, Rise Again |
 
 Bold = manually verified; the rest of that row is covered by it.

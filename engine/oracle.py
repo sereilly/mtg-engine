@@ -2352,6 +2352,21 @@ SUPPORTED_LAYOUTS = frozenset({
 # Support derived from the text-keyed rule tables
 # ---------------------------------------------------------------------------
 
+def _activation_restrictions_readable(oracle_text: str) -> bool:
+    """Whether this card prints an "Activate only …" clause and every one of
+    them is a restriction the engine enforces.
+
+    False for a card printing none, so the claim is only made where there is
+    something to claim; False also for a card printing one the table cannot
+    read, which is what makes it a *gate* rather than a rubber stamp.
+    """
+    from .activation_restrictions import _clauses, unreadable_activation_clauses
+
+    if not _clauses(oracle_text or ""):
+        return False
+    return not unreadable_activation_clauses(oracle_text or "")
+
+
 def _derived_static_claims(
     oracle_text: str, normalized_text: str, card_name: str | None = None
 ) -> list[str]:
@@ -2390,6 +2405,12 @@ def _derived_static_claims(
     # this replaced produced.
     if land_play_allowance_for(oracle_text) is not None:
         claims.append("land_play_allowance")
+    # CR 602.5 activation restrictions ("Activate only if a creature died this
+    # turn"). The activation path reads the same table, so a clause it cannot
+    # read is a card the gate must refuse rather than admit with the restriction
+    # unenforced — the direction this whole arrangement exists to prevent.
+    if _activation_restrictions_readable(oracle_text):
+        claims.append("activation_restrictions")
     # CR 603.2d extra triggers (Sanctum of All). The fire site reads the
     # permanent's own text, so there is no instruction — and without this claim
     # the card would be admitted with the sentence doing nothing, which for a

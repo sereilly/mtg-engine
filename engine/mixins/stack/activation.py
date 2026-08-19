@@ -9,6 +9,7 @@ ability or (for a mana ability, CR 605.1a) performs it without using the stack.
 
 from __future__ import annotations
 
+from ...activation_restrictions import activation_denial
 from ...auras import aura_restriction_active
 from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
 from ...mana_payment import is_mana_ability
@@ -413,67 +414,17 @@ class AbilityActivationMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
-        # "Only during any upkeep step." (Armageddon Clock.) A window scoped to
-        # a *step* rather than to a player's own step — the "any player may
-        # activate" permission is checked separately above, and the two
-        # together are what let an opponent wind the Clock back down.
-        if "only during any upkeep step" in ability_lower:
-            if self.current_step != "upkeep":
-                details = f"{permanent.card.name} can only be activated during an upkeep step"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        # "Activate only during your upkeep." (Cyclopean Tomb, the Clockwork
-        # creatures, Rock Hydra's pump). Legal only on the controller's own upkeep.
-        if "activate only during your upkeep" in ability_lower:
-            if not (self.current_step == "upkeep" and self.active_player_index == controller_index):
-                details = f"{permanent.card.name} can only be activated during your upkeep"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        # "Activate only as a sorcery." (Illusionary Mask) — your turn, a main
-        # phase, and an empty stack (CR 118.2a wording shortcut).
-        if "activate only as a sorcery" in ability_lower:
-            if not (
-                self.active_player_index == controller_index
-                and self.current_turn_phase in ("precombat_main", "postcombat_main")
-                and not self.stack
-            ):
-                details = f"{permanent.card.name} can only be activated as a sorcery"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        # "Activate only during combat." (Jade Statue) / "Activate only during
-        # the end of combat step." (Desert).
-        if "activate only during the end of combat step" in ability_lower:
-            if self.current_step != "end_of_combat":
-                details = f"{permanent.card.name} can only be activated during the end of combat step"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-        elif "activate only during combat" in ability_lower:
-            if self.current_turn_phase != "combat":
-                details = f"{permanent.card.name} can only be activated during combat"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        # "Activate only during an opponent's turn, before attackers are
-        # declared." (Nettling Imp; mirrors cast_restrictions' same phrase.)
-        if "activate only during an opponent's turn, before attackers are declared" in ability_lower:
-            legal = self.active_player_index != controller_index and (
-                self.current_turn_phase in ("beginning", "precombat_main")
-                or (
-                    self.current_turn_phase == "combat"
-                    and self.current_step in ("beginning_of_combat", "declare_attackers")
-                    and not self.combat_attackers_locked
-                )
-            )
-            if not legal:
-                details = (
-                    f"{permanent.card.name} can only be activated during an opponent's turn, "
-                    "before attackers are declared"
-                )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+        # Every printed "Activate only …" clause on *this* ability line
+        # (engine/activation_restrictions.py, CR 602.5). One table, read here and
+        # by the support gate, replacing a hand-written if-chain whose branches
+        # were substring tests: everything the chain did not list was silently
+        # unenforced, which is how Caged Zombie drained two life on an empty
+        # graveyard while reporting supported.
+        denial = activation_denial(self, controller_index, permanent, ability.source_line or "")
+        if denial is not None:
+            details = f"{permanent.card.name}: {denial}"
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         # "…and its activated abilities can't be activated unless they're mana
         # abilities." (Faith's Fetters.) CR 605.1a decides which abilities the
@@ -505,20 +456,11 @@ class AbilityActivationMixin:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
-        # "Activate only if you have exactly seven cards in hand." (Library of
-        # Alexandria's draw ability.)
-        if "activate only if you have exactly seven cards in hand" in ability_lower and len(controller.hand) != 7:
-            details = f"{permanent.card.name} can only be activated with exactly seven cards in hand"
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        # "Activate only during your turn and only once each turn." (Instill Energy)
-        oracle_lower = ability_lower
-        if "only during your turn" in oracle_lower and self.active_player_index != controller_index:
-            details = f"{permanent.card.name} can only be activated during your turn"
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
-        once_each_turn = "once each turn" in oracle_lower
+        # The timing half of "Activate only during your turn and only once each
+        # turn" is in the restriction table above; the *once* half is
+        # per-permanent state rather than a property of the game, so it stays
+        # here with the state it reads.
+        once_each_turn = "once each turn" in ability_lower
         if once_each_turn and permanent.metadata.get("ability_used_turn") == self.turn:
             details = f"{permanent.card.name}'s ability can only be activated once each turn"
             self.log.append(details)

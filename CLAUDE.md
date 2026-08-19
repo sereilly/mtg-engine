@@ -8,8 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 FastAPI web app with a browser game UI. The card pool lives in `cards/` as one
 JSON per set, registered in `cards/manifest.json` (the single source of truth
 for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
-(292), Unlimited Edition (292 — same list as Beta), Arabian Nights (78) and Revised Edition (296),
-388 unique cards, all classified as supported. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
+(292), Unlimited Edition (292 — same list as Beta), Arabian Nights (78),
+Revised Edition (296) and Core Set 2021 (285),
+668 unique cards, all classified as supported. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
@@ -20,18 +21,20 @@ supported — the web app offers those cards to players, and two guards
 fail if one of them is unsupported. `measured` is a set ingested so its numbers
 can be read *before* the work of supporting it is done: the coverage instruments
 load it (`manifest_set_paths(include_measured=True)`), `load_catalog` does not,
-and no player can put one of its cards in a deck. Core Set 2021 (M21,
-285 cards, 58% supported) sits there.
+and no player can put one of its cards in a deck. **It is empty today** — M21
+went in under it at 58% supported and was promoted to `sets` once every card
+was, which is the role working as designed rather than a role nobody uses. The
+next ingested set goes there first.
 
-**A measured set is nameable by the reporting scripts** — `--set M21` works, and
-the label says "measured, not shipped" so its numbers can't be read as
+**A measured set is nameable by the reporting scripts** — `--set <CODE>` works,
+and the label says "measured, not shipped" so its numbers can't be read as
 shipped-pool ones. That is the point of ingesting it: `support_report.py` naming
 the unsupported cards and their reasons is the tool you implement a set *with*,
-and it used to exit "no set 'M21' in the manifest", leaving `--cards
-cards/M21_cards.json` — the spelled-out filename the convention forbids — as the
-only way through. Reading a card file is not shipping it; `load_catalog` is the
-seam that decides what a player can deck. `--all` still means the shipped pool
-alone, in the paths *and* in the label. A measured set is reported by
+and it used to exit "no set in the manifest", leaving `--cards
+cards/<CODE>_cards.json` — the spelled-out filename the convention forbids — as
+the only way through. Reading a card file is not shipping it; `load_catalog` is
+the seam that decides what a player can deck. `--all` still means the shipped
+pool alone, in the paths *and* in the label. A measured set is reported by
 `GRAMMAR_COVERAGE.md` / `HOOK_RELIANCE.md` and deliberately left out of their
 floors and ceilings — a ratchet over a set nobody has implemented fires on its
 composition rather than on anything anyone did. It moves up to `sets` when it is
@@ -435,6 +438,16 @@ adding entries, not editing dispatch**:
   printed with a known template needs no registration at all.
 - `engine/cast_restrictions.py` — text-keyed "cast this spell only during..."
   timing gates (an ordered predicate table; genuinely textual, not per-card).
+- `engine/activation_restrictions.py` — its twin for CR 602.5, "Activate only
+  if a creature died this turn" / "…only during your upkeep" / "…only as a
+  sorcery". Same shape and the same reason it is a table: the clause reads the
+  same on any card printing it. It replaced a hand-written if-chain inside
+  `mixins/stack/activation.py` whose branches were substring tests — so a
+  printed clause nobody had listed was **unenforced**, and that is the quiet
+  failure this file exists for. An unenforced restriction is not a dead
+  ability; it is an ability that works more often than the card allows, so
+  nothing crashes and nothing is missing. The **support gate reads the same
+  table**, which is what stops a card being admitted with its clause ignored.
 - `engine/card_hooks.py` — name-keyed registries for truly bespoke behavior
   (spell-resolved and counterspell riders, leave-battlefield effects,
   draw-step modifiers, the Aura on a land tapped for mana) plus
@@ -627,8 +640,10 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (369 of the 388 catalog cards, passing; the 19
-Revised added have no recorded result yet). **Generated
+manually validated in-game (369 of the 668 catalog cards passing, 10 more
+reported `equivalent`; the rest — almost all of M21, promoted before its
+in-game pass — have no recorded result yet, which SET_PLAYBOOK.md Phase 5 owns
+and deliberately does not gate promotion on). **Generated
 automatically** — results are edited via the in-game Debug Menu, not by hand.
 
 A card is also reported `equivalent` when it is untested but a *passing* card

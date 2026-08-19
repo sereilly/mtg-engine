@@ -1,7 +1,7 @@
 # Scaling Roadmap
 
-Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 257/285) to the full release line - **137 sets, 33,594
+Target: grow the card pool from 668 unique cards (LEA/LEB/2ED/ARN/3ED/M21, all
+shipped and all supported) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
@@ -97,9 +97,10 @@ needs two rounds is worth splitting only if neither half ships a card alone
   CR 704.5j should bin one — verified, and it does not. Two reads are wrong, not
   one: `perm.card.name`, and the `Legendary` supertype, which `has_type` does
   not cover at all (round 48 exempted `game_ending.py` for exactly that). All
-  eleven legendary creatures in the pool are M21, so nothing can hit this until
-  the set ships — which makes it worth doing before it does. A ratchet on
-  `card.name` needs its own census first: hundreds of reads are log lines.
+  eleven legendary creatures in the pool are M21, **which now ships** — so this
+  is reachable in a real game rather than hypothetical, and it is the oldest
+  open block. A ratchet on `card.name` needs its own census first: hundreds of
+  reads are log lines.
 - **Activating an ability of a card in hand.** "Discard this card:" (Waker of
   Waves) is an activation cost paid from *hand* — a mechanic with no seam in
   this engine, not a wording gap. Niambi, Subira and Sanctum of Shattered
@@ -256,63 +257,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 135: a spell that takes several of its modes
-
-*(2026-08-18.)* M21 **284 → 285**, and the set is complete — Sublime Epiphany,
-measured and scoped out one commit ago, built here.
-
-> Choose one or more —
-> • Counter target spell.
-> • Counter target activated or triggered ability.
-> • Return target nonland permanent to its owner's hand.
-> • Create a token that's a copy of target creature you control.
-> • Target player draws a card.
-
-Four pieces, and the head gated the other three: because "Choose one or more"
-refused at lowering, `_modal_options` returned nothing at all, so the bullets
-were not modes either.
-
-**A count is not enough.** Modes are chosen as the spell is cast (CR 601.2b) and
-each one picks its own targets right after (CR 601.2c), so a mode and its targets
-travel together — two modes of this card name a permanent on the opponent's
-board, one on the caster's, and a seat, which the stack item's single
-`target_player_index` cannot say. `ChosenMode` carries the pair; resolution runs
-one application per mode in **printed** order (CR 608.2c), whatever order the
-caster named them; and `chosen_mode_index` stays as the first chosen mode, so
-every reader written for one mode sees a mode the spell really has. A cast that
-named no modes leaves the list empty and takes the old path unchanged — which is
-why the AI simulation is byte-identical.
-
-**"Choose two —" is still refused**, and for the reason the refusal was always
-about rather than an arithmetic one: nothing in the pool prints it, so the bound
-would ship unexercised, and a wrong bound is a spell performing a mode its
-controller never chose.
-
-**An ability on the stack is an object, not a spell.** CR 701.5a removes either
-from the stack, but a spell's card goes to a graveyard and an ability has no card
-at all (CR 113.7a) — so `counter_stack_ability` is its own kind, strict about its
-target, where the spell counter falls back to the top of the stack. The printed
-kinds ride the payload, so "counter target **triggered** ability" is the same
-instruction with a narrower list.
-
-**A token copy is two rules.** CR 111.1 says what a token is; CR 707.2 says what
-a copy is, and `copies.become_copy` already records exactly that. The token's
-base card therefore carries **nothing but a name**: seeding it from the source's
-copiable values as well would be a second statement of what the token is, free to
-disagree with layer 1 the moment anything read `perm.card` — which is why layer 1
-has one reader, and why the guard that says so sent this through
-`permanent_state.py` rather than the handler.
-
-The wire carries the modes too, each with its own target by stable id, and a
-stale one is a **404** rather than a fall back to the index beside it — the
-contract every other target on this protocol already holds to (CR 400.7). The
-browser's mode prompt becomes a multi-select when the card says so, then walks
-the chosen modes through their ordinary targeting prompts one at a time.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Fifteen new tests, all fifteen watched to fail on the round-134 engine.
-
 ## Round 136: three abilities that compiled and did nothing
 
 *(2026-08-18.)* The three cards the promotion rehearsal named. Each compiled
@@ -428,3 +372,58 @@ which today hard-codes two LEA phrases. Thirteen further parse-coverage
 sentences are attribution gaps rather than behaviour gaps (delayed triggers,
 modal trigger heads, equip, Nine Lives' replacement, three statics) and want
 channels, not code.
+
+## Round 138: the restriction nobody enforced, and M21 ships
+
+*(2026-08-18.)* The last blocker, and the promotion. **M21 moves from `measured`
+to `sets`: 668 cards, all supported.**
+
+`mixins/stack/activation.py` gated activations with a hand-written if-chain,
+each branch a substring test against the ability line. Eight LEA phrases were
+listed. Everything else printed with the words was **unenforced** — Caged
+Zombie's "Activate only if a creature died this turn" drained two life on an
+empty graveyard, and the card reported supported the whole time, because an
+unenforced restriction is not a dead ability. It is an ability that works more
+often than the card allows: nothing crashes, nothing is missing, the game is
+just wrong in the player's favour. That is the harder failure to see, and the
+reason this one survived five sets.
+
+`engine/activation_restrictions.py` is the twin of `cast_restrictions.py`: one
+declaration per printed clause, matched **whole** so a rule for a shorter phrase
+cannot satisfy a longer one, read by the activation path *and* by the support
+gate. The eight existing phrases moved into it, so the chain is gone rather than
+joined. Twelve clauses, one reader.
+
+Two details the pool insisted on. Armageddon Clock prints its clause as the tail
+of a conjunction ("Any player may activate this ability **but** only during any
+upkeep step"), so the sentence splitter reads the tail and leaves the permission
+to the rule that owns it. Rocket Launcher's "controlled continuously since the
+beginning of your most recent turn" already had a route through the compiled
+payload, so its entry calls the same `_controlled_since_turn_start` rather than
+inventing a second answer.
+
+**The promotion itself.** Every guard the wider catalog turns on is green; the
+numbers moved the way a modern set should move them —
+
+| | before | after |
+| --- | --- | --- |
+| grammar parses | 78.1% | **80.0%** |
+| grammar executes | 42.2% | **46.4%** |
+| hooked share of supported cards | 24.0% | **13.9%** |
+| hook entries per 100 supported | 25.8 | **15.0** |
+
+Hook reliance nearly halving is the headline: M21 is 285 cards the grammar reads
+almost entirely, so the *marginal cost per card* — the number that decides
+whether this reaches 26,113 — fell by a third of its value on one set.
+
+Three lines are recorded in `parse_coverage.py`'s `ACKNOWLEDGED` as **not
+implemented**, each with what it costs: Chromatic Orrery's "spend mana as though
+it were mana of any color", Malefic Scythe's counter-accumulating trigger, and
+Nine Lives' counter-placing prevention (open since round 127). All three fail in
+the direction that makes the card *weaker* than printed, which is why they are
+acknowledged rather than blocking — and they are named in the report so they
+cannot be mistaken for coverage.
+
+In-game verification is deliberately not a promotion gate (SET_PLAYBOOK.md
+Phase 5): 369 of 668 cards pass, 10 more are `equivalent`, and the rest are
+M21's, owed a Debug-Menu pass.

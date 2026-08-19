@@ -88,6 +88,47 @@ ACTIVATED_LABELS: dict[str, str] = {
     "untap_enchanted_creature": "activated_untap",
     "untap_self": "activated_untap",
     "untap_target_land": "spell_pattern",
+    # --- M21's activated abilities, added at its promotion -------------------
+    # Every one of these would otherwise take the `activated_<category>`
+    # fallback, which is a label the support report has never bucketed by. Each
+    # is placed in the bucket the *ability* belongs to rather than the one its
+    # instruction kind reads like: a label answers "what is this ability for?",
+    # which is why "sequence" above is `activated_damage`.
+    #
+    # Damage, however it is spelled. A fight (Brash Taunter) and a bite
+    # (Heartfire Immolator) differ in who deals back, not in what the ability is
+    # for; life loss is not damage by the rules (CR 118.2) but is the same
+    # bucket for a report about what an ability does to a player.
+    "source_fights_target": "activated_damage",
+    "source_bites_target": "activated_damage",
+    "target_loses_life": "activated_damage",
+    # Granting a keyword until end of turn, to the source, a target or the team.
+    # `activated_pump` already holds the flying grants and the P/T setters, and
+    # these are the same ability with a different word after "gains".
+    "grant_self_keyword_until_eot": "activated_pump",
+    "grant_target_keyword_until_eot": "activated_pump",
+    "grant_team_keyword_until_eot": "activated_pump",
+    "set_team_base_pt_until_eot": "activated_pump",
+    # Evasion, beside `grant_unblockable_to_low_power_target`.
+    "grant_unblockable_to_self": "activated_evasion",
+    # Looking at cards and choosing among them. Scry is the paradigm case and
+    # the look-and-pick (Waker of Waves) is the same question with a keep.
+    "scry": "activated_look",
+    "look_top_pick_to_hand": "activated_look",
+    # Moving a card out of a graveyard. Three destinations, one bucket: what the
+    # ability is for is that the graveyard stops holding it.
+    "put_graveyard_card_on_library_bottom": "activated_recursion",
+    "reanimate_creature": "activated_recursion",
+    "exile_target_graveyard": "activated_recursion",
+    # "Until end of turn, you may cast …" (Idol of Endurance). Not any of the
+    # above: nothing moves and nothing changes characteristics — the ability's
+    # whole effect is a permission (CR 601.3).
+    "grant_cast_permission": "activated_permission",
+    # "{T}, Sacrifice this land: Search your library for a basic land card…"
+    # (Fabled Passage). A tutor, whatever the destination: `activated_look`
+    # is for cards seen and chosen among, and a search is chosen from a
+    # zone nobody sees.
+    "search_library": "activated_search",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -109,6 +150,49 @@ TRIGGERED_LABELS: dict[str, str] = {
     "upkeep_pay_or_sacrifice_enchantment": "upkeep_effect",
     "upkeep_pay_or_sacrifice_self": "upkeep_effect",
     "upkeep_pay_to_untap_self": "upkeep_effect",
+    # --- M21's triggered abilities, added at its promotion -------------------
+    # M21 is the first set whose triggers the grammar reads wholesale, so this
+    # is the block where the vocabulary the shipped pool built gets applied to a
+    # set it did not come from. Each label is the bucket the *ability* belongs
+    # to, not a rendering of its instruction kind.
+    "add_counter_to_target": "triggered_counter",
+    "add_mana_from_text": "triggered_mana",
+    "bounce_target_creature": "triggered_bounce",
+    "buff_creatures_global": "triggered_pump",
+    "copy_triggering_spell": "triggered_copy",
+    "create_token": "triggered_token",
+    "destroy_target_permanent": "triggered_destruction",
+    "discard_then_draw_that_many": "triggered_draw",
+    "draw_controller_cards": "triggered_draw",
+    "draw_then_discard_self": "triggered_draw",
+    "exile_graveyard_until_leaves": "triggered_exile",
+    "exile_self": "triggered_exile",
+    # A keyword granted until end of turn is what `activated_pump` holds on the
+    # other side; same ability, other position.
+    "grant_self_flying_until_eot": "triggered_pump",
+    "grant_target_flying_until_eot": "triggered_pump",
+    "pump_self": "triggered_pump",
+    "pump_target_creature_until_eot": "triggered_pump",
+    "tap_any_number_then_pump_self": "triggered_pump",
+    # Looking at cards and choosing among them.
+    "look_top_pick_to_hand": "triggered_look",
+    "reveal_hand_and_choose": "triggered_look",
+    "scry": "triggered_look",
+    "mill_target_player": "triggered_mill",
+    # Life loss is not damage by the rules (CR 118.2), but for a report about
+    # what an ability does to a player it is the same bucket.
+    "target_loses_life": "triggered_damage",
+    "prevent_all_combat_damage_to_matching": "triggered_prevent",
+    "player_loses_game": "triggered_game_end",
+    # Moving a card out of a graveyard, whichever way and whoever's.
+    "return_creature_from_graveyard_to_hand": "triggered_recursion",
+    "return_self_from_graveyard": "triggered_recursion",
+    "sacrifice_matching_permanent": "triggered_sacrifice",
+    # A composed effect, exactly as `sequence` is on the activated side: the
+    # wrapper cannot say what the ability is for, so the label names the shape
+    # rather than guessing at a bucket. Ten cards share it and they do ten
+    # different things.
+    "sequence": "triggered_sequence",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps
@@ -125,6 +209,24 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # optional clause behind it ("remove a counter … gain 1 life") is neither a
     # draw nor damage.
     ("upkeep_self", "may"): "upkeep_effect",
+    # M21's seventeen optional triggers. `may` still says nothing about the
+    # effect, and the *condition* is the only thing in the pair that does — so
+    # each row names the moment rather than the effect, which is the honest
+    # answer for a wrapper whose contents differ card by card.
+    ("combat_your_turn", "may"): "triggered_combat",
+    ("creature_deals_combat_damage", "may"): "triggered_combat",
+    ("dies", "may"): "triggered_death",
+    ("enters_battlefield", "may"): "triggered_etb",
+    ("draws_card", "may"): "triggered_draw",
+    ("end_step", "may"): "triggered_end_step",
+    ("end_step_self", "may"): "triggered_end_step",
+    ("main_phase_first", "may"): "triggered_main_phase",
+    ("permanent_becomes_untapped", "may"): "triggered_untap",
+    ("self_becomes_target", "may"): "triggered_targeted",
+    # Riddleform, once its animation trigger compiled (round 137). The
+    # condition is what says when; the wrapper still says nothing about
+    # the optional clause behind it.
+    ("you_cast_spell", "may"): "triggered_cast",
 }
 
 

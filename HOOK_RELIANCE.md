@@ -12,9 +12,9 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**93 of 388 supported cards (24.0%)** carry at least one name-keyed entry, across **100 entries** in 7 registries. The pool is 388 cards, 100.0% supported.
+**93 of 668 supported cards (13.9%)** carry at least one name-keyed entry, across **100 entries** in 7 registries. The pool is 668 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **6,730 hand-written entries** covering **6,259 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **3,909 hand-written entries** covering **3,635 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
@@ -25,10 +25,8 @@ Held at this rate, supporting the 26,113-card release line would need about **6,
 | 2ED | 292 | 292 (100.0%) | 52 (17.8%) | 389 | 48 (12.3%) | 56 | 19.2 |
 | ARN | 78 | 78 (100.0%) | 32 (41.0%) | 107 | 30 (28.0%) | 35 | 44.9 |
 | 3ED | 296 | 296 (100.0%) | 55 (18.6%) | 389 | 50 (12.9%) | 58 | 19.6 |
-| M21 *(measured)* | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| **ALL (shipped, deduped)** | **388** | **388 (100.0%)** | **93 (24.0%)** | **519** | **86 (16.6%)** | **100** | **25.8** |
-
-*(measured)* — M21 are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
+| M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
+| **ALL (shipped, deduped)** | **668** | **668 (100.0%)** | **93 (13.9%)** | **1022** | **86 (8.4%)** | **100** | **15.0** |
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so four of these rows are one data point wearing four hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 

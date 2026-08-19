@@ -3,6 +3,7 @@
     "Craw Wurm",
     "Earth Elemental",
     "Fire Elemental",
+    "Garruk's Gorehorn",
     "Gray Ogre",
     "Grizzly Bears",
     "Hill Giant",
@@ -10,14 +11,19 @@
     "Ironroot Treefolk",
     "Merfolk of the Pearl Trident",
     "Mons's Goblin Raiders",
+    "Onakke Ogre",
     "Pearled Unicorn",
     "Savannah Lions",
     "Scathe Zombies",
-    "Water Elemental"
+    "Staunch Shieldmate",
+    "Walking Corpse",
+    "Water Elemental",
+    "Wishcoin Crab"
   ],
   [
     "Air Elemental",
     "Bird Maiden",
+    "Concordia Pegasus",
     "Flying Men",
     "Phantom Monster",
     "Roc of Kher Ridges",
@@ -51,6 +57,11 @@
     "Thoughtlace"
   ],
   [
+    "Granite Gargoyle",
+    "Hellkite Punisher",
+    "Shivan Dragon"
+  ],
+  [
     "Ice Storm",
     "Sinkhole",
     "Stone Rain"
@@ -81,6 +92,14 @@
     "Red Elemental Blast"
   ],
   [
+    "Cancel",
+    "Counterspell"
+  ],
+  [
+    "Colossal Dreadmaw",
+    "Wildwood Patrol"
+  ],
+  [
     "Dand\u00e2n",
     "Sea Serpent"
   ],
@@ -89,8 +108,8 @@
     "Stone-Throwing Devils"
   ],
   [
-    "Granite Gargoyle",
-    "Shivan Dragon"
+    "Giant Growth",
+    "Titanic Growth"
   ],
   [
     "Holy Strength",
@@ -99,5 +118,9 @@
   [
     "Moorish Cavalry",
     "War Mammoth"
+  ],
+  [
+    "Resurrection",
+    "Rise Again"
   ]
 ]
