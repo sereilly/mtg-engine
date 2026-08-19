@@ -57,6 +57,23 @@ CHOOSE_CARD_NAME_ON_ENTER = "as this enchantment enters, choose a card name"
 ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS = "enters with seven +1/+0 counters on it"
 ENTERS_WITH_X_PLUS_1_1_COUNTERS = "enters with x +1/+1 counters on it"
 
+#: "This Equipment enters with a soul counter on it." (Malefic Scythe.) A
+#: **named** counter (CR 122.1) rather than a P/T one, so it is matched by shape
+#: and the word is data: a card printing a differently-named counter needs no
+#: entry. Anchored on "this <noun> enters with a <word> counter on it", which is
+#: the whole sentence — a phrase that matched a prefix would place a counter for
+#: a card that says something else afterwards.
+ENTERS_WITH_NAMED_COUNTER = re.compile(
+    r"^this [a-z]+ enters with a (?P<counter>[a-z]+) counter on it$"
+)
+
+
+def enters_with_named_counter(line: str) -> str | None:
+    """The counter word that line places, or None. Read by the entry state and
+    by the support gate, so what is placed and what is claimed cannot drift."""
+    match = ENTERS_WITH_NAMED_COUNTER.match((line or "").strip().lower().rstrip("."))
+    return match.group("counter") if match is not None else None
+
 # Copy-on-enter (CR 707.2). Clone's line is exactly the creature phrase; Copy
 # Artifact adds a tail the mixin also performs (it appends "Enchantment" to the
 # copied type line), which is why the tail is spelled out below rather than
@@ -71,6 +88,14 @@ COPY_ARTIFACT_ON_ENTER = (
 # Standing permissions stamped on the controller as the permanent enters.
 NO_MAXIMUM_HAND_SIZE = "you have no maximum hand size"
 SPEND_WHITE_AS_RED = "you may spend white mana as though it were red mana"
+#: "You may spend mana as though it were mana of any color." (Chromatic Orrery.)
+#: The general form of the line above, and separate from it rather than a
+#: parameter of it: the narrow one substitutes *one* colour for one other, this
+#: one makes every unit in the pool fungible for a coloured pip. Colourless is
+#: included as a *source* — the Orrery's own five {C} are the point of the card
+#: — but a {C} in a cost still wants colourless, because colourless is not a
+#: colour (CR 105.1) and this line says "as though it were mana of any color".
+SPEND_ANY_COLOR = "you may spend mana as though it were mana of any color"
 
 # "As this enchantment enters, you lose life equal to your life total." (Lich.)
 LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER = (
@@ -107,6 +132,7 @@ _ENTRY_LINES: tuple[tuple[str, str], ...] = (
     (COPY_ARTIFACT_ON_ENTER, ", except it's an enchantment in addition to its other types"),
     (NO_MAXIMUM_HAND_SIZE, ""),
     (SPEND_WHITE_AS_RED, ""),
+    (SPEND_ANY_COLOR, ""),
     (LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER, ""),
 )
 
@@ -167,10 +193,13 @@ __all__ = [
     "COPY_ARTIFACT_ON_ENTER",
     "COPY_CREATURE_ON_ENTER",
     "ENTERS_TAPPED",
+    "ENTERS_WITH_NAMED_COUNTER",
     "ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS",
+    "enters_with_named_counter",
     "ENTERS_WITH_X_PLUS_1_1_COUNTERS",
     "LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER",
     "NO_MAXIMUM_HAND_SIZE",
+    "SPEND_ANY_COLOR",
     "SPEND_WHITE_AS_RED",
     "copy_on_enter_type",
     "enter_effect_line",

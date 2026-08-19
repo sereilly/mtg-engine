@@ -132,8 +132,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
             _line('reanimate_creature', 'spell_pattern'),
     },
     'Armageddon Clock': {
-        'at the beginning of your upkeep, put a doom counter on this artifact':
-            _line('upkeep_put_counter_on_self', 'upkeep_effect', counter='doom'),
     },
     'Balance': {
         'each player chooses a number of lands they control equal to the number '

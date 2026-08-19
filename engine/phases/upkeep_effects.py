@@ -235,21 +235,13 @@ class UpkeepEffectsMixin:
             self.become_tapped(permanent)
             self.log.append(f"{permanent.card.name} tapped (it dealt damage this way)")
 
-    @upkeep_effect("upkeep_self", "upkeep_put_counter_on_self")
-    def _on__upkeep_self__upkeep_put_counter_on_self(self, ctx: UpkeepContext) -> None:
-        """Armageddon Clock: "put a doom counter on this artifact."
-
-        The counter's name comes from the payload, so the accumulation is one
-        handler for every card that counts something up on its own upkeep.
-        """
-        permanent = ctx.permanent
-        counter = str(ctx.trig.instruction.payload.get("counter", "doom"))
-        key = f"{counter}_counters"
-        permanent.metadata[key] = int(permanent.metadata.get(key, 0)) + 1
-        self.log.append(
-            f"{permanent.card.name} got a {counter} counter "
-            f"({permanent.metadata[key]} total)"
-        )
+    # ("upkeep_self", "upkeep_put_counter_on_self") was Armageddon Clock's
+    # entry — "put a doom counter on this artifact", read as one fused kind
+    # because the grammar had no production for a CR 122.1 counter. It has one
+    # now (`add_named_counter_to_self`), the trigger takes the ordinary
+    # on-the-stack route, and the counter lands in the one store both the
+    # removal handler and the draw-step damage already read. Removed rather than
+    # left dark, on the reachability guard's insistence.
 
     @upkeep_effect("upkeep_self", "upkeep_gain_life_over_hand_size")
     def _on__upkeep_self__upkeep_gain_life_over_hand_size(self, ctx: UpkeepContext) -> None:

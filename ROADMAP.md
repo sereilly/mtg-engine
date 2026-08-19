@@ -257,64 +257,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 136: three abilities that compiled and did nothing
-
-*(2026-08-18.)* The three cards the promotion rehearsal named. Each compiled
-`supported` on the strength of a *different* ability — the permanent support
-gate is any-of, where the planeswalker gate is all-of — so a working line hid a
-dead one on the same card.
-
-**Animal Sanctuary** — `{2}, {T}: Put a +1/+1 counter on target Bird, Cat, Dog,
-Goat, Ox, or Snake.` The union already parsed with "or"; it did not with commas,
-which is how English punctuates a list of six rather than a list of two. The
-card means one union either way, and the first alternative alone would have
-refused five of the creatures it names. A comma is only consumed when a subtype
-follows it, so "destroy target Wall, then draw a card" keeps its comma.
-
-**Chromatic Orrery** — `{5}, {T}: Draw a card for each color among permanents
-you control.` A third aggregate beside "the number of" and "the greatest power
-among", and its own node for the reason those are each other's: five permanents
-can be one colour and one permanent can be five (CR 105.2b). Colourless
-contributes nothing (CR 105.1), so a board of artifacts draws nothing — the case
-a count-the-permanents reading gets most wrong. One evaluator, so the
-where-clause spelling of this phrase and the per-each spelling cannot disagree.
-
-**Fabled Passage** — `{T}, Sacrifice this land: Search your library for a basic
-land card, put it onto the battlefield **tapped**, then shuffle. **Then if you
-control four or more lands, untap that land.**` Two riders, and both were being
-dropped: the single-find search had read "tapped" since Cultivate but had
-nowhere to put it, and the second sentence is not a second statement — "that
-land" is the card this search just found, and a statement after the search would
-run before the player has answered its prompt. Both ride the search; the count
-is taken after the land has entered, so it counts itself.
-
-Whole-pool diff: **no card changed support status**, and exactly three changed
-what their abilities do — which is the shape of this round. Suite green, every
-`--check` gate green, shipped pool 388/388, AI simulation byte-identical at 443
-interactions, **zero hooks added**. Nine new tests, all nine watched to fail on
-the round-135 engine.
-
-**M21 still does not promote, and the reason moved.** The rehearsal was run
-again with these three fixed, and it found the same weakness one level up: the
-permanent gate is any-of for **triggered** abilities too. Three M21 cards carry
-a dead trigger behind a working line, and driving them confirms the ability does
-nothing —
-
-* Teferi's Tutelage — "Whenever you draw a card, target opponent mills two
-  cards" does not mill (the mill lowering refuses a `target_opponent` recipient);
-* Alpine Houndmaster — its enters-the-battlefield search for two *named* cards
-  never arms a prompt;
-* Riddleform — "you may have this enchantment become a 3/3 Sphinx …" never
-  animates.
-
-Three shipped LEA cards appear in the same scan (Creature Bond, Howling Mine,
-Paralyze) and are **not** hollow: each is carried out by a derivation table or a
-hook, which is why the scan is a starting point and not a verdict. The rest of
-the rehearsal's findings — the label tables, the planeswalker picker, the
-activated-line reader, five parse-coverage channels, the compiled-ability
-channel — are done and in this round, because none of them needed the promotion
-to be right.
-
 ## Round 137: three triggers that compiled and did nothing
 
 *(2026-08-18.)* The three cards round 136's second rehearsal named. Same shape
@@ -427,3 +369,56 @@ cannot be mistaken for coverage.
 In-game verification is deliberately not a promotion gate (SET_PLAYBOOK.md
 Phase 5): 369 of 668 cards pass, 10 more are `equivalent`, and the rest are
 M21's, owed a Debug-Menu pass.
+
+## Round 139: two of the four acknowledged gaps, closed
+
+*(2026-08-18.)* `parse_coverage.py`'s `ACKNOWLEDGED` held four lines marked
+**NOT IMPLEMENTED** — visible rather than hidden, which is what that dict is
+for, but still four cards doing less than they print. Two are fixed here.
+
+**Chromatic Orrery** — "You may spend mana as though it were mana of any color."
+The engine had one spend-as permission and it was one colour pair wide
+(`can_spend_white_as_red`). With the general one, every unit in the pool pays a
+coloured pip — the Orrery's own five {C} are the point of the card — while a
+{C} in a *cost* still wants colourless, because colourless is not a colour
+(CR 105.1). Handled before the per-colour cascade rather than threaded through
+it: with the permission those five checks are one check about a total, and
+threading is how the narrow permission ended up appearing in five places.
+
+**Malefic Scythe** — three lines, and the middle one was quietly wrong.
+"Equipped creature gets +1/+1 **for each** soul counter" was read by the flat
+P/T-grant pattern, which matches this line's *prefix*, so the Scythe was a
+permanent +1/+1 whose counters did nothing. It has its own reader now, declared
+ahead of the flat one. "Whenever equipped creature dies" is a scope no seat
+comparison can express — the observer is what the dead creature was carrying —
+and it shares one condition kind with an Aura's "when enchanted creature dies",
+because the two attach the same way here.
+
+**One store for a CR 122.1 counter, not two.** `named_counters.py` (round 127)
+kept a dict; Armageddon Clock's doom counters and Cyclone's wind counters had
+been `metadata["<word>_counters"]` since long before. Two stores for one concept
+is how a card puts counters somewhere nothing reads — which is exactly what
+happened the moment the grammar learned this sentence: the placement went to one
+store and the Scythe's own P/T grant looked in the other. The module now uses
+the older spelling, and two entries that existed only to route around the gap
+are gone: Armageddon Clock's card hook, and the `upkeep_put_counter_on_self`
+registry handler. The Clock takes the ordinary on-the-stack route now.
+
+Creature Bond's reader moved with it: `_trigger_aura_death_effects` matched the
+generic `dies` condition because that was the only kind the table produced for
+the phrase, and "when enchanted creature dies" was never the Aura's own death.
+
+Whole-pool diff: **no card changed support status**; two changed what they do,
+and Armageddon Clock changed how it gets there. Suite green, every `--check`
+gate green, pool 668/668, AI simulation byte-identical at 443 interactions,
+**one hook removed and none added** (14.8 entries per 100 supported, down from
+15.0). Five new tests, three watched to fail on the round-138 engine; the other
+two are the without-the-permission controls.
+
+**Two gaps remain, both still acknowledged.** Mana Vault's "at the beginning of
+your draw step, if this artifact is tapped, it deals 1 damage to you" needs a
+draw-step trigger condition scoped to a single permanent — the table has only
+`draw_step_each`. Nine Lives' "if a source would deal damage to you, prevent
+that damage and put an incarnation counter on this enchantment" needs a CR 614
+interceptor that *also places a counter*, which `engine/replacements.py` has no
+shape for. Both fail in the direction that makes the card weaker than printed.

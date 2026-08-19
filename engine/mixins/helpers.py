@@ -4,7 +4,7 @@ import re
 from typing import Iterator
 
 from ..card_hooks import ON_LEAVE_BATTLEFIELD
-from ..auras import detach_aura
+from ..auras import auras_attached_to, detach_aura
 from ..control import (
     base_controller,
     change_control,
@@ -1456,6 +1456,26 @@ class GameHelpersMixin:
             if dead_seat is not None:
                 for trig in matching_triggers(
                     observer.effective_card, condition_kinds={scoped},
+                ):
+                    events.append(make_trigger_event(
+                        controller_index, observer, trig,
+                        trigger_context=dict(died_context),
+                    ))
+            # "Whenever equipped creature dies, put a soul counter on this
+            # Equipment." (Malefic Scythe.) The observer is what the dead
+            # creature was carrying, so the scope is an attachment rather than a
+            # seat — asked here because this is the one place a creature's death
+            # is announced, and a second fire site is a second place to forget.
+            # The direction matters: the observer is attached *to* the dead
+            # creature, not the other way round. Both spellings of "attached"
+            # are asked because both exist — the list an Aura joins, and the
+            # single slot an Equipment sets.
+            if observer in auras_attached_to(dead_permanent) or (
+                observer.metadata.get("attached_to") is dead_permanent
+            ):
+                for trig in matching_triggers(
+                    observer.effective_card,
+                    condition_kinds={"attached_creature_dies"},
                 ):
                     events.append(make_trigger_event(
                         controller_index, observer, trig,

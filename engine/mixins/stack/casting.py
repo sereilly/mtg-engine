@@ -1245,6 +1245,20 @@ class SpellCastingMixin:
             return True
         pool = player.mana_pool
 
+        # "You may spend mana as though it were mana of any color." (Chromatic
+        # Orrery.) Every unit in the pool pays a coloured pip, colourless
+        # included — the Orrery's own five {C} are what the card is for. Handled
+        # before the per-colour cascade rather than woven through it: with the
+        # permission the five checks below are one check about a total, and
+        # threading a substitution through each of them is how the narrow
+        # white-as-red permission ended up appearing in five places.
+        #
+        # A **{C} in the cost still wants colourless**, because colourless is not
+        # a colour (CR 105.1) and this line grants colours. So the generic and
+        # colourless halves are unchanged.
+        if player.spends_mana_as_any_color:
+            return self._pay_with_fungible_colors(player, required)
+
         if pool.get("W", 0) < required["W"]:
             return False
         if pool.get("U", 0) < required["U"]:
@@ -1292,6 +1306,59 @@ class SpellCastingMixin:
                 generic -= spend
                 if generic == 0:
                     break
+
+        player.mana_pool = temp
+        return True
+
+    def _pay_with_fungible_colors(
+        self, player: PlayerState, required: dict[str, int]
+    ) -> bool:
+        """Pay *required* while every unit in the pool counts as any colour.
+
+        Three buckets in order, and the order is the only thing that makes the
+        payment maximal: the coloured pips first (they are the pickiest, and
+        under this permission any unit satisfies one), then {C}, which nothing
+        else can pay, then the generic remainder from whatever is left.
+
+        Colourless is spent *last* among the coloured pips, so a cost that also
+        wants {C} is not starved by a pip that a coloured unit could have paid.
+        """
+        pool = {sym: int(player.mana_pool.get(sym, 0)) for sym in ("W", "U", "B", "R", "G", "C")}
+        colored_pips = sum(required[sym] for sym in ("W", "U", "B", "R", "G"))
+        total = sum(pool.values())
+        if total < colored_pips + required["C"] + required["generic"]:
+            return False
+        if pool["C"] < required["C"] + max(0, colored_pips - (total - pool["C"])):
+            # The colourless the cost names is not reachable: too much of the
+            # pool has already been claimed by pips no coloured unit can cover.
+            return False
+
+        temp = dict(pool)
+        owed = colored_pips
+        for sym in ("W", "U", "B", "R", "G", "C"):
+            if owed <= 0:
+                break
+            # Leave enough colourless behind for the {C} the cost names.
+            spendable = temp[sym] - (required["C"] if sym == "C" else 0)
+            spend = max(0, min(spendable, owed))
+            temp[sym] -= spend
+            owed -= spend
+        if owed > 0:
+            return False
+
+        if temp["C"] < required["C"]:
+            return False
+        temp["C"] -= required["C"]
+
+        generic = required["generic"]
+        for sym in ("C", "W", "U", "B", "R", "G"):
+            if generic <= 0:
+                break
+            spend = min(temp[sym], generic)
+            temp[sym] -= spend
+            generic -= spend
+        if generic > 0:
+            return False
 
         player.mana_pool = temp
         return True

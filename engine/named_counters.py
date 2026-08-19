@@ -7,9 +7,18 @@ separate from ``engine/pt.py``'s +1/+1 channel and from the loyalty one — thos
 counters *do* have rules meaning (layer 7d, CR 606), and routing an inert marker
 through either would make it change a creature's size or a walker's survival.
 
-One dict on the permanent's metadata, keyed by the printed word. A dict rather
-than a field per kind, because the kinds are open: the next set invents another
-word and needs no code here.
+One metadata key per kind, ``"<word>_counters"``, because the kinds are open:
+the next set invents another word and needs no code here.
+
+**One store, not two.** This module arrived (round 127) alongside an older
+spelling — Armageddon Clock's doom counters and Cyclone's wind counters were
+already `metadata["<word>_counters"]`, written and read by the upkeep registry
+and the removal handler. Two stores for one concept is how a card ends up
+putting counters somewhere nothing reads, which is exactly what happened the
+moment the grammar learned to read "put a soul counter on this Equipment": the
+placement went to one store and the card's own P/T grant looked in the other.
+So the key here *is* the old spelling, and the older readers were already
+right.
 
 The counters travel with the permanent and die with it, which CR 400.7 already
 gives for free — a permanent that leaves and returns is a new object with no
@@ -18,12 +27,14 @@ counters, and nothing has to clear them.
 
 from __future__ import annotations
 
-COUNTERS_KEY = "named_counters"
+def counters_key(kind: str) -> str:
+    """The metadata key *kind* counters live under."""
+    return f"{kind}_counters"
 
 
 def counters_on(permanent, kind: str) -> int:
     """How many *kind* counters are on *permanent*."""
-    return int((permanent.metadata.get(COUNTERS_KEY) or {}).get(kind, 0))
+    return int(permanent.metadata.get(counters_key(kind), 0) or 0)
 
 
 def add_counters(permanent, kind: str, count: int = 1) -> int:
@@ -36,10 +47,9 @@ def add_counters(permanent, kind: str, count: int = 1) -> int:
     """
     if count <= 0:
         return counters_on(permanent, kind)
-    held = dict(permanent.metadata.get(COUNTERS_KEY) or {})
-    held[kind] = held.get(kind, 0) + count
-    permanent.metadata[COUNTERS_KEY] = held
-    return held[kind]
+    total = counters_on(permanent, kind) + count
+    permanent.metadata[counters_key(kind)] = total
+    return total
 
 
-__all__ = ["COUNTERS_KEY", "add_counters", "counters_on"]
+__all__ = ["add_counters", "counters_on", "counters_key"]

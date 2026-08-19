@@ -417,30 +417,6 @@ _LOYALTY_TIMING = re.compile(
 
 
 ACKNOWLEDGED: dict[str, dict[str, str]] = {
-    "Chromatic Orrery": {
-        "you may spend mana as though it were mana of any color": (
-            "NOT IMPLEMENTED, and recorded rather than claimed. The card "
-            "compiles supported on its two activated abilities (the five "
-            "colourless mana, and the per-colour draw round 136 built); this "
-            "line is a static permission over how mana may be *spent* and "
-            "nothing reads it. `PlayerState.can_spend_white_as_red` is the only "
-            "spend-as permission the engine has and it is one colour pair wide. "
-            "The effect of the omission is narrow and always in the opponent's "
-            "favour: a player with the Orrery out simply cannot pay a coloured "
-            "cost with the wrong colour, exactly as if the line were not there."
-        ),
-    },
-    "Malefic Scythe": {
-        "whenever equipped creature dies, put a soul counter on this equipment": (
-            "NOT IMPLEMENTED, and recorded rather than claimed. The Equipment "
-            "works — it enters with its counter and grants +1/+1 for each one "
-            "(engine/auras.py reads both) — but the trigger that *adds* further "
-            "counters produces no instruction: no trigger condition names the "
-            "death of the creature an Equipment is attached to. So the Scythe "
-            "is a permanent +1/+1 rather than a growing one, which is strictly "
-            "weaker than the card and never stronger."
-        ),
-    },
     "Nine Lives": {
         "if a source would deal damage to you, prevent that damage and put an "
         "incarnation counter on this enchantment": (

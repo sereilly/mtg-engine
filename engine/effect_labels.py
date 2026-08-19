@@ -136,6 +136,9 @@ ACTIVATED_LABELS: dict[str, str] = {
 TRIGGERED_LABELS: dict[str, str] = {
     "add_corpse_counters_for_each_creature_died": "triggered_counter",
     "add_counter_to_self": "triggered_counter",
+    # A CR 122.1 counter (Malefic Scythe, Armageddon Clock). The same
+    # bucket as a +1/+1 one: the report asks what the ability is for.
+    "add_named_counter_to_self": "triggered_counter",
     "add_mana_for_tapped_land": "spell_pattern",
     "add_plus1_counters_for_each_creature_died": "triggered_counter",
     "deal_damage": "spell_pattern",

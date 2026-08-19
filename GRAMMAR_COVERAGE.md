@@ -20,9 +20,9 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | LEB | 292 | 389 | 78.9% | 77.9% | 42.2% | 151 |
 | 2ED | 292 | 389 | 78.9% | 77.9% | 42.2% | 151 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
-| 3ED | 296 | 389 | 79.2% | 77.6% | 42.7% | 152 |
-| M21 | 285 | 503 | 86.1% | 85.1% | 60.4% | 235 |
-| **All (shipped)** | **1533** | **2166** | **80.0%** | **78.8%** | **46.4%** | **875** |
+| 3ED | 296 | 389 | 79.2% | 77.9% | 42.9% | 152 |
+| M21 | 285 | 503 | 86.5% | 85.5% | 60.6% | 236 |
+| **All (shipped)** | **1533** | **2166** | **80.1%** | **78.9%** | **46.5%** | **876** |
 
 ## Backlog — failure reasons
 
@@ -30,7 +30,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 202 | 78 | expected a subject |  |
+| 200 | 76 | expected a subject |  |
 | 84 | 28 | unrecognized effect verb |  |
 | 40 | 21 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
@@ -53,12 +53,12 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2 | 1 | expected something to shield |  |
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
-| 1 | 1 | no handler for doom counters |  |
 | 1 | 1 | expected 'be' |  |
+| 1 | 1 | expected 'unless defending player controls' |  |
 
 ## Cards executing through the grammar
 
-875 cards, 1005 lines.
+876 cards, 1007 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -98,6 +98,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Destroy all lands.`
   - `Destroy all lands.`
 - **Armageddon Clock**
+  - `At the beginning of your upkeep, put a doom counter on this artifact.`
   - `{4}: Remove a doom counter from this artifact. Any player may activate this ability but only during any upkeep step.`
 - **Army of Allah**
   - `Attacking creatures get +2/+0 until end of turn.`
@@ -798,6 +799,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Change the text of target spell or permanent by replacing all instances of one basic land type with another. (For example, you may change "swampwalk" to "plainswalk." This effect lasts indefinitely.)`
 - **Makeshift Battalion**
   - `Battalion — Whenever this creature and at least two other creatures attack, put a +1/+1 counter on this creature.`
+- **Malefic Scythe**
+  - `Whenever equipped creature dies, put a soul counter on this Equipment.`
 - **Mana Flare**
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`

@@ -20,10 +20,12 @@ from typing import TYPE_CHECKING
 from .auras import (
     animating_auras,
     aura_keyword_grants,
+    aura_pt_grant_per_counter,
     aura_static_pt_grant,
     aura_type_grants,
     auras_attached_to,
 )
+from .named_counters import counters_on
 from .control import control_changes, has_control_change
 from .global_statics import global_statics_applying_to
 from .continuous import (
@@ -303,6 +305,21 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # delta to subtract, and two Auras sort by when each started applying
     # rather than sharing one derived timestamp.
     for aura in auras_attached_to(perm):
+        # "…gets +1/+1 **for each soul counter on this Equipment**." (Malefic
+        # Scythe.) Read before the flat grant, because the flat pattern matches
+        # this line's prefix — answering it would be an Equipment whose counters
+        # do nothing. The count comes off the Equipment, not the creature.
+        per_counter = aura_pt_grant_per_counter(aura.effective_card.oracle_text)
+        if per_counter is not None:
+            power, toughness, counter = per_counter
+            held = counters_on(aura, counter)
+            if held:
+                effects.append(modify_pt(
+                    only, power * held, toughness * held,
+                    timestamp=int(aura.metadata.get("aura_timestamp", _DERIVED_TIMESTAMP)),
+                    label=f"{counter} counters",
+                ))
+            continue
         grant = aura_static_pt_grant(aura.effective_card.oracle_text)
         if grant is None:
             continue

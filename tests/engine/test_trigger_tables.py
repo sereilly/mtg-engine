@@ -37,6 +37,14 @@ from tests.helpers import LEA_PATH
 EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # whenever
     "land_dies": "whenever a land is put into a graveyard from the battlefield",
+    # Both printed spellings, because the kind is in both tables: "whenever" for
+    # an Equipment (Malefic Scythe) and "when" for an Aura (Creature Bond). One
+    # example would leave the other table's pattern unexercised.
+    "attached_creature_dies": (
+        "whenever equipped creature dies, put a soul counter on this equipment.",
+        "when enchanted creature dies, this aura deals damage equal to that "
+        "creature's toughness to the creature's controller.",
+    ),
     "creature_dies": "whenever a creature dies",
     "creature_you_control_dies": (
         "whenever a creature you control dies",

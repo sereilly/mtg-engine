@@ -255,15 +255,27 @@ def test_equipment_is_left_to_its_own_gate_like_an_aura():
     """The control for the widening, and the reason the exclusion is by shape
     rather than by name. Short Sword's "+1/+1" is an ``aura_static_pt_grant``
     read off the card's text by engine/auras.py, which leaves no instruction
-    here — so dropping the unreadable-ability requirement would have refused two
-    Equipment that work perfectly well."""
+    here — so dropping the unreadable-ability requirement would refuse an
+    Equipment that works perfectly well.
+
+    Malefic Scythe used to be the second name here and is not any more: once its
+    counter trigger compiled it carries a real instruction, so it is no longer
+    the shape this exclusion exists for. That is the exclusion narrowing
+    correctly rather than the guard weakening — the card left the class by
+    gaining behaviour.
+    """
     pool = {c.name: c for c in _whole_pool()}
-    for name in ("Short Sword", "Malefic Scythe"):
-        program = compile_card_oracle(pool[name])
-        assert program.supported, name
-        assert all(i.kind == "spell_pattern" for i in program.instructions), (
-            f"{name} is exactly the shape the gate refuses, minus the exclusion"
-        )
+    program = compile_card_oracle(pool["Short Sword"])
+    assert program.supported
+    assert all(i.kind == "spell_pattern" for i in program.instructions), (
+        "Short Sword is exactly the shape the gate refuses, minus the exclusion"
+    )
+
+    scythe = compile_card_oracle(pool["Malefic Scythe"])
+    assert scythe.supported
+    assert any(t.supported for t in scythe.triggered_abilities), (
+        "the Scythe is supported on a real ability now, not on the exclusion"
+    )
 
 
 def test_the_pool_scan_reaches_every_manifest_role():

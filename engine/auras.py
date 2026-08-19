@@ -358,6 +358,31 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
 # the ability is activated, not while the Aura is attached.
 _STATIC_PT_GRANT = re.compile(r"gets ([+-]\d+)/([+-]\d+)(?! until end of turn)")
 
+#: "…gets +1/+1 **for each soul counter on this Equipment**." (Malefic Scythe.)
+#: The multiplier is the whole card: read as a flat grant the Scythe is a
+#: permanent +1/+1 whose counters do nothing, which is what it was. Its own
+#: pattern rather than a tail on the one above, because the two produce
+#: different *kinds* of answer — a number, and a number per counter.
+_PT_GRANT_PER_COUNTER = re.compile(
+    r"gets ([+-]\d+)/([+-]\d+) for each (?P<counter>[a-z]+) counter on "
+    r"(?:this|~)\b"
+)
+
+
+def aura_pt_grant_per_counter(oracle_text: str) -> tuple[int, int, str] | None:
+    """``(power, toughness, counter name)`` for a per-counter grant, or None.
+
+    Read before the flat grant everywhere both are asked, because the flat
+    pattern matches this line's prefix: "gets +1/+1" is true of "gets +1/+1 for
+    each soul counter", and answering the prefix is a card whose counters are
+    decoration.
+    """
+    for raw_line in oracle_text.splitlines():
+        match = _PT_GRANT_PER_COUNTER.search(_line_text(raw_line))
+        if match is not None:
+            return int(match.group(1)), int(match.group(2)), match.group("counter")
+    return None
+
 
 def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
     """The permanent +P/+T an Aura grants while attached, or None.
@@ -366,6 +391,11 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
     simply ceasing to contribute — there is nothing to subtract, and nothing
     that can drift out of step with what was added.
     """
+    # A per-counter grant is a different answer to a question this function only
+    # knows how to answer with a constant, and its line starts the same way — so
+    # it is declined here rather than reported as the flat grant it is not.
+    if aura_pt_grant_per_counter(oracle_text) is not None:
+        return None
     for raw_line in oracle_text.splitlines():
         line = _line_text(raw_line)
         match = _STATIC_PT_GRANT.search(line)

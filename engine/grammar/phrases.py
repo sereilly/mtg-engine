@@ -39,6 +39,14 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_dealt_damage_by_self_dies",
      ("a", "creature", "dealt", "damage", "by", "this", "creature", "this", "turn", "dies")),
     ("creature_dies", ("a", "creature", "dies")),
+    # "Whenever **equipped** creature dies" (Malefic Scythe) / "When
+    # **enchanted** creature dies" (Creature Bond). One condition for both
+    # words: an Equipment and an Aura attach the same way here, and the trigger
+    # is about the permanent this one is attached to either way. Both spellings
+    # are listed because both are printed, and neither is a wording of the other
+    # in a way this table could derive.
+    ("attached_creature_dies", ("equipped", "creature", "dies")),
+    ("attached_creature_dies", ("enchanted", "creature", "dies")),
     # "…becomes the target of a spell or ability an opponent controls" (Warden
     # of the Woods). Longest first, as everywhere in this table: the narrowed
     # wording has the unnarrowed one as a strict prefix, so matching that first

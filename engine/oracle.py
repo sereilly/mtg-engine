@@ -187,6 +187,18 @@ SUPPORTED_SPELL_PATTERNS = (
 WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_dies",                   r"whenever a land is put into a graveyard from the battlefield"),
     ("creature_dies",               r"whenever a creature dies"),
+    # "Whenever equipped creature dies" (Malefic Scythe) / "When enchanted
+    # creature dies" (Creature Bond). One kind for both words: an Equipment and
+    # an Aura attach the same way in this engine, and the condition is about the
+    # permanent *this one is attached to* either way. Which of the two the card
+    # printed is not a difference the dispatcher can act on.
+    #
+    # The identical row appears in the "when" table below, and the pattern
+    # accepts either verb in both places rather than being split between them.
+    # Two cards print two spellings of one condition, so a pattern per table
+    # would leave each table's row matched by only one of them — and the guard
+    # that keeps every kind reachable checks each table against *every* example.
+    ("attached_creature_dies",      r"when(?:ever)? (?:equipped|enchanted) creature dies"),
     ("creature_you_control_dies",   r"whenever a creature you control dies"),
     # The mirror scope (Massacre Wurm). Its own kind rather than a payload
     # narrowing, because the dispatcher's *scoping* differs: this one fires for
@@ -454,6 +466,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
 WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("enters_battlefield",          r"when (?:this|.+) enters(?: the battlefield)?"),
     ("leaves_battlefield",          r"when (?:this|.+) leaves(?: the battlefield)?"),
+    ("attached_creature_dies",      r"when(?:ever)? (?:equipped|enchanted) creature dies"),
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is

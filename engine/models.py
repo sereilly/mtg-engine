@@ -521,6 +521,11 @@ class PlayerState:
     reverse_damage_sources: list = field(default_factory=list)
     has_no_max_hand_size: bool = False
     can_spend_white_as_red: bool = False
+    #: "You may spend mana as though it were mana of any color." (Chromatic
+    #: Orrery.) Every unit in the pool, colourless included, pays a coloured
+    #: pip. Its own flag rather than a widening of the one above, because the
+    #: two are different permissions and a card may grant either.
+    spends_mana_as_any_color: bool = False
     channel_active_until_eot: bool = False
     # "Pay {1} any time you could cast an instant: prevent the next 1 damage to
     # that permanent or player" emblems the player controls until end of turn

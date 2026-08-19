@@ -33,7 +33,11 @@ class EffectsMixin:
             return
         controller_index = self.players.index(controller)
         for trig in prog.triggered_abilities:
-            if trig.condition.kind == "dies" and trig.condition.trigger == "when":
+            # `attached_creature_dies` — the condition this always meant. It read
+            # the generic `dies` because that was the only kind the trigger
+            # table produced for the phrase, and "when enchanted creature dies"
+            # is not the Aura's own death.
+            if trig.condition.kind == "attached_creature_dies":
                 toughness = dead_permanent.effective_toughness
                 self._enqueue_triggered_ability(
                     controller_index=controller_index,

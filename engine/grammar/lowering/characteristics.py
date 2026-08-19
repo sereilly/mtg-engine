@@ -16,6 +16,7 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
+from ..phrases import _COUNTER_KINDS
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._common import (
     _amount_payload,
@@ -664,6 +665,20 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
             "loyalty counters land on the ability's own source or on one "
             "permanent its controller chooses",
             node=node,
+        )
+    # A **named** counter on the source ("put a soul counter on this Equipment",
+    # Malefic Scythe). CR 122.1 counters with no rules meaning of their own:
+    # engine/named_counters.py holds them, and what they mean is whatever the
+    # card's other lines say about them. Only on the source, because that is the
+    # only permanent the placement can name without a picker.
+    if node.counter not in _COUNTER_KINDS and not node.up_to and _is_source(node.subject):
+        if not isinstance(node.count, ast.Fixed):
+            raise LoweringError("a named counter is placed a fixed number at a time", node=node)
+        return (
+            OracleInstruction(
+                "add_named_counter_to_self", "",
+                {"counter": node.counter, "count": node.count.value},
+            ),
         )
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)

@@ -7,8 +7,8 @@ the guard test `tests/engine/test_parse_coverage.py` fails on new
 unclaimed text. Do not edit by hand.
 
 - Supported cards analyzed: **668**
-- Fully claimed: **662**
-- With acknowledged simplifications: **6**
+- Fully claimed: **664**
+- With acknowledged simplifications: **4**
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **49**
 
@@ -16,8 +16,6 @@ unclaimed text. Do not edit by hand.
 
 | Card | Sentence | Why it is acceptable |
 | --- | --- | --- |
-| Chromatic Orrery | `you may spend mana as though it were mana of any color` | NOT IMPLEMENTED, and recorded rather than claimed. The card compiles supported on its two activated abilities (the five colourless mana, and the per-colour draw round 136 built); this line is a static permission over how mana may be *spent* and nothing reads it. `PlayerState.can_spend_white_as_red` is the only spend-as permission the engine has and it is one colour pair wide. The effect of the omission is narrow and always in the opponent's favour: a player with the Orrery out simply cannot pay a coloured cost with the wrong colour, exactly as if the line were not there. |
-| Malefic Scythe | `whenever equipped creature dies, put a soul counter on this equipment` | NOT IMPLEMENTED, and recorded rather than claimed. The Equipment works — it enters with its counter and grants +1/+1 for each one (engine/auras.py reads both) — but the trigger that *adds* further counters produces no instruction: no trigger condition names the death of the creature an Equipment is attached to. So the Scythe is a permanent +1/+1 rather than a growing one, which is strictly weaker than the card and never stronger. |
 | Mana Vault | `at the beginning of your draw step, if this artifact is tapped, it deals 1 damag` | NOT IMPLEMENTED, and recorded here rather than claimed. The card compiles supported on its other three lines (the untap restriction, the pay-{4}-to-untap upkeep trigger and the mana ability) and this one produces no instruction: no trigger table has a draw-step condition for a single permanent, and nothing scans for the phrase. Verified in a game — a tapped Mana Vault costs its controller no life at their draw step. It read as claimed until engine/parsing/ was deleted, because the coverage script asked the legacy registry about the sentence in isolation and a broad rule matched 'deals 1 damage to you' — an instruction the card's own program never carried and nothing ever dispatched. Implementing it needs a per-permanent draw-step trigger (the shape phases/upkeep_effects.py has for the upkeep) and is a behaviour change, so it belongs in a pass of its own |
 | Nine Lives | `if a source would deal damage to you, prevent that damage and put an incarnation` | NOT IMPLEMENTED, and recorded rather than claimed since round 127. The card's other two lines compile — the state trigger that exiles it at eight counters, and the leaves-the-battlefield loss — so it reports supported. This one is a CR 614 replacement that also *places a counter*, and engine/replacements.py has no interceptor that does both. Until it does, Nine Lives prevents nothing and never reaches eight counters: it is an enchantment that sits there. |
 | Shahrazad | `players play a magic subgame, using their libraries as their decks` | subgames are far out of scope. The life clause IS implemented: the caster is treated as the subgame winner and every other player loses half their life, rounded up (handlers/life_and_game.opponents_lose_half_life) |
@@ -90,19 +88,19 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 536 |
-| trigger table | 213 |
+| parse rule | 538 |
+| trigger table | 214 |
 | activation cost | 190 |
-| card_hooks bespoke (name-keyed) | 134 |
+| card_hooks bespoke (name-keyed) | 133 |
 | keyword table | 131 |
 | static-line table | 84 |
 | aura enchant noun (oracle_instructions attach) | 54 |
 | aura static (oracle_instructions/permanent_state) | 35 |
 | loyalty cost | 33 |
-| enter_effects.py | 25 |
+| enter_effects.py | 26 |
 | mixin text scan | 20 |
 | activation_restrictions.py | 16 |
-| auras.py (attached effect) | 14 |
+| auras.py (attached effect) | 13 |
 | oracle.py (modal trigger head) | 9 |
 | cast_costs.py | 7 |
 | cost_modifiers.py | 6 |
@@ -110,8 +108,8 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | untap_restrictions.py | 5 |
 | activation gate (stack/activation) | 4 |
 | ante boilerplate (deck construction, not gameplay) | 4 |
+| auras.py (attachment line) | 4 |
 | oracle.py (delayed trigger) | 3 |
-| auras.py (attachment line) | 3 |
 | phases/draw_step.py (counter damage) | 1 |
 | x spend color (stack/activation) | 1 |
 | target_restrictions.py | 1 |

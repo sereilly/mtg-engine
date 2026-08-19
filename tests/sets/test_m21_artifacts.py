@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game
+from engine.auras import attach_aura
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from tests.helpers import _nosick
@@ -477,3 +478,99 @@ def test_animal_sanctuary_reads_the_whole_printed_subtype_list(set_pool):
     assert counter.instruction.payload["targets"]["filter"]["subtype_filter"] == [
         "bird", "cat", "dog", "goat", "ox", "snake",
     ]
+
+
+# --- Round 139: two cards whose lines were recorded as unimplemented --------
+
+
+def test_chromatic_orrery_lets_colourless_pay_a_coloured_pip(set_pool):
+    """"You may spend mana as though it were mana of any color." The Orrery's
+    own five {C} are what the permission is for, so colourless paying a coloured
+    pip is the case that matters. Paired with the same board without it."""
+    pool = set_pool("M21")
+    for with_orrery, expected in ((True, True), (False, False)):
+        p1 = PlayerState(name="P1")
+        game = Game(players=[p1, PlayerState(name="P2")])
+        game.enforce_mana_costs = False
+        if with_orrery:
+            game._put_permanent_onto_battlefield(
+                0, Permanent(card=pool["Chromatic Orrery"]), None
+            )
+            game._settle()
+        p1.mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 5}
+
+        paid = game._pay_mana_cost(
+            p1, {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0, "generic": 0}
+        )
+
+        assert paid is expected, f"orrery={with_orrery}"
+
+
+def test_chromatic_orrery_does_not_make_coloured_mana_colourless(set_pool):
+    """CR 105.1: colourless is not a colour, so "as though it were mana of any
+    color" does not let a {C} in a cost be paid with white."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1")
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(0, Permanent(card=pool["Chromatic Orrery"]), None)
+    game._settle()
+    p1.mana_pool = {"W": 3, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
+
+    assert not game._pay_mana_cost(
+        p1, {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 1, "generic": 0}
+    )
+
+
+def _scythe_board(set_pool):
+    pool = set_pool("M21")
+    scythe = Permanent(card=pool["Malefic Scythe"])
+    p1 = PlayerState(name="P1")
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(0, scythe, None)
+    bear = Permanent(card=pool["Alpine Watchdog"])       # 2/2
+    p1.battlefield.append(bear)
+    game._sync_control()
+    attach_aura(scythe, bear)
+    return game, p1, scythe, bear
+
+
+def test_malefic_scythe_enters_with_its_counter_and_grants_per_counter(set_pool):
+    """"This Equipment enters with a soul counter on it." / "Equipped creature
+    gets +1/+1 **for each** soul counter on this Equipment."
+
+    Read as a flat grant the Scythe is a permanent +1/+1 whose counters do
+    nothing, which is what it was — the flat pattern matches this line's prefix.
+    """
+    from engine.named_counters import counters_on
+
+    _game, _p1, scythe, bear = _scythe_board(set_pool)
+
+    assert counters_on(scythe, "soul") == 1
+    assert (bear.effective_power, bear.effective_toughness) == (3, 3)
+
+
+def test_malefic_scythe_grows_when_the_equipped_creature_dies(set_pool):
+    """"Whenever equipped creature dies, put a soul counter on this Equipment."
+
+    The condition is about the permanent the Equipment is *attached to*, which
+    is a scope no seat comparison can express — and the counter it places is the
+    one the P/T grant above reads, so a second store would be a Scythe that
+    counts up and never grows.
+    """
+    from engine.named_counters import counters_on
+
+    game, p1, scythe, bear = _scythe_board(set_pool)
+
+    game._permanent_to_graveyard(p1, bear)
+    game._settle()
+
+    assert counters_on(scythe, "soul") == 2
+
+    second = Permanent(card=set_pool("M21")["Alpine Watchdog"])
+    p1.battlefield.append(second)
+    game._sync_control()
+    attach_aura(scythe, second)
+
+    assert (second.effective_power, second.effective_toughness) == (4, 4)

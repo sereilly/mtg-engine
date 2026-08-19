@@ -659,6 +659,30 @@ def remove_loyalty_from_each_planeswalker(game: Game, instruction: OracleInstruc
     return True, "resolved"
 
 
+@effect_handler("add_named_counter_to_self")
+def add_named_counter_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put a soul counter on this Equipment." (Malefic Scythe.)
+
+    CR 122.1: a counter with no rules meaning of its own. What it means is
+    whatever the card's *other* lines say about it — here, +1/+1 to the equipped
+    creature per counter, read by the layer bridge off this same store. The
+    counter is the state; the meaning is elsewhere, which is why this handler
+    knows nothing but the word.
+    """
+    from ..named_counters import add_counters
+
+    source = context.source_permanent
+    if source is None:
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", ""))
+    count = int(instruction.payload.get("count", 1))
+    total = add_counters(source, counter, count)
+    game.log.append(
+        f"{source.card.name} gets a {counter} counter ({total} total)"
+    )
+    return True, "resolved"
+
+
 @effect_handler("remove_counter_from_self")
 def remove_counter_from_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Armageddon Clock: "Remove a doom counter from this artifact."

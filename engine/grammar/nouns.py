@@ -46,6 +46,10 @@ _SELF_NOUNS = frozenset({
     # ability (the Treasure token). Not a card type: it is what the object is,
     # exactly as "this permanent" is, and it names the same source.
     "token",
+    # "Sacrifice this **Equipment**" / "put a soul counter on this Equipment"
+    # (Malefic Scythe). An Equipment subtype used as the card's own noun, the
+    # same way "this Aura" already is above.
+    "equipment",
 })
 
 # "…attached to that creature" — the trailing clause naming what an Aura or

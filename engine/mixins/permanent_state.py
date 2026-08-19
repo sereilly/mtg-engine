@@ -12,13 +12,16 @@ from ..enter_effects import (
     ENTERS_TAPPED,
     ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS,
     ENTERS_WITH_X_PLUS_1_1_COUNTERS,
+    enters_with_named_counter,
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
     NO_MAXIMUM_HAND_SIZE,
     choosable_bodies,
+    SPEND_ANY_COLOR,
     SPEND_WHITE_AS_RED,
 )
 from ..auras import aura_protection_colors, auras_attached_to
 from .. import copies
+from ..named_counters import add_counters as add_named_counters
 from ..tokens import make_token_card
 from ..keywords import add_derived_grant, clear_derived_grants
 from ..land_animation import (
@@ -271,6 +274,16 @@ class PermanentStateMixin:
 
         # enters with fixed counters (Clockwork Beast). Track the counter count so
         # the end-of-combat trigger and the upkeep activated ability can adjust it.
+        # "This Equipment enters with a soul counter on it." (Malefic Scythe.)
+        # A CR 122.1 counter, so the word is data and the store is the one
+        # engine/named_counters.py owns — what the counter *means* is whatever
+        # the card's other lines say, which here is the P/T grant layer 7c
+        # derives from the same store.
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            counter = enters_with_named_counter(raw_line)
+            if counter is not None:
+                add_named_counters(permanent, counter, 1)
+
         if any(ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS == line for line in program.static_lines) or ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS in text:
             permanent.power_bonus += 7
             permanent.metadata["plus_1_0_counters"] = 7
@@ -330,6 +343,9 @@ class PermanentStateMixin:
 
         if SPEND_WHITE_AS_RED in text:
             self.players[caster_index].can_spend_white_as_red = True
+
+        if SPEND_ANY_COLOR in text:
+            self.players[caster_index].spends_mana_as_any_color = True
 
         if LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER in text:
             controller = self.players[caster_index]
