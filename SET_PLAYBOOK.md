@@ -174,6 +174,20 @@ measured set so per-card tests can land as the cards do. **Exit:**
    lines from static to keyword classification and would have dropped the
    shield had `tests/rules/test_protection.py` not been in the first targeted
    run.
+   A printed **restriction** is only done when something enforces it. The
+   failure is not a crash and not a missing ability — it is an ability that
+   works *more often than the card allows*, wrong in the player's favour and
+   silent (M21 round 138: "Activate only during your upkeep" clauses parsed
+   and never checked). So a restriction clause lands as a table the support
+   gate reads too (`activation_restrictions.py` is the model), never as a
+   parsed-and-dropped rider.
+   And a **guard that asks where a name appears is satisfied by the
+   declaration it guards**: round 140 found a trigger condition that sat in
+   both front-end tables, compiled real instructions on two supported cards,
+   and fired nowhere — `test_trigger_dispatchers` passed because the
+   declaration itself was a place the engine "named the kind". Point a
+   census classifier or a guard at the corpus that *acts* (emit sites, the
+   registries, the sweeps), not at where the name occurs.
 2. Every card lands with a focused test in `tests/sets/test_<set>_cards.py`
    (conventions and the split-by-type rule: `tests/sets/README.md`). A new
    set needs zero `tests/conftest.py` changes; the fixture factory covers any
@@ -360,3 +374,22 @@ order, with the grammar last.** The production that flips the cards was written
 after the resolver, the handler, the picker spec, the AI and the browser prompt,
 so at every intermediate point the cards stayed honestly unsupported rather than
 becoming castable with half their targets collected. See ROADMAP round 17.
+
+**M21 — 2026-08-19 (rounds 18–140, promoted at round 138; 136 → 285, shipped).**
+The closing entry, written a day after the promotion it records — 120 rounds
+ran without one, which is itself the finding: **run Phase 6 at promotion, not
+when the next set forces it**, or the phase text goes stale exactly when a new
+operator needs it. Final numbers live in ROADMAP rounds 138–140: 285/285
+supported with **zero name-keyed hooks**, hook reliance on the whole pool
+nearly halved, grammar floors up on every axis. Two lessons moved into Phase 3
+above: the unenforced-restriction class (an ability that works more often than
+the card allows — round 138's `activation_restrictions.py`), and the
+dispatcher guard a declaration satisfies (round 140's dead trigger condition).
+Phase 5 stands open and is recorded here per its exit's second branch: 280 of
+M21's 285 cards have no in-game verification result (plus the 19 Revised
+added; behaviour classes cover 10). The plan: verification sweeps run
+*alongside* the next set's rounds through the Debug Menu — promotion stays
+ungated on them by the standing decision above, and CI now regenerates the
+tracker so the delta cannot silently misreport. Known gaps drained to empty
+in the pre-set cleanup round: `set_progress.py` and `CARD_VERIFICATION.md`
+joined CI's freshness step, and `SET_PROGRESS.md` learned the `measured` role.
