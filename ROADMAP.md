@@ -20,19 +20,21 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** 4,454 tests at a steady 23s, against a CI budget of
-   35s. The budget catches a step change; the *baseline* recorded beside it in
-   `ci.yml` is what catches creep, and it is the number to keep honest — it
+2. **The suite stays fast.** ~6,360 tests at a steady 35s, against a CI budget
+   of 60s. The budget catches a step change; the *baseline* recorded beside it
+   in `ci.yml` is what catches creep, and it is the number to keep honest — it
    went 9s → 17s across four phases with the gate green the whole way. Raising
    the budget is a decision, not maintenance.
 
-   The baseline moved 17 → 23 in this session, and that is a *record* of growth
-   rather than permission for it: ~130 tests were added (permanent ids, the
-   grammar layering guards, two renumbering regression suites) and 17 stopped
-   being true. Leaving it would have parked the warning threshold
-   (`BASELINE × 1.5` = 25.5s) two and a half seconds away, so the next
-   unrelated change would have been blamed for drift this one caused. The
-   budget is untouched.
+   The baseline has moved twice as a *record* of growth rather than permission
+   for it: 17 → 23 when ~130 tests landed in one session (permanent ids, the
+   grammar layering guards, two renumbering regression suites), and 23 → 35
+   when the Commander/Brawl variant and the pre-set cleanup round took the
+   suite from 4,454 tests to ~6,360 — proportional growth, no step change.
+   The second move put the suite *at* the old 35s budget, so the budget was
+   raised 35 → 60 as a decision (2026-08-19, ahead of the next set ingestion):
+   the next set's tests need somewhere to land, and the cliff detector stays
+   well above honest growth.
 
    **The variance recorded here earlier did not reproduce.** Two back-to-back
    local runs once measured 43.98s and 16.79s, which read as a runner-weather

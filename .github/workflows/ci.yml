@@ -39,8 +39,8 @@ jobs:
       # weather, and a budget that fails on weather gets raised without anyone
       # reading the number.
       #
-      # BASELINE is what the suite actually takes — 4,454 tests measure at a
-      # steady 23s — recorded so the headroom is visible instead of guessed, and
+      # BASELINE is what the suite actually takes — ~6,360 tests measure at a
+      # steady 35s — recorded so the headroom is visible instead of guessed, and
       # printed as a percentage on every run. The gate catches the cliff; the
       # percentage is what shows the creep. That distinction is the lesson from
       # letting it drift 9s -> 17s unnoticed across four phases, with the gate
@@ -53,7 +53,17 @@ jobs:
       # and a half seconds away, and the first unrelated change would have been
       # blamed for the drift this one caused. Keeping the baseline honest is the
       # standing invariant; raising the *budget* is still a decision, not
-      # maintenance, and 35 is untouched.
+      # maintenance.
+      #
+      # 23 -> 35 is the same record one growth later: the Commander/Brawl
+      # variant and the pre-set cleanup round took the suite from 4,454 tests
+      # to ~6,360, measuring a steady ~35s — proportional growth, no step
+      # change. That put the suite *at* the old 35s budget, so the budget move
+      # 35 -> 60 was made as a decision (2026-08-19, ahead of the next set
+      # ingestion) rather than arriving as a red run nobody read: the next
+      # set's tests need somewhere to land, and 60 keeps the cliff detector
+      # well above honest growth while still catching an accidental
+      # O(cards^2) sweep.
       #
       # A note on variance, since it nearly caused a wrong conclusion: two
       # back-to-back local runs on one clean tree once measured 43.98s and
@@ -63,8 +73,8 @@ jobs:
       # touching anything.
       - name: Enforce the suite-time budget
         env:
-          BUDGET: 35
-          BASELINE: 23
+          BUDGET: 60
+          BASELINE: 35
         run: |
           START=$(date +%s)
           python -m pytest -q > /dev/null
