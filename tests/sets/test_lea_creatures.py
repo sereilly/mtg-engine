@@ -1537,3 +1537,54 @@ def test_personal_incarnation_thief_cannot_activate_but_owner_can(all_cards):
     )
     assert result.supported
     assert incarnation_perm.metadata.get("redirect_one_damage_to_owner_until_eot") == 1
+
+
+def test_rock_hydra_automatic_shield_spends_counters_per_point(all_cards):
+    """"For each 1 damage that would be dealt to this creature, if it has a
+    +1/+1 counter on it, remove a +1/+1 counter from it and prevent that 1
+    damage." — the automatic half, which for a long time was acknowledged as
+    implemented while nothing read counters in any damage path."""
+    from engine.damage_events import deal_damage
+    from engine.pt import add_plus1_counters
+
+    hydra = Permanent(card=_get(all_cards, "Rock Hydra"))
+    add_plus1_counters(hydra, 3)
+    p1 = PlayerState(name="P1", battlefield=[hydra])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game._sync_control()
+
+    outcome = deal_damage(
+        game,
+        {"recipient": hydra, "amount": 2, "source": _get(all_cards, "Lightning Bolt"), "combat": False},
+    )
+
+    assert outcome.dealt == 0, "both points prevented"
+    assert hydra.metadata.get("plus_counters") == 1, "one counter per point spent"
+
+
+def test_rock_hydra_shield_stops_at_its_last_counter(all_cards):
+    """CR 615.7: prevention is partial when the resource runs out — one counter
+    against five damage prevents one and lets four through, and a hydra with no
+    counters prevents nothing at all."""
+    from engine.damage_events import deal_damage
+    from engine.pt import add_plus1_counters
+
+    hydra = Permanent(card=_get(all_cards, "Rock Hydra"))
+    add_plus1_counters(hydra, 1)
+    p1 = PlayerState(name="P1", battlefield=[hydra])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game._sync_control()
+
+    outcome = deal_damage(
+        game,
+        {"recipient": hydra, "amount": 5, "source": _get(all_cards, "Lightning Bolt"), "combat": False},
+    )
+
+    assert outcome.dealt == 4, "one point prevented, four dealt"
+    assert hydra.metadata.get("plus_counters") == 0
+
+    second = deal_damage(
+        game,
+        {"recipient": hydra, "amount": 2, "source": _get(all_cards, "Lightning Bolt"), "combat": False},
+    )
+    assert second.dealt == 2, "no counters left, nothing prevented"

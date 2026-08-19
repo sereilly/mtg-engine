@@ -75,8 +75,6 @@ IMPLEMENTED_ELSEWHERE: dict[str, str] = {
         "enter_effects.COPY_CREATURE_ON_ENTER (Clone, Vesuvan Doppelganger)",
     "as long as this creature is untapped, noncreature artifacts":
         "mixins/effects.py:_untapped_artifact_protector_active (Guardian Beast)",
-    "for each 1 damage that would be dealt to this creature":
-        "prevention.py (Rock Hydra's +1/+1 counter shield)",
     "remove a corpse counter from this creature":
         "handlers/board_misc.py, reached as an activated ability (Scavenging Ghoul)",
     "this creature can block an additional creature":

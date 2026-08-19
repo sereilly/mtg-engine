@@ -65,7 +65,8 @@ from typing import Any, Callable, Optional
 
 from .effect_ordering import Candidate
 from .models import PlayerState
-from .named_counters import add_counters
+from .named_counters import add_counters, counters_key, counters_on
+from .pt import remove_plus1_counters
 from .shields import (
     PREVENT_ALL_BUT,
     PREVENT_AND_GAIN_LIFE,
@@ -103,6 +104,10 @@ POOL = 600  # "Prevent the next N damage" (CR 615.7)
 # is only ever spent on damage nothing else stopped. CR 616.1e permits any
 # order; this is the default a non-interactive seat takes.
 STATIC_WHOLE_EVENT = 650
+#: A permanent's own per-point counter shield (Rock Hydra's automatic half).
+#: After the whole-event static: it spends a resource per point, so anything
+#: that prevents outright should be offered first.
+PER_POINT_COUNTER_SHIELD = 660
 
 
 @dataclass
@@ -540,6 +545,87 @@ def _prevent_and_place_counter(game, event: dict) -> PreventionOutcome | None:
     return PreventionOutcome(prevented=event["amount"])
 
 
+#: "For each 1 damage that would be dealt to this creature, if it has a +1/+1
+#: counter on it, remove a +1/+1 counter from it and prevent that 1 damage."
+#: (Rock Hydra.) The counter's word is payload, exactly as Nine Lives' is
+#: above; the backreference holds the removal to the same counter the
+#: condition asked about, so a line naming two different counters is not this
+#: shape and refuses.
+_PER_DAMAGE_COUNTER_RE = re.compile(
+    r"^for each 1 damage that would be dealt to this "
+    r"(?:artifact|creature|enchantment|land|permanent), "
+    r"if it has an? (?P<counter>\S+) counter on it, "
+    r"remove an? (?P=counter) counter from it and prevent that 1 damage$"
+)
+
+
+def per_damage_counter_kind(line: str) -> str | None:
+    """The counter *line* spends per point of damage, or None if it is not
+    that line. One matcher for the interceptor and both claim readers, so what
+    is implemented and what is claimed cannot drift."""
+    match = _PER_DAMAGE_COUNTER_RE.match(
+        " ".join(line.strip().lower().rstrip(".").split())
+    )
+    return match.group("counter") if match else None
+
+
+def _counters_available(permanent, counter: str) -> int:
+    """How many *counter* counters *permanent* holds. "+1/+1" lives on the
+    P/T channel (engine/pt.py — it has layer-7d meaning); every other word is
+    an inert named counter."""
+    if counter == "+1/+1":
+        return int(permanent.metadata.get("plus_counters", 0))
+    return counters_on(permanent, counter)
+
+
+def _per_damage_counter_shield(game, event: dict) -> str | None:
+    """The counter kind the recipient's own per-point shield spends, or None."""
+    recipient = event["recipient"]
+    if isinstance(recipient, PlayerState):
+        return None
+    for line in recipient.effective_card.oracle_text.splitlines():
+        counter = per_damage_counter_kind(line)
+        if counter is not None:
+            return counter
+    return None
+
+
+def _applies_per_damage_counter(game, event: dict) -> bool:
+    counter = _per_damage_counter_shield(game, event)
+    return counter is not None and _counters_available(event["recipient"], counter) > 0
+
+
+@prevention_effect(PER_POINT_COUNTER_SHIELD, applies=_applies_per_damage_counter)
+def _remove_counter_per_damage(game, event: dict) -> PreventionOutcome | None:
+    """Rock Hydra's automatic half: one counter per point, only as far as the
+    counters go (CR 615.7's partial prevention) — three counters against five
+    damage remove all three and let two through.
+
+    This was the acknowledged line the roadmap called "the Nine Lives class
+    hiding behind a verified-sounding acknowledgement": prevention.py was
+    credited with it while implementing only the activated {R} shield, so the
+    damage went through in full with the counters untouched.
+    """
+    counter = _per_damage_counter_shield(game, event)
+    if counter is None:
+        return None
+    permanent = event["recipient"]
+    if counter == "+1/+1":
+        removed = remove_plus1_counters(permanent, event["amount"])
+    else:
+        have = counters_on(permanent, counter)
+        removed = min(event["amount"], have)
+        if removed > 0:
+            permanent.metadata[counters_key(counter)] = have - removed
+    if removed <= 0:
+        return None
+    game.log.append(
+        f"{permanent.card.name} removed {removed} {counter} counter(s) to "
+        f"prevent {removed} damage"
+    )
+    return PreventionOutcome(prevented=removed)
+
+
 def prevention_claims_line(line: str) -> bool:
     """Whether one printed line is, in full, a static prevention effect
     implemented above.
@@ -552,4 +638,4 @@ def prevention_claims_line(line: str) -> bool:
     nothing; a card printing only this one would have reported unsupported while
     working perfectly, which is the other half of the same hole.
     """
-    return prevent_and_count_kind(line) is not None
+    return prevent_and_count_kind(line) is not None or per_damage_counter_kind(line) is not None

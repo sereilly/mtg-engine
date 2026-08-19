@@ -125,28 +125,25 @@ needs two rounds is worth splitting only if neither half ships a card alone
 
 - **The Nine Lives class — partial implementation reported as full.** A card is
   supported when **any** line is, so a card can report supported while other
-  lines produce nothing. Nine Lives' damage-prevention replacement and its exile
-  trigger produce nothing. Round 53's hollow gate closes only the *fully* hollow
-  case (nothing supported, nothing static, markers only), and round 20's all-of
-  gate closes the modal shape; the general class is still open and has been
-  found one card at a time — Return to Nature's third mode (round 12), Read the
-  Tides' second (17), Garruk's Uprising' third line (34), Sanctum of Stone
-  Fangs, Fiery Emancipation and Teferi's Ageless Insight (53). Two of those
-  three are implemented (rounds 54 and 57) and Teferi's is still open — which
-  closes three cards and not the class. It wants a census of its own, in the
-  shape Phase 2 uses for a set.
+  lines produce nothing. The census this bullet asked for exists now:
+  `scripts/support_report.py --hollow-lines` names every supported card whose
+  compiled program carries an ability with no instruction behind it. Its first
+  run held **four cards** (Creature Bond, Howling Mine, Paralyze, Capture
+  Sphere), each leaning on a registry the compiler cannot see — and each
+  verified *live* by a per-card test in `tests/sets/`, so the pool's known
+  members are all honest today. Rock Hydra's automatic counter shield — the
+  one the bullet below used to call "the Nine Lives class hiding behind a
+  verified-sounding acknowledgement" — is implemented
+  (`prevention.py:_remove_counter_per_damage`) rather than acknowledged, and
+  its `IMPLEMENTED_ELSEWHERE` entry is gone. What the census cannot see is a
+  *registry that claims a line and does less than it says*: that class is only
+  findable the Rock Hydra way, by giving the behaviour a game. Run the census
+  in every Phase 2, on the measured set.
 - **Fabled Passage** is hollow and stays supported: a land with no mana ability
   whose only ability is unreadable, kept by the separate "a land is always at
   least playable" rule in the compiler. That rule is right for a land that taps
   for mana and wrong for one that does not, and overturning it is a decision
   with its own reasoning to write down.
-- **Rock Hydra's automatic counter shield.** "For each 1 damage that would be
-  dealt to it, remove a +1/+1 counter from it and prevent that 1 damage" is
-  acknowledged in `IMPLEMENTED_ELSEWHERE` as `prevention.py`, but that file
-  implements only his *activated* {R} shield — nothing reads counters in any
-  damage path. So the automatic half is the Nine Lives class hiding behind a
-  verified-sounding acknowledgement. Round 26's counter record is the
-  prerequisite for fixing it honestly.
 - **The verification tracker holds 299 unrecorded cards** — 280 of M21,
   promoted before its in-game pass (SET_PLAYBOOK Phase 5 owns that delta and
   promotion deliberately did not gate on it), plus the 19 Revised added; ten of

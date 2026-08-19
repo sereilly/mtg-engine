@@ -102,3 +102,20 @@ def add_plus1_counters(perm: Permanent, count: int = 1) -> None:
         return
     add_pt_modifier(perm, count, count)
     perm.metadata["plus_counters"] = int(perm.metadata.get("plus_counters", 0)) + count
+
+
+def remove_plus1_counters(perm: Permanent, count: int = 1) -> int:
+    """Remove up to *count* +1/+1 counters — both channels, floored at zero.
+
+    Returns how many actually came off, because a shield sized by counters
+    (Rock Hydra's automatic prevention) may only prevent that much: asking for
+    five off a creature holding two removes two, and the caller deals the
+    difference.
+    """
+    have = int(perm.metadata.get("plus_counters", 0))
+    removed = min(max(count, 0), have)
+    if removed <= 0:
+        return 0
+    add_pt_modifier(perm, -removed, -removed)
+    perm.metadata["plus_counters"] = have - removed
+    return removed
