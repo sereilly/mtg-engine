@@ -32,10 +32,8 @@ callers outside the package import them from this module
 the table did not move its address.
 """
 
-import dataclasses
-
 from ..lord_buffs import (LORD_BUFF_KIND, LordBuff, LordBuffFilter, QUALIFIER_FIELDS, grantable_keywords, lord_buff_payload)
-from ..oracle_types import X_FROM_COUNT, OracleInstruction
+from ..oracle_types import OracleInstruction
 from . import ast
 from .derived import derived_instruction_for_line
 from .errors import LoweringError
@@ -49,6 +47,16 @@ from .lowering import (
     # is what kept this a pure move rather than a rename with a diff attached.
     GRAMMAR_ONLY_PAYLOAD_KEYS,
     INSTRUCTION_CATEGORIES,
+    categories_of,
+    # The scratchpad-producer registry and the wrapper walkers moved to
+    # `lowering/categories.py` and `lowering/_common.py`; the dispatch
+    # below still reads them, and callers outside the package keep this
+    # address.
+    _PRODUCES,
+    _fused_upkeep_pay_to_untap,
+    _mentions_x,
+    _refuse_unfused_distinctness,
+    _stamp_x_from_count,
     _full_mana_payload,
     _fused_discard_then_draw,
     _fused_draw_then_discard,
@@ -128,50 +136,6 @@ from .lowering import (
 # ---------------------------------------------------------------------------
 # Statement dispatch
 # ---------------------------------------------------------------------------
-
-
-# Values an instruction records in the resolution scratchpad, so a later
-# back-reference ("that much") can verify it has a producer.
-_PRODUCES: dict[str, str] = {
-    "deal_damage": "damage_dealt",
-    # CR 705.2: only the player who flipped wins or loses that flip, and both
-    # "if you win" and "if you lose" read the one result — so the flip records
-    # it and the conditionals after it read the record, rather than each
-    # sentence flipping a coin of its own.
-    "flip_coin": "coin_flip",
-    # The exile records whose permanent it removed, which is what "Its
-    # controller creates a token" reads (Angelic Ascension, Secure the Scene).
-    "exile_target_permanent": "exiled_permanent_controller",
-    # Both exiles record what they exiled, which is what "you may play cards
-    # exiled this way" / "you may cast them this turn" read.
-    "exile_top_of_library": "exiled_cards",
-    "search_and_exile_matching": "exiled_cards",
-    # And the graveyard exile, which is what "If **it** was a creature card"
-    # reads (Scavenging Ooze) — the same key, because the question the
-    # back-reference asks is the same one: what did this effect just exile?
-    "exile_target_graveyard_card": "exiled_cards",
-    # "Tap up to two target creatures. **Those creatures** don't untap…"
-    # (Frost Breath.) The tap records which permanents it affected, by id, and
-    # the sentence after it reads that record rather than re-resolving the slots
-    # — by then a target may have left, and CR 611.2c fixed the set when the
-    # effect began.
-    "tap_target_permanent": "tapped_permanents",
-    # "…reveal the top card of your library. **If it's** a creature or land
-    # card, draw a card." (Track Down.) The reveal records what it showed and
-    # the conditional after it reads that record — not the library, which the
-    # draw in its own branch would have changed underneath it.
-    "reveal_top_of_library": "revealed_card",
-    # "Exile it. **If you do**, create a 5/5 black Demon creature token with
-    # flying." (Archfiend's Vessel.) The self-exile records that it happened, so
-    # the branch after it is the ordinary if-you-do rather than a fused kind.
-    "exile_self": "exiled_self",
-    # "Return another target creature you control to its owner's hand. If you
-    # do, you gain life equal to **that creature's** mana value." (Niambi,
-    # Esteemed Speaker.) The bounce records the mana value of what it returned,
-    # because by the time the life gain runs the permanent is gone — reading it
-    # off the battlefield would find nothing and gain nothing.
-    "bounce_target_creature": "returned_mana_value",
-}
 
 
 def lower_statement(
@@ -474,100 +438,6 @@ def lower_statement(
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
 
 
-def _targeted_specs(node: object) -> tuple[ast.TargetSpec, ...]:
-    """Every ``TargetSpec`` in *node*'s subtree that prints the word "target".
-
-    Written against the dataclass fields rather than a per-node list, for the
-    reason ``_restrictions_beyond`` gives: a statement class added later is then
-    covered by default instead of silently answering "no targets here".
-    """
-    found: list[ast.TargetSpec] = []
-    if isinstance(node, ast.TargetSpec):
-        if node.targeted:
-            found.append(node)
-        # A filter carries no recipients, so there is nothing below this.
-        return tuple(found)
-    if dataclasses.is_dataclass(node) and not isinstance(node, type):
-        for field in dataclasses.fields(node):
-            found.extend(_targeted_specs(getattr(node, field.name)))
-    elif isinstance(node, (tuple, list)):
-        for item in node:
-            found.extend(_targeted_specs(item))
-    return tuple(found)
-
-
-def _refuse_unfused_distinctness(steps: tuple[ast.Statement, ...]) -> None:
-    """Refuse a multi-clause sentence whose printed "another target" no fuser claimed.
-
-    CR 601.2c lets two instances of the word "target" name the same object unless
-    something forbids it, and ``TargetSpec.distinct_from_prior`` is that
-    forbidding: "**another** target creature" must differ from the choice the
-    sentence already made. Honouring it needs an instruction with a slot per
-    clause — ``_fused_two_target_pump`` and ``target_bites_target`` are the two
-    that have one — because every other handler resolves through ``_one_choice``
-    and would read the *first* chosen permanent for both clauses.
-
-    Reaching ``_lower_steps`` with the word still on a step therefore means two
-    things at once: the clauses would land on one permanent, and
-    ``_targets_payload`` would read the word as CR 109.5's source exclusion,
-    which is a different restriction. Both are the wider-than-printed outcome, so
-    the sentence refuses.
-
-    Positioned **after** the fusers on purpose: a shape that grows a fused
-    lowering later is claimed above this and never reaches it, so this refusal
-    can only shrink as the engine learns more, never has to be edited.
-    """
-    for step in steps:
-        for spec in _targeted_specs(step):
-            if spec.distinct_from_prior:
-                raise LoweringError(
-                    'a printed "another target" in a multi-clause sentence needs '
-                    "a lowering with a slot per clause",
-                    node=spec,
-                )
-
-
-def _stamp_x_from_count(
-    instructions: tuple[OracleInstruction, ...], spec: dict
-) -> tuple[OracleInstruction, ...]:
-    """Put *spec* on every instruction, including the steps nested inside one.
-
-    A sentence lowers to a tuple, and a wrapper (`sequence`, `if_then`, `may`)
-    carries its own steps in its payload — so stamping the top level alone would
-    define X for the outer instruction and leave the inner ones reading the
-    cast's X, which for a triggered ability is None.
-    """
-    stamped = []
-    for instruction in instructions:
-        payload = dict(instruction.payload)
-        if X_FROM_COUNT in payload and payload[X_FROM_COUNT] != spec:
-            # One resolution has one X (`context.x_value`), so a sentence whose
-            # where-clause defines one *and* whose amount is a count of its own
-            # ("draw cards equal to the number of …, where X is …") would have
-            # the two silently overwrite each other. Neither reading is the
-            # card, so the line refuses.
-            raise LoweringError("two counts cannot share one X")
-        payload[X_FROM_COUNT] = spec
-        for key in ("steps", "then", "else", "otherwise", "action"):
-            nested = payload.get(key)
-            if isinstance(nested, tuple) and nested and isinstance(nested[0], OracleInstruction):
-                payload[key] = _stamp_x_from_count(nested, spec)
-        stamped.append(OracleInstruction(instruction.kind, instruction.value, payload))
-    return tuple(stamped)
-
-
-def _mentions_x(instructions: tuple[OracleInstruction, ...]) -> bool:
-    """Whether anything in *instructions* actually reads an X."""
-    for instruction in instructions:
-        for key, value in instruction.payload.items():
-            if value == "x":
-                return True
-            if isinstance(value, tuple) and value and isinstance(value[0], OracleInstruction):
-                if _mentions_x(value):
-                    return True
-    return False
-
-
 def _lower_where_x(
     node: ast.WhereX, produced: frozenset[str], event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
@@ -773,52 +643,6 @@ def _lower_steps(
     return instructions
 
 
-def _fused_upkeep_pay_to_untap(
-    node: ast.TriggeredAbilityNode,
-) -> tuple[OracleInstruction, ...] | None:
-    """"At the beginning of your upkeep, you may pay {N}. If you do, untap this
-    <permanent>." (Mana Vault, Basalt Monolith, Brass Man, Island Fish Jasconius.)
-
-    Fused for the reason every upkeep shape is fused: the dispatcher in
-    ``engine/phases/upkeep_effects.py`` is keyed on the (trigger condition,
-    instruction kind) pair, and ``upkeep_pay_to_untap_self``'s handler
-    implements the whole prompt — the pay/decline choice, the affordability
-    check and the untap. A decomposed ``may(pay, untap_self)`` is a truer
-    reading of the sentence and has no handler at all.
-
-    Recognised on the **node**, before ``lower_statement`` runs, because two of
-    the four cards would never reach a post-hoc check: the generic ``may``
-    lowering refuses a coloured optional cost outright (Island Fish Jasconius
-    pays {U}{U}{U}), and the refusal is right for every other card that takes
-    that path. Only the fused kind's own handler knows how to charge one.
-
-    Returns None — not a refusal — for anything that is not exactly this shape,
-    so a near miss ("…untap target creature", "…and you gain 1 life") drops back
-    to the ordinary lowering and is refused there by name.
-    """
-    if node.event.kind != "upkeep_self" or node.intervening_if is not None:
-        return None
-    statement = node.statement
-    if not isinstance(statement, ast.May):
-        return None
-    if statement.action is not None or statement.otherwise is not None:
-        return None
-    if not isinstance(statement.cost, ast.ManaCost) or not _is_you(statement.actor):
-        return None
-    # The consequence is untapping the source and nothing else. `untap_self`'s
-    # handler is not consulted here — the fused handler untaps `ctx.permanent`
-    # directly — so the subject is checked against the source rather than
-    # against what any untap lowering would accept.
-    then = statement.then
-    if not isinstance(then, ast.Untap) or not _is_source(then.subject):
-        return None
-    return (
-        OracleInstruction(
-            "upkeep_pay_to_untap_self", "", {"mana": _full_mana_payload(statement.cost)}
-        ),
-    )
-
-
 def _lower_line_statement(
     statement: ast.Statement, *, event: str | None = None
 ) -> tuple[OracleInstruction, ...]:
@@ -919,65 +743,6 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
     if isinstance(node, ast.StaticAbilityNode):
         return _lower_static_ability(node)
     raise LoweringError(f"no lowering for {type(node).__name__}", node=node)
-
-
-# Control-flow wrappers take the categories of whatever they wrap, so gating
-# "damage" is enough to turn on a sequence of damage instructions without
-# inventing a category nobody could reason about.
-#
-# ``may`` is deliberately NOT in here: it gets its own ungated category below.
-# Lowering an optional action is correct, but the prompt it raises still rides
-# the one-card ``pending_optional_pays`` flow, and cards already on that flow
-# (Soul Net, the Rod cycle) hold their trigger on the stack until the player
-# answers — behavior the generic handler does not yet reproduce. Switching
-# "optional" on is gated behind the pending-choice queue.
-_WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
-    "sequence": ("steps",),
-    "if_then": ("then", "else"),
-    "for_each": ("effect",),
-}
-
-
-def _nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
-    """The instructions a wrapper carries, or None if it is not one.
-
-    ``choose_one`` is a wrapper too, and its options are ``{label, instruction}``
-    pairs rather than a bare tuple — the modal shape the pending-choice prompt
-    reads. Its categories are its options', because that is what the card can
-    actually do; giving it a category of its own would say the *choosing* is the
-    effect.
-    """
-    if instruction.kind == "choose_one":
-        return tuple(
-            mode["instruction"] for mode in instruction.payload.get("modes") or ()
-        )
-    nested_keys = _WRAPPER_KINDS.get(instruction.kind)
-    if nested_keys is None:
-        return None
-    nested: tuple[OracleInstruction, ...] = ()
-    for key in nested_keys:
-        nested += tuple(instruction.payload.get(key) or ())
-    return nested
-
-
-def categories_of(instructions: tuple[OracleInstruction, ...]) -> frozenset[str]:
-    """Migration categories covered by a lowered instruction sequence."""
-    found: set[str] = set()
-    for instruction in instructions:
-        nested_keys = _nested_instructions(instruction)
-        if nested_keys is not None:
-            if not nested_keys:
-                return frozenset({"__ungated__"})
-            inner = categories_of(nested_keys)
-            if "__ungated__" in inner:
-                return frozenset({"__ungated__"})
-            found |= inner
-            continue
-        category = INSTRUCTION_CATEGORIES.get(instruction.kind)
-        if category is None:
-            return frozenset({"__ungated__"})
-        found.add(category)
-    return frozenset(found)
 
 
 __all__ = [

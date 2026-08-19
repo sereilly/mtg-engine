@@ -48,13 +48,17 @@ PARSE_LAYERS = ["phrases", "effects", "conditions", "statements", "costs", "pars
 LOWER_LAYERS = ["lowering", "statics", "lower"]
 
 EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game"]
-# The lowering side carries one family the parsing side does not. Zone movement
+# The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
 # outgrew the 1,000-line cap while `effects/board.py` stayed small. A near-empty
 # `effects/zones.py` would buy back the symmetry and cost the thing symmetry is
 # for — one home per template per side, findable from the family name.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones"]
+# `library` and `mana` split out of `lowering/cards.py` the same way when it
+# reached 959 of the 1,000 lines: the hidden-zone flows and mana production
+# each lower to far more than their parse halves read. If `effects/cards.py`
+# ever splits, reuse these names so the mirror re-forms instead of forking.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "mana"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 

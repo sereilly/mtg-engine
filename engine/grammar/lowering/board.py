@@ -22,6 +22,7 @@ from ._common import (
     _is_enchanted,
     _is_source,
     _is_target,
+    _is_you,
     _names_several_targets,
     _restrictions_beyond,
     _targets_only,
@@ -557,3 +558,49 @@ def _lower_phase_out(node: ast.PhaseOut) -> tuple[OracleInstruction, ...]:
             ),
         )
     raise LoweringError("no handler phases out this subject", node=node)
+
+
+def _fused_upkeep_pay_to_untap(
+    node: ast.TriggeredAbilityNode,
+) -> tuple[OracleInstruction, ...] | None:
+    """"At the beginning of your upkeep, you may pay {N}. If you do, untap this
+    <permanent>." (Mana Vault, Basalt Monolith, Brass Man, Island Fish Jasconius.)
+
+    Fused for the reason every upkeep shape is fused: the dispatcher in
+    ``engine/phases/upkeep_effects.py`` is keyed on the (trigger condition,
+    instruction kind) pair, and ``upkeep_pay_to_untap_self``'s handler
+    implements the whole prompt — the pay/decline choice, the affordability
+    check and the untap. A decomposed ``may(pay, untap_self)`` is a truer
+    reading of the sentence and has no handler at all.
+
+    Recognised on the **node**, before ``lower_statement`` runs, because two of
+    the four cards would never reach a post-hoc check: the generic ``may``
+    lowering refuses a coloured optional cost outright (Island Fish Jasconius
+    pays {U}{U}{U}), and the refusal is right for every other card that takes
+    that path. Only the fused kind's own handler knows how to charge one.
+
+    Returns None — not a refusal — for anything that is not exactly this shape,
+    so a near miss ("…untap target creature", "…and you gain 1 life") drops back
+    to the ordinary lowering and is refused there by name.
+    """
+    if node.event.kind != "upkeep_self" or node.intervening_if is not None:
+        return None
+    statement = node.statement
+    if not isinstance(statement, ast.May):
+        return None
+    if statement.action is not None or statement.otherwise is not None:
+        return None
+    if not isinstance(statement.cost, ast.ManaCost) or not _is_you(statement.actor):
+        return None
+    # The consequence is untapping the source and nothing else. `untap_self`'s
+    # handler is not consulted here — the fused handler untaps `ctx.permanent`
+    # directly — so the subject is checked against the source rather than
+    # against what any untap lowering would accept.
+    then = statement.then
+    if not isinstance(then, ast.Untap) or not _is_source(then.subject):
+        return None
+    return (
+        OracleInstruction(
+            "upkeep_pay_to_untap_self", "", {"mana": _full_mana_payload(statement.cost)}
+        ),
+    )

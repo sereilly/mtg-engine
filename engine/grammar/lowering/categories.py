@@ -14,6 +14,7 @@ convention.
 from ...lord_buffs import (LORD_BUFF_KIND)
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND
+from ...oracle_types import OracleInstruction
 INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage": "damage",
     "earthquake_damage": "damage",
@@ -262,3 +263,108 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Optional actions. Parsed and lowered, not switched on — see _WRAPPER_KINDS.
     "may": "optional",
 }
+
+
+# Values an instruction records in the resolution scratchpad, so a later
+# back-reference ("that much") can verify it has a producer. A registry like
+# the table above rather than logic: `_lower_may` and `_lower_steps` (in
+# `lower.py`) read it to thread what each step records forward.
+_PRODUCES: dict[str, str] = {
+    "deal_damage": "damage_dealt",
+    # CR 705.2: only the player who flipped wins or loses that flip, and both
+    # "if you win" and "if you lose" read the one result — so the flip records
+    # it and the conditionals after it read the record, rather than each
+    # sentence flipping a coin of its own.
+    "flip_coin": "coin_flip",
+    # The exile records whose permanent it removed, which is what "Its
+    # controller creates a token" reads (Angelic Ascension, Secure the Scene).
+    "exile_target_permanent": "exiled_permanent_controller",
+    # Both exiles record what they exiled, which is what "you may play cards
+    # exiled this way" / "you may cast them this turn" read.
+    "exile_top_of_library": "exiled_cards",
+    "search_and_exile_matching": "exiled_cards",
+    # And the graveyard exile, which is what "If **it** was a creature card"
+    # reads (Scavenging Ooze) — the same key, because the question the
+    # back-reference asks is the same one: what did this effect just exile?
+    "exile_target_graveyard_card": "exiled_cards",
+    # "Tap up to two target creatures. **Those creatures** don't untap…"
+    # (Frost Breath.) The tap records which permanents it affected, by id, and
+    # the sentence after it reads that record rather than re-resolving the slots
+    # — by then a target may have left, and CR 611.2c fixed the set when the
+    # effect began.
+    "tap_target_permanent": "tapped_permanents",
+    # "…reveal the top card of your library. **If it's** a creature or land
+    # card, draw a card." (Track Down.) The reveal records what it showed and
+    # the conditional after it reads that record — not the library, which the
+    # draw in its own branch would have changed underneath it.
+    "reveal_top_of_library": "revealed_card",
+    # "Exile it. **If you do**, create a 5/5 black Demon creature token with
+    # flying." (Archfiend's Vessel.) The self-exile records that it happened, so
+    # the branch after it is the ordinary if-you-do rather than a fused kind.
+    "exile_self": "exiled_self",
+    # "Return another target creature you control to its owner's hand. If you
+    # do, you gain life equal to **that creature's** mana value." (Niambi,
+    # Esteemed Speaker.) The bounce records the mana value of what it returned,
+    # because by the time the life gain runs the permanent is gone — reading it
+    # off the battlefield would find nothing and gain nothing.
+    "bounce_target_creature": "returned_mana_value",
+}
+
+
+# Control-flow wrappers take the categories of whatever they wrap, so gating
+# "damage" is enough to turn on a sequence of damage instructions without
+# inventing a category nobody could reason about.
+#
+# ``may`` is deliberately NOT in here: it gets its own ungated category above.
+# Lowering an optional action is correct, but the prompt it raises still rides
+# the one-card ``pending_optional_pays`` flow, and cards already on that flow
+# (Soul Net, the Rod cycle) hold their trigger on the stack until the player
+# answers — behavior the generic handler does not yet reproduce. Switching
+# "optional" on is gated behind the pending-choice queue.
+_WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
+    "sequence": ("steps",),
+    "if_then": ("then", "else"),
+    "for_each": ("effect",),
+}
+
+
+def _nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
+    """The instructions a wrapper carries, or None if it is not one.
+
+    ``choose_one`` is a wrapper too, and its options are ``{label, instruction}``
+    pairs rather than a bare tuple — the modal shape the pending-choice prompt
+    reads. Its categories are its options', because that is what the card can
+    actually do; giving it a category of its own would say the *choosing* is the
+    effect.
+    """
+    if instruction.kind == "choose_one":
+        return tuple(
+            mode["instruction"] for mode in instruction.payload.get("modes") or ()
+        )
+    nested_keys = _WRAPPER_KINDS.get(instruction.kind)
+    if nested_keys is None:
+        return None
+    nested: tuple[OracleInstruction, ...] = ()
+    for key in nested_keys:
+        nested += tuple(instruction.payload.get(key) or ())
+    return nested
+
+
+def categories_of(instructions: tuple[OracleInstruction, ...]) -> frozenset[str]:
+    """Migration categories covered by a lowered instruction sequence."""
+    found: set[str] = set()
+    for instruction in instructions:
+        nested_keys = _nested_instructions(instruction)
+        if nested_keys is not None:
+            if not nested_keys:
+                return frozenset({"__ungated__"})
+            inner = categories_of(nested_keys)
+            if "__ungated__" in inner:
+                return frozenset({"__ungated__"})
+            found |= inner
+            continue
+        category = INSTRUCTION_CATEGORIES.get(instruction.kind)
+        if category is None:
+            return frozenset({"__ungated__"})
+        found.add(category)
+    return frozenset(found)

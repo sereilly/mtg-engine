@@ -178,11 +178,17 @@ ast/_core.py   the vocabulary nodes are built from
 ast/           damage characteristics board cards stack combat game
 ast/statements.py  the roof: Effect / Statement / AbilityNode unions
 phrases.py     word tables + fragment productions   |  lowering/_common.py
-effects/       damage characteristics board cards   |  lowering/  (same seven)
-               stack combat game                    |  lowering/categories.py
-statements.py  one whole sentence                   |
+effects/       damage characteristics board cards   |  lowering/  (those seven,
+               stack combat game                    |  + zones library mana)
+statements.py  one whole sentence                   |  lowering/categories.py
 parser.py      one printed line (parse_line)        |  lower.py (dispatch)
 ```
+
+The lowering side carries three families the parse side does not — `zones`,
+`library`, `mana` — because their lowering halves outgrew the 1,000-line cap
+while their parse halves stayed small (`test_grammar_layering.py` documents
+the precedent). If an `effects/` module ever splits, reuse these names so the
+mirror re-forms instead of forking.
 
 Prowess gets a node in `ast/characteristics.py`, parses in
 `effects/characteristics.py` and lowers in `lowering/characteristics.py`.

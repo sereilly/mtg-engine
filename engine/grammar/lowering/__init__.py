@@ -9,7 +9,9 @@ template has one home on each side — prowess parses in
     damage           dealing it, and preventing it
     characteristics  P/T, keywords, colour, printed text, counters
     board            destruction, bouncing, tapping, control, exile
-    cards            draw, discard, mill, search, mana
+    cards            draw, discard, mill, scry
+    library          search, reveal, look-at, exile linkage — the hidden zones
+    mana             "Add {G}" and the tapped-land mana trigger
     stack            countering
     combat           can't-attack / can't-be-blocked
     game             tokens, life, winning, extra turns
@@ -23,7 +25,7 @@ what is missing — never as a lowering that quietly drops the part the engine
 cannot do.
 """
 
-from .categories import INSTRUCTION_CATEGORIES
+from .categories import INSTRUCTION_CATEGORIES, _PRODUCES, categories_of
 from ._common import (
     _lower_condition,
     _filter_payload,
@@ -44,6 +46,9 @@ from ._common import (
     _MANA_KEYS,
     _full_mana_payload,
     _REST_OF_TURN,
+    _mentions_x,
+    _refuse_unfused_distinctness,
+    _stamp_x_from_count,
     count_spec,
 )
 from .damage import (
@@ -90,6 +95,7 @@ from .zones import (
     _fused_exile_then_controller_life,
 )
 from .board import (
+    _fused_upkeep_pay_to_untap,
     _lower_phase_out,
     _lower_put_on_library_bottom,
     _DESTROY_ALL_KINDS,
@@ -107,8 +113,6 @@ from .board import (
     _lower_sacrifice,
 )
 from .cards import (
-    _lower_reveal_top,
-    _lower_reveal_until,
     _DAMAGED_PLAYER_EVENTS,
     _lower_discard,
     _fused_discard_then_draw,
@@ -116,9 +120,15 @@ from .cards import (
     _lower_draw,
     _lower_mill,
     _lower_scry,
+)
+from .mana import (
     _lower_add_mana,
     _TAPPED_LAND_MANA_RECIPIENTS,
     _lower_add_mana_for_tapped_land,
+)
+from .library import (
+    _lower_reveal_top,
+    _lower_reveal_until,
     _lower_cast_from_exiled_with,
     _lower_cast_permission,
     _lower_exile_graveyard_until_leaves,
@@ -162,6 +172,12 @@ from .game import (
 __all__ = [
     "_lower_condition",
     "INSTRUCTION_CATEGORIES",
+    "_PRODUCES",
+    "categories_of",
+    "_mentions_x",
+    "_refuse_unfused_distinctness",
+    "_stamp_x_from_count",
+    "_fused_upkeep_pay_to_untap",
     "_filter_payload",
     "_restrictions_beyond",
     "GRAMMAR_ONLY_PAYLOAD_KEYS",

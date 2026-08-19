@@ -18,6 +18,8 @@ would be a family deciding it differently.
 """
 
 import dataclasses
+
+from ...oracle_types import X_FROM_COUNT, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 
@@ -357,7 +359,7 @@ _EVENT_QUANTITIES: dict[str, str] = {
     "creature_deals_combat_damage_to_player_or_walker": "amount",
 }
 
-# The scratchpad keys that are *quantities*. `lower._PRODUCES` also records
+# The scratchpad keys that are *quantities*. `categories._PRODUCES` also records
 # things no amount can read — a controller's seat, a list of exiled cards — so
 # a bare back-reference resolves against this narrower set. A producer added
 # there and not here fails safe: the bare reading refuses rather than reading a
@@ -755,3 +757,97 @@ def chargeable_tap_filter(filt: "ast.ObjectFilter") -> dict | None:
     return object_only_filter(
         payload, carried_separately=frozenset({"controller", "tapped_only"})
     )
+
+
+def _targeted_specs(node: object) -> tuple[ast.TargetSpec, ...]:
+    """Every ``TargetSpec`` in *node*'s subtree that prints the word "target".
+
+    Written against the dataclass fields rather than a per-node list, for the
+    reason ``_restrictions_beyond`` gives: a statement class added later is then
+    covered by default instead of silently answering "no targets here".
+    """
+    found: list[ast.TargetSpec] = []
+    if isinstance(node, ast.TargetSpec):
+        if node.targeted:
+            found.append(node)
+        # A filter carries no recipients, so there is nothing below this.
+        return tuple(found)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        for field in dataclasses.fields(node):
+            found.extend(_targeted_specs(getattr(node, field.name)))
+    elif isinstance(node, (tuple, list)):
+        for item in node:
+            found.extend(_targeted_specs(item))
+    return tuple(found)
+
+
+def _refuse_unfused_distinctness(steps: tuple[ast.Statement, ...]) -> None:
+    """Refuse a multi-clause sentence whose printed "another target" no fuser claimed.
+
+    CR 601.2c lets two instances of the word "target" name the same object unless
+    something forbids it, and ``TargetSpec.distinct_from_prior`` is that
+    forbidding: "**another** target creature" must differ from the choice the
+    sentence already made. Honouring it needs an instruction with a slot per
+    clause — ``_fused_two_target_pump`` and ``target_bites_target`` are the two
+    that have one — because every other handler resolves through ``_one_choice``
+    and would read the *first* chosen permanent for both clauses.
+
+    Reaching ``_lower_steps`` with the word still on a step therefore means two
+    things at once: the clauses would land on one permanent, and
+    ``_targets_payload`` would read the word as CR 109.5's source exclusion,
+    which is a different restriction. Both are the wider-than-printed outcome, so
+    the sentence refuses.
+
+    Positioned **after** the fusers on purpose: a shape that grows a fused
+    lowering later is claimed above this and never reaches it, so this refusal
+    can only shrink as the engine learns more, never has to be edited.
+    """
+    for step in steps:
+        for spec in _targeted_specs(step):
+            if spec.distinct_from_prior:
+                raise LoweringError(
+                    'a printed "another target" in a multi-clause sentence needs '
+                    "a lowering with a slot per clause",
+                    node=spec,
+                )
+
+
+def _stamp_x_from_count(
+    instructions: tuple[OracleInstruction, ...], spec: dict
+) -> tuple[OracleInstruction, ...]:
+    """Put *spec* on every instruction, including the steps nested inside one.
+
+    A sentence lowers to a tuple, and a wrapper (`sequence`, `if_then`, `may`)
+    carries its own steps in its payload — so stamping the top level alone would
+    define X for the outer instruction and leave the inner ones reading the
+    cast's X, which for a triggered ability is None.
+    """
+    stamped = []
+    for instruction in instructions:
+        payload = dict(instruction.payload)
+        if X_FROM_COUNT in payload and payload[X_FROM_COUNT] != spec:
+            # One resolution has one X (`context.x_value`), so a sentence whose
+            # where-clause defines one *and* whose amount is a count of its own
+            # ("draw cards equal to the number of …, where X is …") would have
+            # the two silently overwrite each other. Neither reading is the
+            # card, so the line refuses.
+            raise LoweringError("two counts cannot share one X")
+        payload[X_FROM_COUNT] = spec
+        for key in ("steps", "then", "else", "otherwise", "action"):
+            nested = payload.get(key)
+            if isinstance(nested, tuple) and nested and isinstance(nested[0], OracleInstruction):
+                payload[key] = _stamp_x_from_count(nested, spec)
+        stamped.append(OracleInstruction(instruction.kind, instruction.value, payload))
+    return tuple(stamped)
+
+
+def _mentions_x(instructions: tuple[OracleInstruction, ...]) -> bool:
+    """Whether anything in *instructions* actually reads an X."""
+    for instruction in instructions:
+        for key, value in instruction.payload.items():
+            if value == "x":
+                return True
+            if isinstance(value, tuple) and value and isinstance(value[0], OracleInstruction):
+                if _mentions_x(value):
+                    return True
+    return False

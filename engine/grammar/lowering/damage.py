@@ -5,7 +5,7 @@ handler performs in full, the "unless they pay" shape, damage conjunctions, and
 the CR 615 prevention shields.
 
 `deal_damage` is the one instruction that records a value other steps can read
-(`_PRODUCES` in `lower.py`), which is why "deal damage, then gain that much
+(`_PRODUCES` in `categories.py`), which is why "deal damage, then gain that much
 life" is two instructions in a sequence rather than a fused kind.
 """
 
