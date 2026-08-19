@@ -16,13 +16,13 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 78.9% | 77.8% | 42.0% | 150 |
-| LEB | 292 | 389 | 78.9% | 77.9% | 42.2% | 151 |
-| 2ED | 292 | 389 | 78.9% | 77.9% | 42.2% | 151 |
+| LEA | 290 | 388 | 79.1% | 78.1% | 42.3% | 150 |
+| LEB | 292 | 389 | 79.2% | 78.1% | 42.4% | 151 |
+| 2ED | 292 | 389 | 79.2% | 78.1% | 42.4% | 151 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
-| 3ED | 296 | 389 | 79.2% | 77.9% | 42.9% | 152 |
-| M21 | 285 | 503 | 86.5% | 85.5% | 60.6% | 236 |
-| **All (shipped)** | **1533** | **2166** | **80.1%** | **78.9%** | **46.5%** | **876** |
+| 3ED | 296 | 389 | 79.7% | 78.4% | 43.4% | 152 |
+| M21 | 285 | 503 | 86.7% | 85.7% | 60.6% | 236 |
+| **All (shipped)** | **1533** | **2166** | **80.3%** | **79.2%** | **46.7%** | **876** |
 
 ## Backlog — failure reasons
 
@@ -30,7 +30,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 200 | 76 | expected a subject |  |
+| 194 | 73 | expected a subject |  |
 | 84 | 28 | unrecognized effect verb |  |
 | 40 | 21 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
@@ -58,7 +58,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 ## Cards executing through the grammar
 
-876 cards, 1007 lines.
+876 cards, 1012 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -99,6 +99,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Destroy all lands.`
 - **Armageddon Clock**
   - `At the beginning of your upkeep, put a doom counter on this artifact.`
+  - `At the beginning of your draw step, this artifact deals damage equal to the number of doom counters on it to each player.`
   - `{4}: Remove a doom counter from this artifact. Any player may activate this ability but only during any upkeep step.`
 - **Army of Allah**
   - `Attacking creatures get +2/+0 until end of turn.`
@@ -808,12 +809,16 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
 - **Mana Vault**
   - `At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.`
+  - `At the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you.`
   - `{T}: Add {C}{C}{C}.`
   - `At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.`
+  - `At the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you.`
   - `{T}: Add {C}{C}{C}.`
   - `At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.`
+  - `At the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you.`
   - `{T}: Add {C}{C}{C}.`
   - `At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.`
+  - `At the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you.`
   - `{T}: Add {C}{C}{C}.`
 - **Manabarbs**
   - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`

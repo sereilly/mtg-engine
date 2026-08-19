@@ -179,6 +179,11 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("upkeep_enchanted_controller",
      ("the", "beginning", "of", "the", "upkeep", "of", "enchanted", "enchantment", "'s", "controller")),
     ("upkeep_chosen", ("the", "beginning", "of", "the", "chosen", "player", "'s", "upkeep")),
+    # "Your draw step" beside "each player's", the same pair as the upkeep two
+    # above and for the same reason: the scope is what the dispatcher reads, and
+    # a narrowing present on one side of the pipeline and absent on the other
+    # compiles the card supported and fires it on the wrong event (round 7).
+    ("draw_step_self", ("the", "beginning", "of", "your", "draw", "step")),
     ("draw_step_each", ("the", "beginning", "of", "each", "player", "'s", "draw", "step")),
     # CR 505.1a — the precombat main phase, the only one that is "first". Both
     # printed spellings; the M21 Shrines say "first" and modern templating says

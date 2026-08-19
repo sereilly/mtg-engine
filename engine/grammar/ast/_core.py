@@ -137,7 +137,21 @@ class BoardCount:
     name: str
 
 
-Amount = Union[Fixed, Var, CountOf, ThatMuch, Half, AllOf, BoardCount]
+@dataclass(frozen=True)
+class CountersOnSource:
+    """"the number of doom counters on it" (Armageddon Clock) — how many CR
+    122.1 named counters the ability's own source is carrying.
+
+    Its own node rather than a :class:`CountOf` over a noun phrase because a
+    counter is not an object: it has no controller, no type line and no zone, so
+    every narrowing an ``ObjectFilter`` could carry would be a question about a
+    permanent instead of about what is sitting on one. The kind is data — the
+    word the card invented — so the next set's counter needs no production.
+    """
+    kind: str
+
+
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, AllOf, BoardCount]
 
 
 # ---------------------------------------------------------------------------

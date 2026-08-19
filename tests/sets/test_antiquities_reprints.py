@@ -161,6 +161,27 @@ def test_armageddon_clock_accumulates_counters_and_scales_its_damage():
     assert (p1.life, p2.life) == (17, 17)      # 2 counters -> 2 more each
 
 
+def test_armageddon_clock_draw_step_damage_is_a_compiled_trigger():
+    """Round 140: the damage used to be a regex over the permanent's oracle
+    text living in phases/draw_step.py, dealt inline before the turn-based
+    draw. It is an ordinary trigger now — the counter kind and the recipient
+    are payload, so the next card printed this way needs no code, and the
+    amount is read off the source when the ability *resolves* rather than when
+    the step began."""
+    program = compile_card_oracle(_artifact("Armageddon Clock", CLOCK_TEXT))
+    trigger = next(
+        t for t in program.triggered_abilities
+        if t.condition.kind == "draw_step_self"
+    )
+
+    assert trigger.supported
+    assert trigger.instruction.kind == "deal_damage"
+    assert trigger.instruction.payload == {
+        "amount_from_named_counters": "doom",
+        "recipient": "each_player",
+    }
+
+
 def test_armageddon_clock_deals_no_damage_before_a_counter_exists():
     clock = Permanent(card=_artifact("Armageddon Clock", CLOCK_TEXT))
     p1 = PlayerState(name="P1", battlefield=[clock], library=[])

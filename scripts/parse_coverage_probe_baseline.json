@@ -178,6 +178,13 @@
   ]
  },
  {
+  "card": "Mana Vault",
+  "clause": "if this artifact is tapped, it deals 1 damage to you",
+  "ignored": [
+   "artifact"
+  ]
+ },
+ {
   "card": "Miscast",
   "clause": "counter target instant or sorcery spell unless its controller pays {3}",
   "ignored": [

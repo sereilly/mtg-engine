@@ -107,6 +107,30 @@ def _accept_card_noun(stream: TokenStream) -> bool:
     return stream.accept_word("card", "cards")
 
 
+def accept_source_reference(stream: TokenStream) -> bool:
+    """Consume a reference to the ability's own source — "it", "this", or
+    "this <noun the card calls itself>" — and say whether one was there.
+
+    A predicate rather than a filter, because the callers that need it are
+    asking about *identity* and not about characteristics: an intervening-if
+    naming the source is answered from ``context.source_permanent``, so an
+    ``ObjectFilter`` built here would carry a narrowing nothing consults. The
+    three spellings are one production so a card printing "this artifact" is
+    read the same way as one printing "it", which is the whole difference
+    between Mana Vault's draw-step clause and Basalt Monolith's.
+    """
+    if stream.accept_word("it"):
+        return True
+    mark = stream.mark()
+    if stream.accept_word("this"):
+        noun = stream.peek_word()
+        if noun is not None and _singular(noun) in _SELF_NOUNS:
+            stream.advance()
+        return True
+    stream.reset(mark)
+    return False
+
+
 def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     """Parse a player reference at the cursor, or return None."""
     mark = stream.mark()
@@ -820,6 +844,7 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
 
 
 __all__ = [
+    "accept_source_reference",
     "parse_object_filter", "parse_player_ref", "parse_recipient", "parse_target_spec",
 ]
 

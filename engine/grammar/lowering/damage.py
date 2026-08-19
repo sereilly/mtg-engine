@@ -450,12 +450,26 @@ def _lower_damage(
     if isinstance(node.amount, ast.ThatMuch):
         back_reference = _back_reference_payload(node.amount, produced, event)
         amount: int | str = 0
+    elif isinstance(node.amount, ast.CountersOnSource):
+        # "…deals damage equal to the number of doom counters on it…"
+        # (Armageddon Clock). A read off the source at resolution rather than a
+        # number, so it travels the same payload-key channel "its power" does —
+        # one key, not a second instruction kind.
+        back_reference = {"amount_from_named_counters": node.amount.kind}
+        amount = 0
     else:
         back_reference = {}
         amount = _amount_payload(node.amount)
 
     sweep = _sweep_kind(node.recipients)
     if sweep is not None:
+        # The sweep handlers take a plain number. A back-reference reaching one
+        # would be dropped here and dealt as zero — visible nowhere, since the
+        # card would still report supported — so it refuses instead.
+        if back_reference:
+            raise LoweringError(
+                "a board sweep cannot carry a computed damage amount", node=node
+            )
         return (OracleInstruction(sweep, "", {"amount": amount}),)
 
     if len(node.recipients) != 1:
@@ -487,6 +501,14 @@ def _lower_damage(
     # already reads its "recipient" key.
     if _is_you(recipient):
         payload["recipient"] = "caster"
+    elif isinstance(recipient, ast.PlayerRef) and recipient.kind == "each_player":
+        # "…deals damage … to each player" (Armageddon Clock). Its own recipient
+        # rather than a fall-through: the kind used to be listed among the ones
+        # the handler reads off the resolution context, which for "each player"
+        # is not a seat at all — the damage went to whatever `context.target`
+        # happened to hold. No card in the pool printed it until this one, so
+        # the hole had never been dealt through.
+        payload["recipient"] = "each_player"
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind == "each_opponent":
         # "…deals 2 damage to each opponent" (Storm Caller). The handler loops
         # the caster's living opponents through the same player-damage path a
@@ -496,7 +518,7 @@ def _lower_damage(
         # "target opponent" joins the chosen-player forms: the damage handler
         # takes the seat off the resolution context either way, and the
         # opponents_only narrowing rides the target description below.
-        "target_player", "target_opponent", "that_player", "controller", "each_player"
+        "target_player", "target_opponent", "that_player", "controller"
     ):
         raise LoweringError(f"unsupported damage recipient {recipient.kind!r}", node=node)
     elif (

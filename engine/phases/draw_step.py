@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 """Draw step (CR 504).
 
 The active player draws a card as a turn-based action. Bonus draws granted to
@@ -10,10 +8,33 @@ the skip-your-draw-for-protection behavior stays name-keyed in
 engine/card_hooks.py:DRAW_STEP_MODIFIERS because the protection quality it
 grants is card-specific. Either way this module only aggregates and enforces,
 so a new bonus-draw card never touches it.
+
+"At the beginning of your draw step" triggered abilities are put on the stack
+here (CR 603.3), the same way the upkeep and end steps do it. Until round 140
+this step had no trigger dispatch at all: Armageddon Clock's damage was a regex
+over the permanent's oracle text sitting in this file, and Mana Vault's
+"if this artifact is tapped, it deals 1 damage to you" — which no regex here
+matched — did nothing whatsoever.
 """
 
 from ..card_hooks import DRAW_STEP_MODIFIERS
 from ..draw_step_modifiers import draw_step_bonus_for
+from ..game_types import OracleExecutionContext
+from ..handlers.control_flow import evaluate_condition
+from ..trigger_utils import iter_triggered_abilities, make_trigger_event
+
+#: The two draw-step conditions and the only difference between them, the same
+#: pair the upkeep and end steps carry: ``draw_step_self`` is "at the beginning
+#: of **your** draw step" and fires for the permanent's own controller,
+#: ``draw_step_each`` is "each player's" and fires for whoever's step it is.
+DRAW_STEP_SELF_CONDITION = "draw_step_self"
+DRAW_STEP_EACH_CONDITION = "draw_step_each"
+
+#: The payload key holding a CR 603.4 intervening-if, checked as the trigger
+#: would fire and again as it resolves. Keyed on the payload's *shape* rather
+#: than on a list of instruction kinds, for the reason end_step.py gives: a list
+#: of kinds is only ever as complete as the last card that touched it.
+DRAW_STEP_INTERVENING_IF = "intervening_if"
 
 
 class DrawStepMixin:
@@ -45,31 +66,41 @@ class DrawStepMixin:
             })
         return choices
 
-    _COUNTER_DAMAGE_RE = re.compile(
-        r"at the beginning of your draw step, this \w+ deals damage equal to "
-        r"the number of (?P<kind>\w+) counters on it to each player"
-    )
+    def _enqueue_draw_step_triggers(self, player_index: int) -> None:
+        """Put this draw step's triggered abilities on the stack (CR 603.3).
 
-    def _resolve_draw_step_counter_damage(self, player_index: int) -> None:
-        """Armageddon Clock's draw-step damage.
-
-        Only the *controller's* draw step fires it ("your draw step"), and the
-        damage goes to every player including them.
+        Two scans, because the printed scope decides who fires: "your draw step"
+        is the source's own controller, "each player's" is everyone. Keyed on
+        the *condition* alone and not on a list of instruction kinds — a
+        trigger's condition is what says when it fires, and its effect is not a
+        second condition (the lesson end_step.py records at length).
         """
-        controller = self.players[player_index]
-        for permanent in list(controller.battlefield):
-            text = " ".join(permanent.effective_card.oracle_text.lower().split())
-            match = self._COUNTER_DAMAGE_RE.search(text)
-            if match is None:
+        events: list[dict] = []
+        scoped = list(iter_triggered_abilities(
+            self,
+            condition_kinds={DRAW_STEP_SELF_CONDITION},
+            players=[self.players[player_index]],
+        )) + list(iter_triggered_abilities(
+            self,
+            condition_kinds={DRAW_STEP_EACH_CONDITION},
+        ))
+        for controller_index, permanent, trig in scoped:
+            if trig.instruction is None:
                 continue
-            amount = int(permanent.metadata.get(f"{match.group('kind')}_counters", 0))
-            if amount <= 0:
+            gate = (trig.instruction.payload or {}).get(DRAW_STEP_INTERVENING_IF)
+            if gate is not None and not evaluate_condition(
+                self,
+                OracleExecutionContext(
+                    caster=self.players[controller_index],
+                    target=self.players[controller_index],
+                    card=permanent.card,
+                    source_permanent=permanent,
+                ),
+                gate,
+            ):
                 continue
-            for victim in self.players:
-                self._deal_damage_to_player(victim, amount, source=permanent)
-            self.log.append(
-                f"{permanent.card.name} dealt {amount} damage to each player"
-            )
+            events.append(make_trigger_event(controller_index, permanent, trig))
+        self._enqueue_triggered_batch(events)
 
     def resolve_draw_step(
         self,
@@ -83,13 +114,6 @@ class DrawStepMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
-
-        # "At the beginning of your draw step, this artifact deals damage equal
-        # to the number of <kind> counters on it to each player." (Armageddon
-        # Clock.) Derived from the source's own text and its current counter
-        # count, so the amount is never stored anywhere that could drift from
-        # the counters.
-        self._resolve_draw_step_counter_damage(player_index)
 
         # Nafs Asp: obligations armed against this player resolve now, before
         # the draw itself — "before that draw step" (a human is prompted via
@@ -121,6 +145,16 @@ class DrawStepMixin:
             self.log.append(f"{player.name} skipped draw step")
             self._close_or_defer_step(phase, step, defer_priority)
             return 0
+
+        # CR 603.3: the step is happening, so its triggers trigger. Enqueued
+        # before the turn-based draw below and after the skip-step check above,
+        # which is exactly the line CR 614.10 draws — a *skipped step* never
+        # begins, so nothing triggers, while the three "skip the draw" paths
+        # below (CR 103.8a's first turn, Island Sanctuary) skip a turn-based
+        # action inside a step that did begin. Nothing observes the position
+        # relative to the draw: the batch sits on the stack until the priority
+        # window at the end of the step drains it.
+        self._enqueue_draw_step_triggers(player_index)
 
         # CR 103.8a: in a two-player game, the player who plays first skips
         # the draw step of their first turn. game.turn is 1 exactly during the

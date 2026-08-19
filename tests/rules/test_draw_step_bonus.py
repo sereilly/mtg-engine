@@ -67,3 +67,80 @@ def test_504_1_asymmetric_and_unrelated_draw_text_grants_no_bonus():
         "",
     ):
         assert draw_step_bonus_for(text) is None, text
+
+
+# ---------------------------------------------------------------------------
+# 504.2 / 603.3 — the step's triggered abilities
+# ---------------------------------------------------------------------------
+#
+# Invented cards again, and for the same reason: the point is that the *scope*
+# a card prints decides who fires, so a test naming Mana Vault or Armageddon
+# Clock could pass against anything keyed to those names.
+
+from engine import Game, PlayerState  # noqa: E402
+from engine.models import CardDefinition, Permanent  # noqa: E402
+
+
+def _clock(name: str, text: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="{2}", cmc=2.0, type_line="Artifact",
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": "Artifact"},
+    )
+
+
+def _two_seat_game(*permanents_for_seat_zero: Permanent) -> tuple[Game, PlayerState, PlayerState]:
+    p1 = PlayerState(name="P1", battlefield=list(permanents_for_seat_zero), library=[])
+    p2 = PlayerState(name="P2", library=[])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.turn = 3  # past CR 103.8a's first-turn draw skip
+    game._sync_control()
+    return game, p1, p2
+
+
+@pytest.mark.cr("504.2", "603.3")
+def test_504_2_a_draw_step_trigger_reaches_the_stack_and_resolves():
+    """"At the beginning of your draw step, …" had no dispatcher at all: the
+    step drew a card and opened priority, and any trigger the compiler produced
+    for it sat in the program unfired."""
+    game, p1, _p2 = _two_seat_game(Permanent(card=_clock(
+        "Dawn Toll", "At the beginning of your draw step, it deals 1 damage to you."
+    )))
+
+    game.resolve_draw_step(0)
+
+    assert p1.life == 19
+
+
+@pytest.mark.cr("504.2", "603.4")
+def test_603_4_a_draw_step_trigger_with_an_intervening_if_checks_it():
+    """The gate is checked as the trigger would fire, so the state at the start
+    of the step is what decides — not the state at resolution alone."""
+    text = "At the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you."
+    tapped = Permanent(card=_clock("Toll of Rust", text), tapped=True)
+    game, p1, _p2 = _two_seat_game(tapped)
+    game.resolve_draw_step(0)
+    assert p1.life == 19
+
+    untapped = Permanent(card=_clock("Toll of Rust", text))
+    game, p1, _p2 = _two_seat_game(untapped)
+    game.resolve_draw_step(0)
+    assert p1.life == 20
+
+
+@pytest.mark.cr("504.2", "603.3")
+def test_504_2_your_draw_step_and_each_players_draw_step_are_different_scopes():
+    """The narrowing is the whole difference between the two conditions: "your"
+    fires only on its controller's step, "each player's" on everyone's. One
+    kind for both would make the dispatcher guess, which is the mistake the end
+    step made until a card printed the other wording."""
+    yours = Permanent(card=_clock(
+        "Dawn Toll", "At the beginning of your draw step, it deals 1 damage to you."
+    ))
+    game, p1, p2 = _two_seat_game(yours)
+
+    game.active_player_index = 1
+    game.resolve_draw_step(1)
+
+    assert (p1.life, p2.life) == (20, 20), "the opponent's draw step is not 'your' draw step"

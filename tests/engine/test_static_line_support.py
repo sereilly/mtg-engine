@@ -41,6 +41,7 @@ from engine.land_play_allowance import land_play_line
 from engine.lord_buffs import lord_buff_for
 from engine.global_statics import global_static_for
 from engine.library_top import library_top_line
+from engine.prevention import prevention_claims_line
 from engine.replacements import replacement_claims_line
 from engine.enter_effects import enter_effect_line
 from engine.grammar import compile_line
@@ -118,6 +119,12 @@ def _derived(normalized: str) -> bool:
         # replacement constant to the whole registry, and these two lines
         # arrived with it.
         or replacement_claims_line(normalized)
+        # "If a source would deal damage to you, prevent that damage and put an
+        # incarnation counter on this enchantment" (Nine Lives) — dispatched by
+        # engine/prevention.py's interceptor, which self-selects on the
+        # permanent's own text through the same matcher the gate asks. CR 615's
+        # half of the table above it, and the eleventh here.
+        or prevention_claims_line(normalized)
         # "All artifacts have …" (Energy Flux), "Creatures you control attack
         # each combat if able" (the Pirate Pursued Whale makes) — dispatched by
         # the CR 613 layer bridge, which appends the granted ability to each

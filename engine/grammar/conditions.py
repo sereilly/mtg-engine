@@ -22,10 +22,16 @@ from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import PT
-from .nouns import parse_object_filter, parse_player_ref
+from .nouns import accept_source_reference, parse_object_filter, parse_player_ref
 from .phrases import _parse_duration
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
+
+
+#: What every state condition below is asked *about*: the ability's own source.
+#: The subject is fixed because the evaluator reads ``context.source_permanent``
+#: — a spec naming anything else would describe a permanent nothing looks up.
+_SOURCE_SPEC = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
 
 
 def _parse_condition(stream: TokenStream) -> ast.Condition:
@@ -210,14 +216,24 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
                 return ast.HadPlus1Counter()
     stream.reset(counter_mark)
 
-    # "it is untapped" and "it's untapped" are the same condition; the lexer
-    # splits the contraction into "it" + "'s", so both spellings are listed
-    # rather than the apostrophe being skipped wherever it turns up.
-    if stream.accept_phrase("it", "is", "untapped") or stream.accept_phrase(
-        "it", "'s", "untapped"
+    # "if this artifact is tapped" (Mana Vault), "if it's untapped" (Aladdin's
+    # Ring), "if this is untapped" — one production over the two axes the pool
+    # varies independently: how the card names itself, and which way round the
+    # state is asked. Writing the four printed spellings out as four phrases is
+    # what left "is tapped" unread while "is untapped" worked, which for an
+    # intervening-if is the silent direction — a gate nothing can fail.
+    #
+    # "it's untapped" reaches the same branch as "it is": the lexer splits the
+    # contraction into "it" + "'s", so both copulas are accepted here rather
+    # than the apostrophe being skipped wherever it turns up.
+    state_mark = stream.mark()
+    if accept_source_reference(stream) and (
+        stream.accept_word("is") or stream.accept_word("'s")
     ):
-        return ast.IsState(ast.TargetSpec("this", ast.ObjectFilter(is_source=True)), "tapped", negated=True)
-    if stream.accept_phrase("this", "is", "untapped"):
-        return ast.IsState(ast.TargetSpec("this", ast.ObjectFilter(is_source=True)), "tapped", negated=True)
+        if stream.accept_word("tapped"):
+            return ast.IsState(_SOURCE_SPEC, "tapped")
+        if stream.accept_word("untapped"):
+            return ast.IsState(_SOURCE_SPEC, "tapped", negated=True)
+    stream.reset(state_mark)
 
     raise stream.error("unrecognized condition")

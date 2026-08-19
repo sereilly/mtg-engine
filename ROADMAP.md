@@ -422,3 +422,99 @@ draw-step trigger condition scoped to a single permanent — the table has only
 that damage and put an incarnation counter on this enchantment" needs a CR 614
 interceptor that *also places a counter*, which `engine/replacements.py` has no
 shape for. Both fail in the direction that makes the card weaker than printed.
+
+## Round 140: the last two acknowledged gaps, and the trigger nobody could fire
+
+*(2026-08-18.)* `parse_coverage.py`'s `ACKNOWLEDGED` is **empty of NOT
+IMPLEMENTED entries**. Round 139 closed two of four; these are the other two,
+and closing them surfaced a third gap that neither of them named.
+
+**Mana Vault** — "At the beginning of your draw step, if this artifact is
+tapped, it deals 1 damage to you." Two halves were missing and each was silent
+in its own way. The draw step had *no trigger dispatch at all*: it drew a card
+and opened priority, so any draw-step trigger the compiler produced sat in the
+program unfired. And "if this artifact is tapped" had no production — the
+condition parser held `it is untapped` / `this is untapped` as two written-out
+phrases, so the *negated* reading worked and the plain one did not. A gate
+nothing can fail is the same silence as no gate at all, which is why both
+directions are now one production over the two axes the pool varies: how the
+card names itself (`accept_source_reference`) and which way round the state is
+asked.
+
+`draw_step_self` joins `draw_step_each` in both trigger tables, the same pair
+the upkeep and end steps carry, and `phases/draw_step.py` gained the scan those
+two steps already had — keyed on the *condition*, not on a list of instruction
+kinds, and checking CR 603.4's intervening-if as the trigger would fire.
+
+**Armageddon Clock came with it, whether or not it was asked.** Its draw-step
+damage was a regex over the permanent's oracle text living inside
+`phases/draw_step.py`, dealt inline before the turn-based draw — so the moment
+`draw_step_self` existed, the Clock's line compiled as a trigger too and the
+choice was a second reader or a migration. It is a trigger now: "damage equal to
+the number of doom counters on it" is `ast.CountersOnSource`, lowered to one
+payload key the way "equal to its power" already is, and read at *resolution*
+through `named_counters.py` — the store round 139 unified. The regex is gone,
+and with it the last oracle-text scan in a turn step.
+
+The migration found a hole underneath. "…to each player" was listed among the
+damage recipients the handler takes off the resolution context, where for "each
+player" there is no seat — the damage went to whatever `context.target` held.
+No card in the pool printed the phrase until this one, so it had never been
+dealt through. It is a recipient of its own now, the same shape `each_opponent`
+takes and differing only in who is in the list.
+
+**Nine Lives** — "If a source would deal damage to you, prevent that damage and
+put an incarnation counter on this enchantment." Recorded as needing a CR 614
+interceptor that also places a counter; it is a CR 615 *prevention* instead, and
+that is the whole reason the shape was missing. Every shield in
+`engine/prevention.py` was one a recipient had been **given** — something
+resolved, armed it, and it is spent. This is the other kind: a static ability
+that applies while its source is on the battlefield, with no charges, no
+lifetime and nothing for the sweeps to clear. One registration, read off the
+card's own text at damage time, with the counter's word as payload so a second
+card printing it needs no code.
+
+It runs **last** in the shared CR 616.1 order, after the consumable shields.
+Any order is legal (616.1e) and this is the default a non-interactive seat
+takes: reaching nine counters loses the game, so the counter should only be
+spent on damage nothing else stopped — and a shield that covers the event
+outright leaves this one unasked.
+
+`prevention_claims_line` joins `replacement_claims_line` at both readers, the
+grammar's parse claim and the support gate. Nine Lives printed three other
+lines so it reported supported anyway; a card whose whole text is one prevention
+would have reported unsupported while working perfectly, which is the same hole
+round 113 closed one table over.
+
+**The third gap, which neither entry named.** `leaves_battlefield` had **no fire
+site anywhere in the engine**. It parsed on both sides of the pipeline, Nine
+Lives compiled a real `player_loses_game` under it, and nothing announced it.
+Nothing reached the gap while the prevention was unimplemented — the enchantment
+never left the battlefield — so closing one acknowledged gap turned a card that
+did nothing into a card that was *stronger than printed*: nine free preventions
+with the downside missing. That is the direction the M21 promotion note calls
+the harder failure to see, arrived at by fixing something.
+
+It is announced from `remove_from_battlefield`, the one transition out, for the
+reason the exile-return beside it is: the other forty callers would forget it.
+
+`tests/engine/test_trigger_dispatchers.py` should have caught it and did not.
+The guard asks whether a condition's name appears anywhere in `engine/` outside
+the tables that *declare* it, and `leaves_battlefield`'s only other mention was
+`return ast.TriggerEvent("leaves_battlefield", "when")` in the grammar — a
+declaration written as code rather than as a table row, so the condition
+satisfied the guard with its own parser. Those calls are excluded now; with the
+tightening and without the fire site, the guard names Nine Lives.
+
+Whole-pool diff: **no card changed support status**, three changed what they do.
+Suite green, every `--check` gate green, pool 668/668, AI simulation
+byte-identical at 443 interactions, **no hook added and none removed** (13.9% of
+supported cards name-keyed, 14.8 entries per 100). Grammar parses 80.0% → 80.3%
+of lines and executes 46.4% → 46.7%. Fourteen new tests, eight of them watched
+to fail on the round-139 engine; the other six are the controls that must pass
+on both. The tightened dispatcher guard is the ninth, and it names Nine Lives.
+
+**`ACKNOWLEDGED` still holds two entries, and both are simplifications rather
+than gaps**: Shahrazad's subgame (the life clause *is* implemented) and Word of
+Command's control-of-player (modelled as forcing the chosen card to be played).
+Neither is a card doing less than it prints without saying so.

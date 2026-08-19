@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
+from ..named_counters import counters_on
 from ..resumption import run_resumable
 from ._common import (
     apply_damage_to_creature, apply_temp_pt_boost, permanent_matches_filter, resolve_amount,
@@ -56,6 +57,13 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     from_trigger = instruction.payload.get("amount_from_trigger")
     if from_trigger is not None:
         damage = max(0, int((context.trigger_context or {}).get(from_trigger, 0)))
+    elif (named_counter := instruction.payload.get("amount_from_named_counters")) is not None:
+        # "…deals damage equal to the number of doom counters on it…"
+        # (Armageddon Clock). Counted at resolution off the permanent, so a
+        # counter added or removed while the trigger was on the stack counts —
+        # and read through engine/named_counters.py rather than off a metadata
+        # key spelled out here, which is the one store CR 122.1 counters live in.
+        damage = counters_on(source_permanent, str(named_counter)) if source_permanent else 0
     elif instruction.payload.get("amount_from_source_power"):
         # "…deals damage equal to **its power**" (Leafkin Avenger). Read at
         # resolution off the permanent, so a pump between activation and
@@ -126,6 +134,32 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             caster, damage, source=source_permanent or card, then=_report, asks=True
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "each_player":
+        # "…deals N damage to each player" (Armageddon Clock): every living seat
+        # in turn order, the source's controller included. One player-damage
+        # event each, resumable so a shield or replacement that stops to ask
+        # carries the rest of the loop with it — the same shape each_opponent
+        # takes below, differing only in who is in the list.
+        #
+        # Nothing is logged for a seat dealt nothing: CR 120.8 says a source
+        # that would deal 0 damage does not deal damage at all, so "dealt 0
+        # damage to P2" is a line about an event that did not happen. An
+        # Armageddon Clock with no counters yet says it twice a turn.
+        def _hit_player(player_index: int) -> None:
+            face = game.players[player_index]
+            game._deal_damage_to_player(
+                face, damage, source=source_permanent or card, asks=True,
+                then=lambda dealt, face=face: dealt and game.log.append(
+                    f"{card.name} dealt {dealt} damage to {face.name}"
+                ),
+            )
+
+        run_resumable(
+            game,
+            [i for i, p in enumerate(game.players) if not p.lost],
+            _hit_player,
+        )
+        return True, "resolved"
     if instruction.payload.get("recipient") == "each_opponent":
         # "…deals N damage to each opponent": one player-damage event per
         # living opponent, in seat order, resumable so a shield or replacement
@@ -134,7 +168,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             face = game.players[opponent_index]
             game._deal_damage_to_player(
                 face, damage, source=source_permanent or card, asks=True,
-                then=lambda dealt, face=face: game.log.append(
+                then=lambda dealt, face=face: dealt and game.log.append(
                     f"{card.name} dealt {dealt} damage to {face.name}"
                 ),
             )

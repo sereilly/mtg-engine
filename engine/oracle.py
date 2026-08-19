@@ -497,6 +497,12 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # caught by test_cursed_land_deals_upkeep_damage_to_land_controller.
     ("upkeep_enchanted_controller", r"at the beginning of the upkeep of enchanted (?:creature|artifact|enchantment)'s controller"),
     ("upkeep_chosen",       r"at the beginning of the chosen player's upkeep"),
+    # "Your draw step" is a scope narrowing and so its own kind, exactly as
+    # upkeep_self is beside upkeep_each: it fires only on its controller's draw
+    # step where the bare form fires on everyone's. Must precede nothing here
+    # (neither is a prefix of the other), but it is listed first to match the
+    # upkeep pair's order.
+    ("draw_step_self",      r"at the beginning of your draw step"),
     ("draw_step_each",      r"at the beginning of each player's draw step"),
     # "At the beginning of your first main phase" (the M21 Shrine cycle) —
     # CR 505.1a's precombat main phase, which is the only one that is "first".
@@ -520,6 +526,10 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
 # "if" conditions that can appear mid-effect
 IF_CONDITION_PATTERNS: tuple[tuple[str, str], ...] = (
     ("artifact_untapped",       r"if this artifact is untapped"),
+    # The same clause the other way round (Mana Vault's draw-step damage). Both
+    # halves are listed because a table holding only one of a pair is how a gate
+    # nothing can fail gets written.
+    ("artifact_tapped",         r"if this artifact is tapped"),
     ("creature_died_this_turn", r"if a creature died this turn"),
     ("no_creatures_in_hand",    r"if you have no creatures in hand"),
     ("paid_mana",               r"if you paid? .+"),
@@ -1965,9 +1975,15 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # Asked as the registry rather than spelled out: an interceptor self-selects
     # on its own exact string, so a literal copied here could claim a line
     # nothing implements.
+    from .prevention import prevention_claims_line
     from .replacements import replacement_claims_line
 
     if replacement_claims_line(normalized):
+        return True
+    # CR 615's shields, asked the same way and for the same reason: a creature
+    # printing a static prevention line works through the interceptor and would
+    # otherwise report unsupported.
+    if prevention_claims_line(normalized):
         return True
     # A board-wide static contributed through the layer bridge (Titania's Song,
     # and the Pirate's "Creatures you control attack each combat if able"). The
@@ -2405,6 +2421,7 @@ def _derived_static_claims(
     from .extra_triggers import extra_triggers_for
     from .global_statics import global_static_for
     from .land_play_allowance import land_play_allowance_for
+    from .prevention import prevention_claims_line
     from .replacements import replacement_claims_line
     from .untap_restrictions import untap_restriction_for
 
@@ -2470,6 +2487,12 @@ def _derived_static_claims(
     # gap waited for a card whose whole text is one replacement.
     if any(replacement_claims_line(line) for line in oracle_text.splitlines()):
         claims.append("replacements")
+    # CR 615's half of the same story: a permanent's *static* prevention (Nine
+    # Lives) applies from its own text at damage time and produces no
+    # instruction either. Asked as the registry, for the reason the line above
+    # gives — a literal copied here could claim a wording nothing intercepts.
+    if any(prevention_claims_line(line) for line in oracle_text.splitlines()):
+        claims.append("prevention")
     # "You have protection from the chosen card name." (Runed Halo.) A player's
     # protection, derived from the controlling permanents' own text at each of
     # the three places CR 702.16i names — so like every table above it needs no

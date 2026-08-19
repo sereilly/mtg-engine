@@ -270,12 +270,6 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # own line.
     ("global_statics.py (lingering rider)",
      lambda s: s.startswith("if this enchantment leaves the battlefield, this effect continues")),
-    # Armageddon Clock's draw-step damage, resolved by
-    # phases/draw_step.py:_resolve_draw_step_counter_damage from the source's
-    # own text and its current counter count.
-    ("phases/draw_step.py (counter damage)",
-     lambda s: s.startswith("at the beginning of your draw step, this")
-     and "counters on it to each player" in s),
     ("draw_step_modifiers.py", lambda s: draw_step_bonus_for(s) is not None),
     ("cost_modifiers.py", lambda s: bool(cost_modifiers_for(s))),
     ("activation gate (stack/activation)", lambda s: any(g in s for g in _ACTIVATION_GATES)),
@@ -417,36 +411,6 @@ _LOYALTY_TIMING = re.compile(
 
 
 ACKNOWLEDGED: dict[str, dict[str, str]] = {
-    "Nine Lives": {
-        "if a source would deal damage to you, prevent that damage and put an "
-        "incarnation counter on this enchantment": (
-            "NOT IMPLEMENTED, and recorded rather than claimed since round 127. "
-            "The card's other two lines compile — the state trigger that exiles "
-            "it at eight counters, and the leaves-the-battlefield loss — so it "
-            "reports supported. This one is a CR 614 replacement that also "
-            "*places a counter*, and engine/replacements.py has no interceptor "
-            "that does both. Until it does, Nine Lives prevents nothing and "
-            "never reaches eight counters: it is an enchantment that sits there."
-        ),
-    },
-    "Mana Vault": {
-        "at the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you": (
-            "NOT IMPLEMENTED, and recorded here rather than claimed. The card "
-            "compiles supported on its other three lines (the untap "
-            "restriction, the pay-{4}-to-untap upkeep trigger and the mana "
-            "ability) and this one produces no instruction: no trigger table "
-            "has a draw-step condition for a single permanent, and nothing "
-            "scans for the phrase. Verified in a game — a tapped Mana Vault "
-            "costs its controller no life at their draw step. It read as "
-            "claimed until engine/parsing/ was deleted, because the coverage "
-            "script asked the legacy registry about the sentence in isolation "
-            "and a broad rule matched 'deals 1 damage to you' — an instruction "
-            "the card's own program never carried and nothing ever dispatched. "
-            "Implementing it needs a per-permanent draw-step trigger (the "
-            "shape phases/upkeep_effects.py has for the upkeep) and is a "
-            "behaviour change, so it belongs in a pass of its own"
-        ),
-    },
     "Shahrazad": {
         "players play a magic subgame, using their libraries as their decks": (
             "subgames are far out of scope. The life clause IS implemented: the caster "

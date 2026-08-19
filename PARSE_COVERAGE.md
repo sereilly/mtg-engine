@@ -7,17 +7,15 @@ the guard test `tests/engine/test_parse_coverage.py` fails on new
 unclaimed text. Do not edit by hand.
 
 - Supported cards analyzed: **668**
-- Fully claimed: **664**
-- With acknowledged simplifications: **4**
+- Fully claimed: **666**
+- With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **49**
+- With deletion-probe findings (ignored words): **50**
 
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
 | --- | --- | --- |
-| Mana Vault | `at the beginning of your draw step, if this artifact is tapped, it deals 1 damag` | NOT IMPLEMENTED, and recorded here rather than claimed. The card compiles supported on its other three lines (the untap restriction, the pay-{4}-to-untap upkeep trigger and the mana ability) and this one produces no instruction: no trigger table has a draw-step condition for a single permanent, and nothing scans for the phrase. Verified in a game — a tapped Mana Vault costs its controller no life at their draw step. It read as claimed until engine/parsing/ was deleted, because the coverage script asked the legacy registry about the sentence in isolation and a broad rule matched 'deals 1 damage to you' — an instruction the card's own program never carried and nothing ever dispatched. Implementing it needs a per-permanent draw-step trigger (the shape phases/upkeep_effects.py has for the upkeep) and is a behaviour change, so it belongs in a pass of its own |
-| Nine Lives | `if a source would deal damage to you, prevent that damage and put an incarnation` | NOT IMPLEMENTED, and recorded rather than claimed since round 127. The card's other two lines compile — the state trigger that exiles it at eight counters, and the leaves-the-battlefield loss — so it reports supported. This one is a CR 614 replacement that also *places a counter*, and engine/replacements.py has no interceptor that does both. Until it does, Nine Lives prevents nothing and never reaches eight counters: it is an enchantment that sits there. |
 | Shahrazad | `players play a magic subgame, using their libraries as their decks` | subgames are far out of scope. The life clause IS implemented: the caster is treated as the subgame winner and every other player loses half their life, rounded up (handlers/life_and_game.opponents_lose_half_life) |
 | Word of Command | `you control that player until word of command finishes resolving` | simplified: control-of-player is modeled as forcing the chosen card to be played (pending_word_of_command) |
 | Word of Command | `while doing so, the player can activate mana abilities only if they're from land` | simplified: the forced play is cast without the mana-ability micromanagement |
@@ -56,6 +54,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Jungle Hollow | `add {b} or {g}` | or |
 | Liliana, Death Mage | `return up to one target creature card from your graveyard to your hand` | target |
 | Liliana, Death Mage | `target opponent loses 2 life for each creature card in their graveyard` | card |
+| Mana Vault | `if this artifact is tapped, it deals 1 damage to you` | artifact |
 | Miscast | `counter target instant or sorcery spell unless its controller pays {3}` | spell |
 | Nevinyrral's Disk | `destroy all artifacts, creatures, and enchantments` | all |
 | Pestilent Haze | `all creatures get -2/-2 until end of turn` | all |
@@ -88,12 +87,12 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 538 |
-| trigger table | 214 |
+| parse rule | 540 |
+| trigger table | 216 |
 | activation cost | 190 |
 | card_hooks bespoke (name-keyed) | 133 |
 | keyword table | 131 |
-| static-line table | 84 |
+| static-line table | 85 |
 | aura enchant noun (oracle_instructions attach) | 54 |
 | aura static (oracle_instructions/permanent_state) | 35 |
 | loyalty cost | 33 |
@@ -110,7 +109,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | ante boilerplate (deck construction, not gameplay) | 4 |
 | auras.py (attachment line) | 4 |
 | oracle.py (delayed trigger) | 3 |
-| phases/draw_step.py (counter damage) | 1 |
 | x spend color (stack/activation) | 1 |
 | target_restrictions.py | 1 |
 | land_play_allowance.py | 1 |

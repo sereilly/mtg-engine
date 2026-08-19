@@ -59,11 +59,13 @@ over rather than running them.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from .effect_ordering import Candidate
 from .models import PlayerState
+from .named_counters import add_counters
 from .shields import (
     PREVENT_ALL_BUT,
     PREVENT_AND_GAIN_LIFE,
@@ -92,6 +94,15 @@ SOURCE_SHIELD = 300  # Reverse Damage against a chosen source
 GENERIC_SHIELD = 400  # Reverse Damage with no chosen source
 COLOR_SHIELD = 500  # Circle of Protection
 POOL = 600  # "Prevent the next N damage" (CR 615.7)
+# A permanent's own static prevention, which is never used up by the event —
+# only by what it *charges*. Nine Lives prevents the whole instance and puts an
+# incarnation counter on itself, and nine of those exile it into "you lose the
+# game", so applying it is the most expensive way to take zero damage on this
+# list. Last, therefore: every consumable above is already paid for, and a
+# shield that covers the event outright leaves this one unasked, so the counter
+# is only ever spent on damage nothing else stopped. CR 616.1e permits any
+# order; this is the default a non-interactive seat takes.
+STATIC_WHOLE_EVENT = 650
 
 
 @dataclass
@@ -449,3 +460,96 @@ def _prevention_pool(game, event: dict) -> PreventionOutcome | None:
     prevented reduces the shield by 1; the remainder is dealt normally
     (CR 615.7). The one shield that protects creatures as well as players."""
     return _spend(game, event, PREVENT_NEXT_N, rider=_log_pool_prevention)
+
+
+# ---------------------------------------------------------------------------
+# A permanent's own static prevention, and the printed lines it implements
+# ---------------------------------------------------------------------------
+#
+# Everything above is a shield a recipient was *given*: something resolved,
+# armed it, and it is spent. This is the other shape — a static ability that
+# applies while its source is on the battlefield, with no charges and no
+# lifetime, so there is no Shield to hold and nothing for the sweeps to clear.
+# It is read off the source's text at damage time for the same reason
+# engine/replacements.py's interceptors are: the card says it, so the card is
+# where the answer lives.
+
+#: "If a source would deal damage to you, prevent that damage and put an
+#: incarnation counter on this enchantment." (Nine Lives.) The counter's word
+#: and the noun the card calls itself are **payload**, not part of the pattern's
+#: meaning — a second card printing this with a different counter needs no code
+#: here, which is the same reason engine/combat_restrictions.py holds its land
+#: type as data.
+_PREVENT_AND_COUNT_RE = re.compile(
+    r"^if a source would deal damage to you, prevent that damage and put "
+    r"an? (?P<counter>[a-z]+) counter on this "
+    r"(?:artifact|creature|enchantment|land|permanent)$"
+)
+
+
+def prevent_and_count_kind(line: str) -> str | None:
+    """The counter *line* places when it prevents, or None if it is not that
+    line. One matcher, asked by the interceptor below and by both claim
+    readers, so what is implemented and what is claimed cannot drift."""
+    match = _PREVENT_AND_COUNT_RE.match(" ".join(line.strip().lower().rstrip(".").split()))
+    return match.group("counter") if match else None
+
+
+def _static_prevention_source(game, event: dict):
+    """The recipient's own permanent whose static prevention covers this event,
+    with the counter it charges — or None.
+
+    Pure, like every other applicability predicate here: it looks the permanent
+    up and reads its text, and the counter is only placed by the ``apply`` half.
+    """
+    recipient = event["recipient"]
+    if not isinstance(recipient, PlayerState):
+        return None
+    for permanent in game.controlled_by(recipient):
+        for line in permanent.effective_card.oracle_text.splitlines():
+            counter = prevent_and_count_kind(line)
+            if counter is not None:
+                return permanent, counter
+    return None
+
+
+def _applies_static_whole_event(game, event: dict) -> bool:
+    return _static_prevention_source(game, event) is not None
+
+
+@prevention_effect(STATIC_WHOLE_EVENT, applies=_applies_static_whole_event)
+def _prevent_and_place_counter(game, event: dict) -> PreventionOutcome | None:
+    """Nine Lives: "If a source would deal damage to you, prevent that damage
+    and put an incarnation counter on this enchantment."
+
+    The whole instance is prevented however large it is, and the counter is
+    placed once per prevented event rather than once per point — CR 615.5's
+    "additional effect", which happens *after* the prevention and refers to the
+    event, not to the damage's size. Nine damage and one damage each cost the
+    same counter, which is what makes the card a nine-*event* shield.
+    """
+    found = _static_prevention_source(game, event)
+    if found is None:
+        return None
+    permanent, counter = found
+    total = add_counters(permanent, counter, 1)
+    game.log.append(
+        f"{permanent.card.name} prevented {event['amount']} damage to "
+        f"{event['recipient'].name} ({total} {counter} counter(s))"
+    )
+    return PreventionOutcome(prevented=event["amount"])
+
+
+def prevention_claims_line(line: str) -> bool:
+    """Whether one printed line is, in full, a static prevention effect
+    implemented above.
+
+    The twin of ``replacements.replacement_claims_line`` and read by the same
+    two callers — the grammar's parse claim (engine/grammar/registries.py) and
+    the support gate (engine/oracle.py) — because a permanent whose ability is a
+    prevention produces no instruction either. Nine Lives happened to print
+    three other lines, so it reported supported with this one silently doing
+    nothing; a card printing only this one would have reported unsupported while
+    working perfectly, which is the other half of the same hole.
+    """
+    return prevent_and_count_kind(line) is not None

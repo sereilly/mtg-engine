@@ -34,6 +34,7 @@ from ..draw_step_modifiers import draw_step_bonus_for
 from ..enter_effects import enter_effect_line
 from ..extra_triggers import extra_trigger_line
 from ..land_play_allowance import land_play_line
+from ..prevention import prevention_claims_line
 from ..replacements import replacement_claims_line
 from ..targeting import enchant_line_subject
 from ..untap_restrictions import self_untap_line, untap_restriction_for
@@ -152,6 +153,13 @@ def registry_for_line(line: str) -> str | None:
     # readers ask the implementer.
     if replacement_claims_line(line):
         return "replacements"
+
+    # engine/prevention.py — CR 615 shields. The same arrangement one layer
+    # over: a permanent's *static* prevention applies from its own text at
+    # damage time, so there is nothing to lower, and the matcher the
+    # interceptor self-selects on is the matcher asked here.
+    if prevention_claims_line(line):
+        return "prevention"
 
     # engine/enter_effects.py — CR 614.1c entry state ("This artifact enters
     # tapped.", "As this artifact enters, choose an opponent.", the

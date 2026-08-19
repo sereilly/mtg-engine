@@ -987,6 +987,32 @@ class GameHelpersMixin:
             gone = [i for i, perm in enumerate(player.battlefield) if id(perm) in departing]
             if gone:
                 vacated[seat] = gone
+        # "When this enchantment leaves the battlefield, you lose the game."
+        # (Nine Lives.) CR 603.6c: a leaves-the-battlefield ability triggers
+        # when a permanent moves from the battlefield to another zone, and
+        # CR 603.10 makes what it sees the last-known information — so the seat
+        # and the ability are read here, while the permanent is still on a
+        # battlefield, and announced once the rebuild below is done.
+        #
+        # Announced from this one transition rather than from the zone-change
+        # callers, for the reason the exile-return at the bottom of this
+        # function gives: the other forty would forget it. It had no fire site
+        # at all until round 140 — the condition parsed on both sides of the
+        # pipeline and Nine Lives compiled a real `player_loses_game` under it —
+        # and nothing reached the gap while the card's prevention was
+        # unimplemented, because the enchantment never left the battlefield.
+        from ..trigger_utils import make_trigger_event, matching_triggers
+
+        leaving: list[dict] = []
+        for perm in targets:
+            seat = self.controller_index_of(perm)
+            if seat is None:
+                continue
+            for trig in matching_triggers(
+                perm.effective_card, condition_kinds={"leaves_battlefield"}
+            ):
+                leaving.append(make_trigger_event(seat, perm, trig))
+
         removed: list[Permanent] = []
         for player in self.players:
             if not any(id(perm) in departing for perm in player.battlefield):
@@ -997,6 +1023,13 @@ class GameHelpersMixin:
             player.battlefield = survivors
         if removed:
             self._renumber_combat_after_removal(vacated)
+        # Only for the permanents that were really there: `targets` is what the
+        # caller asked about and `removed` is what left, and a trigger announced
+        # for a permanent already off the battlefield would fire on nothing.
+        departed = {id(perm) for perm in removed}
+        self._enqueue_triggered_batch(
+            [event for event in leaving if id(event["source_permanent"]) in departed]
+        )
         # "…until this creature leaves the battlefield" (Kitesail Freebooter).
         # Here because this is the one transition out: a return wired into any
         # single caller would be a return the other forty forgot, which is the

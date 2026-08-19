@@ -847,3 +847,52 @@ def test_607_linked_exile_and_return_reference_the_same_card():
     # and recognized as distinct abilities on the same object.
     assert any(a.instruction is not None for a in program.activated_abilities)
     assert any(t.condition.kind == "leaves_battlefield" for t in program.triggered_abilities)
+
+
+@pytest.mark.cr("603.6c", "603.10")
+def test_603_6c_a_leaves_the_battlefield_ability_fires_from_the_removal_seam():
+    """A leaves-the-battlefield ability triggers when a permanent moves from the
+    battlefield to another zone — by *any* route.
+
+    The condition parsed on both sides of the pipeline and had no fire site at
+    all: a card compiled a real instruction under it, entered play, left, and
+    nothing happened. It is announced from ``remove_from_battlefield``, the one
+    transition out, so no destination can forget it — and the trigger is read
+    while the permanent is still on a battlefield, which is what CR 603.10's
+    last-known information amounts to here (its controller's seat).
+    """
+    ward = _mk_card(
+        "Doomed Ward",
+        "Enchantment",
+        "When this enchantment leaves the battlefield, you lose the game.",
+    )
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ward)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.active_player_index = 0
+    game._sync_control()
+
+    game.remove_from_battlefield(p1.battlefield[0])
+    game._settle()
+
+    assert p1.lost
+
+
+@pytest.mark.cr("603.6c")
+def test_603_6c_a_permanent_that_was_not_there_announces_nothing():
+    """"Moves from the battlefield" is the event. Asking the seam to remove a
+    permanent that is not on a battlefield removes nothing, so there is no
+    zone change and nothing triggers — the check that keeps the fire site
+    above from firing on last-known information alone."""
+    ward = _mk_card(
+        "Doomed Ward",
+        "Enchantment",
+        "When this enchantment leaves the battlefield, you lose the game.",
+    )
+    p1 = PlayerState(name="P1", battlefield=[])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.active_player_index = 0
+
+    assert game.remove_from_battlefield(Permanent(card=ward)) is None
+    game._settle()
+
+    assert not p1.lost

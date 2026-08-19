@@ -67,6 +67,14 @@ def _docstring_nodes(tree: ast.AST) -> set[int]:
     return found
 
 
+def _trigger_event_call(node: ast.Call) -> bool:
+    """Whether *node* constructs an ``ast.TriggerEvent`` — spelled either way,
+    since the grammar imports the module and the node class both."""
+    func = node.func
+    name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+    return name == "TriggerEvent"
+
+
 def _mentioned_kinds() -> set[str]:
     mentioned: set[str] = set()
     for path in sorted(ENGINE.rglob("*.py")):
@@ -81,6 +89,17 @@ def _mentioned_kinds() -> set[str]:
                 getattr(node.target, "id", None) in DECLARATION_TABLES
             ):
                 skip |= {id(c) for c in ast.walk(node)}
+            elif isinstance(node, ast.Call) and _trigger_event_call(node) and node.args:
+                # A declaration written as code rather than as a table row.
+                # ``return ast.TriggerEvent("leaves_battlefield", "when")`` in
+                # engine/grammar/phrases.py is the grammar *naming* the kind,
+                # exactly as _AT_EVENTS names one — so counting it as a mention
+                # let a condition satisfy this guard with its own parser. It
+                # did: Nine Lives compiled a real ``player_loses_game`` under
+                # ``leaves_battlefield`` and nothing anywhere announced it
+                # (round 140). Only the first argument is skipped, which is the
+                # kind; the trigger *word* beside it is not a condition name.
+                skip |= {id(c) for c in ast.walk(node.args[0])}
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Constant)

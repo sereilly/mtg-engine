@@ -16,6 +16,7 @@ from engine import Game
 from engine.auras import detach_aura
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
+from engine.shields import add_shield, make_numeric_pool
 from tests.helpers import _nosick
 
 
@@ -1613,3 +1614,86 @@ def test_teferis_tutelage_mills_the_targeted_opponent(set_pool):
 
     assert [c.name for c in p2.graveyard] == ["Shock", "Island"]
     assert p1.graveyard == [], "the caster is not a legal target for their own opponent-mill"
+
+
+# --- Round 140: Nine Lives, the last acknowledged gap ------------------------
+
+
+def _nine_lives(set_pool):
+    pool = set_pool("M21")
+    enchantment = Permanent(card=pool["Nine Lives"])
+    p1 = PlayerState(name="P1", battlefield=[enchantment], library=[])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    return game, p1, enchantment
+
+
+def test_nine_lives_prevents_the_whole_event_and_charges_one_counter(set_pool):
+    """"If a source would deal damage to you, prevent that damage and put an
+    incarnation counter on this enchantment."
+
+    One counter per *event*, however big it is — CR 615.5's additional effect
+    refers to the prevention, not to the number of points — which is what makes
+    the card a nine-event shield rather than a nine-damage one."""
+    game, p1, enchantment = _nine_lives(set_pool)
+
+    game._deal_damage_to_player(p1, 7, source=None)
+
+    assert p1.life == 20
+    assert enchantment.metadata["incarnation_counters"] == 1
+
+
+def test_nine_lives_does_nothing_for_a_player_who_does_not_control_it(set_pool):
+    """"Damage to **you**" is its controller's seat, so an opponent takes the
+    damage and the enchantment takes no counter."""
+    game, _p1, enchantment = _nine_lives(set_pool)
+    p2 = game.players[1]
+
+    game._deal_damage_to_player(p2, 3, source=None)
+
+    assert p2.life == 17
+    assert "incarnation_counters" not in enchantment.metadata
+
+
+def test_nine_lives_exiles_itself_at_nine_counters_and_its_controller_loses(set_pool):
+    """The three lines as one card: the prevention charges the counters, the
+    CR 603.8 state trigger exiles it at nine, and the leave-the-battlefield
+    trigger collects. Until this round the first line did nothing, so the other
+    two were unreachable — and the third had no fire site at all."""
+    game, p1, enchantment = _nine_lives(set_pool)
+
+    for _ in range(9):
+        game._deal_damage_to_player(p1, 1, source=None)
+        game._settle()
+
+    assert enchantment.metadata["incarnation_counters"] == 9
+    assert not game.is_on_battlefield(enchantment)
+    assert p1.life == 20, "nine events prevented in full"
+    assert p1.lost
+
+
+def test_nine_lives_loses_the_game_when_it_leaves_by_any_route(set_pool):
+    """CR 603.6c: the trigger is about *leaving*, not about reaching nine — a
+    Disenchant is the same departure. Announced from the one removal
+    transition, so no route can forget it."""
+    game, p1, enchantment = _nine_lives(set_pool)
+
+    game.remove_from_battlefield(enchantment)
+    game._settle()
+
+    assert p1.lost
+
+
+def test_nine_lives_spends_an_armed_shield_before_a_counter(set_pool):
+    """CR 616.1e's default choice. A prevention shield the player already paid
+    for absorbs the event first; the counter is only spent on damage nothing
+    else stopped, because reaching nine of them loses the game."""
+    game, p1, enchantment = _nine_lives(set_pool)
+    add_shield(p1, make_numeric_pool(5, source_name="Healing Salve"))
+
+    game._deal_damage_to_player(p1, 3, source=None)
+
+    assert p1.life == 20
+    assert "incarnation_counters" not in enchantment.metadata

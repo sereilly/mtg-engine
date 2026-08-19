@@ -70,6 +70,37 @@ def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> a
     raise stream.error("expected a quantity")
 
 
+def _accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | None":
+    """``<word> counters on <the source>`` — the count of a named counter the
+    ability's own source is carrying, or None when the words are something else.
+
+    Sits in front of the noun parser in both readers of "the number of …",
+    because a counter kind is a bare word and ``parse_object_filter`` would
+    refuse it as an unknown noun — so without this the whole line falls, which
+    is what left Armageddon Clock's draw-step damage to a regex in a phase
+    mixin.
+
+    The kind is whatever word the card invented (CR 122.1), matching
+    ``engine/named_counters.py``'s open key space. "+1/+1" cannot arrive here:
+    the lexer reads it as a P/T token rather than a word, so this production
+    admits exactly the counters that have no rules meaning of their own.
+    """
+    mark = stream.mark()
+    kind = stream.peek_word()
+    if kind is not None:
+        stream.advance()
+        if stream.accept_word("counter", "counters") and stream.accept_word("on"):
+            # Late import for the reason the noun imports below give: nouns
+            # depends on this module for comparisons, so the cycle is broken at
+            # call time.
+            from .nouns import accept_source_reference
+
+            if accept_source_reference(stream):
+                return ast.CountersOnSource(kind)
+    stream.reset(mark)
+    return None
+
+
 def _parse_counted_amount(
     stream: TokenStream, *, back_reference: str | None = None
 ) -> ast.Amount:
@@ -83,6 +114,9 @@ def _parse_counted_amount(
     """
     mark = stream.mark()
     if stream.accept_word("the") and stream.accept_phrase("number", "of"):
+        counters = _accept_counters_on_source(stream)
+        if counters is not None:
+            return counters
         # Late import for the reason `parse_equal_to` gives: nouns depends on
         # this module for comparisons, so the cycle is broken at call time.
         from .nouns import parse_object_filter
@@ -113,6 +147,9 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     stream.accept_word("the")
 
     if stream.accept_phrase("number", "of"):
+        counters = _accept_counters_on_source(stream)
+        if counters is not None:
+            return counters
         # Late import: nouns depends on this module for comparisons, so the
         # cycle is broken at call time rather than import time.
         from .nouns import parse_object_filter

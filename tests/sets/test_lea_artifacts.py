@@ -1138,3 +1138,60 @@ def test_black_lotus_still_adds_three_of_one_colour(cards):
     assert result.supported, result.details
     assert p1.mana_pool["R"] == 3
     assert not game.is_on_battlefield(lotus), "sacrificed to pay its own cost"
+
+
+# --- Round 140: Mana Vault's draw-step damage -------------------------------
+
+
+def _vault_game(cards):
+    vault = Permanent(card=cards["Mana Vault"])
+    p1 = PlayerState(name="P1", battlefield=[vault], library=[])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    # CR 103.8a's first-turn skip is a skip of the *draw*, not of the step, but
+    # the step still has to be reached on a turn the engine does not shortcut.
+    game.turn = 3
+    game._sync_control()
+    return game, p1, vault
+
+
+def test_mana_vault_damages_its_controller_at_the_draw_step_while_tapped(cards):
+    """"At the beginning of your draw step, if this artifact is tapped, it
+    deals 1 damage to you." Acknowledged as unimplemented since the parsing
+    registry was deleted: the draw step had no trigger dispatch and no table
+    held a draw-step condition for a single permanent, so a tapped Mana Vault
+    cost its controller nothing."""
+    game, p1, vault = _vault_game(cards)
+    vault.tapped = True
+
+    game.resolve_draw_step(0)
+
+    assert p1.life == 19
+
+
+def test_mana_vault_deals_no_damage_at_the_draw_step_while_untapped(cards):
+    """The other half of the same clause. CR 603.4's intervening-if is checked
+    as the trigger would fire, so an untapped Vault never puts one on the
+    stack — a gate that cannot fail is the same silence as no gate at all."""
+    game, p1, vault = _vault_game(cards)
+    vault.tapped = False
+
+    game.resolve_draw_step(0)
+
+    assert p1.life == 20
+
+
+def test_mana_vault_untapped_by_its_upkeep_trigger_skips_the_draw_step_damage(cards):
+    """The two triggers as one turn: paying {4} at upkeep untaps the Vault, and
+    the draw step's gate then reads the state it was left in rather than the
+    state it was in when the turn began."""
+    game, p1, vault = _vault_game(cards)
+    vault.tapped = True
+    p1.mana_pool["C"] = 4  # the upkeep pay is charged from the pool, not waived
+
+    game.resolve_upkeep(0)
+    assert not vault.tapped, "the {4} was paid, so the Vault untapped"
+
+    game.resolve_draw_step(0)
+
+    assert p1.life == 20
