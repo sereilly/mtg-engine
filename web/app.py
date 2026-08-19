@@ -67,7 +67,7 @@ from .catalog import (
     _resolve_deck_entries,
     _search_cards,
 )
-from .verification_report import _verification_listing, _write_verification_markdown
+from .verification_report import _verification_listing, write_verification_markdown
 from .pregame import _pregame_auto_advance
 from .turn_steps import _end_turn
 from .game_flow import _advance_phase, _ai_step
@@ -259,7 +259,7 @@ def record_verification(req: VerificationRequest):
         entry = verification_store.record(req.card_name, req.status, req.reason or "")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    _write_verification_markdown()
+    write_verification_markdown()
     return entry
 
 

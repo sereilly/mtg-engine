@@ -56,8 +56,15 @@ def _verification_listing() -> tuple[list[dict], dict[str, int]]:
     return cards, counts
 
 
-def _write_verification_markdown() -> None:
-    """Regenerate the human-readable master tracking document."""
+def write_verification_markdown() -> None:
+    """Regenerate the human-readable master tracking document.
+
+    Called by the Debug Menu's save route on every recorded result, and by
+    CI's tracker-freshness step, which regenerates the file headlessly and
+    fails on a diff — the markdown is a projection of
+    ``card_verification.json`` plus the behaviour-class derivation, and a
+    stale projection reads as an answer.
+    """
     cards, counts = _verification_listing()
     lines = [
         "# Card Verification Tracker",

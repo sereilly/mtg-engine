@@ -113,8 +113,6 @@ needs two rounds is worth splitting only if neither half ships a card alone
   buys one card at the cost of a ceiling raise, so the linkage wants deriving
   first. The shape is `cast_permissions.py`'s — a collection on `Game`, granted
   by an effect, swept when its source leaves.
-- **The Shrine cycle and the where-clause cards**: see round 57's *Next* below,
-  which is current.
 - **An AI seat never casts its commander** (the Commander variant's known
   deferral). `ai_policy.py` and `ai_valuation.py` read the hand and the
   battlefield; nothing reads `command_zone`, so an AI commander sits there for
@@ -149,11 +147,16 @@ needs two rounds is worth splitting only if neither half ships a card alone
   damage path. So the automatic half is the Nine Lives class hiding behind a
   verified-sounding acknowledgement. Round 26's counter record is the
   prerequisite for fixing it honestly.
-- **The verification tracker holds 19 untested cards** (the ones Revised added).
-  Rounds 46–47 checked all nineteen behaviour by behaviour and fixed three real
-  bugs in them, but a headless sweep is not a manual in-game pass and
+- **The verification tracker holds 299 unrecorded cards** — 280 of M21,
+  promoted before its in-game pass (SET_PLAYBOOK Phase 5 owns that delta and
+  promotion deliberately did not gate on it), plus the 19 Revised added; ten of
+  the 299 read `equivalent` off a passing peer. Rounds 46–47 checked the
+  Revised nineteen behaviour by behaviour and fixed three real bugs in them,
+  but a headless sweep is not a manual in-game pass and
   `card_verification.json` records what a human checked. A generated artifact
-  that is stale does not read as stale; it reads as an answer.
+  that is stale does not read as stale; it reads as an answer. (This bullet
+  itself said "19 untested" for a week after M21 shipped — the same failure one
+  layer up.)
 
 ### Deliberate refusals, with their reasons
 

@@ -134,6 +134,13 @@ jobs:
           # guard still green.
           python scripts/parse_coverage.py > /dev/null
           python scripts/hook_reliance.py > /dev/null
+          # SET_PROGRESS.md renders from the cached set_progress.json (no
+          # network), and CARD_VERIFICATION.md is a projection of
+          # card_verification.json — both joined this step after the M21
+          # promotion showed their staleness cost: the roadmap read "19
+          # untested cards" for a week while the true number was 299.
+          python scripts/set_progress.py > /dev/null
+          python -c "from web.verification_report import write_verification_markdown as w; w()"
           if ! git diff --quiet; then
             echo "::error::generated trackers are stale — run the scripts and commit the result"
             git --no-pager diff --stat

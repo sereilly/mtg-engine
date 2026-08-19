@@ -58,16 +58,12 @@ A drainable list of things the playbook knows are not yet true, each naming
 the phase that clears it. A retrospective that drains an item deletes it; a
 set that hits a new one adds it.
 
-1. **`scripts/set_progress.py` and card verification sit outside CI's
-   tracker-freshness step.** Until that changes, Phase 4 carries
-   `set_progress.py` as an explicit checklist line and Phase 5 owns the
-   verification tracker. (Candidate fix: add `set_progress.py` to the
-   freshness step in `.github/workflows/ci.yml`; decide after the next
-   promotion shows what its diff churn looks like.)
-2. **`SET_PROGRESS.md` has no `measured` wording.** An ingested-but-unshipped
-   set reads "Partial (N/M supported)" — honest about the numbers, silent
-   about the manifest role. Harmless until a reader takes "Partial" as a
-   promise; fix in `scripts/set_progress.py` if that happens.
+The list is empty. The two items it held drained after the M21 promotion:
+`scripts/set_progress.py` and `CARD_VERIFICATION.md` regeneration joined CI's
+tracker-freshness step (the deferred decision came due — the roadmap read "19
+untested cards" for a week while the true number was 299), and
+`SET_PROGRESS.md` now reports a `measured`-role set as "Measured (N/M
+supported, not shipped)" rather than a bare "Partial".
 
 ## Phase 0 — Pre-flight
 
@@ -223,8 +219,8 @@ The checklist, each line naming its guard:
 - `scripts/behaviour_classes.py --accept` — the set adds classes; the
   largest class must stay under a tenth of the catalog, and the diff is the
   review (the script exits before diffing once told to accept).
-- `python scripts/set_progress.py` — manual; this line is currently the only
-  thing that keeps it true (Known gaps, item 1).
+- `python scripts/set_progress.py` — CI's freshness step now regenerates it
+  and fails on a diff, so a stale run here is caught rather than shipped.
 - CLAUDE.md's pool description names the new set and counts.
 
 ## Phase 5 — Post-promotion verification
