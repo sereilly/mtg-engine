@@ -120,6 +120,11 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     ("creature_dies", "may"): "spell_pattern",
     ("enchantment_cast", "may"): "triggered_draw",
     ("spell_cast", "may"): "spell_pattern",
+    # Living Artifact, once its fused reading went away. The condition is what
+    # says this is an upkeep effect; the wrapper still says nothing, and the
+    # optional clause behind it ("remove a counter … gain 1 life") is neither a
+    # draw nor damage.
+    ("upkeep_self", "may"): "upkeep_effect",
 }
 
 

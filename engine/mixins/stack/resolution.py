@@ -13,6 +13,7 @@ from contextlib import contextmanager
 
 from ...auras import aura_enchant_clause
 from ...classifier import CardClassification, classify_card
+from ...extra_triggers import additional_triggers
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
@@ -106,23 +107,32 @@ class StackResolutionMixin:
         stack_card = card if card is not None else (source_permanent.card if source_permanent is not None else None)
         if stack_card is None:
             return
-        self._stack_push(
-            StackItem(
-                card=stack_card,
-                caster_index=controller_index,
-                target_player_index=target_player_index,
-                target_permanent_index=target_permanent_index,
-                target_permanent_id=target_permanent_id,
-                x_value=None,
-                ability_instruction=instruction,
-                ability_effect_kind=effect_kind,
-                source_permanent=source_permanent,
-                ability_text=ability_text,
-                trigger_context=trigger_context,
-                hook_key=hook_key,
-                hook_event=hook_event,
+        # CR 603.2d: "rather than simply determining that such an ability has
+        # triggered, determine how many times it should trigger, then that
+        # ability triggers that many times" (Sanctum of All). Counted here
+        # because this is the moment an ability triggers — one site, so a fire
+        # site added later is covered by construction, and counting once rather
+        # than recursing is what the rule's "doesn't invoke itself repeatedly"
+        # asks for. Each instance is its own stack object and so chooses its own
+        # targets; it is not a copy (CR 707), which would inherit them.
+        for _ in range(1 + additional_triggers(self, source_permanent, controller_index)):
+            self._stack_push(
+                StackItem(
+                    card=stack_card,
+                    caster_index=controller_index,
+                    target_player_index=target_player_index,
+                    target_permanent_index=target_permanent_index,
+                    target_permanent_id=target_permanent_id,
+                    x_value=None,
+                    ability_instruction=instruction,
+                    ability_effect_kind=effect_kind,
+                    source_permanent=source_permanent,
+                    ability_text=ability_text,
+                    trigger_context=trigger_context,
+                    hook_key=hook_key,
+                    hook_event=hook_event,
+                )
             )
-        )
     def _enqueue_triggered_batch(self, events: list[dict]) -> None:
         """Put a batch of triggered abilities that fired from one event onto the stack
         in APNAP order (CR 603.3b): the active player's triggers are enqueued first

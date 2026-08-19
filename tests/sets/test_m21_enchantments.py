@@ -1386,3 +1386,151 @@ def test_two_halos_protect_from_two_names(set_pool):
 
     game.remove_from_battlefield(second)
     assert names_protecting(game, 0) == frozenset({"Shock"})
+
+
+# --- Round 134: a Shrine that finds Shrines and doubles their triggers ------
+
+
+SHRINES = (
+    "Sanctum of Tranquil Light",
+    "Sanctum of Calm Waters",
+    "Sanctum of Stone Fangs",
+    "Sanctum of Shattered Heights",
+    "Sanctum of Fruitful Harvest",
+)
+
+
+def test_sanctum_of_all_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Sanctum of All"])
+    assert program.supported, program.reason
+
+
+def _sanctum_board(set_pool, *, extra_shrines: int = 0):
+    pool = set_pool("M21")
+    sanctum = Permanent(card=pool["Sanctum of All"])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[sanctum] + [
+            Permanent(card=pool[name]) for name in SHRINES[:extra_shrines]
+        ],
+        library=[pool["Sanctum of Calm Waters"], pool["Shock"]],
+        graveyard=[pool["Sanctum of Stone Fangs"], pool["Alpine Watchdog"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    return game, p1, sanctum
+
+
+def test_sanctum_of_all_upkeep_search_offers_shrines_in_both_zones(set_pool):
+    """"search your library **and/or** graveyard for a **Shrine** card". Both
+    halves are checked against a card that fails only that half: Shock is in the
+    library and is not a Shrine, Alpine Watchdog is in the graveyard and is not
+    one either."""
+    from engine.search_filters import search_matches
+
+    game, p1, _ = _sanctum_board(set_pool)
+    game.resolve_upkeep(0)
+    game._settle()
+    game.resolve_pending_choice("optional_pay", 0, accept=True)
+    game._settle()
+
+    choice = game.pending_choices[0]
+    assert choice.kind == "search_library"
+    assert choice.data["zones"] == ("library", "graveyard")
+    assert [search_matches(c, choice.data) for c in p1.library] == [True, False]
+    assert [search_matches(c, choice.data) for c in p1.graveyard] == [True, False]
+
+
+def test_sanctum_of_all_puts_the_found_shrine_onto_the_battlefield(set_pool):
+    game, p1, _ = _sanctum_board(set_pool)
+    game.resolve_upkeep(0)
+    game._settle()
+    game.resolve_pending_choice("optional_pay", 0, accept=True)
+    game._settle()
+    game.confirm_search_library(0, 0, zone="graveyard")
+    game._settle()
+
+    assert [p.card.name for p in list(game.controlled_by(0))] == [
+        "Sanctum of All", "Sanctum of Stone Fangs",
+    ]
+    assert [c.name for c in p1.graveyard] == ["Alpine Watchdog"]
+
+
+@pytest.mark.parametrize("extra_shrines, expected", [(4, 0), (5, 1)])
+def test_sanctum_of_all_doubles_another_shrines_trigger_at_six(
+    set_pool, extra_shrines, expected
+):
+    """CR 603.2d: "that ability triggers an additional time" — one *more* stack
+    object, each choosing its own targets, not a copy of the first.
+
+    The threshold is exercised from both sides on the same board shape: five
+    other Shrines is six in total and doubles, four is five and does not.
+    """
+    from engine.oracle_types import OracleInstruction
+
+    game, p1, _ = _sanctum_board(set_pool, extra_shrines=extra_shrines)
+    other = list(game.controlled_by(0))[1]
+    assert other.has_type("shrine")
+
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=other,
+        instruction=OracleInstruction("gain_life", "", {"amount": 1}),
+        effect_kind="triggered_life",
+    )
+
+    assert len(game.stack) == 1 + expected
+
+
+def test_sanctum_of_all_does_not_double_its_own_trigger(set_pool):
+    """"a triggered ability of **another** Shrine you control" — the Sanctum is
+    not another Shrine, so its own upkeep trigger fires once however many
+    Shrines are out."""
+    from engine.oracle_types import OracleInstruction
+
+    game, p1, sanctum = _sanctum_board(set_pool, extra_shrines=5)
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=sanctum,
+        instruction=OracleInstruction("gain_life", "", {"amount": 1}),
+        effect_kind="triggered_life",
+    )
+
+    assert len(game.stack) == 1
+    # The same board doubles a different Shrine's trigger, so what is being read
+    # is the word "another" and not the doubling failing to work at all.
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=list(game.controlled_by(0))[1],
+        instruction=OracleInstruction("gain_life", "", {"amount": 1}),
+        effect_kind="triggered_life",
+    )
+    assert len(game.stack) == 3
+
+
+def test_sanctum_of_all_does_not_double_an_opponents_shrine(set_pool):
+    """"another Shrine **you control**" — the seat is part of the phrase, and an
+    opponent's Shrine triggering while the Sanctum's controller has six is not
+    a trigger it doubles."""
+    from engine.oracle_types import OracleInstruction
+
+    pool = set_pool("M21")
+    game, p1, _ = _sanctum_board(set_pool, extra_shrines=5)
+    theirs = Permanent(card=pool["Sanctum of Stone Fangs"])
+    game.players[1].battlefield.append(theirs)
+    game._sync_control()
+
+    game._enqueue_triggered_ability(
+        controller_index=1, source_permanent=theirs,
+        instruction=OracleInstruction("gain_life", "", {"amount": 1}),
+        effect_kind="triggered_life",
+    )
+
+    assert len(game.stack) == 1
+    # The controller's own Shrine, on this same board, doubles — so the seat is
+    # what the phrase is being read for.
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=list(game.controlled_by(0))[1],
+        instruction=OracleInstruction("gain_life", "", {"amount": 1}),
+        effect_kind="triggered_life",
+    )
+    assert len(game.stack) == 3

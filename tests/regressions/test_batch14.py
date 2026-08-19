@@ -385,31 +385,40 @@ class TestLivingArtifactOptionalUpkeep:
         game.active_player_index = 0
         return game, p1, aura
 
+    # Round 134 moved this card's route. Its upkeep trigger used to be read as
+    # one fused instruction kind and resolved inline by the upkeep registry,
+    # with the yes/no arriving in a bespoke `optional_choices` dict; it is now
+    # read as the `may` it is, goes on the stack (CR 603.3), and asks through
+    # the general `optional_pay` prompt. The card does the same thing — these
+    # tests say so through the seam that now carries the answer.
+
     def test_optional_trigger_is_surfaced(self, cards):
         game, p1, aura = self._aura_game(cards)
-        triggers = game.get_optional_upkeep_triggers(0)
-        assert any(t["kind"] == "upkeep_remove_vitality_counter" for t in triggers)
+        game.resolve_upkeep(0)
+        assert [c.kind for c in game.pending_choices] == ["optional_pay"]
 
     def test_not_surfaced_without_counters(self, cards):
+        """"…remove a vitality counter. **If you do**, you gain 1 life": with no
+        counter there is nothing to remove, so the offer is never made — and the
+        life is not gained, which is the part that would otherwise be free."""
         game, p1, aura = self._aura_game(cards, counters=0)
-        triggers = game.get_optional_upkeep_triggers(0)
-        assert not any(t["kind"] == "upkeep_remove_vitality_counter" for t in triggers)
+        game.resolve_upkeep(0)
+        assert game.pending_choices == []
+        assert p1.life == 15
 
     def test_declining_keeps_counter_and_life(self, cards):
         game, p1, aura = self._aura_game(cards)
-        game.resolve_upkeep(0, optional_choices={"Living Artifact": False})
+        game.resolve_upkeep(0)
+        game.confirm_optional_pay(0, accept=False)
+        game._settle()
         assert aura.metadata["vitality_counters"] == 2
         assert p1.life == 15
 
     def test_accepting_removes_counter_and_gains_life(self, cards):
         game, p1, aura = self._aura_game(cards)
-        game.resolve_upkeep(0, optional_choices={"Living Artifact": True})
-        assert aura.metadata["vitality_counters"] == 1
-        assert p1.life == 16
-
-    def test_headless_default_still_gains(self, cards):
-        game, p1, aura = self._aura_game(cards)
         game.resolve_upkeep(0)
+        game.confirm_optional_pay(0, accept=True)
+        game._settle()
         assert aura.metadata["vitality_counters"] == 1
         assert p1.life == 16
 

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**249 / 587 tracked rules covered (42%)** — 1131 tests, 0 unannotated.
+**250 / 587 tracked rules covered (42%)** — 1135 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -70,7 +70,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [514. Cleanup Step](#514-cleanup-step) | 3/3 | 100% |
 | [601. Casting Spells](#601-casting-spells) | 4/7 | 57% |
 | [602. Activating Activated Abilities](#602-activating-activated-abilities) | 3/5 | 60% |
-| [603. Handling Triggered Abilities](#603-handling-triggered-abilities) | 5/12 | 41% |
+| [603. Handling Triggered Abilities](#603-handling-triggered-abilities) | 6/12 | 50% |
 | [604. Handling Static Abilities](#604-handling-static-abilities) | 3/7 | 42% |
 | [605. Mana Abilities](#605-mana-abilities) | 5/5 | 100% |
 | [606. Loyalty Abilities](#606-loyalty-abilities) | 5/5 | 100% |
@@ -566,7 +566,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 503. Upkeep Step
 
-- [x] **503.1** The upkeep step has no turn-based actions. Once it begins, the active player gets priority. (See ... *(2 tests)*
+- [x] **503.1** The upkeep step has no turn-based actions. Once it begins, the active player gets priority. (See ... *(3 tests)*
 - [ ] **503.2** If a spell states that it may be cast only “after [a player’s] upkeep step,” and the turn has mul...
 
 ### 504. Draw Step
@@ -665,12 +665,12 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 603. Handling Triggered Abilities
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(1 tests)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(7 tests, subrules b)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(13 tests)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(10 tests, subrules bd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(14 tests)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(2 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(1 tests)*
 - [ ] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit...
-- [ ] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed...
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(1 tests)*
 - [ ] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of...
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [ ] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a...

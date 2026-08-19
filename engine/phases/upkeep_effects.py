@@ -657,24 +657,14 @@ class UpkeepEffectsMixin:
             self.sacrifice_permanent(permanent)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
 
-    @upkeep_effect("upkeep_self", "target_gains_life")
-    def _on__upkeep_self__target_gains_life(self, ctx: UpkeepContext) -> None:
-        controller = ctx.controller
-        optional_choices = ctx.optional_choices
-        permanent = ctx.permanent
-        # Living Artifact: "you MAY remove a vitality counter ...
-        # If you do, you gain 1 life." Honor the player's yes/no
-        # (surfaced by get_optional_upkeep_triggers); AI/headless
-        # runs (optional_choices is None) take the beneficial default.
-        counters = int(permanent.metadata.get("vitality_counters", 0))
-        if optional_choices is None:
-            accepted = True
-        else:
-            accepted = bool(optional_choices.get(permanent.card.name, False))
-        if counters > 0 and accepted:
-            permanent.metadata["vitality_counters"] = counters - 1
-            self.log.append(f"{permanent.card.name}: {controller.name} removed a vitality counter")
-            self._gain_life(controller, 1, permanent.card.name)
+    # ("upkeep_self", "target_gains_life") was Living Artifact's entry — "you
+    # may remove a vitality counter from this Aura. If you do, you gain 1 life",
+    # read as one fused kind because the decomposed reading had nowhere to run.
+    # It does now: the upkeep step puts an ordinary trigger on the stack, the
+    # grammar reads the sentence as the `may` it is, and the answer arrives
+    # through the general `optional_pay` prompt instead of this file's bespoke
+    # `optional_choices` dict. Removed rather than left dark, on the reachability
+    # guard's insistence: an entry no card can reach is one nothing checks.
 
     @upkeep_effect("no_islands", "sacrifice_self")
     def _on__no_islands__sacrifice_self(self, ctx: UpkeepContext) -> None:

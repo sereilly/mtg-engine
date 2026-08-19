@@ -21,7 +21,8 @@ import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.card_loader import load_catalog, manifest_set_path
-from engine.models import Permanent
+from engine.models import CardDefinition, Permanent
+from engine.oracle_types import OracleInstruction
 
 _CATALOG = {c.name: c for c in load_catalog()}
 _M21 = {
@@ -159,3 +160,136 @@ def test_a_dies_trigger_from_a_sacrificed_cost_also_waits_for_the_spell():
     assert game.resolve_top_of_stack()
     assert p1.life == 22, "Onulet's life gain resolved first"
     assert p1.mana_pool["B"] == 0, "and Sacrifice has not resolved yet"
+
+
+# ---------------------------------------------------------------------------
+# CR 603.2d — how many times it triggers
+# ---------------------------------------------------------------------------
+
+
+def _invented(name: str, type_line: str, oracle_text: str) -> CardDefinition:
+    """A card nobody printed, carrying a template the engine claims to read.
+
+    The point of inventing one: a table keyed on printed text is only text-keyed
+    if a card the pool has never seen works through it. A real card would pass
+    equally well against a name-keyed reading.
+    """
+    return CardDefinition(
+        name=name, mana_cost="{2}", cmc=2.0, type_line=type_line,
+        oracle_text=oracle_text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": type_line,
+                               "oracle_text": oracle_text},
+    )
+
+
+_DOUBLER_TEXT = (
+    "If a triggered ability of another Beast you control triggers while you "
+    "control three or more Beasts, that ability triggers an additional time."
+)
+
+
+def _beast(name: str) -> Permanent:
+    return Permanent(card=_invented(name, "Creature — Beast", ""))
+
+
+@pytest.mark.cr("603.2d")
+def test_603_2d_an_ability_triggers_the_stated_number_of_extra_times():
+    """603.2d: "determine how many times it should trigger, then that ability
+    triggers that many times" — two stack objects, not one copied.
+
+    The card is invented, so what is being tested is the printed template rather
+    than a name: the subtype and the threshold are both different from the one
+    card in the pool that prints this sentence.
+    """
+    game, p1, _ = _duel()
+    doubler = Permanent(card=_invented("Beast Chorus", "Enchantment", _DOUBLER_TEXT))
+    triggerer = _beast("First Beast")
+    p1.battlefield = [doubler, triggerer, _beast("Second Beast"), _beast("Third Beast")]
+    game._sync_control()
+
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=triggerer,
+        instruction=OracleInstruction("gain_life", "", {"amount": 1}),
+        effect_kind="triggered_life",
+    )
+
+    assert len(game.stack) == 2
+
+
+@pytest.mark.cr("603.2d")
+def test_603_2d_below_the_printed_threshold_it_triggers_once():
+    """The same board one Beast short. Paired with the test above so the count
+    is what is being read and not the presence of the enchantment."""
+    game, p1, _ = _duel()
+    doubler = Permanent(card=_invented("Beast Chorus", "Enchantment", _DOUBLER_TEXT))
+    triggerer = _beast("First Beast")
+    p1.battlefield = [doubler, triggerer, _beast("Second Beast")]
+    game._sync_control()
+
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=triggerer,
+        instruction=OracleInstruction("gain_life", "", {"amount": 1}),
+        effect_kind="triggered_life",
+    )
+
+    assert len(game.stack) == 1
+
+
+@pytest.mark.cr("603.2d", "603.7")
+def test_603_2d_a_delayed_trigger_with_no_source_permanent_is_not_doubled():
+    """603.2d: the effect "refers only to triggered abilities that object has,
+    not to any delayed or reflexive triggered abilities". A delayed trigger has
+    no source permanent to be an ability *of*, so it fires once."""
+    game, p1, _ = _duel()
+    doubler = Permanent(card=_invented("Beast Chorus", "Enchantment", _DOUBLER_TEXT))
+    p1.battlefield = [doubler, _beast("A"), _beast("B"), _beast("C")]
+    game._sync_control()
+
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=None,
+        card=_invented("Delayed", "Instant", ""),
+        instruction=OracleInstruction("gain_life", "", {"amount": 1}),
+        effect_kind="triggered_life",
+    )
+
+    assert len(game.stack) == 1
+    # A Beast on this same board doubles, so the board is over the threshold and
+    # what the delayed trigger lacks is a source permanent to be an ability of.
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=p1.battlefield[1],
+        instruction=OracleInstruction("gain_life", "", {"amount": 1}),
+        effect_kind="triggered_life",
+    )
+    assert len(game.stack) == 3
+
+
+@pytest.mark.cr("603.3", "503.1")
+def test_603_3_an_ordinary_upkeep_trigger_goes_on_the_stack():
+    """603.3: a triggered ability is put on the stack the next time a player
+    would receive priority — an upkeep trigger included.
+
+    The upkeep step used to dispatch every trigger through a registry keyed by
+    (condition, instruction kind), whose entries are the interactive
+    pay-or-consequence shapes; a trigger with no entry did nothing at all, and
+    the lowering refused such cards rather than let them compile and be silent.
+    An ordinary one now takes the ordinary route.
+
+    The card is invented so this is the *route* being tested rather than the one
+    pool card that reaches it.
+    """
+    game, p1, _ = _duel()
+    source = Permanent(card=_invented(
+        "Dawn Bell", "Enchantment",
+        "At the beginning of your upkeep, draw a card.",
+    ))
+    p1.battlefield = [source]
+    p1.library = [_invented("Somewhere", "Instant", "")]
+    game._sync_control()
+
+    game.resolve_upkeep(0)
+
+    # The upkeep step opens its own priority window, so by the time it returns
+    # the trigger has been on the stack and come off again — which the log
+    # records and an empty stack does not distinguish from never firing.
+    assert "Dawn Bell ability resolved" in game.log
+    assert [c.name for c in p1.hand] == ["Somewhere"]

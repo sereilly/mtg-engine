@@ -256,46 +256,6 @@ Not gaps to close on sight — each was measured and left refusing:
 
 ---
 
-## Round 131: the top of your library is a place you can play from
-
-*(2026-08-18.)* M21 **280 → 281** — Conspicuous Snoop.
-
-> Play with the top card of your library revealed.
-> You may cast Goblin spells from the top of your library.
-> As long as the top card of your library is a Goblin card, this creature has
-> all activated abilities of that card.
-
-Three printed permissions over one question — *what is on top of whose library,
-and who may see or play it?* — so one module answers all three, and Radha's
-"you may look … and you may play lands from the top" joins them next round.
-
-**Not routed through `cast_permissions.py`.** Every grant there is an *effect's*
-— put on `game.cast_permissions` and taken away again — where this is read off
-the permanent's own text for as long as it is in play (CR 113.6d). The same
-distinction round 114 drew for Demonic Embrace, one zone over: a permission that
-is derived simply stops being true, and has nothing to clear.
-
-**Revealed and visible are two permissions, not one.** CR 400.2's public object
-is stronger than "you may look at the top card any time", and the difference is
-only who *else* can see it — so both are asked, and the weaker one does not
-imply the stronger.
-
-**The ability grant's source is a card in a zone.** It is not a permanent, and
-the library changes on every draw, so the grant is *derived on every read*
-rather than stamped — a stamped answer goes stale the moment a card is drawn.
-That ruled out `Permanent.effective_card`, which is a property with no game to
-ask, so the fold lives on a seam the two callers that need it can reach.
-
-Only the **activated** lines are taken, because that is what the card says: a
-Goblin with a dies-trigger on top grants nothing, and handing over the whole
-text would give the Snoop abilities it never had.
-
-Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
-pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
-added**. Five new tests, all watched to fail on the round-130 engine — with the
-stash taken `-u`, since the module under test is a new file and a tracked-only
-stash would have left it in place and three of the five passing.
-
 ## Round 132: a timing clause is a condition
 
 *(2026-08-18.)* M21 **281 → 282** — Radha, Heart of Keld.
@@ -376,3 +336,52 @@ for an effect fails the guard.
 Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
 pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
 added**. Six new tests, all six watched to fail on the round-132 engine.
+
+## Round 134: an upkeep trigger takes the ordinary route
+
+*(2026-08-18.)* M21 **283 → 284** — Sanctum of All.
+
+> At the beginning of your upkeep, you may search your library and/or graveyard
+> for a Shrine card and put it onto the battlefield. If you search your library
+> this way, shuffle.
+> If a triggered ability of another Shrine you control triggers while you
+> control six or more Shrines, that ability triggers an additional time.
+
+Three refusals, and the largest was not about this card at all.
+
+**An upkeep trigger had exactly one dispatcher.** `engine/phases/upkeep_effects.py`
+keys handlers by `(condition, instruction kind)` and the upkeep step did nothing
+when the pair was absent, so the lowering *refused* every decomposed upkeep
+trigger rather than let it compile cleanly and be silent. The step now puts an
+ordinary trigger on the stack (CR 603.3) when the registry answers nothing, and
+the refusal has nothing left to protect. The registry keeps the interactive
+pay-or-consequence shapes and is asked first.
+
+That moved one shipped card. Living Artifact's "you may remove a vitality
+counter … if you do, you gain 1 life" was read as one fused kind and resolved
+inline; it is now read as the `may` it is and asks through the general
+`optional_pay` prompt. Same outcome, general seam — and its bespoke registry
+entry and its bespoke surfacing block are both gone, on the reachability guard's
+insistence. The move also surfaced a live bug: with **no** counter the offer was
+still made and the life still gained, because "removing from zero is a no-op" is
+right for a mandatory removal and wrong in front of an "if you do". It is an
+entry in `_action_is_takeable` now, beside sacrifice and discard.
+
+**A search may name a subtype.** "a **Shrine** card" — off the printed type line
+for the same reason a supertype is (CR 613.1: a card in a library has no
+computed characteristics). Adding the field to the honoured set and *emitting*
+the key are two things, and I did only the first: the deletion probe caught the
+dropped narrowing, which is what it is for.
+
+**CR 603.2d is a table, not a card.** "That ability triggers an additional time"
+is counted where an ability is put onto the stack — one site, so a fire site
+added later is covered by construction. Two restrictions the rule states and
+`engine/extra_triggers.py` enforces: a delayed or reflexive trigger has no
+source permanent to be an ability *of*, and counting once rather than recursing
+is the rule's "doesn't invoke itself repeatedly".
+
+Whole-pool diff: **one card**. Suite green, every `--check` gate green, shipped
+pool 388/388, AI simulation byte-identical at 443 interactions, **zero hooks
+added**. Ten new tests, nine watched to fail on the round-133 engine; the two
+that pass are the below-threshold controls, each paired with an
+above-threshold twin on the same board.

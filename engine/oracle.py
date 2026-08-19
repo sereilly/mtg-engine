@@ -2355,6 +2355,7 @@ def _derived_static_claims(
     from .cost_modifiers import cost_modifier_claims_line
     from .draw_step_modifiers import draw_step_bonus_for
     from .enter_effects import enter_effect_line
+    from .extra_triggers import extra_triggers_for
     from .global_statics import global_static_for
     from .land_play_allowance import land_play_allowance_for
     from .replacements import replacement_claims_line
@@ -2370,6 +2371,13 @@ def _derived_static_claims(
     # this replaced produced.
     if land_play_allowance_for(oracle_text) is not None:
         claims.append("land_play_allowance")
+    # CR 603.2d extra triggers (Sanctum of All). The fire site reads the
+    # permanent's own text, so there is no instruction — and without this claim
+    # the card would be admitted with the sentence doing nothing, which for a
+    # *static* line on an enchantment is a silence the line-by-line assembly
+    # cannot see: it produces no instruction and raises nothing.
+    if extra_triggers_for(oracle_text) is not None:
+        claims.append("extra_triggers")
     # A board-wide static (Titania's Song, Energy Flux) contributes its effects
     # through the CR 613 layer bridge and, for a granted ability, through the
     # affected permanent's effective card — so there is no instruction to

@@ -854,23 +854,18 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
         if fused is not None:
             return fused
         instructions = _lower_line_statement(node.statement, event=node.event.kind)
-        # An upkeep trigger is dispatched by the (condition, instruction kind)
-        # pair in engine/phases/upkeep_effects.py, whose handlers are written
-        # against the *fused* kinds the legacy rules produce
-        # (`upkeep_pay_to_untap_self`, …). A decomposed `may(pay, untap_self)`
-        # is a more faithful reading of the card, but no upkeep handler is
-        # keyed to it, so claiming the line would leave the card compiling
-        # cleanly and doing nothing at all. Refuse until the upkeep flow can
-        # execute decomposed instructions (roadmap phase 4).
-        decomposed = set(_WRAPPER_KINDS) | {"may"}
-        if node.event.kind.startswith("upkeep") and any(
-            instruction.kind in decomposed for instruction in instructions
-        ):
-            raise LoweringError(
-                "upkeep triggers are dispatched by fused instruction kind; a "
-                "decomposed wrapper has no handler",
-                node=node,
-            )
+        # This used to refuse every decomposed upkeep trigger — a
+        # `may(pay, untap_self)` where the registry in
+        # engine/phases/upkeep_effects.py wanted a fused
+        # `upkeep_pay_to_untap_self` — because the registry was the *only*
+        # dispatcher an upkeep trigger had, so claiming the line would have left
+        # the card compiling cleanly and doing nothing.
+        #
+        # The upkeep step now puts an ordinary trigger on the stack (CR 603.3)
+        # when the registry answers nothing, so a wrapper has somewhere to run
+        # and the refusal has nothing left to protect. The registry keeps the
+        # pay-or-consequence shapes, which are asked first; the fused kinds still
+        # come out of `_fused_upkeep_pay_to_untap` above, unchanged.
         if node.intervening_if is not None:
             # CR 603.4: the condition is checked when the trigger would fire and
             # again on resolution. The legacy compiler dropped these outright,

@@ -306,6 +306,17 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
     if instruction.kind == "discard_controller_cards":
         described = dict(instruction.payload.get("filter") or {})
         return any(_card_matches_filter(card, described) for card in player.hand)
+    # "You may remove a vitality counter from this Aura. **If you do**, you gain
+    # 1 life." (Living Artifact.) With no counter there is nothing to remove, so
+    # the offer is not made and the if-you-do branch never runs. The handler
+    # underneath already treats removing from zero as a no-op — which is right
+    # for a mandatory removal and, on its own, would have let this card gain
+    # life off an empty Aura for as long as it stayed on the battlefield.
+    if instruction.kind == "remove_counter_from_self":
+        if source is None:
+            return False
+        counter = str(instruction.payload.get("counter", "doom"))
+        return int(source.metadata.get(f"{counter}_counters", 0)) > 0
     return True
 
 

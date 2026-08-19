@@ -22,7 +22,7 @@ import re
 # set from the first and validates against the second, so a field added here
 # without a test — or a test added without the field — cannot drift apart:
 # there is one copy and the lowering imports it.
-SEARCH_RESTRICTIONS = frozenset({"mana_value", "named"})
+SEARCH_RESTRICTIONS = frozenset({"mana_value", "named", "subtypes"})
 SEARCH_COMPARISONS = frozenset({"eq", "ge", "gt", "le", "lt"})
 
 _COMPARE = {
@@ -76,6 +76,15 @@ def search_matches(card, data: dict) -> bool:
     # none (CR 613.1).
     for supertype in restrictions.get("supertypes") or ():
         if supertype not in type_line:
+            return False
+    # "a **Shrine** card" (Sanctum of All). Off the printed type line for the
+    # same reason a supertype is: a card in a library or a graveyard has no
+    # computed characteristics (CR 613.1), so the line is the whole of what
+    # there is to ask. AND'd like the supertypes above — a phrase naming two
+    # subtypes wants a card that is both, and the pool prints no search that
+    # names an either/or.
+    for subtype in restrictions.get("subtypes") or ():
+        if subtype not in type_line:
             return False
     named = restrictions.get("named")
     if named is not None and name_key(card.name) != name_key(named):

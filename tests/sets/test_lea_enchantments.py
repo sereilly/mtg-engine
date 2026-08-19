@@ -1465,6 +1465,11 @@ def test_living_artifact_upkeep_removes_counter_and_gains_life(all_cards):
     game = Game(players=[p1, p2])
 
     game.resolve_upkeep(0)
+    # The trigger goes on the stack (CR 603.3) and asks through the general
+    # `optional_pay` prompt — "you **may** remove a vitality counter" is a
+    # decision, and this is the seat making it.
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
 
     assert p1.life == 21
     assert aura_perm.metadata.get("vitality_counters") == 1

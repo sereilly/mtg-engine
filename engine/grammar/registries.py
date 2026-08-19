@@ -32,6 +32,7 @@ from ..cast_restrictions import CAST_RESTRICTIONS
 from ..cost_modifiers import cost_modifier_claims_line
 from ..draw_step_modifiers import draw_step_bonus_for
 from ..enter_effects import enter_effect_line
+from ..extra_triggers import extra_trigger_line
 from ..land_play_allowance import land_play_line
 from ..replacements import replacement_claims_line
 from ..targeting import enchant_line_subject
@@ -137,6 +138,13 @@ def registry_for_line(line: str) -> str | None:
     # ever dispatches.
     if land_play_line(line) is not None:
         return "land_play_allowance"
+
+    # engine/extra_triggers.py — CR 603.2d "that ability triggers an additional
+    # time" (Sanctum of All). Carried out where an ability is put onto the
+    # stack, from the permanent's own text, so there is no instruction to
+    # produce and the line would otherwise read as unclaimed.
+    if extra_trigger_line(line):
+        return "extra_triggers"
 
     # engine/replacements.py — CR 614 interceptors. The phrase table lives there
     # rather than here, because the support gate reads it too: what the engine

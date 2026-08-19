@@ -1970,13 +1970,21 @@ _UPKEEP_PAIRS_DISPATCHED_OUTSIDE_THE_REGISTRY = frozenset({
 def test_every_executed_upkeep_trigger_lands_on_a_pair_something_dispatches(catalog):
     """The bug this catches has already shipped twice in this migration.
 
-    Upkeep-family triggers do not resolve through EFFECT_HANDLERS: the upkeep
-    step looks up ``(trigger condition kind, instruction kind)`` and does
-    nothing at all when the pair is absent. So a trigger phrase plus a perfectly
-    reasonable effect lowering can produce a card that compiles clean, reports as
-    supported, and silently never fires. Checking the pair against the registry
-    over the whole pool is the mechanical form of that review.
+    Upkeep-family triggers used to resolve **only** through the registry: the
+    upkeep step looked up ``(trigger condition kind, instruction kind)`` and did
+    nothing at all when the pair was absent. So a trigger phrase plus a perfectly
+    reasonable effect lowering could produce a card that compiles clean, reports
+    as supported, and silently never fires.
+
+    Round 134 gave those triggers the ordinary route (CR 603.3: on the stack,
+    through EFFECT_HANDLERS), so there are now **three** ways a pair can be
+    dispatched and the question is unchanged: is there any? The registry keeps
+    the interactive pay-or-consequence shapes and is asked first; a kind
+    EFFECT_HANDLERS answers takes the stack; the two below are read directly by
+    the upkeep step. A pair in none of the three is still a card that compiles
+    cleanly and does nothing, which is what this counts.
     """
+    from engine.handlers import EFFECT_HANDLERS
     from engine.oracle import _parse_trigger_condition, normalize_creature_line
     from engine.phases.upkeep_effects import UPKEEP_EFFECTS
 
@@ -1986,6 +1994,7 @@ def test_every_executed_upkeep_trigger_lands_on_a_pair_something_dispatches(cata
 
     upkeep_conditions = {condition for condition, _ in UPKEEP_EFFECTS}
     dispatched = set(UPKEEP_EFFECTS) | _UPKEEP_PAIRS_DISPATCHED_OUTSIDE_THE_REGISTRY
+    from engine.phases.upkeep_step import _ORDINARY_UPKEEP_SEATS
 
     undispatched = []
     for name, line, _node, instructions in _executed_trigger_lines(catalog):
@@ -1993,6 +2002,11 @@ def test_every_executed_upkeep_trigger_lands_on_a_pair_something_dispatches(cata
         if condition is None or condition.kind not in upkeep_conditions:
             continue
         for instruction in instructions:
+            if (
+                condition.kind in _ORDINARY_UPKEEP_SEATS
+                and instruction.kind in EFFECT_HANDLERS
+            ):
+                continue
             if (condition.kind, instruction.kind) not in dispatched:
                 undispatched.append(
                     f"{name}: {line}\n    pair: {(condition.kind, instruction.kind)}"
@@ -3450,16 +3464,24 @@ def test_the_pay_to_untap_shape_is_name_agnostic():
     ]
 
 
-def test_upkeep_pay_to_untap_refuses_a_subject_that_is_not_the_source():
-    """The handler untaps ``ctx.permanent`` and takes no target, so untapping
-    anything else is a different card that would compile onto it."""
+def test_upkeep_pay_to_untap_reads_a_foreign_subject_as_a_decomposed_trigger():
+    """The fused ``upkeep_pay_to_untap_self`` handler untaps ``ctx.permanent``
+    and takes no target, so untapping anything else must not land on it.
+
+    This used to be a refusal — the whole line failed, because a decomposed
+    upkeep trigger had nowhere to run. It now lowers to the wrapper it is and
+    takes the ordinary route (CR 603.3). What the guard holds is unchanged and
+    is the part that mattered: the fused kind is what would untap the wrong
+    permanent, and this line does not produce it.
+    """
     result = compile_line(
         "At the beginning of your upkeep, you may pay {4}. If you do, untap target creature.",
         card_name="Test",
     )
 
-    assert result.parsed
-    assert not result.lowered
+    assert result.parsed and result.lowered
+    assert [i.kind for i in result.instructions] == ["may"]
+    assert "upkeep_pay_to_untap_self" not in repr(result.instructions)
 
 
 def test_a_pay_to_untap_on_another_trigger_is_not_the_fused_kind():

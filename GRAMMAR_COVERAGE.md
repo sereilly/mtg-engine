@@ -16,13 +16,13 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 78.9% | 77.6% | 41.8% | 149 |
-| LEB | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
-| 2ED | 292 | 389 | 78.9% | 77.6% | 41.9% | 150 |
+| LEA | 290 | 388 | 78.9% | 77.8% | 42.0% | 150 |
+| LEB | 292 | 389 | 78.9% | 77.9% | 42.2% | 151 |
+| 2ED | 292 | 389 | 78.9% | 77.9% | 42.2% | 151 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
-| 3ED | 296 | 389 | 79.2% | 77.4% | 42.4% | 151 |
-| M21 *(measured)* | 285 | 503 | 84.3% | 82.5% | 58.3% | 233 |
-| **All (shipped)** | **1248** | **1663** | **78.1%** | **76.6%** | **41.9%** | **636** |
+| 3ED | 296 | 389 | 79.2% | 77.6% | 42.7% | 152 |
+| M21 *(measured)* | 285 | 503 | 84.5% | 82.9% | 58.4% | 234 |
+| **All (shipped)** | **1248** | **1663** | **78.1%** | **76.8%** | **42.2%** | **640** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -32,7 +32,7 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 203 | 79 | expected a subject |  |
+| 202 | 78 | expected a subject |  |
 | 87 | 31 | unrecognized effect verb |  |
 | 42 | 23 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
@@ -45,7 +45,6 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
 | 4 | 1 | expected 'that' |  |
-| 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 4 | 1 | expected 'a' |  |
 | 4 | 1 | expected 'mana' |  |
 | 4 | 1 | expected a quantity |  |
@@ -57,10 +56,11 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
 | 1 | 1 | no handler for doom counters |  |
+| 1 | 1 | expected 'be' |  |
 
 ## Cards executing through the grammar
 
-636 cards, 697 lines.
+640 cards, 701 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -756,6 +756,11 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `When this creature enters, draw X cards, where X is the number of creatures that died under your control this turn.`
 - **Liliana's Steward**
   - `{T}, Sacrifice this creature: Target opponent discards a card. Activate only as a sorcery.`
+- **Living Artifact**
+  - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
+  - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
+  - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
+  - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
 - **Living Lands**
   - `All Forests are 1/1 creatures that are still lands.`
   - `All Forests are 1/1 creatures that are still lands.`
@@ -1083,6 +1088,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
+- **Sanctum of All**
+  - `At the beginning of your upkeep, you may search your library and/or graveyard for a Shrine card and put it onto the battlefield. If you search your library this way, shuffle.`
 - **Sanctum of Calm Waters**
   - `At the beginning of your first main phase, you may draw X cards, where X is the number of Shrines you control. If you do, discard a card.`
 - **Sanctum of Fruitful Harvest**

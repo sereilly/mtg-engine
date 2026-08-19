@@ -20,7 +20,16 @@ from ..models import Permanent
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..mixins._constants import _UPKEEP_PAY_KINDS
+from ..effect_labels import triggered_label
+from ..handlers import EFFECT_HANDLERS
 from .upkeep_effects import UPKEEP_EFFECTS, UpkeepContext, UpkeepEffectsMixin
+
+#: Upkeep conditions whose seat this loop can name without asking anything else:
+#: "at the beginning of **your** upkeep" is the source's controller, and "at the
+#: beginning of **each player's** upkeep" is the player whose upkeep it is. The
+#: other two (`upkeep_enchanted_controller`, `upkeep_chosen`) read a seat off
+#: something else, so they stay with the registry that already knows how.
+_ORDINARY_UPKEEP_SEATS = frozenset({"upkeep_self", "upkeep_each"})
 
 
 class UpkeepStepMixin(UpkeepEffectsMixin):
@@ -262,21 +271,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 "kind": "upkeep_return_self_from_graveyard",
                 "prompt": f"Return {card.name} to the battlefield from your graveyard?",
             })
-        # Living Artifact: "At the beginning of your upkeep, you may remove a
-        # vitality counter from this Aura. If you do, you gain 1 life."
-        for perm in self.controlled_by(player_index):
-            if "you may remove a vitality counter" not in perm.effective_card.oracle_text.lower():
-                continue
-            if int(perm.metadata.get("vitality_counters", 0)) <= 0:
-                continue
-            if perm.card.name in seen:
-                continue
-            seen.add(perm.card.name)
-            triggers.append({
-                "card_name": perm.card.name,
-                "kind": "upkeep_remove_vitality_counter",
-                "prompt": f"Remove a vitality counter from {perm.card.name} to gain 1 life?",
-            })
+        # Living Artifact used to be surfaced here, matched on a substring of
+        # its own text and answered through `optional_choices`. Its trigger now
+        # takes the ordinary route (CR 603.3) and asks through the general
+        # `optional_pay` prompt, which the web layer renders from the registry —
+        # so listing it here as well would offer the same decision twice, only
+        # one of which anything acts on.
         # Vesuvan Doppelganger's granted ability: "At the beginning of your
         # upkeep, you may have this creature become a copy of target creature."
         # Carries a creature-target choice alongside the yes/no.
@@ -527,6 +527,31 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     break
 
                 handler = UPKEEP_EFFECTS.get((cond, kind))
+                if handler is None and cond in _ORDINARY_UPKEEP_SEATS:
+                    # An upkeep trigger with nothing interactive about it —
+                    # "At the beginning of your upkeep, you may search your
+                    # library …" (Sanctum of All). CR 603.3: it goes on the
+                    # stack and resolves through EFFECT_HANDLERS like any other
+                    # trigger, which is what makes it the *ordinary* case and
+                    # the registry above the exception.
+                    #
+                    # The registry is asked first because those handlers are
+                    # pay-or-consequence shapes whose prompt protocol the web
+                    # layer drives inline; a pair it answers never reaches here.
+                    # Only the two conditions whose seat is unambiguous are
+                    # admitted: "your upkeep" is the source's controller and
+                    # "each player's upkeep" is whoever's it is, where
+                    # `upkeep_enchanted_controller` and `upkeep_chosen` name a
+                    # seat this loop does not have in hand.
+                    if kind in EFFECT_HANDLERS:
+                        upkeep_events.append({
+                            "controller_index": controller_seat,
+                            "source_permanent": permanent,
+                            "instruction": trig.instruction,
+                            "effect_kind": triggered_label(kind, cond),
+                            "ability_text": trig.source_line or None,
+                        })
+                        break
                 if handler is not None:
                     handler(self, UpkeepContext(
                         game=self,

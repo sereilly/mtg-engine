@@ -599,6 +599,14 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         # read it off a card in a library where no computed characteristic is
         # available (CR 613.1).
         restrictions["supertypes"] = list(filt.supertypes)
+    if filt.subtypes:
+        # "a **Shrine** card" (Sanctum of All). Off the same printed line and
+        # for the same reason. The field being *honoured* and the key being
+        # *emitted* are two separate things, and this is the second: a filter
+        # admitted by the gate above but left out here is a search that narrows
+        # nothing while the card reports supported — the dropped-rider bug the
+        # deletion probe exists to catch, and did.
+        restrictions["subtypes"] = list(filt.subtypes)
     # One entry per find, in the printed order: how many are found and where each
     # goes are the same fact, so a card that names two destinations cannot lower
     # to a search that finds one.

@@ -53,6 +53,7 @@ from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
 from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import draw_step_bonus_for  # noqa: E402
 from engine.global_statics import global_static_for  # noqa: E402
+from engine.extra_triggers import extra_trigger_line  # noqa: E402
 from engine.land_play_allowance import land_play_line  # noqa: E402
 from engine.untap_restrictions import untap_restriction_for  # noqa: E402
 from engine.oracle import (  # noqa: E402
@@ -184,6 +185,11 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # predicate now calls the same derivation the land-drop path and the support
     # gate call.
     ("land_play_allowance.py", lambda s: land_play_line(s) is not None),
+    # CR 603.2d extra triggers (Sanctum of All), counted where an ability is put
+    # onto the stack from the permanent's own text. Same shape as the entry
+    # above and claimed through the same derivation the fire site and the
+    # support gate call.
+    ("extra_triggers.py", extra_trigger_line),
     # A board-wide static contributes through the CR 613 layer bridge and,
     # for a granted ability, through the affected permanent's effective
     # card. There is no instruction to point at, so without this channel a
