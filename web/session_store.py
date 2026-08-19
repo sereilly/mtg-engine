@@ -6,11 +6,12 @@ import secrets
 
 from engine import Game, PlayerState
 from engine.ante import ante_card_names
+from engine.commander import can_be_commander
 from engine.game_history import GameHistory
 from engine.models import CardDefinition
 
 from .deck_builder import build_deck_from_entries, build_random_deck
-from .deck_store import DeckStore, deck_sideboard
+from .deck_store import DeckStore, deck_commander, deck_sideboard
 from .schemas import CreateSessionRequest
 
 
@@ -53,6 +54,14 @@ class Session:
     # same reason.
     host_deck_sideboard: list[dict] | None = None
     guest_deck_sideboard: list[dict] | None = None
+    # Those decks' command zones (CR 903.5a), kept for the same reason. Read
+    # only when ``commander_variant`` is set.
+    host_deck_commander: list[dict] | None = None
+    guest_deck_commander: list[dict] | None = None
+    # CR 903.1 / 903.12a: the Commander variant this session plays, or None.
+    # Held on the session rather than only on the Game because a rematch builds
+    # a fresh Game and has to lead it with the same commanders.
+    commander_variant: str | None = None
     # Display names for the lobby roster (see SeatConfig.deck_name); the server
     # has no other way to know a personal deck's name.
     host_deck_name: str | None = None
@@ -148,6 +157,7 @@ class Session:
     seat_colors: list[int] = field(default_factory=list)
     seat_deck_cards_list: list[list[dict] | None] = field(default_factory=list)
     seat_deck_sideboards: list[list[dict] | None] = field(default_factory=list)
+    seat_deck_commanders: list[list[dict] | None] = field(default_factory=list)
     seat_deck_names: list[str | None] = field(default_factory=list)
 
 
@@ -199,6 +209,24 @@ class SessionStore:
             build_deck_from_entries(self.catalog, entries, seed=None), playing_for_ante
         )
 
+    def _build_seat_commanders(
+        self,
+        deck_id: str | None,
+        cards: list[dict] | None = None,
+        commander: list[dict] | None = None,
+    ):
+        """The seat's designated commanders (CR 903.3), resolved to catalog
+        cards. Mirrors ``_build_seat_sideboard``'s precedence — inline entries
+        (a personal deck) first, then the saved deck's — because a command zone
+        travels with a deck exactly as a sideboard does. Unshuffled: CR 903.6
+        puts them face up in the command zone, where order means nothing."""
+        entries = commander if commander else None
+        if entries is None and not cards and deck_id and self.deck_store is not None:
+            entries = deck_commander(self.deck_store.get(deck_id))
+        if not entries:
+            return []
+        return build_deck_from_entries(self.catalog, entries, seed=None)
+
     def create(self, request: CreateSessionRequest) -> Session:
         if request.mode == "free_for_all":
             return self._create_ffa(request)
@@ -233,6 +261,8 @@ class SessionStore:
         guest_deck_cards = _entries_to_dicts(request.guest_deck_cards)
         host_deck_sideboard = _entries_to_dicts(request.host_deck_sideboard)
         guest_deck_sideboard = _entries_to_dicts(request.guest_deck_sideboard)
+        host_deck_commander = _entries_to_dicts(request.host_deck_commander)
+        guest_deck_commander = _entries_to_dicts(request.guest_deck_commander)
 
         ante = request.playing_for_ante
         host_deck = self._build_seat_deck(
@@ -279,6 +309,9 @@ class SessionStore:
             guest_deck_cards=guest_deck_cards,
             host_deck_sideboard=host_deck_sideboard,
             guest_deck_sideboard=guest_deck_sideboard,
+            host_deck_commander=host_deck_commander,
+            guest_deck_commander=None if lobby_needed else guest_deck_commander,
+            commander_variant=request.variant,
             host_deck_name=request.host_deck_name,
             guest_deck_name=None if lobby_needed else request.guest_deck_name,
         )
@@ -309,6 +342,7 @@ class SessionStore:
         seat_colors = [seat.colors for seat in seats]
         seat_deck_cards_list = [_entries_to_dicts(seat.deck_cards) for seat in seats]
         seat_deck_sideboards = [_entries_to_dicts(seat.deck_sideboard) for seat in seats]
+        seat_deck_commanders = [_entries_to_dicts(seat.deck_commander) for seat in seats]
         seat_deck_names = [seat.deck_name for seat in seats]
 
         use_pregame = request.enable_pregame
@@ -361,7 +395,9 @@ class SessionStore:
             seat_colors=seat_colors,
             seat_deck_cards_list=seat_deck_cards_list,
             seat_deck_sideboards=seat_deck_sideboards,
+            seat_deck_commanders=seat_deck_commanders,
             seat_deck_names=seat_deck_names,
+            commander_variant=request.variant,
         )
 
         if not lobby_needed:
@@ -369,11 +405,75 @@ class SessionStore:
         self._sessions[sid] = session
         return session
 
+    def _apply_commander_variant(self, session: Session) -> None:
+        """CR 903.3: designate each seat's commander on the session's Game.
+
+        Called from ``_begin_pregame``, which is the one place every path that
+        produces a playable Game converges on — a fresh session, a Free-For-All,
+        a networked lobby's Start, and a rematch. Designating in each of those
+        instead would be four places for the next one to be forgotten in, and a
+        forgotten one is a Commander game whose commanders are ordinary cards.
+
+        CR 903.6 (the cards into the command zone) and 903.7 (the life total)
+        run later, inside ``deal_opening_hands``, because 903.6 has to happen
+        before the shuffle that the same method performs.
+        """
+        variant = session.commander_variant
+        session.game.commander_variant = variant
+        if not variant:
+            return
+        if session.mode == "free_for_all":
+            per_seat = [
+                self._build_seat_commanders(
+                    session.seat_deck_ids[i], session.seat_deck_cards_list[i],
+                    session.seat_deck_commanders[i] if i < len(session.seat_deck_commanders) else None,
+                )
+                for i in range(len(session.game.players))
+            ]
+        else:
+            per_seat = [
+                self._build_seat_commanders(
+                    session.host_deck_id, session.host_deck_cards, session.host_deck_commander
+                ),
+                self._build_seat_commanders(
+                    session.guest_deck_id, session.guest_deck_cards, session.guest_deck_commander
+                ),
+            ]
+        for seat, commanders in enumerate(per_seat[: len(session.game.players)]):
+            for card in commanders:
+                session.game.designate_commander(seat, card)
+            if not session.game.commanders_of(seat):
+                self._designate_a_commander_from_the_deck(session, seat, variant)
+
+    def _designate_a_commander_from_the_deck(
+        self, session: Session, seat: int, variant: str
+    ) -> None:
+        """Lead a deck that named no commander with an eligible card out of it.
+
+        Not a rule — CR 903.3 has a player *designate* the card before the game.
+        It is what makes the variant playable with the random decks and the
+        ordinary saved decks the app is full of, which have no command zone: the
+        alternative is a Commander game with an empty command zone, where 903.8
+        can never fire and 903.4f leaves every colour identity undefined. A deck
+        with no eligible card gets no commander and is exactly that game, which
+        is the honest outcome rather than a card promoted into legendhood.
+        """
+        library = session.game.players[seat].library
+        card = next((held for held in library if can_be_commander(held, variant)), None)
+        if card is None:
+            session.game.log.append(
+                f"{session.game.players[seat].name} has no card that can be a "
+                f"commander (CR 903.3) and starts with an empty command zone"
+            )
+            return
+        session.game.designate_commander(seat, card)
+
     def _begin_pregame(self, session: Session) -> None:
         """Start the game once all decks are known (immediately, or once the
         networked opponent has joined)."""
         game = session.game
         seed = session.seed
+        self._apply_commander_variant(session)
         if session.use_pregame:
             chooser = session.regame_first_chooser
             if chooser is not None:
@@ -446,6 +546,7 @@ class SessionStore:
         guest_deck_cards: list[dict] | None = None,
         guest_deck_name: str | None = None,
         guest_deck_sideboard: list[dict] | None = None,
+        guest_deck_commander: list[dict] | None = None,
     ) -> tuple[Session, int]:
         session = self.get(session_id)
         open_seats = self.open_human_seats(session)
@@ -455,6 +556,7 @@ class SessionStore:
 
         guest_deck_cards = _entries_to_dicts(guest_deck_cards)
         guest_deck_sideboard = _entries_to_dicts(guest_deck_sideboard)
+        guest_deck_commander = _entries_to_dicts(guest_deck_commander)
 
         # Build the joining player's deck before taking the seat, so a deck that
         # can't be used here (an unknown card, or an ante card in a game that
@@ -481,6 +583,8 @@ class SessionStore:
             session.seat_colors[target] = guest_colors
             session.seat_deck_cards_list[target] = guest_deck_cards
             session.seat_deck_sideboards[target] = guest_deck_sideboard
+            if target < len(session.seat_deck_commanders):
+                session.seat_deck_commanders[target] = guest_deck_commander
             session.seat_deck_names[target] = guest_deck_name
         else:
             session.guest_name = guest_name
@@ -488,6 +592,7 @@ class SessionStore:
             session.guest_colors = guest_colors
             session.guest_deck_cards = guest_deck_cards
             session.guest_deck_sideboard = guest_deck_sideboard
+            session.guest_deck_commander = guest_deck_commander
             session.guest_deck_name = guest_deck_name
 
         if library is not None:

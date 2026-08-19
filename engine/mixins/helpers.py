@@ -444,6 +444,51 @@ class GameHelpersMixin:
         player.phased_out = staying
         self._recompute_continuous_effects()
 
+    # -- the two zones CR 903.9b intercepts ---------------------------------
+    #
+    # Every "put this card into a hand / a library" in the engine goes through
+    # one of these two. That is not tidiness: CR 903.9b is a replacement over an
+    # event with no single fire site — a bounce, a tuck, a regrowth and a draw
+    # are all "would be put into its owner's hand or library from anywhere" —
+    # and a rule with thirty possible fire sites is a rule twenty-nine of them
+    # forget. Outside a Commander game both are a plain append, so nothing else
+    # changes shape.
+
+    def _owner_seat(self, owner) -> int:
+        """A seat index from either a seat index or a ``PlayerState``. Both
+        spellings reach these two seams from call sites that already hold one or
+        the other, and converting at the boundary is cheaper than making every
+        caller convert."""
+        return owner if isinstance(owner, int) else self.players.index(owner)
+
+    def put_card_into_hand(self, owner, card) -> bool:
+        """Put *card* into its owner's hand, unless CR 903.9b diverts it.
+
+        Returns True when the card actually arrived. False means it went to the
+        command zone instead, or is waiting on its owner's answer and is in no
+        zone until then — either way the caller must not also record a card
+        arriving in hand.
+        """
+        seat = self._owner_seat(owner)
+        if self.commander_zone_change(seat, card, "hand"):
+            return False
+        self.players[seat].hand.append(card)
+        return True
+
+    def put_card_into_library(self, owner, card, position: str = "bottom") -> bool:
+        """Put *card* into its owner's library, unless CR 903.9b diverts it.
+        ``position`` is "top" or "bottom"; the return value reads as
+        :meth:`put_card_into_hand`'s does."""
+        seat = self._owner_seat(owner)
+        if self.commander_zone_change(seat, card, "library"):
+            return False
+        library = self.players[seat].library
+        if position == "top":
+            library.insert(0, card)
+        else:
+            library.append(card)
+        return True
+
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
         if "Aura" in permanent.card.type_line:

@@ -441,6 +441,21 @@ def _discard(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("commander_zone_change")
+def _commander_zone_change(ctx: PromptContext, choices: list) -> dict:
+    """CR 903.9: one commander at a time, naming where it was headed and which
+    half of the rule is asking — 903.9a (it died or was exiled) and 903.9b (it
+    was about to be bounced or tucked) read very differently to a player."""
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card": ctx.serialize_card(choice.data["card"]),
+        "destination": choice.data["destination"],
+        "rule": choice.data["rule"],
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+    }
+
+
 @prompt_renderer("leng_discard")
 def _leng_discard(ctx: PromptContext, choices: list) -> dict:
     """Library of Leng: one card at a time, with how many are still queued."""

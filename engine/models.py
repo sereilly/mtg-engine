@@ -459,6 +459,37 @@ class PlayerState:
     # — Jeweled Bird antes itself and clears the rest, Darkpact swaps one out.
     # Cards land here from Contract from Below / Demonic Attorney / Jeweled Bird.
     ante: list[CardDefinition] = field(default_factory=list)
+    # The command zone (CR 408), per-player for the reason the ante zone above
+    # is: every rule about it is about the cards a player *owns* there — "a
+    # player may cast a commander they own from the command zone" (CR 903.8),
+    # "its owner may put it into the command zone" (CR 903.9a). Empty outside a
+    # Commander game; see engine/commander.py.
+    command_zone: list[CardDefinition] = field(default_factory=list)
+    # CR 903.3: the cards designated as this player's commander. *Not* a zone —
+    # the designation is an attribute of the card that survives every zone
+    # change, so this list is written once before the game and never emptied,
+    # while ``command_zone`` above holds only what is there right now.
+    commanders: list[CardDefinition] = field(default_factory=list)
+    # CR 903.8: how many times this player has cast each commander *from the
+    # command zone*, keyed by name. The commander tax reads "each previous
+    # time", so this is the count before the cast being paid for.
+    commander_casts: dict[str, int] = field(default_factory=dict)
+    # CR 903.10a: combat damage dealt to this player by each commander over the
+    # course of the game, keyed by ``(owner seat, commander name)``. Keyed by
+    # the commander and not by the opponent because "the same commander" is what
+    # the rule adds up, and by owner as well as name because two players may
+    # lead the same legend.
+    commander_damage_taken: dict[tuple[int, str], int] = field(default_factory=dict)
+    # CR 903.9a's "since the last time state-based actions were checked", as the
+    # commander names already offered for their current stay in a graveyard or
+    # in exile. Discarded when the card leaves those zones, so a commander that
+    # returns and dies again is asked about again — and a declined offer is not
+    # re-asked on every subsequent check.
+    commander_zone_offered: set[str] = field(default_factory=set)
+    # CR 903.11a: the names this player's deck started the game with. Nothing
+    # else can answer that question once cards have moved, and 903.11a bars a
+    # card from outside the game by exactly it.
+    starting_deck_names: frozenset[str] = frozenset()
     # Emblems this player owns (CR 114): command-zone markers with an ability
     # and nothing else. Each entry is {"name", "oracle_text", "source_name"}
     # plus a private "_permanent" — a detached Permanent whose card carries the

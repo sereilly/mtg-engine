@@ -363,7 +363,7 @@ class PendingChoicesMixin:
                         f"{card.name} untaps ({held} counted)"
                     )
         else:
-            caster.hand.append(card)
+            self.put_card_into_hand(caster, card)
         self.log.append(
             f"{caster.name} searched {zone} and put {card.name} "
             + ("onto the battlefield" if destination == "battlefield" else "into hand")
@@ -477,7 +477,7 @@ class PendingChoicesMixin:
         kept = caster.library[keep_index]
         del caster.library[:top_count]
         _bottom_the_rest([card for i, card in enumerate(looked) if i != keep_index])
-        caster.hand.append(kept)
+        self.put_card_into_hand(caster, kept)
         self.discard_pending_choice(choice)
         self.log.append(
             f"{caster.name} put {kept.name} into their hand and the rest on the bottom"
@@ -949,6 +949,13 @@ class PendingChoicesMixin:
         """Resolve a pending discard with a default choice (the lowest-index cards,
         kept in the graveyard). Used for AI players and headless simulation."""
         self.auto_resolve_pending_choices(kinds=("discard",))
+
+    def confirm_commander_zone_change(self, player_index: int, to_command_zone: bool) -> bool:
+        """Resolve the oldest pending CR 903.9 offer for *player_index*: the
+        commander goes into the command zone, or on to where it was headed."""
+        return self.resolve_replacement_choice(
+            player_index, 0 if to_command_zone else 1, kind="commander_zone_change"
+        )
 
     def confirm_leng_discard(self, player_index: int, to_library: bool) -> bool:
         """Resolve the oldest pending Library of Leng destination choice for
@@ -2415,6 +2422,18 @@ def _default_replacement(game, choice) -> None:
         choice.player_index, choice.default_option, kind=choice.kind
     )
 
+
+register_choice(
+    "commander_zone_change",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="commander_zone_change_confirm",
+    prompt_key="commander_zone_change",
+    blocked_detail="choose whether your commander goes to the command zone before other actions",
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
 
 register_choice(
     "leng_discard",

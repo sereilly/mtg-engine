@@ -26,6 +26,12 @@ from __future__ import annotations
 from typing import Any, Iterable, Mapping
 
 from engine.ante import is_ante_card
+from engine.commander import (
+    BASIC_LAND_TYPES,
+    commander_type_problem,
+    deck_card_problem,
+    deck_identity,
+)
 
 # Each format: `scryfall_key` is the key to read out of a card's `legalities`
 # map (None means "no legality checking"); `min_deck`/`max_deck` bound the deck
@@ -63,10 +69,20 @@ FORMATS: list[dict[str, Any]] = [
      "min_commander": 0, "max_commander": 0},
     # CR 903.5a: a 99-card library plus exactly 1 designated commander in the
     # command zone (100 cards total); CR 903.5e: Commander games do not use
-    # sideboards.
+    # sideboards. ``variant`` names the CR 903 variant, which is what turns on
+    # the commander-specific checks below (eligibility, colour identity) and
+    # what the game-setup endpoint hands the engine as
+    # ``Game.commander_variant``.
     {"key": "commander", "label": "Commander", "scryfall_key": "commander",
      "min_deck": 99, "max_deck": 99, "max_copies": 1, "max_sideboard": 0, "singleton": True,
-     "min_commander": 1, "max_commander": 1},
+     "min_commander": 1, "max_commander": 1, "variant": "commander"},
+    # CR 903.12d: 59 + 1 = exactly 60. Brawl is "the normal rules for the
+    # Commander variant with the following modifications" (903.12a), so it is
+    # the same row with a different size — and 903.12c's extra commander type
+    # (planeswalkers) rides on ``variant`` rather than on a column here.
+    {"key": "brawl", "label": "Brawl", "scryfall_key": "brawl",
+     "min_deck": 59, "max_deck": 59, "max_copies": 1, "max_sideboard": 0, "singleton": True,
+     "min_commander": 1, "max_commander": 1, "variant": "brawl"},
 ]
 
 FORMATS_BY_KEY: dict[str, dict[str, Any]] = {f["key"]: f for f in FORMATS}
@@ -143,6 +159,22 @@ def _tally(entries: Iterable[Mapping[str, Any]] | None) -> tuple[dict[str, int],
     return counts, total
 
 
+def _single_basic_type(
+    counts: Mapping[str, int], catalog_by_name: Mapping[str, Mapping[str, Any]]
+) -> str | None:
+    """The one basic land type this deck's basic lands have, or None when it has
+    none or more than one. CR 903.12e's "one basic land type of their choice",
+    read off the deck rather than off a field nothing carries."""
+    types: set[str] = set()
+    for key in counts:
+        card = catalog_by_name.get(key)
+        if card is None or not _is_basic_land(card):
+            continue
+        lowered = str(card.get("type_line") or "").lower()
+        types.update(t for t in BASIC_LAND_TYPES if t in lowered)
+    return next(iter(types)) if len(types) == 1 else None
+
+
 def deck_ante_names(
     catalog_by_name: Mapping[str, Mapping[str, Any]],
     *zones: Iterable[Mapping[str, Any]] | None,
@@ -186,8 +218,14 @@ def validate_deck(
     editor shows — the ante cards are illegal in the deck and the sideboard
     alike (CR 407.3).
 
+    A format with a command zone (CR 903 — Commander, Brawl) additionally
+    checks that each designated commander may be one (CR 903.3 / 903.12c) and
+    that every card's colour identity fits inside theirs (CR 903.5c/d), and
+    reports that identity as ``commander_identity``.
+
     Returns ``{"format", "legal", "problems": [str], "illegal_names": [str],
-    "ante_names": [str]}``.
+    "ante_names": [str]}``, plus ``commander_identity`` for a command-zone
+    format.
     """
     fmt = FORMATS_BY_KEY[normalize_format(fmt_key)]
     # Each zone is walked twice (ante check, then the format checks), so a
@@ -284,6 +322,41 @@ def validate_deck(
         problems.append(f"Commander zone has {cmd_total} card(s); {label} allows at most {max_cmd}.")
     elif cmd_total < min_cmd:
         problems.append(f"{label} requires {min_cmd} designated commander card(s) (found {cmd_total}).")
+
+    # CR 903.3 / 903.12c and CR 903.5c/d. Run only for the variants that have a
+    # command zone, and only over cards the catalog knows — the same rule the
+    # loop above follows, so a card absent from the catalog is reported once as
+    # "not in catalog" rather than as an unidentifiable colour identity.
+    variant = fmt.get("variant")
+    if variant:
+        commander_cards = [
+            catalog_by_name[key] for key in cmd_counts if key in catalog_by_name
+        ]
+        for card in commander_cards:
+            problem = commander_type_problem(card, variant)
+            if problem is not None:
+                problems.append(problem)
+                illegal.append(str(card.get("name", "")))
+        identity = deck_identity(commander_cards)
+        result["commander_identity"] = "".join(
+            c for c in "WUBRG" if c in identity
+        )
+        # CR 903.12e: with a colourless Brawl commander the deck may run any
+        # number of basic lands of one chosen type. Nothing in the deck payload
+        # names that choice, so it is inferred from the basics actually in the
+        # deck — a deck holding one basic type is the choice being exercised,
+        # and one holding two is the rule being broken either way.
+        brawl_basic_type = _single_basic_type(main_counts, catalog_by_name)
+        for key in names:
+            card = catalog_by_name.get(key)
+            if card is None:
+                continue
+            problem = deck_card_problem(
+                card, identity, variant, brawl_basic_type=brawl_basic_type
+            )
+            if problem is not None:
+                problems.append(problem)
+                illegal.append(str(card.get("name", key)))
 
     # An ante card is typically banned in the format too, so it can be flagged
     # twice (each with its own reason) — the name itself is listed once.

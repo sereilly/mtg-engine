@@ -346,6 +346,10 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # CR 407.1: whether this game is played for ante. Drives the ante pile in
         # the board UI and tells a joining player which decks they may bring.
         "playing_for_ante": session.playing_for_ante,
+        # CR 903.1 / 903.12a: "commander", "brawl", or null for an ordinary
+        # game. Drives the command zone in the board UI, the commander-damage
+        # tracker, and whether the client offers a cast from the command zone.
+        "commander_variant": session.game.commander_variant,
         "status": session.status,
         "current_phase": session.game.current_phase,
         "current_turn_phase": session.game.current_turn_phase,

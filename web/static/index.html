@@ -114,6 +114,16 @@
               </label>
             </div>
             <div class="seed-row">
+              <label class="seed-input-label" title="CR 903: each deck is led by a commander that starts in the command zone. Commander is 40 life and the 21-damage rule; Brawl is a 60-card deck at 25 (or 30) life, may be led by a planeswalker, and has no commander-damage rule.">
+                Variant
+                <select id="commanderVariant">
+                  <option value="">None (ordinary game)</option>
+                  <option value="commander">Commander (CR 903)</option>
+                  <option value="brawl">Brawl (CR 903.12)</option>
+                </select>
+              </label>
+            </div>
+            <div class="seed-row">
               <label class="menu-checkbox-label">
                 <input id="useCustomSeed" type="checkbox" />
                 Use custom seed
@@ -378,6 +388,10 @@
                   <p class="side-label">Opponent Exile (<span id="oppExileCount">0</span>)</p>
                   <div id="oppExileCards" class="zone-cards"></div>
                 </div>
+                <div class="zone-reveal-section" data-zone="opp-command">
+                  <p class="side-label">Opponent Command Zone (<span id="oppCommandCount">0</span>)</p>
+                  <div id="oppCommandCards" class="zone-cards"></div>
+                </div>
                 <div class="zone-reveal-section" data-zone="opp-ante">
                   <p class="side-label">Opponent Ante (<span id="oppAnteCount">0</span>)</p>
                   <div id="oppAnteCards" class="zone-cards"></div>
@@ -389,6 +403,10 @@
                 <div class="zone-reveal-section" data-zone="self-exile">
                   <p class="side-label">Your Exile (<span id="selfExileCount">0</span>)</p>
                   <div id="selfExileCards" class="zone-cards"></div>
+                </div>
+                <div class="zone-reveal-section" data-zone="self-command">
+                  <p class="side-label">Your Command Zone (<span id="selfCommandCount">0</span>)</p>
+                  <div id="selfCommandCards" class="zone-cards"></div>
                 </div>
                 <div class="zone-reveal-section" data-zone="self-ante">
                   <p class="side-label">Your Ante (<span id="selfAnteCount">0</span>)</p>

@@ -450,7 +450,25 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="you do not currently have priority")
 
         caster = session.game.players[req.seat]
-        if req.from_zone in ("graveyard", "exile"):
+        if req.from_zone == "command":
+            # CR 903.8: casting a commander from the command zone is a rule
+            # rather than a permission, so the check here is ownership — which
+            # is what the engine re-checks too; this turns "no" into a 400 with
+            # the reason instead of a queue refusal.
+            card = next(
+                (
+                    entry for entry in caster.command_zone
+                    if entry.name == req.card_name
+                    and session.game.may_cast_from_command_zone(req.seat, entry)
+                ),
+                None,
+            )
+            if card is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="that card is not your commander in the command zone (CR 903.8)",
+                )
+        elif req.from_zone in ("graveyard", "exile"):
             # Casting from outside the hand needs a permission grant
             # (engine/cast_permissions.py); the engine re-checks, this just
             # turns "no" into a 400 with the reason instead of a queue refusal.
@@ -1254,6 +1272,22 @@ def do_action(session_id: str, req: GameActionRequest):
         )
         if not ok:
             raise HTTPException(status_code=400, detail="invalid discard selection")
+
+    elif req.action == "commander_zone_change_confirm":
+        # CR 903.9: the owner chooses the command zone, or lets the commander go
+        # where it was headed.
+        if not any(
+            e["player_index"] == req.seat
+            for e in session.game.pending_commander_zone_changes
+        ):
+            raise HTTPException(status_code=400, detail="no commander zone choice pending for you")
+        if req.to_command_zone is None:
+            raise HTTPException(status_code=400, detail="to_command_zone (true/false) is required")
+        ok = session.game.confirm_commander_zone_change(
+            req.seat, to_command_zone=bool(req.to_command_zone)
+        )
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid commander zone choice")
 
     elif req.action == "leng_discard_confirm":
         # Library of Leng: choose where an already-discarded card goes — top of

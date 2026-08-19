@@ -821,6 +821,14 @@ class CombatDamageStepMixin:
                     self.active_player_index,
                     lifelink_life_gained(source_attacker, outcome.dealt),
                 )
+                # CR 903.10a: combat damage from a commander is tallied per
+                # commander for the whole game. Here rather than at the event's
+                # recording, for the reason lifelink is: the rule counts the
+                # damage *dealt* (CR 120.4b), and a result replacement (Ali from
+                # Cairo) lowers the life lost without lowering that.
+                self.record_commander_combat_damage(
+                    defender, source_attacker, outcome.dealt
+                )
                 self._on_player_dealt_damage(defender, outcome.dealt, source_attacker)
                 # Eye for an Eye: combat damage counts too — the attacker's
                 # controller takes the same amount. Applied here rather than by

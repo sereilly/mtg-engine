@@ -240,4 +240,21 @@ def playable_from_zones(game, player_index: int) -> list[dict]:
                 "free": permission.free,
                 "source": permission.source_name,
             })
+    # CR 903.8's command zone. The question this function answers is "what may
+    # this seat play from a non-hand zone right now", and a commander is one of
+    # those — but by a *rule* rather than by a CastPermission, so it is asked of
+    # engine/commander.py instead of of the permission seam. Listing it here is
+    # what lets the browser offer it through the one zone-cast path.
+    for index, card in enumerate(player.command_zone):
+        if not game.may_cast_from_command_zone(player_index, card):
+            continue
+        entries.append({
+            "zone": "command",
+            "index": index,
+            "name": card.name,
+            "free": False,
+            "source": "commander",
+            # CR 903.8, so the client can show what the cast will actually cost.
+            "commander_tax": game.commander_tax(player_index, card),
+        })
     return entries

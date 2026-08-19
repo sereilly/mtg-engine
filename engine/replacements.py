@@ -807,7 +807,7 @@ def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) ->
     player = game.players[choice.player_index]
     card = choice.data["card"]
     if option_index == 0:
-        player.library.insert(0, card)
+        game.put_card_into_library(player, card, "top")
         game.log.append(
             f"{player.name} put discarded {card.name} on top of their library (Library of Leng)"
         )

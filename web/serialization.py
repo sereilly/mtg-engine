@@ -759,6 +759,28 @@ def _serialize_player(
         # The ante zone (CR 407) — public, like exile. Empty unless an ante card
         # (Contract from Below, Demonic Attorney, Jeweled Bird) has resolved.
         "ante": [_serialize_card(card) for card in player.ante],
+        # The command zone (CR 408), public like the ante zone: CR 903.6 puts a
+        # commander there *face up*. Serialized with the viewer's seat when it
+        # is their own, because a commander in it is castable (CR 903.8) and the
+        # cast prompt reads its target spec off the card exactly as a hand
+        # card's. Empty outside a Commander game.
+        "command_zone": [
+            _serialize_card(card, game, seat) if viewer_seat == seat else _serialize_card(card)
+            for card in player.command_zone
+        ],
+        # CR 903.8: what each commander in that zone would cost extra to cast
+        # right now, keyed by name, so the client can show the tax without
+        # re-deriving "each previous time".
+        "commander_tax": {
+            card.name: game.commander_tax(seat, card) for card in player.command_zone
+        },
+        # CR 903.10a: combat damage this player has taken from each commander,
+        # as a list so the client need not parse a tuple key. ``seat`` is the
+        # commander's owner and ``name`` the commander.
+        "commander_damage": [
+            {"seat": owner, "name": name, "damage": dealt}
+            for (owner, name), dealt in sorted(player.commander_damage_taken.items())
+        ],
         # Cards owned from outside the game (CR 100.4). Private, like the hand:
         # only their owner sees what's in it, everyone sees the count.
         "sideboard": (

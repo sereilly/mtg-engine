@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**252 / 587 tracked rules covered (42%)** — 1151 tests, 0 unannotated.
+**267 / 603 tracked rules covered (44%)** — 1250 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -53,6 +53,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [405. Stack](#405-stack) | 5/6 | 83% |
 | [406. Exile](#406-exile) | 2/8 | 25% |
 | [407. Ante](#407-ante) | 4/4 | 100% |
+| [408. Command](#408-command) | 2/3 | 66% |
 | [500. General](#500-general) | 6/12 | 50% |
 | [501. Beginning Phase](#501-beginning-phase) | 1/1 | 100% |
 | [502. Untap Step](#502-untap-step) | 3/4 | 75% |
@@ -88,13 +89,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [701. Keyword Actions](#701-keyword-actions) | 8/17 | 47% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 23/23 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
-| [704. State-Based Actions](#704-state-based-actions) | 4/8 | 50% |
+| [704. State-Based Actions](#704-state-based-actions) | 5/8 | 62% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
 | [707. Copying Objects](#707-copying-objects) | 5/14 | 35% |
 | [724. Ending Turns and Phases](#724-ending-turns-and-phases) | 1/2 | 50% |
 | [800. General](#800-general) | 2/7 | 28% |
 | [802. Attack Multiple Players Option](#802-attack-multiple-players-option) | 4/5 | 80% |
 | [806. Free-for-All Variant](#806-free-for-all-variant) | 0/3 | 0% |
+| [903. Commander](#903-commander) | 12/13 | 92% |
 
 ## Rule detail
 
@@ -128,7 +130,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **103.2** Some games require additional steps that are taken after the starting player has been determined....
 - [x] **103.3** After the starting player has been determined and any additional steps performed, each player shu... *(1 tests)*
 - [ ] **103.4** Each player begins the game with a starting life total of 20. Some variant games have different s...
-- [x] **103.5** Each player draws a number of cards equal to their starting hand size, which is normally seven. (... *(22 tests)*
+- [x] **103.5** Each player draws a number of cards equal to their starting hand size, which is normally seven. (... *(23 tests, subrules c)*
 - [ ] **103.6** Some cards allow a player to take actions with them from their opening hand. Once the mulligan pr...
 - [ ] **103.7** In a Planechase game, the starting player moves the top card of their planar deck off that planar...
 - [x] **103.8** The starting player takes their first turn. *(2 tests, subrules ac)*
@@ -538,6 +540,12 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **407.3** A few cards have the text “Remove this card from your deck before playing if you’re not playing f... *(16 tests)*
 - [x] **407.4** To ante an object is to put that object into the ante zone from whichever zone it’s currently in.... *(6 tests)*
 
+### 408. Command
+
+- [x] **408.1** The command zone is a game area reserved for certain specialized objects that have an overarching... *(1 tests)*
+- [ ] **408.2** Emblems may be created in the command zone. See rule 114, “Emblems.”
+- [x] **408.3** In the Planechase, Vanguard, Commander, Archenemy, and Conspiracy Draft casual variants, nontradi... *(1 tests)*
+
 ### 500. General
 
 - [x] **500.1** A turn consists of five phases, in this order: beginning, precombat main, combat, postcombat main... *(2 tests)*
@@ -770,11 +778,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(27 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(28 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
-- [x] **614.5** A replacement effect doesn’t invoke itself repeatedly; it gets only one opportunity to affect an ... *(3 tests)*
+- [x] **614.5** A replacement effect doesn’t invoke itself repeatedly; it gets only one opportunity to affect an ... *(4 tests)*
 - [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(5 tests)*
 - [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(4 tests, subrules a)*
 - [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
@@ -887,7 +895,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(1 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
 - [x] **704.5** The state-based actions are as follows: *(74 tests, subrules abcdefghijkmnpqrsy)*
-- [ ] **704.6** Some variant games include additional state-based actions that aren’t normally applicable:
+- [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*
 
@@ -926,7 +934,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **800.3** Many multiplayer Magic tournaments have additional rules not included here, including rules for d...
 - [x] **800.4** Unlike two-player games, multiplayer games can continue after one or more players have left the g... *(7 tests, subrules an)*
 - [ ] **800.5** Unless a chosen variant or option prescribes otherwise, seating order is determined by any mutual...
-- [x] **800.6** In a multiplayer game, the first mulligan a player takes doesn’t count toward the number of cards... *(2 tests)*
+- [x] **800.6** In a multiplayer game, the first mulligan a player takes doesn’t count toward the number of cards... *(3 tests)*
 - [ ] **800.7** In a multiplayer game other than a Two-Headed Giant game, the starting player doesn’t skip the dr...
 
 ### 802. Attack Multiple Players Option
@@ -942,6 +950,22 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **806.1** In Free-for-All multiplayer games, a group of players compete as individuals against each other.
 - [ ] **806.2** Any multiplayer options used are determined before play begins. The Free-for-All variant uses the...
 - [ ] **806.3** The players are randomly seated around the table.
+
+### 903. Commander
+
+- [x] **903.1** In the Commander variant, a variant created and popularized by fans, each deck is led by a legend... *(3 tests)*
+- [x] **903.2** A Commander game may be a two-player game or a multiplayer game. The default multiplayer setup is... *(1 tests)*
+- [x] **903.3** Each deck has a legendary card designated as its commander. That card must be either (a) a creatu... *(10 tests, subrules ad)*
+- [x] **903.4** The Commander variant uses color identity to determine what cards can be in a deck with a certain... *(8 tests, subrules acdf)*
+- [x] **903.5** Each Commander deck is subject to the following deck construction rules. *(10 tests, subrules abcde)*
+- [x] **903.6** At the start of the game, each player puts their commander from their deck face up into the comma... *(3 tests)*
+- [x] **903.7** Once the starting player has been determined, each player sets their life total to 40 and draws a... *(4 tests)*
+- [x] **903.8** A player may cast a commander they own from the command zone. A commander cast from the command z... *(9 tests)*
+- [x] **903.9** A commander may return to the command zone during a Commander game. *(18 tests, subrules ab)*
+- [x] **903.10** The Commander variant includes the following specification for winning and losing the game. All o... *(6 tests, subrules a)*
+- [x] **903.11** Except via rules, special actions, and effects that specifically bring cards into Commander games... *(8 tests, subrules a)*
+- [x] **903.12** Brawl Option *(26 tests, subrules abcdefgh)*
+- [ ] **903.13** Commander Draft
 
 ## Cited outside tracked scope (consider widening SCOPE)
 

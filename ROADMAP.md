@@ -115,6 +115,13 @@ needs two rounds is worth splitting only if neither half ships a card alone
   by an effect, swept when its source leaves.
 - **The Shrine cycle and the where-clause cards**: see round 57's *Next* below,
   which is current.
+- **An AI seat never casts its commander** (the Commander variant's known
+  deferral). `ai_policy.py` and `ai_valuation.py` read the hand and the
+  battlefield; nothing reads `command_zone`, so an AI commander sits there for
+  the whole game and Commander-vs-AI is a handicap match. The CR 903.9 zone
+  prompt already defaults safely for AI seats — this is a missing *policy*, not
+  a rules gap. Wants the same shape as every other AI read: derived from the
+  compiled program in `ai_valuation.py`, weight tuning in `ai_policy.py`.
 
 ### Recorded, measured, and not yet fixed
 

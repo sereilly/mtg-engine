@@ -86,6 +86,133 @@
       .includes(ANTE_DECK_TEXT);
   }
 
+  // ---------------------------------------------------------------------
+  // CR 903 — Commander / Brawl. Mirrors engine/commander.py; a format opts in
+  // with a `variant` key ("commander" / "brawl") in the shipped FORMATS table.
+  // ---------------------------------------------------------------------
+
+  const COLORS = "WUBRG";
+  // Basic land type -> the mana symbol it taps for (CR 305.6). A land with a
+  // basic land type has that intrinsic mana ability, and its symbol counts
+  // toward colour identity — which is why Badlands is black-red even though
+  // CR 903.4c throws away the reminder text that says so.
+  const LAND_TYPE_MANA = { plains: "W", island: "U", swamp: "B", mountain: "R", forest: "G" };
+  // CR 903.3a — "This card can be your commander."
+  const CAN_BE_COMMANDER_TEXT = "can be your commander";
+  // CR 903.3 / 903.12c — the card types a commander may have, per variant.
+  const COMMANDER_TYPES = { commander: ["creature"], brawl: ["creature", "planeswalker"] };
+
+  // CR 903.4: mana symbols in the mana cost or rules text (reminder text
+  // ignored, 903.4c), every face included (903.4d/e), plus the card's own
+  // colours (a colour indicator, 204, or a characteristic-defining ability,
+  // 604.3) and the intrinsic mana of any basic land type.
+  function colorIdentity(card) {
+    const identity = new Set();
+    for (const c of (card && card.colors) || []) {
+      const up = String(c).toUpperCase();
+      if (COLORS.includes(up)) identity.add(up);
+    }
+    const typeLine = String((card && card.type_line) || "").toLowerCase();
+    for (const [landType, symbol] of Object.entries(LAND_TYPE_MANA)) {
+      if (typeLine.includes(landType)) identity.add(symbol);
+    }
+    const faces = [[(card && card.mana_cost) || "", (card && card.oracle_text) || ""]];
+    for (const face of (card && card.faces) || []) {
+      faces.push([(face && face.mana_cost) || "", (face && face.oracle_text) || ""]);
+    }
+    for (const [cost, text] of faces) {
+      for (const source of [String(cost), String(text).replace(/\([^)]*\)/g, " ")]) {
+        for (const match of source.matchAll(/\{([^}]*)\}/g)) {
+          for (const ch of match[1].toUpperCase()) {
+            if (COLORS.includes(ch)) identity.add(ch);
+          }
+        }
+      }
+    }
+    return identity;
+  }
+
+  // "WUB", or "colorless" for the empty identity.
+  function formatIdentity(identity) {
+    const ordered = [...COLORS].filter((c) => identity.has(c)).join("");
+    return ordered || "colorless";
+  }
+
+  function deckIdentity(cards) {
+    const identity = new Set();
+    for (const card of cards || []) for (const c of colorIdentity(card)) identity.add(c);
+    return identity;
+  }
+
+  function hasBasicLandType(card) {
+    const tl = String((card && card.type_line) || "").toLowerCase();
+    return Object.keys(LAND_TYPE_MANA).some((t) => tl.includes(t));
+  }
+
+  // The colours of mana a land could produce (CR 903.5d).
+  function producedManaColors(card) {
+    const colors = new Set();
+    for (const c of (card && card.produced_mana) || []) {
+      const up = String(c).toUpperCase();
+      if (COLORS.includes(up)) colors.add(up);
+    }
+    const tl = String((card && card.type_line) || "").toLowerCase();
+    for (const [landType, symbol] of Object.entries(LAND_TYPE_MANA)) {
+      if (tl.includes(landType)) colors.add(symbol);
+    }
+    return colors;
+  }
+
+  // CR 903.3 / 903.12c / 903.3a — why this card may not be a commander, or "".
+  function commanderTypeProblem(card, variant) {
+    const name = String((card && card.name) || "card");
+    if (String((card && card.oracle_text) || "").toLowerCase().includes(CAN_BE_COMMANDER_TEXT)) return "";
+    const tl = String((card && card.type_line) || "").toLowerCase();
+    if (!tl.includes("legendary")) return `${name} is not legendary and cannot be a commander (CR 903.3).`;
+    const allowed = COMMANDER_TYPES[variant] || COMMANDER_TYPES.commander;
+    if (allowed.some((t) => tl.includes(t))) return "";
+    if (tl.includes("vehicle")) return "";
+    if (tl.includes("spacecraft") && card.power) return "";
+    return `${name} is not a legendary ${allowed.join(" or ")} and cannot be a commander (CR 903.3).`;
+  }
+
+  // CR 903.5c/d (and 903.12e) — why this card may not be in the deck, or "".
+  function deckCardProblem(card, identity, variant, brawlBasicType) {
+    const name = String((card && card.name) || "card");
+    const outsideOf = (set) => new Set([...set].filter((c) => !identity.has(c)));
+    if (hasBasicLandType(card)) {
+      const produced = producedManaColors(card);
+      if (variant === "brawl" && identity.size === 0 && brawlBasicType) {
+        const allowed = LAND_TYPE_MANA[String(brawlBasicType).toLowerCase()];
+        if ([...produced].every((c) => c === allowed)) return "";
+      }
+      const outside = outsideOf(produced);
+      if (outside.size) {
+        return `${name} could produce ${formatIdentity(outside)} mana, which is outside the commander's colour identity (${formatIdentity(identity)}) (CR 903.5d).`;
+      }
+      return "";
+    }
+    const own = colorIdentity(card);
+    const outside = outsideOf(own);
+    if (outside.size) {
+      return `${name}'s colour identity (${formatIdentity(own)}) is outside the commander's (${formatIdentity(identity)}) (CR 903.5c).`;
+    }
+    return "";
+  }
+
+  // CR 903.12e's "one basic land type of their choice", read off the deck: the
+  // one basic land type its basics have, or null for none or more than one.
+  function singleBasicType(counts, lookupCard) {
+    const types = new Set();
+    for (const name of counts.keys()) {
+      const card = lookupCard(name);
+      if (!card || !isBasicLand(card)) continue;
+      const tl = String(card.type_line || "").toLowerCase();
+      for (const t of Object.keys(LAND_TYPE_MANA)) if (tl.includes(t)) types.add(t);
+    }
+    return types.size === 1 ? [...types][0] : null;
+  }
+
   // Copy limit for a legal/restricted card, or null for unlimited.
   function effectiveMaxCopies(card, fmt, status) {
     if (isBasicLand(card) || anyNumberAllowed(card)) return null;
@@ -218,6 +345,30 @@
     } else if (cmd.total < minCmd) {
       result.problems.push(`${fmt.label} requires ${minCmd} designated commander card(s) (found ${cmd.total}).`);
     }
+    // CR 903.3 / 903.12c and CR 903.5c/d, for the formats that have a command
+    // zone. Mirrors the same block in web/deck_legality.py.
+    if (fmt.variant) {
+      const commanderCards = [...cmd.counts.keys()].map(lookupCard).filter(Boolean);
+      for (const card of commanderCards) {
+        const problem = commanderTypeProblem(card, fmt.variant);
+        if (problem) {
+          result.problems.push(problem);
+          result.illegalNames.add(card.name);
+        }
+      }
+      const identity = deckIdentity(commanderCards);
+      result.commanderIdentity = [...COLORS].filter((c) => identity.has(c)).join("");
+      const brawlBasicType = singleBasicType(main.counts, lookupCard);
+      for (const name of names) {
+        const card = lookupCard(name);
+        if (!card) continue;
+        const problem = deckCardProblem(card, identity, fmt.variant, brawlBasicType);
+        if (problem) {
+          result.problems.push(problem);
+          result.illegalNames.add(card.name);
+        }
+      }
+    }
     result.legal = result.problems.length === 0;
     return result;
   }
@@ -233,6 +384,10 @@
     cardProblem,
     copyLimit,
     isAnteCard,
+    colorIdentity,
+    formatIdentity,
+    commanderTypeProblem,
+    deckCardProblem,
     validateDeck,
     DEFAULT_FORMAT,
   };

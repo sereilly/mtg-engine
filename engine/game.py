@@ -19,6 +19,7 @@ from .mixins import (
     GameHelpersMixin,
 )
 from .ante import AnteMixin
+from .commander import CommanderMixin
 from .legality import LegalityMixin
 # Per-phase and per-step turn-structure logic (CR 500–514) lives in engine.phases,
 # one mixin class per phase/step. See engine/phases/__init__.py for the taxonomy.
@@ -76,9 +77,15 @@ class Game(
     GameHelpersMixin,
     LegalityMixin,
     AnteMixin,
+    CommanderMixin,
 ):
     players: list[PlayerState]
     enforce_mana_costs: bool = False
+    # CR 903.1 / 903.12a: which Commander variant this game is, or None for an
+    # ordinary game. "commander" or "brawl" (engine/commander.VARIANTS); every
+    # seam in engine/commander.py is inert while this is None, so a normal duel
+    # is unaffected. Set by the web layer from the host's format choice.
+    commander_variant: str | None = None
     # CR 407.1: playing for ante is an optional variation, off unless the host
     # turns it on. While False no card is anted at the start of the game, the
     # winner takes nothing, and cards carrying "Remove this card from your deck

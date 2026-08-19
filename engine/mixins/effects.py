@@ -821,7 +821,32 @@ class EffectsMixin:
         # count. Reading the local instead is why a *modifying* draw
         # replacement could not be written at all — the interceptor would run,
         # the number would change, and the draw would take the old one.
-        return player.draw(max(0, int(payload.get("count", count))))
+        drawn = player.draw(max(0, int(payload.get("count", count))))
+        self._divert_drawn_commanders(player)
+        return drawn
+
+    def _divert_drawn_commanders(self, player) -> None:
+        """CR 903.9b over a draw: drawing a commander puts it into its owner's
+        hand from their library, so its owner may put it into the command zone
+        instead.
+
+        Applied just after ``PlayerState.draw`` rather than inside it, which is
+        the one place the two halves of a draw can be told apart: ``draw`` is
+        the library operation (it must move the card to know a card was there
+        at all), and this is the replacement over its destination. The card
+        never becomes castable or discardable in between, since nothing gets
+        priority between the two lines.
+        """
+        if not self.is_commander_game:
+            return
+        seat = self.players.index(player)
+        for card in [c for c in player.hand if self.is_commander_card(seat, c)]:
+            index = next((i for i, held in enumerate(player.hand) if held is card), None)
+            if index is None:  # pragma: no cover - the list was just read
+                continue
+            player.hand.pop(index)
+            if not self.commander_zone_change(seat, card, "hand"):  # pragma: no cover
+                player.hand.insert(index, card)
 
     def _finish_lamp_draw(self, player_index: int, chosen_index: int, x: int) -> int:
         """Complete a lamp-replaced draw: the chosen card of the top ``x`` goes
@@ -832,7 +857,7 @@ class EffectsMixin:
         del player.library[:x]
         random.shuffle(top)
         player.library.extend(top)
-        player.hand.append(chosen)
+        self.put_card_into_hand(player, chosen)
         # The replacement still ends in "then draw a card", so the chosen card is
         # the last card drawn this turn (Jandor's Ring's cost can discard it).
         player.cards_drawn_this_turn.append(chosen)
@@ -844,11 +869,14 @@ class EffectsMixin:
 
     def _outside_game_choices(self, player_index: int) -> list[int]:
         """Sideboard indices this player may bring into the game (CR 100.4).
-        Ante cards are excluded unless the game is played for ante (CR 407.3)."""
+        Ante cards are excluded unless the game is played for ante (CR 407.3);
+        in a Commander game CR 903.11a's name and colour-identity bars apply
+        on top (`outside_the_game_problem` is None outside one)."""
         player = self.players[player_index]
         return [
             i for i, card in enumerate(player.sideboard)
-            if self.playing_for_ante or not is_ante_card(card)
+            if (self.playing_for_ante or not is_ante_card(card))
+            and self.outside_the_game_problem(player_index, card) is None
         ]
 
     def _finish_outside_game_draw(self, player_index: int, chosen_index: int) -> None:
@@ -857,10 +885,10 @@ class EffectsMixin:
         if not (0 <= chosen_index < len(player.sideboard)):
             return
         card = player.sideboard.pop(chosen_index)
-        player.hand.append(card)
-        self.log.append(
-            f"{player.name} put {card.name} into their hand from outside the game (Ring of Ma'rûf)"
-        )
+        if self.put_card_into_hand(player, card):
+            self.log.append(
+                f"{player.name} put {card.name} into their hand from outside the game (Ring of Ma'rûf)"
+            )
 
     # ------------------------------------------------------------------
     # Suspended replacement choices (engine/replacement_choices.py)
@@ -931,6 +959,20 @@ class EffectsMixin:
             "sideboard_indices": choice.data.get("sideboard_indices"),
             "remaining_draws": choice.data.get("remaining_draws", 0),
         }
+
+    @property
+    def pending_commander_zone_changes(self) -> list[dict]:
+        """CR 903.9's outstanding offers, oldest first — one per commander
+        waiting on its owner's "command zone or not?"."""
+        return [
+            {
+                "player_index": choice.player_index,
+                "card": choice.data["card"],
+                "destination": choice.data["destination"],
+                "rule": choice.data["rule"],
+            }
+            for choice in pending_choices_for(self, "commander_zone_change")
+        ]
 
     @property
     def pending_leng_discards(self) -> list[dict]:
@@ -1234,7 +1276,7 @@ class EffectsMixin:
     def _return_creature_from_graveyard(self, caster: PlayerState) -> bool:
         for idx, card in enumerate(caster.graveyard):
             if card.primary_type == "creature":
-                caster.hand.append(caster.graveyard.pop(idx))
+                self.put_card_into_hand(caster, caster.graveyard.pop(idx))
                 return True
         return False
 
@@ -1278,7 +1320,7 @@ class EffectsMixin:
         # (they differ when the creature was stolen, e.g. by Control Magic).
         owner_idx = self.owner_index_of(chosen)
         owner = self.players[owner_idx] if owner_idx is not None else target
-        owner.hand.append(chosen.card)
+        self.put_card_into_hand(owner, chosen.card)
         if owner_idx is not None:
             self.permanents_to_hand_this_turn[owner_idx] = (
                 self.permanents_to_hand_this_turn.get(owner_idx, 0) + 1

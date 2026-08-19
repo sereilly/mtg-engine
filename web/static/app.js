@@ -970,7 +970,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2056,6 +2056,14 @@ function getLengDiscardInfo(state = currentState) {
   return info;
 }
 
+function getCommanderZoneChangeInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.commander_zone_change;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
 function getBalanceSelectInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.balance_select;
@@ -2367,7 +2375,7 @@ function getPromptBoardTargeting(state = currentState) {
 
   if (getUpkeepPreventionInfo(state)) return null;
   if (getDiscardSelectInfo(state)) return null;
-  if (getLengDiscardInfo(state)) return null;
+  if (getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state)) return null;
 
   // Balance: the lands/creatures to sacrifice are picked on the board (the cards
   // to discard are picked in hand — see the balanceHandSelectable hand option).
@@ -2658,7 +2666,7 @@ function isAnyPromptActive(state = currentState) {
   if (getOptionalTriggerInfo(state)) return true;
   if (getUpkeepPreventionInfo(state)) return true;
   if (getDiscardSelectInfo(state)) return true;
-  if (getLengDiscardInfo(state)) return true;
+  if (getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state)) return true;
   if (getBalanceSelectInfo(state)) return true;
   if (getOptionalPayInfo(state)) return true;
   if (getOptionalUntapInfo(state)) return true;
@@ -2689,7 +2697,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -3258,6 +3266,62 @@ function applyLengDiscardPrompt(info) {
         toLibrary
           ? `${cardName} was put on top of your library (Library of Leng).`
           : `${cardName} was put into your graveyard.`,
+      );
+    });
+  });
+}
+
+// CR 903.9: a commander was about to go somewhere else and its owner may put it
+// into the command zone instead. One commander at a time; two destination
+// buttons, like Library of Leng's above. The rule half is named because 903.9a
+// (it died or was exiled) and 903.9b (it was about to be bounced or tucked)
+// read very differently to a player.
+function applyCommanderZoneChangePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = (info.card && info.card.name) || "your commander";
+  const destination = String(info.destination || "graveyard");
+  const remaining = Number(info.remaining || 1);
+  const rule = info.rule === "903.9b" ? "903.9b" : "903.9a";
+  const wording = rule === "903.9b"
+    ? `${cardName} would be put into your ${destination}.`
+    : `${cardName} is in your ${destination}.`;
+  title.textContent = "Commander";
+  body.textContent =
+    `${wording} Put it into the command zone instead? (CR ${rule})` +
+    (remaining > 1 ? ` (${remaining} to decide)` : "");
+
+  const keepLabel = destination.charAt(0).toUpperCase() + destination.slice(1);
+  steps.innerHTML =
+    `<div class="prompt-choice-row">` +
+    `<button type="button" class="prompt-choice-btn" data-commander-dest="command">Command Zone</button>` +
+    `<button type="button" class="prompt-choice-btn" data-commander-dest="keep">Leave in ${keepLabel}</button>` +
+    `</div>`;
+
+  steps.querySelectorAll("[data-commander-dest]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const toCommandZone = btn.dataset.commanderDest === "command";
+      await sendAction({
+        seat, action: "commander_zone_change_confirm", to_command_zone: toCommandZone,
+      });
+      updateActionHint(
+        toCommandZone
+          ? `${cardName} was put into the command zone (CR ${rule}).`
+          : `${cardName} stayed in your ${destination}.`,
       );
     });
   });
@@ -4956,6 +5020,12 @@ function renderActivationPrompt() {
   const lengDiscardInfo = getLengDiscardInfo();
   if (lengDiscardInfo) {
     applyLengDiscardPrompt(lengDiscardInfo);
+    return;
+  }
+
+  const commanderZoneInfo = getCommanderZoneChangeInfo();
+  if (commanderZoneInfo) {
+    applyCommanderZoneChangePrompt(commanderZoneInfo);
     return;
   }
 
@@ -8823,8 +8893,12 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
   // graveyard/exile: the backend says which (zone, index) entries the viewer
   // may cast or play right now, and clicking one starts an ordinary cast with
   // the zone riding along.
+  // "command" joins graveyard/exile here because the backend answers all three
+  // through one `castable_from_zones` list — a commander is offered by CR 903.8
+  // rather than by a cast permission, but what the client does with it is
+  // identical.
   const castableEntries =
-    zoneSeat === seat && (zoneKind === "graveyard" || zoneKind === "exile")
+    zoneSeat === seat && (zoneKind === "graveyard" || zoneKind === "exile" || zoneKind === "command")
       ? (currentState?.castable_from_zones || []).filter((entry) => entry.zone === zoneKind)
       : [];
   const isCastableFromZone = (index) => castableEntries.some((entry) => entry.index === index);
@@ -8852,7 +8926,13 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
     } else if (isCastableFromZone(index) && !pendingCastTarget && !pendingCastHandCard) {
       el.classList.add("castable-from-zone");
       el.style.cursor = "pointer";
-      el.title = `Cast ${card.name || ""} from your ${zoneKind}`;
+      const zoneLabel = zoneKind === "command" ? "command zone" : zoneKind;
+      const tax = castableEntries.find((entry) => entry.index === index)?.commander_tax || 0;
+      // CR 903.8: the tax is part of what this cast will cost, so it is named
+      // on the card rather than left to surprise the player at payment.
+      el.title = tax
+        ? `Cast ${card.name || ""} from your ${zoneLabel} (+{${tax}} commander tax)`
+        : `Cast ${card.name || ""} from your ${zoneLabel}`;
       el.addEventListener("click", () => beginZoneCast(card, zoneKind));
     }
     container.appendChild(el);
@@ -8927,10 +9007,12 @@ function openZoneReveal(sections, { auto = false } = {}) {
     "self-graveyard": "Your Graveyard",
     "self-exile": "Your Exile",
     "self-ante": "Your Ante",
+    "self-command": "Your Command Zone",
     "self-sideboard": "Your Cards Outside the Game",
     "opp-graveyard": "Opponent Graveyard",
     "opp-exile": "Opponent Exile",
     "opp-ante": "Opponent Ante",
+    "opp-command": "Opponent Command Zone",
   };
   overlay.querySelectorAll(".zone-reveal-section").forEach((el) => {
     el.classList.toggle("hidden", !sections.includes(el.dataset.zone));
@@ -10507,19 +10589,25 @@ function renderBoard(state) {
   q("selfGraveCount").textContent = me.graveyard.length;
   q("selfExileCount").textContent = (me.exile || []).length;
   q("selfAnteCount").textContent = (me.ante || []).length;
+  q("selfCommandCount").textContent = (me.command_zone || []).length;
   q("selfSideboardCount").textContent = (me.sideboard || []).length;
   q("oppDeckCount").textContent = opp.library_count;
   q("oppGraveCount").textContent = opp.graveyard.length;
   q("oppExileCount").textContent = (opp.exile || []).length;
   q("oppAnteCount").textContent = (opp.ante || []).length;
+  q("oppCommandCount").textContent = (opp.command_zone || []).length;
 
   renderZoneCards("selfGraveyardCards", me.graveyard, { zoneSeat: seat, zoneKind: "graveyard" });
   renderZoneCards("selfExileCards", me.exile || [], { zoneSeat: seat, zoneKind: "exile" });
   renderZoneCards("selfAnteCards", me.ante || []);
+  // The viewer's own command zone is clickable: a commander there is castable
+  // by CR 903.8, and `castable_from_zones` says when.
+  renderZoneCards("selfCommandCards", me.command_zone || [], { zoneSeat: seat, zoneKind: "command" });
   renderZoneCards("selfSideboardCards", me.sideboard || []);
   renderZoneCards("oppGraveyardCards", opp.graveyard, { zoneSeat: oppSeat, zoneKind: "graveyard" });
   renderZoneCards("oppExileCards", opp.exile || []);
   renderZoneCards("oppAnteCards", opp.ante || []);
+  renderZoneCards("oppCommandCards", opp.command_zone || []);
 
   renderMana("selfMana", me.mana_pool, seat, me.restricted_mana);
   renderMana("oppMana", opp.mana_pool, oppSeat, opp.restricted_mana);
@@ -10674,6 +10762,9 @@ function animateDiscards(prev, next, viewerSeat) {
 // both the commonest source and the only one with a per-card screen position;
 // the library is not here because nothing names the card that left it — a draw
 // is inferred from the deck count instead.
+// The command zone is not here: nothing in the rules moves a card from it into
+// a hand. CR 903.9b travels the other way, and CR 903.8's cast puts the
+// commander on the stack.
 const HAND_SOURCE_ZONES = ["battlefield", "graveyard", "exile", "ante", "sideboard"];
 // A mass return (Evacuation-style) would otherwise fire one clone per card.
 const HAND_FLIGHT_MAX = 8;
@@ -11859,15 +11950,24 @@ function deckSelection(selectId) {
         deck_id: null,
         deck_cards: deck.cards || [],
         deck_sideboard: deck.sideboard || [],
+        // The command zone (CR 903.5a) travels inline with a personal deck for
+        // the same reason its sideboard does — the server has no copy of it.
+        deck_commander: deck.commander || [],
         deck_name: deck.name || null,
       };
     }
   }
   if (id) {
     const meta = window.getDeckMeta?.(id);
-    return { deck_id: id, deck_cards: null, deck_sideboard: null, deck_name: meta?.name || null };
+    return {
+      deck_id: id, deck_cards: null, deck_sideboard: null, deck_commander: null,
+      deck_name: meta?.name || null,
+    };
   }
-  return { deck_id: null, deck_cards: null, deck_sideboard: null, deck_name: null };
+  return {
+    deck_id: null, deck_cards: null, deck_sideboard: null, deck_commander: null,
+    deck_name: null,
+  };
 }
 
 // Segmented toggles: visible button groups backed by a hidden <input>, so the
@@ -12030,6 +12130,7 @@ function collectFfaSeats() {
       deck_id: sel.deck_id,
       deck_cards: sel.deck_cards,
       deck_sideboard: sel.deck_sideboard,
+      deck_commander: sel.deck_commander,
       deck_name: sel.deck_name,
     });
   }
@@ -12074,6 +12175,9 @@ async function createSession() {
   const format = q("format")?.value || "standard";
   const useCustomSeed = q("useCustomSeed").checked;
   const playingForAnte = window.isPlayingForAnte();
+  // CR 903.1 / 903.12a: "" means an ordinary game, which is what the server
+  // reads a missing variant as.
+  const variant = q("commanderVariant")?.value || null;
   savePlayerName(format === "free_for_all" ? q("ffaSeatName_0")?.value : q("hostName")?.value);
   let req;
   if (format === "free_for_all") {
@@ -12085,6 +12189,7 @@ async function createSession() {
       enable_pregame: true,
       simultaneous_mulligan: !!q("simultaneousMulligan")?.checked,
       playing_for_ante: playingForAnte,
+      variant,
     };
   } else {
     const mode = q("mode").value;
@@ -12092,7 +12197,7 @@ async function createSession() {
     // The opponent's deck is only host-configurable when it's AI. For networked
     // human_vs_human the guest brings their own deck on join.
     const guestSel = mode === "human_vs_human"
-      ? { deck_id: null, deck_cards: null, deck_sideboard: null, deck_name: null }
+      ? { deck_id: null, deck_cards: null, deck_sideboard: null, deck_commander: null, deck_name: null }
       : deckSelection("guestDeckSelect");
     req = {
       mode,
@@ -12101,17 +12206,20 @@ async function createSession() {
       host_deck_id: hostSel.deck_id,
       host_deck_cards: hostSel.deck_cards,
       host_deck_sideboard: hostSel.deck_sideboard,
+      host_deck_commander: hostSel.deck_commander,
       host_deck_name: hostSel.deck_name,
       guest_colors: Number(q("guestColors").value),
       guest_deck_id: guestSel.deck_id,
       guest_deck_cards: guestSel.deck_cards,
       guest_deck_sideboard: guestSel.deck_sideboard,
+      guest_deck_commander: guestSel.deck_commander,
       guest_deck_name: guestSel.deck_name,
       use_custom_seed: useCustomSeed,
       custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
       enable_pregame: true,
       simultaneous_mulligan: !!q("simultaneousMulligan")?.checked,
       playing_for_ante: playingForAnte,
+      variant,
     };
   }
   const data = await postJson("/api/sessions", req);
@@ -12142,6 +12250,7 @@ async function joinSession() {
     guest_deck_id: joinSel.deck_id,
     guest_deck_cards: joinSel.deck_cards,
     guest_deck_sideboard: joinSel.deck_sideboard,
+    guest_deck_commander: joinSel.deck_commander,
     guest_deck_name: joinSel.deck_name,
     guest_colors: Number(q("joinColors")?.value) || 2,
   });

@@ -247,6 +247,29 @@ class SpellCastingMixin:
                 hand_index = next(i for i, card in enumerate(caster.hand) if card.name == card_name)
             except StopIteration as exc:
                 raise ValueError(f"Card not in hand: {card_name}") from exc
+        elif from_zone == "command":
+            # CR 903.8 is a *rule*, not an effect: "a player may cast a
+            # commander they own from the command zone". So it needs no
+            # CastPermission — the permission seam is CR 601.3's "an effect
+            # allows it", and asking it here would refuse the one cast the rules
+            # themselves grant. What it does need is the ownership test, which
+            # is the whole of the rule's restriction.
+            source_zone = caster.command_zone
+            hand_index = next(
+                (i for i, card in enumerate(source_zone) if card.name == card_name), None
+            )
+            if hand_index is None:
+                raise ValueError(f"Card not in command zone: {card_name}")
+            if not self.may_cast_from_command_zone(caster_index, source_zone[hand_index]):
+                details = (
+                    f"{card_name} is not {caster.name}'s commander and cannot be cast "
+                    f"from the command zone (CR 903.8)"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    card_name, False,
+                    classify_card(source_zone[hand_index]).effect_kind, details,
+                )
         else:
             if from_zone not in ("graveyard", "exile"):
                 raise ValueError(f"cannot cast from {from_zone!r}")
@@ -319,6 +342,20 @@ class SpellCastingMixin:
         if spell_tax:
             extra_generic_tax += spell_tax
             self.log.append(f"{card.name} is taxed by {', '.join(taxing_names)}")
+
+        # CR 903.8: the commander tax, {2} per previous cast of this commander
+        # from the command zone. An additional cost like any other (CR 601.2f),
+        # so it joins the same generic total rather than getting a payment path
+        # of its own — which is what makes it interact correctly with the cost
+        # increases above and with a cost reduction below.
+        if from_zone == "command":
+            commander_tax = self.commander_tax(caster_index, card)
+            if commander_tax:
+                extra_generic_tax += commander_tax
+                self.log.append(
+                    f"{card.name} costs an additional {{{commander_tax}}} "
+                    f"(CR 903.8: commander tax)"
+                )
 
         # "…that target this creature cost an additional 3 life to cast."
         # (Terror of the Peaks.) A tax in life rather than mana, scoped to what
@@ -532,6 +569,12 @@ class SpellCastingMixin:
         )
         if permission is not None:
             consume_permission(self, permission, card)
+        if from_zone == "command":
+            # CR 903.8's "each previous time" is counted once the cast is
+            # announced and paid for, so the tax charged above is the one this
+            # cast owed and the next one is {2} higher. A cast that failed
+            # anywhere above returned before here and costs nothing.
+            self.record_commander_cast(caster_index, card)
         if from_zone != "hand":
             self.log.append(f"{card.name} cast from {caster.name}'s {from_zone}")
 

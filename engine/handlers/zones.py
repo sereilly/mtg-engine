@@ -176,7 +176,7 @@ def exchange_ante_with_top_library(game: Game, instruction: OracleInstruction, c
     # CR 407.4: the replacement card comes off the caster's own library, so the
     # caster is the player anting it.
     game.ante_object(game.players.index(caster), caster.library.pop(0))
-    caster.hand.append(anted)
+    game.put_card_into_hand(caster, anted)
     game.log.append(
         f"{card.name}: {caster.name} exchanged {anted.name} in the ante "
         f"for the top card of their library"
@@ -387,7 +387,7 @@ def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_libr
     choice = game.pending_choice_of("discard", player_index)
     allow_top = bool(choice is not None and choice.data.get("allow_top_of_library"))
     if to_library and allow_top:
-        player.library.insert(0, card)
+        game.put_card_into_library(player, card, "top")
         game.log.append(f"{player.name} discarded {card.name} to the top of their library (Library of Leng)")
     else:
         player.graveyard.append(card)
@@ -472,7 +472,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
             caster, context, targets_desc["count"], _eligible
         )
         for returned_card in picked:
-            caster.hand.append(returned_card)
+            game.put_card_into_hand(caster, returned_card)
             game.log.append(
                 f"Returned {returned_card.name} from graveyard to hand"
             )
@@ -487,7 +487,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
         caster.graveyard[idx]
     ):
         chosen = caster.graveyard.pop(idx)
-        caster.hand.append(chosen)
+        game.put_card_into_hand(caster, chosen)
         game.log.append(f"Returned {chosen.name} from graveyard to hand")
         return True, "resolved"
     if card_types:
@@ -498,7 +498,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
             game.log.append(f"No {' or '.join(card_types)} card in graveyard to return")
             return True, "resolved"
         chosen = caster.graveyard.pop(chosen_index)
-        caster.hand.append(chosen)
+        game.put_card_into_hand(caster, chosen)
         game.log.append(f"Returned {chosen.name} from graveyard to hand")
         return True, "resolved"
     if card_type is not None and card_type != "creature":
@@ -509,14 +509,14 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
             game.log.append(f"No {card_type} card in graveyard to return")
             return True, "resolved"
         chosen = caster.graveyard.pop(chosen_index)
-        caster.hand.append(chosen)
+        game.put_card_into_hand(caster, chosen)
         game.log.append(f"Returned {chosen.name} from graveyard to hand")
         return True, "resolved"
 
     returned = game._return_creature_from_graveyard(caster)
     if not returned and any_card and caster.graveyard:
         chosen = caster.graveyard.pop(0)
-        caster.hand.append(chosen)
+        game.put_card_into_hand(caster, chosen)
         game.log.append(f"Returned {chosen.name} from graveyard to hand")
         return True, "resolved"
     game.log.append("Returned creature from graveyard" if returned else "No creature to return")
@@ -616,7 +616,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
         for perm in chosen:
             owner_idx = game.owner_index_of(perm)
             owner = game.players[owner_idx] if owner_idx is not None else context.caster
-            owner.hand.append(perm.card)
+            game.put_card_into_hand(owner, perm.card)
             if owner_idx is not None:
                 game.permanents_to_hand_this_turn[owner_idx] = (
                     game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
@@ -659,7 +659,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
             return True, "resolved"
         owner_idx = game.owner_index_of(perm)
         owner = game.players[owner_idx] if owner_idx is not None else context.caster
-        owner.hand.append(perm.card)
+        game.put_card_into_hand(owner, perm.card)
         if owner_idx is not None:
             game.permanents_to_hand_this_turn[owner_idx] = (
                 game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
@@ -812,7 +812,7 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
                 seat, Permanent(card=found), None, from_zone="library",
             )
         else:
-            player.hand.append(found)
+            game.put_card_into_hand(player, found)
     else:
         game.log.append(f"{player.name} revealed their library and found nothing")
 
@@ -1214,7 +1214,7 @@ def return_all_owned_artifacts_to_hand(game: Game, instruction: OracleInstructio
                 continue
             # Identity, not value: two untapped Moxen of the same name are ``==``.
             game.remove_from_battlefield(permanent)
-            game.players[owner_index].hand.append(permanent.card)
+            game.put_card_into_hand(owner_index, permanent.card)
             game._remove_aura_effects(permanent)
             returned += 1
     game.log.append(f"Returned {returned} artifact(s) to {context.target.name}'s hand")
@@ -1286,7 +1286,7 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
     owner = game.players[owner_idx] if owner_idx is not None else context.caster
     game.remove_from_battlefield(target_perm)
     game._remove_aura_effects(target_perm)
-    owner.library.insert(0, target_perm.card)
+    game.put_card_into_library(owner, target_perm.card, "top")
     game.log.append(
         f"{context.card.name}: {target_perm.card.name} put on top of {owner.name}'s library"
     )
@@ -1406,10 +1406,10 @@ def reveal_top_to_hand_or_bottom(game: Game, instruction: OracleInstruction, con
     card_type = instruction.payload.get("card_type")
     top = caster.library.pop(0)
     if card_type is None or top.primary_type == card_type:
-        caster.hand.append(top)
+        game.put_card_into_hand(caster, top)
         game.log.append(f"{caster.name} revealed {top.name} and put it into their hand")
     else:
-        caster.library.append(top)
+        game.put_card_into_library(caster, top)
         game.log.append(
             f"{caster.name} revealed {top.name} and put it on the bottom of their library"
         )
@@ -1801,7 +1801,7 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
     if not (isinstance(idx, int) and 0 <= idx < len(caster.graveyard)):
         idx = 0
     card = caster.graveyard.pop(idx)
-    caster.library.append(card)
+    game.put_card_into_library(caster, card)
     game.log.append(f"{context.card.name}: {card.name} put on the bottom of {caster.name}'s library")
     return True, "resolved"
 
@@ -1816,7 +1816,7 @@ def return_spell_or_creature_to_hand(game: Game, instruction: OracleInstruction,
     if chosen is not None and chosen in game.stack:
         game.stack.remove(chosen)
         owner = game.players[chosen.caster_index]
-        owner.hand.append(chosen.card)
+        game.put_card_into_hand(owner, chosen.card)
         game.log.append(
             f"{context.card.name} returned {chosen.card.name} from the stack "
             f"to {owner.name}'s hand"

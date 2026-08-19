@@ -134,6 +134,21 @@ class GameEndingMixin:
                     self.log.append(f"{player.name} lost the game (704.5c / 104.3d: {player.poison_counters} poison counters)")
                     changed = True
 
+            # 704.6c / 903.10a: a player dealt 21 or more combat damage by the
+            # same commander over the course of the game loses. Only in a
+            # Commander game, and not in a Brawl one (903.12h) — both answered
+            # by engine/commander.py rather than by a flag read here.
+            if self._commander_damage_state_based_actions():
+                changed = True
+
+            # 903.9a: a commander put into a graveyard or into exile since the
+            # last check may be moved to the command zone by its owner. Its
+            # place among the state-based actions is after the ones that put it
+            # there (704.5f/g above) and before the game-ending check below, so
+            # a commander that died this pass is offered in this pass.
+            if self._commander_zone_state_based_actions():
+                changed = True
+
             # 104.4a: if all players have now lost, the game is a draw
             if not self.is_draw and len(self.players) > 1 and all(p.lost for p in self.players):
                 self.is_draw = True

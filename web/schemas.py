@@ -55,6 +55,7 @@ ActionKind = Literal[
     "discard_confirm",
     "revealed_hand_pick_confirm",
     "leng_discard_confirm",
+    "commander_zone_change_confirm",
     "balance_confirm",
     "sacrifice_confirm",
     "effect_order_confirm",
@@ -106,6 +107,9 @@ class SeatConfig(BaseModel):
     # That deck's sideboard ("outside the game", CR 100.4), sent alongside
     # deck_cards for the same reason.
     deck_sideboard: list[DeckCardEntry] | None = Field(default=None)
+    # That deck's command zone (CR 903.5a), sent for the same reason. Used only
+    # when the session's `variant` names a Commander variant.
+    deck_commander: list[DeckCardEntry] | None = Field(default=None)
     # Display name for the lobby roster (saved deck name or personal deck
     # name); the server has no other way to resolve a personal deck's name.
     deck_name: str | None = Field(default=None)
@@ -128,6 +132,9 @@ class CreateSessionRequest(BaseModel):
     # Those decks' sideboards ("outside the game", CR 100.4).
     host_deck_sideboard: list[DeckCardEntry] | None = Field(default=None)
     guest_deck_sideboard: list[DeckCardEntry] | None = Field(default=None)
+    # Those decks' command zones (CR 903.5a).
+    host_deck_commander: list[DeckCardEntry] | None = Field(default=None)
+    guest_deck_commander: list[DeckCardEntry] | None = Field(default=None)
     # Display names for the lobby roster (see SeatConfig.deck_name).
     host_deck_name: str | None = Field(default=None)
     guest_deck_name: str | None = Field(default=None)
@@ -147,6 +154,12 @@ class CreateSessionRequest(BaseModel):
     # card from your deck before playing if you're not playing for ante" (CR 407.3),
     # and random decks are built without them.
     playing_for_ante: bool = Field(default=False)
+    # CR 903.1 / 903.12a: play this game as a Commander variant. None (the
+    # default) is an ordinary game; "commander" and "brawl" turn on CR 903 —
+    # a command zone, the 40/25/30 starting life, the commander tax, and the
+    # two ways a commander returns to the command zone. Each seat's commander
+    # comes from its deck's command zone (see *_deck_commander above).
+    variant: Literal["commander", "brawl"] | None = Field(default=None)
     # Free-For-All only (mode="free_for_all"): one entry per seat (3 or 4 total).
     # host_*/guest_* fields above are unused in this mode.
     seats: list[SeatConfig] | None = Field(default=None)
@@ -161,6 +174,8 @@ class JoinSessionRequest(BaseModel):
     guest_deck_cards: list[DeckCardEntry] | None = Field(default=None)
     # That deck's sideboard ("outside the game", CR 100.4).
     guest_deck_sideboard: list[DeckCardEntry] | None = Field(default=None)
+    # That deck's command zone (CR 903.5a), for a Commander-variant session.
+    guest_deck_commander: list[DeckCardEntry] | None = Field(default=None)
     guest_colors: int = Field(default=2, ge=1, le=5)
     # Display name for the lobby roster (see SeatConfig.deck_name).
     guest_deck_name: str | None = Field(default=None)
@@ -307,7 +322,7 @@ class GameActionRequest(BaseModel):
     # Casting from outside the hand (engine/cast_permissions.py): which zone
     # the named card is cast or played from. Absent means the hand, so every
     # existing client is unchanged.
-    from_zone: Literal["hand", "graveyard", "exile"] | None = None
+    from_zone: Literal["hand", "graveyard", "exile", "command"] | None = None
     # A cost waiver ("cast spells from your hand without paying their mana
     # costs"): true to use it. Absent lets the engine apply it automatically
     # to spells without {X} in their cost (a waived X is 0, CR 107.3b).
@@ -320,6 +335,10 @@ class GameActionRequest(BaseModel):
     # (Library of Leng) whether to put them on top of the library instead.
     discard_indices: list[int] | None = None
     to_library: bool | None = None
+    # CR 903.9: whether the commander goes to the command zone instead of the
+    # zone it was headed for. Its own field rather than reusing `accept`,
+    # because the answer is a destination and not a yes to an offer of one.
+    to_command_zone: bool | None = None
     # Balance: the indices the player chooses to sacrifice/discard — land and
     # creature indices into their battlefield, plus hand-card indices to discard.
     land_indices: list[int] | None = None

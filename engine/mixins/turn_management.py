@@ -39,12 +39,22 @@ class TurnManagementMixin:
         "after determining which player goes first but before players draw any
         cards", so every library is shuffled first, the ante is seeded, and
         only then are hands dealt.
+
+        CR 903.6 comes *first* in a Commander game: each player puts their
+        commander into the command zone and "then each player shuffles the
+        remaining cards of their deck". Doing it before the shuffle rather than
+        after is what makes a commander unreachable by 903.7's draw, and it is
+        also where 903.7's 40 (or Brawl's 25/30) life total is set.
         """
         order = list(range(starting_player_index, len(self.players))) + list(
             range(0, starting_player_index)
         )
+        self.begin_commander_game()
         for i in order:
             random.shuffle(self.players[i].library)
+        # CR 903.11a asks what a player's *starting deck* held, so it is
+        # recorded once the libraries are final and before anything moves.
+        self.record_starting_decks()
         self.place_starting_ante(order)
         for i in order:
             player = self.players[i]
@@ -61,10 +71,20 @@ class TurnManagementMixin:
         mulligan doesn't count toward the number of cards they'll put on the
         bottom of their library or toward the 7-mulligan limit; every mulligan
         after that counts normally. In a 2-player game this is just the raw
-        ``mulligans_taken`` count (no discount, matching 103.5's base rule)."""
+        ``mulligans_taken`` count (no discount, matching 103.5's base rule).
+
+        CR 903.12g gives the same free first mulligan to **any** Brawl game,
+        two-player included — which is the only thing that separates a
+        two-player Brawl's mulligans from a two-player Commander game's. The two
+        discounts do not stack: 903.12g and 103.5c describe the same one
+        mulligan, so a multiplayer Brawl still discounts exactly one."""
+        from ..commander import free_first_mulligan
+
         player = self.players[player_index]
-        free_offset = 1 if len(self.players) >= 3 else 0
-        return max(0, player.mulligans_taken - free_offset)
+        free = len(self.players) >= 3 or free_first_mulligan(
+            getattr(self, "commander_variant", None)
+        )
+        return max(0, player.mulligans_taken - (1 if free else 0))
 
     def take_mulligan(
         self,

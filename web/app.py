@@ -383,6 +383,7 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
             req.guest_deck_cards,
             req.guest_deck_name,
             req.guest_deck_sideboard,
+            req.guest_deck_commander,
         )
     except DeckNotFoundError as exc:
         raise HTTPException(status_code=400, detail="selected deck not found") from exc

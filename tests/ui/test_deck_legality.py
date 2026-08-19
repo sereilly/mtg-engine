@@ -16,9 +16,12 @@ def _catalog(*cards: dict) -> dict:
     return {c["name"].casefold(): c for c in cards}
 
 
-def _card(name, legal, *, type_line="Creature - Test", oracle_text="", key="modern"):
+def _card(name, legal, *, type_line="Creature - Test", oracle_text="", key="modern",
+          mana_cost=""):
+    # ``mana_cost`` is where CR 903.4 reads a card's colour identity from, so a
+    # Commander-format fixture needs one to be anything but colourless.
     return {"name": name, "type_line": type_line, "oracle_text": oracle_text,
-            "legalities": {key: legal}}
+            "mana_cost": mana_cost, "legalities": {key: legal}}
 
 
 # ── Per-card status ─────────────────────────────────────────────────────────
@@ -175,15 +178,18 @@ def test_commander_requires_a_designated_commander():
 
 
 def test_commander_with_one_designated_commander_is_fine():
+    # The commander is green, so CR 903.5d admits the Forests: each colour of
+    # mana they could produce is in its colour identity.
     cat = _catalog(
         _card("Forest", "legal", type_line="Basic Land - Forest", key="commander"),
-        _card("Norin the Wary", "legal", type_line="Legendary Creature - Human", key="commander"),
+        _card("Green Legend", "legal", type_line="Legendary Creature - Human",
+              key="commander", mana_cost="{2}{G}"),
     )
     res = validate_deck(
         [{"name": "Forest", "count": 99}], "commander", cat,
-        commander=[{"name": "Norin the Wary", "count": 1}],
+        commander=[{"name": "Green Legend", "count": 1}],
     )
-    assert res["legal"] is True
+    assert res["legal"] is True, res["problems"]
 
 
 def test_other_formats_do_not_use_a_commander():

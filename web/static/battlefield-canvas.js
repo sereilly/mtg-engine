@@ -1458,6 +1458,13 @@ class BattlefieldCanvas {
       if (ante.length > 0) {
         piles.push({ seat: seatIdx, kind: "ante", count: ante.length, topCard: ante[ante.length - 1], cx: 0, cy: 0, w: 0, h: 0 });
       }
+      // The command zone (CR 408) — public, and only occupied in a Commander
+      // game (CR 903.6), so the same "appears when it has something in it" rule
+      // the ante pile above follows.
+      const command = Array.isArray(p.command_zone) ? p.command_zone : [];
+      if (command.length > 0) {
+        piles.push({ seat: seatIdx, kind: "command", count: command.length, topCard: command[command.length - 1], cx: 0, cy: 0, w: 0, h: 0 });
+      }
       // Cards owned from outside the game (CR 100.4) — private, so the server
       // only fills this array for its owner; other seats always see it empty and
       // get no pile.
@@ -1490,7 +1497,7 @@ class BattlefieldCanvas {
     if (!this.zonePiles.length) return;
     const n = this.currentState?.players?.length || 0;
     const stage = this.canvas.parentElement?.getBoundingClientRect();
-    const order = { library: 0, graveyard: 1, exile: 2, ante: 3, sideboard: 4 };
+    const order = { library: 0, graveyard: 1, exile: 2, command: 3, ante: 4, sideboard: 5 };
     const slots = new Map(); // seat -> next slot index
     for (const pile of this.zonePiles.slice().sort((a, b) => order[a.kind] - order[b.kind])) {
       const slot = slots.get(pile.seat) || 0;
@@ -1575,7 +1582,7 @@ class BattlefieldCanvas {
   _drawZonePiles(ctx, seatFilter = null) {
     if (!this.zonePiles.length) return;
     const now = performance.now();
-    const labels = { library: "DECK", graveyard: "GRAVE", exile: "EXILE", ante: "ANTE", sideboard: "OUTSIDE" };
+    const labels = { library: "DECK", graveyard: "GRAVE", exile: "EXILE", command: "COMMAND", ante: "ANTE", sideboard: "OUTSIDE" };
     for (const pile of this.zonePiles) {
       if (seatFilter !== null && pile.seat !== seatFilter) continue;
       const x = pile.cx - pile.w / 2;

@@ -63,7 +63,8 @@ Tests are organized by subject — put new tests in the matching subfolder:
 `tests/ai/` (AI policy/simulator), `tests/ui/` (web API + frontend/end-to-end),
 `tests/engine/` (loader, oracle compiler, parsing, dispatch internals),
 `tests/rules/` (Comprehensive Rules sections: phases, combat, mana, layers,
-keywords, replacements), `tests/sets/` (per-card tests for a specific set),
+keywords, replacements, and the casual variants — ante, Commander, Brawl),
+`tests/sets/` (per-card tests for a specific set),
 `tests/regressions/` (in-game bug regressions). Shared fixtures live in
 `tests/conftest.py` and helpers in `tests/helpers.py`, both at the root.
 
@@ -293,6 +294,26 @@ adding entries, not editing dispatch**:
   loops that drive it. Adding a prompt is one `register_choice` + one renderer +
   the code that arms it — never a new `Game` field, and never another branch in
   a per-card cascade.
+- `engine/commander.py` — CR 903, the Commander variant and its Brawl option
+  (CR 903.12). Opt-in like `engine/ante.py`: every seam is inert unless
+  `Game.commander_variant` is `"commander"` or `"brawl"`, so an ordinary duel is
+  untouched. **Colour identity (CR 903.4) is derived here, not read off the
+  ingested Scryfall field** — a token, a test fixture and a card the engine
+  invents have no field and would come back colourless, which is the value that
+  passes every deck check; `tests/rules/test_commander.py` holds the derivation
+  to Scryfall's answer over the whole pool. **The commander designation is a
+  per-seat *name*** (CR 903.3: an attribute of the card, kept across every zone
+  change), because a `Permanent` is a new object each time it enters the
+  battlefield and a `CardDefinition` is shared by every deck in the process.
+  Both halves of CR 903.9's return to the command zone are optional, and both go
+  through one `ReplacementChoice` kind. **CR 903.9b is why every "put this card
+  into a hand / a library" in the engine goes through
+  `Game.put_card_into_hand` / `put_card_into_library`**: the rule has no single
+  fire site — a bounce, a tuck, a regrowth and a draw are all "would be put into
+  its owner's hand or library from anywhere" — and thirty fire sites is
+  twenty-nine places to forget it. Deck construction is `web/deck_legality.py`'s
+  `commander` / `brawl` rows, which opt in with a `variant` key and are mirrored
+  in `web/static/legality.js`.
 - `engine/prevention.py` — CR 615 damage shields, `@prevention_effect(order,
   applies=…)` functions over one `{recipient, amount, source, combat}` event.
   `recipient` is a player *or* a permanent, so a shield that applies to both is

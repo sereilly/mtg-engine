@@ -51,9 +51,11 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     # 3xx — Card Types present in the pool (306 Planeswalkers joined with the
     # M21 measured set's loyalty work)
     **{s: "all" for s in ("300", "301", "302", "303", "304", "305", "306", "307")},
-    # 4xx — Zones (408 Command excluded; 407 Ante is implemented as an opt-in
-    # game variation, so the ante zone is tracked)
-    **{s: "all" for s in ("400", "401", "402", "403", "404", "405", "406", "407")},
+    # 4xx — Zones. 407 Ante and 408 Command are both implemented as opt-in game
+    # variations (CR 407, CR 903), so both zones are tracked.
+    **{s: "all" for s in (
+        "400", "401", "402", "403", "404", "405", "406", "407", "408",
+    )},
     # 5xx — Turn Structure
     **{s: "all" for s in (
         "500", "501", "502", "503", "504", "505", "506", "507", "508", "509",
@@ -123,6 +125,9 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     "800": "all",
     "802": "all",  # Attack Multiple Players Option
     "806": "all",  # Free-for-All Variant
+    # 9xx — Casual variants the engine implements. 903 Commander (with 903.12's
+    # Brawl option) joined with engine/commander.py.
+    "903": "all",
 }
 
 SECTION_RE = re.compile(r"^(\d{3})\.\s+(.+?)\s*$")
