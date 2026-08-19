@@ -24,7 +24,7 @@ from ._core import (
 
 @dataclass(frozen=True)
 class CantBe:
-    """"<subject> can't be <participle> <duration>." (CR 701.15 regenerate,
+    """"<subject> can't be <participle> <duration>." (CR 701.19 regenerate,
     CR 509.1b blocking restrictions.)
 
     One node for the whole family, with the participle carried as data. Minting

@@ -8,10 +8,15 @@ Covers the parts of those rules this engine implements: the priority window
 before priority, actions that bypass the stack (turn-based untap, mana
 abilities), and target-legality checks at resolution.
 
-Not covered (engine gaps, noted rather than asserted):
-- 117.6 (shared team turns) — the variant isn't implemented.
-- 405.3 (APNAP ordering of simultaneously-added stack objects) — the engine
-  never puts two players' objects on the stack in one event.
+Not covered (engine gap, noted rather than asserted):
+- 117.6 (shared team turns) — the variant isn't implemented, and the rule is
+  excluded from the tracker's denominator for that reason (see EXCLUDED in
+  scripts/rules_progress.py).
+
+405.3 *is* covered, at the bottom of this file: ``_enqueue_triggered_batch``
+puts one event's triggers on the stack for every player at once, which is
+exactly the simultaneous case the rule governs. This docstring used to say the
+engine never did that.
 """
 
 from __future__ import annotations
@@ -612,3 +617,75 @@ def test_608_2b_damage_spell_with_vanished_creature_target_does_not_hit_the_play
     assert result.supported
     assert p2.life == 20  # no fallback damage to the player
     assert any(card.name == "Lightning Bolt" for card in p1.graveyard)
+
+
+# ---------------------------------------------------------------------------
+# 405.3 — several objects put on the stack at once go on in APNAP order
+#
+# The active player's objects go on lowest, so they resolve *last*. The engine
+# does this in ``_enqueue_triggered_batch``, which is the one place a single
+# event produces triggers for more than one player.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("405.3", "603.3b")
+def test_405_3_the_active_players_object_is_put_on_the_stack_lowest():
+    """With one event triggering both players' permanents, the active player's
+    trigger goes on first — so it sits at the bottom and resolves last."""
+    from engine.events import Event, collect
+
+    text = "At the beginning of your upkeep, this creature deals 1 damage to you."
+    mine = Permanent(card=_mk_card("Mine", "Creature — Test", text))
+    theirs = Permanent(card=_mk_card("Theirs", "Creature — Test", text))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game.active_player_index = 0
+
+    game._enqueue_triggered_batch(collect(game, Event("upkeep_self")))
+
+    assert [item.caster_index for item in game.stack] == [0, 1]
+    assert game.stack[-1].caster_index == 1  # non-active player resolves first
+
+
+@pytest.mark.cr("405.3", "603.3b")
+def test_405_3_the_order_follows_the_active_player_not_the_seat_number():
+    """APNAP is relative to whose turn it is, so the same board with the other
+    player active produces the opposite stack order. Seat 0 is not privileged;
+    the active player is."""
+    from engine.events import Event, collect
+
+    text = "At the beginning of your upkeep, this creature deals 1 damage to you."
+    mine = Permanent(card=_mk_card("Mine", "Creature — Test", text))
+    theirs = Permanent(card=_mk_card("Theirs", "Creature — Test", text))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game.active_player_index = 1
+
+    game._enqueue_triggered_batch(collect(game, Event("upkeep_self")))
+
+    assert [item.caster_index for item in game.stack] == [1, 0]
+
+
+@pytest.mark.cr("405.3")
+def test_405_3_one_players_several_objects_keep_a_deterministic_relative_order():
+    """When a player controls more than one of the objects, CR 405.3 lets them
+    choose the relative order. The engine has no prompt for that choice, so it
+    keeps collection order — deterministic rather than arbitrary, which is what
+    the seeded AI runs depend on."""
+    from engine.events import Event, collect
+
+    text = "At the beginning of your upkeep, this creature deals 1 damage to you."
+    first = Permanent(card=_mk_card("First", "Creature — Test", text))
+    second = Permanent(card=_mk_card("Second", "Creature — Test", text))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[first, second]),
+        PlayerState(name="P2"),
+    ])
+    game.active_player_index = 0
+
+    game._enqueue_triggered_batch(collect(game, Event("upkeep_self")))
+
+    assert [item.card.name for item in game.stack] == ["First", "Second"]

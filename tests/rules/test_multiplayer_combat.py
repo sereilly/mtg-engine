@@ -312,3 +312,126 @@ def test_800_6_two_player_mulligan_unaffected():
     # 2-player: no discount, matches the historical single-mulligan bottom count.
     assert game.mulligan_effective_count(0) == 1
     assert len(p0.hand) == 6
+
+
+# ---------------------------------------------------------------------------
+# CR 806 — the Free-for-All variant itself, and CR 802.1's "only one player"
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("806.1")
+def test_806_1_every_other_player_is_an_opponent():
+    """In Free-for-All, players compete as individuals — there are no teams.
+
+    So each player's opponent set is simply everyone else, symmetrically. This
+    is the rule that makes every other 806/802 behaviour meaningful: with teams
+    the sets would be smaller and asymmetric.
+    """
+    game = Game(players=[
+        _p0_with_library(),
+        PlayerState(name="P1"),
+        PlayerState(name="P2"),
+        PlayerState(name="P3"),
+    ])
+
+    assert set(game.opponents_of(0)) == {1, 2, 3}
+    assert set(game.opponents_of(1)) == {0, 2, 3}
+    assert set(game.opponents_of(3)) == {0, 1, 2}
+
+
+@pytest.mark.cr("806.1", "104.2a")
+def test_806_1_a_free_for_all_ends_only_when_one_individual_remains():
+    """Competing as individuals means one elimination does not end the game —
+    the game continues until a single player is left."""
+    game = Game(players=[
+        _p0_with_library(),
+        PlayerState(name="P1", life=0),
+        PlayerState(name="P2"),
+    ])
+
+    game.check_state_based_actions()
+    assert game.players[1].lost is True
+    assert game.is_game_over() is False
+    assert game.get_winner() is None
+
+    game.players[2].life = 0
+    game.check_state_based_actions()
+    assert game.is_game_over() is True
+    assert game.get_winner() is game.players[0]
+
+
+@pytest.mark.cr("806.2", "806.2b")
+def test_806_2b_the_variant_uses_the_attack_multiple_players_option():
+    """Exactly one of attack-left, attack-right and attack-multiple-players is
+    used, and this engine uses the third: an attacker may be aimed at *any*
+    living opponent, not only at a seat neighbour.
+
+    Attacking "left" would make seat 1 the only legal target for seat 0; that
+    seat 2 is equally legal is what identifies the option in force.
+    """
+    a1 = Permanent(card=_mk_creature("Free Attacker", 2, 2))
+    game = Game(players=[
+        _p0_with_library(battlefield=[a1]),
+        PlayerState(name="P1"),
+        PlayerState(name="P2"),
+    ])
+    _to_declare_attackers(game)
+
+    ok, msg = game.declare_attackers(0, [0], attacker_targets={0: 2})
+
+    assert ok, msg
+    assert game.combat_attackers == {0: 2}
+
+
+@pytest.mark.cr("806.2c")
+def test_806_2c_creatures_are_not_deployed_to_another_player():
+    """The deploy creatures option isn't used in Free-for-All: a creature is
+    controlled by its own controller and attacks under them, so the attacking
+    seat is the active player and nobody else."""
+    a1 = Permanent(card=_mk_creature("Own Attacker", 2, 2))
+    game = Game(players=[
+        _p0_with_library(battlefield=[a1]),
+        PlayerState(name="P1"),
+        PlayerState(name="P2"),
+    ])
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0], attacker_targets={0: 1})
+
+    assert game.controller_index_of(a1) == 0
+    assert game.active_player_index == 0
+
+
+@pytest.mark.cr("802.1")
+def test_802_1_the_attacker_may_choose_to_attack_only_one_player():
+    """With the attack-multiple-players option in use, a player may still send
+    every attacker at a single opponent in a particular combat — "multiple
+    players" is a permission, not a requirement."""
+    a1 = Permanent(card=_mk_creature("Attacker One", 2, 2))
+    a2 = Permanent(card=_mk_creature("Attacker Two", 2, 2))
+    game = Game(players=[
+        _p0_with_library(battlefield=[a1, a2]),
+        PlayerState(name="P1"),
+        PlayerState(name="P2"),
+    ])
+    _to_declare_attackers(game)
+
+    ok, msg = game.declare_attackers(0, [0, 1], attacker_targets={0: 2, 1: 2})
+
+    assert ok, msg
+    assert game.combat_defending_players() == {2}
+    assert game.combat_attackers == {0: 2, 1: 2}
+
+
+@pytest.mark.cr("802.1")
+def test_802_1_a_single_defender_is_still_a_legal_whole_combat():
+    """The scalar back-compat view is meaningful exactly when one player is
+    being attacked — the case CR 802.1's second sentence describes."""
+    a1 = Permanent(card=_mk_creature("Lone Attacker", 3, 3))
+    game = Game(players=[
+        _p0_with_library(battlefield=[a1]),
+        PlayerState(name="P1"),
+        PlayerState(name="P2"),
+    ])
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0], attacker_targets={0: 1})
+
+    assert game.combat_defending_player_index == 1

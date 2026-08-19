@@ -790,7 +790,7 @@ def _serialize_player(
         "battlefield": battlefield,
         "emblems": _serialize_emblems(player),
         "mana_pool": _serialize_mana_pool(player),
-        # "Spend this mana only to…" (CR 106.6b). Each restriction keeps its own
+        # "Spend this mana only to…" (CR 106.6). Each restriction keeps its own
         # bucket so the UI can show it as a distinct, labelled tracker instead
         # of folding it into the ordinary pool — which would overstate what is
         # spendable. ``creature_only_mana`` is the first of these and keeps its

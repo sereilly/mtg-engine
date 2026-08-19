@@ -896,3 +896,160 @@ def test_603_6c_a_permanent_that_was_not_there_announces_nothing():
     game._settle()
 
     assert not p1.lost
+
+
+# ---------------------------------------------------------------------------
+# 113.6 — where an ability functions
+# 113.7 — what the source of an ability is
+#
+# The default is the battlefield, and the two exceptions in the pool are both
+# M21 cards: Silversmote Ghoul's trigger works from a graveyard, Waker of
+# Waves' ability is activated from a hand. Both are declared by the *sentence*
+# — the zone the text names, or a "Discard this card" cost — never by a card
+# name, which is why an invented card printing the same shape gets the same
+# treatment.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("113.6", "113.6m")
+def test_113_6_a_trigger_naming_its_own_graveyard_functions_from_there(set_pool):
+    """An ability that returns its own card from a graveyard functions there.
+
+    The engine records that as the ``functions_from`` payload key, stamped by
+    the lowering from the zone the sentence names — so what makes the ability
+    work outside the battlefield is its printed text, not a registration.
+    """
+    from engine.events import FUNCTIONS_FROM
+
+    ghoul = set_pool("M21")["Silversmote Ghoul"]
+    program = compile_card_oracle(ghoul)
+
+    returning = [
+        trig for trig in program.triggered_abilities
+        if trig.instruction is not None
+        and (trig.instruction.payload or {}).get(FUNCTIONS_FROM) == "graveyard"
+    ]
+
+    assert returning, "the graveyard-functioning trigger was not declared as one"
+
+
+@pytest.mark.cr("113.6")
+def test_113_6_an_ability_without_that_declaration_functions_only_on_the_battlefield():
+    """The default of CR 113.6: an ordinary permanent's triggered ability
+    carries no zone declaration, so nothing looks for it in a graveyard."""
+    from engine.events import FUNCTIONS_FROM
+
+    ordinary = CardDefinition(
+        name="Plain Trigger", mana_cost="", cmc=0.0, type_line="Creature — Test",
+        oracle_text="At the beginning of your upkeep, draw a card.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Plain Trigger", "type_line": "Creature — Test",
+             "power": "1", "toughness": "1"},
+    )
+    program = compile_card_oracle(ordinary)
+
+    assert program.triggered_abilities
+    assert all(
+        (trig.instruction.payload or {}).get(FUNCTIONS_FROM) is None
+        for trig in program.triggered_abilities
+        if trig.instruction is not None
+    )
+
+
+@pytest.mark.cr("113.6")
+def test_113_6_an_ability_with_a_discard_this_card_cost_is_activated_from_hand(set_pool):
+    """"{1}{U}, Discard this card:" is an ability that functions from the hand.
+
+    The cost is what says so — discarding the card as a cost is only possible
+    where the card is — so the engine gates ``activate_from_hand`` on it rather
+    than on a list of card names.
+    """
+    waker = set_pool("M21")["Waker of Waves"]
+    library = [waker] * 3
+    p1 = PlayerState(name="P1", hand=[waker], library=library[:])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    result = game.activate_from_hand(0, "Waker of Waves")
+
+    assert result.supported is True
+    assert p1.hand == [] or waker not in p1.hand
+
+
+@pytest.mark.cr("113.6")
+def test_113_6_an_ordinary_ability_cannot_be_activated_from_hand():
+    """A card whose ability has no discard-self cost does not function in hand,
+    so activating it from there is refused rather than silently working."""
+    bear = CardDefinition(
+        name="Tapper Bear", mana_cost="", cmc=0.0, type_line="Creature — Bear",
+        oracle_text="{T}: Draw a card.", colors=(), color_identity=(),
+        keywords=(), produced_mana=(),
+        raw={"name": "Tapper Bear", "type_line": "Creature — Bear",
+             "power": "2", "toughness": "2"},
+    )
+    p1 = PlayerState(name="P1", hand=[bear], library=[bear])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    result = game.activate_from_hand(0, "Tapper Bear")
+
+    assert result.supported is False
+    assert bear in p1.hand
+
+
+@pytest.mark.cr("113.7")
+def test_113_7_the_source_of_an_activated_ability_is_the_permanent_that_generated_it():
+    """The source of an ability is the object that generated it.
+
+    An ability activated from a permanent carries that permanent as its source
+    onto the stack, which is what later reads (damage attribution, "this
+    creature") resolve through.
+    """
+    pinger = CardDefinition(
+        name="Prodigal Sorcerer", mana_cost="", cmc=0.0, type_line="Creature — Human",
+        oracle_text="{T}: This creature deals 1 damage to any target.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Prodigal Sorcerer", "type_line": "Creature — Human",
+             "power": "1", "toughness": "1"},
+    )
+    perm = Permanent(card=pinger)
+    perm.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.queue_permanent_ability(0, "Prodigal Sorcerer", target_player_index=1)
+
+    assert game.stack, "the ability did not reach the stack"
+    assert game.stack[-1].source_permanent is perm
+
+
+@pytest.mark.cr("113.7", "113.7a")
+def test_113_7a_the_ability_exists_independently_of_its_source():
+    """An ability on the stack is its own object, not the permanent that made it.
+
+    So the source leaving the battlefield does not remove the ability: it still
+    resolves, and still deals its damage, with the source already gone. That is
+    the whole reason CR 113.7 has to name the source separately.
+    """
+    pinger = CardDefinition(
+        name="Prodigal Sorcerer", mana_cost="", cmc=0.0, type_line="Creature — Human",
+        oracle_text="{T}: This creature deals 1 damage to any target.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Prodigal Sorcerer", "type_line": "Creature — Human",
+             "power": "1", "toughness": "1"},
+    )
+    perm = Permanent(card=pinger)
+    perm.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.queue_permanent_ability(0, "Prodigal Sorcerer", target_player_index=1)
+
+    game._permanent_to_graveyard(p1, perm)
+    game.remove_from_battlefield(perm)
+    assert not game.is_on_battlefield(perm)
+
+    game.resolve_top_of_stack()
+
+    assert p2.life == 19

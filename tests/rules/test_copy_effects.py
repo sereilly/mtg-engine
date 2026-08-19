@@ -405,3 +405,100 @@ def test_707_9b_the_added_type_is_a_card_type_not_a_subtype(catalog):
 
     assert copier.effective_card.type_line == "Artifact Enchantment — Equipment"
     assert copier.has_type("enchantment") and copier.has_type("equipment")
+
+
+# ---------------------------------------------------------------------------
+# 707.10 — copying a spell or ability on the stack
+#
+# A different act from copying a permanent, which is everything above: the copy
+# is *put onto the stack*, it was never cast, and it ceases to exist instead of
+# going to a graveyard. Fork is the pool's copier ("Copy target instant or
+# sorcery spell…"); Double Vision is M21's triggered form.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("707.10")
+def test_707_10_the_copy_is_put_onto_the_stack_and_was_never_cast():
+    """To copy a spell means to put a copy of it onto the stack.
+
+    The copy is marked as one and is not a cast spell: it appears above the
+    original without passing through anyone's hand.
+    """
+    catalog = {card.name: card for card in load_catalog()}
+    p1 = PlayerState(name="P1", hand=[catalog["Lightning Bolt"], catalog["Fork"]])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game.queue_from_hand(0, "Fork", target_player_index=1, target_stack_index=0)
+    game.resolve_top_of_stack()  # Fork resolves and makes the copy
+
+    copy = game.stack[-1]
+    assert copy.is_copy is True
+    assert copy.card.name == "Lightning Bolt"
+    assert [c.name for c in p1.spells_cast_this_turn] == ["Lightning Bolt", "Fork"]
+
+
+@pytest.mark.cr("707.10a")
+def test_707_10a_the_copy_ceases_to_exist_instead_of_reaching_a_graveyard():
+    """A copy of a spell in any zone other than the stack ceases to exist.
+
+    So after both resolve, the damage landed twice but exactly one Lightning
+    Bolt card is in a graveyard — the copy left no card behind.
+    """
+    catalog = {card.name: card for card in load_catalog()}
+    p1 = PlayerState(name="P1", hand=[catalog["Lightning Bolt"], catalog["Fork"]])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game.queue_from_hand(0, "Fork", target_player_index=1, target_stack_index=0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert p2.life == 14  # 3 from the original, 3 from the copy
+    bolts = [c for player in game.players for c in player.graveyard
+             if c.name == "Lightning Bolt"]
+    assert len(bolts) == 1
+
+
+@pytest.mark.cr("707.10c")
+def test_707_10c_the_controller_may_choose_new_targets_for_the_copy():
+    """"You may choose new targets for the copy" — the copy resolves against a
+    target the original never had."""
+    catalog = {card.name: card for card in load_catalog()}
+    bears_a = Permanent(card=catalog["Grizzly Bears"])
+    bears_b = Permanent(card=catalog["Grizzly Bears"])
+    p1 = PlayerState(name="P1", hand=[catalog["Giant Growth"], catalog["Fork"]],
+                     battlefield=[bears_a, bears_b])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.queue_from_hand(0, "Giant Growth", target_player_index=0, target_permanent_index=0)
+    game.queue_from_hand(0, "Fork", target_stack_index=0,
+                         target_player_index=0, target_permanent_index=1)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert bears_a.effective_power == 5
+    assert bears_b.effective_power == 5
+
+
+@pytest.mark.cr("707.10c")
+def test_707_10c_leaving_the_targets_unchanged_is_equally_legal():
+    """The player *may* change targets; declining leaves the copy pointed where
+    the original was, and both resolve at the same object."""
+    catalog = {card.name: card for card in load_catalog()}
+    bears = Permanent(card=catalog["Grizzly Bears"])
+    p1 = PlayerState(name="P1", hand=[catalog["Giant Growth"], catalog["Fork"]],
+                     battlefield=[bears])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.queue_from_hand(0, "Giant Growth", target_player_index=0, target_permanent_index=0)
+    game.queue_from_hand(0, "Fork", target_stack_index=0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert bears.effective_power == 8  # 2 + 3 + 3, both buffs on one creature

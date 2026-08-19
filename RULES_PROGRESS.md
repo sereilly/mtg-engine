@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**267 / 603 tracked rules covered (44%)** — 1252 tests, 0 unannotated.
+**299 / 610 tracked rules covered (49%)** — 1328 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -13,30 +13,31 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [101. The Magic Golden Rules](#101-the-magic-golden-rules) | 0/4 | 0% |
 | [102. Players](#102-players) | 1/4 | 25% |
 | [103. Starting the Game](#103-starting-the-game) | 4/8 | 50% |
-| [104. Ending the Game](#104-ending-the-game) | 5/6 | 83% |
+| [104. Ending the Game](#104-ending-the-game) | 5/5 | 100% |
 | [105. Colors](#105-colors) | 0/5 | 0% |
-| [106. Mana](#106-mana) | 4/13 | 30% |
+| [106. Mana](#106-mana) | 5/13 | 38% |
 | [107. Numbers and Symbols](#107-numbers-and-symbols) | 3/18 | 16% |
 | [108. Cards](#108-cards) | 1/6 | 16% |
 | [109. Objects](#109-objects) | 1/5 | 20% |
 | [110. Permanents](#110-permanents) | 0/5 | 0% |
-| [111. Tokens](#111-tokens) | 1/13 | 7% |
+| [111. Tokens](#111-tokens) | 5/13 | 38% |
 | [112. Spells](#112-spells) | 0/4 | 0% |
-| [113. Abilities](#113-abilities) | 0/12 | 0% |
+| [113. Abilities](#113-abilities) | 2/12 | 16% |
+| [114. Emblems](#114-emblems) | 5/5 | 100% |
 | [115. Targets](#115-targets) | 4/10 | 40% |
-| [116. Special Actions](#116-special-actions) | 0/3 | 0% |
-| [117. Timing and Priority](#117-timing-and-priority) | 6/7 | 85% |
+| [116. Special Actions](#116-special-actions) | 2/3 | 66% |
+| [117. Timing and Priority](#117-timing-and-priority) | 6/6 | 100% |
 | [118. Costs](#118-costs) | 9/14 | 64% |
 | [119. Life](#119-life) | 2/10 | 20% |
 | [120. Damage](#120-damage) | 4/10 | 40% |
 | [121. Drawing a Card](#121-drawing-a-card) | 3/9 | 33% |
-| [122. Counters](#122-counters) | 0/9 | 0% |
+| [122. Counters](#122-counters) | 4/9 | 44% |
 | [200. General](#200-general) | 0/3 | 0% |
 | [201. Name](#201-name) | 0/6 | 0% |
 | [202. Mana Cost and Color](#202-mana-cost-and-color) | 0/4 | 0% |
 | [205. Type Line](#205-type-line) | 0/4 | 0% |
 | [207. Text Box](#207-text-box) | 0/5 | 0% |
-| [208. Power/Toughness](#208-powertoughness) | 0/5 | 0% |
+| [208. Power/Toughness](#208-powertoughness) | 1/5 | 20% |
 | [300. General](#300-general) | 0/2 | 0% |
 | [301. Artifacts](#301-artifacts) | 0/7 | 0% |
 | [302. Creatures](#302-creatures) | 1/7 | 14% |
@@ -50,17 +51,17 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [402. Hand](#402-hand) | 2/3 | 66% |
 | [403. Battlefield](#403-battlefield) | 3/5 | 60% |
 | [404. Graveyard](#404-graveyard) | 1/3 | 33% |
-| [405. Stack](#405-stack) | 5/6 | 83% |
+| [405. Stack](#405-stack) | 6/6 | 100% |
 | [406. Exile](#406-exile) | 2/8 | 25% |
 | [407. Ante](#407-ante) | 4/4 | 100% |
-| [408. Command](#408-command) | 2/3 | 66% |
+| [408. Command](#408-command) | 3/3 | 100% |
 | [500. General](#500-general) | 6/12 | 50% |
 | [501. Beginning Phase](#501-beginning-phase) | 1/1 | 100% |
 | [502. Untap Step](#502-untap-step) | 3/4 | 75% |
 | [503. Upkeep Step](#503-upkeep-step) | 1/2 | 50% |
 | [504. Draw Step](#504-draw-step) | 2/2 | 100% |
 | [505. Main Phase](#505-main-phase) | 3/6 | 50% |
-| [506. Combat Phase](#506-combat-phase) | 6/7 | 85% |
+| [506. Combat Phase](#506-combat-phase) | 7/7 | 100% |
 | [507. Beginning of Combat Step](#507-beginning-of-combat-step) | 1/2 | 50% |
 | [508. Declare Attackers Step](#508-declare-attackers-step) | 3/8 | 37% |
 | [509. Declare Blockers Step](#509-declare-blockers-step) | 4/4 | 100% |
@@ -71,10 +72,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [514. Cleanup Step](#514-cleanup-step) | 3/3 | 100% |
 | [601. Casting Spells](#601-casting-spells) | 4/7 | 57% |
 | [602. Activating Activated Abilities](#602-activating-activated-abilities) | 3/5 | 60% |
-| [603. Handling Triggered Abilities](#603-handling-triggered-abilities) | 8/12 | 66% |
+| [603. Handling Triggered Abilities](#603-handling-triggered-abilities) | 10/12 | 83% |
 | [604. Handling Static Abilities](#604-handling-static-abilities) | 3/7 | 42% |
 | [605. Mana Abilities](#605-mana-abilities) | 5/5 | 100% |
-| [606. Loyalty Abilities](#606-loyalty-abilities) | 5/5 | 100% |
+| [606. Loyalty Abilities](#606-loyalty-abilities) | 5/6 | 83% |
 | [607. Linked Abilities](#607-linked-abilities) | 2/5 | 40% |
 | [608. Resolving Spells and Abilities](#608-resolving-spells-and-abilities) | 3/3 | 100% |
 | [609. Effects](#609-effects) | 4/7 | 57% |
@@ -86,17 +87,17 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/15 | 13% |
-| [701. Keyword Actions](#701-keyword-actions) | 8/17 | 47% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 23/23 | 100% |
+| [701. Keyword Actions](#701-keyword-actions) | 10/19 | 52% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 25/25 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 5/8 | 62% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
-| [707. Copying Objects](#707-copying-objects) | 5/14 | 35% |
+| [707. Copying Objects](#707-copying-objects) | 6/14 | 42% |
 | [724. Ending Turns and Phases](#724-ending-turns-and-phases) | 1/2 | 50% |
 | [800. General](#800-general) | 2/7 | 28% |
-| [802. Attack Multiple Players Option](#802-attack-multiple-players-option) | 4/5 | 80% |
-| [806. Free-for-All Variant](#806-free-for-all-variant) | 0/3 | 0% |
-| [903. Commander](#903-commander) | 12/13 | 92% |
+| [802. Attack Multiple Players Option](#802-attack-multiple-players-option) | 5/5 | 100% |
+| [806. Free-for-All Variant](#806-free-for-all-variant) | 2/3 | 66% |
+| [903. Commander](#903-commander) | 12/12 | 100% |
 
 ## Rule detail
 
@@ -138,11 +139,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 104. Ending the Game
 
 - [x] **104.1** A game ends immediately when a player wins, when the game is a draw, or when the game is restarted. *(6 tests)*
-- [x] **104.2** There are several ways to win the game. *(12 tests, subrules ab)*
+- [x] **104.2** There are several ways to win the game. *(13 tests, subrules ab)*
 - [x] **104.3** There are several ways to lose the game. *(24 tests, subrules abcdefj)*
 - [x] **104.4** There are several ways for the game to be a draw. *(9 tests, subrules ac)*
 - [x] **104.5** If a player loses the game, that player leaves the game. If the game is a draw for a player, that... *(2 tests)*
-- [ ] **104.6** One card (Karn Liberated) restarts the game. All players still in the game when it restarts then ...
 
 ### 105. Colors
 
@@ -159,7 +159,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **106.3** Mana is produced by the effects of mana abilities (see rule 605). It may also be produced by the ... *(2 tests)*
 - [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(4 tests)*
 - [ ] **106.5** If an ability would produce one or more mana of an undefined type, it produces no mana instead.
-- [ ] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona...
+- [x] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona... *(4 tests)*
 - [ ] **106.7** Some abilities produce mana based on the type of mana another permanent or permanents “could prod...
 - [ ] **106.8** If an effect would add mana represented by a hybrid mana symbol to a player’s mana pool, that pla...
 - [ ] **106.9** If an effect would add mana represented by a Phyrexian mana symbol to a player’s mana pool, one m...
@@ -216,16 +216,16 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 111. Tokens
 
-- [ ] **111.1** Some effects put tokens onto the battlefield. A token is a marker used to represent any permanent...
-- [ ] **111.2** The player who creates a token is its owner. The token enters the battlefield under that player’s...
+- [x] **111.1** Some effects put tokens onto the battlefield. A token is a marker used to represent any permanent... *(1 tests)*
+- [x] **111.2** The player who creates a token is its owner. The token enters the battlefield under that player’s... *(1 tests)*
 - [ ] **111.3** The spell or ability that creates a token may define the values of any number of characteristics ...
-- [ ] **111.4** A spell or ability that creates a token sets both its name and its subtype(s). If the spell or ab...
+- [x] **111.4** A spell or ability that creates a token sets both its name and its subtype(s). If the spell or ab... *(2 tests)*
 - [ ] **111.5** If a spell or ability would create a token, but a rule or effect states that a permanent with one...
 - [ ] **111.6** A token is subject to anything that affects permanents in general or that affects the token’s car...
-- [x] **111.7** A token that’s in a zone other than the battlefield ceases to exist. This is a state-based action... *(1 tests)*
+- [x] **111.7** A token that’s in a zone other than the battlefield ceases to exist. This is a state-based action... *(5 tests)*
 - [ ] **111.8** A token that has left the battlefield can’t move to another zone or come back onto the battlefiel...
 - [ ] **111.9** Some effects instruct a player to create a legendary token. These may be written “create [name], ...
-- [ ] **111.10** Some effects instruct a player to create a predefined token. These effects use the definition bel...
+- [x] **111.10** Some effects instruct a player to create a predefined token. These effects use the definition bel... *(2 tests)*
 - [ ] **111.11** If an effect instructs a player to create a token by name, doesn’t define any other characteristi...
 - [ ] **111.12** If an effect instructs a player to create a token that is a copy of a nonexistent object, no toke...
 - [ ] **111.13** A copy of a permanent spell becomes a token as it resolves. The token has the characteristics of ...
@@ -244,13 +244,21 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **113.3** There are four general categories of abilities:
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
-- [ ] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack....
-- [ ] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t...
+- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(5 tests, subrules m)*
+- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(3 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
 - [ ] **113.10** Effects can add or remove abilities of objects. An effect that adds an ability will state that th...
 - [ ] **113.11** Effects can stop an object from having a specified ability. These effects say that the object “ca...
 - [ ] **113.12** An effect that sets an object’s characteristic, or simply states a quality of that object, is dif...
+
+### 114. Emblems
+
+- [x] **114.1** Some effects put emblems into the command zone. An emblem is a marker used to represent an object... *(2 tests)*
+- [x] **114.2** An effect that creates an emblem is written “[Player] gets an emblem with [ability].” This means ... *(2 tests)*
+- [x] **114.3** An emblem has no characteristics other than the abilities defined by the effect that created it. ... *(2 tests)*
+- [x] **114.4** Abilities of emblems function in the command zone. *(1 tests)*
+- [x] **114.5** An emblem is neither a card nor a permanent. Emblem isn’t a card type. *(1 tests)*
 
 ### 115. Targets
 
@@ -267,8 +275,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 116. Special Actions
 
-- [ ] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T...
-- [ ] **116.2** There are twelve special actions:
+- [x] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T... *(4 tests)*
+- [x] **116.2** There are twelve special actions: *(5 tests, subrules a)*
 - [ ] **116.3** If a player takes a special action, that player receives priority afterward.
 
 ### 117. Timing and Priority
@@ -278,7 +286,6 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **117.3** Which player has priority is determined by the following rules: *(7 tests, subrules abcd)*
 - [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(3 tests)*
 - [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(1 tests)*
-- [ ] **117.6** In a multiplayer game using the shared team turns option, teams rather than individual players ha...
 - [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(1 tests)*
 
 ### 118. Costs
@@ -338,12 +345,12 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 122. Counters
 
-- [ ] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte...
-- [ ] **122.2** Counters on an object are not retained if that object moves from one zone to another. The counter...
-- [ ] **122.3** If a permanent has both a +1/+1 counter and a -1/-1 counter on it, N +1/+1 and N -1/-1 counters a...
+- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(4 tests, subrules a)*
+- [x] **122.2** Counters on an object are not retained if that object moves from one zone to another. The counter... *(1 tests)*
+- [x] **122.3** If a permanent has both a +1/+1 counter and a -1/-1 counter on it, N +1/+1 and N -1/-1 counters a... *(2 tests)*
 - [ ] **122.4** If a permanent with an ability that says it can’t have more than N counters of a certain kind on ...
 - [ ] **122.5** If an effect says to “move” a counter, it means to remove that counter from the object it’s curre...
-- [ ] **122.6** Some spells and abilities refer to counters being put on an object. This refers to putting counte...
+- [x] **122.6** Some spells and abilities refer to counters being put on an object. This refers to putting counte... *(1 tests)*
 - [ ] **122.7** An ability that triggers “When/Whenever the Nth [kind] counter” is put on an object triggers when...
 - [ ] **122.8** If a triggered ability instructs a player to put one object’s counters on another object and that...
 - [ ] **122.9** If an activated ability of an object instructs a player to put its counters on another object and...
@@ -387,7 +394,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 208. Power/Toughness
 
-- [ ] **208.1** A creature card has two numbers separated by a slash printed in its lower right corner. The first...
+- [x] **208.1** A creature card has two numbers separated by a slash printed in its lower right corner. The first... *(1 tests)*
 - [ ] **208.2** Rather than a fixed number, some creature cards have power and/or toughness that includes a star ...
 - [ ] **208.3** A noncreature permanent has no power or toughness, even if it’s a card with a power and toughness...
 - [ ] **208.4** Some effects refer to a creature’s “base power,” “base toughness,” or “base power and toughness.”
@@ -438,8 +445,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 305. Lands
 
-- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(2 tests)*
-- [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(16 tests, subrules ab)*
+- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(3 tests)*
+- [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(18 tests, subrules ab)*
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
@@ -476,7 +483,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(3 tests)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(4 tests)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -517,7 +524,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **405.1** When a spell is cast, the physical card is put on the stack (see rule 601.2a). When an ability is... *(2 tests)*
 - [x] **405.2** The stack keeps track of the order that spells and/or abilities were added to it. Each time an ob... *(1 tests)*
-- [ ] **405.3** If an effect puts two or more objects on the stack at the same time, those controlled by the acti...
+- [x] **405.3** If an effect puts two or more objects on the stack at the same time, those controlled by the acti... *(3 tests)*
 - [x] **405.4** Each spell has all the characteristics of the card associated with it. Each activated or triggere... *(2 tests)*
 - [x] **405.5** When all players pass in succession, the top (last-added) spell or ability on the stack resolves.... *(2 tests)*
 - [x] **405.6** Some things that happen during the game don’t use the stack. *(3 tests, subrules ce)*
@@ -543,7 +550,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 408. Command
 
 - [x] **408.1** The command zone is a game area reserved for certain specialized objects that have an overarching... *(1 tests)*
-- [ ] **408.2** Emblems may be created in the command zone. See rule 114, “Emblems.”
+- [x] **408.2** Emblems may be created in the command zone. See rule 114, “Emblems.” *(1 tests)*
 - [x] **408.3** In the Planechase, Vanguard, Commander, Archenemy, and Conspiracy Draft casual variants, nontradi... *(1 tests)*
 
 ### 500. General
@@ -599,7 +606,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller changes, if it... *(7 tests, subrules bc)*
 - [x] **506.5** A creature attacks alone if it’s the only creature declared as an attacker during the declare att... *(5 tests)*
 - [x] **506.6** Some abilities check to see whether or not a creature “had to attack” during a particular combat ... *(2 tests)*
-- [ ] **506.7** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph...
+- [x] **506.7** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph... *(8 tests)*
 
 ### 507. Beginning of Combat Step
 
@@ -674,16 +681,16 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(1 tests)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(10 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(16 tests)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(18 tests, subrules b)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(3 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(1 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(2 tests, subrules c)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(1 tests)*
-- [ ] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of...
+- [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(3 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(1 tests)*
 - [ ] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60...
-- [ ] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge...
+- [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
 ### 604. Handling Static Abilities
 
@@ -707,8 +714,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **606.1** Some activated abilities are loyalty abilities, which are subject to special rules. *(1 tests)*
 - [x] **606.2** An activated ability with a loyalty symbol in its cost is a loyalty ability. Normally, only plane... *(3 tests)*
-- [x] **606.3** A player may activate a loyalty ability of a permanent they control any time they have priority a... *(6 tests)*
+- [x] **606.3** A player may activate a loyalty ability of a permanent they control any time they have priority a... *(7 tests)*
 - [x] **606.4** The cost to activate a loyalty ability of a permanent is to put on or remove from that permanent ... *(4 tests)*
+- [ ] **606.5** If the total cost to activate a loyalty ability contains multiple costs to add or remove loyalty ...
 - [x] **606.6** A loyalty ability with a negative loyalty cost, taking into account any additional costs, can’t b... *(2 tests)*
 
 ### 607. Linked Abilities
@@ -846,6 +854,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.9** Discard *(4 tests, subrules ac)*
 - [ ] **701.12** Exchange
 - [ ] **701.13** Exile
+- [x] **701.14** Fight *(4 tests, subrules abd)*
+- [x] **701.17** Mill *(5 tests, subrules a)*
 - [ ] **701.18** Play
 - [x] **701.19** Regenerate *(16 tests, subrules ac)*
 - [ ] **701.20** Reveal
@@ -861,6 +871,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.2** Deathtouch *(4 tests, subrules bc)*
 - [x] **702.3** Defender *(6 tests, subrules b)*
 - [x] **702.4** Double Strike *(3 tests, subrules b)*
+- [x] **702.5** Enchant *(5 tests, subrules a)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.8** Flash *(2 tests, subrules ab)*
 - [x] **702.9** Flying *(6 tests, subrules b)*
@@ -877,6 +888,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.22** Banding *(25 tests, subrules acdefghjk)*
 - [x] **702.23** Rampage *(3 tests, subrules a)*
 - [x] **702.25** Flanking *(3 tests, subrules a)*
+- [x] **702.26** Phasing *(5 tests, subrules ad)*
 - [x] **702.36** Fear *(4 tests, subrules b)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(3 tests, subrules b)*
@@ -894,7 +906,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(1 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(74 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(77 tests, subrules abcdefghijkmnpqrsy)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*
@@ -916,7 +928,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
 - [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(12 tests, subrules abc)*
-- [ ] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack...
+- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(4 tests, subrules ac)*
 - [ ] **707.11** If an effect refers to a permanent by name, the effect still tracks that permanent even if it cha...
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...
 - [ ] **707.13** One card (Garth One-Eye) instructs a player to create a copy of a card defined by name rather tha...
@@ -939,7 +951,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 802. Attack Multiple Players Option
 
-- [ ] **802.1** Some multiplayer games allow the active player to attack multiple other players. If this option i...
+- [x] **802.1** Some multiplayer games allow the active player to attack multiple other players. If this option i... *(2 tests)*
 - [x] **802.2** As the combat phase starts, the attacking player doesn’t choose an opponent to become the defendi... *(1 tests)*
 - [x] **802.3** As the attacking player declares each attacking creature, they choose a defending player, a plane... *(3 tests, subrules a)*
 - [x] **802.4** If more than one player is being attacked, controls a planeswalker that’s being attacked, or prot... *(2 tests, subrules a)*
@@ -947,8 +959,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 806. Free-for-All Variant
 
-- [ ] **806.1** In Free-for-All multiplayer games, a group of players compete as individuals against each other.
-- [ ] **806.2** Any multiplayer options used are determined before play begins. The Free-for-All variant uses the...
+- [x] **806.1** In Free-for-All multiplayer games, a group of players compete as individuals against each other. *(2 tests)*
+- [x] **806.2** Any multiplayer options used are determined before play begins. The Free-for-All variant uses the... *(3 tests, subrules bc)*
 - [ ] **806.3** The players are randomly seated around the table.
 
 ### 903. Commander
@@ -965,8 +977,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **903.10** The Commander variant includes the following specification for winning and losing the game. All o... *(6 tests, subrules a)*
 - [x] **903.11** Except via rules, special actions, and effects that specifically bring cards into Commander games... *(8 tests, subrules a)*
 - [x] **903.12** Brawl Option *(26 tests, subrules abcdefgh)*
-- [ ] **903.13** Commander Draft
 
-## Cited outside tracked scope (consider widening SCOPE)
+## Excluded from the denominator (mechanic not in this engine)
 
-- **701.14** Keyword Actions (4 tests)
+Listed rather than dropped — see `EXCLUDED` in `scripts/rules_progress.py`. A rule the engine *does* implement that no card exercises is not here; it stays above, untested.
+
+- **104.6** Ending the Game: restarting the game (CR 727) — Karn Liberated is not in the pool
+- **117.6** Timing and Priority: shared team turns option (CR 805) — the engine has no teams
+- **903.13** Commander: Commander Draft — a draft variant, no in-game behaviour

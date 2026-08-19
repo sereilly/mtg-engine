@@ -1258,7 +1258,7 @@ class SpellCastingMixin:
     def _pay_mana_cost(
         self, player: PlayerState, required: dict[str, int], *, spell=None
     ) -> bool:
-        # "Spend this mana only to…" (CR 106.6b): a restricted bucket joins the
+        # "Spend this mana only to…" (CR 106.6): a restricted bucket joins the
         # pool only for a spell its own restriction admits, and whatever the
         # payment consumes is attributed to the restricted bucket first (its
         # units are otherwise lost, so spending them first is the only rational

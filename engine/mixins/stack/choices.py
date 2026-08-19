@@ -369,14 +369,14 @@ class PendingChoicesMixin:
             + ("onto the battlefield" if destination == "battlefield" else "into hand")
         )
         # More finds owed: the prompt stays, minus the destination just used, and
-        # the library is *not* shuffled yet — CR 701.19d shuffles when the search
+        # the library is *not* shuffled yet — CR 701.23h shuffles when the search
         # is over, and shuffling between two finds of one search would hide the
         # second from the player who is still looking.
         if remaining:
             choice.data["destinations"] = remaining
             choice.data["tapped"] = tapped_flags
             return True
-        # Only a library search shuffles (CR 701.19d, and the printed "If you
+        # Only a library search shuffles (CR 701.23h, and the printed "If you
         # search your library this way, shuffle"): a graveyard is an open zone,
         # and randomising a library the player did not search would destroy
         # information they were entitled to keep.

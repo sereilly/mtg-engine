@@ -842,6 +842,19 @@ function syncSeedControls() {
 // (CR 407.3). Defaults to false — the checkbox starts unticked.
 window.isPlayingForAnte = () => Boolean(q("playingForAnte")?.checked);
 
+// The constructed format the host is setting up the game under — a key of
+// web/deck_legality.py's FORMATS table, shipped to the browser in the catalog
+// payload. Read by deck-editor.js, which validates each deck against *this*
+// format rather than the one the deck was saved under: they are different
+// questions, and only this one decides whether the deck can be brought to the
+// game. Defaults to "casual" ("Unrestricted"), which has no banlist.
+window.selectedGameFormat = () => q("gameFormat")?.value || "casual";
+
+// Whether the deck pickers list decks that are illegal in that format. Off by
+// default: an illegal deck is one the host cannot play, so it is hidden until
+// asked for, and shown with the reason on hover when it is.
+window.showsIllegalDecks = () => Boolean(q("showIllegalDecks")?.checked);
+
 function showMenuPage(name) {
   const applyVisibility = () => {
     for (const [key, element] of Object.entries(menuPages)) {
@@ -12090,12 +12103,13 @@ function generateFfaSeatBlocks() {
 }
 
 // Toggle between the Standard host form and the Free-For-All seat list, and
-// (re)generate the seat blocks whenever the format or seat count changes.
-function syncFormatFields() {
-  const format = q("format")?.value || "standard";
-  const isFfa = format === "free_for_all";
-  q("standardModeFields")?.classList.toggle("hidden", isFfa);
-  q("ffaModeFields")?.classList.toggle("hidden", !isFfa);
+// (re)generate the seat blocks whenever the game type or seat count changes.
+// The two sides are marked by class rather than wrapped in one container each,
+// because Format sits between them and belongs to both.
+function syncGameTypeFields() {
+  const isFfa = (q("gameType")?.value || "standard") === "free_for_all";
+  for (const el of document.querySelectorAll(".standard-only")) el.classList.toggle("hidden", isFfa);
+  for (const el of document.querySelectorAll(".ffa-only")) el.classList.toggle("hidden", !isFfa);
   if (isFfa) {
     generateFfaSeatBlocks();
   } else {
@@ -12172,15 +12186,22 @@ function restorePlayerName() {
 async function createSession() {
   hideSetupPanel();
   syncSeedControls();
-  const format = q("format")?.value || "standard";
+  const gameType = q("gameType")?.value || "standard";
   const useCustomSeed = q("useCustomSeed").checked;
   const playingForAnte = window.isPlayingForAnte();
-  // CR 903.1 / 903.12a: "" means an ordinary game, which is what the server
-  // reads a missing variant as.
-  const variant = q("commanderVariant")?.value || null;
-  savePlayerName(format === "free_for_all" ? q("ffaSeatName_0")?.value : q("hostName")?.value);
+  // CR 903.1 / 903.12a: the engine is handed the CR 903 variant, and the two
+  // formats that have one are named for it — web/deck_legality.py's FORMATS
+  // rows carry `variant` equal to their key, held by
+  // tests/ui/test_deck_legality.py. Read as a rule rather than off the shipped
+  // table because the table arrives with the catalog: a lookup that ran first
+  // would quietly hand back "ordinary game". "casual" (Unrestricted) is one,
+  // which is what the server reads a missing variant as; anything else the
+  // dropdown grows without a variant is refused by the schema, loudly.
+  const format = window.selectedGameFormat();
+  const variant = format === "casual" ? null : format;
+  savePlayerName(gameType === "free_for_all" ? q("ffaSeatName_0")?.value : q("hostName")?.value);
   let req;
-  if (format === "free_for_all") {
+  if (gameType === "free_for_all") {
     req = {
       mode: "free_for_all",
       seats: collectFfaSeats(),
@@ -12312,7 +12333,7 @@ async function sendAction(actionBody) {
 
 q("homeHostBtn")?.addEventListener("click", () => {
   showMenuPage("host");
-  syncFormatFields();
+  syncGameTypeFields();
 });
 
 q("homeJoinBtn")?.addEventListener("click", () => {
@@ -12460,9 +12481,17 @@ q("mode").addEventListener("change", () => {
   window.syncStartPageColorInputs?.();
 });
 
-q("format")?.addEventListener("change", () => {
-  syncFormatFields();
+q("gameType")?.addEventListener("change", () => {
+  syncGameTypeFields();
 });
+
+// The format decides which decks are legal, and the checkbox decides whether
+// the illegal ones are listed at all — either way the pickers are rebuilt.
+for (const id of ["gameFormat", "showIllegalDecks"]) {
+  q(id)?.addEventListener("change", () => {
+    window.refreshDeckSelectOptions?.();
+  });
+}
 
 q("ffaSeatCount")?.addEventListener("change", () => {
   generateFfaSeatBlocks();

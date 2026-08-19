@@ -265,7 +265,13 @@ def record_verification(req: VerificationRequest):
 
 @app.get("/api/decks")
 def list_decks():
-    return {"decks": [_deck_summary(deck) for deck in deck_store.list()]}
+    # The full detail, card lists included, not just the summary: the host
+    # page's deck pickers validate every deck against the *format the game will
+    # be played in*, which is a different question from the one the deck was
+    # saved under and so cannot be answered by the summary's stored legality.
+    # Personal (localStorage) decks already carry their lists, so this is also
+    # what makes the two scopes the same shape in the browser.
+    return {"decks": [_deck_detail(deck) for deck in deck_store.list()]}
 
 
 @app.post("/api/decks")

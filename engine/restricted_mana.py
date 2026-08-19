@@ -1,4 +1,4 @@
-"""Mana that may be spent only on certain spells (CR 106.6b).
+"""Mana that may be spent only on certain spells (CR 106.6).
 
 "Spend this mana only to cast creature spells." (Metamorphosis.) "Spend this
 mana only to cast an instant or sorcery spell." (Vodalian Arcanist.) One

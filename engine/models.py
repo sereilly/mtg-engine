@@ -506,7 +506,7 @@ class PlayerState:
     mana_pool: dict[str, int] = field(
         default_factory=lambda: {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
     )
-    # "Spend this mana only to…" (CR 106.6b) — one bucket per restriction key,
+    # "Spend this mana only to…" (CR 106.6) — one bucket per restriction key,
     # each keyed by mana symbol. Mana held here joins the pool only when paying
     # for a spell that restriction admits (spent before unrestricted mana) and
     # empties whenever the regular pool does. ``engine/restricted_mana.py`` owns

@@ -459,7 +459,7 @@ def _attach_spend_only(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """Fold "Spend this mana only to …" into the mana production before it.
 
     A rider and not a step: the sentence adds nothing to the game, it says what
-    the *previous* sentence's mana may pay for (CR 106.6b). Parsed as its own
+    the *previous* sentence's mana may pay for (CR 106.6). Parsed as its own
     step it would be an effect nothing performs, and the mana would go into the
     unrestricted pool with the restriction reported as understood.
 

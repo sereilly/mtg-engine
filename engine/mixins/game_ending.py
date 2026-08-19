@@ -6,6 +6,7 @@ from functools import lru_cache
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..trigger_utils import matching_triggers
+from ..tokens import is_token_card
 
 _COUNTER_CAP_RE = re.compile(r"can't have more than (\d+) (\w+) counters")
 
@@ -263,10 +264,18 @@ class GameEndingMixin:
                     )
                     changed = True
 
-            # 704.5d: tokens in non-battlefield zones cease to exist
+            # 704.5d: a token in any zone but the battlefield ceases to exist.
+            # The zone seams (put_card_into_hand / put_card_into_library) and
+            # _permanent_to_graveyard refuse a token up front, so this is the
+            # backstop for a path that moved a card without going through one —
+            # the sweep that catches what one forgotten call site would leak.
             for player in self.players:
-                # Tokens that somehow ended up in graveyard/hand/exile cease to exist
-                player.graveyard = [c for c in player.graveyard if not getattr(c, "_is_token", False)]
+                for zone_name in ("graveyard", "hand", "exile"):
+                    zone = getattr(player, zone_name, None)
+                    if not zone or not any(is_token_card(c) for c in zone):
+                        continue
+                    setattr(player, zone_name, [c for c in zone if not is_token_card(c)])
+                    changed = True
 
             # 704.5f: creature with toughness 0 or less → graveyard (regeneration cannot replace)
             def _zero_toughness(perm: Permanent) -> bool:
@@ -640,7 +649,7 @@ class GameEndingMixin:
         # "When there are four or more page counters on this artifact, …"
         # (Mazemind Tome.) CR 603.8's *state* trigger: it fires whenever the
         # game state matches rather than on an event, so this sweep is where it
-        # belongs — there is no call site to hang it on, and CR 603.8b says it
+        # belongs — there is no call site to hang it on, and CR 603.8 says it
         # fires only once until the state stops matching, which is why the
         # permanent remembers that it announced.
         for permanent in list(self.all_permanents()):
@@ -655,7 +664,7 @@ class GameEndingMixin:
                 announced = permanent.metadata.get("_state_trigger_announced") or set()
                 key = (kind, wanted)
                 if held < wanted:
-                    # CR 603.8b: the ability may fire again once the state stops
+                    # CR 603.8: the ability may fire again once the state stops
                     # matching. Nothing in the pool undoes a page counter, but
                     # forgetting is the rule and remembering forever is not.
                     if key in announced:

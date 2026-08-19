@@ -330,3 +330,130 @@ def test_a_subject_the_engine_cannot_test_refuses_the_whole_condition():
         "Whenever a creature card in your graveyard attacks, you gain 1 life."
     ))
     assert unreadable is None, "a zone-scoped subject has no dispatcher, so no condition"
+
+
+# ---------------------------------------------------------------------------
+# 603.8 — state triggers
+#
+# A state trigger watches a *condition*, not an event, so it has no call site
+# to hang on: it is checked in the state-based-action sweep, beside the record
+# every path already feeds. Mazemind Tome ("When there are four or more page
+# counters on this artifact, exile it") is the pool's example.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("603.8")
+def test_603_8_a_state_trigger_fires_as_soon_as_the_condition_is_true(set_pool):
+    """A state trigger triggers as soon as the game state matches.
+
+    Nothing "happens" to make it fire — no counter is put on during this call;
+    the sweep simply finds the condition already true and announces it.
+    """
+    from engine.named_counters import add_counters
+
+    tome = Permanent(card=set_pool("M21")["Mazemind Tome"])
+    p1 = PlayerState(name="P1", battlefield=[tome])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    add_counters(tome, "page", 4)
+
+    game.check_state_based_actions()
+
+    assert tome.metadata.get("_state_trigger_announced")
+
+
+@pytest.mark.cr("603.8")
+def test_603_8_the_condition_being_false_leaves_the_trigger_silent(set_pool):
+    """Below the threshold the state does not match, so nothing triggers —
+    the sweep runs constantly and must not announce on every pass."""
+    from engine.named_counters import add_counters
+
+    tome = Permanent(card=set_pool("M21")["Mazemind Tome"])
+    p1 = PlayerState(name="P1", battlefield=[tome])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    add_counters(tome, "page", 3)
+
+    game.check_state_based_actions()
+
+    assert not tome.metadata.get("_state_trigger_announced")
+
+
+@pytest.mark.cr("603.8")
+def test_603_8_a_state_trigger_announces_once_while_the_state_holds(set_pool):
+    """It fires once, not once per check.
+
+    The sweep runs at every priority check, so a state trigger that announced
+    each time would put an unbounded number of copies on the stack. The
+    permanent remembers that it announced, and forgets when the state stops
+    matching.
+    """
+    from engine.named_counters import add_counters
+
+    tome = Permanent(card=set_pool("M21")["Mazemind Tome"])
+    p1 = PlayerState(name="P1", battlefield=[tome])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    add_counters(tome, "page", 4)
+
+    game.check_state_based_actions()
+    announced_after_first = set(tome.metadata.get("_state_trigger_announced") or ())
+    game.check_state_based_actions()
+    game.check_state_based_actions()
+
+    assert set(tome.metadata.get("_state_trigger_announced") or ()) == announced_after_first
+    assert announced_after_first == {("page", 4)}
+
+
+# ---------------------------------------------------------------------------
+# 603.12 — reflexive triggered abilities
+#
+# "…you may pay {1}. When you do, you may tap or untap target creature."
+# (Tolarian Kraken.) The "when you do" half is a *separate* ability created by
+# the payment, not a second half of the first one — which is why it chooses its
+# own targets and is kept under its own key rather than merged into the
+# then-branch.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("603.12")
+def test_603_12_the_when_you_do_clause_is_a_separate_ability(set_pool):
+    """A reflexive trigger is kept apart from the action that creates it.
+
+    The optional payment lowers to a ``may`` carrying its cost and a
+    ``reflexive`` payload; the reflexive half is not folded into ``then``,
+    because a ``then`` branch has no targets of its own to choose.
+    """
+    from engine.oracle import compile_card_oracle
+
+    kraken = set_pool("M21")["Tolarian Kraken"]
+    program = compile_card_oracle(kraken)
+
+    trigger = next(t for t in program.triggered_abilities
+                   if t.condition.kind == "draws_card")
+    payload = trigger.instruction.payload
+
+    assert trigger.instruction.kind == "may"
+    assert payload["cost"] == {"generic": 1}
+    assert payload.get("reflexive"), "the reflexive ability was not kept separate"
+    assert "then" not in payload
+
+
+@pytest.mark.cr("603.12")
+def test_603_12_the_reflexive_ability_carries_its_own_effect(set_pool):
+    """The reflexive half holds the effect that happens "when you do" — here
+    the tap-or-untap — so the payment creates a real second ability rather than
+    an extra step of the first."""
+    from engine.oracle import compile_card_oracle
+
+    kraken = set_pool("M21")["Tolarian Kraken"]
+    program = compile_card_oracle(kraken)
+    trigger = next(t for t in program.triggered_abilities
+                   if t.condition.kind == "draws_card")
+
+    reflexive = trigger.instruction.payload["reflexive"]
+
+    assert reflexive
+    # "you *may* tap or untap": the reflexive ability is itself an optional
+    # action, so its effect sits one level down in that offer's action list.
+    inner = reflexive[0]
+    assert inner.kind == "may"
+    assert [step.kind for step in inner.payload["action"]] == ["tap_or_untap_target"]

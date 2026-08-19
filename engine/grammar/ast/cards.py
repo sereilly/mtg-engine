@@ -397,7 +397,7 @@ class RevealUntil:
 class RevealTop:
     """``Reveal the top card of your library.`` (Track Down.)
 
-    The reveal alone. CR 701.15 makes revealing a card show it to all players
+    The reveal alone. CR 701.20a makes revealing a card show it to all players
     and move it nowhere, so what this does to the game is *record what is
     there* — and the sentences after it read that record rather than the
     library, because by then a draw may have taken the card.
@@ -423,7 +423,7 @@ class RevealTopToHandOrBottom:
 
 @dataclass(frozen=True)
 class LookAtHand:
-    """"Look at target player's hand." (Glasses of Urza, CR 701.16.)
+    """"Look at target player's hand." (Glasses of Urza, CR 402.3.)
 
     An information effect: nothing about the game state changes, so it is a
     leaf of its own rather than a flavour of ``ReturnToZone``. The player is

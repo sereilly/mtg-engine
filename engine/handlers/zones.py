@@ -1372,7 +1372,7 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
 def reveal_top_of_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Reveal the top card of your library." (Track Down.)
 
-    CR 701.15: revealing shows a card to all players and **moves it nowhere**.
+    CR 701.20: revealing shows a card to all players and **moves it nowhere**.
     So the card stays on top, the log names it — that is what a reveal is to
     this engine — and the whole lasting effect is the record left for the
     sentences after it.

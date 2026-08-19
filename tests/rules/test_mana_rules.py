@@ -448,3 +448,75 @@ def test_an_or_mana_line_defaults_to_one_printed_alternative():
 
     assert p1.mana_pool.get("G", 0) == 0, "not an alternative the line prints"
     assert sum(p1.mana_pool.values()) == 1
+
+
+# ---------------------------------------------------------------------------
+# 106.6 — mana produced with a restriction on how it may be spent
+#
+# "Spend this mana only to cast creature spells." (Metamorphosis.) "…only to
+# cast an instant or sorcery spell." (Vodalian Arcanist.) The restriction is a
+# property of the mana, not of the permanent that made it, so it has to survive
+# in the pool until the mana is spent or lost.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("106.6")
+def test_106_6b_restricted_mana_is_held_apart_from_the_general_pool():
+    """Mana produced with a spending restriction is tracked as restricted.
+
+    It is not simply added to the pool: the pool cannot say what its mana may
+    pay for, and the restriction must outlive the ability that made it.
+    """
+    from engine.restricted_mana import mana_restriction_for, restriction_admits
+
+    restriction = mana_restriction_for("Spend this mana only to cast creature spells.")
+
+    assert restriction is not None
+    assert restriction.key == "creature"
+    assert restriction_admits("creature", _mk_card("Bear", "{G}", "Creature — Bear", "")) is True
+
+
+@pytest.mark.cr("106.6")
+def test_106_6b_the_restriction_admits_only_what_it_names():
+    """The restriction is a predicate over the spell being cast, so mana marked
+    for creature spells cannot pay for an instant, and vice versa."""
+    from engine.restricted_mana import restriction_admits
+
+    bear = _mk_card("Bear", "{G}", "Creature — Bear", "")
+    bolt = _mk_card("Bolt", "{R}", "Instant", "")
+
+    assert restriction_admits("creature", bear) is True
+    assert restriction_admits("creature", bolt) is False
+    assert restriction_admits("instant_or_sorcery", bolt) is True
+    assert restriction_admits("instant_or_sorcery", bear) is False
+
+
+@pytest.mark.cr("106.6")
+def test_106_6b_two_restrictions_are_two_separate_buckets():
+    """Each restriction keeps its own bucket: one kind of restricted mana must
+    never pay for what another kind admits, which a single flag could not
+    express."""
+    player = PlayerState(name="P1")
+
+    player.restricted_mana.setdefault("creature", {})["G"] = 2
+    player.restricted_mana.setdefault("instant_or_sorcery", {})["U"] = 1
+
+    assert player.restricted_mana["creature"] == {"G": 2}
+    assert player.restricted_mana["instant_or_sorcery"] == {"U": 1}
+    assert player.mana_pool["G"] == 0  # not in the general pool
+
+
+@pytest.mark.cr("106.6")
+def test_106_6b_a_printed_card_declares_its_restriction(set_pool):
+    """The engine reads the restriction off the printed sentence, so the card
+    that prints it needs no registration — Vodalian Arcanist's mana is marked
+    for instants and sorceries by its own text."""
+    from engine.restricted_mana import mana_restriction_for
+
+    arcanist = set_pool("M21")["Vodalian Arcanist"]
+    restriction = next(
+        (r for r in (mana_restriction_for(s) for s in arcanist.oracle_text.split(". ")) if r),
+        None,
+    )
+
+    assert restriction is not None
+    assert restriction.key == "instant_or_sorcery"

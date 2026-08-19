@@ -279,3 +279,45 @@ def test_deck_summary_defaults_to_casual_when_unset():
     summary = _deck_summary(deck)
     assert summary["format"] == "casual"
     assert summary["legality"]["legal"] is True
+
+
+# ── What the host page's Format dropdown depends on ─────────────────────────
+
+def test_a_formats_variant_is_named_after_the_format():
+    """The host page derives the CR 903 variant from the format key alone.
+
+    `web/static/app.js`'s `createSession` sends the engine `variant` for the
+    format the host picked, and it reads it as "the key, unless the key is
+    casual" rather than looking the row up in this table — because the table
+    reaches the browser with the card catalog, and a lookup that ran before it
+    arrived would quietly hand back "ordinary game" for a Commander session.
+    That shortcut is only true while every row carrying a variant is named for
+    it, so it is held here rather than left as a coincidence. A format that
+    breaks it (a second Commander-like row, say) has to teach the dropdown.
+    """
+    for fmt in FORMATS:
+        variant = fmt.get("variant")
+        if variant is None:
+            continue
+        assert variant == fmt["key"], (
+            f"format {fmt['key']!r} plays the {variant!r} variant, so the host "
+            "page can no longer derive one from the other; give the Format "
+            "dropdown in web/static/index.html an explicit mapping"
+        )
+
+
+def test_deck_list_ships_the_card_lists_it_is_judged_by():
+    """`GET /api/decks` carries each deck's cards, sideboard and command zone.
+
+    The host page's deck pickers re-validate every deck against the format the
+    *game* will be played in, which the stored summary legality (computed for
+    the format the deck was saved under) cannot answer. Without the lists there
+    is nothing to validate, and the filter would silently pass every deck.
+    """
+    decks = client.get("/api/decks").json()["decks"]
+    assert decks, "no shared decks to check — the deck store ships with some"
+    for deck in decks:
+        for zone in ("cards", "sideboard", "commander"):
+            assert isinstance(deck.get(zone), list), (
+                f"deck {deck['name']!r} has no {zone} list in the /api/decks payload"
+            )

@@ -1242,7 +1242,7 @@ class EffectsMixin:
             target, "whenever you're dealt damage, sacrifice that many nontoken permanents"
         ):
             return
-        # CR 701.16b: the sacrificing player chooses which nontoken permanents to
+        # CR 701.21a: the sacrificing player chooses which nontoken permanents to
         # give up (a human is prompted; AI/headless resolves inline). "If you can't,
         # you lose the game." Multiple damage events this step accumulate the count.
         self.arm_forced_sacrifice(

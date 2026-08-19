@@ -11,7 +11,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260818-handfly" />
+    <link rel="stylesheet" href="/styles.css?v=20260819-format1" />
   </head>
   <body>
     <div id="auroraLayer" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -46,51 +46,61 @@
               <h2>Host Game</h2>
             </div>
             <div class="form-field">
-              <span class="form-field-label">Format</span>
-              <input type="hidden" id="format" value="standard" />
-              <div class="seg-toggle" data-input="format">
+              <span class="form-field-label">Game Type</span>
+              <input type="hidden" id="gameType" value="standard" />
+              <div class="seg-toggle" data-input="gameType">
                 <button type="button" class="seg-option" data-value="standard">Standard (1v1)</button>
                 <button type="button" class="seg-option" data-value="free_for_all">Free-For-All</button>
               </div>
             </div>
-            <div id="standardModeFields">
-              <div class="form-field">
-                <span class="form-field-label">Mode</span>
-                <input type="hidden" id="mode" value="human_vs_ai" />
-                <div class="seg-toggle" data-input="mode">
-                  <button type="button" class="seg-option" data-value="human_vs_ai">vs AI</button>
-                  <button type="button" class="seg-option" data-value="human_vs_human">vs Human</button>
-                  <button type="button" class="seg-option" data-value="ai_vs_ai">AI vs AI</button>
-                </div>
-              </div>
-              <div class="seat-grid">
-                <div class="seat-card">
-                  <div class="seat-card-head">
-                    <h3 class="seat-card-title" id="hostSeatTitle">You</h3>
-                  </div>
-                  <label id="hostNameLabel">Name <input id="hostName" value="Player 1" /></label>
-                  <label id="hostDeckLabel"><span id="hostDeckText">Deck</span>
-                    <select id="hostDeckSelect">
-                      <option value="">Random deck</option>
-                    </select>
-                  </label>
-                  <label id="hostColorsLabel"><span id="hostColorsText">Deck colors (1-5)</span> <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
-                </div>
-                <div class="seat-card">
-                  <div class="seat-card-head">
-                    <h3 class="seat-card-title" id="guestSeatTitle">Opponent (AI)</h3>
-                  </div>
-                  <label id="guestDeckLabel"><span id="guestDeckText">Deck</span>
-                    <select id="guestDeckSelect">
-                      <option value="">Random deck</option>
-                    </select>
-                  </label>
-                  <label id="guestColorsLabel"><span id="guestColorsText">Deck colors (1-5)</span> <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
-                  <div id="guestOpenNote" class="seat-open-note hidden">Open seat &mdash; your opponent joins with their own name and deck.</div>
-                </div>
+            <div class="form-field standard-only">
+              <span class="form-field-label">Mode</span>
+              <input type="hidden" id="mode" value="human_vs_ai" />
+              <div class="seg-toggle" data-input="mode">
+                <button type="button" class="seg-option" data-value="human_vs_ai">vs AI</button>
+                <button type="button" class="seg-option" data-value="human_vs_human">vs Human</button>
+                <button type="button" class="seg-option" data-value="ai_vs_ai">AI vs AI</button>
               </div>
             </div>
-            <div id="ffaModeFields" class="hidden">
+            <div class="form-field">
+              <span class="form-field-label">Format</span>
+              <select id="gameFormat" title="The deck-construction rules this game is played under, and what the deck pickers below check a deck against. CR 903: a Commander deck is led by a commander that starts in the command zone — 40 life and the 21-damage rule; Brawl is a 60-card deck at 25 (or 30) life, may be led by a planeswalker, and has no commander-damage rule.">
+                <option value="casual">Unrestricted</option>
+                <option value="commander">Commander</option>
+                <option value="brawl">Brawl</option>
+              </select>
+              <label class="menu-checkbox-label form-field-note" title="Off, the deck pickers list only decks that are legal in this format. On, they list every deck — hover one to read what makes it illegal.">
+                <input id="showIllegalDecks" type="checkbox" autocomplete="off" />
+                Show decks that aren't legal in this format
+              </label>
+            </div>
+            <div class="seat-grid standard-only">
+              <div class="seat-card">
+                <div class="seat-card-head">
+                  <h3 class="seat-card-title" id="hostSeatTitle">You</h3>
+                </div>
+                <label id="hostNameLabel">Name <input id="hostName" value="Player 1" /></label>
+                <label id="hostDeckLabel"><span id="hostDeckText">Deck</span>
+                  <select id="hostDeckSelect">
+                    <option value="">Random deck</option>
+                  </select>
+                </label>
+                <label id="hostColorsLabel"><span id="hostColorsText">Deck colors (1-5)</span> <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
+              </div>
+              <div class="seat-card">
+                <div class="seat-card-head">
+                  <h3 class="seat-card-title" id="guestSeatTitle">Opponent (AI)</h3>
+                </div>
+                <label id="guestDeckLabel"><span id="guestDeckText">Deck</span>
+                  <select id="guestDeckSelect">
+                    <option value="">Random deck</option>
+                  </select>
+                </label>
+                <label id="guestColorsLabel"><span id="guestColorsText">Deck colors (1-5)</span> <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
+                <div id="guestOpenNote" class="seat-open-note hidden">Open seat &mdash; your opponent joins with their own name and deck.</div>
+              </div>
+            </div>
+            <div class="ffa-only hidden">
               <div class="form-field">
                 <span class="form-field-label">Players</span>
                 <input type="hidden" id="ffaSeatCount" value="4" />
@@ -111,16 +121,6 @@
               <label class="menu-checkbox-label" title="CR 407: each player antes one random card from their deck before the game, and the winner keeps the ante. Required to use cards that say &quot;Remove this card from your deck before playing if you're not playing for ante.&quot;">
                 <input id="playingForAnte" type="checkbox" />
                 Playing for ante
-              </label>
-            </div>
-            <div class="seed-row">
-              <label class="seed-input-label" title="CR 903: each deck is led by a commander that starts in the command zone. Commander is 40 life and the 21-damage rule; Brawl is a 60-card deck at 25 (or 30) life, may be led by a planeswalker, and has no commander-damage rule.">
-                Variant
-                <select id="commanderVariant">
-                  <option value="">None (ordinary game)</option>
-                  <option value="commander">Commander (CR 903)</option>
-                  <option value="brawl">Brawl (CR 903.12)</option>
-                </select>
               </label>
             </div>
             <div class="seed-row">
@@ -722,7 +722,7 @@
     <script src="/animations.js?v=20260818-handfly2"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
     <script src="/legality.js?v=20260706-banlist1"></script>
-    <script src="/app.js?v=20260818-handfly3"></script>
-    <script src="/deck-editor.js?v=20260720-legalfilter"></script>
+    <script src="/app.js?v=20260819-format1"></script>
+    <script src="/deck-editor.js?v=20260819-format1"></script>
   </body>
 </html>

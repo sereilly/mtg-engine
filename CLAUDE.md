@@ -84,6 +84,21 @@ regenerates `RULES_PROGRESS.md`, the per-rule coverage tracker; a guard test
 (`tests/engine/test_rules_progress.py`) fails on unannotated tests or
 citations of nonexistent rules. The tracked scope (which CR sections/rules
 count) is the `SCOPE` dict in that script — widen it as the engine grows.
+`EXCLUDED` beside it drops the handful of rules whose *mechanic* this engine
+does not have (Karn's restart, shared team turns, Commander Draft); they are
+reported in an appendix rather than dropped silently. That is **not** for a
+rule the engine implements that no card exercises — CR 724.2's end-the-phase
+half and CR 705.3's "an effect may state a flip's result" stay in the
+denominator and show as untested, which is the honest reading.
+
+`scripts/rules_gaps.py` is the read side: it ranks the untested rules by
+whether `engine/`+`web/` cite them (a cited-but-untested rule is live
+behaviour nothing verifies), by section momentum and by subrule breadth. It
+also checks those source citations against the CR both ways — a rule number
+that does not exist, **and** a subrule letter that does not exist under a rule
+that does. The second is the one that hides: `CR 603.8b` folds to `603.8`,
+which is real, so nine stale citations sat in `engine/` until the letter was
+checked. Advisory only; nothing fails on its output.
 
 ```powershell
 
@@ -98,6 +113,7 @@ python scripts/support_report.py      # per-category card-support coverage (whol
 python scripts/retrieve_oracle.py "Black Lotus"   # oracle text by name (whole pool)
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
+python scripts/rules_gaps.py          # rank untested CR rules by engine citations + section momentum; also flags stale CR citations in engine/web (advisory, stdout only)
 python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots
 python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text
 python scripts/grammar_coverage.py    # regenerate GRAMMAR_COVERAGE.md (how much of the pool the parser reads); --check fails on regression, --accept re-snapshots floors

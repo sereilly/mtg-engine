@@ -3341,6 +3341,14 @@ pre {
   color: var(--ink-soft);
 }
 
+/* A checkbox that qualifies the field above it (the deck pickers' legality
+   filter under Format), rather than a field of its own. */
+.form-field-note {
+  margin: 8px 0 0;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
 .seg-toggle {
   display: flex;
   gap: 4px;

@@ -21,6 +21,7 @@ from ..game_types import GraveyardTarget
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
 from ..targeting import graveyard_target_spec
+from ..tokens import is_token_card
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 
@@ -464,12 +465,14 @@ class GameHelpersMixin:
     def put_card_into_hand(self, owner, card) -> bool:
         """Put *card* into its owner's hand, unless CR 903.9b diverts it.
 
-        Returns True when the card actually arrived. False means it went to the
-        command zone instead, or is waiting on its owner's answer and is in no
-        zone until then — either way the caller must not also record a card
-        arriving in hand.
+        Returns True when the card actually arrived. False means it was a token
+        and ceased to exist (CR 111.7), it went to the command zone instead, or
+        it is waiting on its owner's answer and is in no zone until then — in
+        every case the caller must not also record a card arriving in hand.
         """
         seat = self._owner_seat(owner)
+        if is_token_card(card):
+            return False  # CR 111.7 / 704.5d: it ceases to exist instead
         if self.commander_zone_change(seat, card, "hand"):
             return False
         self.players[seat].hand.append(card)
@@ -480,6 +483,8 @@ class GameHelpersMixin:
         ``position`` is "top" or "bottom"; the return value reads as
         :meth:`put_card_into_hand`'s does."""
         seat = self._owner_seat(owner)
+        if is_token_card(card):
+            return False  # CR 111.7 / 704.5d: it ceases to exist instead
         if self.commander_zone_change(seat, card, "library"):
             return False
         library = self.players[seat].library

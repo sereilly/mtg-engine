@@ -319,7 +319,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
     def _upkeep_land_sacrifice_candidates(self, controller) -> list[Permanent]:
         """Legal choices for Serendib Djinn's upkeep "sacrifice a land": every
         land its controller controls (you choose which of your own permanents a
-        sacrifice takes, CR 701.17a)."""
+        sacrifice takes, CR 701.21a)."""
         return [perm for perm in self.controlled_by(controller) if perm.card.primary_type == "land"]
 
     def _resolve_upkeep_trigger_target(
@@ -404,7 +404,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         its type (Serendib Djinn's "if it was an Island" damage), or None if the
         player controls no land.
 
-        ``chosen`` is the land its controller picked (CR 701.17a: you choose
+        ``chosen`` is the land its controller picked (CR 701.21a: you choose
         which of your own permanents a sacrifice takes). Without one — AI /
         headless play, or an effect where another player does the choosing — the
         first land is taken, the deterministic forced-sacrifice fallback."""

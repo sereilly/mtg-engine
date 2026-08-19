@@ -126,7 +126,7 @@ _ENTRY_LINES: tuple[tuple[str, str], ...] = (
     (ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS, ""),
     (ENTERS_WITH_X_PLUS_1_1_COUNTERS, ""),
     (COPY_CREATURE_ON_ENTER, ""),
-    # CR 706.10c — the mixin builds the copied type line with "Enchantment"
+    # CR 707.9b — the mixin builds the copied type line with "Enchantment"
     # added when the copied artifact is not already one, which is exactly what
     # this tail asks for.
     (COPY_ARTIFACT_ON_ENTER, ", except it's an enchantment in addition to its other types"),

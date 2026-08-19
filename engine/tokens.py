@@ -12,6 +12,22 @@ from typing import Sequence
 
 from .models import CardDefinition
 
+# CR 111.7's flag, stamped into ``CardDefinition.raw`` rather than kept on the
+# Permanent: a bounced or tucked token has no permanent left to ask, and the
+# card is the only thing that arrives at the zone seam.
+TOKEN_CARD_KEY = "is_token_card"
+
+
+def is_token_card(card: CardDefinition) -> bool:
+    """Whether *card* is a token's stand-in card (CR 111.7).
+
+    ``Permanent.metadata["is_token"]`` answers the same question while the
+    token is on the battlefield; this answers it once the permanent is gone,
+    which is what the hand/library seams have to test.
+    """
+    raw = getattr(card, "raw", None)
+    return bool(raw.get(TOKEN_CARD_KEY, False)) if isinstance(raw, dict) else False
+
 
 def default_token_name(subtypes: Sequence[str]) -> str:
     """CR 111.4: an unnamed token's name is its subtype(s) plus "Token".
@@ -112,7 +128,7 @@ def make_token_card(
     keywords = tuple(keywords)
     if oracle_text is None:
         oracle_text = "\n".join(keywords)
-    raw: dict = {"name": name, "type_line": type_line}
+    raw: dict = {"name": name, "type_line": type_line, TOKEN_CARD_KEY: True}
     # A noncreature token (a Treasure) has no printed P/T at all, and "0" is not
     # the same answer as "none": stamped as 0/0 it would be a creature card with
     # lethal toughness the moment anything animated it, and CR 208.1 gives P/T

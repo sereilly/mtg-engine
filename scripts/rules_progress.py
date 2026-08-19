@@ -40,11 +40,14 @@ OUTPUT_PATH = REPO_ROOT / "RULES_PROGRESS.md"
 # section; a tuple tracks only the listed rules (used for the keyword
 # catalogs, where most entries are for sets far beyond this engine's pool).
 SCOPE: dict[str, str | tuple[str, ...]] = {
-    # 1xx — Game Concepts (114 Emblems and 123 Stickers excluded)
+    # 1xx — Game Concepts (123 Stickers excluded). 114 Emblems joined with
+    # M21's planeswalkers: Liliana, Waker of the Dead and Garruk, Unleashed
+    # both print "You get an emblem with …", and engine/handlers/board_misc.py
+    # creates one.
     **{s: "all" for s in (
         "100", "101", "102", "103", "104", "105", "106", "107", "108", "109",
-        "110", "111", "112", "113", "115", "116", "117", "118", "119", "120",
-        "121", "122",
+        "110", "111", "112", "113", "114", "115", "116", "117", "118", "119",
+        "120", "121", "122",
     )},
     # 2xx — Parts of a Card (only the parts Alpha-era cards have)
     **{s: "all" for s in ("200", "201", "202", "205", "207", "208")},
@@ -78,6 +81,8 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "701.9",   # Discard
         "701.12",  # Exchange
         "701.13",  # Exile
+        "701.14",  # Fight (M21: Brash Taunter, Primal Might)
+        "701.17",  # Mill (M21: Carrion Grub, Teferi's Tutelage)
         "701.18",  # Play
         "701.19",  # Regenerate
         "701.20",  # Reveal
@@ -90,6 +95,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     "702": (  # keyword abilities the engine implements (pool + evergreens)
         "702.1",   # General
         "702.2",   # Deathtouch
+        "702.5",   # Enchant (every Aura's attachment restriction)
         "702.3",   # Defender
         "702.4",   # Double Strike
         "702.7",   # First Strike
@@ -106,6 +112,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.19",  # Trample
         "702.20",  # Vigilance
         "702.22",  # Banding
+        "702.26",  # Phasing (M21: Teferi, Master of Time)
         "702.23",  # Rampage
         "702.25",  # Flanking
         "702.36",  # Fear
@@ -130,8 +137,25 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     "903": "all",
 }
 
+# Rules inside a tracked section whose *mechanic* the engine does not have, each
+# a pointer to a subsystem that does not exist here. Listed rather than dropped:
+# they are reported in an appendix and left out of the denominator, because a
+# permanently-unreachable rule counted as "uncovered" is a target nobody can
+# ever close. This is deliberately NOT the same as a rule the engine implements
+# that no card in the pool exercises (CR 724.2's end-the-phase half, CR 705.3's
+# "an effect may state a coin flip's result") — those stay in the denominator
+# and show as untested, which is the honest reading.
+EXCLUDED: dict[str, str] = {
+    "104.6": "restarting the game (CR 727) — Karn Liberated is not in the pool",
+    "117.6": "shared team turns option (CR 805) — the engine has no teams",
+    "903.13": "Commander Draft — a draft variant, no in-game behaviour",
+}
+
 SECTION_RE = re.compile(r"^(\d{3})\.\s+(.+?)\s*$")
-RULE_RE = re.compile(r"^(\d{3}\.\d+)\.\s+(.+)$")
+# The period after the rule number is optional: the April 17, 2026 CR file
+# prints "606.5 If the total cost..." with no period, and requiring one
+# silently dropped that rule from the report.
+RULE_RE = re.compile(r"^(\d{3}\.\d+)\.?\s+(.+)$")
 SUBRULE_RE = re.compile(r"^(\d{3}\.\d+)([a-z])\s+.+$")
 CITATION_RE = re.compile(r"^(\d{3}\.\d+)([a-z])?$|^(\d{3})$")
 EFFECTIVE_RE = re.compile(r"effective as of (.+?)\.")
@@ -242,16 +266,23 @@ def collect_tests(tests_dir: Path) -> list[TestInfo]:
 def tracked_rules(section: Section) -> list[Rule]:
     scope = SCOPE.get(section.number)
     if scope == "all":
-        return list(section.rules.values())
-    if scope is None:
+        rules = list(section.rules.values())
+    elif scope is None:
         return []
-    return [section.rules[num] for num in scope if num in section.rules]
+    else:
+        rules = [section.rules[num] for num in scope if num in section.rules]
+    return [rule for rule in rules if rule.number not in EXCLUDED]
 
 
-def build_report(
-    sections: dict[str, Section], tests: list[TestInfo], edition: str
-) -> tuple[str, list[str], list[str]]:
-    """Return (markdown, unannotated test nodes, unknown citations)."""
+def map_citations(
+    sections: dict[str, Section], tests: list[TestInfo]
+) -> tuple[dict[str, list[str]], dict[str, set[str]], list[str], list[str]]:
+    """Map test citations onto numbered rules.
+
+    Returns ``(coverage, subrule_hits, unannotated, unknown)``: which tests
+    cover each rule, which subrule letters were cited, tests carrying no
+    citation, and citations of rules that don't exist in the CR file.
+    """
     all_rules = {rule.number for section in sections.values() for rule in section.rules.values()}
 
     # citation -> rule number it covers; collect problems along the way
@@ -279,6 +310,14 @@ def build_report(
                 unknown.append(f"{test.node} cites {citation} (no such rule)")
             else:
                 coverage.setdefault(rule_num, []).append(test.node)
+    return coverage, subrule_hits, unannotated, unknown
+
+
+def build_report(
+    sections: dict[str, Section], tests: list[TestInfo], edition: str
+) -> tuple[str, list[str], list[str]]:
+    """Return (markdown, unannotated test nodes, unknown citations)."""
+    coverage, subrule_hits, unannotated, unknown = map_citations(sections, tests)
 
     lines: list[str] = []
     out = lines.append
@@ -342,6 +381,21 @@ def build_report(
         out("## Bad citations (rule number not in MagicCompRules.txt)")
         out("")
         lines.extend(f"- {entry}" for entry in unknown)
+        out("")
+
+    if EXCLUDED:
+        out("## Excluded from the denominator (mechanic not in this engine)")
+        out("")
+        out("Listed rather than dropped — see `EXCLUDED` in "
+            "`scripts/rules_progress.py`. A rule the engine *does* implement "
+            "that no card exercises is not here; it stays above, untested.")
+        out("")
+        for number, reason in sorted(
+            EXCLUDED.items(), key=lambda kv: tuple(int(p) for p in kv[0].split("."))
+        ):
+            section = sections.get(number.split(".", 1)[0])
+            title = f"{section.title}: " if section else ""
+            lines.append(f"- **{number}** {title}{reason}")
         out("")
 
     # Citations that are real rules but fall outside the tracked scope.

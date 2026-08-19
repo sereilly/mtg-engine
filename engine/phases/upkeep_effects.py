@@ -475,7 +475,7 @@ class UpkeepEffectsMixin:
         trigger_targets = ctx.trigger_targets
         # Serendib Djinn: "Sacrifice a land. If you sacrifice an
         # Island this way, this creature deals 3 damage to you."
-        # The controller chooses which land (CR 701.17a) through
+        # The controller chooses which land (CR 701.21a) through
         # the upkeep trigger-target channel; AI/headless play
         # falls back to the first land.
         land_type = str(trig.instruction.payload.get("land_type", "")).lower()

@@ -291,14 +291,45 @@
     return deckAnteNames(deck).length > 0 && !window.isPlayingForAnte?.();
   }
 
+  // Which format a picker judges a deck against. A picker for the game the host
+  // is configuring judges every deck against *that game's* format; the deck
+  // editor's own load list judges each deck against the one it was saved under.
+  // The two are different questions — a Casual-saved 60-card deck is legal as
+  // saved and still cannot be brought to a Commander game — and the deck
+  // summary the server ships answers only the second, which is why the first is
+  // recomputed here from the deck's own card lists.
+  function deckLegalityProblems(deck, format) {
+    if (!window.Legality || format === deck.format || !Array.isArray(deck.cards)) {
+      return orderedProblems(deck.legality?.problems || [], deck.legality?.illegal_names || []);
+    }
+    // Validated as if the game were not played for ante, matching the server's
+    // summaries — deckProblems() below is what forgives those when it applies.
+    const result = window.Legality.validateDeck(
+      deck.cards, format, lookupCard, deck.sideboard || [], deck.commander || [],
+    );
+    return orderedProblems(result.problems, [...result.illegalNames]);
+  }
+
+  // The problems about the deck as a whole (its size, its sideboard, its
+  // command zone) ahead of the ones about a single card, which is not the order
+  // they are found in. A tooltip shows the first few, and a Commander picker
+  // opening with six near-identical "4 copies exceed the 1-of limit" lines
+  // buries the headline: a 60-card deck with nothing in the command zone could
+  // not be played however its copies were counted. Told apart by name, the way
+  // deckProblems() below tells the ante ones apart.
+  function orderedProblems(problems, illegalNames) {
+    const aboutOneCard = (p) => (illegalNames || []).some((n) => p.startsWith(n));
+    return [...problems.filter((p) => !aboutOneCard(p)), ...problems.filter(aboutOneCard)];
+  }
+
   // Deck summaries are always validated as if the game were not played for
   // ante, so each ante card contributes exactly one problem. In an ante-aware
   // picker with ante turned on those problems no longer apply — drop them so a
   // deck whose only flaw was "needs an ante game" reads as fine. Elsewhere (the
   // deck editor's load list) they stand: the deck really is illegal for normal
   // play.
-  function deckProblems(deck, { blockAnte = false } = {}) {
-    const problems = deck.legality?.problems || [];
+  function deckProblems(deck, { blockAnte = false, format = null } = {}) {
+    const problems = deckLegalityProblems(deck, format || deck.format);
     if (!blockAnte || anteBlocks(deck)) return problems;
     const anteNames = deckAnteNames(deck);
     return problems.filter(
@@ -306,17 +337,21 @@
     );
   }
 
-  function makeDeckOption(deck, { blockAnte = false } = {}) {
+  function makeDeckOption(deck, { blockAnte = false, format = null } = {}) {
+    const judged = format || deck.format;
     const option = document.createElement("option");
     option.value = deck.id;
     let label = `${deck.name} (${deck.card_count})`;
-    const problems = deckProblems(deck, { blockAnte });
+    const problems = deckProblems(deck, { blockAnte, format });
     const illegal = problems.length > 0;
     const blocked = blockAnte && anteBlocks(deck);
     if (deck.unknown_count > 0 || illegal) label += " ⚠";
     if (blocked) label += " 🚫 ante only";
     option.textContent = label;
     option.disabled = blocked;
+    // Read by populateDeckSelectElement, which leaves these out unless the
+    // host asks to see them — the tooltip below is then the answer to why.
+    if (illegal || blocked) option.dataset.illegal = "1";
     // Native title tooltip explains why the deck is flagged for its format.
     const tips = [];
     if (blocked) {
@@ -328,7 +363,7 @@
     if (illegal) {
       const shown = problems.slice(0, 6).join("\n");
       const more = problems.length > 6 ? `\n…and ${problems.length - 6} more` : "";
-      tips.push(`Not legal in ${window.Legality ? window.Legality.formatLabel(deck.format) : deck.format}:\n${shown}${more}`);
+      tips.push(`Not legal in ${window.Legality ? window.Legality.formatLabel(judged) : judged}:\n${shown}${more}`);
     }
     if (deck.unknown_count > 0) tips.push(`${deck.unknown_count} card(s) not in the catalog`);
     if (tips.length) option.title = tips.join("\n\n");
@@ -338,7 +373,12 @@
   // Populate a single <select> with the current deck list. Exposed on window so
   // app.js can call it for dynamically-created selects (e.g. Free-For-All seat
   // deck pickers) that aren't part of the fixed `configs` list below.
-  function populateDeckSelectElement(select, placeholder, { blockAnte = true } = {}) {
+  //
+  // `forHostedGame` marks a picker choosing a deck for the game being set up on
+  // the host page, which is the one thing that knows what the others don't:
+  // whether that game is played for ante (CR 407.3) and which format it is
+  // played under. Both decide what may be brought, so both gate the list.
+  function populateDeckSelectElement(select, placeholder, { forHostedGame = true } = {}) {
     if (!select) return;
     const previous = select.value;
     select.innerHTML = "";
@@ -346,17 +386,24 @@
     blank.value = "";
     blank.textContent = placeholder;
     select.appendChild(blank);
+    const format = forHostedGame ? window.selectedGameFormat?.() || "casual" : null;
+    // Only the decks that could actually be played, unless the host asks for
+    // the rest; each of those carries its reason as a hover tooltip.
+    const hideIllegal = forHostedGame && !window.showsIllegalDecks?.();
     // Group decks by scope so the source of each is unambiguous.
     for (const [scope, groupLabel] of [["personal", "Personal"], ["shared", "Shared"]]) {
-      const decks = state.decks.filter((d) => (d.scope || "shared") === scope);
-      if (decks.length === 0) continue;
+      const options = state.decks
+        .filter((d) => (d.scope || "shared") === scope)
+        .map((deck) => makeDeckOption(deck, { blockAnte: forHostedGame, format }))
+        .filter((option) => !(hideIllegal && option.dataset.illegal));
+      if (options.length === 0) continue;
       const group = document.createElement("optgroup");
       group.label = groupLabel;
-      for (const deck of decks) group.appendChild(makeDeckOption(deck, { blockAnte }));
+      for (const option of options) group.appendChild(option);
       select.appendChild(group);
     }
-    // A previously chosen deck that ante has just made unselectable falls back
-    // to the placeholder rather than staying picked but disabled.
+    // A previously chosen deck that ante or the format has just ruled out falls
+    // back to the placeholder rather than staying picked but unplayable.
     const kept = [...select.options].find((o) => o.value === previous && !o.disabled);
     select.value = kept ? previous : "";
   }
@@ -372,14 +419,15 @@
 
   function renderDeckSelectOptions() {
     const configs = [
-      // The editor's load picker must reach every deck, including ante ones.
-      ["deckLoadSelect", "— Load a deck —", { blockAnte: false }],
+      // The editor's load picker must reach every deck, including ante ones and
+      // ones no format would seat.
+      ["deckLoadSelect", "— Load a deck —", { forHostedGame: false }],
       ["hostDeckSelect", "Random deck"],
       ["guestDeckSelect", "Random deck"],
-      // A joining player can't see the host's ante setting from here, so their
-      // picker offers everything and the server rejects an ante deck brought to
-      // a non-ante game with an explanatory error (CR 407.3).
-      ["joinDeckSelect", "Random deck", { blockAnte: false }],
+      // A joining player can't see the host's ante setting or format from here,
+      // so their picker offers everything and the server rejects an ante deck
+      // brought to a non-ante game with an explanatory error (CR 407.3).
+      ["joinDeckSelect", "Random deck", { forHostedGame: false }],
     ];
     for (const [id, placeholder, options] of configs) {
       populateDeckSelectElement(q(id), placeholder, options);
@@ -407,10 +455,10 @@
   // opponent's name; the opponent's deck is host-configurable only when it's AI.
   function syncStartPageColorInputs() {
     // Free-For-All uses its own per-seat colors inputs (built by app.js); the
-    // singular host/guest colors fields this function manages are hidden in that
-    // format, so there's nothing here for it to do.
-    const formatEl = q("format");
-    if (formatEl && formatEl.value === "free_for_all") return;
+    // singular host/guest colors fields this function manages are hidden for
+    // that game type, so there's nothing here for it to do.
+    const gameTypeEl = q("gameType");
+    if (gameTypeEl && gameTypeEl.value === "free_for_all") return;
 
     const modeEl = q("mode");
     const mode = modeEl ? modeEl.value : "human_vs_ai";
