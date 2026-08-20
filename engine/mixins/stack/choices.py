@@ -267,6 +267,18 @@ class PendingChoicesMixin:
             "search_library", caster_index, library_index=library_index, zone=zone
         )
 
+    def confirm_search_library_picks(self, caster_index: int, picks: list) -> bool:
+        """Answer a counted search ("up to two basic land cards") whole: every
+        find in one action, each pick naming its zone and index there."""
+        return self.resolve_pending_choice(
+            "search_library", caster_index, picks=picks
+        )
+
+    def confirm_search_destination(self, caster_index: int, assignments: list) -> bool:
+        return self.resolve_pending_choice(
+            "search_destination", caster_index, assignments=assignments
+        )
+
     def decline_search_library(self, caster_index: int) -> bool:
         """"Fail to find" (CR 701.19b) as an answer rather than an error.
 
@@ -295,6 +307,11 @@ class PendingChoicesMixin:
             self.discard_pending_choice(choice)
             self.log.append(f"{caster.name} searched and found nothing more")
             return True
+        # A counted search ("up to two basic land cards") takes its whole
+        # answer at once through the picks path below; a per-find answer here
+        # would reopen the split flow the atomic answer replaced.
+        if len(choice.data.get("destinations") or ()) > 1:
+            return False
         # A zone the search was not armed with is not a zone this search may
         # look in: "search your library" is a different card from "search your
         # library and/or graveyard", and the wire must not be able to promote
@@ -313,42 +330,16 @@ class PendingChoicesMixin:
         if not search_matches(card, choice.data):
             return False
         source.pop(library_index)
-        # "…, reveal it/those cards, …" (CR 701.20): a search armed with the
-        # printed word shows each find's face to every player. Accumulated on
-        # the choice and recorded once when the search ends, because "those
-        # cards" is one showing — a Cultivate that finds twice is one reveal.
+        # "…, reveal it, …" (CR 701.20): a search armed with the printed word
+        # shows the find's face to every player when the search ends.
         if choice.data.get("reveal"):
             choice.data.setdefault("revealed_names", []).append(card.name)
-        # "a card named A **and/or** a card named B" (Alpine Houndmaster): each
-        # printed name is one find. The name just used is dropped, so a library
-        # holding two copies of the first card cannot answer both finds with it
-        # — the union is what the *picker* may offer, not what one search may
-        # take twice.
-        among = list((choice.data.get("restrictions") or {}).get("named_among") or ())
-        if among:
-            from ...search_filters import name_key
-
-            remaining_names = [n for n in among if name_key(n) != name_key(card.name)]
-            choice.data["restrictions"] = {
-                **(choice.data.get("restrictions") or {}),
-                "named_among": remaining_names,
-            }
         # "…put it onto the battlefield, then shuffle" (Garruk, Unleashed's
         # emblem) — the found card enters play instead of the hand. The
         # destination was fixed when the search was armed; the wire cannot
         # promote a tutor-to-hand into a tutor-to-battlefield.
-        # A counted search consumes its destinations in the printed order; a
-        # single-find one has the fixed `destination` it has always had.
-        remaining = list(choice.data.get("destinations") or ())
-        tapped_flags = list(choice.data.get("tapped") or ())
-        if remaining:
-            destination = remaining.pop(0)
-            enters_tapped = bool(tapped_flags.pop(0)) if tapped_flags else False
-        else:
-            destination = choice.data.get("destination", "hand")
-            # The single-find spelling of the same fact the destination list
-            # carries per entry (Fabled Passage).
-            enters_tapped = bool(choice.data.get("enters_tapped"))
+        destination = choice.data.get("destination", "hand")
+        enters_tapped = bool(choice.data.get("enters_tapped"))
         if destination == "battlefield":
             from ...models import Permanent as _Permanent
 
@@ -375,14 +366,6 @@ class PendingChoicesMixin:
             f"{caster.name} searched {zone} and put {card.name} "
             + ("onto the battlefield" if destination == "battlefield" else "into hand")
         )
-        # More finds owed: the prompt stays, minus the destination just used, and
-        # the library is *not* shuffled yet — CR 701.23h shuffles when the search
-        # is over, and shuffling between two finds of one search would hide the
-        # second from the player who is still looking.
-        if remaining:
-            choice.data["destinations"] = remaining
-            choice.data["tapped"] = tapped_flags
-            return True
         # Only a library search shuffles (CR 701.23h, and the printed "If you
         # search your library this way, shuffle"): a graveyard is an open zone,
         # and randomising a library the player did not search would destroy
@@ -392,6 +375,181 @@ class PendingChoicesMixin:
         self._record_search_reveal(choice)
         self.discard_pending_choice(choice)
         return True
+
+    def _resolve_search_library_picks(self, choice: PendingChoice, picks: list) -> bool:
+        """A counted search's one answer: every find at once (Cultivate).
+
+        The picks are validated together before anything moves — each names a
+        zone the search was armed with and a card the restriction admits, no
+        card is taken twice, and each printed name is consumed by the find
+        that used it (Alpine Houndmaster) — because a half-applied answer
+        would leave the library short with the prompt still owed. An empty
+        list is the fail-to-find (CR 701.19b): "up to" makes finding fewer a
+        legal answer, and the library was searched either way.
+
+        Where the finds land is a separate question the search does not
+        answer: `_place_or_ask_destinations` applies the printed slots, and
+        asks the finder which card fills which only when the slots differ.
+        """
+        slots = self._search_destination_slots(choice.data)
+        if len(slots) < 2:
+            # Not a counted search — the single-find path is its answer.
+            return False
+        if not picks:
+            return self._resolve_search_library(choice, -1, "none")
+        if len(picks) > len(slots):
+            return False
+        caster = self.players[choice.player_index]
+        zones = tuple(choice.data.get("zones", ("library",)))
+        working = dict(choice.data)
+        seen: set[tuple[str, int]] = set()
+        found: list = []
+        for pick in picks:
+            if not isinstance(pick, dict):
+                return False
+            zone = pick.get("zone", "library")
+            index = pick.get("index", -1)
+            if zone not in zones:
+                return False
+            source = caster.library if zone == "library" else caster.graveyard
+            if not isinstance(index, int) or index < 0 or index >= len(source):
+                return False
+            if (zone, index) in seen:
+                return False
+            seen.add((zone, index))
+            card = source[index]
+            if not search_matches(card, working):
+                return False
+            # "a card named A **and/or** a card named B": each printed name is
+            # one find, dropped as it is used, so a library holding two copies
+            # of the first card cannot answer both finds with it.
+            among = list((working.get("restrictions") or {}).get("named_among") or ())
+            if among:
+                from ...search_filters import name_key
+
+                working["restrictions"] = {
+                    **(working.get("restrictions") or {}),
+                    "named_among": [
+                        n for n in among if name_key(n) != name_key(card.name)
+                    ],
+                }
+            found.append((zone, index, card))
+        # Highest index first so the earlier picks still address the cards
+        # they named (the two zones do not renumber each other).
+        for zone, index, _card in sorted(found, key=lambda entry: entry[1], reverse=True):
+            source = caster.library if zone == "library" else caster.graveyard
+            source.pop(index)
+        cards = [card for _zone, _index, card in found]
+        # "…, reveal those cards, …" (CR 701.20): one showing for the whole
+        # search, recorded now — the finds are known even while where each
+        # lands is still being asked.
+        if choice.data.get("reveal"):
+            choice.data["revealed_names"] = [card.name for card in cards]
+        self.log.append(
+            f"{caster.name} searched " + " and ".join(zones) + " and found "
+            + ", ".join(card.name for card in cards)
+        )
+        # The search is over once the finds are named (CR 701.19d): shuffle
+        # before the destination question, which happens after the search.
+        if "library" in zones:
+            random.shuffle(caster.library)
+        self._record_search_reveal(choice)
+        self.discard_pending_choice(choice)
+        self._place_or_ask_destinations(choice.player_index, cards, slots, choice.data)
+        return True
+
+    def _search_destination_slots(self, data: dict) -> list[tuple[str, bool]]:
+        """The printed places a counted search's finds go, as (destination,
+        enters-tapped) pairs in the printed order."""
+        destinations = list(data.get("destinations") or ())
+        tapped = list(data.get("tapped") or ())
+        tapped += [False] * (len(destinations) - len(tapped))
+        return list(zip(destinations, tapped))
+
+    def _place_or_ask_destinations(
+        self, seat: int, cards: list, slots: list[tuple[str, bool]], data: dict
+    ) -> None:
+        """Land the found cards, asking which goes where only when it matters.
+
+        The question exists whenever the printed slots differ at all — with
+        fewer finds than slots ("up to two … put one onto the battlefield
+        tapped and the other into your hand", finding one), the finder still
+        chooses which printed slot the card fills, which is Cultivate's
+        ruling. Identical slots (both to hand, Alpine Houndmaster) have
+        nothing to ask.
+        """
+        if not cards:
+            return
+        if len(set(slots)) <= 1:
+            for card in cards:
+                destination, tapped = slots[0]
+                self._place_found_card(seat, card, destination, tapped)
+            return
+        self.arm_pending_choice(
+            "search_destination", seat,
+            card_name=data.get("card_name", ""),
+            cards=[card.name for card in cards],
+            slots=[
+                {"destination": destination, "tapped": tapped}
+                for destination, tapped in slots
+            ],
+            _cards=list(cards),
+        )
+
+    def _place_found_card(self, seat: int, card, destination: str, tapped: bool) -> None:
+        """One found card landing where the print sent it — the same two
+        destinations the search flow has always had."""
+        caster = self.players[seat]
+        if destination == "battlefield":
+            from ...models import Permanent as _Permanent
+
+            self._put_permanent_onto_battlefield(
+                seat, _Permanent(card=card, tapped=tapped), None
+            )
+        else:
+            self.put_card_into_hand(caster, card)
+        where = (
+            "onto the battlefield tapped" if destination == "battlefield" and tapped
+            else "onto the battlefield" if destination == "battlefield"
+            else "into hand"
+        )
+        self.log.append(f"{caster.name} put {card.name} {where}")
+
+    def _resolve_search_destination(self, choice: PendingChoice, assignments: list) -> bool:
+        """Apply the finder's answer to "which found card goes where".
+
+        ``assignments`` maps each found card, in the order the prompt listed
+        them, to one printed slot. The slots must be distinct — two cards
+        cannot both be the "one" put onto the battlefield — but with fewer
+        cards than slots some slots go unfilled, which is how finding one
+        card under a two-slot printing works.
+        """
+        cards = choice.data.get("_cards") or []
+        slots = choice.data.get("slots") or []
+        if len(assignments) != len(cards):
+            return False
+        if any(
+            not isinstance(entry, int) or entry < 0 or entry >= len(slots)
+            for entry in assignments
+        ):
+            return False
+        if len(set(assignments)) != len(assignments):
+            return False
+        for card, slot_index in zip(cards, assignments):
+            slot = slots[slot_index]
+            self._place_found_card(
+                choice.player_index, card, slot["destination"], bool(slot.get("tapped"))
+            )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_search_destination(self, choice: PendingChoice) -> None:
+        """Printed order — the first find fills the first slot. The AI's search
+        default picks its best card first, so under Cultivate its best land is
+        the one that reaches the battlefield, matching the old split flow."""
+        self._resolve_search_destination(
+            choice, list(range(len(choice.data.get("_cards") or ())))
+        )
 
     def _record_search_reveal(self, choice: PendingChoice) -> None:
         """The showing a printed "reveal it/those cards" performs, made when the
@@ -409,8 +567,16 @@ class PendingChoicesMixin:
         """The AI's search policy, and a fail-to-find when it declines or when
         its choice turns out not to be legal — the library is searched either
         way (CR 701.19b), which is what the decline path performs."""
-        from ...ai_policy import choose_search_card
+        from ...ai_policy import choose_search_card, choose_search_cards
 
+        slots = self._search_destination_slots(choice.data)
+        if len(slots) > 1:
+            picks = choose_search_cards(
+                self, choice.player_index, choice.data, len(slots)
+            )
+            if not self._resolve_search_library_picks(choice, picks):
+                self._resolve_search_library(choice, -1, "none")
+            return
         found = choose_search_card(self, choice.player_index, choice.data)
         if found is None or not self._resolve_search_library(choice, found[1], found[0]):
             self._resolve_search_library(choice, -1, "none")
@@ -2096,9 +2262,14 @@ register_choice(
     "search_library",
     # `zone` defaults so a caller written before the graveyard existed — and the
     # web action, which sends it only when the client picked one — still names
-    # the library.
-    resolve=lambda game, choice, r: game._resolve_search_library(
-        choice, r["library_index"], r.get("zone", "library")
+    # the library. A counted search ("up to two basic land cards") is answered
+    # whole through `picks`; the single-find shape keeps its one index.
+    resolve=lambda game, choice, r: (
+        game._resolve_search_library_picks(choice, r["picks"])
+        if "picks" in r
+        else game._resolve_search_library(
+            choice, r["library_index"], r.get("zone", "library")
+        )
     ),
     default=lambda game, choice: game._default_search_library(choice),
     action="search_library_confirm",
@@ -2114,6 +2285,28 @@ register_choice(
     hidden_for_ai=False,
     # A search takes a card out of the library and shuffles what is left, so any
     # later step of the same resolution reads a library the answer decided.
+    suspends=True,
+)
+
+register_choice(
+    "search_destination",
+    # A counted search whose printed slots differ ("put one onto the
+    # battlefield tapped and the other into your hand") asks its finder which
+    # found card fills which slot. The finds are already made and shown — this
+    # is only where each lands, so it works the same over any zone a picker
+    # took the cards from.
+    resolve=lambda game, choice, r: game._resolve_search_destination(
+        choice, r.get("assignments") or []
+    ),
+    default=lambda game, choice: game._default_search_destination(choice),
+    action="search_destination_confirm",
+    prompt_key="search_destination",
+    blocked_detail="choose where each found card goes before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The cards land only when the answer is applied, so a later step of the
+    # same resolution must not read a board they have not reached yet.
     suspends=True,
 )
 

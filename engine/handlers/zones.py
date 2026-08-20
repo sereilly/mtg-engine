@@ -278,11 +278,15 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         restrictions=dict(instruction.payload.get("restrictions") or {}),
         destination=instruction.payload.get("destination", "hand"),
         # "…put one onto the battlefield tapped and the other into your hand"
-        # (Cultivate): one entry per find, in the printed order. The prompt is
-        # answered once per find and consumes the front of this list, so the
-        # second find cannot land where the first was meant to.
+        # (Cultivate): one entry per find, in the printed order. A counted
+        # search is answered whole — every find in one pick list — and which
+        # find fills which slot is then its own question, asked through the
+        # `search_destination` prompt when the slots differ.
         destinations=list(instruction.payload.get("destinations") or ()),
         tapped=list(instruction.payload.get("tapped") or ()),
+        # The searching card's name, for the prompts' labels — data, not
+        # dispatch.
+        card_name=context.card.name if context.card is not None else "",
         # The single-find spelling of the same fact, plus the conditional untap
         # rider that rides with it (Fabled Passage) — both belong to the search
         # rather than to a later sentence, because they are about the card it

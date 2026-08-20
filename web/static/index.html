@@ -641,6 +641,19 @@
       </div>
     </div>
 
+    <!-- A counted search's "which found card goes where" (Cultivate): each
+         found card is assigned one printed slot before anything lands. -->
+    <div id="searchDestinationModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="searchDestinationTitle">
+      <div class="modal-box">
+        <h2 id="searchDestinationTitle" class="modal-title">Choose Destinations</h2>
+        <p id="searchDestinationSubtitle" class="modal-subtitle">Choose where each card goes.</p>
+        <div id="searchDestinationGrid" class="library-card-grid"></div>
+        <div class="modal-footer">
+          <button id="searchDestinationConfirmBtn" type="button" disabled>Confirm</button>
+        </div>
+      </div>
+    </div>
+
     <div id="lookTopPickModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lookTopPickTitle">
       <div class="modal-box">
         <h2 id="lookTopPickTitle" class="modal-title">Look at the Top of Your Library</h2>
@@ -674,9 +687,10 @@
       </div>
     </div>
 
-    <!-- Cards revealed to all players (Cultivate, Track Down, …): floated
-         large over the board center for a few seconds by app.js, never
-         interactive. -->
+    <!-- Cards revealed (Cultivate, Track Down, …): floated large over the
+         board center for a few seconds by app.js, never interactive. Shown to
+         every viewer except the revealer, who already saw the faces in the
+         picker they chose them from. -->
     <div id="revealOverlay" class="reveal-overlay hidden" aria-live="polite">
       <div class="reveal-overlay-inner">
         <div id="revealOverlayCards" class="reveal-overlay-cards"></div>

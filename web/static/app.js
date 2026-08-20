@@ -99,6 +99,9 @@ let holdPriorityActive = false;
 let stackClickHold = null;
 let stackCanvasHoverActive = false;
 let searchLibrarySelectedIndex = null;
+// A counted search ("up to two basic land cards", Cultivate) multi-selects:
+// the picked library indices, capped at the prompt's max_picks.
+let searchLibrarySelectedMulti = new Set();
 let searchLibraryFilter = "";
 let searchLibraryShowAll = false;
 // Signature of the search grid as last built. The state poll re-renders the
@@ -688,9 +691,10 @@ function maybeTriggerCombatDamageFx(prev, next) {
 // Cards revealed to all players (state.reveal_events — Cultivate's "reveal
 // those cards", Track Down's top-of-library reveal) float large over the
 // center of the board for a few seconds with "Revealed by <player>", rocking
-// gently like the canvas's flying creatures. The feed is diffed by id, so a
-// rerender of the same state shows nothing twice; events arriving together
-// queue and play one after another.
+// gently like the canvas's flying creatures. Shown to everyone *except* the
+// revealer, who already saw the faces in the picker they chose them from.
+// The feed is diffed by id, so a rerender of the same state shows nothing
+// twice; events arriving together queue and play one after another.
 const REVEAL_OVERLAY_MS = 4000;
 let lastSeenRevealId = null;
 let revealOverlayQueue = [];
@@ -714,7 +718,12 @@ function maybeShowRevealOverlay(prev, next) {
   const fresh = events.filter((e) => e.id > lastSeenRevealId);
   lastSeenRevealId = Math.max(lastSeenRevealId, maxId);
   if (!fresh.length) return;
-  revealOverlayQueue.push(...fresh);
+  // The revealer already saw the faces in the picker they chose them from —
+  // the showing is for everyone else. A seatless viewer (spectator) has no
+  // seat to match, so they see every reveal.
+  const toShow = fresh.filter((e) => seat === null || e.seat !== seat);
+  if (!toShow.length) return;
+  revealOverlayQueue.push(...toShow);
   if (!revealOverlayActive) showNextRevealEvent();
 }
 
@@ -4608,6 +4617,7 @@ function renderSearchLibraryModal(info) {
     if (!modal.classList.contains("hidden")) {
       modal.classList.add("hidden");
       searchLibrarySelectedIndex = null;
+      searchLibrarySelectedMulti = new Set();
       searchLibraryFilter = "";
       searchLibraryShowAll = false;
       searchLibraryRenderSig = null;
@@ -4621,6 +4631,10 @@ function renderSearchLibraryModal(info) {
 
   const cards = info.cards || [];
   const count = info.count || 1;
+  // A counted search is answered whole: multi-select up to max_picks, one
+  // confirm. Where each find goes is the next prompt's question.
+  const multi = !!info.multi;
+  const maxPicks = multi ? (info.max_picks || count) : 1;
   // What this search may find (Cultivate's "basic land card", …). The engine
   // re-checks the answer, so this is presentation — but offering an illegal
   // pick would only invite an answer the server then refuses.
@@ -4630,7 +4644,15 @@ function renderSearchLibraryModal(info) {
   const illegalCount = cards.length - legal.size;
   const subtitle = document.getElementById("searchLibrarySubtitle");
   if (subtitle) {
-    subtitle.textContent = `Choose ${count === 1 ? "a card" : `${count} cards`} to put into your hand.`;
+    if (multi) {
+      const dests = info.destinations || [];
+      const allToHand = dests.every((d) => d === "hand");
+      subtitle.textContent = allToHand
+        ? `Choose up to ${maxPicks} cards to put into your hand.`
+        : `Choose up to ${maxPicks} cards. You'll choose where each one goes next.`;
+    } else {
+      subtitle.textContent = `Choose ${count === 1 ? "a card" : `${count} cards`} to put into your hand.`;
+    }
   }
 
   modal.classList.remove("hidden");
@@ -4655,6 +4677,7 @@ function renderSearchLibraryModal(info) {
   // fresh grid for the next find of an "up to N", unchanged for a refusal.
   function resetSelectionState() {
     searchLibrarySelectedIndex = null;
+    searchLibrarySelectedMulti = new Set();
     searchLibraryFilter = "";
     searchLibraryShowAll = false;
     searchLibraryRenderSig = null;
@@ -4668,6 +4691,7 @@ function renderSearchLibraryModal(info) {
     searchLibraryShowAll,
     searchLibraryFilter,
     searchLibrarySelectedIndex,
+    [...searchLibrarySelectedMulti].sort((a, b) => a - b),
   ]);
 
   function buildGrid() {
@@ -4682,7 +4706,10 @@ function renderSearchLibraryModal(info) {
           return "";
         }
         const classes = ["library-card-choice"];
-        if (searchLibrarySelectedIndex === idx) classes.push("selected");
+        const isSelected = multi
+          ? searchLibrarySelectedMulti.has(idx)
+          : searchLibrarySelectedIndex === idx;
+        if (isSelected) classes.push("selected");
         if (!isLegal) classes.push("illegal");
         const inner = card.image_uri
           ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
@@ -4699,11 +4726,32 @@ function renderSearchLibraryModal(info) {
       el.addEventListener("mouseenter", () => updateSearchLibraryPreview(cards[idx]));
       if (el.classList.contains("illegal")) return; // visible via Show All, but not a legal find
       el.addEventListener("click", () => {
-        searchLibrarySelectedIndex = idx;
-        if (confirmBtn) confirmBtn.disabled = false;
+        if (multi) {
+          // Toggle, capped at the printed count — "up to two" never takes three.
+          if (searchLibrarySelectedMulti.has(idx)) searchLibrarySelectedMulti.delete(idx);
+          else if (searchLibrarySelectedMulti.size < maxPicks) searchLibrarySelectedMulti.add(idx);
+          else return;
+        } else {
+          searchLibrarySelectedIndex = idx;
+        }
+        updateConfirmButton();
         buildGrid();
       });
     });
+  }
+
+  function updateConfirmButton() {
+    if (!confirmBtn) return;
+    if (multi) {
+      const n = searchLibrarySelectedMulti.size;
+      confirmBtn.textContent = n
+        ? `Take ${n} Card${n === 1 ? "" : "s"}`
+        : `Take Cards`;
+      confirmBtn.disabled = n === 0;
+    } else {
+      confirmBtn.textContent = "Add to Hand";
+      confirmBtn.disabled = searchLibrarySelectedIndex === null;
+    }
   }
 
   if (showAllCheckbox && !showAllCheckbox.dataset.bound) {
@@ -4728,6 +4776,18 @@ function renderSearchLibraryModal(info) {
   if (confirmBtn && !confirmBtn.dataset.bound) {
     confirmBtn.dataset.bound = "1";
     confirmBtn.addEventListener("click", async () => {
+      // Bound once, so the mode comes from the live prompt, not this render's
+      // closure — the same button answers Demonic Tutor and Cultivate.
+      const liveInfo = getSearchLibraryInfo();
+      if (liveInfo?.multi) {
+        if (searchLibrarySelectedMulti.size === 0) return;
+        const picks = [...searchLibrarySelectedMulti]
+          .sort((a, b) => a - b)
+          .map((index) => ({ zone: "library", index }));
+        resetSelectionState();
+        await sendAction({ seat, action: "search_library_confirm", search_picks: picks });
+        return;
+      }
       if (searchLibrarySelectedIndex === null) return;
       const idx = searchLibrarySelectedIndex;
       resetSelectionState();
@@ -4747,7 +4807,123 @@ function renderSearchLibraryModal(info) {
 
   searchLibraryRebuild = buildGrid;
   if (searchLibraryRenderSig !== renderSig()) buildGrid();
-  if (confirmBtn) confirmBtn.disabled = searchLibrarySelectedIndex === null;
+  updateConfirmButton();
+}
+
+// A counted search's "which found card goes where" (Cultivate's "put one onto
+// the battlefield tapped and the other into your hand"): the found cards are
+// already out of the library; each is assigned one printed slot. Claiming a
+// slot releases it from any other card, and once every unclaimed slot reads
+// the same, the remaining cards fill in automatically — so Cultivate's two
+// finds are settled with a single click.
+let searchDestAssignments = new Map(); // found-card index -> slot index
+let searchDestRenderSig = null;
+
+function getSearchDestinationInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.search_destination;
+  if (!info) return null;
+  if (info.caster_seat !== seat) return null;
+  return info;
+}
+
+function searchDestSlotLabel(slot) {
+  if (!slot) return "";
+  const base = slot.destination === "battlefield" ? "Battlefield" : "Hand";
+  return slot.tapped ? `${base} (tapped)` : base;
+}
+
+function renderSearchDestinationModal(info) {
+  const modal = document.getElementById("searchDestinationModal");
+  if (!modal) return;
+  if (!info) {
+    if (!modal.classList.contains("hidden")) {
+      modal.classList.add("hidden");
+      searchDestAssignments = new Map();
+      searchDestRenderSig = null;
+    }
+    return;
+  }
+  modal.classList.remove("hidden");
+  const cards = info.cards || [];
+  const slots = info.slots || [];
+  const subtitle = document.getElementById("searchDestinationSubtitle");
+  if (subtitle) {
+    subtitle.textContent = `${info.card_name || "Search"}: choose where each card goes.`;
+  }
+  const confirmBtn = document.getElementById("searchDestinationConfirmBtn");
+
+  // Once the unclaimed slots all read the same there is no choice left in
+  // them — assign the remaining cards so one click settles Cultivate.
+  function autoFill() {
+    const used = new Set(searchDestAssignments.values());
+    const free = slots.map((_, i) => i).filter((i) => !used.has(i));
+    const unassigned = cards.map((_, i) => i).filter((i) => !searchDestAssignments.has(i));
+    if (!unassigned.length || unassigned.length > free.length) return;
+    if (new Set(free.map((i) => searchDestSlotLabel(slots[i]))).size !== 1) return;
+    unassigned.forEach((cardIdx, n) => searchDestAssignments.set(cardIdx, free[n]));
+  }
+
+  const renderSig = () => JSON.stringify([
+    cards.map((card) => card.name),
+    slots,
+    [...searchDestAssignments.entries()].sort((a, b) => a[0] - b[0]),
+  ]);
+
+  function build() {
+    const grid = document.getElementById("searchDestinationGrid");
+    if (!grid) return;
+    searchDestRenderSig = renderSig();
+    grid.innerHTML = cards
+      .map((card, idx) => {
+        const assigned = searchDestAssignments.get(idx);
+        const inner = card.image_uri
+          ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+          : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
+        const buttons = slots
+          .map((slot, slotIdx) => {
+            const active = assigned === slotIdx;
+            return `<button type="button" class="dest-slot-btn${active ? " active" : ""}" data-card="${idx}" data-slot="${slotIdx}">${escapeHtml(searchDestSlotLabel(slot))}</button>`;
+          })
+          .join("");
+        return `<div class="library-card-choice dest-card${assigned !== undefined ? " selected" : ""}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div><div class="dest-slot-row">${buttons}</div></div>`;
+      })
+      .join("");
+    grid.querySelectorAll(".dest-slot-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const cardIdx = Number(btn.dataset.card);
+        const slotIdx = Number(btn.dataset.slot);
+        for (const [c, s] of [...searchDestAssignments.entries()]) {
+          if (s === slotIdx && c !== cardIdx) searchDestAssignments.delete(c);
+        }
+        if (searchDestAssignments.get(cardIdx) === slotIdx) {
+          searchDestAssignments.delete(cardIdx);
+        } else {
+          searchDestAssignments.set(cardIdx, slotIdx);
+          autoFill();
+        }
+        build();
+      });
+    });
+    if (confirmBtn) confirmBtn.disabled = searchDestAssignments.size !== cards.length;
+  }
+
+  if (confirmBtn && !confirmBtn.dataset.bound) {
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", async () => {
+      const liveInfo = getSearchDestinationInfo();
+      if (!liveInfo) return;
+      const total = (liveInfo.cards || []).length;
+      if (searchDestAssignments.size !== total) return;
+      const assignments = [];
+      for (let i = 0; i < total; i += 1) assignments.push(searchDestAssignments.get(i));
+      searchDestAssignments = new Map();
+      searchDestRenderSig = null;
+      await sendAction({ seat, action: "search_destination_confirm", search_assignments: assignments });
+    });
+  }
+  if (searchDestRenderSig !== renderSig()) build();
+  if (confirmBtn) confirmBtn.disabled = searchDestAssignments.size !== cards.length;
 }
 
 // See the Truth's pick: the looked-at top cards; clicking one keeps it and
@@ -11452,6 +11628,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   }
   renderActivationPrompt();
   renderSearchLibraryModal(searchLibraryInfo);
+  renderSearchDestinationModal(getSearchDestinationInfo(state));
   renderSearchExileModal(getSearchExileInfo(state));
   renderUntapUpToModal(getUntapUpToInfo(state));
   renderLookTopPickModal(getLookTopPickInfo(state));

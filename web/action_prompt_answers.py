@@ -19,6 +19,17 @@ def _action_search_library_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="no library search pending")
     if req.seat != pending["caster_index"]:
         raise HTTPException(status_code=400, detail="not your library search")
+    # A counted search ("up to two basic land cards") is answered whole: every
+    # find in one pick list. The engine validates the set together — zones,
+    # restriction, no card twice — so a bad combination is a refused answer.
+    if req.search_picks is not None:
+        picks = [
+            {"zone": pick.zone, "index": pick.index} for pick in req.search_picks
+        ]
+        ok = session.game.confirm_search_library_picks(req.seat, picks)
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid search picks")
+        return
     if req.hand_index is None:
         raise HTTPException(status_code=400, detail="hand_index (library card index) is required")
     # Which zone the index addresses. The engine checks it against the zones
@@ -41,6 +52,24 @@ def _action_search_library_decline(session, req, seat_type):
     # Failing to find is legal (CR 701.19b) and is the only answer available
     # when nothing in the searched zones matches the restriction.
     session.game.decline_search_library(req.seat)
+
+@action_handler("search_destination_confirm")
+def _action_search_destination_confirm(session, req, seat_type):
+    pending = next(
+        (c for c in session.game.pending_choices_of("search_destination")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no destination choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.search_assignments is None:
+        raise HTTPException(status_code=400, detail="search_assignments is required")
+    # One printed-slot index per found card, distinct — the engine re-checks
+    # the mapping, so a stale or doubled slot is a refused answer.
+    ok = session.game.confirm_search_destination(req.seat, req.search_assignments)
+    if not ok:
+        raise HTTPException(status_code=400, detail="invalid destination assignment")
 
 @action_handler("look_top_pick_confirm")
 def _action_look_top_pick_confirm(session, req, seat_type):

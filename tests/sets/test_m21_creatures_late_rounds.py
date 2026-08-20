@@ -2303,13 +2303,7 @@ def test_alpine_houndmaster_compiles_its_entry_search(set_pool):
     assert [t.supported for t in program.triggered_abilities] == [True, True]
 
 
-def test_alpine_houndmaster_finds_each_named_card_once(set_pool):
-    """"a card named Alpine Watchdog **and/or** a card named Igneous Cur" — one
-    find per printed name. The library holds two Watchdogs, so a search that
-    read the names as a union without dropping the one it used could answer both
-    finds with the same card and never find the Cur."""
-    from engine.search_filters import search_matches
-
+def _houndmaster_search(set_pool):
     pool = set_pool("M21")
     hound = Permanent(card=pool["Alpine Houndmaster"])
     p1 = PlayerState(
@@ -2326,21 +2320,35 @@ def test_alpine_houndmaster_finds_each_named_card_once(set_pool):
     game._settle()
     game.confirm_optional_pay(0, accept=True)
     game._settle()
+    return game, p1
 
-    first = game.pending_choices[0]
-    assert [c.name for c in p1.library if search_matches(c, first.data)] == [
+
+def test_alpine_houndmaster_finds_each_named_card_once(set_pool):
+    """"a card named Alpine Watchdog **and/or** a card named Igneous Cur" — one
+    find per printed name, answered whole. The picker offers the union, but the
+    answer consumes each name as a pick uses it, so two Watchdogs cannot answer
+    both finds — the pair is a refused answer, not a widened search."""
+    from engine.search_filters import search_matches
+
+    game, p1 = _houndmaster_search(set_pool)
+
+    search = game.pending_choices[0]
+    assert [c.name for c in p1.library if search_matches(c, search.data)] == [
         "Alpine Watchdog", "Igneous Cur", "Alpine Watchdog",
-    ]
-    game.confirm_search_library(0, 0, zone="library")
-    game._settle()
+    ], "the union is what the picker may offer"
 
-    second = game.pending_choices[0]
-    assert [c.name for c in p1.library if search_matches(c, second.data)] == ["Igneous Cur"], (
-        "the name already used is no longer on offer"
-    )
-    game.confirm_search_library(
-        0, next(i for i, c in enumerate(p1.library) if c.name == "Igneous Cur"), zone="library"
+    assert not game.confirm_search_library_picks(
+        0,
+        [{"zone": "library", "index": 0}, {"zone": "library", "index": 3}],
+    ), "two copies of one name cannot answer both finds"
+
+    assert game.confirm_search_library_picks(
+        0,
+        [{"zone": "library", "index": 0}, {"zone": "library", "index": 1}],
     )
     game._settle()
 
     assert sorted(c.name for c in p1.hand) == ["Alpine Watchdog", "Igneous Cur"]
+    assert game.pending_choices == [], (
+        "both slots read \"into your hand\", so there is nothing to ask"
+    )

@@ -185,10 +185,12 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]
     caster = ctx.game.players[choice.player_index]
     zones = tuple(choice.data.get("zones", ("library",)))
+    destinations = list(choice.data.get("destinations") or ())
     payload = {
         "caster_seat": choice.player_index,
         "count": choice.data["count"],
         "card_type": choice.data["card_type"],
+        "card_name": choice.data.get("card_name", ""),
         "zones": list(zones),
         "cards": [ctx.serialize_card(card) for card in caster.library],
         "legal_indices": [
@@ -196,6 +198,16 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
             if search_matches(card, choice.data)
         ],
     }
+    # A counted search ("up to two basic land cards", Cultivate) is answered
+    # whole: the client multi-selects up to `max_picks` and sends one pick
+    # list. The printed slots ride along so the dialog can say where the finds
+    # will go; which find fills which slot is the `search_destination` prompt.
+    if len(destinations) > 1:
+        payload["multi"] = True
+        payload["max_picks"] = len(destinations)
+        payload["destinations"] = destinations
+        payload["tapped"] = list(choice.data.get("tapped") or ())
+        payload["up_to"] = bool(choice.data.get("up_to"))
     if "graveyard" in zones:
         payload["graveyard_cards"] = [
             ctx.serialize_card(card) for card in caster.graveyard
@@ -205,6 +217,23 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
             if search_matches(card, choice.data)
         ]
     return payload
+
+
+@prompt_renderer("search_destination")
+def _search_destination(ctx: PromptContext, choices: list) -> dict:
+    """A counted search's "which found card goes where" (Cultivate): the found
+    cards, already out of the searched zones and revealed if the card said to,
+    and the printed slots each can fill. One slot per card, distinct — the
+    engine re-checks the mapping."""
+    choice = choices[0]
+    return {
+        "caster_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "cards": [
+            ctx.serialize_card(card) for card in choice.data.get("_cards") or ()
+        ],
+        "slots": list(choice.data.get("slots") or ()),
+    }
 
 
 @prompt_renderer("look_top_pick")

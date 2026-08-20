@@ -472,19 +472,53 @@ def choose_search_card(
     what is findable. An AI that filtered differently would be a second opinion
     about what the effect finds — the same bug class as a second parse.
     """
+    picks = choose_search_cards(game, player_index, data, 1)
+    if not picks:
+        return None
+    return picks[0]["zone"], picks[0]["index"]
+
+
+def choose_search_cards(
+    game: Game, player_index: int, data: dict, count: int
+) -> list[dict]:
+    """The counted search's answer: up to *count* distinct picks, best first,
+    each ``{"zone": ..., "index": ...}`` the way the resolver reads them.
+
+    A printed name is consumed by the find that used it, exactly as the
+    resolver will consume it — an AI that kept offering a used name would
+    submit an answer the engine then refuses, which is the fail-to-find.
+    """
+    from .search_filters import name_key
+
     player = game.players[player_index]
-    best: tuple[str, int] | None = None
-    best_score = float("-inf")
-    for zone in tuple(data.get("zones", ("library",))):
-        cards = player.library if zone == "library" else player.graveyard
-        for index, card in enumerate(cards):
-            if not search_matches(card, data):
-                continue
-            score = _score_tutor_choice(game, player_index, card)
-            if best is None or score > best_score:
-                best = (zone, index)
-                best_score = score
-    return best
+    working = dict(data)
+    picks: list[dict] = []
+    taken: set[tuple[str, int]] = set()
+    for _ in range(count):
+        best: tuple[str, int] | None = None
+        best_score = float("-inf")
+        for zone in tuple(working.get("zones", ("library",))):
+            cards = player.library if zone == "library" else player.graveyard
+            for index, card in enumerate(cards):
+                if (zone, index) in taken or not search_matches(card, working):
+                    continue
+                score = _score_tutor_choice(game, player_index, card)
+                if best is None or score > best_score:
+                    best = (zone, index)
+                    best_score = score
+        if best is None:
+            break
+        zone, index = best
+        card = (player.library if zone == "library" else player.graveyard)[index]
+        taken.add(best)
+        picks.append({"zone": zone, "index": index})
+        among = list((working.get("restrictions") or {}).get("named_among") or ())
+        if among:
+            working["restrictions"] = {
+                **(working.get("restrictions") or {}),
+                "named_among": [n for n in among if name_key(n) != name_key(card.name)],
+            }
+    return picks
 
 
 def choose_search_library_index(game: Game, player_index: int, card_type: str = "any") -> int | None:

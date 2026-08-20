@@ -116,3 +116,129 @@ def test_confirming_finishes_the_whole_resolution():
     )
     assert _state(sid)["search_library"] is None
     assert game.resume_stack == [] and not game.effect_suspended
+
+
+# --- The counted search: every find in one answer, then where each goes ------
+#
+# Cultivate's shape ("up to two basic land cards … put one onto the battlefield
+# tapped and the other into your hand"), armed directly so the wire is what is
+# under test; the engine flow has its own tests beside the card.
+
+
+def _counted_session():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 909,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    session = store.get(sid)
+    game = session.game
+    game.enforce_mana_costs = False
+    game.players[0].hand = []
+    game.players[0].library = [_CARDS["Forest"], _CARDS["Black Lotus"], _CARDS["Island"]]
+    session.current_turn = 0
+    game.active_player_index = 0
+    game.arm_pending_choice(
+        "search_library", 0,
+        count=2, card_type="land", zones=("library",),
+        restrictions={"supertypes": ["basic"]},
+        destination="hand",
+        destinations=["battlefield", "hand"], tapped=[True, False],
+        enters_tapped=False, untap_found_if=None, up_to=True, reveal=True,
+        card_name="Cultivate",
+    )
+    return sid, session, game
+
+
+def test_a_counted_search_renders_multi_and_confirms_whole():
+    sid, session, game = _counted_session()
+
+    prompt = _state(sid)["search_library"]
+    assert prompt["multi"] is True
+    assert prompt["max_picks"] == 2
+    assert prompt["destinations"] == ["battlefield", "hand"]
+    assert prompt["legal_indices"] == [0, 2], "the Lotus is not a basic land"
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "search_library_confirm",
+            "search_picks": [
+                {"zone": "library", "index": 0},
+                {"zone": "library", "index": 2},
+            ],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    # The search is over; where each find lands is the next prompt.
+    state = _state(sid)
+    assert state["search_library"] is None
+    followup = state["search_destination"]
+    assert followup is not None
+    assert followup["caster_seat"] == 0
+    assert [card["name"] for card in followup["cards"]] == ["Forest", "Island"]
+    assert followup["slots"] == [
+        {"destination": "battlefield", "tapped": True},
+        {"destination": "hand", "tapped": False},
+    ]
+
+    # The owing seat cannot act around the destination question.
+    refused = client.post(
+        f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"}
+    )
+    assert refused.status_code == 400
+    assert "found card" in refused.json()["detail"]
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "search_destination_confirm", "search_assignments": [1, 0]},
+    )
+    assert resp.status_code == 200, resp.text
+
+    assert [(p.card.name, p.tapped) for p in game.controlled_by(0)] == [("Island", True)]
+    assert [c.name for c in game.players[0].hand] == ["Forest"]
+    assert _state(sid)["search_destination"] is None
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+def test_a_counted_search_refuses_the_single_find_answer():
+    sid, session, game = _counted_session()
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "search_library_confirm", "hand_index": 0},
+    )
+    assert resp.status_code == 400
+    assert len(game.players[0].library) == 3, "nothing moved on a refused answer"
+
+
+def test_a_doubled_slot_is_a_refused_assignment():
+    sid, session, game = _counted_session()
+    client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "search_library_confirm",
+            "search_picks": [
+                {"zone": "library", "index": 0},
+                {"zone": "library", "index": 2},
+            ],
+        },
+    )
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "search_destination_confirm", "search_assignments": [0, 0]},
+    )
+    assert resp.status_code == 400
+    assert _state(sid)["search_destination"] is not None, "still owed"

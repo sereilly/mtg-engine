@@ -2852,6 +2852,43 @@ pre {
   word-break: break-word;
 }
 
+/* The destination-assignment prompt (Cultivate): one slot button per printed
+   destination under each found card. A card whose slot is claimed shows the
+   grid's usual selected treatment; the active button echoes it. */
+.dest-card {
+  cursor: default;
+}
+
+.dest-slot-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  padding: 4px 6px 8px;
+}
+
+.dest-slot-btn {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dest-slot-btn:hover {
+  border-color: rgba(242, 184, 75, 0.55);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dest-slot-btn.active {
+  border-color: rgba(133, 200, 134, 0.95);
+  background: rgba(133, 200, 134, 0.18);
+  color: var(--ink);
+}
+
 .library-card-text-placeholder {
   width: 100%;
   aspect-ratio: 5 / 7;

@@ -147,13 +147,16 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
     """"Search your library for a card, put that card into your hand, then
     shuffle." (Demonic Tutor.)
 
-    ``search_library`` arms ``pending_search_library``, and
-    ``confirm_search_library`` moves exactly **one** card into the *searcher's*
-    hand and shuffles. That is its whole contract, so the two halves the parser
-    read are checked against it here rather than dropped: a destination other
-    than the searcher's own hand has no flow, and a restriction the picker
-    cannot test would leave the player choosing from their entire library while
-    the card still reported as supported.
+    ``search_library`` arms ``pending_search_library``. A single-find search is
+    answered by ``confirm_search_library``, which moves exactly **one** card
+    and shuffles; a counted one ("up to two basic land cards", Cultivate) is
+    answered whole by ``confirm_search_library_picks`` — every find in one
+    answer — and which find fills which printed slot is then asked through the
+    ``search_destination`` prompt. That is the flow's whole contract, so the
+    two halves the parser read are checked against it here rather than
+    dropped: a destination other than the searcher's own hand has no flow, and
+    a restriction the picker cannot test would leave the player choosing from
+    their entire library while the card still reported as supported.
 
     ``count`` is emitted even though only the UI displays it — the legacy rule
     wrote it and the payload has to stay byte-identical — but it is pinned to

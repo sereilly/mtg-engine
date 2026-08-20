@@ -203,6 +203,8 @@ def _casting_window(session: Session, player_index: int) -> _CastingWindow | Non
         return None
     if game.pending_search_library is not None:
         return None
+    if game.pending_choice_of("search_destination") is not None:
+        return None
     if game.pending_reorder_library is not None:
         return None
 

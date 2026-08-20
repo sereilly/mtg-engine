@@ -977,6 +977,10 @@ def test_an_untimed_control_change_still_refuses(set_pool):
 
 
 # --- Round 99: a search that finds twice and splits its finds ---------------
+#
+# Reworked in round 148: a counted search is answered whole — both finds in one
+# pick list — and which find fills which printed slot is then its own question,
+# the `search_destination` prompt.
 
 
 def _cultivate_board(set_pool, library=("Forest", "Shock", "Island", "Mountain")):
@@ -994,6 +998,10 @@ def _cultivate_board(set_pool, library=("Forest", "Shock", "Island", "Mountain")
     return game, p1
 
 
+def _pick(index: int, zone: str = "library") -> dict:
+    return {"zone": zone, "index": index}
+
+
 def test_cultivate_compiles_supported(set_pool):
     """Two finds and two destinations are the *same fact*, so they travel
     together: a card that names two destinations cannot lower to a search that
@@ -1008,56 +1016,162 @@ def test_cultivate_compiles_supported(set_pool):
     assert search.payload["restrictions"]["supertypes"] == ["basic"]
 
 
-def test_the_first_find_enters_tapped_and_the_second_goes_to_hand(set_pool):
-    """The prompt is answered once per find and consumes the front of the
-    destination list, so the second find cannot land where the first was meant
-    to."""
+def test_both_finds_are_one_answer_and_the_split_is_then_asked(set_pool):
+    """The search is answered whole — both cards in one pick list — and the
+    finder is then asked which find fills which printed slot, because "put one
+    onto the battlefield tapped and the other into your hand" names the slots
+    without naming which card is which."""
     game, p1 = _cultivate_board(set_pool)
-
-    assert game.confirm_search_library(0, 0)          # Forest
     library = [c.name for c in p1.library]
-    assert game.confirm_search_library(0, library.index("Island"))
+
+    assert game.confirm_search_library_picks(
+        0, [_pick(library.index("Forest")), _pick(library.index("Island"))]
+    )
+
+    assert game.pending_choices_of("search_library") == [], "the search is over"
+    (asked,) = game.pending_choices_of("search_destination")
+    assert asked.data["cards"] == ["Forest", "Island"]
+    assert asked.data["slots"] == [
+        {"destination": "battlefield", "tapped": True},
+        {"destination": "hand", "tapped": False},
+    ]
+    assert list(game.controlled_by(0)) == [] and p1.hand == [], (
+        "nothing lands until the finder says where"
+    )
+
+    assert game.confirm_search_destination(0, [0, 1])
 
     assert [(p.card.name, p.tapped) for p in game.controlled_by(0)] == [("Forest", True)]
     assert [c.name for c in p1.hand] == ["Island"]
     assert game.pending_choices == []
 
 
-def test_the_library_is_not_shuffled_between_the_two_finds(set_pool):
-    """CR 701.19d shuffles when the *search* is over. Shuffling between two
-    finds of one search would hide the second from the player still looking."""
+def test_the_finder_chooses_which_find_enters_tapped(set_pool):
+    """The same picks, the other way around: the assignment is the finder's,
+    not the pick order's."""
     game, p1 = _cultivate_board(set_pool)
-    before = [c.name for c in p1.library]
+    library = [c.name for c in p1.library]
 
-    game.confirm_search_library(0, 0)
+    assert game.confirm_search_library_picks(
+        0, [_pick(library.index("Forest")), _pick(library.index("Island"))]
+    )
+    assert game.confirm_search_destination(0, [1, 0])
 
-    assert [c.name for c in p1.library] == [n for n in before if n != "Forest"]
-    assert game.pending_choices, "the second find is still owed"
+    assert [(p.card.name, p.tapped) for p in game.controlled_by(0)] == [("Island", True)]
+    assert [c.name for c in p1.hand] == ["Forest"]
 
 
-def test_a_nonbasic_card_is_not_a_legal_find(set_pool):
+def test_two_finds_cannot_share_a_slot(set_pool):
+    """"Put **one** onto the battlefield tapped and **the other** into your
+    hand" — a mapping that lands both finds in one slot is a refused answer,
+    and refusal leaves the prompt owed rather than half-applied."""
+    game, p1 = _cultivate_board(set_pool)
+    library = [c.name for c in p1.library]
+
+    assert game.confirm_search_library_picks(
+        0, [_pick(library.index("Forest")), _pick(library.index("Island"))]
+    )
+
+    assert not game.confirm_search_destination(0, [0, 0])
+    assert not game.confirm_search_destination(0, [1])
+    assert game.pending_choices_of("search_destination"), "still owed"
+
+
+def test_the_library_is_shuffled_when_the_finds_are_named(set_pool):
+    """CR 701.19d shuffles when the *search* is over — which is when the picks
+    are confirmed, not when the finder finishes saying where each one goes.
+    The finds are already out, so the shuffle cannot hide them."""
+    game, p1 = _cultivate_board(set_pool)
+    library = [c.name for c in p1.library]
+
+    game.confirm_search_library_picks(
+        0, [_pick(library.index("Forest")), _pick(library.index("Island"))]
+    )
+
+    assert sorted(c.name for c in p1.library) == ["Mountain", "Shock"]
+    assert game.pending_choices_of("search_destination"), (
+        "the destination question comes after the search"
+    )
+
+
+def test_a_nonbasic_card_poisons_the_whole_answer(set_pool):
     """"A **basic** land card" — a supertype is printed on the type line, which
     is the whole test for what the picker may honour: a card in a library has no
-    computed characteristics at all (CR 613.1)."""
+    computed characteristics at all (CR 613.1). The picks are one answer, so one
+    illegal card refuses all of it and nothing moves."""
     game, p1 = _cultivate_board(set_pool)
-    shock = [c.name for c in p1.library].index("Shock")
+    library = [c.name for c in p1.library]
+    before = list(p1.library)
 
-    assert not game.confirm_search_library(0, shock)
-    assert [c.name for c in p1.hand] == []
+    assert not game.confirm_search_library_picks(
+        0, [_pick(library.index("Forest")), _pick(library.index("Shock"))]
+    )
+
+    assert p1.library == before, "a refused answer moves nothing"
+    assert p1.hand == []
+    assert game.pending_choices_of("search_library"), "still owed"
 
 
-def test_finding_fewer_is_a_legal_answer(set_pool):
-    """"Up to two" — and CR 701.19b makes fail-to-find legal regardless. The
-    decline ends the whole search rather than one find of it, which is the
-    player stating they are done."""
+def test_one_card_cannot_be_picked_twice(set_pool):
+    game, p1 = _cultivate_board(set_pool)
+    forest = [c.name for c in p1.library].index("Forest")
+
+    assert not game.confirm_search_library_picks(0, [_pick(forest), _pick(forest)])
+
+
+def test_a_per_find_answer_is_not_how_a_counted_search_is_answered(set_pool):
+    """The sequential flow is gone: a counted search refuses the single-find
+    answer rather than keeping two protocols alive for one prompt."""
     game, p1 = _cultivate_board(set_pool)
 
-    assert game.confirm_search_library(0, 0)
+    assert not game.confirm_search_library(0, 0)
+    assert p1.library, "and the refusal moved nothing"
+
+
+def test_finding_one_still_asks_which_slot_it_fills(set_pool):
+    """"Up to two" — finding one is legal, and Cultivate's ruling is that the
+    finder then chooses whether it enters the battlefield tapped or goes to
+    hand: fewer cards than slots leaves real slots to choose between."""
+    game, p1 = _cultivate_board(set_pool)
+    forest = [c.name for c in p1.library].index("Forest")
+
+    assert game.confirm_search_library_picks(0, [_pick(forest)])
+    (asked,) = game.pending_choices_of("search_destination")
+    assert asked.data["cards"] == ["Forest"]
+
+    assert game.confirm_search_destination(0, [1])   # into hand, not the battlefield
+
+    assert list(game.controlled_by(0)) == []
+    assert [c.name for c in p1.hand] == ["Forest"]
+    assert game.pending_choices == []
+
+
+def test_declining_finds_nothing_and_asks_nothing(set_pool):
+    """"Up to two" — and CR 701.19b makes fail-to-find legal regardless. With
+    no finds there is no destination question."""
+    game, p1 = _cultivate_board(set_pool)
+
     assert game.decline_search_library(0)
 
-    assert [(p.card.name, p.tapped) for p in game.controlled_by(0)] == [("Forest", True)]
-    assert p1.hand == []
+    assert list(game.controlled_by(0)) == [] and p1.hand == []
     assert game.pending_choices == []
+
+
+def test_a_non_interactive_seat_finishes_the_whole_flow(set_pool):
+    """The AI answers the picks with its search policy and the split with the
+    printed order — its best find is the one that reaches the battlefield —
+    so a headless game never stalls on either prompt."""
+    game, p1 = _cultivate_board(set_pool)
+    game.interactive_seats = set()
+
+    game.auto_resolve_pending_choices()
+
+    battlefield = [(p.card.name, p.tapped) for p in game.controlled_by(0)]
+    assert len(battlefield) == 1 and battlefield[0][1] is True
+    assert len(p1.hand) == 1
+    assert {battlefield[0][0], p1.hand[0].name} <= {"Forest", "Island", "Mountain"}
+    assert game.pending_choices == []
+    assert game.resume_stack == [] and not game.effect_suspended
 
 
 def test_a_single_find_search_is_unchanged(set_pool):
@@ -1078,28 +1192,31 @@ def test_a_single_find_search_is_unchanged(set_pool):
 
 def test_cultivate_reveals_both_finds_as_one_event(set_pool):
     """"…**reveal those cards**…" (CR 701.20): the finds are shown to every
-    player. One event for the whole search — "those cards" is one showing —
-    recorded when the search ends, so the UI floats both faces together."""
+    player as one event the moment the search ends — before the finder says
+    where each goes, because the reveal is the search's, not the landing's."""
     game, p1 = _cultivate_board(set_pool)
-
-    assert game.confirm_search_library(0, 0)          # Forest
-    assert game.reveal_events == [], "the showing is the search's, not one find's"
     library = [c.name for c in p1.library]
-    assert game.confirm_search_library(0, library.index("Island"))
+
+    assert game.confirm_search_library_picks(
+        0, [_pick(library.index("Forest")), _pick(library.index("Island"))]
+    )
 
     (event,) = game.reveal_events
     assert event["seat"] == 0
     assert event["cards"] == ["Forest", "Island"]
     assert "P1 revealed Forest, Island" in game.log
+    assert game.pending_choices_of("search_destination"), (
+        "revealed while the destination question is still open"
+    )
 
 
-def test_a_declined_search_still_reveals_what_it_found(set_pool):
-    """Declining ends the search (CR 701.19b), but a find already made was
-    already shown — backing out of the second find cannot unshow the first."""
-    game, _p1 = _cultivate_board(set_pool)
+def test_a_partial_find_still_reveals_what_it_found(set_pool):
+    """Finding fewer is stating the rest are not there (CR 701.19b) — but the
+    find that was made is still shown."""
+    game, p1 = _cultivate_board(set_pool)
+    forest = [c.name for c in p1.library].index("Forest")
 
-    assert game.confirm_search_library(0, 0)
-    assert game.decline_search_library(0)
+    assert game.confirm_search_library_picks(0, [_pick(forest)])
 
     (event,) = game.reveal_events
     assert event["cards"] == ["Forest"]

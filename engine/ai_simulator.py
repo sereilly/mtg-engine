@@ -51,6 +51,10 @@ _SIMULATED_CHOICES = (
     # one today, so the position cannot change an existing seed, and a
     # blocking prompt left owed would freeze the seat that owes it.
     "revealed_hand_pick",
+    # A counted search's "which found card goes where" — consumes no
+    # randomness (the shuffle was the search's), but it suspends, so leaving
+    # one owed would wedge every later resumable loop.
+    "search_destination",
 )
 
 

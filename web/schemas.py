@@ -45,6 +45,7 @@ ActionKind = Literal[
     "search_library_confirm",
     "search_library_decline",
     "search_exile_confirm",
+    "search_destination_confirm",
     "tap_any_number_confirm",
     "reflexive_target_confirm",
     "untap_up_to_confirm",
@@ -323,8 +324,14 @@ class GameActionRequest(BaseModel):
     search_zone: str | None = None
     # The two-zone exile search (Chandra, Heart of Fire's −9): any number of
     # picks, each naming its zone and the card's index there. Sent with
-    # `search_exile_confirm`; an empty list is the fail-to-find.
+    # `search_exile_confirm`; an empty list is the fail-to-find. A counted
+    # library search ("up to two basic land cards", Cultivate) sends its whole
+    # answer through the same field with `search_library_confirm`.
     search_picks: list["SearchPickRef"] | None = None
+    # A counted search's "which found card goes where": one printed-slot index
+    # per found card, in the order the prompt listed the cards. Sent with
+    # `search_destination_confirm`.
+    search_assignments: list[int] | None = None
     # Casting from outside the hand (engine/cast_permissions.py): which zone
     # the named card is cast or played from. Absent means the hand, so every
     # existing client is unchanged.

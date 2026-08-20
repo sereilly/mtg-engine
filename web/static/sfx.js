@@ -68,6 +68,8 @@ const SFX = (() => {
     if (!state) return false;
     const sl = state.search_library;
     if (sl && sl.caster_seat === viewerSeat) return true;
+    const sd = state.search_destination;
+    if (sd && sd.caster_seat === viewerSeat) return true;
     const rl = state.reorder_library;
     if (rl && rl.caster_seat === viewerSeat) return true;
     const hr = state.hand_reveal;
