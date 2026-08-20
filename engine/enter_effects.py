@@ -183,6 +183,14 @@ def enter_effect_line(line: str) -> str | None:
         for subject in _SELF_SUBJECTS:
             if normalized == subject + phrase + tail:
                 return phrase
+    # "This Equipment enters with a soul counter on it." (Malefic Scythe.) The
+    # one entry line matched by shape rather than by a fixed phrase, asked of
+    # the same reader the mixin places the counter with — so the claim and the
+    # placement cannot drift. It was placed and *not* claimed: nothing gated an
+    # Equipment's effect lines, so the omission cost nothing until the
+    # Equipment gate (engine/oracle.py) started asking.
+    if enters_with_named_counter(normalized) is not None:
+        return "enters with a named counter"
     return None
 
 

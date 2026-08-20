@@ -31,6 +31,18 @@ import re
 # The nouns an Aura's effect clause can address, from its "Enchant <noun>" line.
 _NOUN = r"(?:creature|artifact|enchantment|land|wall|permanent)"
 
+# "Enchanted creature" / "equipped creature" — the attached permanent, named by
+# whichever word the card's own type uses. CR 301.5f: an ability referring to
+# the "equipped creature" refers to whatever creature the permanent is attached
+# to, and an Aura's "enchanted creature" is the same reference (CR 303.4). Both
+# attach through the one record `attach_aura` writes, and the layer bridge
+# derives the grant off the attached permanent's text either way — so every
+# template below that describes a *continuous effect on the host* reads both
+# words. The Aura-only shapes (control of the enchanted permanent, a land-type
+# override, artifact animation) keep "enchanted": no Equipment prints them, and
+# an Equipment that did would want its own reading, not a borrowed one.
+_ATTACHED = r"(?:enchanted|equipped)"
+
 _COLORS = "white|blue|black|red|green"
 # Protection is restricted to the five colours on purpose. The engine's
 # protection checks are colour-based, so "protection from everything" or
@@ -78,7 +90,7 @@ def _build_type_addition_grant() -> re.Pattern[str]:
 
     subtypes = "|".join(sorted(map(re.escape, CREATURE_TYPES), key=len, reverse=True))
     return re.compile(
-        rf"^enchanted {_NOUN} gets [+-]\d+/[+-]\d+, has (?P<keyword>{_KEYWORDS}), "
+        rf"^{_ATTACHED} {_NOUN} gets [+-]\d+/[+-]\d+, has (?P<keyword>{_KEYWORDS}), "
         rf"and is an? (?P<subtype>{subtypes}) in addition to its other types$"
     )
 
@@ -99,7 +111,7 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         # "Enchanted creature gets +2/+2." / "gets -1/-0" / "gets +0/+2 and has
         # reach" / "gets +0/+2 and has '{W}: ... until end of turn.'"
         re.compile(
-            rf"^enchanted {_NOUN} gets [+-]\d+/[+-]\d+"
+            rf"^{_ATTACHED} {_NOUN} gets [+-]\d+/[+-]\d+"
             rf"""(?: and has (?:{_KEYWORDS}|['"][^'"]+['"]))?$"""
         ),
         "static P/T (and optional granted keyword or ability) — _apply_aura_effect",
@@ -116,13 +128,13 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         # The Ward cycle. The trailing sentence is part of the same effect.
         re.compile(
-            rf"^enchanted {_NOUN} has protection from (?:{_COLORS})\."
+            rf"^{_ATTACHED} {_NOUN} has protection from (?:{_COLORS})\."
             r" this effect doesn't remove this aura$"
         ),
         "protection grant — _apply_aura_effect",
     ),
     (
-        re.compile(rf"^enchanted {_NOUN} has (?:{_KEYWORDS})$"),
+        re.compile(rf"^{_ATTACHED} {_NOUN} has (?:{_KEYWORDS})$"),
         "keyword grant — _apply_aura_effect",
     ),
     (
@@ -213,7 +225,7 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     # --- other triggers ------------------------------------------------------
     (
-        re.compile(r"^when(?:ever)? enchanted .+$"),
+        re.compile(rf"^when(?:ever)? {_ATTACHED} .+$"),
         "Aura-attached trigger — trigger_utils / upkeep_effects",
     ),
     (
@@ -314,6 +326,7 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
     """
     from .oracle import _is_supported_keyword_line
     from .cast_costs import cast_cost_claims_line
+    from .enter_effects import enter_effect_line
     from .target_restrictions import target_restriction_line
 
     return [
@@ -322,6 +335,14 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
         if line
         and not line.startswith("enchant ")
         and not _is_supported_keyword_line(line)
+        # "This Equipment enters with a soul counter on it." (Malefic Scythe.)
+        # Entry state `_initialize_permanent_state` carries out from the
+        # permanent's own text as it arrives — not an effect it has while
+        # attached, so it is claimed by the table that performs it rather than
+        # by an effect template here. Equipment reach this gate since the
+        # compiler started holding them to it; an Aura printing an entry line
+        # the table reads is claimed the same way.
+        and enter_effect_line(line) is None
         # "You can't choose an untapped creature as this spell's target as you
         # cast it." (Enthralling Hold.) Not an effect the Aura has while it is
         # attached — it is spent as the spell is cast (CR 601.2c) — so it is
@@ -421,10 +442,13 @@ def auras_attached_to(permanent) -> list:
 def attach_aura(aura, target) -> None:
     """Attach *aura* to *target*, recording it as an owned continuous effect.
 
-    Stamps the Aura with a CR 613.7b timestamp at the moment it becomes
+    Stamps the Aura with a CR 613.7e timestamp at the moment it becomes
     attached, so its contribution sorts against other effects by when it
     started applying rather than sharing one derived timestamp with every other
-    Aura on the board.
+    Aura on the board. An Equipment attaches through here too — the record is
+    the same, and so is the rule (CR 301.5f) — via
+    ``engine/equipment.py.attach_equipment``, which owns the legality and the
+    move-from-a-previous-host half (CR 701.3).
 
     Both directions are recorded here so no caller has to remember to keep them
     in step: ``attached_to`` on the Aura, and both ``attached_auras`` (the list,
@@ -439,7 +463,12 @@ def attach_aura(aura, target) -> None:
         attached.append(aura)
     target.metadata["attached_auras"] = attached
     target.metadata["attached_aura"] = aura
-    aura.metadata.setdefault("aura_timestamp", next_timestamp())
+    # CR 613.7e / 701.3c: a new timestamp *each time* it becomes attached. This
+    # was `setdefault`, which is the same thing for an Aura (it attaches once
+    # and then only leaves) and wrong for an Equipment, which moves: re-equipped
+    # onto a second creature it kept the stamp of its first attachment, and so
+    # ordered its +1/+1 before an effect that had in fact applied earlier.
+    aura.metadata["aura_timestamp"] = next_timestamp()
 
 
 def detach_aura(aura, target) -> None:
@@ -462,6 +491,13 @@ def detach_aura(aura, target) -> None:
         target.metadata.pop("attached_auras", None)
         if target.metadata.get("attached_aura") is aura:
             target.metadata.pop("attached_aura", None)
+    # The attachment's own half of the record, kept in step the way
+    # `attach_aura` keeps it: an Aura that detaches is leaving anyway, but an
+    # Equipment stays on the battlefield (CR 704.5n), and a stale `attached_to`
+    # on it is an attachment the state-based sweep finds illegal again on every
+    # pass — which is a sweep that never reaches its fixpoint.
+    if aura.metadata.get("attached_to") is target:
+        aura.metadata.pop("attached_to", None)
 
 
 # Reminder text. `oracle.normalize_creature_line` strips it, but importing the
@@ -490,7 +526,7 @@ _GRANTABLE_KEYWORDS = (
 )
 
 _KEYWORD_GRANT = re.compile(
-    rf"^enchanted {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has "
+    rf"^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has "
     rf"(?P<keyword>{'|'.join(_GRANTABLE_KEYWORDS)})$"
 )
 
@@ -539,21 +575,21 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
 # Each name is the vocabulary the readers use; the pattern is the printed line.
 _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
-        re.compile(rf"^enchanted {_NOUN} can't be blocked except by walls$"),
+        re.compile(rf"^{_ATTACHED} {_NOUN} can't be blocked except by walls$"),
         "only_blockable_by_walls",
     ),
     (
-        re.compile(r"^all creatures able to block enchanted creature do so$"),
+        re.compile(rf"^all creatures able to block {_ATTACHED} creature do so$"),
         "must_be_blocked_by_all_able",
     ),
     (
         re.compile(
-            rf"^enchanted {_NOUN} doesn't untap during its controller's untap step$"
+            rf"^{_ATTACHED} {_NOUN} doesn't untap during its controller's untap step$"
         ),
         "doesnt_untap",
     ),
     (
-        re.compile(rf"^enchanted {_NOUN} can attack as though it didn't have defender$"),
+        re.compile(rf"^{_ATTACHED} {_NOUN} can attack as though it didn't have defender$"),
         "ignores_defender",
     ),
     (
@@ -600,7 +636,7 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         # — an Aura that stopped a land tapping for mana would lock its
         # controller out of the game rather than shut off one ability.
         re.compile(
-            rf"^enchanted {_NOUN} can't attack or block, and its activated "
+            rf"^{_ATTACHED} {_NOUN} can't attack or block, and its activated "
             r"abilities can't be activated unless they're mana abilities$"
         ),
         "activated_abilities_shut_off",
@@ -608,7 +644,7 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 _PROTECTION_GRANT = re.compile(
-    rf"^enchanted {_NOUN} has protection from (?P<color>{_COLORS})\b"
+    rf"^{_ATTACHED} {_NOUN} has protection from (?P<color>{_COLORS})\b"
 )
 
 
@@ -696,7 +732,13 @@ def aura_animates_artifact(oracle_text: str) -> bool:
 # the code that carries it out — the rule engine/grammar/registries.py works
 # under. Where a derivation is already `^…$` anchored per line it is asked
 # directly and needs no companion here.
-_STATIC_PT_LINE = re.compile(rf"^enchanted {_NOUN} {_STATIC_PT_GRANT.pattern}$")
+_STATIC_PT_LINE = re.compile(rf"^{_ATTACHED} {_NOUN} {_STATIC_PT_GRANT.pattern}$")
+# The per-counter grant's whole line: "Equipped creature gets +1/+1 for each
+# soul counter on this Equipment." The derivation's own pattern plus the noun
+# that closes the sentence, so a sentence saying anything more stays unclaimed.
+_PT_PER_COUNTER_LINE = re.compile(
+    rf"^{_ATTACHED} {_NOUN} {_PT_GRANT_PER_COUNTER.pattern} [a-z]+$"
+)
 # The Ward cycle's trailing sentence, spelled out rather than left open-ended:
 # it is part of the same effect (an Aura granting protection is not removed by
 # it), and an "and whatever follows" claim is the one way this could swallow
@@ -730,6 +772,8 @@ def aura_continuous_claim(line: str) -> str | None:
     normalized = _line_text(line)
     if _STATIC_PT_LINE.match(normalized):
         return "static P/T grant (layer 7c) — auras.aura_static_pt_grant"
+    if _PT_PER_COUNTER_LINE.match(normalized):
+        return "per-counter P/T grant (layer 7c) — auras.aura_pt_grant_per_counter"
     if aura_keyword_grants(normalized):
         return "keyword grant (layer 6) — auras.aura_keyword_grants"
     if aura_restrictions(normalized):

@@ -117,12 +117,12 @@ def _hollow_permanents() -> list[tuple[str, list[str], list[str]]]:
     for card in _whole_pool():
         if card.primary_type not in ("artifact", "enchantment"):
             continue
-        # Auras and Equipment answer to engine/auras.py, which runs first and is
-        # stricter — see test_an_aura_is_left_to_its_own_gate below. Equipment
-        # is here for the same reason and by the same shape: Short Sword's
-        # "+1/+1" is an `aura_static_pt_grant` that leaves no instruction for
-        # this scan to find.
-        if "Aura" in card.type_line or "Equipment" in card.type_line:
+        # Auras answer to engine/auras.py, which runs first and is stricter —
+        # see test_an_aura_is_left_to_its_own_gate below. Equipment used to be
+        # skipped beside them; it is not any more, because an Equipment now
+        # carries a real equip ability (CR 702.6a) and so never has the hollow
+        # shape — see test_equipment_is_supported_on_its_equip_ability.
+        if "Aura" in card.type_line:
             continue
         program = compile_card_oracle(card)
         if not program.supported or program.modes:
@@ -251,31 +251,44 @@ def test_a_permanent_whose_line_never_became_an_ability_is_unsupported():
     assert "sky is green" in program.reason
 
 
-def test_equipment_is_left_to_its_own_gate_like_an_aura():
-    """The control for the widening, and the reason the exclusion is by shape
-    rather than by name. Short Sword's "+1/+1" is an ``aura_static_pt_grant``
-    read off the card's text by engine/auras.py, which leaves no instruction
-    here — so dropping the unreadable-ability requirement would refuse an
-    Equipment that works perfectly well.
+def test_equipment_is_supported_on_its_equip_ability():
+    """An Equipment is no longer exempt from the hollow-permanent gate, because
+    it no longer needs to be. Short Sword used to be supported on the substring
+    "gets +" alone — its equip line compiled to nothing, so it entered play and
+    could never be attached — and the gate had to exempt "equip" by shape or
+    refuse it. CR 702.6a defines equip as an activated ability; the compiler
+    now rewrites the keyword into that ability, which is the "something
+    supported" the gate already looks for.
 
-    Malefic Scythe used to be the second name here and is not any more: once its
-    counter trigger compiled it carries a real instruction, so it is no longer
-    the shape this exclusion exists for. That is the exclusion narrowing
-    correctly rather than the guard weakening — the card left the class by
-    gaining behaviour.
+    The exemption's *absence* is the point of this test: an Equipment whose
+    equip ability fails to compile is refused, with the line named, rather than
+    slipping past the gate on the strength of the word.
     """
     pool = {c.name: c for c in _whole_pool()}
-    program = compile_card_oracle(pool["Short Sword"])
-    assert program.supported
-    assert all(i.kind == "spell_pattern" for i in program.instructions), (
-        "Short Sword is exactly the shape the gate refuses, minus the exclusion"
-    )
+    for name in ("Short Sword", "Malefic Scythe"):
+        program = compile_card_oracle(pool[name])
+        assert program.supported, program.reason
+        equips = [
+            a for a in program.activated_abilities
+            if a.instruction is not None and a.instruction.kind == "attach_source_to_target"
+        ]
+        assert len(equips) == 1, f"{name} should carry exactly one compiled equip ability"
+        assert equips[0].supported
 
-    scythe = compile_card_oracle(pool["Malefic Scythe"])
-    assert scythe.supported
-    assert any(t.supported for t in scythe.triggered_abilities), (
-        "the Scythe is supported on a real ability now, not on the exclusion"
+    # The control: the same card with its equip line replaced by one the
+    # expansion refuses (CR 702.6e's planeswalker variant) has no supported
+    # ability left and is refused naming the equip line — not admitted on the
+    # "gets +" substring, and not exempted by the word.
+    probe = compile_card_oracle(
+        dataclasses.replace(
+            pool["Short Sword"],
+            name="Probe Sword",
+            oracle_text="Equipped creature gets +1/+1.\nEquip planeswalker {1}",
+        )
     )
+    assert not probe.supported
+    assert "equip ability not implemented" in probe.reason
+    assert "Equip planeswalker {1}" in probe.reason
 
 
 def test_the_pool_scan_reaches_every_manifest_role():
@@ -299,3 +312,21 @@ def test_the_pool_scan_reaches_every_manifest_role():
         for card in load_cards(path)
     }
     assert names >= measured
+
+
+def test_an_equipment_with_an_unimplemented_effect_line_is_unsupported():
+    """The other half of the Equipment gate: an Equipment whose *effect* line
+    nothing reads is refused naming the line, instead of shipping with an equip
+    that attaches a do-nothing. Before the gate existed, the equip line and the
+    effect line were both unread and the card was supported on "gets +"."""
+    pool = {c.name: c for c in _whole_pool()}
+    probe = compile_card_oracle(
+        dataclasses.replace(
+            pool["Short Sword"],
+            name="Probe Equipment",
+            oracle_text="Equipped creature has hexproof from everything.\nEquip {1}",
+        )
+    )
+    assert not probe.supported
+    assert "unimplemented equipment effect" in probe.reason
+    assert "hexproof from everything" in probe.reason

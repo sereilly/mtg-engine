@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from ..equipment import is_equipment, unattach_illegal_equipment
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..trigger_utils import matching_triggers
@@ -477,37 +478,20 @@ class GameEndingMixin:
                                 departing.append(perm)
                 self.remove_all_from_battlefield(departing)
 
-            # CR 702.16d: Equipment with a quality the equipped permanent has
-            # protection from becomes unattached, but stays on the battlefield.
-            for perm in self.all_permanents():
-                if "Equipment" not in perm.card.type_line:
-                    continue
-                attached_to = perm.metadata.get("attached_to")
-                if attached_to is None:
-                    continue
-                protection = self._protection_colors(attached_to)
-                if protection and (protection & self._effective_colors(perm)):
-                    perm.metadata["attached_to"] = None
-                    self.log.append(
-                        f"{perm.card.name} became unattached (702.16d: equipped permanent has protection)"
-                    )
-                    changed = True
-
-            # 704.5n: Equipment attached to illegal permanent → becomes unattached (stays on battlefield)
-            for perm in self.all_permanents():
-                if "Equipment" not in perm.card.type_line:
-                    continue
-                attached_to = perm.metadata.get("attached_to")
-                if attached_to is None:
-                    continue
-                if not self.is_on_battlefield(attached_to):
-                    perm.metadata["attached_to"] = None
-                    self.log.append(f"{perm.card.name} became unattached (704.5n: equipped creature left battlefield)")
-                    changed = True
+            # CR 704.5n (and 702.16d, 301.5c, 701.3d): an Equipment attached
+            # to a permanent it can't legally equip becomes unattached and stays
+            # on the battlefield. One sweep in engine/equipment.py, reading the
+            # same legality the equip ability's resolution and target picker
+            # read. The two loops it replaced cleared `attached_to` on the
+            # Equipment alone and left it in the creature's `attached_auras`
+            # list — so a Short Sword unattached by protection kept granting
+            # its +1/+1 to the creature it no longer equipped.
+            if unattach_illegal_equipment(self):
+                changed = True
 
             # 704.5p: non-Aura, non-Equipment, non-Role permanent in attached state → unattach
             for perm in self.all_permanents():
-                if "Aura" in perm.card.type_line or "Equipment" in perm.card.type_line or "Role" in perm.card.type_line:
+                if "Aura" in perm.card.type_line or is_equipment(perm) or "Role" in perm.card.type_line:
                     continue
                 if perm.metadata.get("attached_to") is not None:
                     perm.metadata["attached_to"] = None

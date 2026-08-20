@@ -213,6 +213,30 @@ def _parse_doesnt_untap_next_step(
     return ast.DoesntUntapNextStep(subject)
 
 
+def _parse_attach(stream: TokenStream) -> ast.Statement:
+    """``Attach <subject> to <host>`` (CR 701.3).
+
+    The sentence CR 702.6a expands equip into — "Attach this permanent to
+    target creature you control" — and its one generalisation, a chosen
+    Equipment ("Attach target Equipment you control to target creature you
+    control"). Both halves go through `parse_recipient`, so a narrowed host
+    ("target legendary creature you control", CR 702.6c's "Equip [quality]")
+    is read by the noun phrase every other production already uses rather than
+    by anything here. The whole line must be consumed: a trailing clause this
+    does not read is a refusal, never a silent partial attach.
+    """
+    stream.expect_word("attach")
+    subject = parse_recipient(stream)
+    if subject is None:
+        raise stream.error("expected what to attach")
+    if not stream.accept_word("to"):
+        raise stream.error("expected 'to' after what is attached")
+    host = parse_recipient(stream)
+    if host is None:
+        raise stream.error("expected what to attach to")
+    return ast.Attach(subject, host)
+
+
 def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
     """``tap <objects>`` / ``untap <objects>`` / ``tap or untap <objects>``.
 

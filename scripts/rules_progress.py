@@ -96,6 +96,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.1",   # General
         "702.2",   # Deathtouch
         "702.5",   # Enchant (every Aura's attachment restriction)
+        "702.6",   # Equip (M21: Short Sword, Malefic Scythe)
         "702.3",   # Defender
         "702.4",   # Double Strike
         "702.7",   # First Strike

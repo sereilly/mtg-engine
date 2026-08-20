@@ -121,6 +121,11 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         # is a card reported unsupported rather than a card read by something
         # else.
         "game_end",
+        # Attaching an Equipment (CR 701.3), the effect CR 702.6a's equip
+        # expands to. Switched on with the production: with no fallback
+        # underneath, a category left off would cost every Equipment in the
+        # pool its equip ability rather than route it anywhere else.
+        "attachments",
         # Enabled after the differential showed the grammar's payloads equal
         # engine/combat_restrictions.py's on every such line in the pool. The
         # two shapes it does NOT claim ("attacks each combat if able",

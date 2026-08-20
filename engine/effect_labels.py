@@ -85,6 +85,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     "set_base_pt_target_until_eot": "activated_pump",
     "steal_target_permanent_linked_to_self": "activated_steal",
     "tap_target_permanent": "activated_tapping",
+    # The equip keyword (CR 702.6a), compiled as the activated ability it is
+    # defined to be. Its own bucket: the support report and the AI read the
+    # label, and "activated_attachments" names what the ability does.
+    "attach_source_to_target": "activated_equip",
     "untap_enchanted_creature": "activated_untap",
     "untap_self": "activated_untap",
     "untap_target_land": "spell_pattern",

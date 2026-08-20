@@ -3,14 +3,16 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **668**
-- Passed: **369**
+- Passed: **383** (370 checked in-game, 13 auto-passed)
 - Failed: **0**
-- Equivalent to a passing card: **10**
-- Untested: **289**
+- Equivalent to a passing card: **4**
+- Untested: **281**
+
+An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
 `equivalent` is derived, never recorded: the engine resolves that card through the same code paths as the named peer, so a separate manual pass would exercise nothing new. It is a weaker claim than a check — it inherits the peer's correctness. See BEHAVIOUR_CLASSES.md.
 
-| Card | Status | Failure reason / equivalent to |
+| Card | Status | Failure reason / equivalent to / auto-pass |
 | --- | --- | --- |
 | Abu Ja'far | ✅ pass |  |
 | Adherent of Hope | ⬜ untested |  |
@@ -22,7 +24,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Ali Baba | ✅ pass |  |
 | Ali from Cairo | ✅ pass |  |
 | Alpine Houndmaster | ⬜ untested |  |
-| Alpine Watchdog | ⬜ untested |  |
+| Alpine Watchdog | ✅ pass | auto-pass: keywords only (vigilance) |
 | Ancestral Recall | ✅ pass |  |
 | Angelic Ascension | ⬜ untested |  |
 | Animal Sanctuary | ⬜ untested |  |
@@ -43,7 +45,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Bad Moon | ✅ pass |  |
 | Badlands | ✅ pass |  |
 | Balance | ✅ pass |  |
-| Baneslayer Angel | ⬜ untested |  |
+| Baneslayer Angel | ✅ pass | auto-pass: keywords only (flying, first strike, lifelink, protection from demons and from dragons) |
 | Barrin, Tolarian Archmage | ⬜ untested |  |
 | Basalt Monolith | ✅ pass |  |
 | Basri Ket | ⬜ untested |  |
@@ -65,7 +67,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Black Ward | ✅ pass |  |
 | Blaze of Glory | ✅ pass |  |
 | Blessing | ✅ pass |  |
-| Blood Glutton | ⬜ untested |  |
+| Blood Glutton | ✅ pass | auto-pass: keywords only (lifelink) |
 | Bloodfell Caves | ⬜ untested |  |
 | Blossoming Sands | ⬜ untested |  |
 | Blue Elemental Blast | ✅ pass |  |
@@ -111,9 +113,9 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Clockwork Beast | ✅ pass |  |
 | Clone | ✅ pass |  |
 | Cockatrice | ✅ pass |  |
-| Colossal Dreadmaw | ⬜ untested |  |
+| Colossal Dreadmaw | ✅ pass | auto-pass: keywords only (trample) |
 | Conclave Mentor | ⬜ untested |  |
-| Concordia Pegasus | ≡ equivalent | same behaviour as Air Elemental |
+| Concordia Pegasus | ✅ pass | auto-pass: keywords only (flying) |
 | Consecrate Land | ✅ pass |  |
 | Conservator | ✅ pass |  |
 | Conspicuous Snoop | ⬜ untested |  |
@@ -230,7 +232,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Gadrak, the Crown-Scourge | ⬜ untested |  |
 | Gaea's Liege | ✅ pass |  |
 | Gale Swooper | ⬜ untested |  |
-| Garruk's Gorehorn | ≡ equivalent | same behaviour as Craw Wurm |
+| Garruk's Gorehorn | ✅ pass | auto-pass: no abilities |
 | Garruk's Harbinger | ⬜ untested |  |
 | Garruk's Uprising | ⬜ untested |  |
 | Garruk's Warsteed | ⬜ untested |  |
@@ -316,7 +318,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Jungle Hollow | ⬜ untested |  |
 | Junún Efreet | ✅ pass |  |
 | Juzám Djinn | ✅ pass |  |
-| Kaervek, the Spiteful | ⬜ untested |  |
+| Kaervek, the Spiteful | ✅ pass |  |
 | Karma | ✅ pass |  |
 | Keen Glidemaster | ⬜ untested |  |
 | Keldon Warlord | ✅ pass |  |
@@ -384,7 +386,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mind Twist | ✅ pass |  |
 | Miscast | ⬜ untested |  |
 | Mishra's War Machine | ⬜ untested |  |
-| Mistral Singer | ⬜ untested |  |
+| Mistral Singer | ✅ pass | auto-pass: keywords only (flying, prowess) |
 | Mons's Goblin Raiders | ✅ pass |  |
 | Moorish Cavalry | ✅ pass |  |
 | Mountain | ✅ pass |  |
@@ -408,13 +410,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Obsessive Stitcher | ⬜ untested |  |
 | Obsianus Golem | ✅ pass |  |
 | Old Man of the Sea | ✅ pass |  |
-| Onakke Ogre | ≡ equivalent | same behaviour as Craw Wurm |
+| Onakke Ogre | ✅ pass | auto-pass: no abilities |
 | Onulet | ⬜ untested |  |
 | Opt | ⬜ untested |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ✅ pass |  |
 | Ornery Dilophosaur | ⬜ untested |  |
-| Ornithopter | ⬜ untested |  |
+| Ornithopter | ✅ pass | auto-pass: keywords only (flying) |
 | Oubliette | ✅ pass |  |
 | Pack Leader | ⬜ untested |  |
 | Palladium Myr | ⬜ untested |  |
@@ -555,7 +557,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Spirit of Malevolence | ⬜ untested |  |
 | Sporeweb Weaver | ⬜ untested |  |
 | Stasis | ✅ pass |  |
-| Staunch Shieldmate | ≡ equivalent | same behaviour as Craw Wurm |
+| Staunch Shieldmate | ✅ pass | auto-pass: no abilities |
 | Steal Artifact | ✅ pass |  |
 | Stone Giant | ✅ pass |  |
 | Stone Rain | ✅ pass |  |
@@ -642,7 +644,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Volcanic Salvo | ⬜ untested |  |
 | Vryn Wingmare | ⬜ untested |  |
 | Waker of Waves | ⬜ untested |  |
-| Walking Corpse | ≡ equivalent | same behaviour as Craw Wurm |
+| Walking Corpse | ✅ pass | auto-pass: no abilities |
 | Wall of Air | ✅ pass |  |
 | Wall of Bone | ✅ pass |  |
 | Wall of Brambles | ✅ pass |  |
@@ -667,12 +669,12 @@ Master record of which cards have been manually validated in-game. Generated aut
 | White Knight | ✅ pass |  |
 | White Ward | ✅ pass |  |
 | Wild Growth | ✅ pass |  |
-| Wildwood Patrol | ⬜ untested |  |
+| Wildwood Patrol | ✅ pass | auto-pass: keywords only (trample) |
 | Wildwood Scourge | ⬜ untested |  |
 | Will-o'-the-Wisp | ✅ pass |  |
 | Wind-Scarred Crag | ⬜ untested |  |
 | Winter Orb | ✅ pass |  |
-| Wishcoin Crab | ≡ equivalent | same behaviour as Craw Wurm |
+| Wishcoin Crab | ✅ pass | auto-pass: no abilities |
 | Witch's Cauldron | ⬜ untested |  |
 | Wooden Sphere | ✅ pass |  |
 | Word of Command | ✅ pass |  |

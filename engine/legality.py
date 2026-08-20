@@ -37,7 +37,7 @@ import re
 
 from .handlers._common import graveyard_card_matches, permanent_matches_filter
 from .models import CardDefinition, Permanent
-from .oracle import compile_card_oracle, expand_modal_activated_lines
+from .oracle import compile_card_oracle, expand_ability_lines
 from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
 from .targeting import (
@@ -67,9 +67,10 @@ _ACTIVATED_LINE_RE = re.compile(
 
 
 def _oracle_lines(card: CardDefinition) -> list[str]:
-    # Same modal-activated expansion the compiler applies (Pyramids), so the
-    # bullet effects classify as activated-ability lines, not cast effects.
-    return expand_modal_activated_lines(card.oracle_text or "").split("\n")
+    # The same rewrites the compiler applies (Pyramids' modal bullets, the
+    # CR 702.6a expansion of an equip line), so the resulting effects classify
+    # as activated-ability lines, not cast effects.
+    return expand_ability_lines(card.oracle_text or "").split("\n")
 
 
 def _cast_lines(card: CardDefinition) -> list[str]:
@@ -139,6 +140,7 @@ _FILTERABLE_ABILITY_KINDS = {
     "set_base_pt_target_until_eot",
     "steal_creature_while_tapped_and_weaker",
     "tap_target_permanent",
+    "attach_source_to_target",
 }
 
 
@@ -538,6 +540,19 @@ class LegalityMixin:
             # Ali Baba's "target Wall" (and any other parsed tap-target filter);
             # Icy Manipulator's payload is empty, so everything passes.
             return permanent_matches_filter(perm, instruction.payload)
+        if instruction.kind == "attach_source_to_target":
+            # An equip ability (CR 702.6a). The picker's own_only flag has
+            # already kept it to the activator's creatures; what is left is the
+            # printed narrowing (CR 702.6c's "legendary creature") and whether
+            # the Equipment may legally equip this creature at all — protection
+            # from its colour (702.16d), the Equipment itself (301.5c). Asked of
+            # the same predicate the resolution asks, so a creature offered here
+            # is one the attach then lands on.
+            from .equipment import equip_refusal
+
+            if not permanent_matches_filter(perm, instruction.payload):
+                return False
+            return source_permanent is None or equip_refusal(self, source_permanent, perm) is None
         if instruction.kind == "add_counter_to_target":
             # Tempered Veteran's "target creature with a +1/+1 counter on it" —
             # the same filter the handler enforces at resolution, so the picker

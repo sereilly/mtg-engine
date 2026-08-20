@@ -1485,11 +1485,29 @@ function activatedAbilityText(card) {
   return [(card.oracle_text || "").trim(), ...granted].filter(Boolean).join("\n");
 }
 
+// "Equip {1}" / "Equip legendary creature {3}" (reminder text already
+// stripped by the caller). CR 702.6a defines the keyword as an activated
+// ability — "[Cost]: Attach this permanent to target creature you control.
+// Activate only as a sorcery." — and the engine compiles it as exactly that
+// line (engine/equipment.py), in the printed line's position. Mirroring the
+// rewrite here keeps this parser's ability_index in step with the engine's.
+const EQUIP_LINE_RE = /^equip(?:\s+([a-z][a-z' -]*?))?\s+((?:\{[^{}]+\})+)$/i;
+
+function expandEquipLine(line) {
+  const stripped = line.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim().replace(/\.$/, "");
+  const m = stripped.match(EQUIP_LINE_RE);
+  if (!m) return null;
+  const quality = (m[1] || "").trim();
+  if (quality.toLowerCase() === "planeswalker") return null;
+  const noun = quality || "creature";
+  return `${m[2]}: Attach this permanent to target ${noun} you control. Activate only as a sorcery.`;
+}
+
 function hasActivatedAbility(card) {
   if (!card || typeof card === "string") return false;
   const text = activatedAbilityText(card);
   if (!text) return false;
-  return /\{t\}|:\s*/i.test(text);
+  return /\{t\}|:\s*/i.test(text) || /^\s*equip\b/im.test(text);
 }
 
 function getActivatedAbilityCost(card) {
@@ -6228,7 +6246,9 @@ function getActivatedAbilityOptions(card) {
   let index = 0;
   const lines = activatedAbilityText(card).split("\n");
   for (let li = 0; li < lines.length; li++) {
-    const line = lines[li];
+    // An equip keyword line is the activated ability CR 702.6a says it is;
+    // read it in its expanded form so it takes its place in the index.
+    const line = expandEquipLine(lines[li]) || lines[li];
     const m = line.match(/^\s*((?:\{[^}]+\}[,\s]*)+):\s*(.+)$/);
     if (!m) {
       // A loyalty cost is counters rather than mana, so its half of the line
@@ -8379,7 +8399,7 @@ async function refreshVerifyProgress() {
     if (!resp.ok) throw new Error("failed");
     const payload = await resp.json();
     const c = payload.counts || {};
-    el.textContent = `Verified ${c.pass || 0} passed, ${c.fail || 0} failed, ${c.equivalent || 0} equivalent, ${c.untested || 0} untested (of ${payload.total || 0}).`;
+    el.textContent = `Verified ${c.pass || 0} passed (${c.auto_pass || 0} auto), ${c.fail || 0} failed, ${c.equivalent || 0} equivalent, ${c.untested || 0} untested (of ${payload.total || 0}).`;
     el.classList.remove("error");
   } catch (e) {
     el.textContent = "Could not load verification progress.";
@@ -8477,12 +8497,18 @@ function renderTrackerList() {
   if (!listEl) return;
   const nameFilter = q("trackerFilter").value.trim().toLowerCase();
   const statusFilter = q("trackerStatusFilter").value;
-  // "equivalent" is derived, not recorded: the card runs the same engine
-  // paths as a passing peer, so it needs no separate manual pass.
+  // "equivalent" and the auto-pass are derived, not recorded: an equivalent
+  // card runs the same engine paths as a passing peer, and an auto-passed
+  // card has no abilities (or only keywords), so neither needs a separate
+  // manual pass. The "auto_pass" filter value is a view over passed cards.
   const badge = { pass: "✅", fail: "❌", untested: "⬜", equivalent: "≡" };
   listEl.innerHTML = "";
   const filtered = trackerCards.filter((card) => {
-    if (statusFilter !== "all" && card.status !== statusFilter) return false;
+    if (statusFilter === "auto_pass") {
+      if (!card.auto_pass) return false;
+    } else if (statusFilter !== "all" && card.status !== statusFilter) {
+      return false;
+    }
     if (nameFilter && !card.card_name.toLowerCase().includes(nameFilter)) return false;
     return true;
   });
@@ -8507,6 +8533,16 @@ function renderTrackerList() {
       reason.className = "tracker-reason";
       reason.textContent = card.reason;
       row.appendChild(reason);
+    } else if (card.auto_pass) {
+      const note = document.createElement("span");
+      note.className = "tracker-reason";
+      note.textContent = `auto-pass: ${card.auto_pass}`;
+      row.appendChild(note);
+    } else if (card.status === "equivalent" && card.equivalent_to) {
+      const note = document.createElement("span");
+      note.className = "tracker-reason";
+      note.textContent = `same behaviour as ${card.equivalent_to}`;
+      row.appendChild(note);
     }
 
     const retest = document.createElement("button");
@@ -8533,7 +8569,7 @@ async function openTrackerModal() {
     const payload = await resp.json();
     trackerCards = payload.cards || [];
     const c = payload.counts || {};
-    q("trackerSummary").textContent = `${c.pass || 0} passed · ${c.fail || 0} failed · ${c.equivalent || 0} equivalent · ${c.untested || 0} untested · ${payload.total || 0} total`;
+    q("trackerSummary").textContent = `${c.pass || 0} passed (${c.auto_pass || 0} auto) · ${c.fail || 0} failed · ${c.equivalent || 0} equivalent · ${c.untested || 0} untested · ${payload.total || 0} total`;
     renderTrackerList();
   } catch (e) {
     q("trackerSummary").textContent = "Could not load the tracker.";

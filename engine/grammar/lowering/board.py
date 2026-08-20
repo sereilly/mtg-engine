@@ -177,6 +177,28 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
     return (OracleInstruction("put_graveyard_card_on_library_bottom", "", {}),)
 
 
+def _lower_attach(node: ast.Attach) -> tuple[OracleInstruction, ...]:
+    """"Attach this permanent to target creature you control." (CR 702.6a.)
+
+    One handler, ``attach_source_to_target``, and one shape for it: the source
+    moves, one chosen permanent receives it. The host filter rides the payload
+    exactly as a tap's does — ``type_filter``/``controller`` for the resolution
+    to re-check (CR 608.2b), ``targets`` for ``engine/targeting.py`` to build
+    the picker from — so CR 702.6c's narrowed equip ("target legendary creature
+    you control") costs nothing here. A chosen *subject* ("target Equipment you
+    control", Brass Squire) has no handler yet and refuses naming that.
+    """
+    if not isinstance(node.subject, ast.TargetSpec) or not _is_source(node.subject):
+        raise LoweringError(
+            "no handler attaches anything but the source itself", node=node
+        )
+    if not isinstance(node.host, ast.TargetSpec) or not _is_target(node.host):
+        raise LoweringError("attach needs one chosen permanent to attach to", node=node)
+    payload = _filter_payload(node.host.filter)
+    _describe_targets(payload, node.host)
+    return (OracleInstruction("attach_source_to_target", "", payload),)
+
+
 def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
     if not isinstance(node.subject, ast.TargetSpec):
         raise LoweringError("tap/untap needs an object target", node=node)

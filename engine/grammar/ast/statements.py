@@ -52,6 +52,7 @@ from .characteristics import (
 from .board import (
     Destroy,
     Exile,
+    Attach,
     GainControl,
     PhaseOut,
     PutOnLibraryBottom,
@@ -118,7 +119,7 @@ Effect = Union[
     DealDamage, Pump, SetBasePT, GainKeyword, LoseKeyword, PutCounter, RemoveCounter,
     DoublePower,
     GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice, Exile, Tap, Untap,
-    TapOrUntap, DoesntUntapNextStep,
+    TapOrUntap, DoesntUntapNextStep, Attach,
     Regenerate, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     RevealTop, RevealUntil, NameAndStrip,

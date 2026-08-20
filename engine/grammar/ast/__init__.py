@@ -105,6 +105,7 @@ from .characteristics import (
     BecomeCreature,
 )
 from .board import (
+    Attach,
     Destroy,
     Sacrifice,
     Exile,
@@ -255,6 +256,7 @@ __all__ = [
     "BecomeColor",
     "BecomeCreature",
     # board
+    "Attach",
     "Destroy",
     "Sacrifice",
     "Exile",

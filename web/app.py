@@ -47,6 +47,7 @@ from .schemas import (
 )
 
 from .runtime import (
+    AUTO_PASSES,
     CARD_BY_NAME,
     CARD_CATALOG,
     CATALOG_CARD_NAMES,
@@ -252,8 +253,13 @@ def get_verification():
 
 @app.get("/api/verification/next-untested")
 def get_next_untested():
+    # An auto-passed card (no abilities, or keywords only) is never offered:
+    # there is nothing card-specific to check. An `equivalent` card still is —
+    # that status is weaker than a check, and a real check upgrades it.
     results = verification_store.results()
-    untested = [name for name in CATALOG_CARD_NAMES if name not in results]
+    untested = [
+        name for name in CATALOG_CARD_NAMES if name not in results and name not in AUTO_PASSES
+    ]
     if not untested:
         raise HTTPException(status_code=404, detail="all cards have been tested")
     return {"card_name": random.choice(untested), "remaining": len(untested)}

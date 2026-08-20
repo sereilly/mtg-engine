@@ -64,19 +64,19 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 540 |
+| parse rule | 542 |
 | trigger table | 216 |
-| activation cost | 190 |
+| activation cost | 192 |
 | card_hooks bespoke (name-keyed) | 133 |
 | keyword table | 131 |
 | static-line table | 85 |
 | aura enchant noun (oracle_instructions attach) | 54 |
 | aura static (oracle_instructions/permanent_state) | 35 |
 | loyalty cost | 33 |
-| enter_effects.py | 26 |
+| enter_effects.py | 27 |
 | mixin text scan | 20 |
-| activation_restrictions.py | 16 |
-| auras.py (attached effect) | 13 |
+| activation_restrictions.py | 18 |
+| auras.py (attached effect) | 14 |
 | oracle.py (modal trigger head) | 9 |
 | cast_costs.py | 7 |
 | cost_modifiers.py | 6 |
@@ -84,7 +84,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | untap_restrictions.py | 5 |
 | activation gate (stack/activation) | 4 |
 | ante boilerplate (deck construction, not gameplay) | 4 |
-| auras.py (attachment line) | 4 |
 | oracle.py (delayed trigger) | 3 |
 | x spend color (stack/activation) | 1 |
 | target_restrictions.py | 1 |

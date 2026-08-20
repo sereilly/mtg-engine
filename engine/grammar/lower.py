@@ -128,6 +128,7 @@ from .lowering import (
     _lower_condition,
     _lower_tap,
     _lower_tap_or_untap,
+    _lower_attach,
     _lower_win_game,
     _signed,
 )
@@ -202,6 +203,8 @@ def lower_statement(
         return _lower_tap(statement)
     if isinstance(statement, ast.TapOrUntap):
         return _lower_tap_or_untap(statement)
+    if isinstance(statement, ast.Attach):
+        return _lower_attach(statement)
     if isinstance(statement, ast.Draw):
         return _lower_draw(statement)
     if isinstance(statement, ast.Mill):

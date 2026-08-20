@@ -10,7 +10,7 @@ How much of the card pool the oracle-text parser (`engine/grammar/`) reads. It i
 | Lowered | That AST mapped onto instructions, a sidecar registry, or a keyword line |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `coin_flips, combat_restrictions, control, counters, counterspells, damage, destruction, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
+Categories currently switched on: `attachments, coin_flips, combat_restrictions, control, counters, counterspells, damage, destruction, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 
@@ -21,8 +21,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 | 2ED | 292 | 389 | 79.4% | 78.4% | 42.4% | 151 |
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.9% | 78.7% | 43.4% | 152 |
-| M21 | 285 | 503 | 86.7% | 85.7% | 60.6% | 236 |
-| **All (shipped)** | **1533** | **2166** | **80.5%** | **79.4%** | **46.7%** | **876** |
+| M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
+| **All (shipped)** | **1533** | **2166** | **80.7%** | **79.5%** | **46.7%** | **876** |
 
 ## Backlog — failure reasons
 
@@ -30,8 +30,8 @@ Categories currently switched on: `coin_flips, combat_restrictions, control, cou
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 190 | 72 | expected a subject |  |
-| 84 | 28 | unrecognized effect verb |  |
+| 188 | 70 | expected a subject |  |
+| 83 | 27 | unrecognized effect verb |  |
 | 40 | 21 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
 | 26 | 12 | granted ability in quotes | phase 3 (quoted abilities) |

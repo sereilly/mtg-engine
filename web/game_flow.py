@@ -174,6 +174,7 @@ def _ai_step(session: Session) -> bool:
             activation_action.permanent_name,
             target_player_index=activation_action.target_player_index,
             permanent_index=activation_action.permanent_index,
+            target_permanent_index=activation_action.target_permanent_index,
         )
         _auto_resolve_ai_pending(session)
 

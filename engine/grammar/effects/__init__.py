@@ -56,6 +56,7 @@ from .board import (
     _parse_that_object,
     _parse_doesnt_untap_next_step,
     _parse_tap_untap,
+    _parse_attach,
 )
 from .cards import (
     _parse_draw,
@@ -121,6 +122,7 @@ __all__ = [
     "_parse_that_object",
     "_parse_doesnt_untap_next_step",
     "_parse_tap_untap",
+    "_parse_attach",
     "_parse_draw",
     "_parse_sacrifice",
     "_parse_discard",

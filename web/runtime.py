@@ -14,6 +14,7 @@ from fastapi import HTTPException
 
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.behaviour_signature import peers_by_card
+from engine.oracle import simple_card_keywords
 
 from .deck_store import DeckStore
 from .session_store import Session, SessionStore
@@ -52,6 +53,16 @@ CATALOG_CARD_NAMES = list(dict.fromkeys(card.name for card in CARD_SEARCH_ORDER)
 # pure function of the card pool, and recomputing it per request would compile
 # every card's oracle program again.
 BEHAVIOUR_PEERS = peers_by_card(CARD_CATALOG)
+
+# The cards the verification tracker auto-passes, name -> the keyword abilities
+# that are the whole of the card's printed text (empty for a card with no
+# abilities at all). Also a pure function of the pool, computed once for the
+# same reason. See engine.oracle.simple_card_keywords for the criterion.
+AUTO_PASSES: dict[str, tuple[str, ...]] = {
+    card.name: keywords
+    for card in CARD_SEARCH_ORDER
+    if (keywords := simple_card_keywords(card)) is not None
+}
 
 deck_store = DeckStore(DECKS_DIR)
 

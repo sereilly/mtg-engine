@@ -11,6 +11,7 @@ from .registry import EFFECT_HANDLERS, EffectHandler, effect_handler
 
 # Importing the category modules populates EFFECT_HANDLERS.
 from . import (  # noqa: E402,F401
+    attachments,
     board_misc,
     combat,
     control_flow,

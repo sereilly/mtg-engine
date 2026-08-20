@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**299 / 610 tracked rules covered (49%)** — 1328 tests, 0 unannotated.
+**302 / 611 tracked rules covered (49%)** — 1357 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -39,13 +39,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [207. Text Box](#207-text-box) | 0/5 | 0% |
 | [208. Power/Toughness](#208-powertoughness) | 1/5 | 20% |
 | [300. General](#300-general) | 0/2 | 0% |
-| [301. Artifacts](#301-artifacts) | 0/7 | 0% |
+| [301. Artifacts](#301-artifacts) | 1/7 | 14% |
 | [302. Creatures](#302-creatures) | 1/7 | 14% |
 | [303. Enchantments](#303-enchantments) | 7/7 | 100% |
 | [304. Instants](#304-instants) | 0/5 | 0% |
 | [305. Lands](#305-lands) | 3/9 | 33% |
 | [306. Planeswalkers](#306-planeswalkers) | 9/9 | 100% |
-| [307. Sorceries](#307-sorceries) | 0/5 | 0% |
+| [307. Sorceries](#307-sorceries) | 1/5 | 20% |
 | [400. General](#400-general) | 5/12 | 41% |
 | [401. Library](#401-library) | 1/7 | 14% |
 | [402. Hand](#402-hand) | 2/3 | 66% |
@@ -88,7 +88,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/15 | 13% |
 | [701. Keyword Actions](#701-keyword-actions) | 10/19 | 52% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 25/25 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 26/26 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 5/8 | 62% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -245,7 +245,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
 - [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(5 tests, subrules m)*
-- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(3 tests, subrules a)*
+- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(4 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
 - [ ] **113.10** Effects can add or remove abilities of objects. An effect that adds an ability will state that th...
@@ -262,7 +262,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 115. Targets
 
-- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(6 tests, subrules bcd)*
+- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(7 tests, subrules bcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [ ] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe...
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(2 tests)*
@@ -350,7 +350,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **122.3** If a permanent has both a +1/+1 counter and a -1/-1 counter on it, N +1/+1 and N -1/-1 counters a... *(2 tests)*
 - [ ] **122.4** If a permanent with an ability that says it can’t have more than N counters of a certain kind on ...
 - [ ] **122.5** If an effect says to “move” a counter, it means to remove that counter from the object it’s curre...
-- [x] **122.6** Some spells and abilities refer to counters being put on an object. This refers to putting counte... *(1 tests)*
+- [x] **122.6** Some spells and abilities refer to counters being put on an object. This refers to putting counte... *(2 tests)*
 - [ ] **122.7** An ability that triggers “When/Whenever the Nth [kind] counter” is put on an object triggers when...
 - [ ] **122.8** If a triggered ability instructs a player to put one object’s counters on another object and that...
 - [ ] **122.9** If an activated ability of an object instructs a player to put its counters on another object and...
@@ -411,7 +411,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **301.2** When an artifact spell resolves, its controller puts it onto the battlefield under their control.
 - [ ] **301.3** Artifact subtypes are always a single word and are listed after a long dash: “Artifact — Equipmen...
 - [ ] **301.4** Artifacts have no characteristics specific to their card type. Most artifacts have no colored man...
-- [ ] **301.5** Some artifacts have the subtype “Equipment.” An Equipment can be attached to a creature. It can’t...
+- [x] **301.5** Some artifacts have the subtype “Equipment.” An Equipment can be attached to a creature. It can’t... *(13 tests, subrules abcdf)*
 - [ ] **301.6** Some artifacts have the subtype “Fortification.” A Fortification can be attached to a land. It ca...
 - [ ] **301.7** Some artifacts have the subtype “Vehicle.” Most Vehicles have a crew ability which allows them to...
 
@@ -469,7 +469,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 307. Sorceries
 
-- [ ] **307.1** A player who has priority may cast a sorcery card from their hand during a main phase of their tu...
+- [x] **307.1** A player who has priority may cast a sorcery card from their hand during a main phase of their tu... *(1 tests)*
 - [ ] **307.2** When a sorcery spell resolves, the actions stated in its rules text are followed. Then it’s put i...
 - [ ] **307.3** Sorcery subtypes are always a single word and are listed after a long dash: “Sorcery — Arcane.” E...
 - [ ] **307.4** Sorceries can’t enter the battlefield. If a sorcery would enter the battlefield, it remains in it...
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(85 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(87 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -672,10 +672,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(7 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(11 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(13 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(14 tests, subrules ac)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(15 tests, subrules ac)*
 
 ### 603. Handling Triggered Abilities
 
@@ -730,7 +730,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(16 tests, subrules bcdhn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(17 tests, subrules bcdhn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -775,10 +775,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(61 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(13 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
-- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(56 tests, subrules abcd)*
+- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(58 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [ ] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each...
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(13 tests, subrules b)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(14 tests, subrules be)*
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(6 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(4 tests)*
 - [ ] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p...
@@ -846,7 +846,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 701. Keyword Actions
 
 - [ ] **701.2** Activate
-- [x] **701.3** Attach *(4 tests, subrules a)*
+- [x] **701.3** Attach *(10 tests, subrules abcd)*
 - [ ] **701.5** Cast
 - [ ] **701.6** Counter
 - [x] **701.7** Create *(3 tests, subrules a)*
@@ -872,15 +872,16 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.3** Defender *(6 tests, subrules b)*
 - [x] **702.4** Double Strike *(3 tests, subrules b)*
 - [x] **702.5** Enchant *(5 tests, subrules a)*
+- [x] **702.6** Equip *(14 tests, subrules ace)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.8** Flash *(2 tests, subrules ab)*
-- [x] **702.9** Flying *(6 tests, subrules b)*
+- [x] **702.9** Flying *(7 tests, subrules ab)*
 - [x] **702.10** Haste *(3 tests, subrules bc)*
 - [x] **702.11** Hexproof *(2 tests, subrules bd)*
 - [x] **702.12** Indestructible *(2 tests, subrules b)*
 - [x] **702.14** Landwalk *(7 tests, subrules abc)*
 - [x] **702.15** Lifelink *(6 tests, subrules b)*
-- [x] **702.16** Protection *(42 tests, subrules abcdefghjkmn)*
+- [x] **702.16** Protection *(43 tests, subrules abcdefghjkmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(3 tests, subrules a)*
 - [x] **702.19** Trample *(9 tests, subrules bf)*
@@ -906,7 +907,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(1 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(77 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(81 tests, subrules abcdefghijkmnpqrsy)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*
@@ -967,13 +968,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **903.1** In the Commander variant, a variant created and popularized by fans, each deck is led by a legend... *(3 tests)*
 - [x] **903.2** A Commander game may be a two-player game or a multiplayer game. The default multiplayer setup is... *(1 tests)*
-- [x] **903.3** Each deck has a legendary card designated as its commander. That card must be either (a) a creatu... *(10 tests, subrules ad)*
+- [x] **903.3** Each deck has a legendary card designated as its commander. That card must be either (a) a creatu... *(14 tests, subrules ad)*
 - [x] **903.4** The Commander variant uses color identity to determine what cards can be in a deck with a certain... *(8 tests, subrules acdf)*
 - [x] **903.5** Each Commander deck is subject to the following deck construction rules. *(10 tests, subrules abcde)*
 - [x] **903.6** At the start of the game, each player puts their commander from their deck face up into the comma... *(3 tests)*
 - [x] **903.7** Once the starting player has been determined, each player sets their life total to 40 and draws a... *(4 tests)*
 - [x] **903.8** A player may cast a commander they own from the command zone. A commander cast from the command z... *(9 tests)*
-- [x] **903.9** A commander may return to the command zone during a Commander game. *(18 tests, subrules ab)*
+- [x] **903.9** A commander may return to the command zone during a Commander game. *(19 tests, subrules ab)*
 - [x] **903.10** The Commander variant includes the following specification for winning and losing the game. All o... *(6 tests, subrules a)*
 - [x] **903.11** Except via rules, special actions, and effects that specifically bring cards into Commander games... *(8 tests, subrules a)*
 - [x] **903.12** Brawl Option *(26 tests, subrules abcdefgh)*

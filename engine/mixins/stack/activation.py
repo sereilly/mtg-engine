@@ -482,6 +482,34 @@ class AbilityActivationMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
+        # An equip ability (CR 702.6a): "target creature you control". CR
+        # 602.2b chooses the target as the ability is activated and CR 115.5 /
+        # 601.2c make an illegal choice an ability that cannot be activated, so
+        # a named target that is not a creature the activator controls — or one
+        # the Equipment may not legally equip (CR 301.5, 702.16d) — is refused
+        # here, before the cost, rather than paid for and fizzled. The web
+        # picker never offers such a creature; this is for the engine's own
+        # callers. A target named by neither id nor index is left to the
+        # resolution, which declines it with no fallback.
+        if ability.instruction.kind == "attach_source_to_target":
+            named = None
+            if target_permanent_ids:
+                named = self.permanent_by_id(target_permanent_ids[0])
+            elif isinstance(target_permanent_index, int):
+                named = self.permanent_at(target_player, target_permanent_index)
+            if named is not None and not (
+                self.controls(controller_index, named)
+                and self._ability_target_legal(
+                    ability.instruction, named,
+                    candidate_seat=self.controller_index_of(named),
+                    controller_index=controller_index,
+                    source_permanent=permanent,
+                )
+            ):
+                details = f"no valid target for {permanent.card.name}'s equip ability"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         # Jandor's Ring: "Discard the last card you drew this turn" is an
         # additional cost — unpayable (so the ability can't be activated) if no
         # card drawn this turn is still in hand. Checked before any cost is paid;

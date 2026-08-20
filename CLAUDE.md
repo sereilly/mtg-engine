@@ -464,7 +464,31 @@ adding entries, not editing dispatch**:
   reported unsupported rather than entering play and doing nothing) and derives
   the Aura's continuous effects while it is attached. Removal is the Aura
   ceasing to be attached; there is no remembered delta. Use
-  `attach_aura`/`detach_aura`, never the raw metadata.
+  `attach_aura`/`detach_aura`, never the raw metadata. Its effect templates read
+  "enchanted" **and** "equipped" (CR 301.5f: both words name the attached
+  permanent), so an Equipment's "+1/+1", keyword grant or restriction is the
+  same derivation.
+- `engine/equipment.py` — Equipment (CR 301.5), the equip keyword (CR 702.6)
+  and the attach action (CR 701.3). **Equip is a rewrite, not a keyword flag**:
+  CR 702.6a defines "Equip [cost]" as "[Cost]: Attach this permanent to target
+  creature you control. Activate only as a sorcery.", and
+  `oracle.expand_ability_lines` rewrites the printed line into exactly that
+  before any line is classified — so from there it is an ordinary activated
+  ability to the grammar (`Attach` node, `attach_source_to_target` kind), the
+  cost parser, `activation_restrictions.py`, `targeting.py`'s picker and the web
+  layer, none of which know the word. Every *other* reader of a card's lines
+  (`legality.py`, `parse_coverage.py`, `hook_reliance.py`) must start from that
+  same function or it is reading a different card. `equip_refusal` is the one
+  legality predicate (a creature only; never itself or from an Equipment that
+  is a creature, CR 301.5c; never onto protection, CR 702.16d), asked by the
+  handler at resolution, by the picker at activation and by
+  `unattach_illegal_equipment`, the CR 704.5n sweep — which also forgets an
+  Equipment that has *left* the battlefield (CR 701.3d), read off the host at
+  the sweep rather than wired into each zone-change path, because the phasing
+  handler needs the record to survive removal. The support gate in
+  `oracle.py` holds an Equipment to both halves: its equip ability must compile
+  and every effect line must be claimed — Short Sword used to be "supported" on
+  the substring `gets +` with an equip line nothing read.
 - `engine/characteristic_defining.py` — characteristic-defining P/T (CR 604.3),
   one `dynamic_pt_count` instruction carrying what to count and whose
   battlefield to count it on.
@@ -686,11 +710,24 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (369 of the 668 catalog cards passing, 10 more
-reported `equivalent`; the rest — almost all of M21, promoted before its
-in-game pass — have no recorded result yet, which SET_PLAYBOOK.md Phase 5 owns
-and deliberately does not gate promotion on). **Generated
-automatically** — results are edited via the in-game Debug Menu, not by hand.
+manually validated in-game (383 of the 668 catalog cards passing — 370 checked
+in-game and 13 auto-passed — 4 more reported `equivalent`; the rest — almost
+all of M21, promoted before its in-game pass — have no recorded result yet,
+which SET_PLAYBOOK.md Phase 5 owns and deliberately does not gate promotion
+on). **Generated automatically** — results are edited via the in-game Debug
+Menu, not by hand.
+
+A *simple* card — no abilities at all, or nothing but keyword lines the engine
+implements (`engine.oracle.simple_card_keywords`: a vanilla creature, a
+keyword-only creature, a basic land whose only text is CR 305.6's reminder
+text) — is **auto-passed**: its behaviour is the generic combat and keyword
+code plus its printed numbers, so a manual check would exercise no
+card-specific path. It counts as a pass, the note names why ("auto-pass: no
+abilities" / "keywords only (flying, prowess)"), the summary keeps the
+auto-passed share beside the checked one, and the Debug Menu's "add an untested
+card" never offers one. Derived on read from `web/runtime.py`'s `AUTO_PASSES`,
+never written to the JSON; a result recorded in-game always wins over it, and
+it does not seed `equivalent` (an auto-pass is weaker than a check).
 
 A card is also reported `equivalent` when it is untested but a *passing* card
 shares its behaviour class: the engine resolves both through the same code

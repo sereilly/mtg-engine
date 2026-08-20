@@ -99,6 +99,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "destroy_all_artifacts_creatures_enchantments": "destruction",
     "delayed_destroy_blocked_or_blocker": "destruction",
     "tap_target_permanent": "tapping",
+    # CR 701.3's attach, reached through CR 702.6a's equip. Its own category:
+    # moving an Equipment onto a creature is neither a tap nor a zone change,
+    # and sharing a switch with either would let one be gated off by the other.
+    "attach_source_to_target": "attachments",
     "tap_self": "tapping",
     "untap_target_permanent": "tapping",
     "untap_target_land": "tapping",

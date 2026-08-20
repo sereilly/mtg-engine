@@ -57,6 +57,11 @@ class ActivationAction:
     target_player_index: int
     land_tap_indices: tuple[int, ...]
     score: float
+    # The chosen permanent on `target_player_index`'s battlefield, for an
+    # ability that targets one (an equip's creature). None for the abilities
+    # whose handlers pick for themselves, which is every other one this policy
+    # activates today.
+    target_permanent_index: int | None = None
 
 
 def choose_attack_target(game: Game, player_index: int) -> int:
@@ -162,6 +167,17 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             continue
 
         target = _choose_target_for_instruction(ability.instruction, player_index, game)
+        # An equip ability (CR 702.6a): the creature is chosen here, because the
+        # handler declines a target it was not given rather than scanning for
+        # one (a misplaced Equipment is wrong in a way a fizzled pump is not).
+        # Skipped entirely when nothing is worth equipping, so the AI does not
+        # pay {1} every main phase to move a sword onto the creature it is
+        # already on.
+        target_permanent_index: int | None = None
+        if ability.instruction.kind == "attach_source_to_target":
+            target_permanent_index = _choose_equip_target(game, player_index, permanent)
+            if target_permanent_index is None:
+                continue
         if ability.instruction.kind == "grant_banding_to_target":
             # Banding grants go to the controller's own creatures.
             target = player_index
@@ -188,6 +204,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             target_player_index=target,
             land_tap_indices=land_taps,
             score=score,
+            target_permanent_index=target_permanent_index,
         )
         if best is None or candidate.score > best.score:
             best = candidate
@@ -1106,9 +1123,43 @@ def _score_activation(
     return score
 
 
+def _choose_equip_target(game: Game, player_index: int, equipment) -> int | None:
+    """The battlefield index of the creature *equipment* should be moved onto,
+    or None when it is already on the best one (or there is none).
+
+    The biggest creature that can attack — power first, then toughness — among
+    the ones the Equipment may legally equip, asked of the same legality the
+    engine enforces (``engine/equipment.py``) so the AI never activates an
+    equip the engine then refuses. Summoning-sick creatures are not excluded:
+    an Equipment moved onto one now is on it when it can attack next turn, and
+    the +1/+1 blocks just as well meanwhile.
+    """
+    from .equipment import equip_refusal, equipped_creature
+
+    player = game.players[player_index]
+    candidates = [
+        (idx, perm)
+        for idx, perm in enumerate(player.battlefield)
+        if perm.is_creature and equip_refusal(game, equipment, perm) is None
+    ]
+    if not candidates:
+        return None
+    best_index, best = max(
+        candidates,
+        key=lambda pair: (pair[1].effective_power, pair[1].effective_toughness, -pair[0]),
+    )
+    if equipped_creature(equipment) is best:
+        return None
+    return best_index
+
+
 def _choose_target_for_instruction(instruction: OracleInstruction, caster_index: int, game: Game) -> int:
     if is_mana_ability(instruction):
         # Mana goes to its controller's pool; the ability has no other target.
+        return caster_index
+    if instruction.kind == "attach_source_to_target":
+        # "Target creature you control" — the equip's creature is the
+        # activator's own (CR 702.6a).
         return caster_index
     if instruction.kind in {"draw_target_cards", "gain_life", "prevent_damage"}:
         return caster_index

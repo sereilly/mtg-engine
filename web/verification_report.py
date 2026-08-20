@@ -1,9 +1,11 @@
 """The manual-verification tracker's read side.
 
-Joins the recorded results against the catalog and the behavioural-peer map to
-produce the listing the Debug Menu shows, and regenerates
-``CARD_VERIFICATION.md`` from it. ``equivalent`` is derived on read, never
-stored, so it cannot be mistaken for a human check.
+Joins the recorded results against the catalog, the behavioural-peer map and
+the simple-card table to produce the listing the Debug Menu shows, and
+regenerates ``CARD_VERIFICATION.md`` from it. Two statuses are derived on
+read, never stored, so neither can be mistaken for a human check:
+``equivalent`` (a passing peer runs the same code) and the auto-pass (the card
+has no abilities, or only keywords — there is nothing card-specific to check).
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 from engine.behaviour_signature import equivalent_peer
 
 from .runtime import (
+    AUTO_PASSES,
     BEHAVIOUR_PEERS,
     CATALOG_CARD_NAMES,
     VERIFICATION_MD_PATH,
@@ -26,20 +29,38 @@ def _verification_listing() -> tuple[list[dict], dict[str, int]]:
     through the same code paths, so a separate manual pass would exercise
     nothing new (see engine/behaviour_signature.py).
 
-    This status is *derived*, never stored — ``card_verification.json`` holds
-    only what a human recorded. That keeps the two claims distinguishable, and
-    means the derivation follows its peer: if the peer is later marked failing,
-    everything resting on it stops counting as covered on the next read.
+    An untested *simple* card — no abilities at all, or nothing but keywords
+    the engine implements (``engine.oracle.simple_card_keywords``) — is
+    reported as ``pass`` with ``auto_pass`` naming why: its behaviour is the
+    generic combat and keyword code plus its printed numbers, so there is no
+    card-specific path for a manual check to exercise. It counts as a pass
+    because that is what the tracker is for — deciding which cards still need
+    a human — and these never did; ``counts["auto_pass"]`` keeps the number
+    of them visible beside the checked ones.
+
+    Both statuses are *derived*, never stored — ``card_verification.json``
+    holds only what a human recorded. That keeps the claims distinguishable,
+    and means each derivation follows what it rests on: if a peer is later
+    marked failing, everything resting on it stops counting as covered on the
+    next read, and a recorded result on a simple card (a printed number the
+    data got wrong, say) always wins over the auto-pass. Only recorded passes
+    seed equivalence: an auto-pass is weaker than a check, and equivalence
+    propagates checks rather than creating them.
     """
     results = verification_store.results()
     verified = {name for name, entry in results.items() if entry.get("status") == "pass"}
     cards: list[dict] = []
-    counts = {"pass": 0, "fail": 0, "untested": 0, "equivalent": 0}
+    counts = {"pass": 0, "fail": 0, "untested": 0, "equivalent": 0, "auto_pass": 0}
     for name in CATALOG_CARD_NAMES:
         entry = results.get(name)
         status = entry["status"] if entry else "untested"
         peer = None
-        if status == "untested":
+        auto_pass = None
+        if status == "untested" and name in AUTO_PASSES:
+            status = "pass"
+            auto_pass = _auto_pass_label(AUTO_PASSES[name])
+            counts["auto_pass"] += 1
+        elif status == "untested":
             peer = equivalent_peer(name, BEHAVIOUR_PEERS, verified)
             if peer is not None:
                 status = "equivalent"
@@ -51,9 +72,17 @@ def _verification_listing() -> tuple[list[dict], dict[str, int]]:
                 "reason": entry.get("reason", "") if entry else "",
                 "updated_at": entry.get("updated_at") if entry else None,
                 "equivalent_to": peer,
+                "auto_pass": auto_pass,
             }
         )
     return cards, counts
+
+
+def _auto_pass_label(keywords: tuple[str, ...]) -> str:
+    """Why a simple card passed without a check, for the listing's note column."""
+    if not keywords:
+        return "no abilities"
+    return f"keywords only ({', '.join(keywords)})"
 
 
 def write_verification_markdown() -> None:
@@ -73,17 +102,25 @@ def write_verification_markdown() -> None:
         "Generated automatically — edit results via the in-game Debug Menu.",
         "",
         f"- Total cards: **{len(cards)}**",
-        f"- Passed: **{counts['pass']}**",
+        f"- Passed: **{counts['pass']}** "
+        f"({counts['pass'] - counts['auto_pass']} checked in-game, "
+        f"{counts['auto_pass']} auto-passed)",
         f"- Failed: **{counts['fail']}**",
         f"- Equivalent to a passing card: **{counts['equivalent']}**",
         f"- Untested: **{counts['untested']}**",
+        "",
+        "An *auto-pass* is derived, never recorded: the card has no abilities, "
+        "or nothing but keywords the engine implements, so its behaviour is the "
+        "generic combat and keyword code plus its printed numbers, and there is "
+        "no card-specific path for a manual check to exercise. The note names "
+        "which. A result recorded in-game always takes precedence over it.",
         "",
         "`equivalent` is derived, never recorded: the engine resolves that card "
         "through the same code paths as the named peer, so a separate manual pass "
         "would exercise nothing new. It is a weaker claim than a check — it "
         "inherits the peer's correctness. See BEHAVIOUR_CLASSES.md.",
         "",
-        "| Card | Status | Failure reason / equivalent to |",
+        "| Card | Status | Failure reason / equivalent to / auto-pass |",
         "| --- | --- | --- |",
     ]
     badge = {
@@ -96,5 +133,7 @@ def write_verification_markdown() -> None:
         note = (card["reason"] or "").replace("|", "\\|").replace("\n", " ")
         if card["status"] == "equivalent":
             note = f"same behaviour as {card['equivalent_to']}"
+        elif card["auto_pass"]:
+            note = f"auto-pass: {card['auto_pass']}"
         lines.append(f"| {card['card_name']} | {badge[card['status']]} | {note} |")
     VERIFICATION_MD_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")

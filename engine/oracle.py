@@ -47,6 +47,7 @@ from .oracle_types import (
 )
 from .characteristic_defining import dynamic_pt_for
 from .auras import unclaimed_aura_lines
+from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .cast_costs import cast_cost_claims_line
 from .combat_restrictions import combat_restriction_for
 from .effect_labels import activated_label, triggered_label
@@ -2366,6 +2367,43 @@ def expand_modal_activated_lines(oracle_text: str) -> str:
         i += 1
     return "\n".join(out)
 
+
+def _printed_line_for(expanded_line: str | None, printed_text: str) -> str:
+    """The printed line *expanded_line* was rewritten from, or the line itself.
+
+    An ability's ``source_line`` is the text the compiler read, which for an
+    equip keyword is the CR 702.6a expansion rather than "Equip {1}". The
+    Equipment gate asks which of a card's abilities *is* its equip ability, and
+    the honest way to answer is to walk the printed lines through the same
+    rewrite and compare — not to pattern-match the expansion's English.
+    """
+    if expanded_line is None:
+        return ""
+    wanted = expanded_line.strip()
+    for line in (printed_text or "").split("\n"):
+        if (expand_equip_lines(line) or "").strip() == wanted:
+            return line
+    return expanded_line
+
+
+def expand_ability_lines(oracle_text: str) -> str:
+    """Every rewrite the compiler applies to a card's text before a single line
+    is classified — and therefore the text every *other* reader of a card's
+    lines must start from (``engine/legality.py``, ``scripts/parse_coverage.py``,
+    ``scripts/hook_reliance.py``), or it is reading a different card.
+
+    Two rewrites today, both of them the rules' own:
+
+    * a modal activated head and its bullets become one ability line per
+      bullet (:func:`expand_modal_activated_lines`);
+    * an equip keyword line becomes the activated ability CR 702.6a says it
+      *means* — "[Cost]: Attach this permanent to target creature you control.
+      Activate only as a sorcery." (``engine/equipment.py``). From there it is
+      an ordinary activated ability to the grammar, the cost parser, the timing
+      table and the target picker, none of which know the word.
+    """
+    return expand_equip_lines(expand_modal_activated_lines(oracle_text))
+
 # Layouts the compiler can read straight from the top-level characteristics.
 # Every other layout (split, flip, transform, modal_dfc, adventure, meld, …)
 # leaves mana_cost and oracle_text empty and puts the real text in card_faces,
@@ -2538,8 +2576,12 @@ def _compile_card_oracle(
     layout: str = "normal",
 ) -> OracleProgram:
     # Pyramids-style "{cost}: Choose one —" + bullets become one activated
-    # ability per bullet before any other classification runs.
-    oracle_text = expand_modal_activated_lines(oracle_text)
+    # ability per bullet, and an equip keyword line becomes the activated
+    # ability CR 702.6a defines it as, before any other classification runs.
+    # `printed_text` is kept for the one question that is about the card as
+    # printed — does it carry an equip line at all (the Equipment gate below).
+    printed_text = oracle_text
+    oracle_text = expand_ability_lines(oracle_text)
     normalized_text = _normalize_text(oracle_text)
 
     if layout not in SUPPORTED_LAYOUTS:
@@ -2659,6 +2701,48 @@ def _compile_card_oracle(
                     normalized_text,
                 )
 
+        # An Equipment (CR 301.5) is gated the same way, and had been gated by
+        # nothing: Short Sword was supported on the substring "gets +" below,
+        # its "Equipped creature gets +1/+1" never asked of engine/auras.py and
+        # its equip line never compiled to anything — so it entered play and
+        # could not be attached. Now the equip line has been rewritten into its
+        # CR 702.6a activated ability above, and two things are required of
+        # the card: that ability must have compiled to an instruction the engine
+        # runs, and every *other* effect line must be claimed by the same
+        # attached-effect reader an Aura's are (CR 301.5f makes "equipped
+        # creature" the same reference as "enchanted creature", and the layer
+        # bridge derives both off the attachment). By shape — the printed equip
+        # line — because the compiler is not handed the type line, and CR 702.6a
+        # makes equip an ability of Equipment cards.
+        if has_equip_ability(printed_text):
+            equip_abilities = [
+                ability for ability in activated_abilities
+                if is_equip_line(_printed_line_for(ability.source_line, printed_text))
+            ]
+            dead = next(
+                (a for a in equip_abilities if not a.supported or a.instruction is None),
+                None,
+            )
+            if dead is not None or not equip_abilities:
+                offending = (
+                    dead.source_line if dead is not None
+                    else next(line for line in printed_text.split("\n") if is_equip_line(line))
+                )
+                return OracleProgram(
+                    False,
+                    "unsupported",
+                    f"equip ability not implemented: {offending}",
+                    normalized_text,
+                )
+            unclaimed = unclaimed_aura_lines(aura_lines, name)
+            if unclaimed:
+                return OracleProgram(
+                    False,
+                    "unsupported",
+                    f"unimplemented equipment effect: {unclaimed[0]}",
+                    normalized_text,
+                )
+
         instructions.extend(
             OracleInstruction("derived_static_rule", claim)
             for claim in _derived_static_claims(oracle_text, normalized_text, name)
@@ -2737,16 +2821,18 @@ def _compile_card_oracle(
         # the line named is the first one printed when no ability exists to
         # point at.
         #
-        # Auras **and Equipment** are excluded by shape rather than by name, and
-        # for one reason: both work through engine/auras.py, which this cannot
-        # see and which is the stricter gate anyway (it names the first
-        # unclaimed effect line). Short Sword's "+1/+1" is an
-        # `aura_static_pt_grant` that leaves no instruction here, so without the
-        # equip exclusion the widening would refuse two Equipment that work.
-        attachment = any(
-            line.startswith("enchant ") or line.startswith("equip")
-            for line in aura_lines
-        )
+        # Auras are excluded by shape rather than by name, and for one reason:
+        # they work through engine/auras.py, which this cannot see and which is
+        # the stricter gate anyway (it names the first unclaimed effect line).
+        # Equipment used to be excluded beside them — Short Sword's "+1/+1" is
+        # the same derived grant and left no instruction here. It no longer
+        # needs the exclusion: its equip line compiles to a real activated
+        # ability (CR 702.6a, above), which is the "something supported" this
+        # gate already looks for, and its effect lines are gated by the
+        # Equipment branch above. Keeping "equip" here would have exempted an
+        # Equipment whose equip ability *failed* to compile from the very check
+        # that catches a permanent doing nothing.
+        attachment = any(line.startswith("enchant ") for line in aura_lines)
         if (
             primary_type in ("artifact", "enchantment")
             and not attachment
@@ -2792,3 +2878,43 @@ def compile_card_oracle(card: CardDefinition) -> OracleProgram:
     return _compile_card_oracle(
         card.name, card.primary_type, card.oracle_text, card.keywords, card.layout
     )
+
+
+def simple_card_keywords(card: CardDefinition) -> tuple[str, ...] | None:
+    """The keyword abilities a card's printed text consists of entirely.
+
+    A *simple* card either has no abilities at all — a vanilla creature, or a
+    basic land whose only text is the reminder text of its intrinsic mana
+    ability (CR 305.6) — or has nothing but keyword lines the engine
+    implements, the same admission ``_is_supported_keyword_line`` gives a
+    creature's keyword line (so protection's and hexproof's qualities are
+    read as payload). Returns ``()`` for the first, the normalized keyword
+    parts in printed order for the second, and ``None`` for a card with any
+    other ability, or one the engine does not support.
+
+    Read by the verification tracker (``web/verification_report.py``), which
+    auto-passes a simple card: its behaviour is the engine's generic combat and
+    keyword code plus the card's printed numbers, so a manual in-game check
+    would exercise no ability-specific path. The decision is made from the
+    printed text rather than from the compiled program's shape, because the
+    text is what the claim is about — a program with no instructions is also
+    what an entry-state line (``enter_effects.py``) or a replacement-only
+    permanent compiles to, and neither of those is simple.
+    """
+    program = compile_card_oracle(card)
+    if (
+        not program.supported
+        or program.activated_abilities
+        or program.triggered_abilities
+        or program.modes
+    ):
+        return None
+    keywords: list[str] = []
+    for line in card.oracle_text.splitlines():
+        normalized = normalize_creature_line(line)
+        if not normalized:
+            continue
+        if not _is_supported_keyword_line(line):
+            return None
+        keywords.extend(part.strip() for part in normalized.split(",") if part.strip())
+    return tuple(keywords)

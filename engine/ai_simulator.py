@@ -313,6 +313,7 @@ def run_ai_simulation(
                         activation_action.permanent_name,
                         target_player_index=activation_action.target_player_index,
                         permanent_index=activation_action.permanent_index,
+                        target_permanent_index=activation_action.target_permanent_index,
                     )
                     _resolve_pending_choices(game)
                     report.interaction_count += 1

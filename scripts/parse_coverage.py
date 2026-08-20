@@ -76,7 +76,7 @@ from engine.oracle import (  # noqa: E402
     _parse_trigger_condition,
     _parse_triggered_ability,
     compile_card_oracle,
-    expand_modal_activated_lines,
+    expand_ability_lines,
     normalize_creature_line,
 )
 CARD_PATHS = [
@@ -237,12 +237,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # carries.
     ("oracle.py (delayed trigger)",
      lambda s: _parse_delayed_attack_trigger(s, None) is not None),
-    # An Aura or Equipment's own attachment line. "Equip {1}" is a cost rather
-    # than an effect and "This Equipment enters with a soul counter on it" is
-    # entry state; both are read by engine/auras.py's gate, which is the
-    # stricter reader and the one that decides support.
-    ("auras.py (attachment line)",
-     lambda s: s.startswith("equip") or s.startswith("this equipment enters with")),
+    # "Equip {1}" used to be claimed here by prefix, as "a cost rather than an
+    # effect". It is neither: CR 702.6a defines it as an activated ability, the
+    # compiler now rewrites it into one (`expand_ability_lines`, applied to the
+    # text above), and the rewritten line is claimed by the activated-ability
+    # parse like any other. "This Equipment enters with a soul counter on it"
+    # is entry state and is claimed by enter_effects.py's own reader below.
     # A modal **trigger** head, whose modes are the bullet lines below it
     # (Trufflesnout, Elder Gargaroth). `_modal_trigger_ability` groups the head
     # with its bullets and compiles one `choose_one`; the head read alone is a
@@ -724,7 +724,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         for sentence in sents:
             claim_sentence(sentence, activated, trigger_prefix=trigger_prefix)
 
-    text = expand_modal_activated_lines(card.oracle_text or "")
+    text = expand_ability_lines(card.oracle_text or "")
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
