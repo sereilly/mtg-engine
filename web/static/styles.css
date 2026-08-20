@@ -3096,6 +3096,72 @@ pre {
 .mana-pip--G { background: #a3c8a0; }
 .mana-pip--C { background: #cfcfcf; }
 
+/* Connection-status badge on a roster row, shared by the in-game disconnect
+   dialog and the Join page's rejoin picker. */
+.lobby-seat-status {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.lobby-seat-status.is-connected {
+  color: #9fe8a8;
+  background: rgba(80, 200, 110, 0.14);
+  border: 1px solid rgba(80, 200, 110, 0.35);
+}
+
+.lobby-seat-status.is-disconnected {
+  color: #f0a0a0;
+  background: rgba(224, 68, 68, 0.14);
+  border: 1px solid rgba(224, 68, 68, 0.4);
+}
+
+.lobby-seat-status.is-ai {
+  color: #b8c0d8;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.lobby-seat-row--disconnected {
+  border-color: rgba(224, 68, 68, 0.4);
+}
+
+/* Rejoin picker rows that can't be selected (connected players, AI seats). */
+.lobby-seat-row--disabled {
+  opacity: 0.55;
+}
+
+/* Join page: the rejoin picker that replaces the name/deck form when the
+   session id names a game already in progress. Same layout family as the
+   in-game "Waiting for players" box. */
+.join-rejoin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rejoin-seat-btn {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 6px 16px;
+  font-size: 0.9em;
+  border-radius: 999px;
+  cursor: pointer;
+  color: #0d1420;
+  font-weight: 700;
+  background: linear-gradient(180deg, #9fe8a8, #5fc878);
+  border: 1px solid rgba(80, 200, 110, 0.6);
+}
+
+.rejoin-seat-btn:hover {
+  filter: brightness(1.08);
+}
+
 .lobby-actions {
   display: flex;
   gap: 10px;

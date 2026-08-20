@@ -911,7 +911,11 @@ function openStateSyncStream() {
   closeStateSyncStream();
   if (!sessionId) return;
 
-  const source = new EventSource(`/api/sessions/${sessionId}/events`);
+  // The seat rides on the stream so the server knows who is connected: this
+  // stream staying closed past the grace period is what marks the seat
+  // disconnected. Spectators (seat null) send none.
+  const seatParam = Number.isInteger(seat) ? `?seat=${seat}` : "";
+  const source = new EventSource(`/api/sessions/${sessionId}/events${seatParam}`);
   source.addEventListener("state", (event) => {
     let skipStale = false;
     // A rematch rebuilds the game with a fresh (shorter) log, so the monotonic-log
@@ -927,6 +931,12 @@ function openStateSyncStream() {
       // Ignore transient refresh failures; the stream will keep delivering future updates.
     });
   });
+  source.onopen = () => {
+    // Refresh on every (re)connect: events published while the stream was down
+    // (a network blip, or our own rejoin racing the stream's registration) are
+    // gone for good, so poll the state up to date.
+    getState().catch(() => {});
+  };
   source.onerror = () => {
     if (source.readyState === EventSource.CLOSED && stateSyncSource === source) {
       stateSyncSource = null;
@@ -1327,6 +1337,9 @@ async function waitForBattlefieldAnimations() {
 
 function shouldAutoStepAi(state = currentState) {
   if (!state || !sessionId) return false;
+  // Hold the AI while a human player is disconnected: the game is waiting for
+  // them to rejoin, and every remaining client is behind the blocking dialog.
+  if (blockingDisconnectSeats(state).length > 0) return false;
   const seatTypes = state?.seat_types || {};
   if (seatTypes?.[state?.current_turn] !== "ai") return false;
   // In AI vs AI, respect the manual toggle; in human vs AI always auto-step.
@@ -10363,6 +10376,63 @@ function updateLobbyOverlay(state) {
   if (startBtn) startBtn.disabled = lobby.open_seats.length > 0;
 }
 
+// Started-game connection loss: the joined human seats (other than our own)
+// whose event stream has been gone past the server's grace period. Empty while
+// the lobby is still open (a lobby player who vanishes is kicked, not waited
+// for) and once the game has a winner (the game-over overlay owns the screen).
+function blockingDisconnectSeats(state = currentState) {
+  if (!state || state.winner || state.status === "finished") return [];
+  if (state.lobby && state.lobby.game_started === false) return [];
+  return (state.disconnected_seats || []).filter((s) => s !== seat);
+}
+
+function formatNameList(names) {
+  if (names.length <= 1) return names[0] || "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+// A full-board overlay naming the players whose connection to the host is
+// gone, shown to everyone still here while the server waits for them to
+// rejoin (they take their seat back from the Join Game page — same name, same
+// deck). Same layout family as the lobby's "Waiting for players" box.
+function updateDisconnectOverlay(state) {
+  const overlay = q("disconnectOverlay");
+  if (!overlay) return;
+  const gone = blockingDisconnectSeats(state);
+  if (gone.length === 0) {
+    overlay.classList.add("hidden");
+    return;
+  }
+  overlay.classList.remove("hidden");
+  const names = gone.map((s) => state.players?.[s]?.name || `Seat ${s + 1}`);
+  const title = q("disconnectTitle");
+  if (title) title.textContent = names.length === 1 ? "Player disconnected" : "Players disconnected";
+  const body = q("disconnectBody");
+  if (body) {
+    body.textContent =
+      names.length === 1
+        ? `${names[0]} has lost connection to the game. Waiting for them to rejoin…`
+        : `${formatNameList(names)} have lost connection to the game. Waiting for them to rejoin…`;
+  }
+  const roster = q("disconnectRoster");
+  if (roster) {
+    roster.innerHTML = (state.lobby?.seats || [])
+      .map((s) => {
+        const name = s.name || `Seat ${s.seat + 1}`;
+        const badge = s.is_ai
+          ? `<span class="lobby-seat-status is-ai">AI</span>`
+          : s.connected
+            ? `<span class="lobby-seat-status is-connected">Connected</span>`
+            : `<span class="lobby-seat-status is-disconnected">Disconnected</span>`;
+        return `<div class="lobby-seat-row${s.connected || s.is_ai ? "" : " lobby-seat-row--disconnected"}">
+          <span class="lobby-seat-name">${escapeHtml(name)}</span>
+          ${badge}
+        </div>`;
+      })
+      .join("");
+  }
+}
+
 // Drop the gold player-targeting highlight from every FFA corner panel — the
 // classic header pills are cleared by their fixed-id loops, but the corner
 // pills would otherwise only re-sync on the next renderBoard.
@@ -11086,6 +11156,20 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   const incomingLogLen = Array.isArray(state?.log) ? state.log.length : -1;
   const currentLogLen = Array.isArray(currentState?.log) ? currentState.log.length : -1;
   if (!skipStaleCheck && incomingLogLen < currentLogLen) return;
+  // Kicked from a still-open lobby: our seat is no longer joined (we lost the
+  // connection long enough for the server to free the slot, or the session
+  // moved on without us). Back to the menu — the join link re-seats us while
+  // the lobby is open.
+  if (
+    seat !== null &&
+    state?.lobby &&
+    state.lobby.game_started === false &&
+    Array.isArray(state.joined_seats) &&
+    !state.joined_seats.includes(seat)
+  ) {
+    resetToSetup("You were disconnected and removed from the lobby. Use the join link to rejoin.");
+    return;
+  }
   const wasInPregame = !!currentState?.pregame;
   const prevStateForDiscard = currentState;
 
@@ -11160,6 +11244,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderBoard(state);
   playHandArrivalFlights(handArrivals, state, viewerSeat);
   updateLobbyOverlay(state);
+  updateDisconnectOverlay(state);
   if (wasInPregame && !state?.pregame) {
     updateActionHint("Drag from your hand to cast. The battlefield arranges itself automatically.");
   }
@@ -12346,6 +12431,129 @@ async function joinSession() {
   }
 }
 
+// ── Rejoining a game in progress ─────────────────────────────────────────────
+// When the Join page's session id names a game that has already started, the
+// name/deck form gives way to a roster in the lobby dialog's layout: every
+// seat listed, connected players and AI seats disabled, and a Rejoin button on
+// each disconnected player — taking their seat back with the same name, deck,
+// and board (the server kept all of it). The roster re-polls while visible so
+// a seat that reconnects (or drops) elsewhere updates here.
+let joinTargetPollTimer = null;
+let joinTargetDebounce = null;
+let joinTargetCheckSeq = 0;
+
+function stopJoinTargetPolling() {
+  if (joinTargetPollTimer) {
+    clearInterval(joinTargetPollTimer);
+    joinTargetPollTimer = null;
+  }
+}
+
+function showJoinForm() {
+  q("joinFormFields")?.classList.remove("hidden");
+  q("joinRejoinPanel")?.classList.add("hidden");
+  stopJoinTargetPolling();
+}
+
+// Returns true when the id names a started game and the rejoin picker is up.
+async function checkJoinTarget() {
+  const id = q("joinSessionId")?.value.trim();
+  if (!id || sessionId) {
+    showJoinForm();
+    return false;
+  }
+  const seq = ++joinTargetCheckSeq;
+  let state = null;
+  try {
+    const resp = await fetch(`/api/sessions/${id}/state`);
+    if (resp.ok) state = await resp.json();
+  } catch {
+    // Unreachable server or malformed payload reads as "not a started game".
+  }
+  if (seq !== joinTargetCheckSeq) return false; // superseded by a newer check
+  if (q("joinSessionId")?.value.trim() !== id || sessionId) return false;
+  if (!state || state.lobby?.game_started === false) {
+    showJoinForm();
+    return false;
+  }
+  // No visibility gate here: the invite-link bootstrap runs while the menu-swap
+  // animation still has the page hidden, and rendering into a hidden page is
+  // what makes the picker already right when the swap reveals it.
+  renderRejoinPanel(state);
+  return true;
+}
+
+function renderRejoinPanel(state) {
+  const panel = q("joinRejoinPanel");
+  if (!panel) return;
+  q("joinFormFields")?.classList.add("hidden");
+  panel.classList.remove("hidden");
+  const seats = state.lobby?.seats || [];
+  const finished = !!state.winner || state.status === "finished";
+  const anyGone = seats.some((s) => !s.is_ai && s.joined && !s.connected);
+  const note = q("joinRejoinNote");
+  if (note) {
+    note.textContent = finished
+      ? "This game has ended. A disconnected player can still rejoin to see the result."
+      : anyGone
+        ? "This game is already in progress. Rejoin as your player to pick up where you left off."
+        : "This game is already in progress and every player is still connected.";
+  }
+  const roster = q("joinRejoinRoster");
+  if (roster) {
+    roster.innerHTML = seats
+      .map((s) => {
+        const name = s.name || `Seat ${s.seat + 1}`;
+        const canRejoin = !s.is_ai && s.joined && !s.connected;
+        const tail = s.is_ai
+          ? `<span class="lobby-seat-status is-ai">AI</span>`
+          : canRejoin
+            ? `<button type="button" class="rejoin-seat-btn" data-seat="${s.seat}">Rejoin</button>`
+            : `<span class="lobby-seat-status is-connected">Connected</span>`;
+        return `<div class="lobby-seat-row${canRejoin ? "" : " lobby-seat-row--disabled"}">
+          <span class="lobby-seat-name">${escapeHtml(name)}</span>
+          <span class="lobby-seat-deck">${escapeHtml(s.deck_name || "")}</span>
+          ${tail}
+        </div>`;
+      })
+      .join("");
+  }
+  if (!joinTargetPollTimer) {
+    joinTargetPollTimer = setInterval(() => {
+      // Left the Join page (Back, or into a game): stop refreshing the roster.
+      if (q("joinGamePage")?.classList.contains("hidden")) {
+        showJoinForm();
+        return;
+      }
+      checkJoinTarget().catch(() => {});
+    }, 2000);
+  }
+}
+
+async function rejoinSession(seatIndex) {
+  const id = q("joinSessionId")?.value.trim();
+  if (!id || !Number.isInteger(seatIndex)) return;
+  let data;
+  try {
+    data = await postJson(`/api/sessions/${id}/rejoin`, { seat: seatIndex });
+  } catch (error) {
+    // Refused (someone else took the seat back first, or it reconnected):
+    // refresh the roster so the buttons match the server again.
+    updateActionHint(error instanceof Error ? error.message : "Rejoin failed", true);
+    checkJoinTarget().catch(() => {});
+    return;
+  }
+  stopJoinTargetPolling();
+  sessionId = data.session_id;
+  seat = data.seat;
+  openStateSyncStream();
+  setJoinUrls(data.join_url, data.lan_join_url, data.public_join_url);
+  setVisible(true);
+  initBattlefieldCanvas();
+  renderState(data.state);
+  updateActionHint("Rejoined the game.");
+}
+
 const _CAST_ACTIONS = new Set(["cast", "debug_cast_free", "debug_cast_free_opponent"]);
 
 async function sendAction(actionBody) {
@@ -12398,6 +12606,7 @@ q("homeHostBtn")?.addEventListener("click", () => {
 
 q("homeJoinBtn")?.addEventListener("click", () => {
   showMenuPage("join");
+  checkJoinTarget().catch(() => {});
 });
 
 q("hostBackBtn")?.addEventListener("click", () => {
@@ -12406,6 +12615,7 @@ q("hostBackBtn")?.addEventListener("click", () => {
 
 q("joinBackBtn")?.addEventListener("click", () => {
   showMenuPage("home");
+  stopJoinTargetPolling();
 });
 
 async function requestRematch() {
@@ -12507,6 +12717,19 @@ q("leaveGameBtn")?.addEventListener("click", async () => {
   resetToSetup("You left the match.");
 });
 
+// The disconnect dialog's escape hatch: nobody should be trapped behind the
+// modal by an opponent who never comes back. Same forfeit-and-leave flow as
+// the Settings panel's Leave Game.
+q("disconnectLeaveBtn")?.addEventListener("click", async () => {
+  if (!confirm("Leave the match? You will forfeit and return to the main menu.")) return;
+  try {
+    await concedeCurrentSeat();
+  } catch {
+    // Even if the concede call fails, still leave.
+  }
+  resetToSetup("You left the match.");
+});
+
 q("lobbyStartBtn")?.addEventListener("click", async () => {
   if (!sessionId || seat === null) return;
   const data = await postJson(`/api/sessions/${sessionId}/start`, { seat });
@@ -12571,6 +12794,19 @@ q("playingForAnte")?.addEventListener("change", () => {
 // format readout and deck list are downstream of that input — and of the
 // checkbox that decides whether the decks it rules out are listed anyway.
 q("joinSessionId")?.addEventListener("input", syncJoinFormat);
+// The same input decides whether this is a fresh join or a rejoin: a started
+// game swaps the form for the rejoin roster (debounced — ids are pasted, but
+// they can also be typed).
+q("joinSessionId")?.addEventListener("input", () => {
+  if (joinTargetDebounce) clearTimeout(joinTargetDebounce);
+  joinTargetDebounce = setTimeout(() => {
+    checkJoinTarget().catch(() => {});
+  }, 350);
+});
+q("joinRejoinRoster")?.addEventListener("click", (event) => {
+  const btn = event.target instanceof Element ? event.target.closest(".rejoin-seat-btn") : null;
+  if (btn) rejoinSession(Number(btn.dataset.seat));
+});
 q("joinShowIllegalDecks")?.addEventListener("change", syncJoinFormat);
 // The format table ships with the card catalog, which lands after this file
 // runs; a session id read before it arrived resolved against a one-row
@@ -12581,6 +12817,9 @@ q("joinBtn").addEventListener("click", async () => {
   try {
     await joinSession();
   } catch (e) {
+    // "no open seat to join" usually means the game started while this form
+    // was open — the picker is the right response, not an error.
+    if (await checkJoinTarget()) return;
     alert(e.message);
   }
 });
@@ -12998,6 +13237,9 @@ const sessionFromUrl = params.get("session");
 if (sessionFromUrl) {
   q("joinSessionId").value = sessionFromUrl;
   showMenuPage("join");
+  // An invite link into a game already in progress lands on the rejoin
+  // roster rather than the name/deck form.
+  checkJoinTarget().catch(() => {});
 }
 // Unconditional: the readout starts out saying "paste a session ID", which is
 // only true while the field is empty, and an invite link has just filled it.

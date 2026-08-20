@@ -421,6 +421,12 @@ class StartGameRequest(BaseModel):
     seat: int = Field(ge=0)
 
 
+class RejoinSessionRequest(BaseModel):
+    # The seat to take back in a game already in progress. Nothing else: the
+    # seat keeps its name, deck, and board — rejoining rebuilds nothing.
+    seat: int = Field(ge=0)
+
+
 class RandomDeckRequest(BaseModel):
     colors: int = Field(ge=1, le=5)
     seed: int = 1337

@@ -26,6 +26,8 @@ LAYERS = (
     "runtime",
     # Server-sent events.
     "events",
+    # Per-seat presence, read off the event streams.
+    "presence",
     # Seat identity, loss/win, and whether to hold priority.
     "seats",
     # Engine object -> client JSON, one function per kind of object.

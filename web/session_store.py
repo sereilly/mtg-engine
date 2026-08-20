@@ -32,6 +32,12 @@ class Session:
     status: str = "active"
     # hvh: seat1 joins later. other modes are immediately joined.
     joined_seats: set[int] = field(default_factory=lambda: {0})
+    # Joined human seats whose player has lost their connection to the host
+    # (their event stream has been gone longer than web/presence.py's grace
+    # period). Only meaningful once the game has started: a lobby player who
+    # disconnects is removed from the lobby (``leave``) instead of remembered.
+    # Cleared when the player's stream comes back or they rejoin explicitly.
+    disconnected_seats: set[int] = field(default_factory=set)
     seat_types: dict[int, str] = field(default_factory=dict)
     # Seed used to build decks / drive the coin flip. Kept so the guest deck (built
     # at join time for networked human_vs_human) stays deterministic with the host.
@@ -617,6 +623,7 @@ class SessionStore:
             )
 
         session.joined_seats.add(target)
+        session.disconnected_seats.discard(target)
         session.game.players[target].name = guest_name
         if session.mode == "free_for_all":
             session.seat_names[target] = guest_name
@@ -641,6 +648,28 @@ class SessionStore:
             session.game.players[target].sideboard = sideboard
 
         return session, target
+
+    def leave(self, session: Session, seat: int) -> Session:
+        """Remove a joined human seat from a still-open lobby (a player who
+        disconnected, or closed their tab, before the game started).
+
+        The seat becomes an open slot again: ``open_human_seats`` picks it back
+        up, Start stays disabled, and the next player to join — this player
+        coming back included — takes it over with their own name and deck.
+        Only lobby seats can be vacated: once the game has started a vanished
+        player is *disconnected* (kept in the game, waited for) rather than
+        unseated, and the host's seat never opens because ``join`` fills guest
+        seats with guest configuration.
+        """
+        if session.game_started:
+            raise ValueError("the game has started — a missing player can only disconnect, not leave")
+        if seat == 0:
+            raise ValueError("the host's seat cannot be vacated")
+        if seat not in session.joined_seats:
+            raise ValueError("seat has not joined this session")
+        session.joined_seats.discard(seat)
+        session.disconnected_seats.discard(seat)
+        return session
 
     def start(self, session: Session, seat: int) -> Session:
         """Explicitly start a game once every human seat has joined. Any joined

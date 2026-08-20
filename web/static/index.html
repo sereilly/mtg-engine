@@ -144,21 +144,27 @@
             <label title="The format the host is playing this session under. It rides on the session ID, so the deck picker below can check your decks against it before you join.">Format
               <div id="joinFormatValue" class="join-format-value">Paste a session ID to see its format</div>
             </label>
-            <label>Your name <input id="joinName" value="Player 2" /></label>
-            <div class="join-deck-field">
-              <div class="join-deck-head">
-                <label for="joinDeckSelect">Your deck</label>
-                <label id="joinShowIllegalDecksLabel" class="menu-checkbox-label join-format-note hidden" title="Off, the deck picker lists only decks that are legal in this game's format. On, it lists every deck — hover one to read what makes it illegal.">
-                  <input id="joinShowIllegalDecks" type="checkbox" autocomplete="off" />
-                  Show decks that aren't legal in this format
-                </label>
+            <div id="joinFormFields">
+              <label>Your name <input id="joinName" value="Player 2" /></label>
+              <div class="join-deck-field">
+                <div class="join-deck-head">
+                  <label for="joinDeckSelect">Your deck</label>
+                  <label id="joinShowIllegalDecksLabel" class="menu-checkbox-label join-format-note hidden" title="Off, the deck picker lists only decks that are legal in this game's format. On, it lists every deck — hover one to read what makes it illegal.">
+                    <input id="joinShowIllegalDecks" type="checkbox" autocomplete="off" />
+                    Show decks that aren't legal in this format
+                  </label>
+                </div>
+                <select id="joinDeckSelect">
+                  <option value="">Random deck</option>
+                </select>
               </div>
-              <select id="joinDeckSelect">
-                <option value="">Random deck</option>
-              </select>
+              <label id="joinColorsLabel">Deck colors (1-5) <input id="joinColors" type="number" min="1" max="5" value="2" /></label>
+              <button id="joinBtn" class="menu-primary-btn">Join Session</button>
             </div>
-            <label id="joinColorsLabel">Deck colors (1-5) <input id="joinColors" type="number" min="1" max="5" value="2" /></label>
-            <button id="joinBtn" class="menu-primary-btn">Join Session</button>
+            <div id="joinRejoinPanel" class="join-rejoin-panel hidden">
+              <div id="joinRejoinNote" class="lobby-count"></div>
+              <div id="joinRejoinRoster" class="lobby-roster"></div>
+            </div>
           </div>
         </div>
       </section>
@@ -316,6 +322,23 @@
                     <button id="lobbyCopyLinkBtn" type="button" class="secondary-btn">Copy Join Link</button>
                     <button id="lobbyStartBtn" type="button" class="menu-primary-btn" disabled>Start Game</button>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Outside #battlefieldCanvasWrap on purpose: the wrap's
+                 backdrop-filter makes it a stacking context, so an overlay
+                 inside it can never paint above the floating prompt dock
+                 (z-index 11 on .board-column). This dialog must block the
+                 prompts too, so it lives on the column, where its z-index 30
+                 actually wins. -->
+            <div id="disconnectOverlay" class="lobby-overlay hidden">
+              <div class="lobby-box">
+                <h2 id="disconnectTitle" class="lobby-title">Player disconnected</h2>
+                <div id="disconnectBody" class="lobby-count"></div>
+                <div id="disconnectRoster" class="lobby-roster"></div>
+                <div class="lobby-actions">
+                  <button id="disconnectLeaveBtn" type="button" class="secondary-btn">Leave Game</button>
                 </div>
               </div>
             </div>

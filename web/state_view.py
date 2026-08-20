@@ -46,6 +46,7 @@ from engine.models import PlayerState
 from .prompts import PromptContext, render_prompts
 from .session_store import Session
 
+from .presence import seat_is_connected
 from .runtime import store
 from .seats import _build_rematch_info, _seat_type, _winner
 from .serialization import (
@@ -452,6 +453,12 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "priority_player": session.game.priority_player_index,
         "priority_pass_count": session.game.priority_pass_count,
         "joined_seats": sorted(session.joined_seats),
+        # Joined human seats whose player has lost their connection (their
+        # event stream has been gone past web/presence.py's grace period).
+        # The remaining players' clients show the "waiting for them to
+        # rejoin" dialog off this; the Join page's rejoin picker reads the
+        # per-seat ``connected`` flags below.
+        "disconnected_seats": sorted(session.disconnected_seats),
         "seat_types": session.seat_types,
         "lobby": {
             "game_started": session.game_started,
@@ -462,6 +469,18 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                 {
                     "seat": i,
                     "joined": i in session.joined_seats,
+                    # Live presence, not the grace-delayed disconnect flag: the
+                    # Join page's rejoin picker disables "connected" seats, and
+                    # it must disable exactly the seats /rejoin would refuse —
+                    # both ask whether a stream is open right now. (An AI seat
+                    # has no stream; being at the table is its presence.)
+                    "connected": (
+                        i in session.joined_seats
+                        and (
+                            session.seat_types.get(i) == "ai"
+                            or seat_is_connected(session.id, i)
+                        )
+                    ),
                     "is_ai": session.seat_types.get(i) == "ai",
                     "name": session.game.players[i].name if i in session.joined_seats else None,
                     "deck_name": (

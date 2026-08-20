@@ -40,6 +40,7 @@ from .schemas import (
     JoinSessionRequest,
     RandomDeckRequest,
     RawStateRequest,
+    RejoinSessionRequest,
     RematchRequest,
     StartGameRequest,
     VerificationRequest,
@@ -57,6 +58,11 @@ from .runtime import (
     verification_store,
 )
 from .events import _notify_session_change, _stream_session_events
+from .presence import (
+    _stream_session_events_with_presence,
+    mark_seat_connected,
+    seat_is_connected,
+)
 from .seats import _loser, _rematch_human_seats, _seat_type, _winner
 from engine.oracle import compile_card_oracle
 from .serialization import _serialize_modes
@@ -410,6 +416,38 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
     }
 
 
+@app.post("/api/sessions/{session_id}/rejoin")
+def rejoin_session(session_id: str, req: RejoinSessionRequest, request: Request):
+    """Take a seat back in a game already in progress — same name, same deck,
+    same board; nothing is rebuilt. The seat must be a joined human seat with
+    no live event stream (its player is gone), so a connected player cannot be
+    displaced. Before the game starts the path is ``/join`` instead: a lobby
+    player who vanishes is unseated and their slot is simply open again."""
+    session = _require_session(session_id)
+    if not session.game_started:
+        raise HTTPException(status_code=400, detail="the game has not started — join it instead")
+    if req.seat >= len(session.game.players):
+        raise HTTPException(status_code=400, detail="seat out of range for this session")
+    if session.seat_types.get(req.seat) != "human":
+        raise HTTPException(status_code=400, detail="an AI seat cannot be rejoined")
+    if req.seat not in session.joined_seats:
+        raise HTTPException(status_code=400, detail="seat has not joined this session")
+    if seat_is_connected(session_id, req.seat):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{session.game.players[req.seat].name} is still connected",
+        )
+    mark_seat_connected(session_id, req.seat)
+    return {
+        "session_id": session.id,
+        "join_url": _build_join_url(request, session.id),
+        "lan_join_url": _build_lan_join_url(request, session.id),
+        "public_join_url": _build_public_join_url(request, session.id),
+        "seat": req.seat,
+        "state": build_state(session, viewer_seat=req.seat),
+    }
+
+
 @app.post("/api/sessions/{session_id}/start")
 def start_session(session_id: str, req: StartGameRequest):
     session = _require_session(session_id)
@@ -468,10 +506,18 @@ def restart_match(session_id: str, req: RematchRequest):
 
 
 @app.get("/api/sessions/{session_id}/events")
-async def stream_session_events(session_id: str):
-    _require_session(session_id)
+async def stream_session_events(session_id: str, seat: int | None = Query(default=None, ge=0)):
+    session = _require_session(session_id)
+    # A seat on the stream is how the server knows that player is connected:
+    # this stream closing, and staying closed past the presence grace period,
+    # is what marks the seat disconnected (web/presence.py). A spectator sends
+    # no seat and is nobody's presence.
+    if seat is not None and seat < len(session.game.players):
+        stream = _stream_session_events_with_presence(session_id, seat)
+    else:
+        stream = _stream_session_events(session_id)
     return StreamingResponse(
-        _stream_session_events(session_id),
+        stream,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-store, max-age=0",
