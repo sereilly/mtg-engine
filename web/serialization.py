@@ -695,6 +695,7 @@ def _serialize_player(
     seat: int,
     game: Game,
     playable_hand_indices: list[int] | None = None,
+    playable_command_indices: list[int] | None = None,
 ) -> dict:
     if viewer_seat == seat:
         hand = [_serialize_card(card, game, seat) for card in player.hand]
@@ -802,4 +803,9 @@ def _serialize_player(
             if any(n > 0 for n in bucket.values())
         },
         "playable_hand_indices": playable_hand_indices if viewer_seat == seat else [],
+        # The same answer for the viewer's own command zone (CR 903.8): which
+        # commanders they could cast right now, so the board highlights one the
+        # way it highlights a castable card in hand. Distinct from
+        # `castable_from_zones`, which says the zone is open at all.
+        "playable_command_indices": playable_command_indices if viewer_seat == seat else [],
     }

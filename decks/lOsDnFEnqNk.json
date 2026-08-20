@@ -1,0 +1,173 @@
+{
+  "id": "lOsDnFEnqNk",
+  "name": "Niambi's Esteemed Skies",
+  "description": "Azorius Brawl. Niambi, Esteemed Speaker flashes in to rebuy an enter-the-battlefield creature and gain the life back, then turns spare legendary cards into two fresh ones. The deck is a flying curve -- Watcher of the Spheres, Falconer Adept, Serra Angel, Baneslayer Angel -- protected by counterspells and pinned down by Control Magic, Faith's Fetters and Swords to Plowshares. (White/Blue)",
+  "format": "brawl",
+  "cards": [
+    {
+      "name": "Speaker of the Heavens",
+      "count": 1
+    },
+    {
+      "name": "Selfless Savior",
+      "count": 1
+    },
+    {
+      "name": "Watcher of the Spheres",
+      "count": 1
+    },
+    {
+      "name": "Shacklegeist",
+      "count": 1
+    },
+    {
+      "name": "Barrin, Tolarian Archmage",
+      "count": 1
+    },
+    {
+      "name": "Celestial Enforcer",
+      "count": 1
+    },
+    {
+      "name": "Mistral Singer",
+      "count": 1
+    },
+    {
+      "name": "Skyscanner",
+      "count": 1
+    },
+    {
+      "name": "Gale Swooper",
+      "count": 1
+    },
+    {
+      "name": "Falconer Adept",
+      "count": 1
+    },
+    {
+      "name": "Mangara, the Diplomat",
+      "count": 1
+    },
+    {
+      "name": "Tide Skimmer",
+      "count": 1
+    },
+    {
+      "name": "Clone",
+      "count": 1
+    },
+    {
+      "name": "Serra Angel",
+      "count": 1
+    },
+    {
+      "name": "Baneslayer Angel",
+      "count": 1
+    },
+    {
+      "name": "Keen Glidemaster",
+      "count": 1
+    },
+    {
+      "name": "Swift Response",
+      "count": 1
+    },
+    {
+      "name": "Roaming Ghostlight",
+      "count": 1
+    },
+    {
+      "name": "Stormwing Entity",
+      "count": 1
+    },
+    {
+      "name": "Concordia Pegasus",
+      "count": 1
+    },
+    {
+      "name": "Wall of Runes",
+      "count": 1
+    },
+    {
+      "name": "Opt",
+      "count": 1
+    },
+    {
+      "name": "Swords to Plowshares",
+      "count": 1
+    },
+    {
+      "name": "Counterspell",
+      "count": 1
+    },
+    {
+      "name": "Lofty Denial",
+      "count": 1
+    },
+    {
+      "name": "Angelic Ascension",
+      "count": 1
+    },
+    {
+      "name": "Disenchant",
+      "count": 1
+    },
+    {
+      "name": "Glorious Anthem",
+      "count": 1
+    },
+    {
+      "name": "Mazemind Tome",
+      "count": 1
+    },
+    {
+      "name": "Control Magic",
+      "count": 1
+    },
+    {
+      "name": "Teferi's Ageless Insight",
+      "count": 1
+    },
+    {
+      "name": "Teferi, Master of Time",
+      "count": 1
+    },
+    {
+      "name": "Faith's Fetters",
+      "count": 1
+    },
+    {
+      "name": "Unsummon",
+      "count": 1
+    },
+    {
+      "name": "Sublime Epiphany",
+      "count": 1
+    },
+    {
+      "name": "Plains",
+      "count": 11
+    },
+    {
+      "name": "Island",
+      "count": 11
+    },
+    {
+      "name": "Tranquil Cove",
+      "count": 1
+    },
+    {
+      "name": "Fabled Passage",
+      "count": 1
+    }
+  ],
+  "sideboard": [],
+  "commander": [
+    {
+      "name": "Niambi, Esteemed Speaker",
+      "count": 1
+    }
+  ],
+  "created_at": 1787187303.9347854,
+  "updated_at": 1787187598.5508945
+}

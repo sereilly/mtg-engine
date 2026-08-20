@@ -1,0 +1,317 @@
+{
+  "id": "gyuRLnRjlF0",
+  "name": "Rin and Seri's Menagerie",
+  "description": "Naya Commander. Rin and Seri, Inseparable make a Cat every time you cast a Dog and a Dog every time you cast a Cat, so the deck is Cats and Dogs front to back, widened with +1/+1 counters (Conclave Mentor, Basri) and closed with anthems and a trampling alpha strike. (Green/Red/White)",
+  "format": "commander",
+  "cards": [
+    {
+      "name": "Savannah Lions",
+      "count": 1
+    },
+    {
+      "name": "Selfless Savior",
+      "count": 1
+    },
+    {
+      "name": "Alpine Watchdog",
+      "count": 1
+    },
+    {
+      "name": "Pack Leader",
+      "count": 1
+    },
+    {
+      "name": "Alpine Houndmaster",
+      "count": 1
+    },
+    {
+      "name": "Igneous Cur",
+      "count": 1
+    },
+    {
+      "name": "Chandra's Magmutt",
+      "count": 1
+    },
+    {
+      "name": "Bolt Hound",
+      "count": 1
+    },
+    {
+      "name": "Basri's Acolyte",
+      "count": 1
+    },
+    {
+      "name": "Rambunctious Mutt",
+      "count": 1
+    },
+    {
+      "name": "Feline Sovereign",
+      "count": 1
+    },
+    {
+      "name": "Pridemalkin",
+      "count": 1
+    },
+    {
+      "name": "Canopy Stalker",
+      "count": 1
+    },
+    {
+      "name": "Sabertooth Mauler",
+      "count": 1
+    },
+    {
+      "name": "Jolrael, Mwonvuli Recluse",
+      "count": 1
+    },
+    {
+      "name": "Conclave Mentor",
+      "count": 1
+    },
+    {
+      "name": "Tempered Veteran",
+      "count": 1
+    },
+    {
+      "name": "Wildwood Scourge",
+      "count": 1
+    },
+    {
+      "name": "Basri's Lieutenant",
+      "count": 1
+    },
+    {
+      "name": "Falconer Adept",
+      "count": 1
+    },
+    {
+      "name": "Valorous Steed",
+      "count": 1
+    },
+    {
+      "name": "Makeshift Battalion",
+      "count": 1
+    },
+    {
+      "name": "Siege Striker",
+      "count": 1
+    },
+    {
+      "name": "Llanowar Elves",
+      "count": 1
+    },
+    {
+      "name": "Birds of Paradise",
+      "count": 1
+    },
+    {
+      "name": "Llanowar Visionary",
+      "count": 1
+    },
+    {
+      "name": "Fierce Empath",
+      "count": 1
+    },
+    {
+      "name": "Solemn Simulacrum",
+      "count": 1
+    },
+    {
+      "name": "Sol Ring",
+      "count": 1
+    },
+    {
+      "name": "Cultivate",
+      "count": 1
+    },
+    {
+      "name": "Elder Gargaroth",
+      "count": 1
+    },
+    {
+      "name": "Baneslayer Angel",
+      "count": 1
+    },
+    {
+      "name": "Terror of the Peaks",
+      "count": 1
+    },
+    {
+      "name": "Serra Angel",
+      "count": 1
+    },
+    {
+      "name": "Colossal Dreadmaw",
+      "count": 1
+    },
+    {
+      "name": "Garruk's Warsteed",
+      "count": 1
+    },
+    {
+      "name": "Glorious Anthem",
+      "count": 1
+    },
+    {
+      "name": "Orcish Oriflamme",
+      "count": 1
+    },
+    {
+      "name": "Castle",
+      "count": 1
+    },
+    {
+      "name": "Garruk's Uprising",
+      "count": 1
+    },
+    {
+      "name": "Basri's Solidarity",
+      "count": 1
+    },
+    {
+      "name": "Army of Allah",
+      "count": 1
+    },
+    {
+      "name": "Burn Bright",
+      "count": 1
+    },
+    {
+      "name": "Swords to Plowshares",
+      "count": 1
+    },
+    {
+      "name": "Lightning Bolt",
+      "count": 1
+    },
+    {
+      "name": "Scorching Dragonfire",
+      "count": 1
+    },
+    {
+      "name": "Soul Sear",
+      "count": 1
+    },
+    {
+      "name": "Legion's Judgment",
+      "count": 1
+    },
+    {
+      "name": "Angelic Ascension",
+      "count": 1
+    },
+    {
+      "name": "Desert Twister",
+      "count": 1
+    },
+    {
+      "name": "Disenchant",
+      "count": 1
+    },
+    {
+      "name": "Return to Nature",
+      "count": 1
+    },
+    {
+      "name": "Primal Might",
+      "count": 1
+    },
+    {
+      "name": "Heroic Intervention",
+      "count": 1
+    },
+    {
+      "name": "Hunter's Edge",
+      "count": 1
+    },
+    {
+      "name": "Feat of Resistance",
+      "count": 1
+    },
+    {
+      "name": "Invigorating Surge",
+      "count": 1
+    },
+    {
+      "name": "Basri's Aegis",
+      "count": 1
+    },
+    {
+      "name": "Basri Ket",
+      "count": 1
+    },
+    {
+      "name": "Garruk, Unleashed",
+      "count": 1
+    },
+    {
+      "name": "Basri, Devoted Paladin",
+      "count": 1
+    },
+    {
+      "name": "Garruk, Savage Herald",
+      "count": 1
+    },
+    {
+      "name": "Plateau",
+      "count": 1
+    },
+    {
+      "name": "Savannah",
+      "count": 1
+    },
+    {
+      "name": "Taiga",
+      "count": 1
+    },
+    {
+      "name": "City of Brass",
+      "count": 1
+    },
+    {
+      "name": "Blossoming Sands",
+      "count": 1
+    },
+    {
+      "name": "Rugged Highlands",
+      "count": 1
+    },
+    {
+      "name": "Wind-Scarred Crag",
+      "count": 1
+    },
+    {
+      "name": "Temple of Triumph",
+      "count": 1
+    },
+    {
+      "name": "Fabled Passage",
+      "count": 1
+    },
+    {
+      "name": "Animal Sanctuary",
+      "count": 1
+    },
+    {
+      "name": "Forest",
+      "count": 10
+    },
+    {
+      "name": "Plains",
+      "count": 9
+    },
+    {
+      "name": "Mountain",
+      "count": 8
+    }
+  ],
+  "sideboard": [],
+  "commander": [
+    {
+      "name": "Rin and Seri, Inseparable",
+      "count": 1
+    }
+  ],
+  "created_at": 1787177413.6795065,
+  "updated_at": 1787177413.6795068
+}

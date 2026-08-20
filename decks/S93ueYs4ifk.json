@@ -1,0 +1,289 @@
+{
+  "id": "S93ueYs4ifk",
+  "name": "Vito's Dusk Tithe",
+  "description": "Mono-black Commander. Vito, Thorn of the Dusk Rose turns every point of life gained into life lost by an opponent, so the deck is built out of small, repeatable life gain -- lifelink bodies, death triggers, Soul Net and Throne of Bone -- with Drain Life and Peer into the Abyss as the finishers. (Mono-Black)",
+  "format": "commander",
+  "cards": [
+    {
+      "name": "Archfiend's Vessel",
+      "count": 1
+    },
+    {
+      "name": "Blood Glutton",
+      "count": 1
+    },
+    {
+      "name": "El-Hajj\u00e2j",
+      "count": 1
+    },
+    {
+      "name": "Onulet",
+      "count": 1
+    },
+    {
+      "name": "Spirit of Malevolence",
+      "count": 1
+    },
+    {
+      "name": "Hooded Blightfang",
+      "count": 1
+    },
+    {
+      "name": "Fetid Imp",
+      "count": 1
+    },
+    {
+      "name": "Silversmote Ghoul",
+      "count": 1
+    },
+    {
+      "name": "Gloom Sower",
+      "count": 1
+    },
+    {
+      "name": "Tavern Swindler",
+      "count": 1
+    },
+    {
+      "name": "Caged Zombie",
+      "count": 1
+    },
+    {
+      "name": "Will-o'-the-Wisp",
+      "count": 1
+    },
+    {
+      "name": "Royal Assassin",
+      "count": 1
+    },
+    {
+      "name": "Sorceress Queen",
+      "count": 1
+    },
+    {
+      "name": "Hypnotic Specter",
+      "count": 1
+    },
+    {
+      "name": "Liliana's Standard Bearer",
+      "count": 1
+    },
+    {
+      "name": "Crypt Lurker",
+      "count": 1
+    },
+    {
+      "name": "Skyscanner",
+      "count": 1
+    },
+    {
+      "name": "Sengir Vampire",
+      "count": 1
+    },
+    {
+      "name": "Nightmare",
+      "count": 1
+    },
+    {
+      "name": "Goremand",
+      "count": 1
+    },
+    {
+      "name": "Massacre Wurm",
+      "count": 1
+    },
+    {
+      "name": "Solemn Simulacrum",
+      "count": 1
+    },
+    {
+      "name": "Palladium Myr",
+      "count": 1
+    },
+    {
+      "name": "Sol Ring",
+      "count": 1
+    },
+    {
+      "name": "Mana Vault",
+      "count": 1
+    },
+    {
+      "name": "Basalt Monolith",
+      "count": 1
+    },
+    {
+      "name": "Meteorite",
+      "count": 1
+    },
+    {
+      "name": "Dark Ritual",
+      "count": 1
+    },
+    {
+      "name": "Throne of Bone",
+      "count": 1
+    },
+    {
+      "name": "Soul Net",
+      "count": 1
+    },
+    {
+      "name": "Ivory Tower",
+      "count": 1
+    },
+    {
+      "name": "Witch's Cauldron",
+      "count": 1
+    },
+    {
+      "name": "Malefic Scythe",
+      "count": 1
+    },
+    {
+      "name": "Mazemind Tome",
+      "count": 1
+    },
+    {
+      "name": "Nevinyrral's Disk",
+      "count": 1
+    },
+    {
+      "name": "Sanctum of Stone Fangs",
+      "count": 1
+    },
+    {
+      "name": "Bad Moon",
+      "count": 1
+    },
+    {
+      "name": "Demonic Embrace",
+      "count": 1
+    },
+    {
+      "name": "Infernal Scarring",
+      "count": 1
+    },
+    {
+      "name": "Oubliette",
+      "count": 1
+    },
+    {
+      "name": "Pestilence",
+      "count": 1
+    },
+    {
+      "name": "Animate Dead",
+      "count": 1
+    },
+    {
+      "name": "Demonic Tutor",
+      "count": 1
+    },
+    {
+      "name": "Grim Tutor",
+      "count": 1
+    },
+    {
+      "name": "Raise Dead",
+      "count": 1
+    },
+    {
+      "name": "Rise Again",
+      "count": 1
+    },
+    {
+      "name": "Sanguine Indulgence",
+      "count": 1
+    },
+    {
+      "name": "Drain Life",
+      "count": 1
+    },
+    {
+      "name": "Liliana's Scorn",
+      "count": 1
+    },
+    {
+      "name": "Pestilent Haze",
+      "count": 1
+    },
+    {
+      "name": "Bad Deal",
+      "count": 1
+    },
+    {
+      "name": "Peer into the Abyss",
+      "count": 1
+    },
+    {
+      "name": "Alchemist's Gift",
+      "count": 1
+    },
+    {
+      "name": "Village Rites",
+      "count": 1
+    },
+    {
+      "name": "Eliminate",
+      "count": 1
+    },
+    {
+      "name": "Grasp of Darkness",
+      "count": 1
+    },
+    {
+      "name": "Terror",
+      "count": 1
+    },
+    {
+      "name": "Finishing Blow",
+      "count": 1
+    },
+    {
+      "name": "Simulacrum",
+      "count": 1
+    },
+    {
+      "name": "Liliana, Waker of the Dead",
+      "count": 1
+    },
+    {
+      "name": "Liliana, Death Mage",
+      "count": 1
+    },
+    {
+      "name": "Ugin, the Spirit Dragon",
+      "count": 1
+    },
+    {
+      "name": "Radiant Fountain",
+      "count": 1
+    },
+    {
+      "name": "Diamond Valley",
+      "count": 1
+    },
+    {
+      "name": "City of Brass",
+      "count": 1
+    },
+    {
+      "name": "Fabled Passage",
+      "count": 1
+    },
+    {
+      "name": "Swamp",
+      "count": 32
+    }
+  ],
+  "sideboard": [],
+  "commander": [
+    {
+      "name": "Vito, Thorn of the Dusk Rose",
+      "count": 1
+    }
+  ],
+  "created_at": 1787177413.669185,
+  "updated_at": 1787177413.6691852
+}

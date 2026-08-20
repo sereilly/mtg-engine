@@ -3,9 +3,15 @@
 :func:`_serialize_state` assembles it from every layer below — the serialization
 leaves, the pregame / turn-step / combat prompts, the seat and outcome answers —
 and does it *per viewer*, because a hand is hidden from everyone but its owner
-and a prompt belongs to the seat that owes it. The two playability computations
-live here as well: nothing else asks them, and "what can I play right now" is a
+and a prompt belongs to the seat that owes it. The playability computations live
+here as well: nothing else asks them, and "what can I play right now" is a
 question about the view, not about the turn.
+
+There is **one** of those, asked of two zones. :func:`_card_castable_now` is the
+whole question — timing, targets, mana — and the hand and the command zone
+differ only in what their zone adds to the cost (nothing; CR 903.8's commander
+tax). Answering the command zone separately would be a second opinion about
+castability, and the two would drift the first time a timing gate moved.
 
 **Two functions, and the difference is the point.** :func:`_serialize_state`
 reads the game and returns JSON — it does not move a card, lock a division or
@@ -29,6 +35,8 @@ was missing.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from engine import Game
 from engine.cast_permissions import playable_from_zones
@@ -126,32 +134,51 @@ def _can_afford_with_pool(pool: dict, cost: dict, player: PlayerState) -> bool:
     return True
 
 
-def _compute_playable_hand_indices(session: Session, player_index: int) -> list[int]:
-    """Return hand indices the player can legally cast right now (considering timing,
-    mana already in pool plus potential mana from untapped lands, and restrictions)."""
+@dataclass(frozen=True)
+class _CastingWindow:
+    """The seat-wide half of "what can I play right now": the mana this seat
+    could produce and the turn-structure facts a timing gate reads.
+
+    Built once per seat, because every card the seat might cast is tested
+    against the same one — a card in hand and a commander in the command zone
+    (CR 903.8) differ only in what their zone adds to the cost.
+    """
+
+    potential_pool: dict[str, int]
+    has_gloom: bool
+    may_play_land: bool
+    current_turn: int
+    is_main_phase: bool
+    stack_empty: bool
+
+
+def _casting_window(session: Session, player_index: int) -> _CastingWindow | None:
+    """The window *player_index* is casting into, or None when they cannot
+    begin a cast at all — a blocking prompt is open, or they do not have
+    priority."""
     game = session.game
     player = game.players[player_index]
 
     # Bail under blocking UI states where casting is not possible
     if session.pregame_phase is not None:
-        return []
+        return None
     if _cleanup_discard_requirement(session) > 0:
-        return []
+        return None
     if _untap_land_selection_requirement(session) > 0:
-        return []
+        return None
     if _upkeep_pay_pending(session):
-        return []
+        return None
     if _optional_trigger_pending(session):
-        return []
+        return None
     if session.island_sanctuary_pending:
-        return []
+        return None
     if game.pending_search_library is not None:
-        return []
+        return None
     if game.pending_reorder_library is not None:
-        return []
+        return None
 
     if not game.has_priority(player_index):
-        return []
+        return None
 
     # Potential mana = current pool + what each untapped land could produce
     potential_pool: dict[str, int] = dict(player.mana_pool)
@@ -161,71 +188,131 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
                 sym = color.upper()
                 potential_pool[sym] = potential_pool.get(sym, 0) + 1
 
-    has_gloom = any(perm.card.name == "Gloom" for perm in game.all_permanents())
-    may_play_land = game._may_play_another_land(player_index)
-    current_turn = session.current_turn
-    is_main_phase = game.current_phase == "main"
-    stack_empty = not game.stack
+    return _CastingWindow(
+        potential_pool=potential_pool,
+        has_gloom=any(perm.card.name == "Gloom" for perm in game.all_permanents()),
+        may_play_land=game._may_play_another_land(player_index),
+        current_turn=session.current_turn,
+        is_main_phase=game.current_phase == "main",
+        stack_empty=not game.stack,
+    )
 
-    playable = []
-    for i, card in enumerate(player.hand):
-        classification = classify_card(card)
-        if not classification.supported:
-            continue
 
-        # CR 702.8b: flash casts any time an instant could be cast, so both
-        # timing gates ask instant-or-flash rather than the type line alone.
-        instant_speed = card.primary_type == "instant" or card.has_flash
+def _card_castable_now(
+    session: Session,
+    player_index: int,
+    card,
+    window: _CastingWindow,
+    *,
+    extra_generic: int = 0,
+) -> bool:
+    """Whether *card* could be cast or played right now — timing, targets and
+    mana (the pool plus what untapped lands could add).
 
-        # Non-instant-speed spells require it to be your turn
-        if player_index != current_turn and not instant_speed:
-            continue
+    ``extra_generic`` is what casting it from *this* zone adds to the cost:
+    CR 903.8's commander tax for the command zone, nothing for the hand. Which
+    zones the seat may cast from is the caller's question rather than this
+    one's — the hand is CR 601.3 and the command zone is CR 903.8, two
+    different rules whose cards then face the same gates.
+    """
+    game = session.game
+    player = game.players[player_index]
 
-        # Sorcery-speed: must be main phase with empty stack on your turn
-        # (planeswalkers per CR 306.1).
-        if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment", "planeswalker"} and not instant_speed:
-            if player_index != current_turn or not is_main_phase or not stack_empty:
-                continue
+    classification = classify_card(card)
+    if not classification.supported:
+        return False
 
-        # Card-specific timing restriction
-        if "cast this spell only during your declare attackers step" in card.oracle_text.lower():
-            if game.current_step != "declare_attackers" or game.active_player_index != player_index:
-                continue
+    # CR 702.8b: flash casts any time an instant could be cast, so both
+    # timing gates ask instant-or-flash rather than the type line alone.
+    instant_speed = card.primary_type == "instant" or card.has_flash
 
-        # Blaze of Glory: only during combat before blockers are declared.
-        if "cast this spell only during combat before blockers are declared" in card.oracle_text.lower():
-            if game.current_phase != "combat" or game.current_step not in (
-                "beginning_of_combat",
-                "declare_attackers",
-            ):
-                continue
+    # Non-instant-speed spells require it to be your turn
+    if player_index != window.current_turn and not instant_speed:
+        return False
 
-        # False Orders / similar: only during the declare blockers step.
-        if "cast this spell only during the declare blockers step" in card.oracle_text.lower():
-            if game.current_phase != "combat" or game.current_step != "declare_blockers":
-                continue
+    # Sorcery-speed: must be main phase with empty stack on your turn
+    # (planeswalkers per CR 306.1).
+    if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment", "planeswalker"} and not instant_speed:
+        if player_index != window.current_turn or not window.is_main_phase or not window.stack_empty:
+            return False
 
-        # Target validation (aura enchant targets, removal targets, counter targets, etc.)
-        target_ok, _ = game._validate_cast_targets(card, player_index, None)
-        if not target_ok:
-            continue
+    # Card-specific timing restriction
+    if "cast this spell only during your declare attackers step" in card.oracle_text.lower():
+        if game.current_step != "declare_attackers" or game.active_player_index != player_index:
+            return False
 
-        # Land play restriction: CR 305.2's one per turn, plus whatever the
-        # allowances on this seat's battlefield add (engine/land_play_allowance.py).
-        if card.primary_type == "land" and not may_play_land:
-            continue
+    # Blaze of Glory: only during combat before blockers are declared.
+    if "cast this spell only during combat before blockers are declared" in card.oracle_text.lower():
+        if game.current_phase != "combat" or game.current_step not in (
+            "beginning_of_combat",
+            "declare_attackers",
+        ):
+            return False
 
-        # Mana affordability for non-land cards
-        if card.primary_type != "land" and game.enforce_mana_costs:
-            extra_tax = 3 if (has_gloom and "W" in card.colors) else 0
-            # Use x_value=0 so X spells are shown as playable (castable at X=0)
-            cost = game._parse_mana_cost(card.mana_cost, x_value=0, extra_generic=extra_tax)
-            if not _can_afford_with_pool(potential_pool, cost, player):
-                continue
+    # False Orders / similar: only during the declare blockers step.
+    if "cast this spell only during the declare blockers step" in card.oracle_text.lower():
+        if game.current_phase != "combat" or game.current_step != "declare_blockers":
+            return False
 
-        playable.append(i)
+    # Target validation (aura enchant targets, removal targets, counter targets, etc.)
+    target_ok, _ = game._validate_cast_targets(card, player_index, None)
+    if not target_ok:
+        return False
 
-    return playable
+    # Land play restriction: CR 305.2's one per turn, plus whatever the
+    # allowances on this seat's battlefield add (engine/land_play_allowance.py).
+    if card.primary_type == "land" and not window.may_play_land:
+        return False
+
+    # Mana affordability for non-land cards
+    if card.primary_type != "land" and game.enforce_mana_costs:
+        extra_tax = extra_generic + (3 if (window.has_gloom and "W" in card.colors) else 0)
+        # Use x_value=0 so X spells are shown as playable (castable at X=0)
+        cost = game._parse_mana_cost(card.mana_cost, x_value=0, extra_generic=extra_tax)
+        if not _can_afford_with_pool(window.potential_pool, cost, player):
+            return False
+
+    return True
+
+
+def _compute_playable_hand_indices(session: Session, player_index: int) -> list[int]:
+    """Return hand indices the player can legally cast right now (considering timing,
+    mana already in pool plus potential mana from untapped lands, and restrictions)."""
+    window = _casting_window(session, player_index)
+    if window is None:
+        return []
+    return [
+        i
+        for i, card in enumerate(session.game.players[player_index].hand)
+        if _card_castable_now(session, player_index, card, window)
+    ]
+
+
+def _compute_playable_command_indices(session: Session, player_index: int) -> list[int]:
+    """The same answer for the seat's own command zone: which commanders they
+    could cast right now (CR 903.8), by the test a card in hand gets — so the
+    board highlights a castable commander exactly as it highlights a castable
+    card in hand.
+
+    CR 903.8's tax is part of what that cast costs, so a commander recast twice
+    stops being highlighted once the tax outruns the mana on the board. That is
+    the whole reason this is not the constant the commander's *permission* is:
+    ``castable_from_zones`` says the seat may cast it from there at all, which
+    is true for as long as it sits in the zone.
+    """
+    game = session.game
+    window = _casting_window(session, player_index)
+    if window is None:
+        return []
+    return [
+        i
+        for i, card in enumerate(game.players[player_index].command_zone)
+        if game.may_cast_from_command_zone(player_index, card)
+        and _card_castable_now(
+            session, player_index, card, window,
+            extra_generic=game.commander_tax(player_index, card),
+        )
+    ]
 
 
 def build_state(session: Session, viewer_seat: int | None) -> dict:
@@ -346,6 +433,11 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # CR 407.1: whether this game is played for ante. Drives the ante pile in
         # the board UI and tells a joining player which decks they may bring.
         "playing_for_ante": session.playing_for_ante,
+        # The constructed format this game is played under (a key of
+        # web/deck_legality.py's FORMATS). The session id names it too — that is
+        # what a player reads *before* joining; this is the same answer from the
+        # server, for a client that is already in the game.
+        "format": session.game_format,
         # CR 903.1 / 903.12a: "commander", "brawl", or null for an ordinary
         # game. Drives the command zone in the board UI, the commander-damage
         # tracker, and whether the client offers a cast from the command zone.
@@ -390,6 +482,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             _serialize_player(
                 session.game.players[i], viewer_seat, i, session.game,
                 _compute_playable_hand_indices(session, i) if viewer_seat == i else [],
+                _compute_playable_command_indices(session, i) if viewer_seat == i else [],
             )
             for i in range(len(session.game.players))
         ],

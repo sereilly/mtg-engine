@@ -1,0 +1,173 @@
+{
+  "id": "UbweYQjlwFI",
+  "name": "Radha's Keldon Warhost",
+  "description": "Gruul Brawl. Radha, Heart of Keld attacks with first strike on your turn and lets you play lands off the top of your library, so the deck runs a high land count and a curve of power-4 payoffs -- Garruk's Uprising, Drowsing Tyrannodon, Turret Ogre and Ornery Dilophosaur all key off a big body -- with burn to clear blockers and Terror of the Peaks, Elder Gargaroth and Shivan Dragon at the top. (Red/Green)",
+  "format": "brawl",
+  "cards": [
+    {
+      "name": "Llanowar Elves",
+      "count": 1
+    },
+    {
+      "name": "Birds of Paradise",
+      "count": 1
+    },
+    {
+      "name": "Scavenging Ooze",
+      "count": 1
+    },
+    {
+      "name": "Drowsing Tyrannodon",
+      "count": 1
+    },
+    {
+      "name": "Heartfire Immolator",
+      "count": 1
+    },
+    {
+      "name": "Garruk's Harbinger",
+      "count": 1
+    },
+    {
+      "name": "Thrashing Brontodon",
+      "count": 1
+    },
+    {
+      "name": "Llanowar Visionary",
+      "count": 1
+    },
+    {
+      "name": "Pridemalkin",
+      "count": 1
+    },
+    {
+      "name": "Bolt Hound",
+      "count": 1
+    },
+    {
+      "name": "Fierce Empath",
+      "count": 1
+    },
+    {
+      "name": "Leafkin Avenger",
+      "count": 1
+    },
+    {
+      "name": "Ornery Dilophosaur",
+      "count": 1
+    },
+    {
+      "name": "Predatory Wurm",
+      "count": 1
+    },
+    {
+      "name": "Turret Ogre",
+      "count": 1
+    },
+    {
+      "name": "Battle-Rattle Shaman",
+      "count": 1
+    },
+    {
+      "name": "Elder Gargaroth",
+      "count": 1
+    },
+    {
+      "name": "Terror of the Peaks",
+      "count": 1
+    },
+    {
+      "name": "Wildwood Scourge",
+      "count": 1
+    },
+    {
+      "name": "Solemn Simulacrum",
+      "count": 1
+    },
+    {
+      "name": "Brash Taunter",
+      "count": 1
+    },
+    {
+      "name": "Colossal Dreadmaw",
+      "count": 1
+    },
+    {
+      "name": "Shivan Dragon",
+      "count": 1
+    },
+    {
+      "name": "Lightning Bolt",
+      "count": 1
+    },
+    {
+      "name": "Shock",
+      "count": 1
+    },
+    {
+      "name": "Giant Growth",
+      "count": 1
+    },
+    {
+      "name": "Sure Strike",
+      "count": 1
+    },
+    {
+      "name": "Scorching Dragonfire",
+      "count": 1
+    },
+    {
+      "name": "Soul Sear",
+      "count": 1
+    },
+    {
+      "name": "Primal Might",
+      "count": 1
+    },
+    {
+      "name": "Hunter's Edge",
+      "count": 1
+    },
+    {
+      "name": "Cultivate",
+      "count": 1
+    },
+    {
+      "name": "Garruk's Uprising",
+      "count": 1
+    },
+    {
+      "name": "Garruk, Unleashed",
+      "count": 1
+    },
+    {
+      "name": "Volcanic Geyser",
+      "count": 1
+    },
+    {
+      "name": "Mountain",
+      "count": 11
+    },
+    {
+      "name": "Forest",
+      "count": 11
+    },
+    {
+      "name": "Rugged Highlands",
+      "count": 1
+    },
+    {
+      "name": "Fabled Passage",
+      "count": 1
+    }
+  ],
+  "sideboard": [],
+  "commander": [
+    {
+      "name": "Radha, Heart of Keld",
+      "count": 1
+    }
+  ],
+  "created_at": 1787187303.9341066,
+  "updated_at": 1787187303.9341068
+}

@@ -374,11 +374,21 @@
   // app.js can call it for dynamically-created selects (e.g. Free-For-All seat
   // deck pickers) that aren't part of the fixed `configs` list below.
   //
-  // `forHostedGame` marks a picker choosing a deck for the game being set up on
-  // the host page, which is the one thing that knows what the others don't:
-  // whether that game is played for ante (CR 407.3) and which format it is
-  // played under. Both decide what may be brought, so both gate the list.
-  function populateDeckSelectElement(select, placeholder, { forHostedGame = true } = {}) {
+  // Three separate questions decide what a picker offers, and each caller
+  // answers them for itself:
+  //   `format`     which format's rules a deck is judged against — null judges
+  //                each deck by the format it was *saved* under, which is all
+  //                the editor's own load picker (and a session id that names no
+  //                format) can honestly say.
+  //   `hideIllegal` whether the ones that fail leave the list entirely.
+  //   `blockAnte`  whether a deck holding ante cards is unselectable (CR 407.3).
+  // The defaults are the host page's answers, because every picker on it — the
+  // fixed ones and the Free-For-All seats app.js builds — wants them.
+  function populateDeckSelectElement(select, placeholder, {
+    format = window.selectedGameFormat?.() || "casual",
+    hideIllegal = !window.showsIllegalDecks?.(),
+    blockAnte = true,
+  } = {}) {
     if (!select) return;
     const previous = select.value;
     select.innerHTML = "";
@@ -386,16 +396,15 @@
     blank.value = "";
     blank.textContent = placeholder;
     select.appendChild(blank);
-    const format = forHostedGame ? window.selectedGameFormat?.() || "casual" : null;
-    // Only the decks that could actually be played, unless the host asks for
-    // the rest; each of those carries its reason as a hover tooltip.
-    const hideIllegal = forHostedGame && !window.showsIllegalDecks?.();
+    // A format nobody has named cannot rule a deck out, so it never hides one:
+    // the list would be filtered by a rule the player was never shown.
+    const hidesIllegal = Boolean(format) && hideIllegal;
     // Group decks by scope so the source of each is unambiguous.
     for (const [scope, groupLabel] of [["personal", "Personal"], ["shared", "Shared"]]) {
       const options = state.decks
         .filter((d) => (d.scope || "shared") === scope)
-        .map((deck) => makeDeckOption(deck, { blockAnte: forHostedGame, format }))
-        .filter((option) => !(hideIllegal && option.dataset.illegal));
+        .map((deck) => makeDeckOption(deck, { blockAnte, format }))
+        .filter((option) => !(hidesIllegal && option.dataset.illegal));
       if (options.length === 0) continue;
       const group = document.createElement("optgroup");
       group.label = groupLabel;
@@ -421,13 +430,19 @@
     const configs = [
       // The editor's load picker must reach every deck, including ante ones and
       // ones no format would seat.
-      ["deckLoadSelect", "— Load a deck —", { forHostedGame: false }],
+      ["deckLoadSelect", "— Load a deck —", { format: null, hideIllegal: false, blockAnte: false }],
       ["hostDeckSelect", "Random deck"],
       ["guestDeckSelect", "Random deck"],
-      // A joining player can't see the host's ante setting or format from here,
-      // so their picker offers everything and the server rejects an ante deck
-      // brought to a non-ante game with an explanatory error (CR 407.3).
-      ["joinDeckSelect", "Random deck", { forHostedGame: false }],
+      // The joining player is judged against the format the *session id* names
+      // (null while it names none — a legacy id, or nothing pasted yet), with
+      // its own "show the illegal ones" checkbox beside it. Ante is still not
+      // knowable from here, so an ante deck stays selectable and the server
+      // rejects it with an explanatory error (CR 407.3).
+      ["joinDeckSelect", "Random deck", {
+        format: window.joinGameFormat?.() ?? null,
+        hideIllegal: !window.joinShowsIllegalDecks?.(),
+        blockAnte: false,
+      }],
     ];
     for (const [id, placeholder, options] of configs) {
       populateDeckSelectElement(q(id), placeholder, options);

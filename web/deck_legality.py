@@ -38,33 +38,44 @@ from engine.commander import (
 # (library) size; `max_copies` is the per-card limit (counted across deck +
 # sideboard + commander); `max_sideboard` caps the sideboard (None = unchecked,
 # 0 = no sideboard at all); `singleton` forces a hard 1-of; `min_commander`/
-# `max_commander` bound the command zone (0/0 = format has no command zone).
+# `max_commander` bound the command zone (0/0 = format has no command zone);
+# `session_code` is the two characters a session id under this format leads with
+# (see `session_id_prefix` below).
 FORMATS: list[dict[str, Any]] = [
-    {"key": "casual", "label": "Casual (no restrictions)", "scryfall_key": None,
+    {"key": "casual", "label": "Casual (no restrictions)", "session_code": "qf",
+     "scryfall_key": None,
      "min_deck": 0, "max_deck": None, "max_copies": 99, "max_sideboard": None, "singleton": False,
      "min_commander": 0, "max_commander": 0},
-    {"key": "standard", "label": "Standard", "scryfall_key": "standard",
+    {"key": "standard", "label": "Standard", "session_code": "hv",
+     "scryfall_key": "standard",
      "min_deck": 60, "max_deck": None, "max_copies": 4, "max_sideboard": 15, "singleton": False,
      "min_commander": 0, "max_commander": 0},
-    {"key": "pioneer", "label": "Pioneer", "scryfall_key": "pioneer",
+    {"key": "pioneer", "label": "Pioneer", "session_code": "zk",
+     "scryfall_key": "pioneer",
      "min_deck": 60, "max_deck": None, "max_copies": 4, "max_sideboard": 15, "singleton": False,
      "min_commander": 0, "max_commander": 0},
-    {"key": "modern", "label": "Modern", "scryfall_key": "modern",
+    {"key": "modern", "label": "Modern", "session_code": "wm",
+     "scryfall_key": "modern",
      "min_deck": 60, "max_deck": None, "max_copies": 4, "max_sideboard": 15, "singleton": False,
      "min_commander": 0, "max_commander": 0},
-    {"key": "legacy", "label": "Legacy", "scryfall_key": "legacy",
+    {"key": "legacy", "label": "Legacy", "session_code": "jt",
+     "scryfall_key": "legacy",
      "min_deck": 60, "max_deck": None, "max_copies": 4, "max_sideboard": 15, "singleton": False,
      "min_commander": 0, "max_commander": 0},
-    {"key": "vintage", "label": "Vintage", "scryfall_key": "vintage",
+    {"key": "vintage", "label": "Vintage", "session_code": "xb",
+     "scryfall_key": "vintage",
      "min_deck": 60, "max_deck": None, "max_copies": 4, "max_sideboard": 15, "singleton": False,
      "min_commander": 0, "max_commander": 0},
-    {"key": "pauper", "label": "Pauper", "scryfall_key": "pauper",
+    {"key": "pauper", "label": "Pauper", "session_code": "nd",
+     "scryfall_key": "pauper",
      "min_deck": 60, "max_deck": None, "max_copies": 4, "max_sideboard": 15, "singleton": False,
      "min_commander": 0, "max_commander": 0},
-    {"key": "premodern", "label": "Premodern", "scryfall_key": "premodern",
+    {"key": "premodern", "label": "Premodern", "session_code": "rg",
+     "scryfall_key": "premodern",
      "min_deck": 60, "max_deck": None, "max_copies": 4, "max_sideboard": 15, "singleton": False,
      "min_commander": 0, "max_commander": 0},
-    {"key": "oldschool", "label": "Old School 93/94", "scryfall_key": "oldschool",
+    {"key": "oldschool", "label": "Old School 93/94", "session_code": "vp",
+     "scryfall_key": "oldschool",
      "min_deck": 60, "max_deck": None, "max_copies": 4, "max_sideboard": 15, "singleton": False,
      "min_commander": 0, "max_commander": 0},
     # CR 903.5a: a 99-card library plus exactly 1 designated commander in the
@@ -73,14 +84,16 @@ FORMATS: list[dict[str, Any]] = [
     # the commander-specific checks below (eligibility, colour identity) and
     # what the game-setup endpoint hands the engine as
     # ``Game.commander_variant``.
-    {"key": "commander", "label": "Commander", "scryfall_key": "commander",
+    {"key": "commander", "label": "Commander", "session_code": "kz",
+     "scryfall_key": "commander",
      "min_deck": 99, "max_deck": 99, "max_copies": 1, "max_sideboard": 0, "singleton": True,
      "min_commander": 1, "max_commander": 1, "variant": "commander"},
     # CR 903.12d: 59 + 1 = exactly 60. Brawl is "the normal rules for the
     # Commander variant with the following modifications" (903.12a), so it is
     # the same row with a different size — and 903.12c's extra commander type
     # (planeswalkers) rides on ``variant`` rather than on a column here.
-    {"key": "brawl", "label": "Brawl", "scryfall_key": "brawl",
+    {"key": "brawl", "label": "Brawl", "session_code": "sy",
+     "scryfall_key": "brawl",
      "min_deck": 59, "max_deck": 59, "max_copies": 1, "max_sideboard": 0, "singleton": True,
      "min_commander": 1, "max_commander": 1, "variant": "brawl"},
 ]
@@ -94,6 +107,49 @@ def normalize_format(key: str | None) -> str:
     if key and key in FORMATS_BY_KEY:
         return key
     return DEFAULT_FORMAT
+
+
+# A session id leads with the two characters naming the format it is played
+# under, and nothing separates them from the random half: ``kzhQ2v1sK9tWA`` is a
+# Commander game. The codes are arbitrary rather than abbreviations, so the id
+# does not announce the format to anyone who happens to see it — obfuscation,
+# not secrecy: the table below ships to the browser with the card catalog,
+# because the Join screen has to decode an id it was handed.
+SESSION_CODE_LENGTH = 2
+
+FORMATS_BY_SESSION_CODE: dict[str, dict[str, Any]] = {f["session_code"]: f for f in FORMATS}
+
+
+def session_id_prefix(key: str | None) -> str:
+    """The characters a session id leads with to name its format.
+
+    Fixed width, which is what lets the random half follow with no separator:
+    the split is by position, so it needs no character the two halves are
+    guaranteed not to share.
+    """
+    return FORMATS_BY_KEY[normalize_format(key)]["session_code"]
+
+
+def format_from_session_id(session_id: str | None) -> str | None:
+    """The format a session id names, or ``None`` when it names none.
+
+    ``None`` rather than :data:`DEFAULT_FORMAT`, because the two are different
+    answers: Casual is a format a host chose, and an id carrying no code is an
+    id this build did not mint. Coercing the second to the first would have the
+    join screen state a format it cannot know — and then filter the decks by
+    it. A caller that wants the lenient reading asks ``normalize_format``.
+
+    Dropping the separator costs the *certainty* of that answer for such an id:
+    a bare ``secrets.token_urlsafe`` token opens with a known code about once in
+    four hundred, and then reads as that format. Sessions live in memory and do
+    not outlive the process that minted them, so the ids this can misread are
+    ones no running server can be holding.
+    """
+    text = session_id or ""
+    if len(text) <= SESSION_CODE_LENGTH:
+        return None
+    fmt = FORMATS_BY_SESSION_CODE.get(text[:SESSION_CODE_LENGTH])
+    return fmt["key"] if fmt else None
 
 
 def card_status(card: Mapping[str, Any], fmt: Mapping[str, Any]) -> str:

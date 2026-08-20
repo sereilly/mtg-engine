@@ -1643,6 +1643,24 @@ class BattlefieldCanvas {
         ctx.shadowBlur = 0;
       }
 
+      // A commander this seat could cast right now (CR 903.8, its tax counted):
+      // the same cyan a playable card in hand is given, so "I can cast this"
+      // reads the same wherever the card is sitting. The server answers per
+      // index and this pile is one face, so any castable commander lights it —
+      // clicking opens the reveal panel, where the individual cards glow.
+      const castableFromPile =
+        pile.kind === "command" &&
+        (this.currentState?.players?.[pile.seat]?.playable_command_indices || []).length > 0;
+      if (castableFromPile) {
+        ctx.strokeStyle = "rgba(0, 220, 220, 0.85)";
+        ctx.lineWidth = 2 / this.zoom;
+        ctx.shadowColor = "rgba(0, 220, 220, 0.75)";
+        ctx.shadowBlur = 12 / this.zoom;
+        this._roundRect(ctx, x - 1.5 / this.zoom, y - 1.5 / this.zoom, pile.w + 3 / this.zoom, pile.h + 3 / this.zoom, 7 / this.zoom);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
       // Count badge, top-right of the pile.
       const label = `×${pile.count}`;
       ctx.font = `bold ${11 / this.zoom}px sans-serif`;

@@ -10,15 +10,25 @@
   // Kept minimal — the authoritative list arrives via setFormats() from the
   // /api/cards/catalog response.
   let FORMATS = [
-    { key: "casual", label: "Casual (no restrictions)", scryfall_key: null, min_deck: 0, max_deck: null, max_copies: 99, max_sideboard: null, singleton: false },
+    { key: "casual", label: "Casual (no restrictions)", session_code: "qf", scryfall_key: null, min_deck: 0, max_deck: null, max_copies: 99, max_sideboard: null, singleton: false },
   ];
   let byKey = new Map(FORMATS.map((f) => [f.key, f]));
+  let byCode = new Map(FORMATS.map((f) => [f.session_code, f]));
   const DEFAULT_FORMAT = "casual";
 
   function setFormats(list) {
     if (Array.isArray(list) && list.length > 0) {
       FORMATS = list;
       byKey = new Map(FORMATS.map((f) => [f.key, f]));
+      byCode = new Map(FORMATS.map((f) => [f.session_code, f]));
+      // Anything read off the table before it arrived — the Join screen's
+      // format, decoded from a session id below — was answered against the
+      // one-row fallback and is stale now. An optional callback rather than a
+      // DOM event because this file is DOM-free by design (the parity test
+      // evaluates it in bare node, with `window` an empty object).
+      if (typeof window.onLegalityFormatsLoaded === "function") {
+        window.onLegalityFormatsLoaded();
+      }
     }
   }
 
@@ -28,6 +38,30 @@
 
   function normalizeFormat(key) {
     return key && byKey.has(key) ? key : DEFAULT_FORMAT;
+  }
+
+  // A session id leads with two characters naming the format it is played
+  // under, with nothing between them and the random half — mirrors
+  // web/deck_legality.py, where the codes are arbitrary rather than
+  // abbreviations so an id does not announce its format on sight. This is what
+  // lets the Join screen name the format, and filter the deck list by it, from
+  // the pasted id alone — before any request is made.
+  const SESSION_CODE_LENGTH = 2;
+
+  function sessionIdPrefix(key) {
+    const fmt = byKey.get(normalizeFormat(key));
+    return fmt ? fmt.session_code : "";
+  }
+
+  // The format a session id names, or null when it names none — an id minted
+  // before this encoding existed, or a half-typed one. Null is not "casual":
+  // see the docstring on the Python half for why the join screen must be able
+  // to tell "played unrestricted" from "not stated".
+  function formatFromSessionId(sessionId) {
+    const id = String(sessionId == null ? "" : sessionId);
+    if (id.length <= SESSION_CODE_LENGTH) return null;
+    const fmt = byCode.get(id.slice(0, SESSION_CODE_LENGTH));
+    return fmt ? fmt.key : null;
   }
 
   function getFormat(key) {
@@ -377,6 +411,8 @@
     setFormats,
     formats,
     normalizeFormat,
+    sessionIdPrefix,
+    formatFromSessionId,
     getFormat,
     formatLabel,
     isChecked,

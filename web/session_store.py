@@ -11,6 +11,12 @@ from engine.game_history import GameHistory
 from engine.models import CardDefinition
 
 from .deck_builder import build_deck_from_entries, build_random_deck
+from .deck_legality import (
+    DEFAULT_FORMAT,
+    FORMATS_BY_KEY,
+    normalize_format,
+    session_id_prefix,
+)
 from .deck_store import DeckStore, deck_commander, deck_sideboard
 from .schemas import CreateSessionRequest
 
@@ -58,9 +64,16 @@ class Session:
     # only when ``commander_variant`` is set.
     host_deck_commander: list[dict] | None = None
     guest_deck_commander: list[dict] | None = None
+    # The constructed format this session is played under (a key of
+    # web/deck_legality.py's FORMATS). Also encoded in ``id``, which is how a
+    # player holding nothing but the session id knows what they are joining;
+    # the two are minted together in ``create`` and never diverge after.
+    game_format: str = DEFAULT_FORMAT
     # CR 903.1 / 903.12a: the Commander variant this session plays, or None.
     # Held on the session rather than only on the Game because a rematch builds
-    # a fresh Game and has to lead it with the same commanders.
+    # a fresh Game and has to lead it with the same commanders. Derived from
+    # ``game_format`` rather than taken from the request, so the variant a game
+    # is actually played under cannot disagree with the format its id names.
     commander_variant: str | None = None
     # Display names for the lobby roster (see SeatConfig.deck_name); the server
     # has no other way to know a personal deck's name.
@@ -231,7 +244,8 @@ class SessionStore:
         if request.mode == "free_for_all":
             return self._create_ffa(request)
 
-        sid = secrets.token_urlsafe(8)
+        game_format = self._resolve_format(request)
+        sid = self._mint_session_id(game_format)
 
         seed = self._resolve_seed(request)
 
@@ -311,7 +325,8 @@ class SessionStore:
             guest_deck_sideboard=guest_deck_sideboard,
             host_deck_commander=host_deck_commander,
             guest_deck_commander=None if lobby_needed else guest_deck_commander,
-            commander_variant=request.variant,
+            game_format=game_format,
+            commander_variant=FORMATS_BY_KEY[game_format].get("variant"),
             host_deck_name=request.host_deck_name,
             guest_deck_name=None if lobby_needed else request.guest_deck_name,
         )
@@ -333,7 +348,8 @@ class SessionStore:
         if not (3 <= len(seats) <= 4):
             raise ValueError("Free-For-All sessions need 3 or 4 seats")
 
-        sid = secrets.token_urlsafe(8)
+        game_format = self._resolve_format(request)
+        sid = self._mint_session_id(game_format)
         seed = self._resolve_seed(request)
 
         seat_names = [seat.name or f"Player {i + 1}" for i, seat in enumerate(seats)]
@@ -397,7 +413,8 @@ class SessionStore:
             seat_deck_sideboards=seat_deck_sideboards,
             seat_deck_commanders=seat_deck_commanders,
             seat_deck_names=seat_deck_names,
-            commander_variant=request.variant,
+            game_format=game_format,
+            commander_variant=FORMATS_BY_KEY[game_format].get("variant"),
         )
 
         if not lobby_needed:
@@ -512,6 +529,30 @@ class SessionStore:
             if session.mode in ("ai_vs_ai", "free_for_all"):
                 game.active_player_index = starting_player
                 game.start_priority_window(starting_player)
+
+    def _resolve_format(self, request: CreateSessionRequest) -> str:
+        """The constructed format this session is played under.
+
+        ``variant`` (CR 903) is the older of the two fields, and a client that
+        predates ``format`` sends only it. The two Commander formats are named
+        for their variant — held by ``tests/ui/test_deck_legality.py`` — so a
+        bare variant *is* a format key, and folding it in here is what stops
+        such a client from minting a ``casual.`` id for a Commander game.
+        """
+        fmt = normalize_format(request.format)
+        if fmt == DEFAULT_FORMAT and request.variant:
+            return normalize_format(request.variant)
+        return fmt
+
+    def _mint_session_id(self, fmt: str) -> str:
+        """A fresh session id, led by the format it is played under.
+
+        The random half stays the whole id's unguessability — the prefix is
+        public information (it is on the join URL either way) and names one of
+        a dozen formats, so it gives an attacker nothing the Format dropdown
+        would not.
+        """
+        return f"{session_id_prefix(fmt)}{secrets.token_urlsafe(8)}"
 
     def _resolve_seed(self, request: CreateSessionRequest) -> int:
         if request.use_custom_seed:

@@ -154,6 +154,12 @@ class CreateSessionRequest(BaseModel):
     # card from your deck before playing if you're not playing for ante" (CR 407.3),
     # and random decks are built without them.
     playing_for_ante: bool = Field(default=False)
+    # The constructed format this game is played under: a key of
+    # web/deck_legality.py's FORMATS table (a bare str here because schemas is
+    # the bottom layer and cannot import it; session_store normalizes it). It is
+    # what the session id is minted with, so a player joining by that id can read
+    # the format off it before they have asked the server anything.
+    format: str = Field(default="casual", max_length=40)
     # CR 903.1 / 903.12a: play this game as a Commander variant. None (the
     # default) is an ordinary game; "commander" and "brawl" turn on CR 903 —
     # a command zone, the 40/25/30 starting life, the commander tax, and the

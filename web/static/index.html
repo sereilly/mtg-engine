@@ -11,7 +11,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260819-format1" />
+    <link rel="stylesheet" href="/styles.css?v=20260819-format3" />
   </head>
   <body>
     <div id="auroraLayer" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -141,12 +141,22 @@
               <h2>Join Game</h2>
             </div>
             <label>Session ID <input id="joinSessionId" placeholder="paste session id" /></label>
+            <label title="The format the host is playing this session under. It rides on the session ID, so the deck picker below can check your decks against it before you join.">Format
+              <div id="joinFormatValue" class="join-format-value">Paste a session ID to see its format</div>
+            </label>
             <label>Your name <input id="joinName" value="Player 2" /></label>
-            <label>Your deck
+            <div class="join-deck-field">
+              <div class="join-deck-head">
+                <label for="joinDeckSelect">Your deck</label>
+                <label id="joinShowIllegalDecksLabel" class="menu-checkbox-label join-format-note hidden" title="Off, the deck picker lists only decks that are legal in this game's format. On, it lists every deck — hover one to read what makes it illegal.">
+                  <input id="joinShowIllegalDecks" type="checkbox" autocomplete="off" />
+                  Show decks that aren't legal in this format
+                </label>
+              </div>
               <select id="joinDeckSelect">
                 <option value="">Random deck</option>
               </select>
-            </label>
+            </div>
             <label id="joinColorsLabel">Deck colors (1-5) <input id="joinColors" type="number" min="1" max="5" value="2" /></label>
             <button id="joinBtn" class="menu-primary-btn">Join Session</button>
           </div>
@@ -721,8 +731,8 @@
     <script src="/anime.min.js?v=3.2.2"></script>
     <script src="/animations.js?v=20260818-handfly2"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
-    <script src="/legality.js?v=20260706-banlist1"></script>
-    <script src="/app.js?v=20260819-format1"></script>
-    <script src="/deck-editor.js?v=20260819-format1"></script>
+    <script src="/legality.js?v=20260819-format3"></script>
+    <script src="/app.js?v=20260819-format2"></script>
+    <script src="/deck-editor.js?v=20260819-format2"></script>
   </body>
 </html>

@@ -3349,6 +3349,68 @@ pre {
   color: var(--ink-soft);
 }
 
+/* The Join screen's Format field is a readout, not a control — the format is
+   the host's choice, arriving in the session id. Shaped like the inputs around
+   it so the form still reads as one column. */
+.join-format-value {
+  display: block;
+  /* Both numbers are what the fields it is stacked with resolve to: the 6px
+     indent every form control on the page carries (see the `input, select,
+     button` rule above), and the full-width-plus-that-indent it leaves them
+     with. A readout doing its own box math would sit 6px off the column. */
+  width: 100%;
+  margin: 5px 0 0 6px;
+  padding: 9px 11px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--glass-stroke);
+  background: rgba(9, 14, 28, 0.35);
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.join-format-value.is-unknown {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* The deck picker is what the filter checkbox acts on, so it rides on that
+   field's own label line rather than sitting in the form's single column:
+   "Your deck" at the left, the filter pushed to the right edge above the
+   select it filters. */
+.join-deck-field {
+  margin-bottom: 14px;
+}
+
+.join-deck-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  /* Every control on the page carries a 6px left indent (see the `input,
+     select, button` rule above), so the select below ends 6px past the card's
+     content edge. The row reaches that same edge, or the right-aligned filter
+     would stop just short of the box it filters. */
+  margin-right: -6px;
+}
+
+/* Both labels are inside the row now, so the column's per-label spacing below
+   would push the select away from the head it belongs to. */
+.join-deck-head label {
+  margin-bottom: 0;
+}
+
+.join-format-note {
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
+/* `.menu-checkbox-label`'s `display: flex` would otherwise beat the global
+   `.hidden` rule — same specificity, later in the file. There is nothing to
+   filter until the session id names a format, so this one really does hide. */
+.join-format-note.hidden {
+  display: none;
+}
+
 .seg-toggle {
   display: flex;
   gap: 4px;

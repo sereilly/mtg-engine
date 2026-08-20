@@ -855,6 +855,21 @@ window.selectedGameFormat = () => q("gameFormat")?.value || "casual";
 // asked for, and shown with the reason on hover when it is.
 window.showsIllegalDecks = () => Boolean(q("showIllegalDecks")?.checked);
 
+// The same two questions on the Join screen, where the format is not a choice
+// but a fact about the game being joined: the host's session id names it (see
+// `format_from_session_id` in web/deck_legality.py), so the joining player is
+// told which format they are about to play, and their deck picker judges by it
+// — before anything has been sent to the server. Null when the id names no
+// format, which is an id minted before the encoding existed, or a half-typed
+// one; not "casual", which is a format someone chose.
+// Trimmed here rather than inside the decoder, which is held character-for-
+// character equal to the Python half (tests/ui/test_legality_js_parity.py) —
+// stray whitespace is this input box's problem, and `joinSession` trims it off
+// the value it actually sends for the same reason.
+window.joinGameFormat = () =>
+  window.Legality?.formatFromSessionId(q("joinSessionId")?.value.trim()) ?? null;
+window.joinShowsIllegalDecks = () => Boolean(q("joinShowIllegalDecks")?.checked);
+
 function showMenuPage(name) {
   const applyVisibility = () => {
     for (const [key, element] of Object.entries(menuPages)) {
@@ -8887,7 +8902,11 @@ function renderHandCarouselArrows(container, { active, offset, maxOffset, totalC
   }
 }
 
-function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } = {}) {
+function renderZoneCards(
+  containerId,
+  cards,
+  { zoneSeat = null, zoneKind = "", playableIndices = [] } = {},
+) {
   const container = q(containerId);
   container.innerHTML = "";
   if (!cards || cards.length === 0) return;
@@ -8927,6 +8946,10 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
     const el = createCardElement(card, {
       compact: true, showManaCost: false,
       selected: graveyardTargeting && isChosenGraveyardTarget(index),
+      // The same cyan glow a castable card in hand gets, from the same kind of
+      // backend answer (`playable_command_indices`): mana on the board, timing,
+      // and CR 903.8's tax all said yes *right now*.
+      playable: playableIndices.includes(index),
     });
     if (graveyardTargeting && isValidGraveyardTarget(index)) {
       el.classList.add("targeting-valid");
@@ -8937,7 +8960,12 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
           : resolvePendingCastTarget(zoneSeat, index)
       ));
     } else if (isCastableFromZone(index) && !pendingCastTarget && !pendingCastHandCard) {
-      el.classList.add("castable-from-zone");
+      // The emerald glow means "an effect opened this zone to you", which is
+      // news in a graveyard or an exile. In the command zone it would be on for
+      // as long as the commander sat there — CR 903.8 is a rule, not an effect —
+      // so a commander takes the hand's castable-now highlight above instead,
+      // and keeps the click.
+      if (zoneKind !== "command") el.classList.add("castable-from-zone");
       el.style.cursor = "pointer";
       const zoneLabel = zoneKind === "command" ? "command zone" : zoneKind;
       const tax = castableEntries.find((entry) => entry.index === index)?.commander_tax || 0;
@@ -10615,7 +10643,11 @@ function renderBoard(state) {
   renderZoneCards("selfAnteCards", me.ante || []);
   // The viewer's own command zone is clickable: a commander there is castable
   // by CR 903.8, and `castable_from_zones` says when.
-  renderZoneCards("selfCommandCards", me.command_zone || [], { zoneSeat: seat, zoneKind: "command" });
+  renderZoneCards("selfCommandCards", me.command_zone || [], {
+    zoneSeat: seat,
+    zoneKind: "command",
+    playableIndices: me.playable_command_indices || [],
+  });
   renderZoneCards("selfSideboardCards", me.sideboard || []);
   renderZoneCards("oppGraveyardCards", opp.graveyard, { zoneSeat: oppSeat, zoneKind: "graveyard" });
   renderZoneCards("oppExileCards", opp.exile || []);
@@ -12199,6 +12231,11 @@ async function createSession() {
   // dropdown grows without a variant is refused by the schema, loudly.
   const format = window.selectedGameFormat();
   const variant = format === "casual" ? null : format;
+  // `format` goes with it: the server mints the session id from it, so the
+  // player who joins by that id is told what they are playing. `variant` is
+  // the older field and stays — a server reading only it (or only the format)
+  // still gets a consistent game, since the two Commander formats are named
+  // for their variant.
   savePlayerName(gameType === "free_for_all" ? q("ffaSeatName_0")?.value : q("hostName")?.value);
   let req;
   if (gameType === "free_for_all") {
@@ -12210,6 +12247,7 @@ async function createSession() {
       enable_pregame: true,
       simultaneous_mulligan: !!q("simultaneousMulligan")?.checked,
       playing_for_ante: playingForAnte,
+      format,
       variant,
     };
   } else {
@@ -12240,6 +12278,7 @@ async function createSession() {
       enable_pregame: true,
       simultaneous_mulligan: !!q("simultaneousMulligan")?.checked,
       playing_for_ante: playingForAnte,
+      format,
       variant,
     };
   }
@@ -12256,6 +12295,27 @@ async function createSession() {
   } else if (!data.state?.pregame) {
     updateActionHint("Session ready. Drag from your hand to cast. The battlefield arranges itself automatically.");
   }
+}
+
+// Show the format the pasted session id names, and rebuild the deck picker
+// against it. Called whenever the id changes, whenever the "show illegal ones"
+// checkbox flips, and once more when the format table finally arrives with the
+// card catalog — until it does, every id reads as naming no format.
+function syncJoinFormat() {
+  const value = q("joinSessionId")?.value.trim() || "";
+  const format = window.joinGameFormat();
+  const readout = q("joinFormatValue");
+  if (readout) {
+    readout.textContent = format
+      ? window.Legality?.formatLabel(format) || format
+      : value
+        ? "Not stated — this session ID doesn't name a format"
+        : "Paste a session ID to see its format";
+    readout.classList.toggle("is-unknown", !format);
+  }
+  // Nothing to show or hide decks against until a format is named.
+  q("joinShowIllegalDecksLabel")?.classList.toggle("hidden", !format);
+  window.refreshDeckSelectOptions?.();
 }
 
 async function joinSession() {
@@ -12506,6 +12566,16 @@ q("useCustomSeed").addEventListener("change", () => {
 q("playingForAnte")?.addEventListener("change", () => {
   window.refreshDeckSelectOptions?.();
 });
+
+// The joined game's format arrives in its session id, so the Join screen's
+// format readout and deck list are downstream of that input — and of the
+// checkbox that decides whether the decks it rules out are listed anyway.
+q("joinSessionId")?.addEventListener("input", syncJoinFormat);
+q("joinShowIllegalDecks")?.addEventListener("change", syncJoinFormat);
+// The format table ships with the card catalog, which lands after this file
+// runs; a session id read before it arrived resolved against a one-row
+// fallback and has to be re-read now.
+window.onLegalityFormatsLoaded = syncJoinFormat;
 
 q("joinBtn").addEventListener("click", async () => {
   try {
@@ -12929,6 +12999,9 @@ if (sessionFromUrl) {
   q("joinSessionId").value = sessionFromUrl;
   showMenuPage("join");
 }
+// Unconditional: the readout starts out saying "paste a session ID", which is
+// only true while the field is empty, and an invite link has just filled it.
+syncJoinFormat();
 
 window.syncStartPageColorInputs?.();
 syncSeedControls();
