@@ -1510,20 +1510,25 @@ function hasActivatedAbility(card) {
   return /\{t\}|:\s*/i.test(text) || /^\s*equip\b/im.test(text);
 }
 
-function getActivatedAbilityCost(card) {
+// The activation cost of one of a card's abilities — the one at `abilityIndex`
+// in the engine's order, or the first when none is named. Read off the same
+// parsed options the ability menu shows (getActivatedAbilityOptions), so the
+// cost the auto-tap flow pays is the cost of the ability being activated.
+//
+// This used to split the card's first colon-bearing line at its first colon.
+// For an Equipment that line is "Equip {1} ({1}: Attach to target creature you
+// control. …)" — the colon is inside the reminder text — so the cost read as
+// "Equip {1} ({1}" and the insufficient-mana prompt asked for two mana to pay
+// a {1} equip. Reading the options also stops a second ability's activation
+// being priced at the first ability's cost.
+function getActivatedAbilityCost(card, abilityIndex = null) {
   if (!card || typeof card === "string") return "";
-  const text = activatedAbilityText(card);
-  if (!text) return "";
-
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
-    if (!line || !line.includes(":")) continue;
-    const [cost] = line.split(":", 1);
-    if (!cost || !cost.trim()) continue;
-    return cost.trim();
-  }
-
-  return "";
+  const options = getActivatedAbilityOptions(card);
+  if (!options.length) return "";
+  const chosen = Number.isInteger(abilityIndex) && abilityIndex >= 0 && abilityIndex < options.length
+    ? options[abilityIndex]
+    : options[0];
+  return (chosen.cost || "").trim();
 }
 
 function abilityCostRequiresTap(card) {
@@ -6753,7 +6758,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
-  const activationCost = getActivatedAbilityCost(card);
+  const activationCost = getActivatedAbilityCost(card, abilityIndex);
 
   // "{X}" activation costs (Illusionary Mask, Clockwork Beast) need an X chosen
   // before the ability is sent — without it the engine receives X = 0 and e.g.
@@ -7725,7 +7730,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
             pendingAutoTap = {
               card: pending.card,
               cardName: pending.cardName,
-              cost: getActivatedAbilityCost(pending.card),
+              cost: getActivatedAbilityCost(pending.card, pending.abilityIndex),
               actionBody: costBody,
             };
             renderActivationPrompt();
@@ -7769,7 +7774,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
           pendingAutoTap = {
             card: pending.card,
             cardName: pending.cardName,
-            cost: getActivatedAbilityCost(pending.card),
+            cost: getActivatedAbilityCost(pending.card, pending.abilityIndex),
             actionBody: activateBody,
           };
           renderActivationPrompt();
