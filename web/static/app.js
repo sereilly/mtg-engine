@@ -100,6 +100,15 @@ let stackClickHold = null;
 let stackCanvasHoverActive = false;
 let searchLibrarySelectedIndex = null;
 let searchLibraryFilter = "";
+let searchLibraryShowAll = false;
+// Signature of the search grid as last built. The state poll re-renders the
+// modal every tick; rebuilding the grid's innerHTML each time would restart
+// every card image load and destroy the tile under the pointer (killing its
+// hover preview), so the grid only rebuilds when this changes.
+let searchLibraryRenderSig = null;
+// The latest render's buildGrid. The filter input binds its listener once, so
+// it rebuilds through this pointer rather than a closure over a stale grid.
+let searchLibraryRebuild = null;
 let reorderLibraryCurrentOrder = null;
 let autoPassPriorityInFlight = false;
 let autoPassPriorityRequestedStateKey = "";
@@ -4474,17 +4483,80 @@ function applyMulliganBottomPrompt(info) {
   }
 }
 
+// The search dialog's side pane: the hovered card's large art and rules text,
+// like the battlefield hover preview but living inside the modal (the floating
+// overlay preview sits below the modal backdrop). Keeps the last hovered card
+// rather than clearing on mouseleave, so the pane doesn't flicker while the
+// pointer crosses the gaps between grid tiles.
+function updateSearchLibraryPreview(card) {
+  const frame = document.getElementById("searchLibraryPreviewFrame");
+  const image = document.getElementById("searchLibraryPreviewImage");
+  const empty = document.getElementById("searchLibraryPreviewEmpty");
+  const nameEl = document.getElementById("searchLibraryPreviewName");
+  const typeEl = document.getElementById("searchLibraryPreviewType");
+  const textEl = document.getElementById("searchLibraryPreviewText");
+  if (!frame || !image || !empty) return;
+
+  if (!card) {
+    frame.classList.add("empty-preview");
+    image.classList.add("hidden");
+    image.removeAttribute("src");
+    empty.classList.remove("hidden");
+    if (nameEl) nameEl.textContent = "";
+    if (typeEl) typeEl.textContent = "";
+    if (textEl) textEl.innerHTML = "";
+    return;
+  }
+
+  if (nameEl) nameEl.textContent = card.name || "Card";
+  if (typeEl) typeEl.textContent = card.type || "";
+  if (textEl) textEl.innerHTML = card.oracle_text ? renderSymbolsInline(card.oracle_text) : "";
+
+  const largeImageUri = normalizeLargeImageUri(card);
+  if (!largeImageUri) {
+    frame.classList.add("empty-preview");
+    image.classList.add("hidden");
+    empty.classList.remove("hidden");
+    return;
+  }
+  frame.classList.remove("empty-preview");
+  image.src = largeImageUri;
+  image.alt = `${card.name || "Card"} preview`;
+  image.classList.remove("hidden");
+  empty.classList.add("hidden");
+}
+
 function renderSearchLibraryModal(info) {
   const modal = document.getElementById("searchLibraryModal");
   if (!modal) return;
 
   if (!info) {
-    modal.classList.add("hidden");
+    // Reset once, when the search actually closes. Only the render hides the
+    // modal — the confirm/decline handlers reset state and wait for the
+    // refreshed payload, so a refused action leaves the dialog usable.
+    if (!modal.classList.contains("hidden")) {
+      modal.classList.add("hidden");
+      searchLibrarySelectedIndex = null;
+      searchLibraryFilter = "";
+      searchLibraryShowAll = false;
+      searchLibraryRenderSig = null;
+      searchLibraryRebuild = null;
+      const filterInput = document.getElementById("searchLibraryFilter");
+      if (filterInput) filterInput.value = "";
+      updateSearchLibraryPreview(null);
+    }
     return;
   }
 
   const cards = info.cards || [];
   const count = info.count || 1;
+  // What this search may find (Cultivate's "basic land card", …). The engine
+  // re-checks the answer, so this is presentation — but offering an illegal
+  // pick would only invite an answer the server then refuses.
+  const legal = new Set(
+    Array.isArray(info.legal_indices) ? info.legal_indices : cards.map((_, idx) => idx)
+  );
+  const illegalCount = cards.length - legal.size;
   const subtitle = document.getElementById("searchLibrarySubtitle");
   if (subtitle) {
     subtitle.textContent = `Choose ${count === 1 ? "a card" : `${count} cards`} to put into your hand.`;
@@ -4495,30 +4567,81 @@ function renderSearchLibraryModal(info) {
   const grid = document.getElementById("searchLibraryGrid");
   const filterInput = document.getElementById("searchLibraryFilter");
   const confirmBtn = document.getElementById("searchLibraryConfirmBtn");
+  const declineBtn = document.getElementById("searchLibraryDeclineBtn");
+  const showAllRow = document.getElementById("searchLibraryShowAllRow");
+  const showAllCheckbox = document.getElementById("searchLibraryShowAll");
+  const showAllLabel = document.getElementById("searchLibraryShowAllLabel");
+
+  // The toggle only exists when the search restricts what it may find.
+  if (showAllRow) showAllRow.classList.toggle("hidden", illegalCount === 0);
+  if (showAllLabel) {
+    showAllLabel.textContent = `Show all cards (${illegalCount} ineligible)`;
+  }
+  if (showAllCheckbox) showAllCheckbox.checked = searchLibraryShowAll;
+
+  // Answering resets the selection state but never hides the modal itself:
+  // the action's refreshed payload decides — gone for a finished search, a
+  // fresh grid for the next find of an "up to N", unchanged for a refusal.
+  function resetSelectionState() {
+    searchLibrarySelectedIndex = null;
+    searchLibraryFilter = "";
+    searchLibraryShowAll = false;
+    searchLibraryRenderSig = null;
+    if (filterInput) filterInput.value = "";
+    if (confirmBtn) confirmBtn.disabled = true;
+  }
+
+  const renderSig = () => JSON.stringify([
+    cards.map((card) => card.name),
+    info.legal_indices || null,
+    searchLibraryShowAll,
+    searchLibraryFilter,
+    searchLibrarySelectedIndex,
+  ]);
 
   function buildGrid() {
     if (!grid) return;
+    searchLibraryRenderSig = renderSig();
     const term = searchLibraryFilter.toLowerCase();
     const items = cards
       .map((card, idx) => {
+        const isLegal = legal.has(idx);
+        if (!isLegal && !searchLibraryShowAll) return "";
         if (term && !card.name.toLowerCase().includes(term) && !(card.type || "").toLowerCase().includes(term)) {
           return "";
         }
-        const selectedClass = searchLibrarySelectedIndex === idx ? " selected" : "";
+        const classes = ["library-card-choice"];
+        if (searchLibrarySelectedIndex === idx) classes.push("selected");
+        if (!isLegal) classes.push("illegal");
         const inner = card.image_uri
           ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
           : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
-        return `<div class="library-card-choice${selectedClass}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+        return `<div class="${classes.join(" ")}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
       })
       .join("");
-    grid.innerHTML = items;
+    grid.innerHTML = items || `<div class="modal-empty-note">${
+      term ? "No cards match the filter." : "Nothing here can be found by this search — click Fail to Find."
+    }</div>`;
 
     grid.querySelectorAll(".library-card-choice").forEach((el) => {
+      const idx = Number(el.dataset.idx);
+      el.addEventListener("mouseenter", () => updateSearchLibraryPreview(cards[idx]));
+      if (el.classList.contains("illegal")) return; // visible via Show All, but not a legal find
       el.addEventListener("click", () => {
-        searchLibrarySelectedIndex = Number(el.dataset.idx);
+        searchLibrarySelectedIndex = idx;
         if (confirmBtn) confirmBtn.disabled = false;
         buildGrid();
       });
+    });
+  }
+
+  if (showAllCheckbox && !showAllCheckbox.dataset.bound) {
+    showAllCheckbox.dataset.bound = "1";
+    showAllCheckbox.addEventListener("change", () => {
+      searchLibraryShowAll = showAllCheckbox.checked;
+      // Re-render from the current state rather than a captured buildGrid, so
+      // the once-bound listener never rebuilds a stale grid.
+      renderSearchLibraryModal(getSearchLibraryInfo());
     });
   }
 
@@ -4527,7 +4650,7 @@ function renderSearchLibraryModal(info) {
     filterInput.value = searchLibraryFilter;
     filterInput.addEventListener("input", () => {
       searchLibraryFilter = filterInput.value;
-      buildGrid();
+      searchLibraryRebuild?.();
     });
   }
 
@@ -4536,16 +4659,23 @@ function renderSearchLibraryModal(info) {
     confirmBtn.addEventListener("click", async () => {
       if (searchLibrarySelectedIndex === null) return;
       const idx = searchLibrarySelectedIndex;
-      searchLibrarySelectedIndex = null;
-      searchLibraryFilter = "";
-      if (filterInput) { filterInput.value = ""; delete filterInput.dataset.bound; }
-      delete confirmBtn.dataset.bound;
-      modal.classList.add("hidden");
+      resetSelectionState();
       await sendAction({ seat, action: "search_library_confirm", hand_index: idx });
     });
   }
 
-  buildGrid();
+  // "Fail to find" (CR 701.19b): the only way out when nothing matches the
+  // restriction, and how "up to N" searches stop early.
+  if (declineBtn && !declineBtn.dataset.bound) {
+    declineBtn.dataset.bound = "1";
+    declineBtn.addEventListener("click", async () => {
+      resetSelectionState();
+      await sendAction({ seat, action: "search_library_decline" });
+    });
+  }
+
+  searchLibraryRebuild = buildGrid;
+  if (searchLibraryRenderSig !== renderSig()) buildGrid();
   if (confirmBtn) confirmBtn.disabled = searchLibrarySelectedIndex === null;
 }
 

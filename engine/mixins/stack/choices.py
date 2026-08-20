@@ -2082,6 +2082,9 @@ register_choice(
     ),
     default=lambda game, choice: game._default_search_library(choice),
     action="search_library_confirm",
+    # "Fail to find" (CR 701.19b) is the second answer, not a way around the
+    # prompt — and the only one available when nothing matches the restriction.
+    also_answers=("search_library_decline",),
     prompt_key="search_library",
     blocked_detail="complete library search before other actions",
     blocks_every_seat=True,

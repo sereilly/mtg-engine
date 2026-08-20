@@ -75,6 +75,30 @@ def test_the_owing_seat_cannot_act_around_the_open_prompt():
     assert "library search" in refused.json()["detail"]
 
 
+def test_declining_is_a_legal_answer_and_finishes_the_resolution():
+    """"Fail to find" (CR 701.19b) answers the prompt rather than acting around
+    it, so the gate must let it through — ``search_library_decline`` shipped
+    registered but unreachable, every attempt refused with the search prompt's
+    own blocked_detail, which stranded the seat whenever nothing in the library
+    matched the restriction."""
+    sid, session, game = _session()
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "search_library_decline"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    assert not any(c.name == "Black Lotus" for c in game.players[0].hand), (
+        "declining finds nothing"
+    )
+    assert any(c.name == "Demonic Tutor" for c in game.players[0].graveyard), (
+        "and the suspended tail of the resolution still ran"
+    )
+    assert _state(sid)["search_library"] is None
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
 def test_confirming_finishes_the_whole_resolution():
     sid, session, game = _session()
 

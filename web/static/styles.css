@@ -2717,6 +2717,87 @@ pre {
   box-sizing: border-box;
 }
 
+/* The search-library modal's control row: the name/type filter shares its line
+   with the "Show all cards" toggle, which only appears when the search
+   restricts what it may find (Cultivate's "basic land card"). */
+.search-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.search-controls-row input[type="text"] {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.modal-checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.modal-checkbox-row input {
+  width: auto;
+}
+
+/* `display: inline-flex` above would otherwise beat the global `.hidden` rule —
+   same specificity, and this block wins on source order. */
+.modal-checkbox-row.hidden {
+  display: none;
+}
+
+/* Card grid on the left, hover preview pane on the right. */
+.modal-box--search-preview {
+  width: min(1100px, 94vw);
+}
+
+.search-preview-layout {
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+}
+
+.search-preview-layout .library-card-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* The flex row stretches the grid to the preview pane's height, making its
+     height definite — without this, the auto rows compress the tiles (they
+     have overflow:hidden, so they can shrink) instead of scrolling. */
+  grid-auto-rows: max-content;
+}
+
+.search-preview-pane {
+  flex: 0 0 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 860px) {
+  .search-preview-pane {
+    display: none;
+  }
+}
+
+/* A card the search may not find, shown only when "Show all cards" is on:
+   darkened and unselectable. */
+.library-card-choice.illegal {
+  cursor: not-allowed;
+  filter: brightness(0.45) saturate(0.55);
+}
+
+.library-card-choice.illegal:hover {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .library-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));

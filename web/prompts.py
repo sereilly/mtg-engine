@@ -123,7 +123,7 @@ def blocking_prompt(game, seat: int, action: str, exempt_actions: frozenset[str]
             continue
         if not spec.open_for(game, choice):
             continue
-        if action in exempt_actions or action == spec.action:
+        if action in exempt_actions or action == spec.action or action in spec.also_answers:
             continue
         return spec, choice
     return None

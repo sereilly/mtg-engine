@@ -50,6 +50,11 @@ def _incomplete(kind: str, spec: ChoiceSpec) -> list[str]:
         # The registry IS the dispatch (web/action_registry.py), so "reachable"
         # is a key lookup rather than a grep of the old if/elif chain.
         problems.append(f"action {spec.action!r} has no registered handler")
+    for extra in spec.also_answers:
+        if extra not in ACTION_KINDS:
+            problems.append(f"also_answers {extra!r} is not an ActionKind")
+        elif extra not in ACTION_HANDLERS:
+            problems.append(f"also_answers {extra!r} has no registered handler")
     if not spec.prompt_key:
         problems.append("no prompt_key")
     return problems
@@ -81,7 +86,11 @@ def test_the_completeness_check_fires():
 
 
 def test_kinds_and_keys_are_unique():
-    actions = [spec.action for spec in CHOICE_SPECS.values()]
+    actions = [
+        action
+        for spec in CHOICE_SPECS.values()
+        for action in (spec.action, *spec.also_answers)
+    ]
     keys = [spec.prompt_key for spec in CHOICE_SPECS.values()]
     assert len(set(actions)) == len(actions), "two prompts answered by one action"
     assert len(set(keys)) == len(keys), "two prompts sharing a state key"
@@ -147,6 +156,14 @@ def test_a_gating_prompt_refuses_everything_but_its_own_action(kind):
 
     answering = blocking_prompt(game, 0, spec.action, frozenset())
     assert answering is None, f"{kind} refuses the action that answers it"
+
+    # A second answer (a search's "fail to find") must pass the same gate —
+    # search_library_decline shipped registered but unreachable, every attempt
+    # refused with the prompt's own blocked_detail.
+    for extra in spec.also_answers:
+        assert blocking_prompt(game, 0, extra, frozenset()) is None, (
+            f"{kind} refuses {extra!r}, which is declared to answer it"
+        )
 
     other = blocking_prompt(game, 0, "pass_priority", frozenset())
     if spec.blocked_detail is None:

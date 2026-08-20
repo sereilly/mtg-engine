@@ -66,6 +66,9 @@ class ChoiceSpec:
     """Everything the engine and the web layer need to know about one kind.
 
     action           -- the ``ActionKind`` that answers this prompt
+    also_answers     -- further ``ActionKind``s the gate accepts while this
+                        prompt is open (a search's "fail to find" decline is a
+                        second answer, not a way around the prompt)
     prompt_key       -- key the state payload carries the rendered prompt under
     blocked_detail   -- the 400 message when the owing seat tries to do
                         something else first. ``None`` means answering is not
@@ -98,6 +101,7 @@ class ChoiceSpec:
     default: Defaulter
     action: str
     prompt_key: str
+    also_answers: tuple[str, ...] = ()
     blocked_detail: str | None = None
     default_at_arm: bool = False
     blocks_every_seat: bool = False
@@ -121,6 +125,7 @@ def register_choice(
     default: Defaulter,
     action: str,
     prompt_key: str,
+    also_answers: tuple[str, ...] = (),
     blocked_detail: str | None = None,
     default_at_arm: bool = False,
     blocks_every_seat: bool = False,
@@ -143,6 +148,7 @@ def register_choice(
         default=default,
         action=action,
         prompt_key=prompt_key,
+        also_answers=also_answers,
         blocked_detail=blocked_detail,
         default_at_arm=default_at_arm,
         blocks_every_seat=blocks_every_seat,
