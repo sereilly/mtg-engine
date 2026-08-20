@@ -684,6 +684,77 @@ function maybeTriggerCombatDamageFx(prev, next) {
   if (strikes.length) battlefieldCanvas.playCombatDamage(strikes);
 }
 
+// ---- Revealed-cards overlay ----
+// Cards revealed to all players (state.reveal_events — Cultivate's "reveal
+// those cards", Track Down's top-of-library reveal) float large over the
+// center of the board for a few seconds with "Revealed by <player>", rocking
+// gently like the canvas's flying creatures. The feed is diffed by id, so a
+// rerender of the same state shows nothing twice; events arriving together
+// queue and play one after another.
+const REVEAL_OVERLAY_MS = 4000;
+let lastSeenRevealId = null;
+let revealOverlayQueue = [];
+let revealOverlayActive = false;
+
+function maybeShowRevealOverlay(prev, next) {
+  const events = Array.isArray(next?.reveal_events) ? next.reveal_events : [];
+  const maxId = events.length ? events[events.length - 1].id : 0;
+  // First state after a load or rejoin: whatever is in the feed already
+  // happened — start watching from here rather than replaying it.
+  if (lastSeenRevealId === null || !prev) {
+    lastSeenRevealId = maxId;
+    return;
+  }
+  // An undo rewinds the game's id counter; follow it down so the next real
+  // reveal is not silently swallowed by a stale high-water mark.
+  if (maxId < lastSeenRevealId && !events.some((e) => e.id > lastSeenRevealId)) {
+    lastSeenRevealId = maxId;
+    return;
+  }
+  const fresh = events.filter((e) => e.id > lastSeenRevealId);
+  lastSeenRevealId = Math.max(lastSeenRevealId, maxId);
+  if (!fresh.length) return;
+  revealOverlayQueue.push(...fresh);
+  if (!revealOverlayActive) showNextRevealEvent();
+}
+
+function showNextRevealEvent() {
+  const overlay = q("revealOverlay");
+  const event = revealOverlayQueue.shift();
+  if (!overlay || !event) {
+    revealOverlayActive = false;
+    return;
+  }
+  revealOverlayActive = true;
+
+  const title = q("revealOverlayTitle");
+  if (title) title.textContent = `Revealed by ${event.player_name || "a player"}`;
+  const row = q("revealOverlayCards");
+  if (row) {
+    row.innerHTML = (event.cards || [])
+      .map((card, i) => {
+        const uri = card.large_image_uri || card.image_uri;
+        const inner = uri
+          ? `<img src="${escapeHtml(uri)}" alt="${escapeHtml(card.name)}" />`
+          : `<div class="reveal-card-placeholder">${escapeHtml(card.name)}</div>`;
+        // The inline delay staggers the pop-ins and (inherited by the card
+        // face) offsets the rocking phase between siblings.
+        return `<div class="reveal-card" style="animation-delay: ${i * 140}ms">${inner}</div>`;
+      })
+      .join("");
+  }
+  overlay.classList.remove("hidden", "reveal-overlay--closing");
+  SFX.onCardsRevealed();
+  setTimeout(() => {
+    overlay.classList.add("reveal-overlay--closing");
+    setTimeout(() => {
+      overlay.classList.add("hidden");
+      overlay.classList.remove("reveal-overlay--closing");
+      showNextRevealEvent();
+    }, 300);
+  }, REVEAL_OVERLAY_MS);
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -11322,6 +11393,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   }
 
   maybeTriggerCombatDamageFx(currentState, state);
+  maybeShowRevealOverlay(currentState, state);
   SFX.onStateChange(currentState, state, seat ?? 0);
   // Begin background music once the game is underway (idempotent per session).
   if (state && !state.pregame && !state.winner) MUSIC.start();
@@ -12866,17 +12938,28 @@ q("lobbyStartBtn")?.addEventListener("click", async () => {
   renderState(data);
 });
 
-q("lobbyCopyLinkBtn")?.addEventListener("click", async () => {
+async function copyJoinLink(event) {
   // Prefer the public IPv6 URL so the link works beyond the local network.
-  const linkUrl = currentPublicJoinUrl || currentLanJoinUrl || currentJoinUrl;
+  // Shift-click skips it for the IPv4 (LAN) form, for players on networks
+  // where IPv6 doesn't reach.
+  const preferIpv4 = Boolean(event?.shiftKey);
+  const linkUrl = preferIpv4
+    ? currentLanJoinUrl || currentJoinUrl
+    : currentPublicJoinUrl || currentLanJoinUrl || currentJoinUrl;
   if (!linkUrl) return;
   try {
     await copyTextToClipboard(linkUrl);
-    updateActionHint("Join URL copied to clipboard.");
+    updateActionHint(preferIpv4 ? "IPv4 Join URL copied to clipboard." : "Join URL copied to clipboard.");
   } catch {
     updateActionHint("Could not copy the Join URL. Copy it manually.", true);
   }
-});
+}
+
+q("lobbyCopyLinkBtn")?.addEventListener("click", copyJoinLink);
+
+// The disconnect dialog offers the same link so the players still here can
+// re-send it to whoever dropped (rejoining goes through the Join Game page).
+q("disconnectCopyLinkBtn")?.addEventListener("click", copyJoinLink);
 
 q("startBtn").addEventListener("click", async () => {
   try {

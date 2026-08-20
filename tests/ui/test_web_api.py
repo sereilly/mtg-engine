@@ -3088,3 +3088,31 @@ def test_effect_order_prompt_is_shown_gates_actions_and_can_be_answered():
     assert game.lamp_draw_replacements == {}, "the chosen effect applied"
     assert 0 in game.outside_game_draw_replacements, "the other is still armed"
     assert confirm.json()["effect_order"] is None, "the prompt is gone"
+
+
+def test_reveal_events_reach_every_viewer_with_catalog_art():
+    """A reveal is public by definition (CR 701.20), so the feed serializes
+    identically for the revealing seat, the opponent and a spectator — with
+    each card name resolved to its catalog art so the client can float the
+    face. A name outside the catalog keeps its entry with no art rather than
+    vanishing (the client falls back to a text placeholder)."""
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "seed": 77},
+    ).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+    session.game.record_reveal(0, ["Forest", "Not A Real Card"])
+
+    for viewer in ("seat=0", "seat=1", ""):
+        state = client.get(f"/api/sessions/{sid}/state?{viewer}").json()
+        (event,) = state["reveal_events"]
+        assert event["seat"] == 0
+        assert event["player_name"] == session.game.players[0].name
+        forest, unknown = event["cards"]
+        assert forest["name"] == "Forest" and forest["image_uri"]
+        assert unknown == {
+            "name": "Not A Real Card",
+            "image_uri": None,
+            "large_image_uri": None,
+        }

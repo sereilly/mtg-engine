@@ -523,11 +523,12 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
             alternatives.append(filt.named)
         alternatives.append(second.named)
     stream.accept_punct(",")
-    # "reveal it," / "reveal them," — honoured rather than dropped: the search
-    # flow's log names the found card publicly ("searched library and put X into
-    # hand"), which is what revealing one card means to this engine. The plural
-    # is the two-name spelling of the same word.
-    if stream.accept_word("reveal"):
+    # "reveal it," / "reveal them," — recorded, not just consumed: a search that
+    # prints the word shows the found cards' faces to every player (CR 701.20),
+    # and the flow records that reveal so the UI can show them. The plural is
+    # the two-name spelling of the same word.
+    reveal = bool(stream.accept_word("reveal"))
+    if reveal:
         if not stream.accept_word("them"):
             stream.expect_word("it")
         stream.accept_punct(",")
@@ -575,6 +576,7 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         ast.PlayerRef("you"), filt, destination, graveyard, tapped=(tapped,),
         named_alternatives=tuple(alternatives),
         untap_found_if=condition, untap_found_filter=counted,
+        reveal=reveal,
     )
 
 
@@ -641,8 +643,9 @@ def _parse_two_card_search(stream: TokenStream, graveyard: bool) -> ast.Statemen
     filt = parse_object_filter(stream)
     stream.accept_punct(",")
     # "reveal those cards," — the plural of the singular production's "reveal
-    # it", and honoured the same way: the search log names what was found.
-    if stream.accept_word("reveal"):
+    # it", and recorded the same way: the finds are shown to every player.
+    reveal = bool(stream.accept_word("reveal"))
+    if reveal:
         if not stream.accept_phrase("those", "cards"):
             raise stream.error("expected 'those cards' after the plural reveal")
         stream.accept_punct(",")
@@ -664,6 +667,7 @@ def _parse_two_card_search(stream: TokenStream, graveyard: bool) -> ast.Statemen
         extra_destinations=(second,),
         tapped=(first_tapped, second_tapped),
         up_to=True,
+        reveal=reveal,
     )
 
 

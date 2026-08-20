@@ -66,7 +66,7 @@
               <span class="form-field-label">Format</span>
               <select id="gameFormat" title="The deck-construction rules this game is played under, and what the deck pickers below check a deck against. CR 903: a Commander deck is led by a commander that starts in the command zone — 40 life and the 21-damage rule; Brawl is a 60-card deck at 25 (or 30) life, may be led by a planeswalker, and has no commander-damage rule.">
                 <option value="casual">Unrestricted</option>
-                <option value="commander">Commander</option>
+                <option value="commander" selected>Commander</option>
                 <option value="brawl">Brawl</option>
               </select>
               <label class="menu-checkbox-label form-field-note" title="Off, the deck pickers list only decks that are legal in this format. On, they list every deck — hover one to read what makes it illegal.">
@@ -113,7 +113,7 @@
             </div>
             <div class="seed-row">
               <label class="menu-checkbox-label" title="Everyone decides keep/mulligan at the same time instead of in turn order">
-                <input id="simultaneousMulligan" type="checkbox" />
+                <input id="simultaneousMulligan" type="checkbox" checked />
                 Simultaneous mulligans
               </label>
             </div>
@@ -319,7 +319,7 @@
                   <div id="lobbyCount" class="lobby-count"></div>
                   <div id="lobbyRoster" class="lobby-roster"></div>
                   <div class="lobby-actions">
-                    <button id="lobbyCopyLinkBtn" type="button" class="secondary-btn">Copy Join Link</button>
+                    <button id="lobbyCopyLinkBtn" type="button" class="secondary-btn" title="Shift-click to copy the IPv4 (LAN) link">Copy Join Link</button>
                     <button id="lobbyStartBtn" type="button" class="menu-primary-btn" disabled>Start Game</button>
                   </div>
                 </div>
@@ -338,6 +338,7 @@
                 <div id="disconnectBody" class="lobby-count"></div>
                 <div id="disconnectRoster" class="lobby-roster"></div>
                 <div class="lobby-actions">
+                  <button id="disconnectCopyLinkBtn" type="button" class="secondary-btn" title="Shift-click to copy the IPv4 (LAN) link">Copy Join Link</button>
                   <button id="disconnectLeaveBtn" type="button" class="secondary-btn">Leave Game</button>
                 </div>
               </div>
@@ -673,6 +674,16 @@
       </div>
     </div>
 
+    <!-- Cards revealed to all players (Cultivate, Track Down, …): floated
+         large over the board center for a few seconds by app.js, never
+         interactive. -->
+    <div id="revealOverlay" class="reveal-overlay hidden" aria-live="polite">
+      <div class="reveal-overlay-inner">
+        <div id="revealOverlayCards" class="reveal-overlay-cards"></div>
+        <div id="revealOverlayTitle" class="reveal-overlay-title">Revealed</div>
+      </div>
+    </div>
+
     <div id="handRevealModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="handRevealTitle">
       <div class="modal-box">
         <h2 id="handRevealTitle" class="modal-title">Opponent's Hand</h2>
@@ -769,13 +780,13 @@
     </div>
 
     <script src="/battlefield-canvas.js?v=20260818-handfly"></script>
-    <script src="/sfx.js?v=2-sfx"></script>
+    <script src="/sfx.js?v=3-reveal"></script>
     <script src="/music.js?v=1-music"></script>
     <script src="/anime.min.js?v=3.2.2"></script>
     <script src="/animations.js?v=20260818-handfly2"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
     <script src="/legality.js?v=20260819-format3"></script>
-    <script src="/app.js?v=20260819-format2"></script>
+    <script src="/app.js?v=20260819-reveal1"></script>
     <script src="/deck-editor.js?v=20260819-format2"></script>
   </body>
 </html>

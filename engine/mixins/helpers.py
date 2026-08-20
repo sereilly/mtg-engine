@@ -63,6 +63,23 @@ class GameHelpersMixin:
                 return idx, permanent
         return None
 
+    def record_reveal(self, player_index: int, card_names: list[str]) -> None:
+        """Record that *player_index* revealed *card_names* to all players
+        (CR 701.20). The prose log already names revealed cards; this is the
+        structured record beside it, read by the web layer so a client can show
+        the revealed faces. One entry per reveal — a Cultivate that finds two
+        cards is one event, not two — and only the newest few are kept, because
+        a client diffs the feed by id rather than replaying a history."""
+        if not card_names:
+            return
+        self.reveal_event_seq += 1
+        self.reveal_events.append({
+            "id": self.reveal_event_seq,
+            "seat": player_index,
+            "cards": list(card_names),
+        })
+        del self.reveal_events[:-10]
+
     @staticmethod
     def _stack_item_colors(item) -> tuple[str, ...]:
         """Effective color symbols of a spell on the stack, honoring a color

@@ -152,6 +152,12 @@ class SearchLibrary:
     #: "Up to" — finding fewer, none included, is a legal answer (CR 701.19b's
     #: fail-to-find is always legal, but this says so on the card).
     up_to: bool = False
+    #: "…, **reveal it**, …" / "…, **reveal those cards**, …" (CR 701.20). What
+    #: the word buys is the public record: a search that prints it shows the
+    #: found cards' faces to every player, and the engine's reveal-event feed
+    #: (``Game.record_reveal``) is that showing. A search without it — Demonic
+    #: Tutor's — records nothing, so the field defaults off.
+    reveal: bool = False
     #: "Then if you control four or more lands, untap that land." (Fabled
     #: Passage.) A rider on *this* search rather than a second statement,
     #: because "that land" is the card this search just found — a sentence after

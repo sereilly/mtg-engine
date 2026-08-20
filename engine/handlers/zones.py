@@ -92,6 +92,7 @@ def draw_reveal_discard_unless_land(game: Game, instruction: OracleInstruction, 
         return True, "resolved"
     drawn = caster.cards_drawn_this_turn[-1]
     game.log.append(f"{card.name}: {caster.name} drew and revealed {drawn.name}")
+    game.record_reveal(game.players.index(caster), [drawn.name])
     if drawn.primary_type != "land":
         caster.hand.remove(drawn)
         game._discard_card(caster, drawn)
@@ -289,6 +290,10 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         enters_tapped=bool(instruction.payload.get("enters_tapped")),
         untap_found_if=instruction.payload.get("untap_found_if"),
         up_to=bool(instruction.payload.get("up_to")),
+        # "…, reveal it/those cards, …" (CR 701.20): the finds are shown to
+        # every player, which the resolution records as one reveal event when
+        # the search ends. A search that does not print the word shows nothing.
+        reveal=bool(instruction.payload.get("reveal")),
     )
     game.log.append(f"{caster.name} is searching their " + " and ".join(zones))
     return True, "pending_search_library"
@@ -807,6 +812,7 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
 
     if found is not None:
         game.log.append(f"{player.name} revealed {found.name}")
+        game.record_reveal(seat, [found.name])
         if payload.get("destination") == "battlefield":
             game._put_permanent_onto_battlefield(
                 seat, Permanent(card=found), None, from_zone="library",
@@ -1390,6 +1396,7 @@ def reveal_top_of_library(game: Game, instruction: OracleInstruction, context: O
     top = caster.library[0]
     context.results["revealed_card"] = top
     game.log.append(f"{caster.name} revealed {top.name} from the top of their library")
+    game.record_reveal(game.players.index(caster), [top.name])
     return True, "resolved"
 
 
@@ -1405,6 +1412,7 @@ def reveal_top_to_hand_or_bottom(game: Game, instruction: OracleInstruction, con
         return True, "resolved"
     card_type = instruction.payload.get("card_type")
     top = caster.library.pop(0)
+    game.record_reveal(game.players.index(caster), [top.name])
     if card_type is None or top.primary_type == card_type:
         game.put_card_into_hand(caster, top)
         game.log.append(f"{caster.name} revealed {top.name} and put it into their hand")

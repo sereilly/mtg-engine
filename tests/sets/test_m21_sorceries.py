@@ -1062,7 +1062,8 @@ def test_finding_fewer_is_a_legal_answer(set_pool):
 
 def test_a_single_find_search_is_unchanged(set_pool):
     """The counted shape is additive: a search that names one destination keeps
-    the payload — and the flow — it has always had."""
+    the payload — and the flow — it has always had. No "reveal" key either:
+    Demonic Tutor's shape prints no reveal, so the flow shows nothing."""
     from engine.grammar import compile_line
 
     (search,) = compile_line(
@@ -1070,6 +1071,49 @@ def test_a_single_find_search_is_unchanged(set_pool):
     ).instructions
 
     assert search.payload == {"count": 1, "card_type": "any"}
+
+
+# --- The printed reveal: shown to every player as a structured event ---------
+
+
+def test_cultivate_reveals_both_finds_as_one_event(set_pool):
+    """"…**reveal those cards**…" (CR 701.20): the finds are shown to every
+    player. One event for the whole search — "those cards" is one showing —
+    recorded when the search ends, so the UI floats both faces together."""
+    game, p1 = _cultivate_board(set_pool)
+
+    assert game.confirm_search_library(0, 0)          # Forest
+    assert game.reveal_events == [], "the showing is the search's, not one find's"
+    library = [c.name for c in p1.library]
+    assert game.confirm_search_library(0, library.index("Island"))
+
+    (event,) = game.reveal_events
+    assert event["seat"] == 0
+    assert event["cards"] == ["Forest", "Island"]
+    assert "P1 revealed Forest, Island" in game.log
+
+
+def test_a_declined_search_still_reveals_what_it_found(set_pool):
+    """Declining ends the search (CR 701.19b), but a find already made was
+    already shown — backing out of the second find cannot unshow the first."""
+    game, _p1 = _cultivate_board(set_pool)
+
+    assert game.confirm_search_library(0, 0)
+    assert game.decline_search_library(0)
+
+    (event,) = game.reveal_events
+    assert event["cards"] == ["Forest"]
+
+
+def test_a_singular_printed_reveal_carries_the_same_flag(set_pool):
+    """"…, reveal it, …" is the one-find spelling of the same word, and lowers
+    to the same payload key the two-card search carries."""
+    (search,) = compile_line(
+        "Search your library for a basic land card, reveal it, put it into "
+        "your hand, then shuffle."
+    ).instructions
+
+    assert search.payload["reveal"] is True
 
 
 # --- Transmogrify: reveal until, as one procedure (round 117) ---------------
@@ -1111,6 +1155,21 @@ def test_transmogrify_exiles_and_replaces_from_the_library(set_pool):
     assert [p.card.name for p in game.controlled_by(1)] == ["Baneslayer Angel"]
     # Four cards in, one onto the battlefield, three shuffled back.
     assert len(p2.library) == 3
+
+
+def test_transmogrify_reveals_the_card_it_stopped_on(set_pool):
+    """The card the reveal stopped on was shown to every player (CR 701.20a),
+    so it lands in the reveal-event feed under the *revealing* seat — the
+    exiled creature's controller, not the caster."""
+    game, _, _p2 = _transmogrify_board(
+        set_pool, ["Mountain", "Baneslayer Angel", "Mountain"],
+    )
+
+    assert _transmogrify(game).supported
+
+    (event,) = game.reveal_events
+    assert event["seat"] == 1
+    assert event["cards"] == ["Baneslayer Angel"]
 
 
 def test_transmogrify_on_a_library_with_no_creature_finds_nothing(set_pool):

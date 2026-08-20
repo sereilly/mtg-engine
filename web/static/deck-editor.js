@@ -392,10 +392,18 @@
     if (!select) return;
     const previous = select.value;
     select.innerHTML = "";
-    const blank = document.createElement("option");
-    blank.value = "";
-    blank.textContent = placeholder;
-    select.appendChild(blank);
+    // CR 903.3: a Commander/Brawl game is led by a designated commander, which
+    // a generated random deck doesn't have — so those two formats list saved
+    // decks only. Read as a rule off the format key rather than the shipped
+    // table's `variant`, for the reason createSession gives: the table arrives
+    // with the catalog, and this can run before it.
+    const offersRandom = format !== "commander" && format !== "brawl";
+    if (offersRandom) {
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = placeholder;
+      select.appendChild(blank);
+    }
     // A format nobody has named cannot rule a deck out, so it never hides one:
     // the list would be filtered by a rule the player was never shown.
     const hidesIllegal = Boolean(format) && hideIllegal;
@@ -412,9 +420,16 @@
       select.appendChild(group);
     }
     // A previously chosen deck that ante or the format has just ruled out falls
-    // back to the placeholder rather than staying picked but unplayable.
+    // back to the first selectable option — the placeholder where the format
+    // offers one, otherwise the first listed deck — rather than staying picked
+    // but unplayable.
     const kept = [...select.options].find((o) => o.value === previous && !o.disabled);
-    select.value = kept ? previous : "";
+    if (kept) {
+      select.value = previous;
+    } else {
+      const first = [...select.options].find((o) => !o.disabled);
+      select.value = first ? first.value : "";
+    }
   }
   window.populateDeckSelectElement = populateDeckSelectElement;
 

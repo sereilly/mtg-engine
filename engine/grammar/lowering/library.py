@@ -254,9 +254,14 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         # legal answer, so the flow must let the player stop.
         if node.up_to or node.named_alternatives:
             payload["up_to"] = True
-    # Both keys are emitted only when the card carries them, so the payload of
+    # These keys are emitted only when the card carries them, so the payload of
     # every search printed before this change — Demonic Tutor's — stays
     # byte-identical and a behaviour signature does not move.
+    if node.reveal:
+        # "…, reveal it/those cards, …" (CR 701.20): the find is shown to every
+        # player, which the flow records as a reveal event for the UI. Emitted
+        # only when printed — a tutor that does not reveal shows nothing.
+        payload["reveal"] = True
     if restrictions:
         payload["restrictions"] = restrictions
     if node.graveyard:

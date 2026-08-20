@@ -104,6 +104,13 @@ class Game(
     lands_played_this_turn: dict[int, int] = field(default_factory=dict)
     stack: list[StackItem] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
+    # CR 701.20: cards revealed to all players, as a structured record beside
+    # the prose log so the UI can show the revealed faces. Each entry is
+    # ``{"id": n, "seat": i, "cards": [names]}`` appended by ``record_reveal``;
+    # ids are monotonic and only the newest few entries are kept — this is an
+    # event feed a client diffs, not a history.
+    reveal_events: list[dict] = field(default_factory=list)
+    reveal_event_seq: int = 0
     extra_turns: dict[int, int] = field(default_factory=dict)
     extra_turn_queue: list[int] = field(default_factory=list)
     current_turn_is_extra: bool = False

@@ -76,6 +76,34 @@ from .combat_prompts import (
 from .game_flow import settle_before_observation
 
 
+def _serialize_reveal_events(game: Game) -> list[dict]:
+    """The reveal feed (CR 701.20, ``Game.record_reveal``), with each card name
+    resolved to its catalog art so the client can show the revealed faces. A
+    reveal is public by definition, so every viewer — spectators included —
+    gets the same list. A name outside the catalog (a debug-injected card)
+    keeps its entry with no art; the client falls back to a text placeholder."""
+    events: list[dict] = []
+    for event in game.reveal_events:
+        cards = []
+        for name in event["cards"]:
+            entry = CATALOG_BY_NAME.get(name.casefold())
+            cards.append({
+                "name": name,
+                "image_uri": entry.get("image_uri") if entry else None,
+                "large_image_uri": entry.get("large_image_uri") if entry else None,
+            })
+        seat = event["seat"]
+        events.append({
+            "id": event["id"],
+            "seat": seat,
+            "player_name": (
+                game.players[seat].name if 0 <= seat < len(game.players) else "Unknown"
+            ),
+            "cards": cards,
+        })
+    return events
+
+
 def _seat_deck_colors(game: Game, seat: int) -> list[str]:
     """Color identity of a seat's deck, derived from its (pre-deal) library —
     works uniformly for random/saved/personal decks and for host/AI/joined-guest
@@ -508,6 +536,9 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "stack": [_serialize_stack_item(item, session.game) for item in reversed(session.game.stack)],
         "combat": combat_state,
         "log": session.game.log,
+        # Cards revealed to all players (CR 701.20) — an event feed the client
+        # diffs by id to float the revealed faces over the board.
+        "reveal_events": _serialize_reveal_events(session.game),
         "winner": win,
         "rematch": _build_rematch_info(session, viewer_seat),
         "cleanup_discard": cleanup_info,

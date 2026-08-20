@@ -291,6 +291,7 @@ class PendingChoicesMixin:
             # answer the player states by declining the rest.
             if "library" in zones:
                 random.shuffle(caster.library)
+            self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
             self.log.append(f"{caster.name} searched and found nothing more")
             return True
@@ -312,6 +313,12 @@ class PendingChoicesMixin:
         if not search_matches(card, choice.data):
             return False
         source.pop(library_index)
+        # "…, reveal it/those cards, …" (CR 701.20): a search armed with the
+        # printed word shows each find's face to every player. Accumulated on
+        # the choice and recorded once when the search ends, because "those
+        # cards" is one showing — a Cultivate that finds twice is one reveal.
+        if choice.data.get("reveal"):
+            choice.data.setdefault("revealed_names", []).append(card.name)
         # "a card named A **and/or** a card named B" (Alpine Houndmaster): each
         # printed name is one find. The name just used is dropped, so a library
         # holding two copies of the first card cannot answer both finds with it
@@ -382,8 +389,21 @@ class PendingChoicesMixin:
         # information they were entitled to keep.
         if zone == "library":
             random.shuffle(caster.library)
+        self._record_search_reveal(choice)
         self.discard_pending_choice(choice)
         return True
+
+    def _record_search_reveal(self, choice: PendingChoice) -> None:
+        """The showing a printed "reveal it/those cards" performs, made when the
+        search ends (a decline included — the finds already made were shown).
+        One event and one log line for the whole search, because "those cards"
+        is one showing, not one per find."""
+        revealed = list(choice.data.get("revealed_names") or ())
+        if not revealed:
+            return
+        caster = self.players[choice.player_index]
+        self.record_reveal(choice.player_index, revealed)
+        self.log.append(f"{caster.name} revealed {', '.join(revealed)}")
 
     def _default_search_library(self, choice: PendingChoice) -> None:
         """The AI's search policy, and a fail-to-find when it declines or when

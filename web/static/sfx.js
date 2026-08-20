@@ -107,9 +107,14 @@ const SFX = (() => {
 
     _handlePhaseChange(prev, next, viewerSeat);
 
+    // A structured reveal event fired (Cultivate, Track Down): app.js shows
+    // the floating-card overlay and plays onCardsRevealed for it, so the
+    // log-text reveal rules below stand down for this batch to avoid doubling.
+    const revealEventFired = _lastRevealId(next) > _lastRevealId(prev);
+
     const prevLen = Array.isArray(prev.log) ? prev.log.length : 0;
     const newEntries = Array.isArray(next.log) ? next.log.slice(prevLen) : [];
-    if (newEntries.length > 0) _handleLogEntries(newEntries, prev, next, viewerSeat);
+    if (newEntries.length > 0) _handleLogEntries(newEntries, prev, next, viewerSeat, revealEventFired);
 
     // Stack went from non-empty to empty → resolution finished
     const prevStackLen = Array.isArray(prev.stack) ? prev.stack.length : 0;
@@ -169,7 +174,13 @@ const SFX = (() => {
     if (snd) _play(snd);
   }
 
-  function _handleLogEntries(entries, prev, next, viewerSeat) {
+  // Newest id in a state's reveal-event feed (0 when absent/empty).
+  function _lastRevealId(state) {
+    const events = state?.reveal_events;
+    return Array.isArray(events) && events.length ? events[events.length - 1].id : 0;
+  }
+
+  function _handleLogEntries(entries, prev, next, viewerSeat, revealEventFired = false) {
     let graveyardPlayed = false;
     let stackResolvePlayed = false;
     let stackEnterPlayed = false;
@@ -329,13 +340,15 @@ const SFX = (() => {
       }
 
       // ── Reveal a card from hand to the opponent ──────────────────────────────
-      if ((s.includes('reveal') && s.includes('hand')) || s.includes('revealed from hand')) {
+      if (!revealEventFired &&
+          ((s.includes('reveal') && s.includes('hand')) || s.includes('revealed from hand'))) {
         _play('card_ux/Reveal_Card_To_Oponent.wav');
         continue;
       }
 
       // ── Reveal / look at top of library ──────────────────────────────────────
-      if (s.includes('looking at the top') || (s.includes('reveal') && s.includes('card'))) {
+      if (s.includes('looking at the top') ||
+          (!revealEventFired && s.includes('reveal') && s.includes('card'))) {
         _play('events/RevealCard_TopOfDeck.wav');
         continue;
       }
@@ -370,11 +383,15 @@ const SFX = (() => {
   function onNotificationClose()  { _play('ui/UI_Notification_Close.wav'); }
   function onSelectionAppear()    { _play('ui/UI_Selection_Appear.wav'); }
   function onError()              { _play('ui/Menu_Cancel.wav'); }
+  // The revealed-cards overlay (app.js) plays this as each event's cards
+  // appear; the log-text reveal rules stand down when the feed advances.
+  function onCardsRevealed()      { _play('card_ux/Reveal_Card_To_Oponent.wav'); }
 
   return {
     onStateChange, onLifeChange,
     onLogOpen, onLogClose, onMenuDecide, onMenuCancel, onMenuToggle,
     onNotificationAppear, onNotificationClose, onSelectionAppear, onError,
+    onCardsRevealed,
     setVolume, setMuted, getVolume, isMuted,
   };
 })();
