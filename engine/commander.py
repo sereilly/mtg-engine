@@ -11,14 +11,16 @@ Three concerns live here:
 * **The designation** (CR 903.3). A commander is not a characteristic of the
   object — it is an attribute of the *card*, kept "even when it changes zones".
   So it cannot be a flag on a :class:`~engine.models.Permanent`, which is a new
-  object every time it enters the battlefield (CR 400.7), and it cannot be
-  identity on the :class:`~engine.models.CardDefinition`, which is immutable and
-  **shared by every deck in the process** (the catalog dedupes reprints to one
-  object, so two decks running the same card hold the same instance). It is a
-  per-seat name: ``PlayerState.commanders`` holds the cards a seat began with in
-  the command zone, and "is this card that seat's commander?" is asked by owner
-  *and* name. CR 903.5b makes every non-basic name in a Commander deck unique,
-  so within one seat a name names one card.
+  object every time it enters the battlefield (CR 400.7). It is per-seat:
+  ``PlayerState.commanders`` holds the card objects a seat began with in the
+  command zone, and "is this card that seat's commander?" is asked by owner
+  *and object identity*. Identity is what keeps a token copy or another card
+  with the same name from being the commander (a copy token is a fresh
+  ``CardDefinition`` carrying the copied name); the owner check is what keeps
+  an opponent's copy of the same **catalog-shared** card object from being one
+  (the catalog dedupes reprints, so two decks running one card hold the same
+  instance). CR 903.5b makes every non-basic name in a Commander deck unique,
+  so within one seat the designated object is the only one of its name.
 
 * **Colour identity** (CR 903.4), which is what a deck may contain. Derived from
   printed characteristics here rather than read off the ingested Scryfall field,
@@ -401,16 +403,21 @@ class CommanderMixin:
     def is_commander_card(self, player_index: int, card: Any) -> bool:
         """Whether *card* is ``player_index``'s commander, in any zone.
 
-        By owner and name rather than by object identity: one
-        :class:`CardDefinition` is shared by every deck in the process, so
-        identity alone would make an opponent's copy of the same card a
-        commander too. CR 903.5b makes the name unique within the seat's deck.
+        By owner **and object identity**: CR 903.3 makes the designation an
+        attribute of the card itself, so a token copy (a fresh
+        :func:`~engine.tokens.make_token_card` object carrying the same name)
+        and any other same-name card are never the commander — only the
+        designated object is. The owner is still asked because the catalog
+        dedupes reprints: an opponent's copy of the same card *is* the same
+        ``CardDefinition`` object, and identity alone would crown it too.
+        (Within one seat, two literal copies of one catalog object — a
+        non-singleton deck 903.5b forbids — remain indistinguishable, which is
+        no worse than the name test this replaces.)
         """
         if card is None or not (0 <= player_index < len(self.players)):
             return False
-        name = _card_field(card, "name")
         return any(
-            existing.name == name for existing in self.players[player_index].commanders
+            existing is card for existing in self.players[player_index].commanders
         )
 
     def commander_owner_index(self, card: Any) -> int | None:
@@ -459,13 +466,22 @@ class CommanderMixin:
             player.life = life
             for card in player.commanders:
                 # The designated card is pulled out of the library wherever the
-                # deck put it; a designation with no copy in the library (a test
-                # rig, or a deck built commander-first) still starts in the zone.
-                for index, held in enumerate(player.library):
-                    if held.name == card.name:
-                        player.library.pop(index)
-                        break
-                if not any(held.name == card.name for held in player.command_zone):
+                # deck put it — by identity first (the designation *is* a card
+                # in the deck), by name as the fallback a test rig or a deck
+                # built commander-first needs; a designation with no copy in
+                # the library at all still starts in the zone.
+                index = next(
+                    (i for i, held in enumerate(player.library) if held is card),
+                    None,
+                )
+                if index is None:
+                    index = next(
+                        (i for i, held in enumerate(player.library) if held.name == card.name),
+                        None,
+                    )
+                if index is not None:
+                    player.library.pop(index)
+                if not any(held is card for held in player.command_zone):
                     player.command_zone.append(card)
             self.log.append(
                 f"{player.name} starts at {life} life with "
@@ -551,9 +567,8 @@ class CommanderMixin:
         zone". Only their own, and only a commander that is actually there."""
         if not self.is_commander_game:
             return False
-        name = _card_field(card, "name")
         return self.is_commander_card(player_index, card) and any(
-            held.name == name for held in self.players[player_index].command_zone
+            held is card for held in self.players[player_index].command_zone
         )
 
     def record_commander_cast(self, player_index: int, card: Any) -> None:
@@ -667,7 +682,7 @@ class CommanderMixin:
         changed = False
         for seat, player in enumerate(self.players):
             for commander in list(player.commanders):
-                if self._commander_zone_offer_pending(seat, commander.name):
+                if self._commander_zone_offer_pending(seat, commander):
                     # The card is in no zone at all: an interactive owner is
                     # part-way through answering this very offer. Skipping is
                     # what keeps the fixpoint below from reading "not in a
@@ -686,7 +701,7 @@ class CommanderMixin:
                 player.commander_zone_offered.add(commander.name)
                 held = getattr(player, zone)
                 index = next(
-                    (i for i, card in enumerate(held) if card.name == commander.name),
+                    (i for i, card in enumerate(held) if card is commander),
                     None,
                 )
                 if index is None:  # pragma: no cover - _commander_dead_zone found it
@@ -696,22 +711,23 @@ class CommanderMixin:
                 changed = True
         return changed
 
-    def _commander_zone_offer_pending(self, seat: int, name: str) -> bool:
+    def _commander_zone_offer_pending(self, seat: int, commander: CardDefinition) -> bool:
         """Whether a CR 903.9 offer for this commander is still waiting on its
         owner — which is also "the card is currently in no zone"."""
         return any(
             choice.kind == "commander_zone_change"
             and choice.player_index == seat
-            and _card_field(choice.data.get("card"), "name") == name
+            and choice.data.get("card") is commander
             for choice in self.pending_replacement_choices
         )
 
     @staticmethod
     def _commander_dead_zone(player: PlayerState, commander: CardDefinition) -> str | None:
-        """"graveyard" / "exile" if that commander card is in one of them, else
-        None. The two zones CR 903.9a names, asked as one question."""
+        """"graveyard" / "exile" if that commander card — the designated object,
+        not a same-name copy (CR 903.3) — is in one of them, else None. The two
+        zones CR 903.9a names, asked as one question."""
         for zone in DEAD_ZONES:
-            if any(card.name == commander.name for card in getattr(player, zone)):
+            if any(card is commander for card in getattr(player, zone)):
                 return zone
         return None
 

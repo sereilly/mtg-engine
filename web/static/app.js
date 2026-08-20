@@ -1848,6 +1848,24 @@ function cardRequiresManaColorChoice(card) {
   );
 }
 
+// The card's text with its activated-ability lines removed ("{T}: Add one
+// mana of any color."). An activated ability's choices are made when it is
+// activated (CR 602), never while casting the card — Meteorite must not ask
+// for a color on cast because its mana ability mentions one.
+function nonActivatedOracleText(card) {
+  return ((card && card.oracle_text) || "")
+    .split("\n")
+    .filter((line) => !/^[^.:]*:/.test(line))
+    .join("\n");
+}
+
+// The cast-time variant: only text OUTSIDE activated abilities can put a
+// color choice on the spell itself (Metamorphosis, Feat of Resistance).
+function castRequiresManaColorChoice(card) {
+  if (!card || typeof card === "string") return false;
+  return cardRequiresManaColorChoice({ oracle_text: nonActivatedOracleText(card) });
+}
+
 function cardRequiresCastColorChoice(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
@@ -1926,10 +1944,15 @@ function inferLandProducedMana(perm) {
   return symbols;
 }
 
-function computeAutoTapLands(manaCost, currentManaPool, battlefield) {
+// One planner behind both auto-tap questions ("can it pay?" and "tap what?"),
+// so the button's promise and the taps it fires can't disagree. Each tap
+// carries the COLOR the land was assigned to produce: a multi-color land
+// (City of Brass) tapped without one defaults server-side to whatever it
+// defaults to, which is how auto-tap used to pay {1}{W} with two green.
+function computeAutoTapPlan(manaCost, currentManaPool, battlefield) {
   const required = parseManaCostSymbols(manaCost || "");
   const pool = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0, ...currentManaPool };
-  const toTap = [];
+  const taps = [];
 
   const untapped = [];
   for (let i = 0; i < (battlefield || []).length; i++) {
@@ -1939,21 +1962,27 @@ function computeAutoTapLands(manaCost, currentManaPool, battlefield) {
     const produces = inferLandProducedMana(perm);
     if (produces.length > 0) untapped.push({ index: i, produces, used: false });
   }
+  // Constrained lands first for the colored pips: spending the Forest on {G}
+  // before City of Brass keeps the any-color land free for the pip only it
+  // can pay (and for generic, where its color doesn't matter).
+  const byFlexibility = [...untapped].sort((a, b) => a.produces.length - b.produces.length);
 
-  // Satisfy specific color requirements first
+  let ok = true;
   for (const color of ["W", "U", "B", "R", "G", "C"]) {
     let deficit = Math.max(0, (required[color] || 0) - (pool[color] || 0));
-    for (const land of untapped) {
+    for (const land of byFlexibility) {
       if (deficit <= 0) break;
       if (land.used || !land.produces.includes(color)) continue;
       land.used = true;
-      toTap.push(land.index);
+      taps.push({ index: land.index, color });
       pool[color] = (pool[color] || 0) + 1;
       deficit--;
     }
+    if (deficit > 0) ok = false;
   }
 
-  // Satisfy generic mana with remaining untapped lands
+  // Generic is paid by whatever is left; any color works, so a mono-color
+  // land names its own and a multi-color land is left to the server default.
   const totalPool = MANA_ORDER.reduce((sum, c) => sum + (pool[c] || 0), 0);
   const totalRequired = MANA_ORDER.reduce((sum, c) => sum + (required[c] || 0), 0) + (required.generic || 0);
   let genericDeficit = Math.max(0, totalRequired - totalPool);
@@ -1961,42 +1990,20 @@ function computeAutoTapLands(manaCost, currentManaPool, battlefield) {
     if (genericDeficit <= 0) break;
     if (land.used) continue;
     land.used = true;
-    toTap.push(land.index);
+    taps.push({ index: land.index, color: land.produces.length === 1 ? land.produces[0] : null });
     genericDeficit--;
   }
+  if (genericDeficit > 0) ok = false;
 
-  return toTap;
+  return { taps, ok };
+}
+
+function computeAutoTapLands(manaCost, currentManaPool, battlefield) {
+  return computeAutoTapPlan(manaCost, currentManaPool, battlefield).taps;
 }
 
 function canAutoTapSatisfyCost(manaCost, currentManaPool, battlefield) {
-  const required = parseManaCostSymbols(manaCost || "");
-  const pool = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0, ...currentManaPool };
-
-  const untapped = [];
-  for (const perm of (battlefield || [])) {
-    if (!(perm.type || "").toLowerCase().includes("land")) continue;
-    if (perm.tapped) continue;
-    const produces = inferLandProducedMana(perm);
-    if (produces.length > 0) untapped.push({ produces, used: false });
-  }
-
-  for (const color of ["W", "U", "B", "R", "G", "C"]) {
-    let deficit = Math.max(0, (required[color] || 0) - (pool[color] || 0));
-    for (const land of untapped) {
-      if (deficit <= 0) break;
-      if (land.used || !land.produces.includes(color)) continue;
-      land.used = true;
-      pool[color] = (pool[color] || 0) + 1;
-      deficit--;
-    }
-    if (deficit > 0) return false;
-  }
-
-  const totalPool = MANA_ORDER.reduce((sum, c) => sum + (pool[c] || 0), 0);
-  const totalRequired = MANA_ORDER.reduce((sum, c) => sum + (required[c] || 0), 0) + (required.generic || 0);
-  const genericDeficit = Math.max(0, totalRequired - totalPool);
-  const unusedLands = untapped.filter(l => !l.used).length;
-  return genericDeficit <= unusedLands;
+  return computeAutoTapPlan(manaCost, currentManaPool, battlefield).ok;
 }
 
 async function performAutoTap() {
@@ -2009,14 +2016,18 @@ async function performAutoTap() {
     const me = getCurrentPlayerState();
     if (!me) throw new Error("Cannot read player state.");
 
-    const landIndices = computeAutoTapLands(pendingAutoTapCost(pending), me.mana_pool, me.battlefield);
-    if (landIndices.length > 0) {
-      updateActionHint(`Auto-tapping ${landIndices.length} land(s)...`);
-      for (const permanentIndex of landIndices) {
-        await sendAction(withPermanentId(
-          { seat, action: "tap", permanent_index: permanentIndex },
-          "permanent_id", seat, permanentIndex,
-        ));
+    const taps = computeAutoTapLands(pendingAutoTapCost(pending), me.mana_pool, me.battlefield);
+    if (taps.length > 0) {
+      updateActionHint(`Auto-tapping ${taps.length} land(s)...`);
+      for (const tap of taps) {
+        const body = withPermanentId(
+          { seat, action: "tap", permanent_index: tap.index },
+          "permanent_id", seat, tap.index,
+        );
+        // The color this land was assigned to pay. Without it the server
+        // picks for a multi-color land, and its pick owes nothing to the cost.
+        if (tap.color) body.mana_color = tap.color;
+        await sendAction(body);
       }
     }
 
@@ -7776,8 +7787,10 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   );
 
   // Metamorphosis: "Add X mana of any one color..." — the caster picks the
-  // color after choosing the sacrificed creature; it rides mana_color.
-  if (cardRequiresManaColorChoice(pending.card) && (pending.castAction || "cast") === "cast") {
+  // color after choosing the sacrificed creature; it rides mana_color. Asked
+  // of the non-activated text only: "{T}: Add one mana of any color." is an
+  // ability whose color is chosen on activation, not while casting (Meteorite).
+  if (castRequiresManaColorChoice(pending.card) && (pending.castAction || "cast") === "cast") {
     pendingManaColor = {
       kind: "cast_fixed",
       cardName: pending.cardName,
@@ -8598,6 +8611,10 @@ function showCardPreview(card) {
   // counters from Scavenging Ghoul, …), one "symbol: count" line per kind.
   const counterLines = previewCounterLines(card);
   const sections = [];
+  // CR 903.3: name the designation in the description, above everything else.
+  if (typeof card === "object" && card?.is_commander) {
+    sections.push("👑 Commander - this is the designated commander card");
+  }
   if (keywordLabel) sections.push(renderSymbolsInline(keywordLabel));
   if (previewText) sections.push(renderOracleTextWithChanges(previewText, textChanges));
   for (const line of counterLines) sections.push(renderSymbolsInline(line));
@@ -8665,6 +8682,15 @@ function createCardElement(card, options = {}) {
     badge.alt = "Summoning Sickness";
     badge.title = "Summoning Sickness";
     cardEl.appendChild(badge);
+  }
+  // CR 903.3: the designated commander card - never a copy or a same-name
+  // look-alike - wears a crown wherever its face shows.
+  if (!hidden && typeof card === "object" && card.is_commander) {
+    const crown = document.createElement("div");
+    crown.className = "card-overlay-badge commander-crown";
+    crown.textContent = "👑";
+    crown.title = "Commander";
+    cardEl.appendChild(crown);
   }
   if (draggable) {
     cardEl.classList.add("draggable");
@@ -9349,12 +9375,17 @@ function renderZoneCards(
           ? toggleSeveralGraveyardTarget(zoneSeat, index)
           : resolvePendingCastTarget(zoneSeat, index)
       ));
-    } else if (isCastableFromZone(index) && !pendingCastTarget && !pendingCastHandCard) {
+    } else if (
+      isCastableFromZone(index)
+      && (zoneKind === "command" || (!pendingCastTarget && !pendingCastHandCard))
+    ) {
       // The emerald glow means "an effect opened this zone to you", which is
       // news in a graveyard or an exile. In the command zone it would be on for
       // as long as the commander sat there — CR 903.8 is a rule, not an effect —
       // so a commander takes the hand's castable-now highlight above instead,
-      // and keeps the click.
+      // and keeps the click. The command zone also keeps its click while a cast
+      // is mid-flight: a dead-looking commander was a playtest bug, so a blocked
+      // click says why instead of doing nothing.
       if (zoneKind !== "command") el.classList.add("castable-from-zone");
       el.style.cursor = "pointer";
       const zoneLabel = zoneKind === "command" ? "command zone" : zoneKind;
@@ -9364,7 +9395,13 @@ function renderZoneCards(
       el.title = tax
         ? `Cast ${card.name || ""} from your ${zoneLabel} (+{${tax}} commander tax)`
         : `Cast ${card.name || ""} from your ${zoneLabel}`;
-      el.addEventListener("click", () => beginZoneCast(card, zoneKind));
+      el.addEventListener("click", () => {
+        if (pendingCastTarget || pendingCastHandCard) {
+          updateActionHint("Finish the current cast before starting another.", true);
+          return;
+        }
+        beginZoneCast(card, zoneKind);
+      });
     }
     container.appendChild(el);
   }
@@ -9403,7 +9440,7 @@ async function beginZoneCast(card, zone) {
     const actionBody = { seat, action: "cast", card_name: cardName, target_seat: castTargetSeat, from_zone: zone };
     try {
       await sendAction(actionBody);
-      updateActionHint(`Cast ${cardName} from your ${zone}.`);
+      updateActionHint(`Cast ${cardName} from your ${zone === "command" ? "command zone" : zone}.`);
       clearPendingHandCast();
     } catch (e) {
       if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
@@ -12243,6 +12280,18 @@ function initBattlefieldCanvas() {
 
     onZonePileClick(info) {
       if (!info || info.kind === "library") return;
+      // The viewer's own command zone holding exactly one castable commander:
+      // the window would offer a single click, so the pile click IS that click.
+      if (info.kind === "command" && info.seat === seat) {
+        const zone = currentState?.players?.[seat]?.command_zone || [];
+        const castable = (currentState?.castable_from_zones || []).filter(
+          (entry) => entry.zone === "command",
+        );
+        if (zone.length === 1 && castable.some((entry) => entry.index === 0)) {
+          beginZoneCast(zone[0], "command");
+          return;
+        }
+      }
       openZoneReveal([zoneRevealSectionFor(info.seat, info.kind)]);
     },
 

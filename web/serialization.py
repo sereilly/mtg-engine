@@ -187,6 +187,10 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # naming something else.
         "id": perm.permanent_id,
         "name": perm.card.name,
+        # CR 903.3: this permanent is the designated commander card itself —
+        # never a token copy or another same-name card. Drawn as a crown badge
+        # and named in the card preview.
+        "is_commander": game.is_commander_permanent(perm),
         # Effective type line so a copy shows its copied types (a Copy Artifact
         # copying a Mox reads "Artifact Enchantment", not just "Enchantment").
         "type": perm.effective_card.type_line,
@@ -725,6 +729,15 @@ def _serialize_player(
                     for k in range(len(usable))
                 ]
 
+    def _crowned(entries: list, cards) -> list:
+        # CR 903.3: mark the designated commander card, wherever its zone
+        # payload is visible. Identity-keyed, so a same-name card or a token
+        # copy's card is never marked. Hidden hands are strings and skipped.
+        for payload, card in zip(entries, cards):
+            if isinstance(payload, dict) and game.is_commander_card(seat, card):
+                payload["is_commander"] = True
+        return entries
+
     return {
         "name": player.name,
         "life": player.life,
@@ -739,7 +752,7 @@ def _serialize_player(
         "shield_color": player.damage_prevention_color,
         # Channel emblem: while active the player may pay life for {C} this turn.
         "channel_active": player.channel_active_until_eot,
-        "hand": hand,
+        "hand": _crowned(hand, player.hand),
         "hand_count": len(player.hand),
         # Jandor's Ring: whether a card drawn this turn is still in hand, i.e.
         # whether its "Discard the last card you drew this turn" cost is payable.
@@ -749,14 +762,14 @@ def _serialize_player(
         # The viewer's own graveyard/exile carry the same target specs a hand
         # card does, because a cast permission (engine/cast_permissions.py) can
         # make one castable — and the cast prompts read the spec off the card.
-        "graveyard": [
+        "graveyard": _crowned([
             _serialize_card(card, game, seat) if viewer_seat == seat else _serialize_card(card)
             for card in player.graveyard
-        ],
-        "exile": [
+        ], player.graveyard),
+        "exile": _crowned([
             _serialize_card(card, game, seat) if viewer_seat == seat else _serialize_card(card)
             for card in player.exile
-        ],
+        ], player.exile),
         # The ante zone (CR 407) — public, like exile. Empty unless an ante card
         # (Contract from Below, Demonic Attorney, Jeweled Bird) has resolved.
         "ante": [_serialize_card(card) for card in player.ante],
@@ -765,10 +778,10 @@ def _serialize_player(
         # is their own, because a commander in it is castable (CR 903.8) and the
         # cast prompt reads its target spec off the card exactly as a hand
         # card's. Empty outside a Commander game.
-        "command_zone": [
+        "command_zone": _crowned([
             _serialize_card(card, game, seat) if viewer_seat == seat else _serialize_card(card)
             for card in player.command_zone
-        ],
+        ], player.command_zone),
         # CR 903.8: what each commander in that zone would cost extra to cast
         # right now, keyed by name, so the client can show the tax without
         # re-deriving "each previous time".

@@ -3020,6 +3020,16 @@ class BattlefieldCanvas {
     // ---- Title plate ----
     this._drawNamePlate(ctx, card?.name, x + m, y + m, w - 2 * m, nh, fc, artR + 1);
 
+    // ---- Commander crown (CR 903.3: the designated card, never a copy) ----
+    if (card?.is_commander) {
+      ctx.save();
+      ctx.font = `${Math.max(8, w * 0.16)}px sans-serif`;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "top";
+      ctx.fillText("👑", x + w - m - 1, y + m + 1);
+      ctx.restore();
+    }
+
     // ---- Land mana symbols (bottom center) ----
     this._drawLandMana(ctx, card, x, y, w, h, m);
 

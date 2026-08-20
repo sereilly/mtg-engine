@@ -751,6 +751,48 @@ def test_a_non_interactive_seat_takes_the_command_zone_without_a_prompt(set_pool
     assert len(game.players[0].command_zone) == 1
 
 
+@pytest.mark.cr("903.3", "903.9a")
+def test_a_dead_copy_of_the_commander_is_not_offered_the_command_zone(set_pool):
+    """CR 903.3 ties the designation to the card itself, so a token copy —
+    whose card is a fresh object carrying the copied name — dying must not
+    raise 903.9a's offer. Only the designated card gets the way back."""
+    pool = set_pool("M21")
+    game = _commander_game(pool)
+    game.interactive_seats = {0}
+    gadrak = pool["Gadrak, the Crown-Scourge"]
+    game.cast_from_hand(0, gadrak.name, from_zone="command")
+
+    # A same-name look-alike (the card a token copy carries) hits the graveyard
+    # while the real commander is on the battlefield.
+    from engine.tokens import make_token_card
+    look_alike = make_token_card(gadrak.name, None, None, "Token")
+    game.players[0].graveyard.append(look_alike)
+
+    game.check_state_based_actions()
+
+    # No offer, and nothing reached the command zone. (The look-alike itself is
+    # swept out of the graveyard by CR 111.7's own state-based action — a token
+    # in any zone but the battlefield ceases to exist — which is not this rule.)
+    assert game.pending_commander_zone_changes == []
+    assert game.players[0].command_zone == []
+
+
+@pytest.mark.cr("903.3", "903.3d")
+def test_a_token_copy_of_the_commander_is_not_a_commander_permanent(set_pool):
+    """903.3's example: a permanent copying the commander is not a commander;
+    the designated card's permanent is, copies notwithstanding."""
+    pool = set_pool("M21")
+    game = _commander_game(pool)
+    gadrak = pool["Gadrak, the Crown-Scourge"]
+    game.cast_from_hand(0, gadrak.name, from_zone="command")
+    real = next(iter(game.controlled_by(0)))
+
+    token = game.create_token_copy(0, real)
+
+    assert game.is_commander_permanent(real) is True
+    assert game.is_commander_permanent(token) is False
+
+
 # ---------------------------------------------------------------------------
 # 903.9b — hand and library
 # ---------------------------------------------------------------------------
@@ -1223,6 +1265,28 @@ def test_casting_a_commander_from_the_command_zone_over_the_api():
     assert session.game.commander_tax(0, session.game.commanders_of(0)[0]) == COMMANDER_TAX
 
 
+@pytest.mark.cr("903.3")
+def test_the_served_state_crowns_the_designated_commander_card():
+    """The wire marks the designated card — in the command zone and, once cast
+    and resolved, on the battlefield — so the client can badge it. Identity-
+    keyed: a same-name card in another zone is not marked."""
+    session_id = _commander_session()
+    game = store.get(session_id).game
+
+    state = _state(session_id)
+    zone = state["players"][0]["command_zone"]
+    assert [c.get("is_commander") for c in zone] == [True]
+
+    # Cast (the session enforces costs, so fill the pool) and resolve it.
+    game.players[0].mana_pool = {"W": 9, "U": 9, "B": 9, "R": 9, "G": 9}
+    result = game.cast_from_hand(0, "Kaervek, the Spiteful", from_zone="command")
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+    state = _state(session_id)
+    crowned = [p["name"] for p in state["players"][0]["battlefield"] if p.get("is_commander")]
+    assert crowned == ["Kaervek, the Spiteful"]
+
+
 @pytest.mark.cr("903.8")
 def test_the_api_refuses_a_commander_that_is_not_yours():
     session_id = _commander_session()
@@ -1235,13 +1299,15 @@ def test_the_api_refuses_a_commander_that_is_not_yours():
 
 
 @pytest.mark.cr("903.9a")
-def test_the_served_state_prompts_its_owner_for_a_commander_in_a_graveyard(set_pool):
-    pool = set_pool("M21")
+def test_the_served_state_prompts_its_owner_for_a_commander_in_a_graveyard():
     session_id = _commander_session()
     game = store.get(session_id).game
     game.interactive_seats = {0}
+    # The *designated* card object goes to the graveyard: CR 903.3 ties the
+    # designation to the card itself, so a same-name look-alike (a fixture
+    # pool's separate load, a token copy) must not raise this prompt.
     game.players[0].command_zone.clear()
-    game.players[0].graveyard.append(pool["Kaervek, the Spiteful"])
+    game.players[0].graveyard.append(game.players[0].commanders[0])
     game.check_state_based_actions()
 
     prompt = _state(session_id)["commander_zone_change"]

@@ -323,10 +323,13 @@ adding entries, not editing dispatch**:
   ingested Scryfall field** — a token, a test fixture and a card the engine
   invents have no field and would come back colourless, which is the value that
   passes every deck check; `tests/rules/test_commander.py` holds the derivation
-  to Scryfall's answer over the whole pool. **The commander designation is a
-  per-seat *name*** (CR 903.3: an attribute of the card, kept across every zone
-  change), because a `Permanent` is a new object each time it enters the
-  battlefield and a `CardDefinition` is shared by every deck in the process.
+  to Scryfall's answer over the whole pool. **The commander designation is
+  per-seat, by card-object identity** (CR 903.3: an attribute of the card, kept
+  across every zone change), because a `Permanent` is a new object each time it
+  enters the battlefield. Identity is what keeps a token copy — a fresh
+  `CardDefinition` carrying the copied name — from being the commander; the
+  owner check is what keeps an opponent's copy of the same catalog-shared
+  object from being one.
   Both halves of CR 903.9's return to the command zone are optional, and both go
   through one `ReplacementChoice` kind. **CR 903.9b is why every "put this card
   into a hand / a library" in the engine goes through
