@@ -140,6 +140,11 @@ def _text_change_replacements(perm: Permanent) -> list[dict]:
 
 def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     image_uri, large_image_uri, art_crop = _card_image_uris(perm.card)
+    # A Clone keeps its own art — the physical card is a Clone. A token that is
+    # a copy (Sublime Epiphany, the Debug Menu's "Create a copy") has no card
+    # and so no art of its own; the copied card's is the only face it can wear.
+    if image_uri is None and large_image_uri is None and perm.copied_from is not None:
+        image_uri, large_image_uri, art_crop = _card_image_uris(perm.effective_card)
 
     # Resolve aura attachment. Both addresses go on the wire: the ``id`` is the
     # stable one and the ``index`` is what the canvas has always drawn its

@@ -42,6 +42,8 @@ ActionKind = Literal[
     "debug_return_to_hand",
     "debug_destroy_permanent",
     "debug_exile_permanent",
+    "debug_create_copy",
+    "debug_send_to_opponent",
     "search_library_confirm",
     "search_library_decline",
     "search_exile_confirm",

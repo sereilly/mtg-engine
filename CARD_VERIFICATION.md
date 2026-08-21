@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **668**
-- Passed: **383** (370 checked in-game, 13 auto-passed)
+- Passed: **386** (373 checked in-game, 13 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **4**
-- Untested: **281**
+- Untested: **278**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -234,7 +234,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Gale Swooper | ⬜ untested |  |
 | Garruk's Gorehorn | ✅ pass | auto-pass: no abilities |
 | Garruk's Harbinger | ⬜ untested |  |
-| Garruk's Uprising | ⬜ untested |  |
+| Garruk's Uprising | ✅ pass |  |
 | Garruk's Warsteed | ⬜ untested |  |
 | Garruk, Savage Herald | ⬜ untested |  |
 | Garruk, Unleashed | ⬜ untested |  |
@@ -452,7 +452,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Pyramids | ✅ pass |  |
 | Quirion Dryad | ⬜ untested |  |
 | Radha, Heart of Keld | ⬜ untested |  |
-| Radiant Fountain | ⬜ untested |  |
+| Radiant Fountain | ✅ pass |  |
 | Raging River | ✅ pass |  |
 | Rain of Revelation | ⬜ untested |  |
 | Raise Dead | ✅ pass |  |
@@ -524,7 +524,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Shahrazad | ✅ pass |  |
 | Shanodin Dryads | ✅ pass |  |
 | Shatter | ✅ pass |  |
-| Shatterstorm | ⬜ untested |  |
+| Shatterstorm | ✅ pass |  |
 | Shipwreck Dowser | ⬜ untested |  |
 | Shivan Dragon | ✅ pass |  |
 | Shock | ⬜ untested |  |

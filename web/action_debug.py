@@ -211,3 +211,54 @@ def _action_debug_destroy_permanent(session, req, seat_type):
     session.game._recompute_continuous_effects()
     session.game.check_state_based_actions()
     session.game.log.append(f"[Debug] {name} destroyed.")
+
+
+@action_handler("debug_create_copy", human_only=DEBUG_ONLY)
+def _action_debug_create_copy(session, req, seat_type):
+    controller_seat, permanent = _debug_target_permanent(session, req)
+    # A copy in the CR 707 sense, made the one way the engine makes one:
+    # ``create_token_copy`` records a layer-1 contribution of the source's
+    # *copiable* values, so a Clone-as-Bears copies as Bears and a +1/+1
+    # counter or an Aura on the original does not leak into the copy. It enters
+    # under the seat that controls the original, because "a copy of this" is a
+    # second one of what the board already shows. SBAs run so a copied Aura
+    # with nothing to enchant, or a second legend, is handled as the rules say.
+    copy = session.game.create_token_copy(controller_seat, permanent)
+    session.game.check_state_based_actions()
+    session.game.log.append(
+        f"[Debug] Created a token copy of {copy.effective_card.name}."
+    )
+
+
+# The object a Debug-Menu control change is recorded under. ``engine/control.py``
+# keys layer-2 contributions by source identity, so one shared sentinel means
+# sending a permanent back and forth *replaces* the previous debug contribution
+# (with a fresh timestamp) rather than piling up a second one — and it is never
+# a permanent, so nothing leaving the battlefield can end it.
+class _DebugControlSource:
+    name = "Debug Menu"
+
+
+_DEBUG_CONTROL_SOURCE = _DebugControlSource()
+
+
+@action_handler("debug_send_to_opponent", human_only=DEBUG_ONLY)
+def _action_debug_send_to_opponent(session, req, seat_type):
+    controller_seat, permanent = _debug_target_permanent(session, req)
+    # The first opponent of the seat that *controls* it, not of the seat that
+    # clicked: in a two-player game that is the other player whichever side of
+    # the board the permanent sits on, so the item is never a no-op.
+    opponent_seat = _first_opponent_seat(session.game, controller_seat)
+    if opponent_seat is None:
+        raise HTTPException(status_code=400, detail="no opposing seat to send it to")
+    name = permanent.card.name
+    # A control *change* (CR 613 layer 2), not a change of owner: the card still
+    # returns to its original owner's hand or graveyard when it leaves, and the
+    # same path stamps CR 302.6's summoning sickness for a creature that changes
+    # hands. Recorded through ``take_control`` so a hand-built board gets its
+    # base controller captured first.
+    if not session.game.take_control(permanent, opponent_seat, source=_DEBUG_CONTROL_SOURCE):
+        raise HTTPException(status_code=404, detail="permanent not found on that battlefield")
+    session.game.log.append(
+        f"[Debug] {session.game.players[opponent_seat].name} gains control of {name}."
+    )

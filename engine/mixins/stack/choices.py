@@ -108,6 +108,7 @@ class PendingChoicesMixin:
             self.effect_suspended = True  # rejected — still owed, still waiting
             return False
         resume_after_answer(self)
+        self._settle_resumed_resolution()
         return True
 
     def take_choice_default(self, choice: PendingChoice) -> None:
@@ -119,6 +120,25 @@ class PendingChoicesMixin:
         self.effect_suspended = False
         spec.default(self, choice)
         resume_after_answer(self)
+        self._settle_resumed_resolution()
+
+    def _settle_resumed_resolution(self) -> None:
+        """CR 704.3 for a resolution that finished on an *answer*.
+
+        State-based actions are checked before a player would receive priority
+        after a spell or ability resolves. The priority pass does that for a
+        resolution that runs straight through — but one that stops to ask
+        (a scry, a search) ran that check at the suspension point, and the
+        steps behind the answer had nowhere to be checked at all. "Scry 1. Draw
+        a card." (Opt) is the shape that showed it: the draw is in the resumed
+        tail, the draw record grew, and the sweep that turns the record into
+        "whenever you draw a card" (Tolarian Kraken) never ran, so the trigger
+        waited for whatever next happened to check state. Nothing to do while
+        the resumption suspended again — the next answer settles it.
+        """
+        if self.effect_suspended:
+            return
+        self.check_state_based_actions()
 
     def auto_resolve_pending_choices(
         self, only_player_index: int | None = None, kinds=None

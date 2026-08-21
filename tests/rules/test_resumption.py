@@ -122,6 +122,50 @@ def test_608_2c_a_draw_written_after_a_scry_waits_for_the_scry():
     assert game.resume_stack == [] and not game.effect_suspended
 
 
+@pytest.mark.cr("704.3", "603.2")
+def test_704_3_state_is_checked_once_a_resumed_resolution_finishes():
+    """The Opt shape again, watched from the other side: what happens *after*
+    the draw behind the scry. CR 704.3 checks state before a player would get
+    priority after a resolution, and the priority pass does that for a
+    resolution that runs straight through. One that suspended ran the check at
+    the suspension point; the steps behind the answer had nowhere to be
+    checked, so a "whenever you draw a card" permanent (Tolarian Kraken) saw
+    the draw recorded and never announced."""
+    kraken = CARDS_BY_NAME.get("Tolarian Kraken")
+    if kraken is None:  # pragma: no cover - pool-dependent
+        from engine.card_loader import load_catalog
+        kraken = next(c for c in load_catalog() if c.name == "Tolarian Kraken")
+    card = _probe_spell("Scry 1. Draw a card.")
+    caster = PlayerState(
+        name="P0", hand=[card], library=_library("A", "B", "C"),
+        battlefield=[Permanent(card=kraken)],
+    )
+    game = Game(players=[caster, PlayerState(name="P1")])
+    game.enforce_mana_costs = True
+    game.interactive_seats = {0}
+    game._sync_control()
+    # {U} for the probe spell, {1} left for the Kraken's "you may pay {1}".
+    caster.mana_pool = {"W": 0, "U": 1, "B": 0, "R": 0, "G": 0, "C": 1, "generic": 0}
+
+    result = game.cast_from_hand(0, card.name, target_player_index=1)
+    assert result.supported, result.details
+    assert game.pending_choices_of("scry", 0)
+    assert not game.pending_choices_of("optional_pay", 0), "nothing drawn yet"
+
+    assert game.confirm_scry(0, card_order=[0], bottom_count=0) is True
+
+    assert [c.name for c in caster.hand] == ["A"], "the draw behind the scry happened"
+    assert game.draws_announced_this_turn.get(0) == 1, (
+        "and the Kraken's draw trigger was announced without waiting for the "
+        "next thing that happens to check state"
+    )
+    assert game.stack and "Tolarian Kraken" in str(game.stack[-1]), (
+        "the trigger is on the stack (CR 704.3 puts waiting triggers there)"
+    )
+    game._settle()
+    assert game.pending_choices_of("optional_pay", 0), "and resolves into its 'you may pay {1}'"
+
+
 @pytest.mark.cr("608.2c", "701.23a")
 def test_608_2c_a_draw_written_after_a_search_waits_for_the_search():
     """The same rule with the other library-shaping prompt. A search removes a

@@ -1200,7 +1200,10 @@ def scry(game: Game, instruction: OracleInstruction, context: OracleExecutionCon
         game.log.append(f"{caster.name} scries {amount} with nothing to look at")
         return True, "resolved"
     caster_index = game.players.index(caster)
-    game.arm_pending_choice("scry", caster_index, top_count=top_count, amount=amount)
+    game.arm_pending_choice(
+        "scry", caster_index,
+        top_count=top_count, amount=amount, card_name=context.card.name,
+    )
     game.log.append(f"{caster.name} is scrying {top_count}")
     return True, "pending_scry"
 

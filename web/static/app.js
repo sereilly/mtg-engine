@@ -1,4 +1,4 @@
-let sessionId = null;
+﻿let sessionId = null;
 let seat = null;
 let currentState = null;
 let stateSyncSource = null;
@@ -113,6 +113,8 @@ let searchLibraryRenderSig = null;
 // it rebuilds through this pointer rather than a closure over a stale grid.
 let searchLibraryRebuild = null;
 let reorderLibraryCurrentOrder = null;
+// Scry: the looked-at cards top-first plus which of them go to the bottom.
+let scryArrangement = null;
 let autoPassPriorityInFlight = false;
 let autoPassPriorityRequestedStateKey = "";
 let autoPassDisabledPhaseInFlight = false;
@@ -2306,6 +2308,48 @@ function getLoyaltyRecipientInfo(state = currentState) {
   return info;
 }
 
+// Trufflesnout / Elder Gargaroth: a modal triggered ability's "Choose one —".
+function getModeChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.mode_choice;
+  if (!info || !Array.isArray(info.modes) || info.modes.length === 0) return null;
+  if (info.player_seat !== undefined && info.player_seat !== seat) return null;
+  return info;
+}
+
+// Necromentia: "Choose a card name other than a basic land card name."
+function getNameAndStripInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.name_and_strip;
+  if (!info || info.caster_seat !== seat) return null;
+  return info;
+}
+
+// Tolarian Kraken: the reflexive trigger ("When you do, …") choosing its target.
+function getReflexiveTargetInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.reflexive_target;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.candidates) || info.candidates.length === 0) return null;
+  return info;
+}
+
+// Siege Striker: "You may tap any number of untapped creatures you control."
+function getTapAnyNumberInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.tap_any_number;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
+// Duress / Kitesail Freebooter: the caster picks out of the revealed hand.
+function getRevealedHandPickInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.revealed_hand_pick;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 function getManaPaymentInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.mana_payment;
@@ -2396,6 +2440,14 @@ function getCamouflageInfo(state = currentState) {
 function getReorderLibraryInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.reorder_library;
+  if (!info) return null;
+  if (info.caster_seat !== seat) return null;
+  return info;
+}
+
+function getScryInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.scry;
   if (!info) return null;
   if (info.caster_seat !== seat) return null;
   return info;
@@ -2648,6 +2700,52 @@ function getPromptBoardTargeting(state = currentState) {
           target_permanent_id: byKey.get(`${targetSeat}-${idx}`),
         }),
       invalidHint: "Only a planeswalker the ability names can take the counter.",
+    });
+  }
+
+  // Tolarian Kraken: the reflexive trigger's target, by id — the candidates
+  // were enumerated when the ability was created (CR 603.12) and may sit on
+  // either battlefield.
+  const reflexiveTargetInfo = getReflexiveTargetInfo(state);
+  if (reflexiveTargetInfo) {
+    const byKey = new Map(
+      (reflexiveTargetInfo.candidates || []).map((c) => [`${c.seat}-${c.index}`, c.id]),
+    );
+    return promptTargeting({
+      permanentKeys: [...byKey.keys()],
+      onPermanent: (targetSeat, idx) =>
+        submitPromptAction({
+          seat,
+          action: "reflexive_target_confirm",
+          target_permanent_id: byKey.get(`${targetSeat}-${idx}`),
+        }),
+      invalidHint: "Only a creature the trigger named when it was created can be chosen.",
+    });
+  }
+
+  // Siege Striker: toggle any number of the highlighted creatures, then confirm
+  // from the prompt panel. Selection is by id; an empty answer is legal.
+  const tapAnyNumberInfo = getTapAnyNumberInfo(state);
+  if (tapAnyNumberInfo) {
+    const byKey = new Map(
+      (tapAnyNumberInfo.candidates || []).map((c) => [`${c.seat}-${c.index}`, c.id]),
+    );
+    const offered = new Set(byKey.values());
+    tapAnyNumberSelectedIds = tapAnyNumberSelectedIds.filter((id) => offered.has(id));
+    const selectedKeys = [...byKey.entries()]
+      .filter(([, id]) => tapAnyNumberSelectedIds.includes(id))
+      .map(([key]) => key);
+    return promptTargeting({
+      permanentKeys: [...byKey.keys()],
+      selectedKeys,
+      onPermanent: (targetSeat, idx) => {
+        const id = byKey.get(`${targetSeat}-${idx}`);
+        const at = tapAnyNumberSelectedIds.indexOf(id);
+        if (at >= 0) tapAnyNumberSelectedIds.splice(at, 1);
+        else tapAnyNumberSelectedIds.push(id);
+        refreshPromptSelection(state);
+      },
+      invalidHint: "Only your untapped creatures can be tapped for this.",
     });
   }
 
@@ -3623,6 +3721,19 @@ function applySacrificeSelectPrompt(info) {
 
 // Color rods (Wooden Sphere, …): "Whenever a player casts a [color] spell, you
 // may pay {1}. If you do, gain 1 life." A yes/no decision per pending trigger.
+// A mana cost as "{W}{W}{2}" text, from either a symbol dict or a bare number.
+function manaCostText(cost) {
+  if (cost === null || cost === undefined) return "{0}";
+  if (typeof cost !== "object") return `{${cost}}`;
+  let out = "";
+  for (const color of ["W", "U", "B", "R", "G", "C"]) {
+    for (let i = 0; i < (Number(cost[color]) || 0); i += 1) out += `{${color}}`;
+  }
+  const generic = Number(cost.generic) || 0;
+  if (generic > 0 || !out) out += `{${generic}}`;
+  return out;
+}
+
 function applyOptionalPayPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -3651,19 +3762,41 @@ function applyOptionalPayPrompt(info) {
   // Hasran Ogress: "unless you pay {2}" — declining deals damage instead.
   const damage = Number(current?.damage || 0);
 
-  // Render the generic cost as a mana icon ({1}) rather than literal "{1}" text.
-  const costSymbols = renderSymbolsInline(`{${cost}}`);
+  // Render the cost as mana icons rather than literal "{1}" text. A cost is a
+  // symbol dict everywhere in the engine ({generic: 1}, {W: 1, generic: 2});
+  // the older life-rod prompts still send a bare number, so take both.
+  const costText = manaCostText(cost);
+  const costSymbols = renderSymbolsInline(costText);
+  // "You may tap or untap target creature" (Tolarian Kraken's reflexive
+  // half): an optional action with nothing to pay is a yes/no, not a payment.
+  const isFree = !isDraw && costText === "{0}" && damage === 0 && Number(life) === 0;
   const acceptLabel = isDraw
     ? escapeHtml(`Draw ${current.draw} card${current.draw > 1 ? "s" : ""}`)
-    : `Pay ${costSymbols}`;
-  const declineLabel = damage > 0 ? escapeHtml(`Take ${damage} damage`) : "Decline";
-  title.textContent = isDraw ? "Optional Draw" : damage > 0 ? "Pay or Take Damage" : "Pay for Life?";
+    : isFree
+      ? "Yes"
+      : `Pay ${costSymbols}`;
+  const declineLabel = damage > 0 ? escapeHtml(`Take ${damage} damage`) : isFree ? "No" : "Decline";
+  title.textContent = isDraw
+    ? "Optional Draw"
+    : damage > 0
+      ? "Pay or Take Damage"
+      : Number(life) > 0
+        ? "Pay for Life?"
+        : isFree
+          ? "Optional Effect"
+          : "Pay the Cost?";
   if (isDraw) {
     body.textContent = `${cardName}: ${current.prompt || "Draw a card?"}`;
+  } else if (isFree) {
+    body.textContent = `${cardName}: ${current.prompt || "you may apply this optional effect. Do it?"}`;
   } else if (damage > 0) {
-    setSymbolsHtml(body, `${cardName}: pay {${cost}}, or it deals ${damage} damage to you.`);
+    setSymbolsHtml(body, `${cardName}: pay ${costText}, or it deals ${damage} damage to you.`);
+  } else if (Number(life) > 0) {
+    setSymbolsHtml(body, `${cardName}: pay ${costText} to gain ${life} life?`);
   } else {
-    setSymbolsHtml(body, `${cardName}: pay {${cost}} to gain ${life} life?`);
+    // "You may pay {1}. When you do, …" (Tolarian Kraken): nothing to gain
+    // directly, so the prompt's own wording says what paying buys.
+    setSymbolsHtml(body, `${cardName}: ${current?.prompt || `pay ${costText}?`}`);
   }
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
@@ -4069,6 +4202,178 @@ function applyLoyaltyRecipientPrompt(info) {
     `${info.card_name}: put ${info.count} loyalty counter(s) on one of these.`;
   q("promptSteps").innerHTML =
     "<div>Action: click one of the highlighted planeswalkers on the battlefield.</div>";
+}
+
+// Tolarian Kraken: "When you do, you may tap or untap target creature." The
+// candidates glow on the board (getPromptBoardTargeting); the panel just says so.
+function applyReflexiveTargetPrompt(info) {
+  const panel = q("activationPanel");
+  panel.classList.remove("hidden");
+  q("promptOkBtn").classList.add("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  q("promptCustomOkBtn").disabled = true;
+  q("promptTitle").textContent = "Choose a target";
+  q("promptBody").textContent =
+    `${info.card_name || "The ability"}: its reflexive trigger needs a target.`;
+  q("promptSteps").innerHTML =
+    "<div>Action: click one of the highlighted creatures on the battlefield.</div>";
+}
+
+// Siege Striker: toggle creatures on the board, read the count back here, confirm.
+let tapAnyNumberSelectedIds = [];
+function applyTapAnyNumberPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const candidates = info.candidates || [];
+  const offered = new Set(candidates.map((c) => c.id));
+  tapAnyNumberSelectedIds = tapAnyNumberSelectedIds.filter((id) => offered.has(id));
+  const chosen = candidates.filter((c) => tapAnyNumberSelectedIds.includes(c.id));
+  const power = Number(info.power) || 0;
+  const toughness = Number(info.toughness) || 0;
+  const perCreature = `${power >= 0 ? "+" : ""}${power}/${toughness >= 0 ? "+" : ""}${toughness}`;
+  const total = `${power * chosen.length >= 0 ? "+" : ""}${power * chosen.length}/${toughness * chosen.length >= 0 ? "+" : ""}${toughness * chosen.length}`;
+
+  title.textContent = "Tap any number of creatures?";
+  body.textContent =
+    `${info.card_name || "This creature"} gets ${perCreature} until end of turn for each creature tapped this way.`;
+  const chosenLine = chosen.length
+    ? `Tapping: ${chosen.map((c) => c.name).join(", ")} (${total})`
+    : "Tapping: none.";
+  steps.innerHTML = [
+    candidates.length
+      ? "<div>Action: click a highlighted creature to tap it; click it again to leave it untapped.</div>"
+      : "<div>You control no untapped creatures to tap.</div>",
+    `<div><strong>${escapeHtml(chosenLine)}</strong></div>`,
+    `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" data-tap-any-number-confirm="1">${chosen.length ? `Tap ${chosen.length}` : "Tap None"}</button></div>`,
+  ].join("");
+
+  steps.querySelector("[data-tap-any-number-confirm]")?.addEventListener("click", async () => {
+    const ids = [...tapAnyNumberSelectedIds];
+    tapAnyNumberSelectedIds = [];
+    await sendAction({ seat, action: "tap_any_number_confirm", target_permanent_ids: ids });
+  });
+}
+
+// Trufflesnout / Elder Gargaroth: one button per printed mode.
+function applyModeChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Choose one";
+  body.textContent = `${info.card_name || "Triggered ability"}: pick a mode.`;
+  const buttons = (info.modes || [])
+    .map(
+      (mode) =>
+        `<button type="button" class="prompt-choice-btn" data-mode-index="${Number(mode.index)}">${escapeHtml(mode.label || `Mode ${Number(mode.index) + 1}`)}</button>`,
+    )
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+  steps.querySelectorAll("[data-mode-index]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({ seat, action: "mode_choice_confirm", hand_index: Number(btn.dataset.modeIndex) });
+    });
+  });
+}
+
+// Necromentia: name a card. The suggestions are what the searched player has in
+// public zones (and their hand, which the engine offers as a convenience); any
+// name is accepted except a basic land's (CR 202.1 lets a player name any card).
+let nameAndStripDraft = null;
+function applyNameAndStripPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const suggestions = info.suggestions || [];
+  if (nameAndStripDraft === null) nameAndStripDraft = info.default_name || suggestions[0] || "";
+  const opponent = currentState?.players?.[info.target_seat]?.name || "that player";
+
+  title.textContent = "Name a card";
+  body.textContent =
+    `${info.card_name || "This spell"}: name a card other than a basic land. ${opponent} will search their zones for it.`;
+  const chips = suggestions
+    .map(
+      (name) =>
+        `<button type="button" class="prompt-choice-btn name-chip${name === nameAndStripDraft ? " selected" : ""}" data-name-chip="${escapeHtml(name)}">${escapeHtml(name)}</button>`,
+    )
+    .join("");
+  steps.innerHTML = [
+    `<div class="name-strip-row"><input id="nameAndStripInput" type="text" list="nameAndStripSuggestions" placeholder="Card name" value="${escapeHtml(nameAndStripDraft)}" autocomplete="off" /><button type="button" class="prompt-choice-btn" data-name-confirm="1">Name It</button></div>`,
+    `<datalist id="nameAndStripSuggestions">${suggestions.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("")}</datalist>`,
+    suggestions.length
+      ? `<div class="prompt-subnote">Seen in their public zones (graveyard, exile, battlefield):</div><div class="prompt-choice-row name-chip-row">${chips}</div>`
+      : "",
+  ].join("");
+
+  const input = steps.querySelector("#nameAndStripInput");
+  const submit = async () => {
+    const name = (input?.value || "").trim();
+    if (!name) {
+      updateActionHint("Type or pick a card name first.", true);
+      return;
+    }
+    try {
+      await sendAction({ seat, action: "name_and_strip_confirm", card_name: name });
+      nameAndStripDraft = null;
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  };
+  input?.addEventListener("input", () => {
+    nameAndStripDraft = input.value;
+  });
+  input?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submit();
+  });
+  steps.querySelector("[data-name-confirm]")?.addEventListener("click", submit);
+  steps.querySelectorAll("[data-name-chip]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      nameAndStripDraft = btn.dataset.nameChip;
+      if (input) input.value = nameAndStripDraft;
+      steps.querySelectorAll(".name-chip").forEach((c) => c.classList.toggle("selected", c === btn));
+    });
+  });
 }
 
 // Power Sink: "Counter target spell unless its controller pays {X}." The targeted
@@ -5001,6 +5306,48 @@ function renderLookTopPickModal(info) {
   }
 }
 
+// Duress / Kitesail Freebooter: the whole revealed hand, with only the legal
+// picks clickable — the card revealed the hand (CR 701.20), so the rest are
+// shown but marked illegal rather than hidden.
+function renderRevealedHandPickModal(info) {
+  const modal = document.getElementById("revealedHandPickModal");
+  if (!modal) return;
+  if (!info) {
+    modal.classList.add("hidden");
+    return;
+  }
+  modal.classList.remove("hidden");
+  const legal = new Set((info.legal_indices || []).map(Number));
+  const subtitle = document.getElementById("revealedHandPickSubtitle");
+  if (subtitle) {
+    subtitle.textContent =
+      `${info.card_name || "Choose"}: ${info.victim_name || "the opponent"} revealed their hand. Click a highlighted card; the dimmed ones can't be chosen.`;
+  }
+  const grid = document.getElementById("revealedHandPickGrid");
+  if (grid) {
+    grid.innerHTML = (info.cards || [])
+      .map((card, idx) => {
+        const inner = card.image_uri
+          ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+          : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
+        const cls = legal.has(idx) ? "library-card-choice" : "library-card-choice illegal";
+        return `<div class="${cls}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+      })
+      .join("") || `<div class="modal-empty-note">Their hand is empty.</div>`;
+    grid.querySelectorAll(".library-card-choice").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const idx = Number(el.dataset.idx);
+        if (!legal.has(idx)) {
+          updateActionHint("That card can't be chosen with this effect.", true);
+          return;
+        }
+        modal.classList.add("hidden");
+        await sendAction({ seat, action: "revealed_hand_pick_confirm", hand_index: idx });
+      });
+    });
+  }
+}
+
 // Rewind's "Untap up to four lands": a resolution-time multi-select over
 // matching permanents, capped at the printed amount. Confirming with nothing
 // selected is legal ("up to" includes zero).
@@ -5322,6 +5669,195 @@ function renderReorderLibraryModal(info) {
   buildCards();
 }
 
+// CR 701.22a: look at the top N, put any number on the bottom in any order
+// and the rest back on top in any order. The wire is one permutation
+// (`card_order`, top-first, kept cards leading) plus `bottom_count`, so the
+// arrangement here is kept exactly in that shape: clicking a card toggles it
+// between the two groups, dragging reorders within the row, and the kept
+// cards are always normalised to the front. Scry 1 — by far the common case —
+// gets two direct buttons instead of a toggle-then-confirm.
+function renderScryModal(info) {
+  const modal = document.getElementById("scryModal");
+  if (!modal) return;
+
+  if (!info) {
+    modal.classList.add("hidden");
+    scryArrangement = null;
+    return;
+  }
+
+  modal.classList.remove("hidden");
+
+  const cards = info.cards || [];
+  if (scryArrangement === null || scryArrangement.order.length !== cards.length) {
+    scryArrangement = { order: cards.map((_, i) => i), bottomed: new Set() };
+  }
+  const single = cards.length === 1;
+
+  const title = document.getElementById("scryTitle");
+  if (title) title.textContent = `Scry ${info.amount || cards.length}`;
+  const subtitle = document.getElementById("scrySubtitle");
+  if (subtitle) {
+    const who = info.card_name ? `${info.card_name}: ` : "";
+    subtitle.textContent = single
+      ? `${who}look at the top card of your library. You may put it on the bottom.`
+      : `${who}click a card to send it to the bottom (click again to keep it); drag to reorder. The leftmost kept card ends up on top.`;
+  }
+
+  const container = document.getElementById("scryCards");
+  const confirmBtn = document.getElementById("scryConfirmBtn");
+  const keepBtn = document.getElementById("scryKeepBtn");
+  const bottomBtn = document.getElementById("scryBottomBtn");
+  const summary = document.getElementById("scrySummary");
+  const axis = modal.querySelector(".scry-axis-labels");
+  if (axis) axis.classList.toggle("hidden", single);
+
+  let dragSrcSlot = null;
+
+  function normalise() {
+    const { order, bottomed } = scryArrangement;
+    scryArrangement.order = [
+      ...order.filter((i) => !bottomed.has(i)),
+      ...order.filter((i) => bottomed.has(i)),
+    ];
+  }
+
+  async function submit() {
+    if (!scryArrangement) return;
+    normalise();
+    const payload = {
+      seat,
+      action: "scry_confirm",
+      card_order: [...scryArrangement.order],
+      bottom_count: scryArrangement.bottomed.size,
+    };
+    scryArrangement = null;
+    modal.classList.add("hidden");
+    await sendAction(payload);
+  }
+
+  function buildCards() {
+    if (!container) return;
+    normalise();
+    container.innerHTML = "";
+    const { order, bottomed } = scryArrangement;
+    const keptCount = order.length - bottomed.size;
+    if (summary) {
+      summary.textContent = single
+        ? ""
+        : `${keptCount} on top, ${bottomed.size} to the bottom`;
+    }
+    order.forEach((cardIdx, slotPos) => {
+      if (!single && slotPos === keptCount && keptCount > 0 && bottomed.size > 0) {
+        const divider = document.createElement("div");
+        divider.className = "scry-divider";
+        divider.title = "Cards to the right go to the bottom";
+        container.appendChild(divider);
+      }
+      const card = cards[cardIdx];
+      const slot = document.createElement("div");
+      slot.className = "reorder-card-slot";
+      slot.dataset.slotPos = slotPos;
+
+      const item = document.createElement("div");
+      item.className = "reorder-card-item scry-card-item" + (bottomed.has(cardIdx) ? " scry-bottomed" : "");
+      item.draggable = !single;
+      item.dataset.slotPos = slotPos;
+      item.dataset.cardIdx = cardIdx;
+
+      if (card.image_uri) {
+        const img = document.createElement("img");
+        img.src = card.image_uri;
+        img.alt = card.name;
+        img.loading = "lazy";
+        item.appendChild(img);
+      } else {
+        const ph = document.createElement("div");
+        ph.className = "reorder-card-text-placeholder";
+        ph.textContent = card.name;
+        item.appendChild(ph);
+      }
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "reorder-card-item-name";
+      nameEl.textContent = card.name;
+      item.appendChild(nameEl);
+
+      const badge = document.createElement("div");
+      badge.className = "scry-card-badge";
+      badge.textContent = bottomed.has(cardIdx) ? "Bottom" : "Top";
+      item.appendChild(badge);
+
+      if (!single) {
+        item.addEventListener("click", () => {
+          if (bottomed.has(cardIdx)) bottomed.delete(cardIdx);
+          else bottomed.add(cardIdx);
+          buildCards();
+        });
+
+        item.addEventListener("dragstart", (e) => {
+          dragSrcSlot = slotPos;
+          item.classList.add("dragging");
+          e.dataTransfer.effectAllowed = "move";
+        });
+        item.addEventListener("dragend", () => {
+          item.classList.remove("dragging");
+          container.querySelectorAll(".reorder-card-slot").forEach((s) => s.classList.remove("drag-over"));
+        });
+        slot.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          slot.classList.add("drag-over");
+        });
+        slot.addEventListener("dragleave", () => slot.classList.remove("drag-over"));
+        slot.addEventListener("drop", (e) => {
+          e.preventDefault();
+          slot.classList.remove("drag-over");
+          const destSlot = Number(slot.dataset.slotPos);
+          if (dragSrcSlot === null || dragSrcSlot === destSlot) return;
+          const newOrder = [...scryArrangement.order];
+          const [moved] = newOrder.splice(dragSrcSlot, 1);
+          newOrder.splice(destSlot, 0, moved);
+          scryArrangement.order = newOrder;
+          dragSrcSlot = null;
+          buildCards();
+        });
+      }
+
+      slot.appendChild(item);
+      container.appendChild(slot);
+    });
+  }
+
+  // Bound once per page: every handler reads the module-level arrangement, so
+  // a re-render on the next state poll never needs to rebind.
+  if (confirmBtn && !confirmBtn.dataset.bound) {
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", submit);
+  }
+  if (keepBtn && !keepBtn.dataset.bound) {
+    keepBtn.dataset.bound = "1";
+    keepBtn.addEventListener("click", async () => {
+      if (!scryArrangement) return;
+      scryArrangement.bottomed = new Set();
+      await submit();
+    });
+  }
+  if (bottomBtn && !bottomBtn.dataset.bound) {
+    bottomBtn.dataset.bound = "1";
+    bottomBtn.addEventListener("click", async () => {
+      if (!scryArrangement) return;
+      scryArrangement.bottomed = new Set(scryArrangement.order);
+      await submit();
+    });
+  }
+  if (confirmBtn) confirmBtn.classList.toggle("hidden", single);
+  if (keepBtn) keepBtn.classList.toggle("hidden", !single);
+  if (bottomBtn) bottomBtn.classList.toggle("hidden", !single);
+
+  buildCards();
+}
+
 function getOpponentName(state = currentState) {
   if (!state || !Array.isArray(state.players) || state.players.length < 2) {
     return "Opponent";
@@ -5532,6 +6068,37 @@ function renderActivationPrompt() {
   const loyaltyRecipientInfo = getLoyaltyRecipientInfo();
   if (loyaltyRecipientInfo) {
     applyLoyaltyRecipientPrompt(loyaltyRecipientInfo);
+    return;
+  }
+
+  const reflexiveTargetInfo = getReflexiveTargetInfo();
+  if (reflexiveTargetInfo) {
+    applyReflexiveTargetPrompt(reflexiveTargetInfo);
+    return;
+  }
+
+  const tapAnyNumberInfo = getTapAnyNumberInfo();
+  if (tapAnyNumberInfo) {
+    applyTapAnyNumberPrompt(tapAnyNumberInfo);
+    return;
+  }
+
+  const modeChoiceInfo = getModeChoiceInfo();
+  if (modeChoiceInfo) {
+    applyModeChoicePrompt(modeChoiceInfo);
+    return;
+  }
+
+  const nameAndStripInfo = getNameAndStripInfo();
+  if (nameAndStripInfo) {
+    applyNameAndStripPrompt(nameAndStripInfo);
+    return;
+  }
+
+  // The revealed-hand pick has its own card-grid modal
+  // (renderRevealedHandPickModal); it claims the slot without a panel.
+  if (getRevealedHandPickInfo()) {
+    panel.classList.add("hidden");
     return;
   }
 
@@ -8056,6 +8623,11 @@ function setDebugMenuEnabled(enabled, canCastFree = false) {
   q("debugAddToSideboardBtn").disabled = !enabled;
   q("debugCastFreeBtn").disabled = !enabled || !canCastFree;
   q("debugCastFreeOpponentBtn").disabled = !enabled;
+  // The Cast Card buttons are the free cast with the name filled in, so they
+  // are gated exactly as it is: only while this seat holds priority.
+  for (const button of document.querySelectorAll("#debugCastCardRow .debug-cast-card-btn")) {
+    button.disabled = !enabled || !canCastFree;
+  }
   q("debugForceAttackAllToggle").disabled = !enabled;
   if (!enabled) {
     renderDebugOptions([]);
@@ -8163,7 +8735,10 @@ async function addDebugCardToSideboard() {
   updateActionHint(`Debug: added ${cardName} outside the game.`);
 }
 
-async function castDebugCardForFree() {
+// Cast a card for free as this seat. With no argument it casts whatever the
+// search box names; the Cast Card buttons pass their card's name instead, so
+// both go through one path (targets, modes, X, the priority check).
+async function castDebugCardForFree(presetCardName = null) {
   if (!sessionId || seat === null) {
     updateDebugStatus("Create or join a session first.", "error");
     return;
@@ -8174,7 +8749,7 @@ async function castDebugCardForFree() {
   }
 
   const input = q("debugCardSearch");
-  const cardName = input.value.trim();
+  const cardName = (presetCardName ?? input.value).trim();
   if (!cardName) {
     updateDebugStatus("Type a card name before casting.", "error");
     return;
@@ -11710,7 +12285,9 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderSearchExileModal(getSearchExileInfo(state));
   renderUntapUpToModal(getUntapUpToInfo(state));
   renderLookTopPickModal(getLookTopPickInfo(state));
+  renderRevealedHandPickModal(getRevealedHandPickInfo(state));
   renderReorderLibraryModal(reorderLibraryInfo);
+  renderScryModal(getScryInfo(state));
   renderHandRevealModal(getHandRevealInfo(state));
   renderDrawChoiceModals(state);
   attemptPendingActivation();
@@ -11773,6 +12350,14 @@ const PERMANENT_MENU_ACTIONS = {
   "clear-summoning-sickness": {
     action: "debug_clear_summoning_sickness",
     hint: (name) => `${name} no longer has summoning sickness.`,
+  },
+  "create-copy": {
+    action: "debug_create_copy",
+    hint: (name) => `Created a token copy of ${name}.`,
+  },
+  "send-to-opponent": {
+    action: "debug_send_to_opponent",
+    hint: (name) => `${name} is now under the opponent's control.`,
   },
   "return-to-hand": {
     action: "debug_return_to_hand",
@@ -13628,6 +14213,16 @@ q("debugAddToSideboardBtn").addEventListener("click", async () => {
 q("debugCastFreeBtn").addEventListener("click", async () => {
   try {
     await castDebugCardForFree();
+  } catch (e) {
+    updateDebugStatus(e.message, "error");
+  }
+});
+
+q("debugCastCardRow").addEventListener("click", async (event) => {
+  const button = event.target.closest(".debug-cast-card-btn");
+  if (!button || button.disabled) return;
+  try {
+    await castDebugCardForFree(button.dataset.card);
   } catch (e) {
     updateDebugStatus(e.message, "error");
   }

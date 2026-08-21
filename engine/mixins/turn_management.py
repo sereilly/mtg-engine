@@ -138,8 +138,24 @@ class TurnManagementMixin:
         return True
 
     def keep_hand(self, player_index: int) -> None:
-        """Rule 103.5: Player declares to keep their current hand."""
+        """Rule 103.5: Player declares to keep their current hand.
+
+        The hand was drawn before the game's first turn (CR 103.4), and so were
+        any mulligan redraws — none of them is a card drawn *this turn*, but
+        every one of them went through ``PlayerState.draw`` and onto the
+        per-turn record. The headless ``start_turn`` resets that record; the
+        web layer's pregame starts turn 1 without it, so a "whenever you draw a
+        card" permanent put onto the battlefield on turn 1 (Tolarian Kraken)
+        announced the whole opening hand. Keeping is the last pregame step a
+        seat takes, so it is where the record is wiped — together with the
+        sweep memories that compare against it, or a check that ran during the
+        pregame would leave them ahead of an empty record and swallow the first
+        real draws of the turn.
+        """
         player = self.players[player_index]
+        player.cards_drawn_this_turn = []
+        self.draws_announced_this_turn.pop(player_index, None)
+        self.second_draw_fired_this_turn.discard(player_index)
         suffix = (
             f" ({player.mulligans_taken} mulligan(s) taken)"
             if player.mulligans_taken > 0

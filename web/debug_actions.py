@@ -35,6 +35,8 @@ _DEBUG_ANYTIME_ACTIONS = {
     "debug_return_to_hand",
     "debug_destroy_permanent",
     "debug_exile_permanent",
+    "debug_create_copy",
+    "debug_send_to_opponent",
 }
 
 

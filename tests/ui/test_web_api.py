@@ -3038,6 +3038,140 @@ def test_debug_tap_works_on_an_opponents_permanent():
     assert bear.tapped
 
 
+def test_debug_create_copy_puts_a_token_copy_under_the_same_controller():
+    bear = Permanent(card=_mk_creature_card("Copied Bear", 2, 2))
+    sid = _make_board_menu_session(9330, {1: [bear]})
+    session = store.get(sid)
+
+    response = _board_action(sid, "debug_create_copy", 1, 0)
+    assert response.status_code == 200, response.text
+    board = session.game.players[1].battlefield
+    assert len(board) == 2 and board[0] is bear
+    copy = board[1]
+    assert copy.metadata.get("is_token") is True
+    assert copy.copied_from == "Copied Bear"
+    assert copy.effective_card.name == "Copied Bear"
+    assert (copy.effective_power, copy.effective_toughness) == (2, 2)
+    # The original is untouched, and the copy is a fresh object (CR 400.7).
+    assert session.game.players[0].battlefield == []
+    assert copy.permanent_id != bear.permanent_id
+    serialized = response.json()["players"][1]["battlefield"][1]
+    assert serialized["name"] == "Copied Bear" and serialized["is_token"] is True
+
+
+def test_debug_create_copy_copies_copiable_values_not_counters():
+    """CR 707.2: a copy takes the printed (copiable) values — a +1/+1 counter on
+    the original is not part of what gets copied."""
+    from engine.pt import add_plus1_counters
+
+    bear = Permanent(card=_mk_creature_card("Buffed Bear", 2, 2))
+    add_plus1_counters(bear, 1)
+    sid = _make_board_menu_session(9331, {0: [bear]})
+    session = store.get(sid)
+    assert bear.effective_power == 3
+
+    assert _board_action(sid, "debug_create_copy", 0, 0).status_code == 200
+    copy = session.game.players[0].battlefield[1]
+    assert (copy.effective_power, copy.effective_toughness) == (2, 2)
+
+
+def test_debug_create_copy_of_a_token_copy_wears_the_copied_cards_art():
+    """A token copy has no card and so no art of its own; the wire falls back
+    to the copied card's image rather than sending a blank face."""
+    bear = Permanent(card=_mk_creature_card("Pictured Bear", 2, 2))
+    bear.card.raw["image_uris"] = {"normal": "https://img/normal.jpg", "large": "https://img/large.jpg"}
+    sid = _make_board_menu_session(9332, {0: [bear]})
+
+    response = _board_action(sid, "debug_create_copy", 0, 0)
+    assert response.status_code == 200, response.text
+    copy = response.json()["players"][0]["battlefield"][1]
+    assert copy["image_uri"] == "https://img/normal.jpg"
+    assert copy["large_image_uri"] == "https://img/large.jpg"
+
+
+def test_debug_send_to_opponent_changes_control_not_ownership():
+    bear = Permanent(card=_mk_creature_card("Sent Bear", 2, 2))
+    sid = _make_board_menu_session(9333, {0: [bear]})
+    session = store.get(sid)
+    game = session.game
+
+    response = _board_action(sid, "debug_send_to_opponent", 0, 0)
+    assert response.status_code == 200, response.text
+    assert game.players[0].battlefield == []
+    assert game.players[1].battlefield == [bear]
+    assert game.controller_index_of(bear) == 1
+    # CR 108.3 / 400.3: still seat 0's card — a bounce returns it to seat 0's hand.
+    assert game.owner_index_of(bear) == 0
+    # CR 302.6: a creature that changed hands this turn is summoning sick.
+    assert game._is_summoning_sick(bear)
+    assert "gains control of Sent Bear" in game.log[-1]
+
+    game.players[0].hand = []
+    assert _board_action(sid, "debug_return_to_hand", 1, 0).status_code == 200
+    assert [c.name for c in game.players[0].hand] == ["Sent Bear"]
+    assert game.players[1].battlefield == []
+
+
+def test_debug_send_to_opponent_sends_an_opponents_permanent_back():
+    """"Opponent" is relative to the seat that *controls* the permanent, so in
+    a two-player game the item moves a permanent across the board whichever
+    side it sits on, and a second use sends it back again."""
+    bear = Permanent(card=_mk_creature_card("Boomerang Bear", 2, 2))
+    sid = _make_board_menu_session(9334, {1: [bear]})
+    session = store.get(sid)
+    game = session.game
+
+    assert _board_action(sid, "debug_send_to_opponent", 1, 0).status_code == 200
+    assert game.controller_index_of(bear) == 0
+    assert game.players[0].battlefield == [bear]
+
+    assert _board_action(sid, "debug_send_to_opponent", 0, 0).status_code == 200
+    assert game.controller_index_of(bear) == 1
+    assert game.players[1].battlefield == [bear]
+    assert game.owner_index_of(bear) == 1
+
+
+def test_debug_send_to_opponent_rejects_an_index_off_the_battlefield():
+    bear = Permanent(card=_mk_creature_card("Lone Bear", 2, 2))
+    sid = _make_board_menu_session(9335, {0: [bear]})
+
+    assert _board_action(sid, "debug_send_to_opponent", 0, 3).status_code == 404
+    assert _board_action(sid, "debug_create_copy", 0, 3).status_code == 404
+    assert store.get(sid).game.players[0].battlefield == [bear]
+
+
+def test_debug_cast_card_buttons_name_castable_pool_cards():
+    """The Debug Menu's Cast Card section lists one card per basic card type
+    the pool has; each must be a real catalog card of that type that the free
+    cast accepts with no further choices."""
+    import re
+    from web.runtime import CARD_BY_NAME
+
+    html = (pathlib.Path(web_app.__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
+    row = re.search(r'id="debugCastCardRow".*?</div>', html, re.S).group(0)
+    buttons = re.findall(r'data-card="([^"]+)"[^>]*>([^<]+)</button>', row)
+    assert [label for _, label in buttons] == [
+        "Creature", "Artifact", "Enchantment", "Instant", "Sorcery", "Land", "Planeswalker",
+    ]
+    assert dict(buttons)["Grizzly Bears"] == "Creature"
+    for name, label in buttons:
+        card = CARD_BY_NAME.get(name.casefold())
+        assert card is not None, f"{name} is not in the catalog"
+        assert card.primary_type == label.lower(), (name, card.type_line)
+
+    for name, label in buttons:
+        sid = _make_main_phase_session(9340, _mk_creature_card("Filler", 1, 1))
+        response = client.post(
+            f"/api/sessions/{sid}/action",
+            json={"seat": 0, "action": "debug_cast_free", "card_name": name},
+        )
+        assert response.status_code == 200, (name, response.text)
+        game = store.get(sid).game
+        on_stack = [item.card.name for item in game.stack]
+        on_board = [p.card.name for p in game.players[0].battlefield]
+        assert name in on_stack or name in on_board, (name, on_stack, on_board)
+
+
 def test_effect_order_prompt_is_shown_gates_actions_and_can_be_answered():
     """CR 616.1e end to end through the web layer.
 

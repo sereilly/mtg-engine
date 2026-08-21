@@ -1777,6 +1777,12 @@ h2.targeting-valid {
   font-size: 0.88rem;
 }
 
+/* Seven type buttons: narrower than the generic row so they pack two or three
+   per line instead of one each. */
+.debug-panel-body .debug-cast-card-row button {
+  flex: 1 1 110px;
+}
+
 #rawState {
   max-height: 240px;
   overflow: auto;
@@ -2153,6 +2159,30 @@ h2.targeting-valid {
 
 .prompt-custom-input-row input {
   width: 100px;
+}
+
+/* Necromentia's name-a-card prompt: a free-text input beside its confirm, and
+   the names the engine saw in the searched player's zones as one-click chips. */
+.name-strip-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.name-strip-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.prompt-subnote {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  margin: 6px 0 4px;
+}
+
+.name-chip-row {
+  flex-wrap: wrap;
 }
 
 .card-preview-frame {
@@ -3016,6 +3046,78 @@ pre {
   color: var(--ink-soft);
   background: rgba(255, 255, 255, 0.06);
   border-radius: 6px 6px 0 0;
+}
+
+/* Scry modal — shares the reorder-library row; adds the top/bottom split */
+.scry-cards {
+  min-height: 0;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.scry-axis-labels.hidden {
+  display: none;
+}
+
+.scry-card-item {
+  position: relative;
+  cursor: pointer;
+}
+
+.scry-card-item[draggable="true"] {
+  cursor: grab;
+}
+
+.scry-card-item.scry-bottomed {
+  opacity: 0.55;
+  border-color: rgba(220, 100, 90, 0.55);
+}
+
+.scry-card-item.scry-bottomed:hover {
+  opacity: 0.8;
+}
+
+.scry-card-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #0f1a12;
+  background: rgba(133, 200, 134, 0.95);
+  pointer-events: none;
+}
+
+.scry-card-item.scry-bottomed .scry-card-badge {
+  color: #fff;
+  background: rgba(200, 80, 70, 0.95);
+}
+
+.scry-divider {
+  align-self: stretch;
+  width: 2px;
+  min-height: 160px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to bottom,
+    rgba(133, 200, 134, 0.7),
+    rgba(200, 80, 70, 0.7)
+  );
+  margin: 0 4px;
+}
+
+.scry-footer {
+  align-items: center;
+}
+
+.scry-summary {
+  margin-right: auto;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
 }
 
 .turn-announcement {

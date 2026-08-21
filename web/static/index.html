@@ -11,7 +11,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260819-format3" />
+    <link rel="stylesheet" href="/styles.css?v=20260820-debugcast2" />
   </head>
   <body>
     <div id="auroraLayer" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -526,6 +526,20 @@
                   Force AI to attack with all creatures
                 </label>
 
+                <h3 class="debug-subhead">Cast Card</h3>
+                <!-- One simple card of each basic card type the pool has, cast
+                     for free exactly as "Cast Selected Card For Free" would cast
+                     it. data-card names the card; app.js does the rest. -->
+                <div id="debugCastCardRow" class="button-row debug-cast-card-row">
+                  <button type="button" class="debug-cast-card-btn" data-card="Grizzly Bears" title="Grizzly Bears">Creature</button>
+                  <button type="button" class="debug-cast-card-btn" data-card="Sol Ring" title="Sol Ring">Artifact</button>
+                  <button type="button" class="debug-cast-card-btn" data-card="Crusade" title="Crusade">Enchantment</button>
+                  <button type="button" class="debug-cast-card-btn" data-card="Fog" title="Fog">Instant</button>
+                  <button type="button" class="debug-cast-card-btn" data-card="Basri's Solidarity" title="Basri's Solidarity">Sorcery</button>
+                  <button type="button" class="debug-cast-card-btn" data-card="Forest" title="Forest">Land</button>
+                  <button type="button" class="debug-cast-card-btn" data-card="Basri Ket" title="Basri Ket">Planeswalker</button>
+                </div>
+
                 <h3 class="debug-subhead">Card Verification</h3>
                 <p id="debugVerifyProgress" class="debug-status">Loading verification progress…</p>
                 <div class="button-row">
@@ -595,6 +609,24 @@
       </div>
     </div>
 
+    <div id="scryModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="scryTitle">
+      <div class="modal-box reorder-library-box scry-box">
+        <h2 id="scryTitle" class="modal-title">Scry</h2>
+        <p id="scrySubtitle" class="modal-subtitle">Look at the top cards of your library. Click a card to send it to the bottom; drag to reorder the ones you keep.</p>
+        <div class="reorder-library-axis-labels scry-axis-labels">
+          <span class="reorder-axis-top">← Top of library</span>
+          <span class="reorder-axis-bottom">Bottom →</span>
+        </div>
+        <div id="scryCards" class="reorder-library-cards scry-cards"></div>
+        <div class="modal-footer scry-footer">
+          <span id="scrySummary" class="scry-summary"></span>
+          <button id="scryKeepBtn" type="button" class="hidden">Keep on Top</button>
+          <button id="scryBottomBtn" type="button" class="hidden">Put on Bottom</button>
+          <button id="scryConfirmBtn" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+
     <div id="combatDamageModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="combatDamageTitle">
       <div class="modal-box combat-damage-box">
         <h2 id="combatDamageTitle" class="modal-title">Assign Combat Damage</h2>
@@ -659,6 +691,14 @@
         <h2 id="lookTopPickTitle" class="modal-title">Look at the Top of Your Library</h2>
         <p id="lookTopPickSubtitle" class="modal-subtitle">Choose a card to put into your hand; the rest go to the bottom.</p>
         <div id="lookTopPickGrid" class="library-card-grid"></div>
+      </div>
+    </div>
+
+    <div id="revealedHandPickModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="revealedHandPickTitle">
+      <div class="modal-box">
+        <h2 id="revealedHandPickTitle" class="modal-title">Choose a Card from the Revealed Hand</h2>
+        <p id="revealedHandPickSubtitle" class="modal-subtitle">Click one of the highlighted cards.</p>
+        <div id="revealedHandPickGrid" class="library-card-grid"></div>
       </div>
     </div>
 
@@ -788,6 +828,8 @@
            offers the opposite of the permanent's current tapped state. -->
       <button type="button" class="permanent-menu-item permanent-menu-item--tap" role="menuitem" data-action="tap">Tap</button>
       <button type="button" class="permanent-menu-item" role="menuitem" data-action="clear-summoning-sickness">Remove Summoning Sickness</button>
+      <button type="button" class="permanent-menu-item" role="menuitem" data-action="create-copy">Create a Copy</button>
+      <button type="button" class="permanent-menu-item" role="menuitem" data-action="send-to-opponent">Send to Opponent</button>
       <button type="button" class="permanent-menu-item" role="menuitem" data-action="return-to-hand">Return to Hand</button>
       <button type="button" class="permanent-menu-item" role="menuitem" data-action="destroy">Destroy</button>
       <button type="button" class="permanent-menu-item" role="menuitem" data-action="exile">Exile</button>
@@ -801,7 +843,7 @@
     <script src="/animations.js?v=20260818-handfly2"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
     <script src="/legality.js?v=20260819-format3"></script>
-    <script src="/app.js?v=20260819-reveal1"></script>
+    <script src="/app.js?v=20260820-debugcast1"></script>
     <script src="/deck-editor.js?v=20260819-format2"></script>
   </body>
 </html>

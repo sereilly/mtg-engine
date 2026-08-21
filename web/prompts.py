@@ -251,21 +251,36 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+# Zones whose contents every player may look at (CR 400.2): what a prompt may
+# list to a seat other than the zone's owner.
+_PUBLIC_ZONES = frozenset({"graveyard", "exile", "battlefield", "ante", "command_zone"})
+
+
 @prompt_renderer("name_and_strip")
 def _name_and_strip(ctx: PromptContext, choices: list) -> dict:
     """Necromentia's "choose a card name".
 
-    The names offered are the ones in the searched player's *public* zones plus
-    their hand — which the chooser is not entitled to see, so the list is a
-    convenience for the common case and never the rule: CR 202.1 lets a player
-    name any card at all, and the engine accepts a name outside the list. Only
-    the basic-land restriction is enforced, because only that one is printed.
+    The names offered are the ones in the searched player's **public** zones
+    among the ones the card searches — the graveyard, for Necromentia. The card
+    also searches the hand and the library, and the choice record lists those
+    zones too (the search needs them), but the chooser is not entitled to see
+    either, so they are never read here: a suggestion list built over the
+    library is the opponent's decklist. For the same reason the record's
+    ``default_name`` — the commonest card over every searched zone, which is
+    the *AI's* stated policy — is not forwarded. The list is a convenience and
+    never the rule: CR 202.1 lets a player name any card at all, the engine
+    accepts a name outside the list, and only the printed basic-land
+    restriction is enforced.
     """
     choice = choices[0]
     target = ctx.game.players[choice.data["target_seat"]]
+    public_zones = [
+        zone for zone in (choice.data.get("zones") or ())
+        if zone in _PUBLIC_ZONES
+    ]
     seen = sorted({
         card.name
-        for zone in choice.data.get("zones") or ()
+        for zone in public_zones
         for card in getattr(target, zone, [])
         if "basic" not in (card.type_line or "").lower()
     })
@@ -274,7 +289,6 @@ def _name_and_strip(ctx: PromptContext, choices: list) -> dict:
         "card_name": choice.data.get("card_name", ""),
         "target_seat": choice.data["target_seat"],
         "suggestions": seen,
-        "default_name": choice.data.get("default_name", ""),
     }
 
 
@@ -416,6 +430,7 @@ def _scry(ctx: PromptContext, choices: list) -> dict:
     top_count = choice.data["top_count"]
     return {
         "caster_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
         "top_count": top_count,
         # The printed number, which can exceed top_count on a short library —
         # the prompt still says "Scry 3" when only two cards are there.
@@ -674,8 +689,10 @@ def _body_choice(ctx: PromptContext, choices: list) -> dict:
 def _mode_choice(ctx: PromptContext, choices: list) -> dict:
     """A modal triggered ability's "Choose one —" (Trufflesnout, Elder
     Gargaroth): the printed bullet labels, answered by index."""
-    data = choices[0].data
+    choice = choices[0]
+    data = choice.data
     return {
+        "player_seat": choice.player_index,
         "card_name": data["card_name"],
         "modes": [
             {"index": i, "label": label}
