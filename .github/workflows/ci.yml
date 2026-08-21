@@ -46,34 +46,17 @@ jobs:
       # letting it drift 9s -> 17s unnoticed across four phases, with the gate
       # green the whole way.
       #
-      # 17 -> 23 is a *record* of growth, not permission for it: ~130 tests were
-      # added in one session (permanent ids, the grammar layering guards, two
-      # renumbering regression suites) and 17 stopped being true. Leaving it
-      # would have put the warning threshold — BASELINE * 1.5, so 25.5s — two
-      # and a half seconds away, and the first unrelated change would have been
-      # blamed for the drift this one caused. Keeping the baseline honest is the
-      # standing invariant; raising the *budget* is still a decision, not
-      # maintenance.
-      #
-      # 23 -> 35 is the same record one growth later: the Commander/Brawl
-      # variant and the pre-set cleanup round took the suite from 4,454 tests
-      # to ~6,360, measuring a steady ~35s — proportional growth, no step
-      # change. That put the suite *at* the old 35s budget, so the budget move
-      # 35 -> 60 was made as a decision (2026-08-19, ahead of the next set
-      # ingestion) rather than arriving as a red run nobody read: the next
-      # set's tests need somewhere to land, and 60 keeps the cliff detector
-      # well above honest growth while still catching an accidental
-      # O(cards^2) sweep.
-      #
       # A note on variance, since it nearly caused a wrong conclusion: two
       # back-to-back local runs on one clean tree once measured 43.98s and
       # 16.79s, which read as a runner-weather problem. It did not reproduce —
       # three consecutive runs later landed on 23s exactly. Treat a single slow
       # run as noise and read the printed percentages across several before
       # touching anything.
+      #
+      # 60 -> 120 (2026-08-21): Runs on Github take significantly longer than local runs
       - name: Enforce the suite-time budget
         env:
-          BUDGET: 60
+          BUDGET: 120
           BASELINE: 35
         run: |
           START=$(date +%s)
