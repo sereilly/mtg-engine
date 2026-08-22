@@ -625,6 +625,11 @@ def _lower_lose_keyword(node: ast.LoseKeyword) -> tuple[OracleInstruction, ...]:
 _LOYALTY_PICKER_HONOURED = frozenset({"card_types", "subtypes", "controller"})
 
 
+def _amount_value(amount) -> int:
+    """A fixed Amount as a plain int, for a payload that carries a number."""
+    return amount.value if isinstance(amount, ast.Fixed) else 0
+
+
 def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
     # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) The source's
     # own loyalty lives on the permanent (metadata["loyalty_counters"],
@@ -705,6 +710,27 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
             OracleInstruction(
                 "add_named_counter_to_self", "",
                 {"counter": node.counter, "count": node.count.value},
+            ),
+        )
+    # "Put up to X +1/+0 counters on this creature. This ability can't cause the
+    # total number of +1/+0 counters on this creature to be greater than N."
+    # (Clockwork Beast prints seven, Clockwork Avian four.) The cap is payload,
+    # which is the whole reason this is a production: the two cards differ by a
+    # number, and the number used to be baked into a card-name-keyed hook whose
+    # key spelled out "seven".
+    #
+    # The cap is **required**. Without it the ability would put counters on
+    # without limit, which is a card doing more than it prints — so a bare
+    # "put up to X +1/+0 counters" keeps refusing.
+    if node.counter == "+1/+0" and _is_source(node.subject) and node.cap is not None:
+        return (
+            OracleInstruction(
+                "add_power_counters_to_self", "",
+                {
+                    "amount": "x" if isinstance(node.count, ast.Var) else _amount_value(node.count),
+                    "cap": node.cap,
+                    "up_to": bool(node.up_to),
+                },
             ),
         )
     if node.counter != "+1/+1" or node.up_to:

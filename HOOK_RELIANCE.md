@@ -12,22 +12,22 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**93 of 668 supported cards (13.9%)** carry at least one name-keyed entry, across **99 entries** in 7 registries. The pool is 668 cards, 100.0% supported.
+**92 of 668 supported cards (13.8%)** carry at least one name-keyed entry, across **98 entries** in 7 registries. The pool is 668 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **3,870 hand-written entries** covering **3,635 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **3,831 hand-written entries** covering **3,596 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 52 (17.9%) | 388 | 48 (12.4%) | 56 | 19.3 |
-| LEB | 292 | 292 (100.0%) | 52 (17.8%) | 389 | 48 (12.3%) | 56 | 19.2 |
-| 2ED | 292 | 292 (100.0%) | 52 (17.8%) | 389 | 48 (12.3%) | 56 | 19.2 |
+| LEA | 290 | 290 (100.0%) | 51 (17.6%) | 388 | 47 (12.1%) | 55 | 19.0 |
+| LEB | 292 | 292 (100.0%) | 51 (17.5%) | 389 | 47 (12.1%) | 55 | 18.8 |
+| 2ED | 292 | 292 (100.0%) | 51 (17.5%) | 389 | 47 (12.1%) | 55 | 18.8 |
 | ARN | 78 | 78 (100.0%) | 32 (41.0%) | 107 | 30 (28.0%) | 35 | 44.9 |
-| 3ED | 296 | 296 (100.0%) | 55 (18.6%) | 389 | 49 (12.6%) | 57 | 19.3 |
+| 3ED | 296 | 296 (100.0%) | 54 (18.2%) | 389 | 48 (12.3%) | 56 | 18.9 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ATQ *(measured)* | 85 | 66 (77.6%) | 9 (13.6%) | 87 | 7 (8.0%) | 8 | 12.1 |
-| **ALL (shipped, deduped)** | **668** | **668 (100.0%)** | **93 (13.9%)** | **1022** | **85 (8.3%)** | **99** | **14.8** |
+| ATQ *(measured)* | 85 | 67 (78.8%) | 9 (13.4%) | 91 | 7 (7.7%) | 8 | 11.9 |
+| **ALL (shipped, deduped)** | **668** | **668 (100.0%)** | **92 (13.8%)** | **1022** | **84 (8.2%)** | **98** | **14.7** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -37,7 +37,7 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 87 | 88 |
+| `CARD_LINE_INSTRUCTIONS` | 86 | 87 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ENCHANTED_LAND_TAPPED_FOR_MANA` | 1 | 1 |
@@ -59,7 +59,6 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 - **Channel** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Chaos Orb** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **City in a Bottle** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Clockwork Beast** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Consecrate Land** (`ON_LEAVE_BATTLEFIELD`)
 - **Contract from Below** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Crumble** (`CARD_LINE_INSTRUCTIONS`) — 1 line

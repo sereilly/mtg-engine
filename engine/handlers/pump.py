@@ -466,18 +466,26 @@ def add_loyalty_counters_to_chosen(game: Game, instruction: OracleInstruction, c
     return True, "resolved"
 
 
-@effect_handler("add_variable_power_counters_to_self")
-def add_variable_power_counters_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    # Clockwork Beast: "{X}, {T}: Put up to X +1/+0 counters on this creature.
-    # This ability can't cause the total number of +1/+0 counters on this
-    # creature to be greater than seven."
+@effect_handler("add_power_counters_to_self")
+def add_power_counters_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{X}, {T}: Put up to X +1/+0 counters on this creature. This ability
+    can't cause the total number of +1/+0 counters on this creature to be
+    greater than N." — Clockwork Beast (seven) and Clockwork Avian (four).
+
+    The cap is on the payload. It used to be the constant 7 in this function
+    and the word "seven" inside a card-name-keyed hook's dictionary key, which
+    is two copies of one number and the reason the Avian needed a second entry
+    to say four.
+    """
     card = context.card
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
+    amount = instruction.payload.get("amount", 0)
+    requested = context.x_value or 0 if amount == "x" else int(amount)
+    cap = int(instruction.payload.get("cap", 0))
     current = int(source_permanent.metadata.get("plus_1_0_counters", 0))
-    requested = max(0, context.x_value or 0)
-    added = min(requested, max(0, 7 - current))
+    added = min(max(0, requested), max(0, cap - current))
     if added:
         source_permanent.power_bonus += added
         source_permanent.metadata["plus_1_0_counters"] = current + added

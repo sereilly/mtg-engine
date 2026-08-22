@@ -34,6 +34,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_expansion_permanents": "destruction",
     "shuffle_graveyard_into_library": "zones",
     "gain_type": "characteristics",
+    "add_power_counters_to_self": "counters",
     # One pump per chosen slot, each with its own P/T delta (Rookie Mistake).
     # The same category as the one-target pump above: what differs is how many
     # targets the sentence names, not what the effect is.

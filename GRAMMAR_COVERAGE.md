@@ -16,14 +16,14 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 79.4% | 78.4% | 42.3% | 150 |
-| LEB | 292 | 389 | 79.4% | 78.4% | 42.4% | 151 |
-| 2ED | 292 | 389 | 79.4% | 78.4% | 42.4% | 151 |
+| LEA | 290 | 388 | 79.6% | 78.6% | 42.5% | 151 |
+| LEB | 292 | 389 | 79.7% | 78.7% | 42.7% | 152 |
+| 2ED | 292 | 389 | 79.7% | 78.7% | 42.7% | 152 |
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
-| 3ED | 296 | 389 | 79.9% | 78.7% | 43.4% | 152 |
+| 3ED | 296 | 389 | 80.2% | 78.9% | 43.7% | 153 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 65.8% | 65.0% | 43.3% | 48 |
-| **All (shipped)** | **1533** | **2166** | **80.7%** | **79.5%** | **46.7%** | **876** |
+| ATQ *(measured)* | 85 | 120 | 66.7% | 65.8% | 44.2% | 49 |
+| **All (shipped)** | **1533** | **2166** | **80.9%** | **79.7%** | **46.9%** | **880** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -33,7 +33,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 198 | 77 | expected a subject |  |
+| 193 | 75 | expected a subject |  |
 | 88 | 32 | unrecognized effect verb |  |
 | 49 | 27 | unconsumed text |  |
 | 30 | 30 | unrecognized activation cost |  |
@@ -61,7 +61,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 
 ## Cards executing through the grammar
 
-876 cards, 1012 lines.
+880 cards, 1016 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -292,6 +292,13 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
   - `{T}: Add one mana of any color.`
 - **Clay Statue**
   - `{2}: Regenerate this creature.`
+- **Clockwork Avian**
+  - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than four. Activate only during your upkeep.`
+- **Clockwork Beast**
+  - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.`
+  - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.`
+  - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.`
+  - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.`
 - **Cockatrice**
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`

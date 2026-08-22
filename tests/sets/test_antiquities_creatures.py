@@ -179,3 +179,62 @@ def test_urzas_avenger_offers_all_four_printed_keywords(set_pool):
         step.kind == "pump_self" and step.payload == {"power": -1, "toughness": -1}
         for step in steps
     )
+
+
+# ---------------------------------------------------------------------------
+# Clockwork Avian (round 12) — the cap is a number, not a card name
+# ---------------------------------------------------------------------------
+
+
+def _avian_in_upkeep(set_pool):
+    """Clockwork Avian **entered** rather than constructed, so its "enters with
+    four +1/+0 counters" actually ran — and in an upkeep, because "Activate
+    only during your upkeep" is a real restriction and is enforced."""
+    pool = set_pool("ATQ")
+    avian = Permanent(card=pool["Clockwork Avian"])
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(0, avian, None)
+    game._set_phase_and_step("beginning", "upkeep")
+    # The ability costs {T}, so summoning sickness is a real gate on it
+    # (CR 302.6) and the fixture has to be past it — a creature that just
+    # arrived genuinely cannot use this.
+    avian.metadata.pop("summoning_sickness_turn", None)
+    return game, avian
+
+
+def test_clockwork_avian_enters_at_its_cap_and_cannot_exceed_it(set_pool):
+    game, avian = _avian_in_upkeep(set_pool)
+    assert avian.effective_power == 4, "0/4 base plus four +1/+0 counters"
+
+    game.activate_permanent_ability(0, "Clockwork Avian", x_value=3)
+
+    assert avian.effective_power == 4, "already at the printed cap"
+
+
+def test_clockwork_avian_refills_only_up_to_the_cap(set_pool):
+    game, avian = _avian_in_upkeep(set_pool)
+    # Spend three, as combat would.
+    avian.metadata["plus_1_0_counters"] = 1
+    avian.power_bonus = 1
+    assert avian.effective_power == 1
+
+    game.activate_permanent_ability(0, "Clockwork Avian", x_value=10)
+
+    assert avian.effective_power == 4, "1 -> 4, not 1 -> 11"
+
+
+def test_the_two_clockwork_cards_share_one_rule_with_different_numbers(set_pool, catalog_by_name):
+    """Clockwork Beast prints seven and the Avian prints four. That difference
+    used to be a card-name-keyed hook whose dictionary key spelled out "seven"
+    and a constant 7 in the handler — two copies of one number, which is why
+    the Avian would have needed a second entry to say four."""
+    beast = compile_card_oracle(catalog_by_name["Clockwork Beast"])
+    avian = compile_card_oracle(set_pool("ATQ")["Clockwork Avian"])
+
+    (beast_ability,) = [a for a in beast.activated_abilities if a.instruction]
+    (avian_ability,) = [a for a in avian.activated_abilities if a.instruction]
+
+    assert beast_ability.instruction.kind == avian_ability.instruction.kind
+    assert beast_ability.instruction.payload["cap"] == 7
+    assert avian_ability.instruction.payload["cap"] == 4

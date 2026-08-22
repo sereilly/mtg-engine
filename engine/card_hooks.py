@@ -188,12 +188,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
     # already parses; the sentence after it is not. The cap is what makes the
     # handler this card's — lowering the first sentence alone would let the
     # counters past seven.
-    'Clockwork Beast': {
-        "{x}, {t}: put up to x +1/+0 counters on this creature. this ability can't "
-        "cause the total number of +1/+0 counters on this creature to be greater "
-        "than seven. activate only during your upkeep":
-            _line("add_variable_power_counters_to_self", "activated_counter"),
-    },
     'Contract from Below': {
         'discard your hand, ante the top card of your library, then draw seven '
         'cards':

@@ -85,6 +85,13 @@ class PutCounter:
     # creature" is the one this placement just chose, and reading it as its own
     # sentence would leave the doubling looking for a target nobody picked.
     then_double: bool = False
+    # "This ability can't cause the total number of +1/+0 counters on this
+    # creature to be greater than **seven**." (Clockwork Beast; Clockwork Avian
+    # prints four.) A rider on the placement rather than a sentence of its own:
+    # it says nothing the game does, it bounds what the sentence in front of it
+    # may do. Parsed apart it would be an effect nothing performs, and the
+    # ability would put counters on without limit.
+    cap: int | None = None
 
 
 @dataclass(frozen=True)

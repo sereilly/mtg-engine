@@ -64,10 +64,10 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 542 |
+| parse rule | 543 |
 | trigger table | 216 |
 | activation cost | 192 |
-| card_hooks bespoke (name-keyed) | 134 |
+| card_hooks bespoke (name-keyed) | 132 |
 | keyword table | 131 |
 | static-line table | 112 |
 | aura enchant noun (oracle_instructions attach) | 54 |

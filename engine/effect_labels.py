@@ -41,6 +41,7 @@ from __future__ import annotations
 # position (the clause right of an ability's colon).
 ACTIVATED_LABELS: dict[str, str] = {
     "add_counter_to_self": "activated_counter",
+    "add_power_counters_to_self": "activated_counter",
     # Jandor's Saddlebags. Declared here rather than taken from the "tapping"
     # category default, so the card keeps the bucket it reported before the
     # grammar learned to lower its line — the whole reason this table exists.

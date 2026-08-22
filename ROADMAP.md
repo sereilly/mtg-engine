@@ -1167,3 +1167,62 @@ regression tests failing in the same run.
 **Numbers.** ATQ 64 → 66; grammar parses 65.0% → 68.3% of its lines. Shipped
 pool 668/668, floors and ceilings unmoved, suite green at 6626, no hook added
 and none removed.
+
+## ATQ round 12: a cap that was a card name, and a revert
+
+*(2026-08-21.)* **66 → 67**, one hook retired, and one attempt reverted.
+
+**Clockwork Beast and Clockwork Avian differ by a number.** "Put up to X +1/+0
+counters on this creature. This ability can't cause the total number of +1/+0
+counters on this creature to be greater than **seven**" — the Beast's line — was
+a `card_hooks` entry whose *dictionary key spelled out the word seven*, pointing
+at a handler with a literal `7` in it. Two copies of one number, and the Avian
+prints four, so it would have needed a second entry to say so.
+
+The cap is payload now: the grammar already parsed the sentence and refused it
+at lowering ("no handler for +1/+0 counters"), so the work was a rider
+production folding the bound onto the placement, a lowering, and the handler
+reading `cap`. The hook is deleted, and **every ceiling in
+`hook_reliance_ratchet.json` moved down** — 13.9% → 13.8% of supported cards
+hooked, 99 → 98 entries, 14.8 → 14.7 per hundred. Accepted, so the gain is
+locked in rather than available to spend again.
+
+**The cap is required, not optional.** A bare "put up to X +1/+0 counters on
+this creature" still refuses: without the bound the ability puts counters on
+without limit, which is a card doing more than it prints.
+
+**And the deletion probe earned its keep.** The rider's first version accepted
+the noun in "on this **creature** to be greater than four" optionally, and
+`parse_coverage.py --check` reported the word as ignored — correctly: "on this
+to be greater than four" is not a sentence, and a rule that accepts it would
+accept a cap on some other permanent's counters. The noun is required now.
+
+### Detonate: built, measured, reverted
+
+The round opened on Detonate, whose only refusal was "mana value X has no
+payload form here", and it looked like one change. Emitting the variable bound
+and resolving it against the announced X at the single dispatch point worked —
+suite green but for two guards that assert the old refusal — and then the card
+was *supported and wrong*: it destroyed an artifact of any mana value and dealt
+no damage.
+
+Three things are needed, not one. `_destroy_target_permanent` rebuilds its
+filter from named parameters and **has no `mana_value` among them**, so the
+bound never reaches resolution at all; X is not threaded to the announcement
+check; and "Detonate deals X damage to **that artifact's controller**" is a
+last-known-information back-reference to a permanent that has just been
+destroyed. Reverted whole rather than shipped, because an honestly unsupported
+card beats a supported one that plays a strictly stronger card.
+
+Two things worth keeping from it. The dropped `mana_value` in
+`_destroy_target_permanent` is a real hole and is **not currently reachable**:
+cast validation refuses an out-of-range target before resolution ever sees it
+(checked against Eliminate, which refuses a mana-value-5 creature). It is
+defence-in-depth that is not there, and it is where Detonate's round should
+start. And the two guards that failed were right to: they assert that a
+narrowing may never be *dropped*, and the version that satisfied them by
+emitting the bound only worked because something downstream resolved it — which
+for `power` and `toughness` nothing does.
+
+**Numbers.** ATQ 66 → 67; grammar parses 65.8% → 66.7%. Shipped pool 668/668,
+grammar floors unmoved, hook ceilings **down**, suite green at 6629.

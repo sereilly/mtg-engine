@@ -21,10 +21,10 @@ from dataclasses import replace
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import PUNCT, tokenize
+from .lexer import PT, PUNCT, tokenize
 from .nouns import parse_object_filter, parse_target_spec
 from .effects import _parse_create_token, _parse_gains
-from .phrases import _parse_duration
+from .phrases import _accept_number, _parse_duration
 from .statements import _parse_condition, parse_statement
 from .effects import _parse_loses
 from .stream import TokenStream
@@ -530,3 +530,53 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
         effects[0] = _attach_riders(effects[0], riders)
         return ast.Conjunction(tuple(effects))
     raise GrammarError("damage rider with no damage effect to attach to")
+
+
+def _attach_counter_cap(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """Fold "This ability can't cause the total number of <kind> counters on
+    this <noun> to be greater than N." into the placement before it.
+
+    The counter kind is checked against the placement's own, not just consumed:
+    a card capping a *different* counter than the one it just placed is saying
+    something this rider cannot express, and matching it anyway would cap the
+    wrong pile.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.PutCounter):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "this", "ability", "can't", "cause", "the", "total", "number", "of"
+    ):
+        stream.reset(mark)
+        return False
+    token = stream.peek()
+    if token is None or token.kind != PT or token.text != last.counter:
+        stream.reset(mark)
+        return False
+    stream.advance()
+    if not stream.accept_word("counters"):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase("on", "this"):
+        stream.reset(mark)
+        return False
+    # The noun is **required**, not merely accepted. Optional, the rider still
+    # matched with the word deleted — which the parse-coverage deletion probe
+    # reported as a silently ignored word, and it was right: "on this to be
+    # greater than four" is not a sentence, and a rule that accepts it is a
+    # rule that would accept a cap on some other permanent's counters too.
+    if not stream.accept_word(
+        "creature", "artifact", "enchantment", "land", "permanent"
+    ):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase("to", "be", "greater", "than"):
+        stream.reset(mark)
+        return False
+    cap = _accept_number(stream)
+    if cap is None:
+        stream.reset(mark)
+        return False
+    steps[-1] = dataclasses.replace(last, cap=cap)
+    return True
