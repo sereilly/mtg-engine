@@ -210,8 +210,11 @@ def _describe_several_targets(payload: dict[str, object], recipient: ast.TargetS
         "kind": "object",
         "filter": _filter_payload(recipient.filter),
         # The maximum, not the count chosen — "up to two" may legally name one
-        # or none (CR 601.2c).
-        "count": recipient.count,
+        # or none (CR 601.2c). "X target lands" (Candelabra of Tawnos) carries
+        # the string instead: the number is the announced X, resolved where
+        # every other computed amount is, and a literal 0 here would show a
+        # picker that offers nothing.
+        "count": "x" if recipient.count_from_x else recipient.count,
     }
 
 
@@ -432,8 +435,16 @@ def _names_several_targets(subject: ast.Recipient) -> bool:
     """
     return (
         isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "up_to"
-        and subject.count > 1
+        # "up to N target …" and "**N** target …" are the same shape to every
+        # reader downstream; only the floor differs, and the floor is the
+        # picker's business rather than the lowering's. "X target lands" has no
+        # printed number at all, so its count is unknown here and it qualifies
+        # on the quantifier alone.
+        and (
+            (subject.quantifier == "up_to" and subject.count > 1)
+            or (subject.quantifier == "exactly"
+                and (subject.count_from_x or subject.count > 1))
+        )
     )
 
 

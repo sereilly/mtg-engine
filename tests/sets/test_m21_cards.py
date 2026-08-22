@@ -57,13 +57,20 @@ def test_each_opponent_round_cards_compile_supported(set_pool, name):
 
 
 def test_a_targeted_several_tap_lowers_and_an_untargeted_one_still_refuses():
-    """The two spellings are different mechanisms, and only one got a handler.
+    """The two spellings are different mechanisms, and the ``targeted`` flag is
+    what keeps them apart.
 
-    "Tap up to two **target** creatures" (Frost Breath) names cast-time targets,
-    which the tap handler now resolves as a list. Rewind's "untap up to four
-    lands" prints no "target" at all — it is chosen on resolution, through the
-    pending-choice queue — so the ``targeted`` flag on the spec is still what
-    keeps them apart, and untap has no several-target handler either way."""
+    "Tap up to two **target** creatures" (Frost Breath) and "Untap X **target**
+    lands" (Candelabra of Tawnos) name cast-time targets, which both handlers
+    resolve as a list. Rewind's "untap up to four lands" prints no "target" at
+    all — it is chosen on resolution, through the pending-choice queue — so it
+    still refuses here, and describing it would raise a cast-time picker in
+    front of a choice CR 115.1b makes later.
+
+    Untap gained its several-target handler in ATQ round 16; before that this
+    test asserted it had none, which was true and is the only thing that
+    changed.
+    """
     tapped = compile_line("Tap up to two target creatures.", card_name="Test")
     assert tapped.lowered, tapped.failure_reason
     (instruction,) = tapped.instructions
@@ -71,8 +78,21 @@ def test_a_targeted_several_tap_lowers_and_an_untargeted_one_still_refuses():
     assert instruction.payload["targets"]["count"] == 2
 
     untapped = compile_line("Untap up to two target creatures.", card_name="Test")
-    assert untapped.parsed and not untapped.lowered
-    assert untapped.failure_reason == "no handler taps or untaps several targets"
+    assert untapped.lowered, untapped.failure_reason
+    (instruction,) = untapped.instructions
+    assert instruction.kind == "untap_target_permanent"
+    assert instruction.payload["targets"]["count"] == 2
+
+    # Rewind's spelling: no "target" printed, so nothing is chosen at cast
+    # (CR 115.1b) and it reaches a *different* handler — one that makes its
+    # choice on resolution through the pending-choice queue. Same words, same
+    # count, different mechanism, and the `targeted` flag is the only thing
+    # that says so.
+    untargeted = compile_line("Untap up to four lands.", card_name="Test")
+    assert untargeted.lowered, untargeted.failure_reason
+    (instruction,) = untargeted.instructions
+    assert instruction.kind == "untap_up_to_matching"
+    assert "targets" not in instruction.payload
 
 
 # --- The multi-target round: "each of up to N target ..." -------------------

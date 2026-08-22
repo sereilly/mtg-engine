@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 80.5% | 79.2% | 44.0% | 154 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 70.0% | 69.2% | 46.7% | 52 |
+| ATQ *(measured)* | 85 | 120 | 70.8% | 70.0% | 47.5% | 53 |
 | **All (shipped)** | **1533** | **2166** | **81.1%** | **79.9%** | **47.1%** | **884** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -35,7 +35,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | ---: | ---: | --- | --- |
 | 192 | 74 | expected a subject |  |
 | 88 | 32 | unrecognized effect verb |  |
-| 49 | 27 | unconsumed text |  |
+| 53 | 28 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
 | 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 9 | 4 | expected 'the number of' in a where-clause |  |
@@ -43,7 +43,6 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | 8 | 3 | expected a colour or a creature body after 'becomes' |  |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 6 | 3 | no lowering for RawEffect |  |
-| 6 | 3 | expected something to destroy |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected a quantity |  |
 | 4 | 1 | expected 'that' |  |
@@ -52,6 +51,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | 3 | 1 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
+| 2 | 2 | expected something to destroy |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | expected a destination zone after 'return' |  |
 | 1 | 1 | expected what to gain control of |  |
@@ -224,6 +224,8 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
   - `{1}{B}, {T}: Each opponent loses 2 life. Activate only if a creature died this turn.`
 - **Cancel**
   - `Counter target spell.`
+- **Candelabra of Tawnos**
+  - `{X}, {T}: Untap X target lands.`
 - **Canopy Stalker**
   - `When this creature dies, you gain 1 life for each creature that died this turn.`
 - **Carrion Grub**

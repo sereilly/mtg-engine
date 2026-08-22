@@ -383,3 +383,52 @@ def test_obelisk_of_undoing_refuses_a_permanent_you_only_control(set_pool):
 
     assert "Citanul Druid" in {p.card.name for p in game.all_permanents()}
     assert not p1.hand, "it is not your card to take"
+
+
+# ---------------------------------------------------------------------------
+# Candelabra of Tawnos (round 16) — a counted, variable target list
+# ---------------------------------------------------------------------------
+
+
+def _candelabra(set_pool, land_count=3):
+    pool = set_pool("ATQ")
+    candelabra = Permanent(card=pool["Candelabra of Tawnos"])
+    lands = [Permanent(card=pool["Mishra's Workshop"]) for _ in range(land_count)]
+    for land in lands:
+        land.tapped = True
+    p1 = PlayerState(name="P1", battlefield=[candelabra, *lands])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    return game, lands
+
+
+def test_candelabra_untaps_exactly_the_lands_named(set_pool):
+    game, lands = _candelabra(set_pool)
+
+    game.activate_permanent_ability(
+        0, "Candelabra of Tawnos", x_value=2,
+        target_player_index=0, target_permanent_index=[1, 2],
+    )
+
+    assert [not land.tapped for land in lands] == [True, True, False]
+
+
+def test_candelabra_untaps_only_lands(set_pool):
+    """The printed noun phrase is enforced at resolution as well as at
+    announcement. `resolve_target_permanents` defaults to "is it a creature?",
+    which would have matched none of these — and on a card that did name
+    creatures would have skipped the rest of the phrase."""
+    pool = set_pool("ATQ")
+    candelabra = Permanent(card=pool["Candelabra of Tawnos"])
+    creature = Permanent(card=pool["Citanul Druid"])
+    creature.tapped = True
+    p1 = PlayerState(name="P1", battlefield=[candelabra, creature])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(
+        0, "Candelabra of Tawnos", x_value=1,
+        target_player_index=0, target_permanent_index=[1],
+    )
+
+    assert creature.tapped, "a creature is not a land"

@@ -404,6 +404,12 @@ class TargetSpec:
     quantifier: str            # target | each | all | up_to | any_target | this | a
     filter: ObjectFilter = field(default_factory=ObjectFilter)
     count: int = 1
+    # "**X** target lands" (Candelabra of Tawnos). The count is the announced X
+    # (CR 601.2b), so it is not a number until the ability is activated —
+    # recorded as a fact rather than baked into `count`, because a count of 0
+    # and a count that is *not yet known* are different things and a picker
+    # shown 0 would offer nothing.
+    count_from_x: bool = False
     # "another target creature" (Garruk, Savage Herald's −2): a second chosen
     # object that must differ from the sentence's earlier choice — not from the
     # ability's source, which is what the filter's other_than_source says.

@@ -1347,3 +1347,48 @@ instead.
 
 **Numbers.** ATQ 70 → 71; grammar parses 69.2% → 70.0%. Shipped pool 668/668,
 floors and ceilings unmoved, suite green at 6640, no hook added.
+
+## ATQ round 16: a count with no printed number
+
+*(2026-08-21.)* **71 → 72.** Candelabra of Tawnos — "{X}, {T}: Untap **X target
+lands**." Three gaps in one sentence, each of which the engine had solved for a
+neighbouring spelling.
+
+**"N target lands" is not "up to N target lands".** The parser read the
+second and not the first: `up_to` was the only counted quantifier, so a bare
+count fell through to the unquantified reading and the line failed on "expected
+something to untap". They are the same shape to every reader downstream and
+differ only in the *floor* — "up to two" may name one, "two" must name two —
+which is the picker's business rather than the lowering's, so `exactly` joins
+`up_to` in `_names_several_targets` and nothing else had to learn a second name.
+
+**And Candelabra's count is not a number at all.** It is the announced X
+(CR 601.2b), unknown until the ability is activated. Recorded as
+`count_from_x` rather than folded into `count`, because a count of zero and a
+count that is *not yet known* are different things and a picker shown zero
+offers nothing.
+
+**Untap had no several-target handler**, which was an honest refusal — the
+comment there said so, and named the bug it was written after (Rewind untapping
+one land of up to four while reporting itself supported). It has one now,
+gated exactly as the tap beside it is: the filter must be one the handler can
+answer in full, or a narrowing would be dropped and the untap would reach more
+permanents than the card names.
+
+**The default predicate nearly ate it.** `resolve_target_permanents` defaults
+to "is it a creature?", so the first working version untapped **none** of
+Candelabra's lands and logged success. The handler passes the payload's filter
+now — and on a card that *did* name creatures, the default would have skipped
+the rest of the printed phrase, which is the same bug wearing a friendlier face.
+
+**One guard was rewritten rather than satisfied.**
+`test_a_targeted_several_tap_lowers_and_an_untargeted_one_still_refuses`
+asserted untap had no several-target handler. That was true and is exactly what
+this round changed, so the test now asserts what still distinguishes the two
+spellings: Rewind's "up to four lands" prints no "target", is chosen on
+resolution (CR 115.1b), and reaches a different handler entirely. Same words,
+same count, different mechanism — and the `targeted` flag is the only thing
+that says so.
+
+**Numbers.** ATQ 71 → 72; grammar parses 70.0% → 70.8%. Shipped pool 668/668,
+floors and ceilings unmoved, suite green at 6642, no hook added.

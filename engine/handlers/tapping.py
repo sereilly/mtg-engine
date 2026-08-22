@@ -72,6 +72,27 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
     non-matching permanent fizzles instead of sliding onto an arbitrary legal
     one — the same rule the filtered tap beside it follows.
     """
+    # "Untap X target lands." (Candelabra of Tawnos.) The several-targets
+    # description says a list was collected; each slot resolves strictly, so a
+    # target that has left is dropped rather than slid onto another (CR 608.2b).
+    targets_desc = instruction.payload.get("targets") or {}
+    if isinstance(targets_desc, dict) and targets_desc.get("count") not in (None, 1):
+        # The printed noun phrase, enforced here as well as at announcement.
+        # `resolve_target_permanents` defaults to "is it a creature?", which
+        # would have matched none of Candelabra's lands — and, on a card that
+        # did name creatures, would have skipped the rest of the phrase.
+        chosen = resolve_target_permanents(
+            game, context,
+            predicate=lambda p: permanent_matches_filter(p, instruction.payload),
+        )
+        for perm in chosen:
+            game.become_untapped(perm)
+        game.log.append(
+            f"Untapped {len(chosen)} permanent(s)" if chosen
+            else "No valid permanents to untap"
+        )
+        return True, "resolved"
+
     narrowed = any(
         key in instruction.payload
         for key in ("type_filter", "subtype_filter", "color_filter")

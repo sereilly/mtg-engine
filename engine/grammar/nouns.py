@@ -22,6 +22,7 @@ from .errors import GrammarError
 from .lexer import NUMBER, PT, WORD, render
 from .stream import TokenStream
 from .vocabulary import (
+    NUMBER_WORDS,
     ALL_SUBTYPES,
     CARD_TYPES,
     COLOR_WORDS,
@@ -779,6 +780,21 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     )
 
 
+def _at_counted_target(stream: TokenStream) -> bool:
+    """Whether the cursor is at "<number> target …" — a bare count, no "up to".
+
+    Looked ahead rather than tried-and-rewound because the number is also the
+    opening of several other phrases ("two or more", "three cards"), and only
+    the word after it says which this is.
+    """
+    word = stream.peek_word()
+    token = stream.peek()
+    if token is None:
+        return False
+    is_number = token.kind == NUMBER or word in NUMBER_WORDS or word == "x"
+    return bool(is_number) and stream.peek_word(1) == "target"
+
+
 def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     """Parse a quantified object reference, or return None if the cursor is not
     at one."""
@@ -808,6 +824,9 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     # field and no lowering has to learn two names for one restriction.
     other_before_target = False
     distinct_from_prior = False
+    # "X target lands": the count is the announced X rather than a printed
+    # number, so it is not known until the ability is activated.
+    exactly_x = False
 
     # Whether the word "target" is printed — recorded, not merely consumed:
     # "up to four lands" (Rewind) names no targets and is chosen on
@@ -839,6 +858,19 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         targeted = bool(stream.accept_word("target")) or other_before_target
     elif stream.accept_word("target"):
         quantifier = "target"
+        targeted = True
+    elif _at_counted_target(stream):
+        # "**X** target lands" (Candelabra of Tawnos) / "two target creatures".
+        # A bare count where "up to" prints a maximum: the player chooses
+        # *exactly* this many, so it is the same several-target shape with a
+        # different floor — and reading it as "up to" would let a card that
+        # must untap four untap one and report itself supported, which is the
+        # bug `_names_several_targets` was written after.
+        amount = parse_amount(stream)
+        count = amount.value if isinstance(amount, ast.Fixed) else 0
+        exactly_x = not isinstance(amount, ast.Fixed)
+        stream.expect_word("target")
+        quantifier = "exactly"
         targeted = True
     elif stream.at_word("another") and stream.peek_word(1) == "target":
         # "another target creature" (Garruk, Savage Herald) — a second chosen
@@ -879,6 +911,7 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         filt = dataclasses.replace(filt, other_than_source=True)
     return ast.TargetSpec(
         quantifier, filt, count,
+        count_from_x=exactly_x,
         distinct_from_prior=distinct_from_prior, targeted=targeted,
     )
 

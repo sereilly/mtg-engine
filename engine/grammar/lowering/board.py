@@ -256,10 +256,23 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
             several = _filter_payload(spec.filter)
             _describe_several_targets(several, spec)
             return (OracleInstruction("tap_target_permanent", "", several),)
-        # Untap is untouched. Both untap handlers resolve exactly one permanent,
-        # so this used to untap one and call the card supported. What a lowering
-        # may accept is "one target", and `_is_target` is the one place that says
-        # so — the literal quantifier tuple that admitted this is gone.
+        # "Untap X target lands." (Candelabra of Tawnos.) Untap reaches the same
+        # several-targets opt-in the tap above uses: `untap_target_permanent`
+        # resolves a list when the description says there is one.
+        #
+        # Gated the same way, and for the same reason — the filter must be one
+        # the handler's `permanent_matches_filter` can answer in full, or a
+        # narrowing would be dropped and the untap would reach more permanents
+        # than the card names.
+        if (
+            isinstance(node, ast.Untap)
+            and not _restrictions_beyond(
+                spec.filter, frozenset({"card_types", "controller", "other_than_source"})
+            )
+        ):
+            several = _filter_payload(spec.filter)
+            _describe_several_targets(several, spec)
+            return (OracleInstruction("untap_target_permanent", "", several),)
         raise LoweringError("no handler taps or untaps several targets", node=node)
     if not _is_target(spec):
         raise LoweringError("no handler for non-targeted tap/untap", node=node)
