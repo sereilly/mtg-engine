@@ -1502,3 +1502,35 @@ drops it for the same reason — so this drops it too.
 
 **Numbers.** ATQ 74 → 75; grammar parses 72.5% → 73.3%. Shipped pool 668/668,
 floors and ceilings unmoved, suite green at 6650, no hook added.
+
+## ATQ round 20: two cards, one redirect, one word apart
+
+*(2026-08-21.)* **75 → 76.** Martyrs of Korlis — "As long as this creature is
+untapped, all damage that would be dealt to you by **artifacts** is dealt to
+this creature instead." Veteran Bodyguard, shipped since Alpha, prints the same
+sentence with "unblocked creatures" in that slot.
+
+So the source class became payload and the two share one interceptor. The class
+is read off each candidate's own line rather than one card's sentence being a
+module constant and the other needing a second interceptor — which is the shape
+this file's neighbours (`prevention.py`'s shields, `combat_restrictions.py`'s
+blockers) already use, arrived at here by the same route: a second card.
+
+**The claim goes through the same matcher.** `replacement_claims_line` lists
+constants; this one is matched by shape and asked of the reader the interceptor
+uses, so a source class the redirect cannot answer leaves the line unclaimed
+rather than admitted with the redirect silently not firing.
+
+**And a fixture was carrying half a card.** `test_509_1h_a_blocked_trampler_is_not_an_unblocked_creature`
+built its Bodyguard from the sentence *without* "As long as this creature is
+untapped" — harmless while the interceptor probed for the rest as a substring,
+and wrong the moment the reader anchored on the whole printed line. The
+condition is not decoration: a redirect that fires while its creature is tapped
+is a strictly better card than the one printed, which is why anchoring is worth
+the fixture edit. Same finding as round 1's "Land Aura" and round 11's Erhnam
+Djinn — a test fixture printing text no card prints is a test asserting a card
+that does not exist.
+
+**Numbers.** ATQ 75 → 76; grammar unchanged (the line is a derived replacement,
+not a parsed one). Shipped pool 668/668, floors and ceilings unmoved, suite
+green at 6650, no hook added.

@@ -63,6 +63,8 @@ between the two registries raises at import.
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -430,6 +432,42 @@ VETERAN_BODYGUARD_TEXT = (
     "this creature instead"
 )
 
+#: "As long as this creature is untapped, all damage that would be dealt to you
+#: by **<source class>** is dealt to this creature instead." Veteran Bodyguard
+#: says "unblocked creatures"; Martyrs of Korlis says "artifacts". One
+#: redirection with the class as data, because the two sentences differ in
+#: nothing else — and the untapped condition is part of the printed line rather
+#: than a separate static, which is why it is matched here and not asked
+#: elsewhere.
+_REDIRECT_TO_SELF = re.compile(
+    r"^as long as this creature is untapped, all damage that would be dealt to "
+    r"you by (?P<source_class>unblocked creatures|artifacts|creatures) is dealt "
+    r"to this creature instead$"
+)
+
+
+def redirect_to_self_source_class(line: str) -> str | None:
+    """The class of source *line* redirects, or None if it is not that line.
+
+    One matcher, asked by the interceptor and by the claim reader, so what is
+    redirected and what is claimed cannot drift.
+    """
+    return _match_group(_REDIRECT_TO_SELF, line, "source_class")
+
+
+def _match_group(pattern, line: str, group: str) -> str | None:
+    match = pattern.match(" ".join((line or "").strip().lower().rstrip(".").split()))
+    return match.group(group) if match is not None else None
+
+
+def _source_answers_class(game, source, source_class: str) -> bool:
+    """Whether *source* is in the class a redirect names."""
+    if source_class == "unblocked creatures":
+        return _unblocked_attacker(source)
+    from .prevention import source_has_type
+
+    return source_has_type(game, source, source_class.rstrip("s"))
+
 
 def _unblocked_attacker(source) -> bool:
     """Whether *source* is an unblocked attacking creature.
@@ -444,18 +482,25 @@ def _unblocked_attacker(source) -> bool:
 
 
 def _protecting_bodyguard(game, payload: dict):
-    """The untapped Veteran Bodyguard that would take this damage, or None."""
-    if payload["amount"] <= 0 or not _unblocked_attacker(payload.get("source")):
+    """The untapped permanent that would take this damage instead, or None.
+
+    Veteran Bodyguard and Martyrs of Korlis are one effect with different
+    source classes, so the class is read off each candidate's own line and
+    checked against the damage's source — rather than one card's sentence being
+    a constant and the other needing a second interceptor.
+    """
+    if payload["amount"] <= 0:
         return None
-    return next(
-        (
-            permanent
-            for permanent in game.controlled_by(payload["recipient"])
-            if not permanent.tapped
-            and VETERAN_BODYGUARD_TEXT in (permanent.effective_card.oracle_text or "").lower()
-        ),
-        None,
-    )
+    for permanent in game.controlled_by(payload["recipient"]):
+        if permanent.tapped:
+            continue
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            source_class = redirect_to_self_source_class(line)
+            if source_class is None:
+                continue
+            if _source_answers_class(game, payload.get("source"), source_class):
+                return permanent
+    return None
 
 
 def _applies_bodyguard_redirect(game, payload: dict) -> bool:
@@ -1041,4 +1086,12 @@ def replacement_claims_line(line: str) -> bool:
     trailing full stop.
     """
     normalized = line.strip().lower().rstrip(".")
-    return any(normalized == phrase + tail for phrase, tail in REPLACEMENT_LINES)
+    if any(normalized == phrase + tail for phrase, tail in REPLACEMENT_LINES):
+        return True
+    # "As long as this creature is untapped, all damage … is dealt to this
+    # creature instead" (Veteran Bodyguard, Martyrs of Korlis). Matched by
+    # shape rather than listed as a constant, because the source class is
+    # payload — and asked of the same reader the interceptor uses, so a class
+    # it cannot answer leaves the line unclaimed rather than admitted with the
+    # redirect silently not firing.
+    return redirect_to_self_source_class(normalized) is not None

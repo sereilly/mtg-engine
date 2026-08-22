@@ -342,3 +342,46 @@ def test_the_lock_leaves_other_artifacts_alone(set_pool):
 
     assert tome.tapped, "the named one is held"
     assert not other.tapped, "its look-alike is not — the record is by id"
+
+
+# ---------------------------------------------------------------------------
+# Martyrs of Korlis (round 20) — Veteran Bodyguard's redirect, other class
+# ---------------------------------------------------------------------------
+
+
+def _martyrs_hit_by(set_pool, source_name, tapped=False):
+    from engine.damage_events import deal_damage
+
+    pool = set_pool("ATQ")
+    martyrs = Permanent(card=pool["Martyrs of Korlis"])
+    martyrs.tapped = tapped
+    source = Permanent(card=pool[source_name])
+    p1 = PlayerState(name="P1", battlefield=[martyrs])
+    p2 = PlayerState(name="P2", battlefield=[source])
+    game = Game(players=[p1, p2])
+    deal_damage(game, {"recipient": p1, "amount": 3, "source": source, "combat": False})
+    return p1, martyrs
+
+
+def test_martyrs_of_korlis_takes_artifact_damage_for_you(set_pool):
+    p1, martyrs = _martyrs_hit_by(set_pool, "Ornithopter")
+
+    assert p1.life == 20
+    assert martyrs.damage_marked == 3
+
+
+def test_a_tapped_martyrs_protects_nobody(set_pool):
+    """"**As long as this creature is untapped**" — the condition is half the
+    card, and a redirect that fired while tapped would be strictly better than
+    the one printed."""
+    p1, martyrs = _martyrs_hit_by(set_pool, "Ornithopter", tapped=True)
+
+    assert martyrs.damage_marked == 0
+
+
+def test_martyrs_of_korlis_ignores_a_nonartifact_source(set_pool):
+    """The class is the only thing separating this card from Veteran
+    Bodyguard, which redirects unblocked creatures and not artifacts."""
+    p1, martyrs = _martyrs_hit_by(set_pool, "Citanul Druid")
+
+    assert martyrs.damage_marked == 0

@@ -159,9 +159,14 @@ def test_509_1h_a_blocked_trampler_is_not_an_unblocked_creature():
     The redirect reads the source permanent's own combat state, which is what
     makes it get this right; a check that trusted "this damage arrived on the
     player's pile during combat" cannot tell the two apart."""
+    # Veteran Bodyguard's line *in full*. The fixture used to carry only the
+    # second half, which worked while the interceptor probed for it as a
+    # substring — and the untapped condition is not decoration: a redirect that
+    # fires while its creature is tapped is a strictly better card. The reader
+    # is anchored on the whole printed line now, so the fixture prints one.
     guard_text = (
-        "all damage that would be dealt to you by unblocked creatures is dealt "
-        "to this creature instead"
+        "As long as this creature is untapped, all damage that would be dealt "
+        "to you by unblocked creatures is dealt to this creature instead."
     )
     bodyguard = Permanent(card=_mk_creature_card("Bodyguard", 2, 5, guard_text))
     defender = PlayerState(name="P1", battlefield=[bodyguard], life=20)
