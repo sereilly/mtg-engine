@@ -545,3 +545,16 @@ def _fused_exile_then_controller_life(
     if gain.amount != ast.ThatMuch("its_power"):
         return None
     return (OracleInstruction("exile_creature_gain_life_equal_to_power", "", {}),)
+
+
+def _lower_shuffle_graveyard_into_library(
+    node: ast.ShuffleGraveyardIntoLibrary,
+) -> tuple[OracleInstruction, ...]:
+    """Feldon's Cane. Whose graveyard is on the payload even though only one
+    value is printed today — the alternative is a kind that would have to be
+    replaced the first time a card says "target player's"."""
+    return (
+        OracleInstruction(
+            "shuffle_graveyard_into_library", "", {"whose": node.whose.kind}
+        ),
+    )

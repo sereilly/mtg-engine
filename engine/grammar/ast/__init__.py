@@ -107,6 +107,7 @@ from .characteristics import (
 )
 from .board import (
     SacrificeExpansionPermanents,
+    ShuffleGraveyardIntoLibrary,
     Attach,
     Destroy,
     Sacrifice,
@@ -232,6 +233,7 @@ __all__ = [
     "RevealedCardIs",
     "Controls",
     "SacrificeExpansionPermanents",
+    "ShuffleGraveyardIntoLibrary",
     "EveryOf",
     "IsState",
     "DiedThisTurn",

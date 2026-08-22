@@ -331,3 +331,24 @@ def _parse_sacrifice_expansion_permanents(stream: TokenStream) -> ast.Statement 
         stream.reset(mark)
         return None
     return ast.SacrificeExpansionPermanents(set_code)
+
+
+def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement | None:
+    """``Shuffle your graveyard into your library.`` (Feldon's Cane.)
+
+    Both possessives are read rather than assumed. A card moving *another*
+    player's graveyard is a different effect, and consuming "your" without
+    checking it would compile that card onto this one.
+    """
+    mark = stream.mark()
+    # "your graveyard" is a possessive, not a player reference — `parse_player_ref`
+    # reads "you" / "target player" / "each opponent" and rightly refuses it —
+    # so the word is matched directly, and both occurrences are checked. A card
+    # moving *another* player's graveyard is a different effect, and consuming
+    # the possessive without reading it would compile that card onto this one.
+    if not stream.accept_phrase(
+        "shuffle", "your", "graveyard", "into", "your", "library"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"))

@@ -231,3 +231,38 @@ def test_the_set_name_is_resolved_through_the_manifest(set_pool):
     (ability,) = program.activated_abilities
 
     assert ability.instruction.payload["set_code"] == "atq"
+
+
+# ---------------------------------------------------------------------------
+# Feldon's Cane (round 10)
+# ---------------------------------------------------------------------------
+
+
+def test_feldons_cane_moves_the_whole_graveyard_and_exiles_itself(set_pool):
+    pool = set_pool("ATQ")
+    cane = Permanent(card=pool["Feldon's Cane"])
+    graveyard = [pool["Ornithopter"], pool["Jalum Tome"], pool["Citanul Druid"]]
+    p1 = PlayerState(name="P1", battlefield=[cane], graveyard=list(graveyard), library=[])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Feldon's Cane")
+
+    assert p1.graveyard == [], "every card in it goes — that is what 'your graveyard' means"
+    assert len(p1.library) == 3
+    assert "Feldon's Cane" not in {perm.card.name for perm in game.all_permanents()}, (
+        "'Exile this artifact' is part of the cost (CR 601.2h)"
+    )
+
+
+def test_feldons_cane_leaves_an_opponents_graveyard_alone(set_pool):
+    pool = set_pool("ATQ")
+    cane = Permanent(card=pool["Feldon's Cane"])
+    p1 = PlayerState(name="P1", battlefield=[cane], graveyard=[pool["Ornithopter"]], library=[])
+    p2 = PlayerState(name="P2", graveyard=[pool["Jalum Tome"]], library=[])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Feldon's Cane")
+
+    assert len(p2.graveyard) == 1

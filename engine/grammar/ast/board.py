@@ -217,3 +217,14 @@ class SacrificeExpansionPermanents:
     a name-keyed entry.
     """
     set_code: str
+
+
+@dataclass(frozen=True)
+class ShuffleGraveyardIntoLibrary:
+    """``Shuffle your graveyard into your library.`` (Feldon's Cane.)
+
+    Its own node rather than a `ReturnToZone` with a zone pair: this moves a
+    *whole zone* rather than any object a filter could name, and shuffling is
+    part of the move rather than a rider on it (CR 701.19).
+    """
+    whose: PlayerRef

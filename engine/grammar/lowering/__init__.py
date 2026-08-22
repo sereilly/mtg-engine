@@ -86,6 +86,7 @@ from .characteristics import (
     _lower_change_text,
 )
 from .zones import (
+    _lower_shuffle_graveyard_into_library,
     _EXILED_CREATURE,
     _reads_no_return_restriction,
     _lower_put_onto_battlefield,
@@ -248,6 +249,7 @@ __all__ = [
     "_lower_gain_control",
     "_lower_sacrifice",
     "_lower_sacrifice_expansion_permanents",
+    "_lower_shuffle_graveyard_into_library",
     "_EXILED_CREATURE",
     "_lower_exile",
     "_fused_exile_then_controller_life",

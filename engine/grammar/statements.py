@@ -63,6 +63,7 @@ from .effects import (
     _parse_reveal_top,
     _parse_sacrifice,
     _parse_sacrifice_expansion_permanents,
+    _parse_shuffle_graveyard_into_library,
     _parse_search_library,
     _parse_doesnt_untap_next_step,
     _parse_tap_untap,
@@ -451,6 +452,13 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     expansion_sacrifice = _parse_sacrifice_expansion_permanents(stream)
     if expansion_sacrifice is not None:
         return expansion_sacrifice
+    # "Shuffle your graveyard into your library." (Feldon's Cane.) Read here
+    # rather than as a verb in the subject-verb reader: the sentence has no
+    # object noun phrase at all — it names two zones — so there is nothing for
+    # that reader to take as a subject.
+    graveyard_shuffle = _parse_shuffle_graveyard_into_library(stream)
+    if graveyard_shuffle is not None:
+        return graveyard_shuffle
     # "[Until end of turn,] you may play/cast <cards> [this turn] […]" — a
     # cast-or-play permission (CR 601.3). Tried before the "you may" wrapper
     # below: the permission IS the sentence's whole effect, where the wrapper

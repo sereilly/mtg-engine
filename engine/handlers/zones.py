@@ -1842,3 +1842,29 @@ def return_spell_or_creature_to_hand(game: Game, instruction: OracleInstruction,
         "Returned creature to hand" if bounced else f"{context.card.name}: nothing was returned"
     )
     return True, "resolved"
+
+
+@effect_handler("shuffle_graveyard_into_library")
+def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Feldon's Cane: "{T}, Exile this artifact: Shuffle your graveyard into
+    your library."
+
+    CR 701.19: the cards move and the library is shuffled as one action, so
+    there is nothing to schedule and nothing that can observe a half-moved
+    zone. The graveyard is emptied rather than filtered — every card in it
+    goes, which is what "your graveyard" means.
+    """
+    whose = str(instruction.payload.get("whose", "you"))
+    player = context.caster if whose == "you" else context.target
+    if player is None:
+        return False, "no player to shuffle"
+    moved = len(player.graveyard)
+    player.library.extend(player.graveyard)
+    player.graveyard.clear()
+    # Through the module-level RNG every other shuffle uses, so a seeded run
+    # stays reproducible (the determinism invariant).
+    random.shuffle(player.library)
+    game.log.append(
+        f"{player.name} shuffled {moved} card(s) from their graveyard into their library"
+    )
+    return True, "resolved"
