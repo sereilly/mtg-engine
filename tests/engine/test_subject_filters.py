@@ -111,6 +111,37 @@ def test_nontoken_rejects_a_token(pool):
     assert not subject_matches(game, token, {"nontoken": True})
 
 
+def test_ownership_is_asked_separately_from_control(pool):
+    """"target permanent you both **own** and control" (Obelisk of Undoing).
+
+    Ownership (CR 108.3) never changes; control (CR 613 layer 2) does, and a
+    card printed with both is printed for the case where they differ. Reading
+    one as the other is how a stolen permanent gets returned to the thief's
+    hand — so the two are separate keys, and the demonstration is a permanent
+    whose control has moved.
+    """
+    from engine.control import change_control
+
+    stolen = Permanent(card=pool["Grizzly Bears"])
+    thief = Permanent(card=pool["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[thief])
+    p2 = PlayerState(name="P2", battlefield=[stolen])
+    game = Game(players=[p1, p2])
+    # Stolen the way the engine steals: a layer-2 contribution, which leaves
+    # `base_controller` — and so ownership — pointing at the seat it entered
+    # under. Setting the field by hand would be a fixture asserting its own
+    # premise.
+    game._put_permanent_onto_battlefield(1, stolen, None)
+    change_control(stolen, 0, source=thief)
+    game._sync_control()
+
+    assert subject_matches(game, stolen, {"controller": "you"}, observer=0)
+    assert not subject_matches(game, stolen, {"owner": "you"}, observer=0)
+    assert not subject_matches(
+        game, stolen, {"controller": "you", "owner": "you"}, observer=0
+    )
+
+
 def test_the_relative_keys_refuse_without_the_context_they_need(pool):
     """"You control" and "another" are relative, which is why they are outside
     ``OBJECT_ONLY_FILTER_KEYS``. A caller with no observer and no source must
@@ -184,6 +215,7 @@ _COVERED_ELSEWHERE = {
     "nontoken": "test_nontoken_rejects_a_token",
     "untapped_only": "test_untapped_only_rejects_a_tapped_permanent",
     "controller": "test_the_relative_keys_refuse_without_the_context_they_need",
+    "owner": "test_ownership_is_asked_separately_from_control",
     "exclude_self": "test_the_relative_keys_refuse_without_the_context_they_need",
 }
 

@@ -198,6 +198,12 @@ class ObjectFilter:
     with_keywords: tuple[str, ...] = ()       # "with flying"
     without_keywords: tuple[str, ...] = ()    # "without flying"
     controller: str | None = None             # "you" | "opponent" | "that_player"
+    # "target permanent you both **own** and control" (Obelisk of Undoing).
+    # Ownership (CR 108.3) is a different question from control (CR 613 layer
+    # 2) and the two come apart the moment anything is stolen — which is
+    # precisely the case this card is printed to exclude. Its own field, so a
+    # phrase naming only one of them cannot be read as naming both.
+    owner: str | None = None                  # "you"
     tapped: bool | None = None
     attacking: bool | None = None
     blocking: bool | None = None
@@ -307,6 +313,8 @@ class ObjectFilter:
             payload["without_keywords"] = list(self.without_keywords)
         if self.controller:
             payload["controller"] = self.controller
+            if self.owner is not None:
+                payload["owner"] = self.owner
         if self.attacking:
             payload["attacking_only"] = True
         if self.blocking:
@@ -464,6 +472,12 @@ class DiscardCost:
     # can say: its fields are AND'd, so "land" and "shrine" together would name
     # a card that is both. Empty is the unrestricted "Discard a card".
     filters: tuple[ObjectFilter, ...] = ()
+    # "Discard a card **at random**" (Coral Helm). Not a narrowing of which
+    # cards may pay — every card in hand may — but a removal of the *choice*:
+    # the payer names nothing, and a cost the payer picks is a strictly better
+    # cost than one chance picks. Its own flag rather than an empty filter list
+    # for exactly that reason; the two shapes look identical and are not.
+    at_random: bool = False
     #: "Discard **your hand**" (Subira, Tulzidi Caravanner). Every card, so
     #: there is nothing for the payer to choose and nothing for a filter to
     #: narrow — a different cost from "discard a card", not a count of it, which

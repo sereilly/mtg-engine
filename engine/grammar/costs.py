@@ -230,7 +230,14 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 narrowed = _parse_card_alternatives(stream)
                 if narrowed is None:
                     raise stream.error("unrecognized discard cost")
-                costs.append(ast.DiscardCost(ast.Fixed(1), filters=narrowed))
+                # "Discard a card **at random**" (Coral Helm). Read after the
+                # noun phrase because that is where it is printed, and folded
+                # onto this cost rather than left for the effect parser — it
+                # says how the cost is paid, not what happens afterwards.
+                at_random = bool(stream.accept_phrase("at", "random"))
+                costs.append(
+                    ast.DiscardCost(ast.Fixed(1), filters=narrowed, at_random=at_random)
+                )
             stream.accept_punct(",")
             continue
         break

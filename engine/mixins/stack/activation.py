@@ -9,6 +9,8 @@ ability or (for a mana ability, CR 605.1a) performs it without using the stack.
 
 from __future__ import annotations
 
+import random
+
 from ...activation_restrictions import activation_denial
 from ...auras import aura_restriction_active
 from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
@@ -565,7 +567,21 @@ class AbilityActivationMixin:
             # a cheaper cost: it is refused rather than quietly slid onto a legal
             # one, so a stale click cannot discard the land the player meant to
             # keep.
-            if cost_hand_index is not None and (
+            # "Discard a card **at random**" (Coral Helm). The payer names
+            # nothing — a cost the payer picks is a strictly better cost than
+            # one chance picks, which is the whole difference between this card
+            # and one that says "discard a card". Any index a caller sent is
+            # ignored rather than honoured, because honouring it would hand the
+            # choice back.
+            #
+            # Through the module RNG, like every other randomiser here, so a
+            # seeded run reproduces the discard (the determinism invariant).
+            if ability.cost.discard_at_random:
+                discard_cost_cards = random.sample(
+                    payable, min(ability.cost.discard_cards, len(payable))
+                )
+                cost_hand_index = None
+            elif cost_hand_index is not None and (
                 not 0 <= cost_hand_index < len(hand)
                 or hand[cost_hand_index] not in payable
             ):
@@ -575,13 +591,14 @@ class AbilityActivationMixin:
                 )
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
-            named = hand[cost_hand_index] if isinstance(cost_hand_index, int) else payable[0]
-            discard_cost_cards = [named]
-            for card in payable:
-                if len(discard_cost_cards) >= ability.cost.discard_cards:
-                    break
-                if card is not named:
-                    discard_cost_cards.append(card)
+            if not ability.cost.discard_at_random:
+                named = hand[cost_hand_index] if isinstance(cost_hand_index, int) else payable[0]
+                discard_cost_cards = [named]
+                for card in payable:
+                    if len(discard_cost_cards) >= ability.cost.discard_cards:
+                        break
+                    if card is not named:
+                        discard_cost_cards.append(card)
 
         # "Discard your hand" (Subira). Never unpayable — discarding nothing is
         # discarding your hand — so there is no check beside the others above,

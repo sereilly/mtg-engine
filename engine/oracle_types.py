@@ -79,6 +79,10 @@ class ActivatedAbilityCost:
     # `_chargeable_discard_filters` refuses to read one, the same pairing
     # `sacrifice_filter` describes.
     discard_filters: tuple[dict, ...] = ()
+    #: "Discard a card at random" (Coral Helm). The payer picks nothing; the
+    #: activation path draws the card from the hand with the module RNG, so a
+    #: seeded run reproduces it.
+    discard_at_random: bool = False
     # Subira: "Discard your hand: …" — every card, chosen by nobody. Its own
     # field rather than a large ``discard_cards``, because the payability check
     # is the opposite: a count can be unpayable for want of cards, and this one

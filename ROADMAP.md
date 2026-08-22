@@ -1226,3 +1226,45 @@ for `power` and `toughness` nothing does.
 
 **Numbers.** ATQ 66 → 67; grammar parses 65.8% → 66.7%. Shipped pool 668/668,
 grammar floors unmoved, hook ceilings **down**, suite green at 6629.
+
+## ATQ round 13: a cost nobody chooses, and ownership as its own question
+
+*(2026-08-21.)* **67 → 69.** Coral Helm and Obelisk of Undoing.
+
+**"Discard a card at random" is not "discard a card" with a filter.** It
+removes the *choice*, and a cost the payer picks is a strictly better cost than
+one chance picks — so it is a flag on the cost, not an empty filter list, and
+the payment path ignores any index a caller sends rather than honouring it
+(honouring it would hand the choice back). The phrase is stripped before the
+noun parser sees it, because "at random" says how the card is chosen and not
+what the card must *be*; left in, the noun parser refused "a card at random"
+and the cost silently became none at all. The draw goes through the module RNG
+like every other randomiser, so a seeded run reproduces it.
+
+**Ownership is a different question from control, and Obelisk of Undoing is
+printed for the case where they differ.** CR 108.3 ownership never changes;
+CR 613 layer 2 control does. "Target permanent you both own and control" is the
+card excluding the permanent it stole, so `owner` is its own filter key asked
+separately from `controller` — folding them would return a stolen permanent to
+the thief's hand. It is a *relative* key like `controller`: no observer, no
+answer, which is the safe direction.
+
+Three narrower refusals had to move for it, each on a distinction the card
+already makes. "Return … to **your** hand" normally refuses because the bounce
+handler always returns to the *owner's* hand — but a target you own makes the
+two the same hand. "The bounce handler only returns creatures" refuses a bare
+"target permanent" because it would bounce a land — but this one is not bare,
+it carries an ownership narrowing the filter path can test, and the card really
+does bounce a land. And the handler's filter copy had to learn to carry
+`owner`, or announcement and resolution would have disagreed.
+
+**A name collision cost 27 tests and was worth every one.** `parse_object_filter`
+already had a local called `owner` — the *zone's* owner, for "from your
+graveyard" — so `owner=owner` in the constructor bound the wrong one and every
+graveyard-scoped card started reporting an ownership restriction nothing could
+test. Chandra, Flame's Catalyst was the first to fall. Renamed to `owned_by`;
+the lesson is the one `EveryOf` taught in round 9, in a smaller scope: a
+long function's locals are a namespace too.
+
+**Numbers.** ATQ 67 → 69; grammar parses 66.7% → 68.3%. Shipped pool 668/668,
+floors and ceilings unmoved, suite green at 6633, no hook added.

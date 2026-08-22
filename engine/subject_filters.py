@@ -54,7 +54,7 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",
     "nontoken", "named", "supertypes",
-    "with_keywords", "controller", "exclude_self",
+    "with_keywords", "controller", "owner", "exclude_self",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -64,7 +64,7 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
 #: takes the excluded permanent as its own argument — has neither to give, so a
 #: payload it hands over must stay inside this set or the narrowing would be
 #: quietly ignored.
-OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {"controller", "exclude_self"}
+OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {"controller", "owner", "exclude_self"}
 
 #: The keys ``_card_matches_filter`` answers about a **card** — an object in a
 #: hand, a graveyard or a library. A far smaller set than the two above, and
@@ -196,6 +196,23 @@ def subject_matches(
         if seat is None or observer is None:
             return False
         if (seat == observer) != (controller == "you"):
+            return False
+    # "…you both **own** and control" (Obelisk of Undoing). Ownership is
+    # CR 108.3 and never changes; control is CR 613 layer 2 and does. A card
+    # printed with both is printed to exclude the permanent where they differ,
+    # so this is asked separately from the controller test above rather than
+    # folded into it — reading one as the other is how a stolen permanent gets
+    # returned to the thief's hand.
+    #
+    # Relative like `controller`, so an observer is required and its absence
+    # refuses: a caller that cannot say whose ability this is must not be
+    # handed a narrowing it would then ignore.
+    owner = described.get("owner")
+    if owner is not None:
+        owner_seat = game.owner_index_of(obj)
+        if owner_seat is None or observer is None:
+            return False
+        if (owner_seat == observer) != (owner == "you"):
             return False
     # Keywords are asked of layer 6, so a creature *granted* defender answers a
     # defender-narrowed filter exactly as a printed one does.

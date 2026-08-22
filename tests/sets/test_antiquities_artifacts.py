@@ -328,3 +328,58 @@ def test_the_animation_ends_at_your_next_upkeep(set_pool):
 
     game.resolve_upkeep(0)
     assert not tome.is_creature
+
+
+# ---------------------------------------------------------------------------
+# Coral Helm / Obelisk of Undoing (round 13)
+# ---------------------------------------------------------------------------
+
+
+def test_coral_helm_discards_without_letting_the_payer_choose(set_pool):
+    """"Discard a card **at random**" is not "discard a card" with a filter —
+    it removes the *choice*, and a cost the payer picks is a strictly better
+    cost than one chance picks. A caller that names an index is ignored."""
+    import random
+
+    pool = set_pool("ATQ")
+    helm = Permanent(card=pool["Coral Helm"])
+    creature = Permanent(card=pool["Citanul Druid"])
+    hand = [pool["Ornithopter"], pool["Jalum Tome"], pool["Detonate"]]
+    p1 = PlayerState(name="P1", battlefield=[helm, creature], hand=list(hand))
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    random.seed(7)
+    base = creature.effective_power
+
+    result = game.activate_permanent_ability(
+        0, "Coral Helm", target_permanent_index=1, cost_hand_index=0
+    )
+
+    assert result.supported
+    assert creature.effective_power == base + 2
+    assert len(p1.hand) == 2 and len(p1.graveyard) == 1
+
+
+def test_obelisk_of_undoing_refuses_a_permanent_you_only_control(set_pool):
+    """"you both **own** and control" — ownership (CR 108.3) never changes and
+    control (CR 613 layer 2) does, and this card is printed for the case where
+    they differ. Reading one as the other returns a stolen permanent to the
+    thief's hand."""
+    from engine.control import change_control
+
+    pool = set_pool("ATQ")
+    obelisk = Permanent(card=pool["Obelisk of Undoing"])
+    theirs = Permanent(card=pool["Citanul Druid"])
+    p1 = PlayerState(name="P1", battlefield=[obelisk])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    change_control(theirs, 0, source=obelisk)
+    game._sync_control()
+    assert game.controls(0, theirs), "the fixture needs it stolen, not given"
+
+    game.activate_permanent_ability(0, "Obelisk of Undoing", target_permanent_index=1)
+
+    assert "Citanul Druid" in {p.card.name for p in game.all_permanents()}
+    assert not p1.hand, "it is not your card to take"

@@ -290,7 +290,26 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
         # owner's hand by construction, so "to your hand" is a different effect
         # (it matters the moment you have stolen the creature) and refuses.
         if destination.owner is None or destination.owner.kind != "owner":
-            raise LoweringError("the bounce handler returns a permanent to its owner", node=node)
+            # "…to **your** hand" is a different place from "its owner's hand"
+            # — the moment you have stolen the permanent, they are two players'
+            # hands — so the bounce handler, which always returns a permanent
+            # to its owner, cannot carry it.
+            #
+            # Unless the card says you own it. "Return target permanent you
+            # both own and control to your hand" (Obelisk of Undoing) narrows
+            # the target to the case where the two hands are the same hand, so
+            # the handler is exactly right and the refusal below would be
+            # refusing on a distinction the card already made.
+            owns_it = (
+                isinstance(node.subject, ast.TargetSpec)
+                and node.subject.filter is not None
+                and node.subject.filter.owner == "you"
+            )
+            if not (owns_it and destination.owner is not None
+                    and destination.owner.kind == "you"):
+                raise LoweringError(
+                    "the bounce handler returns a permanent to its owner", node=node
+                )
         if filt.is_card:
             raise LoweringError("no handler bounces a card that is not in play", node=node)
         # "target **nonland** permanent" (Sublime Epiphany) names no card type
@@ -300,7 +319,13 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
         # "target permanent" would be admitted here and then bounce a land,
         # which is the case this refusal was written for.
         widened = set(filt.card_types) in ({"creature"}, {"creature", "planeswalker"})
-        if not widened and not filt.excluded_types:
+        # "target permanent **you both own and control**" (Obelisk of Undoing)
+        # names no card type either, and leaves an ownership narrowing behind
+        # instead of an exclusion — which `subject_matches` answers, so the
+        # handler's filter path has something to test. The card really does
+        # bounce a land, and that is the card.
+        narrowed = bool(filt.excluded_types) or filt.owner is not None
+        if not widened and not narrowed:
             raise LoweringError("the bounce handler only returns creatures", node=node)
         if any(bounce_extras) or filt.card_types != ("creature",):
             # A narrowed or widened bounce carries what the handler's
@@ -311,7 +336,7 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
                 for key, value in _filter_payload(filt).items()
                 if key in (
                     "type_filter", "exclude_types", "exclude_subtypes",
-                    "exclude_self", "controller",
+                    "exclude_self", "controller", "owner",
                 )
             }}
             _describe_targets(payload, subject)

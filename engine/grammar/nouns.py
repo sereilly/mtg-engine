@@ -293,6 +293,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     with_keywords: list[str] = []
     without_keywords: list[str] = []
     controller: str | None = None
+    owned_by: str | None = None
     tapped: bool | None = None
     attacking: bool | None = None
     blocking: bool | None = None
@@ -556,6 +557,15 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
 
     # --- postmodifiers ---------------------------------------------------
     while True:
+        # "you both own and control" (Obelisk of Undoing). Read before the bare
+        # "you control", which is its suffix: matching that first would consume
+        # "control" and strand "own", and — worse — would compile the card as
+        # though it read "any permanent you control", which is exactly the
+        # stolen permanent it is printed to exclude.
+        if stream.accept_phrase("you", "both", "own", "and", "control"):
+            controller = "you"
+            owned_by = "you"
+            continue
         if stream.accept_phrase("you", "control"):
             controller = "you"
             continue
@@ -747,6 +757,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         with_keywords=tuple(with_keywords),
         without_keywords=tuple(without_keywords),
         controller=controller,
+        owner=owned_by,
         tapped=tapped,
         attacking=attacking,
         blocking=blocking,

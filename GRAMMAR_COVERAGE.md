@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 80.2% | 78.9% | 43.7% | 153 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 66.7% | 65.8% | 44.2% | 49 |
+| ATQ *(measured)* | 85 | 120 | 68.3% | 67.5% | 45.8% | 51 |
 | **All (shipped)** | **1533** | **2166** | **80.9%** | **79.7%** | **46.9%** | **880** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -36,7 +36,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | 193 | 75 | expected a subject |  |
 | 88 | 32 | unrecognized effect verb |  |
 | 49 | 27 | unconsumed text |  |
-| 30 | 30 | unrecognized activation cost |  |
+| 29 | 29 | unrecognized activation cost |  |
 | 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 9 | 4 | expected 'the number of' in a where-clause |  |
 | 9 | 4 | expected a keyword ability |  |
@@ -51,10 +51,10 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | 4 | 1 | expected 'a' |  |
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
-| 3 | 2 | expected a destination zone after 'return' |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 1 | expected something to shield |  |
+| 2 | 1 | expected a destination zone after 'return' |  |
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | no keyword-grant handler expires at the granting player's next upkeep |  |
 | 1 | 1 | expected 'be' |  |
@@ -326,6 +326,8 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
+- **Coral Helm**
+  - `{3}, Discard a card at random: Target creature gets +2/+2 until end of turn.`
 - **Counterspell**
   - `Counter target spell.`
   - `Counter target spell.`
@@ -958,6 +960,8 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
   - `{W}{W}, {T}: Destroy target black permanent.`
 - **Oasis**
   - `{T}: Prevent the next 1 damage that would be dealt to target creature this turn.`
+- **Obelisk of Undoing**
+  - `{6}, {T}: Return target permanent you both own and control to your hand.`
 - **Obsessive Stitcher**
   - `{T}: Draw a card, then discard a card.`
   - `{2}{U}{B}, {T}, Sacrifice this creature: Return target creature card from your graveyard to the battlefield.`

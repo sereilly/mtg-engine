@@ -852,8 +852,18 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         None if discard_last_drawn
         else re.search(r"\bdiscard (an? [^,:]+?)\s*(?=,|$)", cost_lower)
     )
+    # "Discard a card **at random**" (Coral Helm). Stripped from the phrase
+    # before the noun parser sees it — it is not part of what the card must
+    # *be*, it is how the card is chosen — and recorded so the payment path
+    # draws rather than lets the payer name one. Left in, the noun parser would
+    # refuse "a card at random" and the cost would silently become none at all.
+    discard_phrase = discarded.group(1) if discarded else None
+    discard_at_random = False
+    if discard_phrase and discard_phrase.endswith(" at random"):
+        discard_phrase = discard_phrase[: -len(" at random")]
+        discard_at_random = True
     discard_filters = (
-        _chargeable_discard_filters(discarded.group(1)) if discarded else None
+        _chargeable_discard_filters(discard_phrase) if discard_phrase else None
     )
     # "Tap two untapped Spirits you control" (Shacklegeist). The {T} symbol was
     # already consumed above as mana; this is the spelled-out form, which taps
@@ -875,6 +885,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         tap_count=tap_cost[0] if tap_cost else 0,
         discard_cards=0 if discard_filters is None else 1,
         discard_filters=discard_filters or (),
+        discard_at_random=discard_at_random and discard_filters is not None,
         discard_whole_hand=discard_whole_hand,
         discard_self=discard_self,
         put_counter=put_counter,
