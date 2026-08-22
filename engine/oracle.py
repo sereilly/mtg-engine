@@ -192,6 +192,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # battlefield" (Tablet of Epityr, Urza's Miter). After the land row, which
     # keeps its own dispatcher and its own damage shape (Dingus Egg) — this one
     # is the general reading and would otherwise claim that line too.
+    # The same event with CR 603.4's intervening-if about *how* it died
+    # (Urza's Miter). Before the unqualified row, whose pattern is this one's
+    # prefix — matched first it would drop the qualifier and the ability would
+    # fire on a sacrifice the card excludes, which is a trigger working more
+    # often than it prints.
+    ("permanent_dies",
+     r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"
+     r", if it (?P<dying_not_sacrificed>wasn't sacrificed)"),
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"),
     ("creature_dies",               r"whenever a creature dies"),

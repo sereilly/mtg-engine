@@ -1392,3 +1392,37 @@ that says so.
 
 **Numbers.** ATQ 71 → 72; grammar parses 70.0% → 70.8%. Shipped pool 668/668,
 floors and ceilings unmoved, suite green at 6642, no hook added.
+
+## ATQ round 17: how a permanent died is not derivable from where it landed
+
+*(2026-08-21.)* **72 → 73.** Urza's Miter — "Whenever an artifact you control is
+put into a graveyard from the battlefield, **if it wasn't sacrificed**, you may
+pay {3}."
+
+Round 3 built the trigger and left this card out with a reason: the qualifier is
+CR 603.4's intervening-if about *how* the permanent died, and nothing recorded
+that. A sacrifice and a destruction put the artifact in the same graveyard, so
+the graveyard cannot answer the question — the answer has to be written down at
+the moment it happens.
+
+`sacrifice_permanent` is the one transition CR 701.21a describes, and it already
+exists as one because seven sites used to reach the graveyard around it. So the
+record goes there: one line, set before the graveyard move that announces the
+death, read back by the death dispatcher as last-known information. Nothing else
+had to change — no new field on `Game`, no second fire site, and a card printed
+with the same qualifier over any other subject gets it free.
+
+**The refusal it replaced was the right one.** Round 3 could have shipped the
+card by dropping the clause, and the result would have been an ability that
+fires on a sacrifice the card excludes — working more often than it prints,
+which is the failure mode that is silent in the player's favour. The test for it
+sacrifices the artifact and asserts the stack is *empty*.
+
+**Both front ends needed the clause, for different reasons.** The compiler's
+pattern captures it as payload; the grammar merely has to consume it, or the
+sentence is cut short and the line fails on a clause the parser does understand.
+The narrowed row is ordered before its own prefix, as every narrowed row in that
+table is.
+
+**Numbers.** ATQ 72 → 73; grammar parses 70.8% → 71.7%. Shipped pool 668/668,
+floors and ceilings unmoved, suite green at 6644, no hook added.

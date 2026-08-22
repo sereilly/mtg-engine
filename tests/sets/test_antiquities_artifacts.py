@@ -432,3 +432,38 @@ def test_candelabra_untaps_only_lands(set_pool):
     )
 
     assert creature.tapped, "a creature is not a land"
+
+
+# ---------------------------------------------------------------------------
+# Urza's Miter (round 17) — an intervening-if about how it died
+# ---------------------------------------------------------------------------
+
+
+def _miter_and_fodder(set_pool):
+    pool = set_pool("ATQ")
+    miter = Permanent(card=pool["Urza's Miter"])
+    fodder = Permanent(card=pool["Ornithopter"])
+    p1 = PlayerState(name="P1", battlefield=[miter, fodder])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    return game, fodder
+
+
+def test_urzas_miter_triggers_when_an_artifact_is_destroyed(set_pool):
+    game, fodder = _miter_and_fodder(set_pool)
+
+    game._permanent_to_graveyard(game.players[0], fodder)
+
+    assert [item.card.name for item in game.stack] == ["Urza's Miter"]
+
+
+def test_urzas_miter_stays_quiet_when_the_artifact_was_sacrificed(set_pool):
+    """"…**if it wasn't sacrificed**" (CR 603.4). A sacrifice and a destruction
+    leave the artifact in the same graveyard, so the graveyard cannot answer
+    the question — only the record the one sacrifice transition leaves can."""
+    game, fodder = _miter_and_fodder(set_pool)
+
+    game.sacrifice_permanent(fodder)
+
+    assert game.stack == [], (
+        "the Miter fires more often than it prints if the qualifier is dropped"
+    )

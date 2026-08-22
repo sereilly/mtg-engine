@@ -1190,6 +1190,13 @@ class GameHelpersMixin:
         controller = self.players[seat]
         if self.remove_from_battlefield(permanent) is None:
             return None
+        # "…**if it wasn't sacrificed**, you may pay {3}." (Urza's Miter.) How a
+        # permanent left is not derivable from where it ended up — a sacrifice
+        # and a destruction both put it in the same graveyard — so the one
+        # sacrifice transition records it, and the death dispatcher reads it
+        # back as last-known information (CR 608.2h). Set before the graveyard
+        # move, because that is what announces the death.
+        permanent.metadata["was_sacrificed"] = True
         self._permanent_to_graveyard(controller, permanent)
         # Announced after the permanent has gone, so a trigger that reads the
         # board sees the board the sacrifice left behind (CR 603.10 — the
@@ -1557,6 +1564,16 @@ class GameHelpersMixin:
                     trig.condition.payload.get("dying_filter"),
                     observer=controller_index,
                     source=observer,
+                ):
+                    continue
+                # "…if it wasn't sacrificed" (Urza's Miter). CR 603.4's
+                # intervening-if, checked when the trigger would fire — and the
+                # only thing that can answer it is the record the sacrifice
+                # transition left, since the graveyard looks the same either
+                # way.
+                if (
+                    trig.condition.payload.get("dying_not_sacrificed")
+                    and dead_permanent.metadata.get("was_sacrificed")
                 ):
                     continue
                 events.append(make_trigger_event(

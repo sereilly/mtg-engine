@@ -557,6 +557,18 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         if dying is not None and stream.accept_phrase(
             "is", "put", "into", "a", "graveyard", "from", "the", "battlefield"
         ):
+            # "…**, if it wasn't sacrificed**" (Urza's Miter). CR 603.4's
+            # intervening-if, consumed here so the sentence is read whole —
+            # left for the effect parser it would be an imperative nobody can
+            # perform, and the line would fail on a clause it does understand.
+            # The condition's own payload carries it; this side only has to
+            # not choke on it.
+            qualifier = stream.mark()
+            if not (
+                stream.accept_punct(",")
+                and stream.accept_phrase("if", "it", "wasn't", "sacrificed")
+            ):
+                stream.reset(qualifier)
             return ast.TriggerEvent("permanent_dies", "whenever", subject=dying)
         stream.reset(grave_mark)
         # "Whenever a creature you control with deathtouch attacks / deals

@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 80.5% | 79.2% | 44.0% | 154 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 70.8% | 70.0% | 47.5% | 53 |
+| ATQ *(measured)* | 85 | 120 | 71.7% | 70.8% | 48.3% | 54 |
 | **All (shipped)** | **1533** | **2166** | **81.1%** | **79.9%** | **47.1%** | **884** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,7 +33,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 192 | 74 | expected a subject |  |
+| 191 | 73 | expected a subject |  |
 | 88 | 32 | unrecognized effect verb |  |
 | 53 | 28 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
@@ -1511,6 +1511,8 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
   - `Whenever a player casts an artifact spell, you may pay {1}. If you do, you gain 1 life.`
 - **Urza's Mine**
   - `{T}: Add {C}. If you control an Urza's Power-Plant and an Urza's Tower, add {C}{C} instead.`
+- **Urza's Miter**
+  - `Whenever an artifact you control is put into a graveyard from the battlefield, if it wasn't sacrificed, you may pay {3}. If you do, draw a card.`
 - **Urza's Power Plant**
   - `{T}: Add {C}. If you control an Urza's Mine and an Urza's Tower, add {C}{C} instead.`
 - **Urza's Tower**
