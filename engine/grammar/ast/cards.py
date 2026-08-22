@@ -283,6 +283,32 @@ class SearchAndExile:
 
 
 @dataclass(frozen=True)
+class TransmuteBySacrifice:
+    """Transmute Artifact's whole effect, as one statement.
+
+    "Sacrifice an artifact. If you do, search your library for an artifact card.
+    If that card's mana value is less than or equal to the sacrificed artifact's
+    mana value, put it onto the battlefield. If it's greater, you may pay {X},
+    where X is the difference. If you do, put it onto the battlefield. If you
+    don't, put it into its owner's graveyard. Then shuffle."
+
+    One node for the whole paragraph, the shape Necromentia and Tawnos's Coffin
+    already use, and for the same reason: the sentences are not effects that
+    happen to follow one another. Every clause after the first is *about* the
+    two objects the first two chose — the artifact given up and the card found —
+    and the sizes of both are only knowable once each choice has been made. A
+    parse producing seven statements would produce six with nothing to read.
+
+    Both filters ride the node because both are printed nouns, and a card
+    printed "sacrifice a creature … search for a creature card" is the same
+    machine with different words.
+    """
+
+    sacrificed: ObjectFilter
+    found: ObjectFilter
+
+
+@dataclass(frozen=True)
 class CastPermission:
     """A sentence whose effect is permission to cast or play from somewhere
     the rules alone would not allow (CR 601.3):

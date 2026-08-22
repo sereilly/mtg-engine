@@ -264,6 +264,11 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         "search_destination",
         # Reshapes the library; the spell's own CR 608.2n move waits behind it.
         "look_top_pick",
+        # "Sacrifice an artifact. **If you do**, search your library…"
+        # (Transmute Artifact): what the player gives up decides what the rest
+        # of the resolution may find. Only an interactive seat queues it —
+        # `default_at_arm` answers for everyone else before the flag is set.
+        "sacrifice",
         # "Remove any number of +1/+1 counters … create **that many** … tokens"
         # (Tetravus): the answer is the count the next step of the same
         # sentence uses. Shapeshifter arms the same kind at the end of what it

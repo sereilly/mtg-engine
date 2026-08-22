@@ -163,3 +163,90 @@ def test_it_reads_the_targets_graveyard_not_the_casters(set_pool):
     assert "Su-Chi" in [card.name for card in p1.graveyard]
     assert p1.graveyard[0].name == "Su-Chi", "the caster's pile is not the one read"
     assert p2.library[0].name == "Ornithopter"
+
+
+# ---------------------------------------------------------------------------
+# Transmute Artifact (round 29) — three decisions, each shaping the next
+# ---------------------------------------------------------------------------
+
+
+def _transmute(set_pool, given, library):
+    pool = set_pool("ATQ")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Transmute Artifact"]],
+        battlefield=[Permanent(card=pool[given])],
+        library=[pool[name] for name in library],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    return game, p1, pool
+
+
+def _resolve(game):
+    game.cast_from_hand(0, "Transmute Artifact")
+    game.auto_resolve_pending_choices()
+
+
+def test_a_cheaper_find_goes_straight_onto_the_battlefield(set_pool):
+    """Su-Chi's mana value is 4 and Ornithopter's is 0, so no payment is
+    offered at all."""
+    game, p1, pool = _transmute(set_pool, "Su-Chi", ["Ornithopter"])
+
+    _resolve(game)
+
+    assert [perm.card.name for perm in p1.battlefield] == ["Ornithopter"]
+    assert "Su-Chi" in [card.name for card in p1.graveyard]
+
+
+def test_a_dearer_find_needs_the_difference_paid(set_pool):
+    """The other way round: Ornithopter pays for nothing, Su-Chi costs 4, and a
+    seat that cannot pay the difference watches it go to the graveyard."""
+    game, p1, pool = _transmute(set_pool, "Ornithopter", ["Su-Chi"])
+
+    _resolve(game)
+
+    assert p1.battlefield == []
+    assert "Su-Chi" in [card.name for card in p1.graveyard]
+
+
+def test_the_search_finds_an_artifact_creature(set_pool):
+    """CR 205.2: a card has every type its line names, so Ornithopter is an
+    artifact card. `primary_type` picks one type by the order of a list and
+    picked "creature", which made this search — and Goblin Artisans' counter —
+    blind to every artifact creature in the set."""
+    from engine.search_filters import search_matches
+
+    pool = set_pool("ATQ")
+    assert search_matches(pool["Ornithopter"], {"card_type": "artifact"})
+    assert not search_matches(pool["Ornithopter"], {"card_type": "land"})
+
+
+def test_nothing_happens_without_an_artifact_to_give_up(set_pool):
+    """"Sacrifice an artifact. **If you do**, …" — no artifact, no search."""
+    pool = set_pool("ATQ")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Transmute Artifact"]],
+        library=[pool["Su-Chi"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    _resolve(game)
+
+    assert p1.battlefield == []
+    assert [card.name for card in p1.library] == ["Su-Chi"]
+
+
+def test_the_declined_payment_still_moves_the_card(set_pool):
+    """A decline is an answer, and this one has a consequence: "If you don't,
+    put it into its owner's graveyard." The non-interactive default read the
+    legacy damage field alone and dropped the branch, so the found card
+    vanished out of the game instead."""
+    game, p1, pool = _transmute(set_pool, "Ornithopter", ["Su-Chi"])
+
+    _resolve(game)
+
+    assert "Su-Chi" not in [card.name for card in p1.library]
+    assert "Su-Chi" in [card.name for card in p1.graveyard]

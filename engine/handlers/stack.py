@@ -168,16 +168,17 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
 
 
 def _spell_is_one_of(card, card_types) -> bool:
-    """Whether a spell on the stack is of any of *card_types* (CR 205.2).
+    """Whether a spell on the stack is any of *card_types* (CR 205.2).
 
-    Containment in the printed type line, not ``primary_type``: a card has
-    **every** type its line names, so Ornithopter is an artifact spell *and* a
-    creature spell. Asking `primary_type` picks one of them by the order of a
-    list, and it picked "creature" — so Goblin Artisans, whose whole ability is
-    countering an artifact spell, refused every artifact creature in the set.
+    Through the one reader of that question (``search_filters.card_has_type``):
+    a card has every type its line names, and asking ``primary_type`` picks one
+    of them by the order of a list. It picked "creature", so Goblin Artisans —
+    whose whole ability is countering an artifact spell — refused every artifact
+    creature in the set.
     """
-    line = (getattr(card, "type_line", "") or "").lower()
-    return any(str(wanted).lower() in line for wanted in card_types)
+    from ..search_filters import card_has_type
+
+    return any(card_has_type(card, wanted) for wanted in card_types)
 
 
 @effect_handler("counter_top_stack_spell")

@@ -13,6 +13,8 @@ from ._common import (
     resolve_target_permanent,
     resolve_target_permanents,
 )
+from ..oracle_types import OracleInstruction as _OracleInstruction
+from ..resumption import run_resumable
 from ..search_filters import search_matches
 from .registry import effect_handler
 
@@ -453,6 +455,126 @@ def _resolve_graveyard_slots(caster, context, count, eligible):
         graveyard.pop(index)
     # Printed order, not removal order: the hand and the log read left to right.
     return [card for _index, card in resolved]
+
+
+@effect_handler("place_held_card")
+def place_held_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Put the card a "held" search found where a later step decided.
+
+    Its own instruction kind because it is what the branches of Transmute
+    Artifact's optional payment *are*: the `may` machinery runs instruction
+    lists, so "put it onto the battlefield" and "put it into its owner's
+    graveyard" have to be instructions rather than closures.
+    """
+    card = context.results.get("found_card")
+    if card is None:
+        return True, "resolved"
+    context.results["found_card"] = None
+    seat = game.players.index(context.caster)
+    destination = str(instruction.payload.get("destination", "battlefield"))
+    if destination == "battlefield":
+        game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+        game.log.append(f"{card.name} enters the battlefield")
+        return True, "resolved"
+    # CR 400.3: a card put into a graveyard goes to its **owner's**, and the
+    # only owner a library card can have is the player whose library it was.
+    game.players[seat].graveyard.append(card)
+    game.log.append(f"{card.name} is put into its owner's graveyard")
+    return True, "resolved"
+
+
+@effect_handler("transmute_by_sacrifice")
+def transmute_by_sacrifice(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Transmute Artifact's whole effect.
+
+    Three decisions in a row, each one shaping the next: what to give up, what
+    to look for, and — only when the find costs more than what went — whether to
+    pay the difference. So the steps run through ``run_resumable``: the first two
+    suspend on a prompt, and the work behind each is recorded rather than run
+    against an answer nobody has given yet.
+
+    Every piece is the engine's existing machinery. The sacrifice is the
+    standing forced-sacrifice prompt, told to record what it took (CR 608.2h —
+    by the time the comparison runs the artifact is a card in a graveyard, and a
+    different object); the search is the standing library search with the find
+    *held* rather than placed, because where it goes is the next step's
+    decision; and the payment is the ordinary optional-pay entry whose accept
+    and decline branches are the two placements the card prints.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    results = context.results
+
+    def _sacrifice(_step) -> None:
+        game.arm_forced_sacrifice(
+            seat, 1,
+            filter=dict(instruction.payload.get("sacrifice_filter") or {}),
+            reason=context.card.name if context.card is not None else "Transmute",
+            record=results,
+        )
+
+    def _search(_step) -> None:
+        given = list(results.get("sacrificed_cards") or ())
+        if not given:
+            # "**If you do**" — nothing was given up, so nothing follows.
+            game.log.append(f"{context.card.name}: nothing was sacrificed")
+            return
+        game.arm_pending_choice(
+            "search_library", seat,
+            count=1,
+            card_type=(instruction.payload.get("search_filter") or {}).get(
+                "type_filter", "any"
+            ),
+            zones=("library",),
+            restrictions={},
+            destination="held",
+            destinations=[],
+            tapped=[],
+            card_name=context.card.name if context.card is not None else "",
+            enters_tapped=False,
+            untap_found_if=None,
+            up_to=False,
+            reveal=False,
+            record=results,
+        )
+
+    def _place(_step) -> None:
+        card = results.get("found_card")
+        given = list(results.get("sacrificed_cards") or ())
+        if card is None or not given:
+            return
+        paid_for = int(getattr(given[0], "cmc", 0) or 0)
+        wanted = int(getattr(card, "cmc", 0) or 0)
+        if wanted <= paid_for:
+            game._execute_oracle_instruction(
+                _OracleInstruction("place_held_card", "", {"destination": "battlefield"}),
+                context,
+            )
+            return
+        # "If it's greater, you may pay {X}, where X is the difference." The
+        # number is the difference and nothing else, so it is computed here
+        # rather than asked for — CR 107.3 lets a cost name a value the effect
+        # fixes.
+        difference = wanted - paid_for
+        game.arm_pending_choice(
+            "optional_pay", seat,
+            card_name=context.card.name if context.card is not None else "",
+            cost={"generic": difference},
+            life=0,
+            _source_permanent=context.source_permanent,
+            _on_accept=(
+                _OracleInstruction("place_held_card", "", {"destination": "battlefield"}),
+            ),
+            _on_decline=(
+                _OracleInstruction("place_held_card", "", {"destination": "graveyard"}),
+            ),
+            _on_reflexive=(),
+            _context=context,
+            prompt=f"Pay {{{difference}}}?",
+        )
+
+    run_resumable(game, [_sacrifice, _search, _place], lambda step: step(None))
+    return True, "resolved"
 
 
 @effect_handler("put_graveyard_cards_on_library_top")

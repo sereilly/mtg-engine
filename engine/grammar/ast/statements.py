@@ -93,6 +93,7 @@ from .cards import (
     RevealTopToHandOrBottom,
     Scry,
     SearchAndExile,
+    TransmuteBySacrifice,
     SearchLibrary,
     Shuffle,
 )
@@ -136,7 +137,7 @@ Effect = Union[
     ExileGraveyardUntilLeaves, CastFromExiledWith,
     PhaseOut,
     AddManaForTappedLand, PreventDamage,
-    SearchLibrary, SearchAndExile, ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
+    SearchLibrary, SearchAndExile, TransmuteBySacrifice, ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
     RevealHandAndChoose,
     Shuffle, ExtraTurn, EndTheTurn, ChooseNumber, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
     SacrificeUnlessPay, DamageUnlessPay, Fight, LookAtHand, CantBe, CombatRestriction,

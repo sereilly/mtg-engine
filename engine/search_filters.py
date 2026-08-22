@@ -34,6 +34,23 @@ _COMPARE = {
 }
 
 
+def card_has_type(card, wanted: str) -> bool:
+    """Whether *card* has the card type *wanted* (CR 205.2).
+
+    A card has **every** type its line names, so Ornithopter is an artifact card
+    *and* a creature card. ``primary_type`` picks one of them by the order of a
+    list, and three readers of this one question asked it that way: a search's
+    "an artifact card" found no artifact creature, a counter's "target artifact
+    spell" refused one, and only the graveyard reader had it right. One
+    function, so the next reader cannot make it four.
+
+    Containment in the printed type line rather than a parse of it: a card
+    outside the battlefield has no computed characteristics at all (CR 613.1),
+    so the line is the whole of what there is to ask.
+    """
+    return str(wanted).lower() in (getattr(card, "type_line", "") or "").lower()
+
+
 def name_key(text: str) -> str:
     """A card name reduced to what two spellings of it agree on.
 
@@ -64,7 +81,7 @@ def search_matches(card, data: dict) -> bool:
     the same card, asked with the answer inverted.
     """
     card_type = data.get("card_type", "any")
-    if card_type != "any" and card.primary_type != card_type:
+    if card_type != "any" and not card_has_type(card, card_type):
         return False
     type_line = card.type_line.lower()
     if any(excluded in type_line for excluded in data.get("exclude_types") or ()):

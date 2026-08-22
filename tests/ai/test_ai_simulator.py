@@ -63,15 +63,23 @@ def test_the_simulator_drains_every_prompt_that_suspends_a_resolution():
     step, with nothing pointing back at what caused it. Derived from the
     registry, because a hand-kept list is what would go stale.
 
-    ``effect_order`` is the one exception, and it is exempt by construction
-    rather than by opinion: ``engine/replacements.py`` answers a non-interactive
-    seat with the default *before* queueing, so a headless run can never owe one.
+    Two exemptions, both by construction rather than by opinion. A kind
+    registered ``default_at_arm`` is never *queued* for a non-interactive seat —
+    ``arm_pending_choice`` takes its default before the flag is set — so a
+    headless run cannot owe one. ``effect_order`` is the same rule written a
+    layer up: ``engine/replacements.py`` answers a non-interactive seat with the
+    default before queueing.
     """
     from engine.ai_simulator import _SIMULATED_CHOICES
     from engine.pending_choices import CHOICE_SPECS
 
     suspending = {kind for kind, spec in CHOICE_SPECS.items() if spec.suspends}
-    undrained = suspending - set(_SIMULATED_CHOICES) - {"effect_order"}
+    answered_at_arm = {
+        kind for kind, spec in CHOICE_SPECS.items() if spec.default_at_arm
+    }
+    undrained = (
+        suspending - set(_SIMULATED_CHOICES) - answered_at_arm - {"effect_order"}
+    )
 
     assert not undrained, (
         "suspending prompt(s) a headless simulation would leave owed, wedging "

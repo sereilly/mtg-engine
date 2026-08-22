@@ -18,15 +18,12 @@ unsupported card.
 
 from __future__ import annotations
 
-import dataclasses
-
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import NUMBER, PT, SELF, WORD, render
 from .stream import TokenStream
 from .vocabulary import (
-    NUMBER_WORDS,
     ALL_SUBTYPES,
     CARD_TYPES,
     COLOR_WORDS,

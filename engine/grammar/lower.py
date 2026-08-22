@@ -122,6 +122,7 @@ from .lowering import (
     _lower_cast_from_exiled_with,
     _lower_cast_permission,
     _lower_exile_graveyard_until_leaves,
+    _lower_transmute_by_sacrifice,
     _lower_exile_until_leaves_or_untaps,
     _lower_exile_top_of_library,
     _lower_look_top_pick,
@@ -337,6 +338,9 @@ def lower_statement(
 
     if isinstance(statement, ast.ExileGraveyardUntilLeaves):
         return _lower_exile_graveyard_until_leaves(statement)
+
+    if isinstance(statement, ast.TransmuteBySacrifice):
+        return _lower_transmute_by_sacrifice(statement)
 
     if isinstance(statement, ast.ExileUntilLeavesOrUntaps):
         return _lower_exile_until_leaves_or_untaps(statement)

@@ -17,6 +17,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (
     chargeable_card_filter,
+    _filter_payload,
     _amount_payload,
     _back_reference_payload,
     _describe_targets,
@@ -381,6 +382,35 @@ def _lower_exile_graveyard_until_leaves(
         OracleInstruction(
             "exile_graveyard_until_leaves", "",
             {"filter": _linked_exile_filter(node.filter)},
+        ),
+    )
+
+
+def _lower_transmute_by_sacrifice(
+    node: "ast.TransmuteBySacrifice",
+) -> tuple[OracleInstruction, ...]:
+    """Transmute Artifact. Both printed nouns ride the payload; everything else
+    the sentence says was required by the production that read it, so there is
+    nothing left here to drop."""
+    from ...subject_filters import object_only_filter
+
+    sacrificed = _filter_payload(node.sacrificed)
+    if object_only_filter(sacrificed) is None:
+        # The sacrifice prompt is handed a set of the player's own permanents
+        # and no observer, so a narrowing it cannot test would be dropped where
+        # it is charged — the same refusal every sacrifice cost makes.
+        raise LoweringError(
+            "the sacrifice half of this effect cannot test that phrase", node=node
+        )
+    found = chargeable_card_filter(node.found)
+    if found is None:
+        raise LoweringError(
+            "the search half of this effect cannot test that phrase", node=node
+        )
+    return (
+        OracleInstruction(
+            "transmute_by_sacrifice", "",
+            {"sacrifice_filter": sacrificed, "search_filter": found},
         ),
     )
 

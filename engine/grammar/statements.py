@@ -11,14 +11,19 @@ The narrow waist of the parser — below is a fragment, above is a *line*.
 import dataclasses
 
 from . import ast
-from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import (PT, SELF, WORD)
+from .lexer import (SELF, WORD)
 from .nouns import parse_object_filter
-from .references import parse_player_ref, parse_recipient
-from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, NUMBER_WORDS
+from .paragraphs import (
+    _parse_cast_from_exiled_with,
+    _parse_exile_graveyard_until_leaves,
+    _parse_exile_until_leaves_or_untaps,
+    _parse_name_and_strip,
+    _parse_transmute_by_sacrifice,
+)
+from .references import parse_recipient
+from .vocabulary import CARD_TYPES
 from .stream import TokenStream
-from .amounts import expect_pt
 from .conditions import _parse_condition
 from .phrases import (
     _parse_duration,
@@ -181,6 +186,14 @@ def _parse_subject_verb(
     if stream.at_word("prevent"):
         return _parse_prevent(stream)
     if stream.at_word("sacrifice"):
+        # Transmute Artifact's whole paragraph opens with the same two words a
+        # bare sacrifice does, and that match would leave six sentences
+        # unconsumed — so it is tried first, and refuses without consuming.
+        mark_transmute = stream.mark()
+        transmute = _parse_transmute_by_sacrifice(stream)
+        if transmute is not None:
+            return transmute
+        stream.reset(mark_transmute)
         stream.advance()
         return _parse_sacrifice(stream, ast.PlayerRef("you"))
     if stream.at_word("regenerate"):
@@ -701,197 +714,6 @@ def _parse_where_x(stream: TokenStream) -> ast.Amount | None:
         _parse_duration(stream)
         return ast.CountOfDeaths(filt)
     return ast.CountOf(filt)
-
-
-def _parse_exile_graveyard_until_leaves(stream: TokenStream) -> ast.Statement | None:
-    """``Exile all <filter> from your graveyard until this <permanent> leaves
-    the battlefield.`` (Idol of Endurance.)
-
-    Every word of the duration is required. Without it this is a *permanent*
-    exile of a graveyard, which is a different card — and the difference does
-    not show until the source leaves.
-    """
-    if not stream.accept_phrase("exile", "all"):
-        return None
-    try:
-        filt = parse_object_filter(stream)
-    except GrammarError:
-        return None
-    if not filt.is_card or filt.zone != "graveyard":
-        return None
-    if filt.zone_owner is None or filt.zone_owner.kind != "you":
-        return None
-    if not stream.accept_phrase("until", "this"):
-        return None
-    if stream.accept_kind(SELF) is None:
-        stream.accept_word("artifact", "creature", "enchantment", "permanent", "land")
-    if not stream.accept_phrase("leaves", "the", "battlefield"):
-        return None
-    return ast.ExileGraveyardUntilLeaves(filt)
-
-
-def _parse_exile_until_leaves_or_untaps(stream: TokenStream) -> ast.Statement | None:
-    """Tawnos's Coffin's four sentences, as one statement.
-
-    ``Exile target creature and all Auras attached to it. Note the number and
-    kind of counters that were on that creature. When this artifact leaves the
-    battlefield or becomes untapped, return that exiled card to the battlefield
-    under its owner's control tapped with the noted number and kind of counters
-    on it. If you do, return the other exiled cards to the battlefield under
-    their owner's control attached to that permanent.``
-
-    **Every word is required**, and each one is load-bearing rather than
-    decorative: without the Auras the creature comes back naked, without the
-    counters it comes back smaller, without "tapped" it comes back ready, and
-    without either half of the two-event return it never comes back at all. A
-    production that let any of them be absent would also let it be *deleted*
-    with no change to what was lowered.
-    """
-    if not stream.accept_phrase("exile", "target", "creature"):
-        return None
-    if not stream.accept_phrase("and", "all", "auras", "attached", "to", "it"):
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase(
-        "note", "the", "number", "and", "kind", "of", "counters",
-        "that", "were", "on", "that", "creature",
-    ):
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase("when", "this"):
-        return None
-    if stream.accept_kind(SELF) is None:
-        stream.accept_word("artifact", "creature", "enchantment", "permanent", "land")
-    if not stream.accept_phrase("leaves", "the", "battlefield"):
-        return None
-    if not stream.accept_phrase("or", "becomes", "untapped"):
-        return None
-    stream.accept_punct(",")
-    if not stream.accept_phrase(
-        "return", "that", "exiled", "card", "to", "the", "battlefield",
-        "under", "its", "owner", "'s", "control", "tapped",
-        "with", "the", "noted", "number", "and", "kind", "of", "counters",
-        "on", "it",
-    ):
-        return None
-    stream.accept_punct(".")
-    if not stream.accept_phrase("if", "you", "do"):
-        return None
-    stream.accept_punct(",")
-    if not stream.accept_phrase(
-        "return", "the", "other", "exiled", "cards",
-        "to", "the", "battlefield", "under", "their", "owner", "'s", "control",
-        "attached", "to", "that", "permanent",
-    ):
-        return None
-    return ast.ExileUntilLeavesOrUntaps(
-        ast.TargetSpec("target", ast.ObjectFilter(card_types=("creature",)), targeted=True)
-    )
-
-
-def _parse_cast_from_exiled_with(stream: TokenStream) -> ast.Statement | None:
-    """``Until end of turn, you may cast a <filter> spell from among cards
-    exiled with this <permanent> without paying its mana cost.``
-    (Idol of Endurance.)
-
-    The cost waiver is required: without it the permission is a different one
-    and strictly weaker, and a card that dropped the words would be cheaper to
-    misread than to notice.
-    """
-    if not stream.accept_phrase("until", "end", "of", "turn"):
-        return None
-    stream.accept_punct(",")
-    if not stream.accept_phrase("you", "may", "cast", "a"):
-        return None
-    try:
-        filt = parse_object_filter(stream)
-    except GrammarError:
-        return None
-    # ``parse_object_filter`` reads "creature spell" whole, marking the zone as
-    # the stack. Requiring the word back would be asking it twice; requiring the
-    # *zone* is what actually distinguishes "cast a creature spell" from a card
-    # filter that would name some other zone.
-    if filt.zone != "stack":
-        return None
-    if not stream.accept_phrase("from", "among", "cards", "exiled", "with", "this"):
-        return None
-    if stream.accept_kind(SELF) is None:
-        stream.accept_word("artifact", "creature", "enchantment", "permanent", "land")
-    if not stream.accept_phrase(
-        "without", "paying", "its", "mana", "cost",
-    ):
-        return None
-    return ast.CastFromExiledWith(filt)
-
-
-def _parse_name_and_strip(stream: TokenStream) -> ast.Statement:
-    """Necromentia's whole three-sentence effect.
-
-    Every word is required. The zone list is what the search reaches and the
-    token clause names which of those zones the count comes from — "each card
-    exiled from their **hand** this way" is a strict subset of what was exiled,
-    and a card counting the whole pile would make far more Zombies.
-
-    "other than a basic land card name" is consumed and *honoured*: it is the
-    one restriction on the choice, and a name it forbids has to be refused where
-    the choice is made rather than dropped here.
-    """
-    for word in ("choose", "a", "card", "name", "other", "than", "a", "basic",
-                 "land", "card", "name"):
-        stream.expect_word(word)
-    if not stream.accept_punct("."):
-        raise stream.error("expected the search sentence after the choice")
-    for word in ("search", "target", "opponent", "'s"):
-        stream.expect_word(word)
-    zones: list[str] = []
-    while True:
-        word = stream.peek_word()
-        if word not in ("graveyard", "hand", "library"):
-            break
-        stream.advance()
-        zones.append(word)
-        if stream.accept_punct(","):
-            stream.accept_word("and")
-            continue
-        if stream.accept_word("and"):
-            continue
-        break
-    if len(zones) < 2:
-        raise stream.error("expected the zones the search reaches")
-    for word in ("for", "any", "number", "of", "cards", "with", "that", "name",
-                 "and", "exile", "them"):
-        stream.expect_word(word)
-    if not stream.accept_punct("."):
-        raise stream.error("expected the shuffle sentence after the search")
-    for word in ("that", "player", "shuffles"):
-        stream.expect_word(word)
-    stream.accept_punct(",")
-    for word in ("then", "creates", "a"):
-        stream.expect_word(word)
-    power, _, toughness, _ = expect_pt(stream)
-    colors: list[str] = []
-    while (word := stream.peek_word()) in COLOR_WORDS:
-        colors.append(COLOR_WORDS[word])
-        stream.advance()
-    subtypes: list[str] = []
-    while (word := stream.peek_word()) and word in CREATURE_TYPES:
-        subtypes.append(word)
-        stream.advance()
-    for word in ("creature", "token", "for", "each", "card", "exiled", "from", "their"):
-        stream.expect_word(word)
-    token_zone = stream.peek_word()
-    if token_zone not in ("hand", "graveyard", "library"):
-        raise stream.error("expected the zone the token count comes from")
-    stream.advance()
-    for word in ("this", "way"):
-        stream.expect_word(word)
-    if not (isinstance(power, ast.Fixed) and isinstance(toughness, ast.Fixed)):
-        raise stream.error("the token's printed power/toughness is a number")
-    return ast.NameAndStrip(
-        zones=tuple(zones), token_zone=token_zone,
-        token_power=power.value, token_toughness=toughness.value,
-        token_colors=tuple(colors), token_subtypes=tuple(subtypes),
-    )
 
 
 def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:

@@ -1978,3 +1978,66 @@ half of the two-event return it never comes back at all.
 **Numbers.** ATQ 83 → 84; grammar parses 83.3% → 84.2% of its lines, executes
 55.8% → 56.7%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
 6700, no hook added.
+
+## ATQ round 29: the last card, and one type question asked three ways
+
+*(2026-08-22.)* **84 → 85. Every card in Antiquities is supported.** The last is
+Transmute Artifact:
+
+```
+Sacrifice an artifact. If you do, search your library for an artifact card. If
+that card's mana value is less than or equal to the sacrificed artifact's mana
+value, put it onto the battlefield. If it's greater, you may pay {X}, where X is
+the difference. If you do, put it onto the battlefield. If you don't, put it
+into its owner's graveyard. Then shuffle.
+```
+
+**Three decisions in a row, each shaping the next** — what to give up, what to
+look for, whether to pay the difference — and every one of them is machinery the
+engine already had. The sacrifice is the standing forced-sacrifice prompt, the
+search is the standing library search, and the payment is the ordinary
+optional-pay entry whose accept and decline branches are the two placements the
+card prints. Three things had to change for the chain to hold:
+
+- **The sacrifice suspends.** "Sacrifice an artifact. **If you do**, search…" —
+  what the player gives up decides what the rest of the resolution may find, so
+  the rest waits. Only an interactive seat is affected: `default_at_arm` answers
+  for everyone else *before* the flag is set, which is why headless and AI play
+  are byte-identical.
+- **The sacrifice records what it took.** By the time the comparison runs, the
+  artifact is a card in a graveyard and a different object (CR 400.7), so its
+  mana value is frozen as it happens — CR 608.2h's rule.
+- **The search can *hold* its find.** Where the card goes is a later step's
+  decision, so `destination: "held"` hands it over instead of placing it.
+
+### Two bugs, and one of them was the same bug three times
+
+**A declined optional payment dropped its branch.** The non-interactive default
+applied a decline's consequence only when the entry carried the legacy `damage`
+field, so a grammar-lowered "if you don't, …" branch never ran — Transmute
+Artifact's found card vanished out of the game rather than going to a graveyard.
+A decline is an answer, and an answer with a consequence has to have it applied.
+
+**And CR 205.2 was being asked with `primary_type` in three places.** A card has
+*every* type its line names, so Ornithopter is an artifact card and a creature
+card; `primary_type` picks one of them by the order of a list, and it picks
+"creature". Round 25 found the counter flow doing it (Goblin Artisans refused
+every artifact creature in the set); this round found the *search* doing it
+(Transmute Artifact could not find one either). The graveyard reader had it
+right all along and said so in its docstring. There is one
+`search_filters.card_has_type` now, and all three ask it.
+
+### `statements.py` split: paragraphs.py
+
+Antiquities' four-sentence cards took it past the thousand-line guard, and the
+cut is the one the guard asks for: a **sentence** stays in `statements.py`, a
+**paragraph** — several sentences that are only an effect together — moves to
+`paragraphs.py`. Necromentia, Idol of Endurance, Tawnos's Coffin and Transmute
+Artifact are the four, and none of them calls back into the sentence parser,
+which is what lets the new module sit *below* `statements.py` in `PARSE_LAYERS`
+rather than beside it.
+
+**Numbers.** ATQ 84 → **85/85**; grammar parses 84.2% → 85.0% of its lines,
+executes 56.7% → 57.5%. Shipped pool 668/668, floors and ceilings unmoved, suite
+green at 6705, no hook added — **the whole set is implemented with zero
+name-keyed entries added since the ingest**.

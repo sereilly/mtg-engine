@@ -360,6 +360,23 @@ class PendingChoicesMixin:
         # promote a tutor-to-hand into a tutor-to-battlefield.
         destination = choice.data.get("destination", "hand")
         enters_tapped = bool(choice.data.get("enters_tapped"))
+        if destination == "held":
+            # "Search your library for an artifact card. **If** that card's mana
+            # value… put it onto the battlefield… **If you don't**, put it into
+            # its owner's graveyard." (Transmute Artifact.) Where the find goes
+            # is a later step's decision, so the search hands it over rather
+            # than placing it — the card is out of the library and in nobody's
+            # zone for exactly as long as it takes the next step of the same
+            # resolution to run, with no priority in between.
+            record = choice.data.get("record")
+            if record is not None:
+                record["found_card"] = card
+            self.log.append(f"{caster.name} searched {zone} and found {card.name}")
+            if zone == "library":
+                random.shuffle(caster.library)
+            self._record_search_reveal(choice)
+            self.discard_pending_choice(choice)
+            return True
         if destination == "battlefield":
             from ...models import Permanent as _Permanent
 
@@ -2025,7 +2042,12 @@ class PendingChoicesMixin:
         self.discard_pending_choice(choice)
         if floating is not None:
             self._pay_optional(choice.player_index, entry)
-        elif int(entry.get("damage", 0) or 0) > 0:
+        elif int(entry.get("damage", 0) or 0) > 0 or entry.get("_on_decline"):
+            # A decline is an *answer*, and an answer with a consequence has to
+            # have it applied. This read the legacy damage field alone, so a
+            # grammar-lowered "if you don't, …" branch was dropped for every
+            # non-interactive seat — Transmute Artifact's found card simply
+            # vanished instead of going to a graveyard.
             self._apply_optional_pay_decline(choice.player_index, entry)
         self._remove_optional_pay_stack_item(entry)
 
@@ -2170,7 +2192,7 @@ class PendingChoicesMixin:
                 ),
             )
 
-    def _resolve_sacrifice_inline(self, player_index: int, count: int, filter: dict | None, exclude, reason: str, on_short) -> None:
+    def _resolve_sacrifice_inline(self, player_index: int, count: int, filter: dict | None, exclude, reason: str, on_short, record: dict | None = None) -> None:
         """Sacrifice ``count`` of the player's permanents with the deterministic
         heuristic (permanents whose death loses the game are kept for last)."""
         player = self.players[player_index]
@@ -2188,6 +2210,8 @@ class PendingChoicesMixin:
             perm = self.default_sacrifice_pick(
                 [self.permanent_at(player, i) for i in valid]
             )
+            if record is not None:
+                record.setdefault("sacrificed_cards", []).append(perm.card)
             self.sacrifice_permanent(perm)
             self.log.append(f"{player.name} sacrificed {perm.card.name} ({reason})")
 
@@ -2200,6 +2224,7 @@ class PendingChoicesMixin:
         exclude=None,
         reason: str = "Sacrifice",
         on_short=None,
+        record: dict | None = None,
     ) -> None:
         """Force a player to sacrifice ``count`` permanents matching the filter
         payload ``filter``. A human seat is prompted to choose which; AI /
@@ -2210,7 +2235,13 @@ class PendingChoicesMixin:
         ``filter`` has no default. An empty payload is a legal value meaning "any
         permanent", but it has to be written down: a caller that simply forgot
         the noun phrase would otherwise sacrifice more widely than the card
-        prints, and defaulting is how that stays invisible."""
+        prints, and defaulting is how that stays invisible.
+
+        ``record`` is a resolution scratchpad the sacrificed *cards* are appended
+        to under ``sacrificed_cards``. A later step of the same effect may be
+        about what went (Transmute Artifact reads its mana value), and by then
+        the permanent is in a graveyard and is a different object (CR 400.7) —
+        so it is recorded as it happens, which is CR 608.2h's rule."""
         player = self.players[player_index]
         if not self._sacrifice_candidate_indices(player, filter, exclude):
             self._apply_sacrifice_shortfall(player_index, count, on_short, reason)
@@ -2222,11 +2253,14 @@ class PendingChoicesMixin:
             else:
                 # A differently-shaped sacrifice is already owed; this one can't be
                 # folded into that prompt, so it resolves inline.
-                self._resolve_sacrifice_inline(player_index, count, filter, exclude, reason, on_short)
+                self._resolve_sacrifice_inline(
+                    player_index, count, filter, exclude, reason, on_short, record
+                )
             return
         self.arm_pending_choice(
             "sacrifice", player_index,
-            count=count, filter=filter, exclude=exclude, reason=reason, on_short=on_short,
+            count=count, filter=filter, exclude=exclude, reason=reason,
+            on_short=on_short, record=record,
         )
 
     def pending_sacrifice_state(self) -> dict | None:
@@ -2269,7 +2303,10 @@ class PendingChoicesMixin:
         reason = data["reason"]
         # Resolved before any removal, so no index is held across one.
         removed: list[str] = []
+        record = data.get("record")
         for perm in [self.permanent_at(player, i) for i in sorted(chosen, reverse=True)]:
+            if record is not None:
+                record.setdefault("sacrificed_cards", []).append(perm.card)
             self.sacrifice_permanent(perm)
             removed.append(perm.card.name)
         for name in reversed(removed):
@@ -2285,7 +2322,7 @@ class PendingChoicesMixin:
         data = choice.data
         self._resolve_sacrifice_inline(
             choice.player_index, int(data["count"]), data["filter"],
-            data["exclude"], data["reason"], data["on_short"],
+            data["exclude"], data["reason"], data["on_short"], data.get("record"),
         )
 
     def auto_resolve_pending_sacrifice(self, only_player_index: int | None = None) -> None:
@@ -2561,6 +2598,13 @@ register_choice(
     blocked_detail="complete forced sacrifice before other actions",
     default_at_arm=True,
     spectator_visible=True,
+    # "Sacrifice an artifact. **If you do**, search your library…" (Transmute
+    # Artifact): what the player gives up decides what the rest of the same
+    # resolution may find, so the rest has to wait for the answer. Only an
+    # interactive seat ever queues this — `default_at_arm` takes the
+    # deterministic answer before the flag is set — so headless and AI play run
+    # exactly as they did.
+    suspends=True,
 )
 
 register_choice(

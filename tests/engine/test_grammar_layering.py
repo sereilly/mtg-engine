@@ -53,6 +53,12 @@ PARSE_LAYERS = [
     # never need the quantifier one.
     "nouns",
     "references",
+    # Whole printed *paragraphs* that are one effect (Necromentia, Idol of
+    # Endurance, Tawnos's Coffin, Transmute Artifact). Below `statements`
+    # because none of them calls back into the sentence parser — each reads its
+    # own words to the end — and split out of it when Antiquities' four-sentence
+    # cards pushed that file past the guard below.
+    "paragraphs",
     "phrases",
     # The trigger tables and the productions that read them. Split out of
     # `phrases` when Antiquities' trigger work pushed that module past the

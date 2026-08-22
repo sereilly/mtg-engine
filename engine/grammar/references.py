@@ -21,7 +21,6 @@ from .amounts import parse_amount
 from .lexer import NUMBER, WORD
 from .nouns import (
     _GENERIC_NOUNS,
-    _SELF_NOUNS,
     _singular,
     parse_object_filter,
 )
