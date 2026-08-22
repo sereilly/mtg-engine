@@ -207,6 +207,17 @@ def _parse_doesnt_untap_next_step(
     stream.expect_word("their", "its")
     stream.expect_word("controller")
     stream.expect_word("'s")
+    # "…untap step **for as long as this creature remains tapped**" (Phyrexian
+    # Gremlins). No "next": the restriction is continuous and ends when the
+    # source untaps, which is a different effect from Frost Breath's one-shot
+    # and gets a different node. Tried before requiring "next" so the two
+    # spellings do not have to be told apart by their prefixes.
+    linked = stream.mark()
+    if stream.accept_phrase("untap", "step", "for", "as", "long", "as", "this"):
+        stream.accept_word("creature", "artifact", "enchantment", "land", "permanent")
+        if stream.accept_phrase("remains", "tapped"):
+            return ast.DoesntUntapWhileSourceTapped(subject)
+    stream.reset(linked)
     stream.expect_word("next")
     stream.expect_word("untap")
     stream.expect_word("step")

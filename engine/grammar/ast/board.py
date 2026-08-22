@@ -228,3 +228,18 @@ class ShuffleGraveyardIntoLibrary:
     part of the move rather than a rider on it (CR 701.19).
     """
     whose: PlayerRef
+
+
+@dataclass(frozen=True)
+class DoesntUntapWhileSourceTapped:
+    """``<subject> doesn't untap during its controller's untap step **for as
+    long as this creature remains tapped**.`` (Phyrexian Gremlins.)
+
+    A sibling of :class:`DoesntUntapNextStep` rather than that node with a
+    duration, because the two are different effects and the difference is the
+    whole card. Frost Breath's is a one-shot restriction that expires by being
+    used up at the *next* untap step; this one is continuous and ends on a
+    condition — the source untapping — which may never coincide with an untap
+    step at all.
+    """
+    subject: Recipient

@@ -11,6 +11,7 @@ aggregates and enforces them, so new restriction cards never touch it.
 
 from ..auras import aura_restriction_active
 from ..handlers._common import permanent_effective_colors
+from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
 from ..untap_restrictions import (
     SELF_DOESNT_UNTAP_PHRASE,
     SELF_MAY_KEEP_TAPPED_PHRASE,
@@ -223,6 +224,19 @@ class UntapStepMixin:
             # more of a player's permanents from untapping". Cleared below, for
             # this step whether or not it kept anything tapped.
             if permanent.metadata.get("skip_next_untap"):
+                continue
+
+            # "…doesn't untap during its controller's untap step for as long as
+            # this creature remains tapped." (Phyrexian Gremlins.) Read off the
+            # *source's* record rather than a flag on this permanent, so the
+            # restriction ends the moment the source untaps or leaves — there
+            # is nothing here to clear, which is what makes a condition-ended
+            # duration expressible at all.
+            if any(
+                holder.tapped
+                and holder.metadata.get(UNTAP_LOCK_WHILE_TAPPED_KEY) == permanent.permanent_id
+                for holder in self.all_permanents()
+            ):
                 continue
 
             # Old Man of the Sea: "You may choose not to untap this creature

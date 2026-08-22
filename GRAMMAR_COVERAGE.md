@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 80.5% | 79.2% | 44.0% | 154 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 71.7% | 70.8% | 48.3% | 54 |
+| ATQ *(measured)* | 85 | 120 | 72.5% | 71.7% | 49.2% | 55 |
 | **All (shipped)** | **1533** | **2166** | **81.1%** | **79.9%** | **47.1%** | **884** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -1007,6 +1007,8 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
+- **Phyrexian Gremlins**
+  - `{T}: Tap target artifact. It doesn't untap during its controller's untap step for as long as this creature remains tapped.`
 - **Piety**
   - `Blocking creatures get +0/+3 until end of turn.`
 - **Pirate Ship**

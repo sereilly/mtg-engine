@@ -51,6 +51,7 @@ from .characteristics import (
     SetBasePT,
 )
 from .board import (
+    DoesntUntapWhileSourceTapped,
     SacrificeExpansionPermanents,
     ShuffleGraveyardIntoLibrary,
     Destroy,
@@ -123,7 +124,7 @@ Effect = Union[
     DoublePower,
     GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, Exile, Tap, Untap,
-    TapOrUntap, DoesntUntapNextStep, Attach,
+    TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped, Attach,
     Regenerate, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     RevealTop, RevealUntil, NameAndStrip,

@@ -1426,3 +1426,43 @@ table is.
 
 **Numbers.** ATQ 72 → 73; grammar parses 70.8% → 71.7%. Shipped pool 668/668,
 floors and ceilings unmoved, suite green at 6644, no hook added.
+
+## ATQ round 18: the same linked duration, spent on a restriction
+
+*(2026-08-21.)* **73 → 74.** Phyrexian Gremlins — "{T}: Tap target artifact. It
+doesn't untap during its controller's untap step **for as long as this creature
+remains tapped**."
+
+Round 5 built this duration for a P/T contribution and said what was left:
+"Phyrexian Gremlins shares the duration and spends it on a different effect …
+a linked *untap restriction* on another permanent." That is what this round is,
+and the shape carried over unchanged — the record lives on the **source**, the
+untap step reads it back while the source is tapped, and nothing anywhere has a
+flag to clear. The restriction ends when the Gremlins untaps, when it leaves
+(its record goes with it), or when the held artifact leaves (its id stops
+resolving).
+
+**It is a sibling node, not Frost Breath's with a duration.** "Doesn't untap
+during its controller's **next** untap step" is a one-shot that expires by
+being used up; this one is continuous and ends on a condition that may never
+coincide with an untap step at all. The existing node's docstring already
+argued that the word "next" is part of what it means — so the two spellings get
+two nodes, and the production tries the linked form *before* requiring "next"
+rather than telling them apart by prefix.
+
+**The pronoun is the interesting part.** "Tap target artifact. **It** doesn't
+untap…" — the noun parser collapses a bare "it" onto the same self-reference
+shape a card's own name produces, so the subject arrives looking like the
+Gremlins rather than the artifact. The lowering requires exactly that shape and
+nothing narrower (an adjective would restate a choice already made; a *chosen*
+subject would be a second target the card never offered), and the handler acts
+on the target the sentence before it picked — doing nothing when there is none,
+which is the failing-safe direction for a sentence only ever printed after one
+that chooses.
+
+The record is by `permanent_id`, so a second Jalum Tome on the same battlefield
+untaps normally; there is a test for exactly that, because `Permanent` compares
+equal by value and the look-alike is the bug this engine keeps finding.
+
+**Numbers.** ATQ 73 → 74; grammar parses 71.7% → 72.5%. Shipped pool 668/668,
+floors and ceilings unmoved, suite green at 6647, no hook added.

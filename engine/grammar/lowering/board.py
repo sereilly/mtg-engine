@@ -651,3 +651,34 @@ def _lower_sacrifice_expansion_permanents(
             "sacrifice_expansion_permanents", "", {"set_code": node.set_code}
         ),
     )
+
+
+def _lower_doesnt_untap_while_source_tapped(
+    node: ast.DoesntUntapWhileSourceTapped,
+) -> tuple[OracleInstruction, ...]:
+    """Phyrexian Gremlins. The subject is the permanent the sentence before it
+    tapped — a back-reference, so nothing is described for the picker: the
+    choice was made by that sentence and describing it again would ask for a
+    second one."""
+    subject = node.subject
+    # "Tap target artifact. **It** doesn't untap …" — the pronoun refers to the
+    # permanent the sentence before it chose. The noun parser collapses a bare
+    # "it" onto the same self-reference shape the card's own name produces, so
+    # what is required here is that shape and nothing narrower: an adjective
+    # would be restating a choice already made, and a *chosen* subject would be
+    # a second target the card never offered.
+    #
+    # The handler reads the chosen target and does nothing when there is none,
+    # which is the failing-safe direction — this sentence is only printed after
+    # one that chooses.
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "this"
+        and subject.filter == ast.ObjectFilter(is_source=True)
+    ):
+        raise LoweringError(
+            "the linked untap restriction acts on the permanent the previous "
+            "sentence tapped",
+            node=node,
+        )
+    return (OracleInstruction("restrict_untap_while_source_tapped", "", {}),)

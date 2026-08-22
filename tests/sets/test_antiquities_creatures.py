@@ -287,3 +287,58 @@ def test_the_ability_pays_its_own_sacrifice_cost(set_pool):
     game.activate_permanent_ability(0, "Priest of Yawgmoth", cost_permanent_index=1)
 
     assert len(list(game.all_permanents())) == before - 1, "exactly one artifact left"
+
+
+# ---------------------------------------------------------------------------
+# Phyrexian Gremlins (round 18) — a linked untap lock
+# ---------------------------------------------------------------------------
+
+
+def _gremlins_holding(set_pool):
+    pool = set_pool("ATQ")
+    gremlins = Permanent(card=pool["Phyrexian Gremlins"])
+    tome = Permanent(card=pool["Jalum Tome"])
+    p1 = PlayerState(name="P1", battlefield=[gremlins])
+    p2 = PlayerState(name="P2", battlefield=[tome])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    gremlins.metadata.pop("summoning_sickness_turn", None)
+    game.activate_permanent_ability(
+        0, "Phyrexian Gremlins", target_player_index=1, target_permanent_index=0
+    )
+    return game, gremlins, tome
+
+
+def test_phyrexian_gremlins_taps_the_artifact_and_holds_it(set_pool):
+    game, gremlins, tome = _gremlins_holding(set_pool)
+
+    assert gremlins.tapped, "the ability costs {T}"
+    assert tome.tapped
+
+    game.resolve_untap_step(1)
+    assert tome.tapped, "held while the Gremlins remains tapped"
+
+
+def test_the_lock_ends_the_moment_the_gremlins_untaps(set_pool):
+    """The restriction is read off the *source's* record, so it ends when the
+    source untaps — there is no flag on the held artifact to clear, which is
+    what makes a duration that ends on a condition expressible at all."""
+    game, gremlins, tome = _gremlins_holding(set_pool)
+
+    gremlins.tapped = False
+    game.resolve_untap_step(1)
+
+    assert not tome.tapped
+
+
+def test_the_lock_leaves_other_artifacts_alone(set_pool):
+    game, gremlins, tome = _gremlins_holding(set_pool)
+    pool = set_pool("ATQ")
+    other = Permanent(card=pool["Jalum Tome"])
+    other.tapped = True
+    game.players[1].battlefield.append(other)
+
+    game.resolve_untap_step(1)
+
+    assert tome.tapped, "the named one is held"
+    assert not other.tapped, "its look-alike is not — the record is by id"
