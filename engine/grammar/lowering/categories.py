@@ -30,6 +30,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "upkeep_chosen_player_hand_overflow_damage": "upkeep",
     "deal_damage_equal_to_swamps": "upkeep",
     "pump_target_creature_until_eot": "pump",
+    "pump_target_while_source_tapped": "pump",
     # One pump per chosen slot, each with its own P/T delta (Rookie Mistake).
     # The same category as the one-target pump above: what differs is how many
     # targets the sentence names, not what the effect is.

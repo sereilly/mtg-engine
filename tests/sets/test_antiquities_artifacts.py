@@ -105,3 +105,83 @@ def test_tablet_of_epityr_ignores_a_dying_creature(set_pool):
     _dies(game, 0, druid)
 
     assert [item.card.name for item in game.stack] == []
+
+
+# ---------------------------------------------------------------------------
+# Ashnod's Battle Gear / Tawnos's Weaponry (round 5) — a linked duration
+# ---------------------------------------------------------------------------
+
+
+def _weaponry_and_creature(set_pool):
+    """Tawnos's Weaponry (+1/+1) rather than Ashnod's Battle Gear (+2/-2).
+
+    The Gear is the sharper card and the worse fixture: -2 toughness kills any
+    small creature outright through CR 704.5f, so the boost would be measured
+    on a permanent that is no longer there. Its own behaviour is asserted
+    separately below, on a creature big enough to survive it.
+    """
+    pool = set_pool("ATQ")
+    weaponry = Permanent(card=pool["Tawnos's Weaponry"])
+    creature = Permanent(card=pool["Citanul Druid"])
+    p1 = PlayerState(name="P1", battlefield=[weaponry, creature])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    return game, weaponry, creature
+
+
+def test_tawnoss_weaponry_boosts_while_tapped(set_pool):
+    game, weaponry, creature = _weaponry_and_creature(set_pool)
+    base_power, base_toughness = creature.effective_power, creature.effective_toughness
+
+    game.activate_permanent_ability(0, "Tawnos's Weaponry", target_permanent_index=1)
+
+    assert weaponry.tapped, "the ability costs {T}"
+    assert creature.effective_power == base_power + 1
+    assert creature.effective_toughness == base_toughness + 1
+
+
+def test_the_boost_ends_the_moment_the_source_untaps(set_pool):
+    """The reason this is a linked duration and not an until-end-of-turn pump.
+    Nothing schedules the removal — the boost is contributed while the source
+    is tapped and simply stops being contributed when it is not, so untapping
+    mid-turn ends it rather than the cleanup step doing so.
+    """
+    game, weaponry, creature = _weaponry_and_creature(set_pool)
+    base_power = creature.effective_power
+
+    game.activate_permanent_ability(0, "Tawnos's Weaponry", target_permanent_index=1)
+    assert creature.effective_power == base_power + 1
+
+    weaponry.tapped = False
+    game._refresh_dynamic_creatures()
+
+    assert creature.effective_power == base_power
+
+
+def test_the_boost_does_not_compound_across_recomputes(set_pool):
+    """Aspect of Wolf's bug class: a delta written onto the pumped creature has
+    to be subtracted again, and a subtraction that does not exactly match its
+    addition compounds on every refresh — and CR 611.3a means refreshes are
+    constant. Contributing to the derived channel makes the question moot, and
+    this is what would notice if that ever changed."""
+    game, weaponry, creature = _weaponry_and_creature(set_pool)
+    base_power = creature.effective_power
+
+    game.activate_permanent_ability(0, "Tawnos's Weaponry", target_permanent_index=1)
+    for _ in range(5):
+        game._refresh_dynamic_creatures()
+
+    assert creature.effective_power == base_power + 1
+
+
+def test_ashnods_battle_gear_is_a_real_drawback(set_pool):
+    """+2/-2, and the minus is not decoration: a 1/1 given it dies to CR 704.5f
+    before the boost can be read anywhere."""
+    pool = set_pool("ATQ")
+    gear = Permanent(card=pool["Ashnod's Battle Gear"])
+    fragile = Permanent(card=pool["Citanul Druid"])  # 1/1
+    p1 = PlayerState(name="P1", battlefield=[gear, fragile])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.activate_permanent_ability(0, "Ashnod's Battle Gear", target_permanent_index=1)
+
+    assert fragile not in list(game.all_permanents())

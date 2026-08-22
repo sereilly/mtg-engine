@@ -205,6 +205,19 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    # "for as long as this artifact remains tapped" (Ashnod's Battle Gear,
+    # Tawnos's Weaponry). A *linked* duration: it ends when the source untaps
+    # or leaves, so nothing schedules its removal — the effect is contributed
+    # while the condition holds and simply stops being contributed when it does
+    # not, which is CR 611.3b's "removal is the absence of a contribution".
+    # The noun is any permanent word, because the card printing it says what it
+    # is and the duration does not care.
+    ("while_source_tapped",
+     ("for", "as", "long", "as", "this", "artifact", "remains", "tapped")),
+    ("while_source_tapped",
+     ("for", "as", "long", "as", "this", "creature", "remains", "tapped")),
+    ("while_source_tapped",
+     ("for", "as", "long", "as", "this", "permanent", "remains", "tapped")),
     ("until_end_of_turn", ("until", "end", "of", "turn")),
     ("until_end_of_combat", ("until", "end", "of", "combat")),
     ("until_your_next_turn", ("until", "your", "next", "turn")),

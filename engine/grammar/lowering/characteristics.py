@@ -184,6 +184,15 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         payload: dict[str, object] = {"power": power, "toughness": toughness}
         payload["blocking_only"] = bool(node.subject.filter.blocking)
         _describe_targets(payload, node.subject)
+        if node.duration.kind == "while_source_tapped":
+            # Its own kind rather than a flag on the until-end-of-turn one:
+            # that handler writes a delta the cleanup step subtracts, and this
+            # effect must not be written as a delta at all — it is rebuilt from
+            # the source's record on every recompute, so it ends the instant
+            # the source untaps rather than at the next cleanup.
+            return (
+                OracleInstruction("pump_target_while_source_tapped", "", payload),
+            )
         return (OracleInstruction("pump_target_creature_until_eot", "", payload),)
 
     # "White creatures get +1/+1", "Attacking creatures get +2/+0 until end of turn"

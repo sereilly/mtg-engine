@@ -885,3 +885,54 @@ unmoved, suite green at 6603. No hook added. Circle of Protection: Artifacts and
 Rakalite are still out — both are *activated* prevention with riders (a chosen
 source of a class; a delayed self-return), not the static shield this round
 built.
+
+## ATQ round 5: a duration that ends on a condition, not at a step
+
+*(2026-08-21.)* **53 → 55.** Ashnod's Battle Gear and Tawnos's Weaponry —
+"…gets +2/-2 **for as long as this artifact remains tapped**", Antiquities'
+signature design and a duration the engine had no shape for.
+
+**The census was wrong about these two, in a useful direction.** Both print two
+lines the grammar refuses, and the plan counted both as gaps. The first —
+"You may choose not to untap this artifact during your untap step" — is already
+implemented: `untap_restrictions.SELF_MAY_KEEP_TAPPED_PHRASE` and the untap
+step's per-permanent scan, claimed through `grammar/registries.py`. A line the
+grammar refuses is not a line nothing implements, and the backlog listing
+cannot tell those apart; only asking the claim readers can.
+
+**Every existing duration ends at a step boundary.** `until_end_of_turn` writes
+a delta and the cleanup step subtracts it. This one ends on a *condition* — the
+source untapping — which has no moment anyone could hook: the source can untap
+in its controller's untap step, or to Twiddle, or by leaving the battlefield
+entirely. So the boost is never written onto the pumped creature at all. The
+handler records it on the **source**, and `_refresh_linked_tapped_pumps`
+contributes it into the same derived layer-7c channel every other conditional
+buff uses, rebuilt from the board on every recompute. Three ways it stops, none
+of them special-cased: the source untaps, the source leaves (its record leaves
+with it), or the pumped permanent leaves (its id stops resolving).
+
+That is `_add_static_pt`'s docstring taken at its word. A delta on the target
+would be Aspect of Wolf's bug with a different trigger for the mismatch, and
+CR 611.3a means the refresh runs constantly — so
+`test_the_boost_does_not_compound_across_recomputes` refreshes five times and
+checks the number has not moved.
+
+**The fixture taught something the assertion did not.** The first version of
+these tests used Ashnod's Battle Gear on a 1/1 and failed: the creature was
+*gone*. -2 toughness on a 1/1 is lethal through CR 704.5f, so the boost was
+being measured on a permanent that had already died — the engine was right and
+the test was asking the wrong permanent. The boost tests use Tawnos's Weaponry
+(+1/+1) now, and the Gear keeps a test of its own asserting exactly that death,
+because the drawback is half of what the card is.
+
+**Phyrexian Gremlins did not land.** It shares the duration and spends it on a
+different effect — "Tap target artifact. It doesn't untap during its
+controller's untap step for as long as this creature remains tapped" — which is
+a linked *untap restriction* on another permanent, not a P/T contribution. The
+duration is in place for it; the effect is not.
+
+**Numbers.** ATQ 53 → 55; grammar parses 54.2% → 55.8% of its lines. Shipped
+pool 668/668, every floor and ceiling unmoved, suite green at 6607. No hook
+added — and Old Man of the Sea's hook is now the only remaining user of a
+linked-tapped duration, so retiring it is a candidate round rather than a
+speculative one.

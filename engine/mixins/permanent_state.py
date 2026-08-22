@@ -515,6 +515,33 @@ class PermanentStateMixin:
                 )
                 _add_static_pt(creature, lands // 2, (lands + 1) // 2)
 
+    def _refresh_linked_tapped_pumps(self, all_permanents) -> None:
+        """"…gets +2/-2 for as long as this artifact remains tapped."
+        (Ashnod's Battle Gear, Tawnos's Weaponry.)
+
+        The boost is recorded on the *source* by the handler and contributed
+        here, into the same derived channel every other conditional layer-7c
+        effect uses — so it is rebuilt from the board on every recompute and
+        ends the instant the source stops being tapped. Nothing schedules its
+        removal, which is the point: an effect that ends on a *condition*
+        rather than at a step boundary has no moment anyone could hook, and a
+        remembered delta would have to be unwound at one.
+
+        Three ways the contribution simply stops, none of them special-cased:
+        the source untaps, the source leaves the battlefield (its record leaves
+        with it), or the pumped permanent leaves (its id no longer resolves).
+        """
+        from ..handlers.pump import PUMP_WHILE_TAPPED_KEY
+
+        for source in all_permanents:
+            record = source.metadata.get(PUMP_WHILE_TAPPED_KEY)
+            if not record or not source.tapped:
+                continue
+            target = self.permanent_by_id(record.get("target_id"))
+            if target is None:
+                continue
+            _add_static_pt(target, int(record.get("power", 0)), int(record.get("toughness", 0)))
+
     def _refresh_dynamic_creatures(self) -> None:
         all_permanents = list(self.all_permanents())
         # Clear the derived layer-7c channel this method rebuilds. Everything
@@ -533,6 +560,7 @@ class PermanentStateMixin:
             for instr in compile_card_oracle(perm.effective_card).instructions
             if instr.kind == LAND_ANIMATION_KIND
         ]
+        self._refresh_linked_tapped_pumps(all_permanents)
         self._refresh_global_statics(all_permanents)
         self._refresh_static_land_types(all_permanents)
         # Layer 4 before layer 7: a characteristic-defining P/T that counts

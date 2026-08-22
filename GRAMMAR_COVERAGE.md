@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.9% | 78.7% | 43.4% | 152 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 54.2% | 53.3% | 34.2% | 37 |
+| ATQ *(measured)* | 85 | 120 | 55.8% | 55.0% | 35.8% | 39 |
 | **All (shipped)** | **1533** | **2166** | **80.7%** | **79.5%** | **46.7%** | **876** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -35,7 +35,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | ---: | ---: | --- | --- |
 | 204 | 83 | expected a subject |  |
 | 92 | 35 | unrecognized effect verb |  |
-| 52 | 30 | unconsumed text |  |
+| 50 | 28 | unconsumed text |  |
 | 30 | 30 | unrecognized activation cost |  |
 | 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 9 | 4 | expected 'the number of' in a where-clause |  |
@@ -119,6 +119,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Counter target artifact spell.`
 - **Ashnod's Altar**
   - `Sacrifice a creature: Add {C}{C}.`
+- **Ashnod's Battle Gear**
+  - `{2}, {T}: Target creature you control gets +2/-2 for as long as this artifact remains tapped.`
 - **Atog**
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
@@ -1346,6 +1348,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `{T}, Pay 3 life: Flip a coin. If you win the flip, you gain 6 life.`
 - **Tawnos's Wand**
   - `{2}, {T}: Target creature with power 2 or less can't be blocked this turn.`
+- **Tawnos's Weaponry**
+  - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
 - **Teferi's Protege**
   - `{1}{U}, {T}: Draw a card, then discard a card.`
 - **Teferi's Tutelage**

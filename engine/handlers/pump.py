@@ -156,6 +156,72 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     return True, "resolved"
 
 
+#: What a "for as long as this permanent remains tapped" pump records on its
+#: **source**: the pumped permanent's id and the boost. Read by
+#: ``mixins/permanent_state._refresh_linked_tapped_pumps`` on every recompute.
+#: One name, because the handler that writes it and the refresh that reads it
+#: are in different files and a second spelling is how they come apart.
+PUMP_WHILE_TAPPED_KEY = "pump_while_tapped"
+
+
+@effect_handler("pump_target_while_source_tapped")
+def pump_target_while_source_tapped(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Ashnod's Battle Gear: "{2}, {T}: Target creature you control gets +2/-2
+    for as long as this artifact remains tapped." Tawnos's Weaponry is the same
+    card with a different boost.
+
+    **Nothing is written onto the pumped creature.** The boost is recorded on
+    the *source* and contributed by the derived-buff recompute while the source
+    is tapped, so it ends the instant the source untaps — or leaves, or is
+    untapped by something else mid-turn — and no cleanup step has to remember
+    to subtract it. A delta on the target would be the Aspect of Wolf bug with
+    a different trigger for the mismatch (`_add_static_pt`'s docstring).
+
+    The record is keyed by ``permanent_id``, not by holding the Permanent:
+    CR 400.7 makes a returning permanent a new object, and an id that no longer
+    resolves simply contributes nothing.
+    """
+    caster = context.caster
+    card = context.card
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+
+    power_delta = resolve_amount(instruction.payload.get("power", 0), context.x_value)
+    toughness_delta = resolve_amount(instruction.payload.get("toughness", 0), context.x_value)
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+
+    def _eligible(perm: Permanent) -> bool:
+        if not perm.is_creature:
+            return False
+        if not permanent_matches_filter(perm, filters):
+            return False
+        if filters.get("controller") == "you" and not game.controls(
+            game.players.index(caster), perm
+        ):
+            return False
+        return True
+
+    target_perm = resolve_target_permanent(
+        game, context, predicate=_eligible, fallback_players=(context.target, caster)
+    )
+    if target_perm is None:
+        game.log.append(f"{card.name}: no valid creature target")
+        return True, "resolved"
+
+    source_permanent.metadata[PUMP_WHILE_TAPPED_KEY] = {
+        "target_id": target_perm.permanent_id,
+        "power": power_delta,
+        "toughness": toughness_delta,
+    }
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{card.name} gives {target_perm.card.name} "
+        f"{power_delta:+d}/{toughness_delta:+d} while it remains tapped"
+    )
+    return True, "resolved"
+
+
 @effect_handler("pump_targets_until_eot")
 def pump_targets_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Until end of turn, target creature gets +0/+2 and **another** target
