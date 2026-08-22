@@ -60,6 +60,11 @@ _DERIVED_TIMESTAMP = 0
 # rebuilt by ``_recalculate_lord_buffs``; the qualifier itself is checked here,
 # at read time.
 QUALIFIED_BUFFS = "lord_buff_while"
+#: Types an effect added to a permanent, with what else the same sentence
+#: said. A list, because two effects may each add a type and neither
+#: replaces the other; each entry carries its own duration so the sweep
+#: that clears it knows which ones it owns.
+GAINED_TYPES = "gained_types"
 
 _QUALIFIER_HOLDS = {
     "attacking": lambda perm: bool(perm.attacking),
@@ -292,6 +297,20 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             )
         )
 
+    # The P/T half of a gained-type record that says so ("…with power and
+    # toughness each equal to its mana value", Xenic Poltergeist). Layer 7b,
+    # beside Animate Artifact's, and the same value: CR 202.3's mana value of
+    # the permanent, which for a 0-cost artifact really is 0/0 and really does
+    # die to CR 704.5f.
+    for gained in meta.get(GAINED_TYPES) or ():
+        if gained.get("pt_from_mana_value"):
+            value = int(perm.card.cmc)
+            effects.append(set_pt(
+                only, value, value,
+                timestamp=_DERIVED_TIMESTAMP,
+                label=f"gained-pt:{gained.get('source', 'effect')}",
+            ))
+
     for static in global_statics_applying_to(perm):
         if static.pt_from_mana_value:
             value = int(perm.card.cmc)
@@ -455,6 +474,21 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # creature type and its subtypes are layer 4, the keyword is layer 6, and
     # the P/T was set through `engine/pt.py` when the ability resolved. Added
     # rather than replacing, which is what the printed phrase says.
+    # "That creature becomes an **artifact** in addition to its other types."
+    # (Ashnod's Transmogrant) / "…becomes an artifact **creature** …" (Xenic
+    # Poltergeist.) One record for a type an effect *added* to a permanent,
+    # with the duration it lasts for; layer 4 reads it here and layer 7b reads
+    # the P/T half below, so a card adding a type without changing P/T costs
+    # nothing extra.
+    for gained in meta.get(GAINED_TYPES) or ():
+        effects.append(add_types(
+            only,
+            card_types=list(gained.get("card_types") or ()),
+            subtypes=list(gained.get("subtypes") or ()),
+            timestamp=0,
+            label=f"gained:{gained.get('source', 'effect')}",
+        ))
+
     animation = meta.get("animate_until_end_of_turn")
     if animation:
         effects.append(add_types(

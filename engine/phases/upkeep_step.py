@@ -16,6 +16,7 @@ import re
 from ..auras import aura_enchants
 from ..copies import RECOPY_EACH_UPKEEP, grants_ability
 from ..land_types import MIRE_COUNTER, end_land_type_change
+from ..layer_bridge import GAINED_TYPES
 from ..models import Permanent
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
@@ -496,6 +497,26 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if perm.metadata.get("forestwalk_until_next_upkeep_of") == player_index:
                 perm.metadata.pop("has_forestwalk", None)
                 perm.metadata.pop("forestwalk_until_next_upkeep_of", None)
+            # "Until **your** next upkeep, target noncreature artifact becomes
+            # an artifact creature…" (Xenic Poltergeist) — the same moment and
+            # the same reasoning as the forestwalk above: it expires at the
+            # start of that upkeep, before this turn's own triggers get a
+            # chance to grant a fresh one. Whose upkeep is the seat recorded
+            # when the ability resolved, because CR 109.5 makes it the
+            # controller of the ability rather than of the affected permanent.
+            gained = perm.metadata.get(GAINED_TYPES)
+            if gained:
+                kept = [
+                    g for g in gained
+                    if not (
+                        g.get("duration") == "until_your_next_upkeep"
+                        and g.get("seat") == player_index
+                    )
+                ]
+                if kept:
+                    perm.metadata[GAINED_TYPES] = kept
+                else:
+                    perm.metadata.pop(GAINED_TYPES, None)
         # Non-interactive "at the beginning of upkeep" triggers (fixed upkeep damage)
         # are collected here and put on the stack (CR 603.3); they resolve through the
         # upkeep priority window. The pay-or-consequence triggers below stay inline

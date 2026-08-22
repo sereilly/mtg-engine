@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..land_types import MIRE_COUNTER, change_land_type
+from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
 from ..oracle_types import OracleInstruction
 from ..pt import set_base_pt
@@ -745,4 +746,55 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             exclude=exclude,
             reason=context.card.name,
         )
+    return True, "resolved"
+
+
+@effect_handler("gain_type")
+def gain_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Ashnod's Transmogrant: "That creature becomes an artifact in addition to
+    its other types." Xenic Poltergeist: "Until your next upkeep, target
+    noncreature artifact becomes an artifact creature with power and toughness
+    each equal to its mana value."
+
+    Nothing on the permanent's own card is touched. The gained type is a record
+    the CR 613 bridge reads on every recompute (`layer_bridge.GAINED_TYPES`),
+    so the permanent stops being an artifact by the record going away rather
+    than by anything being restored — the same shape Animate Artifact and the
+    board-wide statics already use, and the reason none of them has to stash an
+    original type line.
+
+    A duration of "permanent" is the absent one, and it is what Ashnod's
+    Transmogrant prints: the creature is still an artifact long after the
+    Transmogrant has been sacrificed to pay for it.
+    """
+    payload = instruction.payload
+    filters = (payload.get("targets") or {}).get("filter") or {}
+
+    def _eligible(perm: Permanent) -> bool:
+        return permanent_matches_filter(perm, filters)
+
+    target_perm = resolve_target_permanent(
+        game, context, predicate=_eligible, fallback_players=(context.target, context.caster)
+    )
+    if target_perm is None:
+        game.log.append(f"{context.card.name}: no valid target")
+        return True, "resolved"
+
+    record = {
+        "card_types": list(payload.get("card_types") or ()),
+        "duration": str(payload.get("duration", "permanent")),
+        "pt_from_mana_value": bool(payload.get("pt_from_mana_value")),
+        "source": context.card.name if context.card else "effect",
+        # "…until **your** next upkeep" — whose upkeep ends it. Recorded when
+        # the ability resolves rather than looked up when it expires: by then
+        # the source may be gone, and CR 109.5 makes this the controller of the
+        # ability, not of the permanent it was pointed at.
+        "seat": game.players.index(context.caster) if context.caster in game.players else 0,
+    }
+    target_perm.metadata.setdefault(GAINED_TYPES, []).append(record)
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{context.card.name}: {target_perm.card.name} becomes "
+        + " ".join(record["card_types"])
+    )
     return True, "resolved"

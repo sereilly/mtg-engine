@@ -266,3 +266,65 @@ def test_feldons_cane_leaves_an_opponents_graveyard_alone(set_pool):
     game.activate_permanent_ability(0, "Feldon's Cane")
 
     assert len(p2.graveyard) == 1
+
+
+# ---------------------------------------------------------------------------
+# Ashnod's Transmogrant / Xenic Poltergeist (round 11) — gained types
+# ---------------------------------------------------------------------------
+
+
+def test_ashnods_transmogrant_makes_a_creature_an_artifact_permanently(set_pool):
+    """"in addition to its other types", and with no duration at all — the
+    creature is still an artifact long after the Transmogrant has been
+    sacrificed to pay for the ability."""
+    pool = set_pool("ATQ")
+    transmogrant = Permanent(card=pool["Ashnod's Transmogrant"])
+    druid = Permanent(card=pool["Citanul Druid"])
+    p1 = PlayerState(name="P1", battlefield=[transmogrant, druid])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Ashnod's Transmogrant", target_permanent_index=1)
+
+    assert druid.has_type("artifact")
+    assert druid.is_creature, "'in addition to' — it does not stop being a creature"
+    assert "Ashnod's Transmogrant" not in {p.card.name for p in game.all_permanents()}
+
+    game.resolve_cleanup_step(0)
+    assert druid.has_type("artifact"), "no duration means it does not wear off"
+
+
+def _poltergeist_game(set_pool):
+    pool = set_pool("ATQ")
+    poltergeist = Permanent(card=pool["Xenic Poltergeist"])
+    tome = Permanent(card=pool["Jalum Tome"])  # a {3} artifact
+    p1 = PlayerState(name="P1", battlefield=[poltergeist, tome])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    return game, tome
+
+
+def test_xenic_poltergeist_animates_an_artifact_at_its_mana_value(set_pool):
+    game, tome = _poltergeist_game(set_pool)
+    assert not tome.is_creature
+
+    game.activate_permanent_ability(0, "Xenic Poltergeist", target_permanent_index=1)
+
+    assert tome.is_creature
+    assert (tome.effective_power, tome.effective_toughness) == (3, 3)
+
+
+def test_the_animation_ends_at_your_next_upkeep(set_pool):
+    """"Until **your** next upkeep" is a real duration and not "until end of
+    turn" — the two are different moments (CR 500 puts the upkeep step inside
+    the turn), so the record is swept at the upkeep of the seat that made it."""
+    game, tome = _poltergeist_game(set_pool)
+
+    game.activate_permanent_ability(0, "Xenic Poltergeist", target_permanent_index=1)
+    assert tome.is_creature
+
+    game.resolve_cleanup_step(0)
+    assert tome.is_creature, "the turn ending is not when this expires"
+
+    game.resolve_upkeep(0)
+    assert not tome.is_creature

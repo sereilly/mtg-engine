@@ -113,6 +113,13 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         "damage", "pump", "life", "destruction", "tapping", "optional", "zones",
         "mana", "regeneration", "counterspells", "prevention", "recolor", "upkeep",
         "turns", "evasion", "tokens", "counters", "text_change", "control",
+        # A type an effect *adds* to a permanent — "becomes an artifact in
+        # addition to its other types" (Ashnod's Transmogrant), "becomes an
+        # artifact creature with power and toughness each equal to its mana
+        # value" (Xenic Poltergeist). Its own category rather than sharing
+        # `recolor`: that one is layer 5 and this is layer 4 (and sometimes 7b),
+        # and one switch must not be able to gate half of either off.
+        "characteristics",
         # Ending the game (CR 104): "You win the game.", "Target player loses
         # the game.", "The game is a draw." No card in the pool prints one — the
         # legacy registry had rules for all three and they went unexercised by

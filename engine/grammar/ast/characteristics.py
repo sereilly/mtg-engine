@@ -157,3 +157,24 @@ class BecomeColor:
     """
     subject: Recipient
     color: str
+
+
+@dataclass(frozen=True)
+class GainType:
+    """``<subject> becomes an artifact in addition to its other types.``
+    (Ashnod's Transmogrant) / ``…becomes an artifact creature with power and
+    toughness each equal to its mana value.`` (Xenic Poltergeist.)
+
+    Distinct from :class:`BecomeCreature`, which names a printed P/T and a
+    creature body. This one names *types* and, optionally, a P/T defined by the
+    permanent's own mana value — so the two cannot share a node without one of
+    them carrying a field the other must not set.
+
+    ``duration`` with no kind means permanently, which is what Ashnod's
+    Transmogrant prints: the creature stays an artifact after the Transmogrant
+    is long gone.
+    """
+    subject: Recipient
+    card_types: tuple[str, ...]
+    duration: Duration = field(default_factory=Duration)
+    pt_from_mana_value: bool = False

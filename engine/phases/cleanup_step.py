@@ -12,6 +12,7 @@ from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissi
 from ..models import Permanent
 from ..keywords import clear_until_eot_keywords
 from ..control import end_until_eot_control_changes
+from ..layer_bridge import GAINED_TYPES
 from ..mixins._constants import _EOT_METADATA_KEYS
 from ..shields import clear_shields
 
@@ -111,6 +112,19 @@ class CleanupStepMixin:
                     permanent.toughness_bonus -= temp_toughness
                 for key in _EOT_METADATA_KEYS:
                     permanent.metadata.pop(key, None)
+                # A gained type whose duration is "until end of turn" ends here,
+                # and ends by the record leaving — the permanent's own type line
+                # was never touched, so there is nothing to restore. Records
+                # with another duration are left alone: a permanent one
+                # (Ashnod's Transmogrant) outlives every turn boundary there is,
+                # which is why this cannot be a plain key in the sweep above.
+                gained = permanent.metadata.get(GAINED_TYPES)
+                if gained:
+                    kept = [g for g in gained if g.get("duration") != "until_end_of_turn"]
+                    if kept:
+                        permanent.metadata[GAINED_TYPES] = kept
+                    else:
+                        permanent.metadata.pop(GAINED_TYPES, None)
                 # A granted "protection from <colour>" is one key per colour
                 # rather than a fixed name, so it is swept by prefix. Listing
                 # five keys would work today and be one entry short the day a

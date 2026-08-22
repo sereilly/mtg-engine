@@ -15,7 +15,7 @@ from ..errors import GrammarError
 from ..lexer import (GToken, PT, WORD)
 from ..nouns import (parse_object_filter, parse_recipient)
 from ..stream import TokenStream
-from ..vocabulary import (COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX, match_longest)
+from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX, match_longest)
 
 from ..phrases import _COUNTER_KINDS, _parse_duration, _parse_for_each, _parse_keywords
 
@@ -471,7 +471,49 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     animated = _parse_become_creature(stream, subject)
     if animated is not None:
         return animated
+    gained = _parse_gain_type(stream, subject)
+    if gained is not None:
+        return gained
     raise stream.error("expected a colour or a creature body after 'becomes'")
+
+
+def _parse_gain_type(
+    stream: TokenStream, subject: ast.Recipient
+) -> ast.GainType | None:
+    """``… becomes an artifact in addition to its other types.`` (Ashnod's
+    Transmogrant.) ``… becomes an artifact creature with power and toughness
+    each equal to its mana value.`` (Xenic Poltergeist.)
+
+    Read after the creature-body form, whose "becomes a 3/3 …" opens with a
+    P/T and cannot be confused with this. Every tail is required: without "in
+    addition to its other types" or the mana-value P/T clause the sentence says
+    something this does not implement, and consuming the type word alone would
+    claim it.
+    """
+    mark = stream.mark()
+    if not (stream.accept_word("a") or stream.accept_word("an")):
+        stream.reset(mark)
+        return None
+    types: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word is None or word not in CARD_TYPES:
+            break
+        types.append(word)
+        stream.advance()
+    if not types:
+        stream.reset(mark)
+        return None
+    if stream.accept_phrase("with", "power", "and", "toughness", "each", "equal", "to"):
+        if not stream.accept_phrase("its", "mana", "value"):
+            stream.reset(mark)
+            return None
+        duration = _parse_duration(stream)
+        return ast.GainType(subject, tuple(types), duration, pt_from_mana_value=True)
+    if stream.accept_phrase("in", "addition", "to", "its", "other", "types"):
+        return ast.GainType(subject, tuple(types), _parse_duration(stream))
+    stream.reset(mark)
+    return None
 
 
 def _parse_become_creature(

@@ -83,6 +83,7 @@ from .characteristics import (
     _lower_remove_counter,
     _lower_for_each,
     _lower_become_color,
+    _lower_gain_type,
     _lower_change_text,
 )
 from .zones import (
@@ -225,6 +226,7 @@ __all__ = [
     "_lower_remove_counter",
     "_lower_for_each",
     "_lower_become_color",
+    "_lower_gain_type",
     "_lower_change_text",
     "_DESTROY_ALL_KINDS",
     "_BASIC_LAND_TYPES",

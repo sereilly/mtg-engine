@@ -478,6 +478,24 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         if reason.startswith("continuous pump"):
             reason = "continuous keyword grant needs the CR 613 layers engine"
         raise LoweringError(reason, node=node)
+    # "…gains forestwalk **until your next upkeep**." (Erhnam Djinn.) Every
+    # grant kind below ends at the cleanup step, so lowering this duration onto
+    # one would grant the keyword for the rest of the turn and take it away a
+    # step early — a card doing less than it prints, silently.
+    #
+    # The duration became parseable when Xenic Poltergeist needed it, which is
+    # the widened-gate hazard in miniature: the phrase used to fail
+    # full-token consumption, so `card_hooks.CARD_LINE_INSTRUCTIONS` claimed
+    # Erhnam Djinn's line and the upkeep registry expired the grant correctly.
+    # Refusing here hands the line back to that hook. Deleting the hook in
+    # favour of a general "until your next upkeep" grant is worth doing and is
+    # not this round's work — and until it is done, refusing is the only answer
+    # that does not quietly shorten the card.
+    if node.duration.kind == "until_your_next_upkeep":
+        raise LoweringError(
+            "no keyword-grant handler expires at the granting player's next upkeep",
+            node=node,
+        )
     # "Creatures you control gain flying until end of turn." (Basri, Devoted
     # Paladin's −6.) A team grant locked in at resolution (CR 611.2c) — its own
     # kind, resolved over the controller's board by the handler.
@@ -873,3 +891,32 @@ def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
     if not _is_target(node.subject):
         raise LoweringError("a text change has to name what it changes", node=node)
     return (OracleInstruction("mark_text_modified", "", {"mode": node.mode}),)
+
+
+#: Durations a gained type may carry. "Permanently" is the absent kind, which
+#: is what Ashnod's Transmogrant prints — the creature stays an artifact long
+#: after the Transmogrant has been sacrificed.
+_GAINED_TYPE_DURATIONS = frozenset({None, "until_end_of_turn", "until_your_next_upkeep"})
+
+
+def _lower_gain_type(node: ast.GainType) -> tuple[OracleInstruction, ...]:
+    """Ashnod's Transmogrant / Xenic Poltergeist.
+
+    The subject must be a chosen target or the pronoun bound by an earlier
+    sentence of the same effect: the handler adds the record to *one* permanent,
+    and a quantified subject would name a set it cannot reach.
+    """
+    if node.duration.kind not in _GAINED_TYPE_DURATIONS:
+        raise LoweringError(
+            f"no handler holds a gained type for {node.duration.kind}", node=node
+        )
+    payload: dict[str, object] = {
+        "card_types": list(node.card_types),
+        "duration": node.duration.kind or "permanent",
+        "pt_from_mana_value": bool(node.pt_from_mana_value),
+    }
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in ("target", "that"):
+        if node.subject.quantifier == "target":
+            _describe_targets(payload, node.subject)
+        return (OracleInstruction("gain_type", "", payload),)
+    raise LoweringError("a gained type needs a single named permanent", node=node)

@@ -42,6 +42,12 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("until_end_of_turn", ("until", "end", "of", "turn")),
     ("until_end_of_combat", ("until", "end", "of", "combat")),
     ("until_your_next_turn", ("until", "your", "next", "turn")),
+    # "Until your next upkeep" (Xenic Poltergeist). Longer than its own prefix
+    # is not the issue here — "until your next turn" and "until your next
+    # upkeep" diverge at the last word — but they are different moments (CR 500:
+    # the upkeep step is inside the turn), so they are different kinds and the
+    # one nothing implements must not fall back to the one that is close.
+    ("until_your_next_upkeep", ("until", "your", "next", "upkeep")),
     ("this_turn", ("this", "turn")),
 )
 

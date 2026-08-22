@@ -10,7 +10,7 @@ How much of the card pool the oracle-text parser (`engine/grammar/`) reads. It i
 | Lowered | That AST mapped onto instructions, a sidecar registry, or a keyword line |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `attachments, coin_flips, combat_restrictions, control, counters, counterspells, damage, destruction, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
+Categories currently switched on: `attachments, characteristics, coin_flips, combat_restrictions, control, counters, counterspells, damage, destruction, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 
@@ -19,10 +19,10 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | LEA | 290 | 388 | 79.4% | 78.4% | 42.3% | 150 |
 | LEB | 292 | 389 | 79.4% | 78.4% | 42.4% | 151 |
 | 2ED | 292 | 389 | 79.4% | 78.4% | 42.4% | 151 |
-| ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
+| ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.9% | 78.7% | 43.4% | 152 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 64.2% | 63.3% | 41.7% | 46 |
+| ATQ *(measured)* | 85 | 120 | 65.8% | 65.0% | 43.3% | 48 |
 | **All (shipped)** | **1533** | **2166** | **80.7%** | **79.5%** | **46.7%** | **876** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,14 +33,14 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 199 | 78 | expected a subject |  |
+| 198 | 77 | expected a subject |  |
 | 88 | 32 | unrecognized effect verb |  |
-| 50 | 28 | unconsumed text |  |
+| 49 | 27 | unconsumed text |  |
 | 30 | 30 | unrecognized activation cost |  |
 | 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 9 | 4 | expected 'the number of' in a where-clause |  |
-| 9 | 4 | expected a colour or a creature body after 'becomes' |  |
 | 9 | 4 | expected a keyword ability |  |
+| 8 | 3 | expected a colour or a creature body after 'becomes' |  |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 6 | 3 | expected something to destroy |  |
@@ -56,8 +56,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 1 | expected something to shield |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | no keyword-grant handler expires at the granting player's next upkeep |  |
 | 1 | 1 | expected 'be' |  |
-| 1 | 1 | expected 'unless defending player controls' |  |
 
 ## Cards executing through the grammar
 
@@ -123,6 +123,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Sacrifice a creature: Add {C}{C}.`
 - **Ashnod's Battle Gear**
   - `{2}, {T}: Target creature you control gets +2/-2 for as long as this artifact remains tapped.`
+- **Ashnod's Transmogrant**
+  - `{T}, Sacrifice this artifact: Put a +1/+1 counter on target nonartifact creature. That creature becomes an artifact in addition to its other types.`
 - **Atog**
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
@@ -1583,6 +1585,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Destroy all creatures. They can't be regenerated.`
 - **Wyluli Wolf**
   - `{T}: Target creature gets +1/+1 until end of turn.`
+- **Xenic Poltergeist**
+  - `{T}: Until your next upkeep, target noncreature artifact becomes an artifact creature with power and toughness each equal to its mana value.`
 - **Yawgmoth Demon**
   - `At the beginning of your upkeep, you may sacrifice an artifact. If you don't, tap this creature and it deals 2 damage to you.`
 - **Zombie Master**

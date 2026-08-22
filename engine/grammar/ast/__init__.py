@@ -103,6 +103,7 @@ from .characteristics import (
     RemoveCounter,
     ChangeText,
     BecomeColor,
+    GainType,
     BecomeCreature,
 )
 from .board import (
@@ -260,6 +261,7 @@ __all__ = [
     "RemoveCounter",
     "ChangeText",
     "BecomeColor",
+    "GainType",
     "BecomeCreature",
     # board
     "Attach",

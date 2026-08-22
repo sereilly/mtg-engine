@@ -1114,3 +1114,56 @@ else does.
 **Numbers.** ATQ 61 → 63; grammar parses 62.5% → 65.0% of its lines.
 `phrases.py` 1,011 → 399 lines, `triggers.py` 651. Shipped pool 668/668, floors
 and ceilings unmoved, suite green at 6621, no hook added.
+
+## ATQ round 11: a type an effect adds, and a duration that broke a card by working
+
+*(2026-08-21.)* **64 → 66.** Ashnod's Transmogrant and Xenic Poltergeist. One
+new channel, and one near-miss worth more than either card.
+
+**A gained type is a record, not a rewrite.** "That creature becomes an artifact
+in addition to its other types" and "…becomes an artifact creature with power
+and toughness each equal to its mana value" are the same effect with different
+tails, so they are one node, one instruction and one `GAINED_TYPES` record that
+the CR 613 bridge reads on every recompute — layer 4 for the type, layer 7b for
+the mana-value P/T. Nothing on the permanent's own card is touched, so the type
+goes away by the record going away; there is no original type line stashed
+anywhere and nothing to restore. That is the shape Animate Artifact and the
+board-wide statics already use, and the reason none of them needs one either.
+
+Ashnod's Transmogrant's grant has **no duration at all**, which is the printed
+card: the creature is still an artifact long after the Transmogrant has been
+sacrificed to pay for its own ability. Xenic Poltergeist's expires at the
+granting seat's next upkeep, swept where Erhnam Djinn's forestwalk already is —
+before that turn's own triggers, so one that would grant a fresh effect does not
+have it taken away in the same step.
+
+### The duration that broke a card by starting to work
+
+`until your next upkeep` was not in the duration table, and adding it for Xenic
+Poltergeist **broke Erhnam Djinn** — eleven tests, immediately. The phrase used
+to fail full-token consumption, so the grammar refused the whole line and
+`card_hooks.CARD_LINE_INSTRUCTIONS` claimed it; the hook's upkeep registry
+expired the grant on schedule. With the phrase parseable, the grammar consumed
+the line first (it always runs before the hooks) and lowered it onto
+`grant_target_keyword_until_eot` — a grant every existing kind ends at the
+*cleanup step*. Erhnam Djinn would have granted forestwalk for the rest of the
+turn and taken it away a step early, on a card that still reported supported.
+
+This is CLAUDE.md's stated ordering doing exactly half its job. "A line that
+grows a production leaves its hook dead rather than wrong" is true of the
+*hook*; it says nothing about whether the production is right, and here it was
+not. The keyword-grant lowering refuses the duration now, which hands the line
+back to the hook that expires it correctly — an effect the engine cannot carry
+out being a `LoweringError` naming what is missing, which is the rule this file
+states for exactly this case. Retiring the hook in favour of a general
+"until your next upkeep" grant is worth doing and is its own round; until then,
+refusing is the only answer that does not quietly shorten the card.
+
+Worth recording that the guard which caught this was **the existing per-card
+tests**, not a ratchet. A grammar change with no ATQ card in sight moved a
+shipped card's behaviour, and what noticed was eleven Arabian Nights and
+regression tests failing in the same run.
+
+**Numbers.** ATQ 64 → 66; grammar parses 65.0% → 68.3% of its lines. Shipped
+pool 668/668, floors and ceilings unmoved, suite green at 6626, no hook added
+and none removed.

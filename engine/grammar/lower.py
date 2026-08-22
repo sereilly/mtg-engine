@@ -66,6 +66,7 @@ from .lowering import (
     _lower_add_mana,
     _lower_add_mana_for_tapped_land,
     _lower_become_color,
+    _lower_gain_type,
     _lower_cant_be,
     _lower_change_text,
     _lower_combat_restriction,
@@ -303,6 +304,8 @@ def lower_statement(
         return _lower_sacrifice(statement)
     if isinstance(statement, ast.SacrificeExpansionPermanents):
         return _lower_sacrifice_expansion_permanents(statement)
+    if isinstance(statement, ast.GainType):
+        return _lower_gain_type(statement)
     if isinstance(statement, ast.ShuffleGraveyardIntoLibrary):
         return _lower_shuffle_graveyard_into_library(statement)
 
