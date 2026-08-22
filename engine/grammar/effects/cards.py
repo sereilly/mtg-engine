@@ -187,6 +187,34 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
             per_each=_parse_mana_multiplier(stream),
         )
 
+    # "Add **an amount of {B} equal to the sacrificed artifact's mana value**."
+    # (Priest of Yawgmoth.) The amount is a back-reference to what the ability's
+    # own sacrifice cost ate, which only the resolution holding that cost can
+    # read (CR 608.2h) — so the node records *which* back-reference and the
+    # handler does the arithmetic, the same split every other computed amount
+    # in the grammar makes.
+    #
+    # Read before `parse_amount`, which would take "an" as the number one and
+    # then fail on "amount" — a failure that says nothing about what the
+    # sentence actually is.
+    sacrificed_mark = stream.mark()
+    if stream.accept_phrase("an", "amount", "of"):
+        if stream.at_kind(MANA):
+            symbol_token = stream.next()
+            symbol = symbol_token.text.strip("{}")
+            if stream.accept_phrase("equal", "to", "the", "sacrificed") and stream.peek_word():
+                # The noun repeats what the cost already named ("artifact"), so
+                # it is consumed rather than re-read: the cost decided what was
+                # sacrificed, and a second reading here could only disagree.
+                stream.advance()
+                if stream.accept_phrase("'s", "mana", "value"):
+                    return ast.AddMana(
+                        (),
+                        source_text=_clause(),
+                        from_sacrificed_cost=symbol,
+                    )
+        stream.reset(sacrificed_mark)
+
     count = parse_amount(stream)
     # "Add six {R}." (Chandra, Heart of Fire's −9) — a counted single symbol,
     # the same pips as "{R}{R}{R}{R}{R}{R}" spelled with a number word.

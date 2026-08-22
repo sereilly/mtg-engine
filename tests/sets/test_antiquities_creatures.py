@@ -238,3 +238,52 @@ def test_the_two_clockwork_cards_share_one_rule_with_different_numbers(set_pool,
     assert beast_ability.instruction.kind == avian_ability.instruction.kind
     assert beast_ability.instruction.payload["cap"] == 7
     assert avian_ability.instruction.payload["cap"] == 4
+
+
+# ---------------------------------------------------------------------------
+# Priest of Yawgmoth (round 15) — an effect reading back what its cost ate
+# ---------------------------------------------------------------------------
+
+
+def _priest_and(set_pool, artifact_name):
+    pool = set_pool("ATQ")
+    priest = Permanent(card=pool["Priest of Yawgmoth"])
+    fodder = Permanent(card=pool[artifact_name])
+    p1 = PlayerState(name="P1", battlefield=[priest, fodder])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    priest.metadata.pop("summoning_sickness_turn", None)
+    return game, p1
+
+
+def test_priest_of_yawgmoth_pays_the_sacrificed_artifacts_mana_value(set_pool):
+    game, p1 = _priest_and(set_pool, "Jalum Tome")  # {3}
+
+    game.activate_permanent_ability(0, "Priest of Yawgmoth", cost_permanent_index=1)
+
+    assert p1.mana_pool["B"] == 3
+    assert "Jalum Tome" not in {perm.card.name for perm in game.all_permanents()}
+
+
+def test_a_zero_cost_artifact_pays_nothing(set_pool):
+    """Ornithopter's mana value is 0, and 0 is the honest answer — the amount
+    is the sacrificed artifact's mana value, not "at least one"."""
+    game, p1 = _priest_and(set_pool, "Ornithopter")  # {0}
+
+    game.activate_permanent_ability(0, "Priest of Yawgmoth", cost_permanent_index=1)
+
+    assert p1.mana_pool.get("B", 0) == 0
+
+
+def test_the_ability_pays_its_own_sacrifice_cost(set_pool):
+    """`sacrifice_creature_for_mana` was listed as a kind whose handler performs
+    the sacrifice itself, so the activation path skipped paying it. That was
+    harmless while only two *sorceries* produced the kind — the casting path
+    pays their cost — and silently stopped paying it the moment an activated
+    ability produced the same kind."""
+    game, p1 = _priest_and(set_pool, "Jalum Tome")
+    before = len(list(game.all_permanents()))
+
+    game.activate_permanent_ability(0, "Priest of Yawgmoth", cost_permanent_index=1)
+
+    assert len(list(game.all_permanents())) == before - 1, "exactly one artifact left"

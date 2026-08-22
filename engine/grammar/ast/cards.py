@@ -97,6 +97,12 @@ class AddMana:
     # phrase: which spells it admits is that module's question, asked again by
     # the payer, so one rule answers "what may this pay for?" in both places.
     spend_only: str | None = None
+    # "an amount of {B} equal to the sacrificed artifact's mana value" (Priest
+    # of Yawgmoth). The mana symbol, with the *amount* named as a
+    # back-reference rather than a number: it is the mana value of whatever the
+    # ability's sacrifice cost ate, which is last-known information by the time
+    # this resolves.
+    from_sacrificed_cost: str | None = None
     # "Add {G} **for each creature with power 4 or greater you control**"
     # (Leafkin Avenger). A board count multiplying the whole clause, the same
     # shape a life gain and a counter placement already carry — so it is a

@@ -257,6 +257,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "return_self_from_graveyard": "zones",
     "bounce_target_creature": "zones",
     "add_mana_from_text": "mana",
+    # "Add an amount of {B} equal to the sacrificed artifact's mana value"
+    # (Priest of Yawgmoth). The handler predates the grammar reading this
+    # sentence — two hooks produced it — so the kind is named for the creature
+    # the first of them sacrificed; what it actually reads is the mana value of
+    # whatever the cost ate, artifact or otherwise.
+    "sacrifice_creature_for_mana": "mana",
     # A triggered *mana* ability on a land being tapped (CR 605.1b): resolved
     # inline by Game.tap_land_for_mana, not through EFFECT_HANDLERS on the
     # stack, because CR 605.4a says a triggered mana ability never uses it.

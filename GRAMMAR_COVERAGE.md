@@ -16,14 +16,14 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 79.6% | 78.6% | 42.5% | 151 |
-| LEB | 292 | 389 | 79.7% | 78.7% | 42.7% | 152 |
-| 2ED | 292 | 389 | 79.7% | 78.7% | 42.7% | 152 |
+| LEA | 290 | 388 | 79.9% | 78.9% | 42.8% | 152 |
+| LEB | 292 | 389 | 79.9% | 78.9% | 42.9% | 153 |
+| 2ED | 292 | 389 | 79.9% | 78.9% | 42.9% | 153 |
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
-| 3ED | 296 | 389 | 80.2% | 78.9% | 43.7% | 153 |
+| 3ED | 296 | 389 | 80.5% | 79.2% | 44.0% | 154 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 69.2% | 68.3% | 45.8% | 51 |
-| **All (shipped)** | **1533** | **2166** | **80.9%** | **79.7%** | **46.9%** | **880** |
+| ATQ *(measured)* | 85 | 120 | 70.0% | 69.2% | 46.7% | 52 |
+| **All (shipped)** | **1533** | **2166** | **81.1%** | **79.9%** | **47.1%** | **884** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -45,7 +45,6 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | 6 | 3 | no lowering for RawEffect |  |
 | 6 | 3 | expected something to destroy |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
-| 5 | 2 | expected 'mana' |  |
 | 5 | 2 | expected a quantity |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | expected 'a' |  |
@@ -58,10 +57,11 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | no keyword-grant handler expires at the granting player's next upkeep |  |
 | 1 | 1 | expected 'be' |  |
+| 1 | 1 | expected 'unless defending player controls' |  |
 
 ## Cards executing through the grammar
 
-880 cards, 1016 lines.
+884 cards, 1020 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -1039,6 +1039,8 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 - **Pridemalkin**
   - `When this creature enters, put a +1/+1 counter on target creature you control.`
   - `Each creature you control with a +1/+1 counter on it has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
+- **Priest of Yawgmoth**
+  - `{T}, Sacrifice an artifact: Add an amount of {B} equal to the sacrificed artifact's mana value.`
 - **Primal Might**
   - `Target creature you control gets +X/+X until end of turn. Then it fights up to one target creature you don't control. (Each deals damage equal to its power to the other.)`
 - **Prismite**
@@ -1167,6 +1169,11 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
   - `Target opponent sacrifices a creature of their choice with flying.`
 - **Sabertooth Mauler**
   - `At the beginning of your end step, if a creature died this turn, put a +1/+1 counter on this creature and untap it.`
+- **Sacrifice**
+  - `Add an amount of {B} equal to the sacrificed creature's mana value.`
+  - `Add an amount of {B} equal to the sacrificed creature's mana value.`
+  - `Add an amount of {B} equal to the sacrificed creature's mana value.`
+  - `Add an amount of {B} equal to the sacrificed creature's mana value.`
 - **Sage of Lat-Nam**
   - `{T}, Sacrifice an artifact: Draw a card.`
 - **Samite Healer**

@@ -28,9 +28,19 @@ from ...subject_filters import card_matches_any, filter_head_noun, subject_match
 # (CR 608.2h, last-known information). Charging the cost generically as well
 # would sacrifice two creatures for one activation. Kinds here pay it
 # themselves; everything else pays through the cost path below.
+#: Instruction kinds whose *handler* performs the sacrifice itself, so the
+#: activation path must not also pay it — two creatures for one ability.
+#:
+#: `sacrifice_creature_for_mana` used to be listed here and does not belong:
+#: its handler reads back what the cost ate (`sacrificed_for_cost`) and
+#: sacrifices nothing. That was harmless while only Metamorphosis and Sacrifice
+#: produced it — both sorceries, whose cost the *casting* path pays, so this
+#: set never saw them — and it silently stopped paying the cost the moment an
+#: activated ability produced the same kind (Priest of Yawgmoth). The listed
+#: kind is the one whose handler really does call
+#: `_sacrifice_creature_for_mana` (Diamond Valley).
 COST_PERFORMING_KINDS = frozenset({
     "sacrifice_creature_gain_life_by_toughness",   # Diamond Valley
-    "sacrifice_creature_for_mana",                 # Metamorphosis / Sacrifice
 })
 
 
@@ -938,6 +948,12 @@ class AbilityActivationMixin:
                     target=target_player,
                     card=permanent.card,
                     source_permanent=permanent,
+                    # The same last-known-information channel the queued path
+                    # below records. An ability that resolves without touching
+                    # the stack still had its cost paid, and an effect reading
+                    # back what the cost ate must not depend on which of the
+                    # two paths it came down.
+                    choices={"sacrificed_for_cost": sacrifice_cost_permanent},
                 ),
             )
             supported, details = state_machine.run(instruction)
@@ -956,7 +972,17 @@ class AbilityActivationMixin:
                 source_permanent=permanent,
                 ability_text=ability.source_line,
                 target_stack_item=target_stack_item,
-                choices={"chosen_source": chosen_source},
+                # What the ability's own sacrifice cost ate (CR 601.2h), for
+                # an effect that reads it back — "Add an amount of {B} equal
+                # to **the sacrificed artifact's** mana value" (Priest of
+                # Yawgmoth). The permanent is off the battlefield by now, so
+                # this is the only place it survives (CR 608.2h last-known
+                # information), exactly as the casting path already records an
+                # additional cost's sacrifice.
+                choices={
+                    "chosen_source": chosen_source,
+                    "sacrificed_for_cost": sacrifice_cost_permanent,
+                },
             )
         )
         self.log.append(f"{permanent.card.name} ability added to stack")

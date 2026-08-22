@@ -37,6 +37,22 @@ def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:
     would add nothing while reporting success; it keeps its own fused
     ``sacrifice_self_for_mana`` handler on the legacy path.
     """
+    # "Add an amount of {B} equal to the sacrificed artifact's mana value."
+    # (Priest of Yawgmoth.) The mana is one symbol and the *amount* is the mana
+    # value of what the ability's sacrifice cost ate, which the handler reads
+    # back off `sacrificed_for_cost` — the same channel the casting path has
+    # used for Sacrifice and Metamorphosis since that cost became general.
+    #
+    # `bonus` is 0 here and 1 on Metamorphosis's "1 plus …"; it is on the
+    # payload for the same reason the colour is, so a card printing either
+    # needs no code.
+    if node.from_sacrificed_cost:
+        return (
+            OracleInstruction(
+                "sacrifice_creature_for_mana", "",
+                {"color": node.from_sacrificed_cost, "bonus": 0, "spend_only": None},
+            ),
+        )
     if node.pips:
         # A printed "or" ships under its own key, never as bare ``pips``: a
         # reader that has not learned ``pips_choice`` then adds *nothing*

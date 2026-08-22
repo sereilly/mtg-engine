@@ -1306,3 +1306,44 @@ subscripting twice where binding once would do.
 
 **Numbers.** ATQ 69 → 70. Shipped pool 668/668, floors and ceilings unmoved,
 positional baselines *down*, suite green at 6636, no hook added.
+
+## ATQ round 15: an effect that reads back its own cost
+
+*(2026-08-21.)* **70 → 71.** Priest of Yawgmoth — "{T}, Sacrifice an artifact:
+Add an amount of {B} equal to **the sacrificed artifact's** mana value." The
+effect is arithmetic on something that is no longer on the battlefield, and the
+engine already had every piece of it in a place the activation path could not
+reach.
+
+`sacrifice_creature_for_mana` has read the mana value of whatever a cost ate
+since the round that separated it from performing the sacrifice, and the
+casting path has recorded that on `sacrificed_for_cost` ever since. What was
+missing was the activation path recording the same thing — on **both** its
+routes, the queued one and the one that resolves without touching the stack,
+because an effect reading back its cost must not depend on which of the two it
+came down.
+
+**And the round found a cost that was never being paid.**
+`COST_PERFORMING_KINDS` — the set of instruction kinds whose *handler*
+sacrifices, so the activation path must not sacrifice again — listed
+`sacrifice_creature_for_mana`. Its handler does not sacrifice; it says so in
+its own docstring. The listing was harmless for as long as only Metamorphosis
+and Sacrifice produced the kind, because both are **sorceries** whose cost the
+casting path pays and this set never sees them. The moment an *activated*
+ability produced the same kind, the sacrifice silently stopped being charged:
+Priest of Yawgmoth made three black mana and kept the artifact.
+
+That is a free ability rather than a broken one, and nothing would have failed
+— which is why the test for it asserts the board *shrank*, not that the mana
+arrived. The set now holds only the kind whose handler really does call
+`_sacrifice_creature_for_mana`.
+
+**A naming note, recorded rather than churned.** The kind is
+`sacrifice_creature_for_mana` and Priest of Yawgmoth sacrifices an artifact.
+The name is from the first card that produced it; what the handler reads is the
+mana value of whatever the cost ate, of any type. Renaming it touches two hooks
+and a category table for no behavioural gain, so it is written down here
+instead.
+
+**Numbers.** ATQ 70 → 71; grammar parses 69.2% → 70.0%. Shipped pool 668/668,
+floors and ceilings unmoved, suite green at 6640, no hook added.
