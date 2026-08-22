@@ -198,6 +198,15 @@ def _parse_subject_verb(
     if idol is not None:
         return idol
     stream.reset(mark_idol)
+    # Tawnos's Coffin's whole four-sentence effect, read before the general
+    # exile for the same reason Idol's is: the sentences behind the first one
+    # are not effects of their own, and a general match would leave them as
+    # unconsumed text.
+    mark_coffin = stream.mark()
+    coffin = _parse_exile_until_leaves_or_untaps(stream)
+    if coffin is not None:
+        return coffin
+    stream.reset(mark_coffin)
     if stream.at_word("exile"):
         # "Exile the top three cards of your library" moves library cards, not
         # a permanent — tried first because the recipient parser below refuses
@@ -719,6 +728,65 @@ def _parse_exile_graveyard_until_leaves(stream: TokenStream) -> ast.Statement | 
     if not stream.accept_phrase("leaves", "the", "battlefield"):
         return None
     return ast.ExileGraveyardUntilLeaves(filt)
+
+
+def _parse_exile_until_leaves_or_untaps(stream: TokenStream) -> ast.Statement | None:
+    """Tawnos's Coffin's four sentences, as one statement.
+
+    ``Exile target creature and all Auras attached to it. Note the number and
+    kind of counters that were on that creature. When this artifact leaves the
+    battlefield or becomes untapped, return that exiled card to the battlefield
+    under its owner's control tapped with the noted number and kind of counters
+    on it. If you do, return the other exiled cards to the battlefield under
+    their owner's control attached to that permanent.``
+
+    **Every word is required**, and each one is load-bearing rather than
+    decorative: without the Auras the creature comes back naked, without the
+    counters it comes back smaller, without "tapped" it comes back ready, and
+    without either half of the two-event return it never comes back at all. A
+    production that let any of them be absent would also let it be *deleted*
+    with no change to what was lowered.
+    """
+    if not stream.accept_phrase("exile", "target", "creature"):
+        return None
+    if not stream.accept_phrase("and", "all", "auras", "attached", "to", "it"):
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase(
+        "note", "the", "number", "and", "kind", "of", "counters",
+        "that", "were", "on", "that", "creature",
+    ):
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("when", "this"):
+        return None
+    if stream.accept_kind(SELF) is None:
+        stream.accept_word("artifact", "creature", "enchantment", "permanent", "land")
+    if not stream.accept_phrase("leaves", "the", "battlefield"):
+        return None
+    if not stream.accept_phrase("or", "becomes", "untapped"):
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "return", "that", "exiled", "card", "to", "the", "battlefield",
+        "under", "its", "owner", "'s", "control", "tapped",
+        "with", "the", "noted", "number", "and", "kind", "of", "counters",
+        "on", "it",
+    ):
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("if", "you", "do"):
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "return", "the", "other", "exiled", "cards",
+        "to", "the", "battlefield", "under", "their", "owner", "'s", "control",
+        "attached", "to", "that", "permanent",
+    ):
+        return None
+    return ast.ExileUntilLeavesOrUntaps(
+        ast.TargetSpec("target", ast.ObjectFilter(card_types=("creature",)), targeted=True)
+    )
 
 
 def _parse_cast_from_exiled_with(stream: TokenStream) -> ast.Statement | None:

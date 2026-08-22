@@ -87,6 +87,7 @@ from .characteristics import (
     _lower_change_text,
 )
 from .zones import (
+    _lower_exile_until_leaves_or_untaps,
     _lower_shuffle_graveyard_into_library,
     _EXILED_CREATURE,
     _reads_no_return_restriction,
@@ -281,6 +282,7 @@ __all__ = [
     "_lower_cast_from_exiled_with",
     "_lower_cast_permission",
     "_lower_exile_graveyard_until_leaves",
+    "_lower_exile_until_leaves_or_untaps",
     "_lower_exile_top_of_library",
     "_lower_look_top_pick",
     "_lower_search_and_exile",

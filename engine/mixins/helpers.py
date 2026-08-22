@@ -732,6 +732,13 @@ class GameHelpersMixin:
             return False
         permanent.tapped = False
         emit(self, "permanent_becomes_untapped", subject=permanent)
+        # "When this artifact leaves the battlefield **or becomes untapped**,
+        # return that exiled card…" (Tawnos's Coffin). The second of the two
+        # things that end a linked exile, and it is here for the reason the
+        # first is in `remove_from_battlefield`: this is the one place a
+        # permanent becomes untapped, so a return wired into any single untapper
+        # would be a return the other ten forgot.
+        self.return_linked_exile(permanent, "became untapped")
         return True
 
     # ------------------------------------------------------------------
@@ -1110,23 +1117,65 @@ class GameHelpersMixin:
         # single caller would be a return the other forty forgot, which is the
         # reason this function exists at all.
         for perm in removed:
-            for entry in perm.metadata.pop("exiled_until_leaves", ()) or ():
-                owner = self.players[int(entry["owner_index"])]
-                card = entry["card"]
-                # Back to the zone it was taken from. Kitesail Freebooter takes
-                # from a hand and Idol of Endurance from a graveyard, and a card
-                # returned to the wrong one is a card the effect created out of
-                # nothing — so the origin rides the entry rather than being a
-                # constant here.
-                destination = str(entry.get("to", "hand"))
-                if card in owner.exile:
-                    owner.exile.remove(card)
-                    getattr(owner, destination).append(card)
-                    self.log.append(
-                        f"{card.name} returns to {owner.name}'s {destination} "
-                        f"({perm.card.name} left the battlefield)"
-                    )
+            self.return_linked_exile(perm, "left the battlefield")
         return removed
+
+    def return_linked_exile(self, permanent: Permanent, why: str) -> None:
+        """Give back everything exiled *with* ``permanent`` (CR 400.7, 610.3).
+
+        Two callers, because two things end a linked exile: the permanent
+        leaving the battlefield (Kitesail Freebooter, Idol of Endurance) and —
+        Tawnos's Coffin alone — the permanent becoming untapped. One function
+        because the unwinding is identical and the difference is only what says
+        the word.
+        """
+        entries = permanent.metadata.pop("exiled_until_leaves", ()) or ()
+        returned: Permanent | None = None
+        for entry in entries:
+            owner = self.players[int(entry["owner_index"])]
+            card = entry["card"]
+            # Back to the zone it was taken from. Kitesail Freebooter takes from
+            # a hand, Idol of Endurance from a graveyard and Tawnos's Coffin
+            # from the battlefield, and a card returned to the wrong one is a
+            # card the effect created out of nothing — so the origin rides the
+            # entry rather than being a constant here.
+            destination = str(entry.get("to", "hand"))
+            if card not in owner.exile:
+                continue
+            owner.exile.remove(card)
+            if destination != "battlefield":
+                getattr(owner, destination).append(card)
+                self.log.append(
+                    f"{card.name} returns to {owner.name}'s {destination} "
+                    f"({permanent.card.name} {why})"
+                )
+                continue
+            arrival = Permanent(card=card)
+            self._put_permanent_onto_battlefield(
+                int(entry["owner_index"]), arrival, None
+            )
+            if entry.get("tapped"):
+                arrival.tapped = True
+            if entry.get("counters"):
+                from ..handlers.zones import restore_noted_counters
+
+                restore_noted_counters(self, arrival, entry["counters"])
+            # "…**attached to that permanent**" — the Auras go back onto the
+            # creature the entry before them brought back, which is why they
+            # travel in one record and in printed order. Nothing to attach to
+            # means the Aura simply arrives, and CR 704.5n's sweep bins it.
+            if entry.get("attach_to_returned") and returned is not None:
+                from ..auras import attach_aura
+
+                attach_aura(arrival, returned)
+            else:
+                returned = arrival
+            self.log.append(
+                f"{card.name} returns to the battlefield "
+                f"({permanent.card.name} {why})"
+            )
+        if entries:
+            self._recompute_continuous_effects()
 
     @staticmethod
     def default_sacrifice_pick(candidates: list[Permanent]) -> Permanent:

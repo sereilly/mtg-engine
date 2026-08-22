@@ -1610,6 +1610,114 @@ def exile_graveyard_until_leaves(game: Game, instruction: OracleInstruction, con
     return True, "resolved"
 
 
+#: The counter records a permanent carries, as ``(metadata key, restore)`` —
+#: what to read when Tawnos's Coffin notes "the number and kind of counters"
+#: and what to do when it puts them back.
+#:
+#: +1/+1 counters are not a plain number: they are the P/T channel too
+#: (engine/pt.py), so restoring them by writing the record would give back the
+#: marker and not the size. Every other kind is CR 122.1's inert marker and its
+#: whole existence *is* the number.
+def _note_counters(permanent) -> dict[str, int]:
+    """Every counter on *permanent*, by kind. The keys are the engine's own
+    metadata spelling, so nothing has to enumerate which kinds exist."""
+    noted: dict[str, int] = {}
+    for key, value in permanent.metadata.items():
+        if not key.endswith("_counters") or not isinstance(value, int) or value <= 0:
+            continue
+        noted[key] = int(value)
+    plus = int(permanent.metadata.get("plus_counters", 0) or 0)
+    if plus > 0:
+        noted["plus_counters"] = plus
+    return noted
+
+
+def restore_noted_counters(game, permanent, noted: dict) -> None:
+    """Put back the counters :func:`_note_counters` recorded.
+
+    +1/+1 counters go through ``Game.place_plus1_counters``, the seam, not the
+    library operation under it: a permanent that *enters with* counters has
+    those counters put on it (CR 121.6), so CR 614 may change how many arrive
+    and CR 603 may fire on their arrival — the two things the seam is for.
+
+    Every other kind is CR 122.1's inert marker whose whole existence is the
+    number, so the number is written back.
+    """
+    for key, count in (noted or {}).items():
+        if key == "plus_counters":
+            game.place_plus1_counters(permanent, int(count))
+            continue
+        permanent.metadata[key] = int(permanent.metadata.get(key, 0)) + int(count)
+
+
+@effect_handler("exile_until_leaves_or_untaps")
+def exile_until_leaves_or_untaps(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Tawnos's Coffin: "Exile target creature and all Auras attached to it.
+    Note the number and kind of counters that were on that creature. When this
+    artifact leaves the battlefield or becomes untapped, return that exiled card
+    to the battlefield under its owner's control tapped with the noted number
+    and kind of counters on it. If you do, return the other exiled cards …
+    attached to that permanent."
+
+    A **linked** exile (CR 400.7, CR 610.3) recorded on the permanent, which is
+    the store Kitesail Freebooter and Idol of Endurance already use. What this
+    card adds to it is a destination (the battlefield), a state to come back in
+    (tapped, with the noted counters) and a relationship between the returned
+    cards (the Auras go back onto the creature).
+
+    The counters are **noted**, not derived, for the reason CR 608.2h exists: by
+    the time the return runs the permanent is long gone, and the object that
+    comes back is a new one (CR 400.7) with no counters at all.
+    """
+    from ..auras import auras_attached_to
+
+    source = context.source_permanent
+    if source is None:
+        game.log.append("the linked exile has no permanent to be linked to")
+        return True, "resolved"
+    payload = instruction.payload
+    victim = resolve_target_permanent(
+        game, context,
+        predicate=lambda candidate: permanent_matches_filter(candidate, payload),
+    )
+    if victim is None:
+        game.log.append(f"{context.card.name}: no valid creature to exile")
+        return True, "resolved"
+    auras = list(auras_attached_to(victim))
+    held = list(source.metadata.get("exiled_until_leaves") or ())
+    entries = [
+        {
+            "owner_index": game.owner_index_of(victim) or 0,
+            "card": victim.card,
+            "to": "battlefield",
+            "tapped": True,
+            "counters": _note_counters(victim),
+        }
+    ] + [
+        {
+            "owner_index": game.owner_index_of(aura) or 0,
+            "card": aura.card,
+            "to": "battlefield",
+            # "…attached to that permanent" — the Auras go back onto the
+            # creature the entry above brings with them, which is why they are
+            # one record rather than two unrelated ones.
+            "attach_to_returned": True,
+        }
+        for aura in auras
+    ]
+    game.remove_all_from_battlefield([victim, *auras])
+    for entry, permanent in zip(entries, [victim, *auras]):
+        game.players[int(entry["owner_index"])].exile.append(permanent.card)
+    source.metadata["exiled_until_leaves"] = held + entries
+    game.log.append(
+        f"{context.card.name} exiled {victim.card.name}"
+        + (f" and {len(auras)} Aura(s)" if auras else "")
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_cast_permission")
 def grant_cast_permission(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """A cast-or-play permission (CR 601.3) over cards in a named zone —

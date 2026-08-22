@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 81.0% | 79.7% | 44.2% | 155 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 83.3% | 83.3% | 55.8% | 62 |
+| ATQ *(measured)* | 85 | 120 | 84.2% | 84.2% | 56.7% | 63 |
 | **All (shipped)** | **1533** | **2166** | **81.3%** | **80.1%** | **47.1%** | **885** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -35,7 +35,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ---: | ---: | --- | --- |
 | 185 | 70 | expected a subject |  |
 | 85 | 29 | unrecognized effect verb |  |
-| 47 | 23 | unconsumed text |  |
+| 46 | 22 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
 | 27 | 12 | granted ability in quotes | phase 3 (quoted abilities) |
 | 9 | 4 | expected 'the number of' in a where-clause |  |
@@ -1395,6 +1395,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever an artifact you control is put into a graveyard from the battlefield, you may pay {1}. If you do, you gain 1 life.`
 - **Tavern Swindler**
   - `{T}, Pay 3 life: Flip a coin. If you win the flip, you gain 6 life.`
+- **Tawnos's Coffin**
+  - `{3}, {T}: Exile target creature and all Auras attached to it. Note the number and kind of counters that were on that creature. When this artifact leaves the battlefield or becomes untapped, return that exiled card to the battlefield under its owner's control tapped with the noted number and kind of counters on it. If you do, return the other exiled cards to the battlefield under their owner's control attached to that permanent.`
 - **Tawnos's Wand**
   - `{2}, {T}: Target creature with power 2 or less can't be blocked this turn.`
 - **Tawnos's Weaponry**

@@ -56,6 +56,33 @@ class Exile:
 
 
 @dataclass(frozen=True)
+class ExileUntilLeavesOrUntaps:
+    """Tawnos's Coffin's whole four-sentence effect.
+
+    "Exile target creature and all Auras attached to it. Note the number and
+    kind of counters that were on that creature. When this artifact leaves the
+    battlefield **or becomes untapped**, return that exiled card to the
+    battlefield under its owner's control tapped with the noted number and kind
+    of counters on it. If you do, return the other exiled cards to the
+    battlefield under their owner's control attached to that permanent."
+
+    One node for the four sentences, in the shape Necromentia's and Idol of
+    Endurance's productions already use: none of the four is an effect on its
+    own. The note is meaningless without the return that reads it, the return is
+    meaningless without the exile that filled the pile, and the reattachment
+    names "that permanent" — the creature the *previous* sentence put back. A
+    parse that produced four statements would produce three that do nothing.
+
+    Only the subject rides the node. Every other word is required by the
+    production, so a card printing the sentence without the counters, without
+    the Auras, or with only one of the two return events is a different card and
+    keeps failing to parse.
+    """
+
+    subject: Recipient
+
+
+@dataclass(frozen=True)
 class GainControl:
     """``Gain control of <subject> for as long as <duration>.`` (CR 613 layer 2.)
 

@@ -1926,3 +1926,55 @@ untouched.
 **Numbers.** ATQ 82 → 83; grammar parses 82.5% → 83.3% of its lines, executes
 55.0% → 55.8%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
 6694, no hook added.
+
+## ATQ round 28: the linked exile, and the second thing that ends one
+
+*(2026-08-22.)* **83 → 84.** Tawnos's Coffin — four sentences that are one
+effect:
+
+```
+{3}, {T}: Exile target creature and all Auras attached to it. Note the number
+and kind of counters that were on that creature. When this artifact leaves the
+battlefield or becomes untapped, return that exiled card to the battlefield
+under its owner's control tapped with the noted number and kind of counters on
+it. If you do, return the other exiled cards to the battlefield under their
+owner's control attached to that permanent.
+```
+
+**The linked-exile seam was already built**, which the "open block" in *Carried
+forward* undersells: `permanent.metadata["exiled_until_leaves"]` is the pile
+Kitesail Freebooter and Idol of Endurance use, and `remove_from_battlefield` —
+the one transition off the battlefield — is what empties it. What this card adds
+is vocabulary the entries did not carry: a **destination** (the battlefield,
+where the others go to a hand or a graveyard), a **state** to come back in
+(tapped, with the noted counters) and a **relationship** between the returned
+cards (the Auras go back onto the creature).
+
+**And a second thing that ends a linked exile.** Every other card in the family
+says "leaves the battlefield"; this one says "or becomes untapped", which is the
+half it is actually played for. `become_untapped` is the one place a permanent
+untaps — the round that wrote it says so, and that is exactly why the return
+goes there rather than into the untap step: a return wired into one untapper
+would be a return the other ten forgot.
+
+**The counters are noted, not derived**, which is CR 608.2h's reason: by the
+time the return runs the permanent has been gone for a turn cycle, and what
+comes back is a new object (CR 400.7) with no counters at all. They go back
+through `Game.place_plus1_counters` rather than the library operation under it —
+a permanent that *enters with* counters has those counters put on it (CR 121.6),
+so CR 614 may change how many arrive and CR 603 may fire on their arrival. The
+counter-placement guard caught the shortcut before the test did.
+
+**Four sentences, one production, one node.** The shape Necromentia and Idol of
+Endurance already use, and for the same reason: none of the four is an effect on
+its own. The note means nothing without the return that reads it, the return
+means nothing without the exile that filled the pile, and the reattachment names
+"that permanent" — the creature the sentence before it put back. A parse
+producing four statements would produce three that do nothing. Every word is
+required: without the Auras the creature comes back naked, without the counters
+it comes back smaller, without "tapped" it comes back ready, and without either
+half of the two-event return it never comes back at all.
+
+**Numbers.** ATQ 83 → 84; grammar parses 83.3% → 84.2% of its lines, executes
+55.8% → 56.7%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
+6700, no hook added.

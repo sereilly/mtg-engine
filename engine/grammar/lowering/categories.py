@@ -175,6 +175,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # may be cast from — so no new category and GRAMMAR_CATEGORIES is unchanged.
     "exile_top_of_library": "zones",
     "exile_graveyard_until_leaves": "zones",
+    "exile_until_leaves_or_untaps": "zones",
     "look_top_pick_to_hand": "zones",
     "search_and_exile_matching": "zones",
     "grant_cast_permission": "zones",

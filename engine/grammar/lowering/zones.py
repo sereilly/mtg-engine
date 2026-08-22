@@ -516,6 +516,16 @@ def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruct
     return (OracleInstruction("put_target_on_library_top", "", payload),)
 
 
+def _lower_exile_until_leaves_or_untaps(
+    node: "ast.ExileUntilLeavesOrUntaps",
+) -> tuple[OracleInstruction, ...]:
+    """Tawnos's Coffin. Everything the sentence says is fixed by the production
+    that read it, so the payload carries only the picker's description."""
+    payload: dict[str, object] = {"type_filter": "creature"}
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("exile_until_leaves_or_untaps", "", payload),)
+
+
 def _lower_graveyard_cards_on_library_top(
     node: ast.PutOnLibraryTop,
 ) -> tuple[OracleInstruction, ...]:
