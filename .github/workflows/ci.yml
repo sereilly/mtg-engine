@@ -39,8 +39,8 @@ jobs:
       # weather, and a budget that fails on weather gets raised without anyone
       # reading the number.
       #
-      # BASELINE is what the suite actually takes — ~6,360 tests measure at a
-      # steady 35s — recorded so the headroom is visible instead of guessed, and
+      # BASELINE is what the suite actually takes — ~6,845 tests measure at a
+      # steady 40s — recorded so the headroom is visible instead of guessed, and
       # printed as a percentage on every run. The gate catches the cliff; the
       # percentage is what shows the creep. That distinction is the lesson from
       # letting it drift 9s -> 17s unnoticed across four phases, with the gate
@@ -57,7 +57,7 @@ jobs:
       - name: Enforce the suite-time budget
         env:
           BUDGET: 120
-          BASELINE: 35
+          BASELINE: 40
         run: |
           START=$(date +%s)
           python -m pytest -q > /dev/null

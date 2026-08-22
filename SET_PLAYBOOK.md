@@ -194,7 +194,12 @@ measured set so per-card tests can land as the cards do. **Exit:**
    manifest set, and the convention guard holds it to that.
 3. Between rounds: the supported count from `support_report.py --set <CODE>`
    must have risen; regenerate the trackers; run any `--accept` only after
-   reading the diff it blesses.
+   reading the diff it blesses. **And the exit is two numbers, not one**:
+   `--hollow-lines` must also reach zero. A card is supported when *any* of its
+   lines is, so a set can read 85/85 with three cards doing less than they
+   print — Antiquities did, for thirty rounds. Take the split a grammar size
+   guard asks for when it fires, too: the family boundary is easiest to see
+   while the work that crossed the line is still in hand.
 4. Append the round's narrative to the set's ROADMAP.md entry as you go —
    what the round bought, what it cost, what it exposed. Numbers live there,
    not here.
@@ -204,7 +209,8 @@ measured set so per-card tests can land as the cards do. **Exit:**
 **Entry:** every card supported. **Exit:** one promotion commit, every gate
 green, the trackers agreeing the set ships.
 
-Step 1 is a **rehearsal**: move the manifest entry from `measured` to `sets`
+Step 1 is a **rehearsal**, and it is implementation work rather than a
+formality — budget for it. Move the manifest entry from `measured` to `sets`
 locally and run everything *before* committing. Promotion instantly widens
 every `load_catalog()`-driven guard — the catalog sweep, card coverage,
 no-hollow-support, behaviour classes — and `parse_coverage.py` sees the set
@@ -393,3 +399,40 @@ ungated on them by the standing decision above, and CI now regenerates the
 tracker so the delta cannot silently misreport. Known gaps drained to empty
 in the pre-set cleanup round: `set_progress.py` and `CARD_VERIFICATION.md`
 joined CI's freshness step, and `SET_PROGRESS.md` learned the `measured` role.
+
+**ATQ — 2026-08-22 (ingest through promotion; 48 → 85, shipped at round 30).**
+The first set run end to end in the playbook's own shape, and the first with
+**no name-keyed hook added at any point** — ATQ ships at 10.6% hooked cards,
+every one of them inherited from the 19 Revised reprints. Three findings moved
+into the phase text above.
+
+**Phase 3 gained "a card that reports supported is not a card that works".**
+Round 1 spent a whole round *lowering* the count by fixing gates that could not
+ask the question, and round 30 spent another closing the three cards
+`--hollow-lines` had named since. Both were right, and the second is the one
+worth stating: a set is not implemented while that census is non-empty, so
+**run `support_report.py --set <CODE> --hollow-lines` as a Phase 3 exit
+criterion**, not only at the ingest. It is in Phase 3's step 3 now.
+
+**Phase 4's rehearsal is where the set's real defects surface, and that is the
+design working.** Six guards fired on the widened catalog and each named live
+wrongness rather than bookkeeping: a printed timing clause nobody enforced, a
+conditional whose targets had no prompt, seventeen unlabelled abilities, and a
+card (Cursed Rack) whose whole second line was a literal `7` in the cleanup
+step. None of these was visible while the set was `measured` — the guards read
+`load_catalog()`. Phase 4's checklist already said "read every new finding
+before accepting anything"; what this run adds is the reason to budget time for
+it, so the wording now says the rehearsal is *implementation work*, not a
+formality.
+
+**And a size guard is a scheduling signal, not a chore.** Two grammar modules
+crossed the thousand-line cap mid-set (`nouns.py` → `references.py`,
+`statements.py` → `paragraphs.py`) and both splits fell along a line the CR
+already draws — what a noun phrase *describes* against what it *points at*, and
+a sentence against a paragraph. Phase 3 now says to take the split when the
+guard fires rather than deferring it: the family boundary is easiest to see
+while the work that crossed the line is still in hand.
+
+Known gaps: still empty. Phase 5 stands open, as for M21 — 346 of 734 cards have
+no in-game result, and the two promoted-before-verification sets are the whole
+of it.

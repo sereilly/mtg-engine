@@ -1,7 +1,7 @@
 # Scaling Roadmap
 
-Target: grow the card pool from 668 unique cards (LEA/LEB/2ED/ARN/3ED/M21, all
-shipped and all supported) to the full release line - **137 sets, 33,594
+Target: grow the card pool from 734 unique cards (LEA/LEB/2ED/ARN/ATQ/3ED/M21,
+all shipped and all supported) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal, kept to the last three rounds. Everything
@@ -20,17 +20,20 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** ~6,360 tests at a steady 35s, against a CI budget
+2. **The suite stays fast.** ~6,845 tests at a steady 40s, against a CI budget
    of 60s. The budget catches a step change; the *baseline* recorded beside it
    in `ci.yml` is what catches creep, and it is the number to keep honest — it
    went 9s → 17s across four phases with the gate green the whole way. Raising
    the budget is a decision, not maintenance.
 
-   The baseline has moved twice as a *record* of growth rather than permission
-   for it: 17 → 23 when ~130 tests landed in one session (permanent ids, the
-   grammar layering guards, two renumbering regression suites), and 23 → 35
+   The baseline has moved three times as a *record* of growth rather than
+   permission for it: 17 → 23 when ~130 tests landed in one session (permanent
+   ids, the grammar layering guards, two renumbering regression suites), 23 → 35
    when the Commander/Brawl variant and the pre-set cleanup round took the
-   suite from 4,454 tests to ~6,360 — proportional growth, no step change.
+   suite from 4,454 tests to ~6,360, and 35 → 40 at Antiquities' promotion,
+   which took it to ~6,845 — most of that not new tests at all but the
+   pool-wide sweeps parametrizing over 85 more cards. Proportional growth every
+   time, no step change.
    The second move put the suite *at* the old 35s budget, so the budget was
    raised 35 → 60 as a decision (2026-08-19, ahead of the next set ingestion):
    the next set's tests need somewhere to land, and the cliff detector stays
