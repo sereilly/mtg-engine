@@ -1,13 +1,29 @@
 from __future__ import annotations
 
+import dataclasses
 import random
 import re
 
 from ..auras import aura_additional_mana_on_tap
 from ..card_hooks import ENCHANTED_LAND_TAPPED_FOR_MANA
-from ..game_types import SimulationResult
+from ..game_types import OracleExecutionContext, SimulationResult
 from ..oracle import compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities
+
+def _is_free_beyond_tapping(cost) -> bool:
+    """Whether *cost* is the tap symbol and nothing else.
+
+    Compared against a default cost rather than by listing the fields that must
+    be empty. A list would silently start ignoring any cost component added
+    later — and ignoring a cost component here means performing an ability
+    without paying for it, which is the one direction this check exists to
+    prevent.
+    """
+    empty_mana = {symbol: 0 for symbol in cost.mana}
+    return cost == dataclasses.replace(
+        type(cost)(mana=empty_mana), requires_tap=True
+    )
+
 
 class TurnManagementMixin:
     def select_starting_player(
@@ -254,6 +270,31 @@ class TurnManagementMixin:
         self.check_state_based_actions()
         return SimulationResult("Channel", True, "spell_pattern", f"added {amount} C")
 
+    @staticmethod
+    def _land_mana_instruction(land):
+        """The instruction a land's own ``{T}: Add …`` ability produces, or None.
+
+        None for a basic (no compiled ability at all) and for a land whose only
+        abilities are something else — Bazaar of Baghdad draws and discards, and
+        must not be mistaken for a mana source here.
+
+        Requires the ability's cost to be the tap alone: this entry point has
+        already tapped the land and charges nothing further, so an ability
+        wanting mana or a sacrifice on top would be performed unpaid.
+        """
+        from ..mana_payment import is_mana_ability
+
+        for ability in compile_card_oracle(land.effective_card).activated_abilities:
+            instruction = ability.instruction
+            if instruction is None or not ability.supported:
+                continue
+            cost = ability.cost
+            if not cost.requires_tap or not _is_free_beyond_tapping(cost):
+                continue
+            if is_mana_ability(ability) or instruction.kind == "if_then":
+                return instruction
+        return None
+
     def tap_land_for_mana(
         self,
         player_index: int,
@@ -291,18 +332,52 @@ class TurnManagementMixin:
                         f"{land.card.name} dealt {damage} damage to {player.name}"
                     ),
                 )
-        mana_symbol = chosen_color
-        produced = land.effective_produced_mana
-        if produced:
-            if chosen_color in produced:
-                mana_symbol = chosen_color
-            else:
-                mana_symbol = produced[0]
+        # **The land's own compiled mana ability, when it has one.** This used
+        # to add exactly one symbol chosen from `produced_mana`, which is right
+        # for every land in the 1993-94 base sets and for the dual cycles — all
+        # of them produce one mana — and silently wrong for the first land that
+        # does not. Antiquities brought four: Mishra's Workshop prints
+        # {C}{C}{C} and paid one, and the Urza's cycle's assembly could not be
+        # read at all because the amount is behind a condition.
+        #
+        # `produced_mana` is Scryfall's summary of *which symbols* a land can
+        # make; it says nothing about how many or under what condition. The
+        # compiled ability says both, so it is what runs, and the summary is
+        # the fallback for a basic whose whole ability line is CR 305.6
+        # reminder text and compiles to nothing.
+        mana_ability = self._land_mana_instruction(land)
+        if mana_ability is not None:
+            instruction = mana_ability
+            if chosen_color:
+                # The colour arrives the way the activation path delivers it,
+                # so "tap Badlands for {R}" keeps meaning what it did; the
+                # handler ignores it unless the printed clause offers a choice.
+                instruction = dataclasses.replace(
+                    instruction,
+                    payload={**instruction.payload, "color": chosen_color},
+                )
+            self._execute_oracle_instruction(
+                instruction,
+                OracleExecutionContext(
+                    caster=player,
+                    target=player,
+                    card=land.card,
+                    source_permanent=land,
+                ),
+            )
         else:
-            symbols = land.basic_land_mana
-            if symbols:
-                mana_symbol = symbols[0]
-        player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
+            mana_symbol = chosen_color
+            produced = land.effective_produced_mana
+            if produced:
+                if chosen_color in produced:
+                    mana_symbol = chosen_color
+                else:
+                    mana_symbol = produced[0]
+            else:
+                symbols = land.basic_land_mana
+                if symbols:
+                    mana_symbol = symbols[0]
+            player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
 
         self.log.append(f"{player.name} tapped {land_name} for mana")
 

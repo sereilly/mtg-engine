@@ -40,6 +40,10 @@ def _is_instant_or_sorcery(card) -> bool:
     return "instant" in lowered or "sorcery" in lowered
 
 
+def _is_artifact(card) -> bool:
+    return "artifact" in (getattr(card, "type_line", "") or "").lower()
+
+
 # The printed line, anchored at both ends. Anchored because a sentence saying
 # more than one of these is a restriction this file does not implement, and a
 # prefix match would claim it and then enforce the narrower rule — mana more
@@ -52,6 +56,16 @@ _PATTERNS: tuple[tuple[re.Pattern[str], ManaRestriction], ...] = (
     (
         re.compile(r"^spend this mana only to cast an instant or sorcery spell\.?$"),
         ManaRestriction("instant_or_sorcery", _is_instant_or_sorcery),
+    ),
+    (
+        # Mishra's Workshop. Its {C}{C}{C} parsed here long before this row
+        # existed; what refused the line was this clause, and the refusal took
+        # the whole ability with it — so the land fell through to the blanket
+        # land pass and tapped for the single {C} `produced_mana` records. An
+        # artifact-restricted three mana became one unrestricted mana, which is
+        # the direction the anchoring note above is about.
+        re.compile(r"^spend this mana only to cast artifact spells\.?$"),
+        ManaRestriction("artifact", _is_artifact),
     ),
 )
 

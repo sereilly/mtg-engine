@@ -40,6 +40,11 @@ def pool():
 _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     ("type_filter", {"type_filter": "artifact"}, "Grizzly Bears"),
     ("subtype_filter", {"subtype_filter": "wall"}, "Grizzly Bears"),
+    # The conjunction spelling. Grizzly Bears is a Bear and not a Wall, so an
+    # OR'd implementation would *accept* it on the first alternative — which is
+    # what makes this row a demonstration of AND rather than a second copy of
+    # the row above.
+    ("subtype_filter_all", {"subtype_filter_all": ["bear", "wall"]}, "Grizzly Bears"),
     ("color_filter", {"color_filter": "W"}, "Grizzly Bears"),
     ("exclude_colors", {"exclude_colors": ["G"]}, "Grizzly Bears"),
     ("exclude_types", {"exclude_types": ["creature"]}, "Grizzly Bears"),
@@ -177,6 +182,26 @@ _COVERED_ELSEWHERE = {
     "controller": "test_the_relative_keys_refuse_without_the_context_they_need",
     "exclude_self": "test_the_relative_keys_refuse_without_the_context_they_need",
 }
+
+
+def test_a_conjunction_of_subtypes_matches_a_permanent_carrying_both(pool):
+    """The positive half, on the cards the key was added for.
+
+    "Urza's Mine" is two land types, not one name (CR 205.3i): `urza's` and
+    `mine`. So "if you control an Urza's Power-Plant and an Urza's Tower" asks
+    for two permanents each carrying two subtypes, and an OR would let a single
+    Urza's Mine satisfy the whole assembly.
+    """
+    mine = Permanent(card=pool["Urza's Mine"])
+    tower = Permanent(card=pool["Urza's Tower"])
+    game = Game(
+        players=[PlayerState(name="P1", battlefield=[mine, tower]), PlayerState(name="P2")]
+    )
+
+    assert subject_matches(game, mine, {"subtype_filter_all": ["urza's", "mine"]})
+    assert subject_matches(game, tower, {"subtype_filter_all": ["urza's", "tower"]})
+    # The whole point: the Mine is an Urza's, and it is not a Tower.
+    assert not subject_matches(game, mine, {"subtype_filter_all": ["urza's", "tower"]})
 
 
 def test_no_key_is_promised_without_a_matcher_behind_it():

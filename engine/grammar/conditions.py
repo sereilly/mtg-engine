@@ -35,6 +35,34 @@ _SOURCE_SPEC = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
 
 
 def _parse_condition(stream: TokenStream) -> ast.Condition:
+    """One condition, or several joined by "and".
+
+    "If you control an Urza's Mine **and** an Urza's Tower" (the Antiquities
+    cycle) is the shape that needed this. The conjunction is read here rather
+    than in each clause because it belongs to the clause *list*: nothing stops
+    a card conjoining two different condition kinds, and a per-clause "and"
+    would have to be written into every one of them.
+
+    The loop backtracks. An "and" that is not followed by a condition belongs
+    to whatever comes next — most often the effect ("If you control an Island,
+    draw a card **and** gain 1 life") — so a failed continuation rewinds and
+    the single condition is returned unchanged.
+    """
+    first = _parse_single_condition(stream)
+    parts = [first]
+    while True:
+        mark = stream.mark()
+        if not stream.accept_word("and"):
+            break
+        try:
+            parts.append(_parse_single_condition(stream))
+        except GrammarError:
+            stream.reset(mark)
+            break
+    return first if len(parts) == 1 else ast.EveryOf(tuple(parts))
+
+
+def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     """Conditions the grammar models today. Anything else raises so the line
     falls back rather than silently losing the condition — the legacy compiler
     dropped intervening-ifs entirely, making conditional triggers always fire."""
@@ -143,7 +171,36 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
                 comparison = ast.Comparison("eq", ast.Fixed(0))
             elif at_least is not None:
                 comparison = ast.Comparison("ge", ast.Fixed(at_least))
-            return ast.Controls(player, filt, comparison, shared_name)
+            first = ast.Controls(player, filt, comparison, shared_name)
+
+            # "you control an Urza's Mine **and** an Urza's Tower" (the
+            # Antiquities cycle). The conjunction shares one player and one
+            # verb and repeats only the noun, so it is desugared into the same
+            # `AllOf` the clause-level "and" builds — "control X and control Y"
+            # is what the shared-verb form means, and having one node for both
+            # keeps the evaluator from needing a second shape.
+            #
+            # Only for the plain form. A negated, counted or shared-name clause
+            # ("you control no creatures and…") would need the qualifier
+            # distributed over each conjunct to stay faithful, and no card in
+            # the pool prints one — so it refuses to widen instead of guessing
+            # which of the two readings was meant.
+            if not negated and at_least is None and not shared_name:
+                parts = [first]
+                while True:
+                    conj = stream.mark()
+                    if not stream.accept_word("and"):
+                        break
+                    stream.accept_word("a", "an")
+                    try:
+                        extra = parse_object_filter(stream)
+                    except GrammarError:
+                        stream.reset(conj)
+                        break
+                    parts.append(ast.Controls(player, extra))
+                if len(parts) > 1:
+                    return ast.EveryOf(tuple(parts))
+            return first
         # "you gained 3 or more life this turn" (Indulging Patrician). "Or more"
         # is the only printed comparison on this clause, so the threshold is a
         # plain minimum rather than a Comparison: inventing "or less" here would

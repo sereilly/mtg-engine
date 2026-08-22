@@ -180,6 +180,11 @@ def _card_matches_filter(card, filt: dict) -> bool:
     )
     if wanted_subtypes and not any(s in subtypes for s in wanted_subtypes):
         return False
+    # The conjunction spelling, AND'd — see `subtype_filter_all` in
+    # permanent_matches_filter.
+    wanted_all_subtypes = filt.get("subtype_filter_all") or ()
+    if wanted_all_subtypes and not all(s in subtypes for s in wanted_all_subtypes):
+        return False
     # "Discard a **legendary** card" (Niambi, Esteemed Speaker). Off the printed
     # line, which for a card in a zone is the whole of what there is (CR 613.1).
     wanted_supertypes = filt.get("supertypes") or ()
@@ -386,6 +391,15 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         # ships.
         subtypes = [subtype_filter] if isinstance(subtype_filter, str) else subtype_filter
         if not any(perm.has_type(s) for s in subtypes):
+            return False
+    # "an **Urza's Power-Plant**" — a conjunction of subtypes, the same
+    # distinction `type_filter_all` draws for card types and for the same
+    # reason. "Urza's Mine", "Urza's Power-Plant" and "Urza's Tower" are each
+    # two land types (CR 205.3i), so OR'ing them would make any one of the three
+    # satisfy all three and the assembly would complete on a single land.
+    subtype_filter_all = payload.get("subtype_filter_all")
+    if subtype_filter_all:
+        if not all(perm.has_type(s) for s in subtype_filter_all):
             return False
     if tapped_only and not perm.tapped:
         return False

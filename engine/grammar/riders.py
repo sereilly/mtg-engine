@@ -287,7 +287,8 @@ def _parse_conditional_instead_rider(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> bool:
     """``You gain 4 life. If a creature died this turn, you gain 8 life
-    instead.`` (Life Goes On.)
+    instead.`` (Life Goes On.) ``{T}: Add {C}. If you control an Urza's
+    Power-Plant and an Urza's Tower, add {C}{C} instead.`` (Urza's Mine.)
 
     The second sentence *replaces* the first when its condition holds, so the
     pair folds into one ``Conditional`` — then the bigger gain, otherwise the
@@ -295,8 +296,16 @@ def _parse_conditional_instead_rider(
     death; the "instead" is the whole content of the sentence, so it is
     required, and only a same-shaped statement may replace the last step.
     """
+    # The statement kinds this rider can replace. `AddMana` joins `GainLife`
+    # for the Antiquities land cycle — "{T}: Add {C}. If you control an Urza's
+    # Power-Plant and an Urza's Tower, add {C}{C} instead." — which is the same
+    # sentence pair with a different verb. The replacement must be the *same*
+    # kind as what it replaces (checked below), so widening the set cannot let
+    # one kind silently stand in for another.
+    _REPLACEABLE = (ast.GainLife, ast.AddMana)
+
     last = steps[-1] if steps else None
-    if not isinstance(last, ast.GainLife):
+    if not isinstance(last, _REPLACEABLE):
         return False
     mark = stream.mark()
     if not stream.accept_word("if"):
@@ -312,7 +321,7 @@ def _parse_conditional_instead_rider(
     except GrammarError:
         stream.reset(mark)
         return False
-    if not isinstance(replacement, ast.GainLife) or not stream.accept_word("instead"):
+    if type(replacement) is not type(last) or not stream.accept_word("instead"):
         stream.reset(mark)
         return False
     steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)

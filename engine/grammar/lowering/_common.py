@@ -692,6 +692,14 @@ def _lower_condition(
             "kind": "exiled_card_was",
             "card_types": list(condition.filter.card_types),
         }
+    if isinstance(condition, ast.EveryOf):
+        # Lowered whole rather than folded into one flattened payload: each part
+        # keeps its own kind, so a conjunction of two *different* condition
+        # kinds costs nothing extra here or in the evaluator.
+        return {
+            "kind": "all_of",
+            "conditions": [_lower_condition(part, produced) for part in condition.conditions],
+        }
     if isinstance(condition, ast.Controls):
         payload = {
             "kind": "controls",

@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 # Everything down to ``nontoken`` is delegated to ``permanent_matches_filter``;
 # the last three need the game and are tested below.
 TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
-    "type_filter", "subtype_filter", "color_filter",
+    "type_filter", "subtype_filter", "subtype_filter_all", "color_filter",
     "exclude_colors", "exclude_types", "exclude_subtypes",
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",

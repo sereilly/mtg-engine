@@ -185,6 +185,12 @@ class ObjectFilter:
     type_match: str = "any"
     supertypes: tuple[str, ...] = ()          # "legendary", "basic", ...
     subtypes: tuple[str, ...] = ()            # "wall", "djinn", ... (from data)
+    # How multiple subtypes combine, exactly as `type_match` does for card
+    # types. "Djinn or Efreet" is a union ("any"); "Urza's Power-Plant" is a
+    # single permanent carrying both land types ("all", CR 205.3i). Collapsing
+    # them would let one Urza's Mine satisfy "an Urza's Mine and an Urza's
+    # Tower" on its own.
+    subtype_match: str = "any"
     colors: tuple[str, ...] = ()              # mana symbols: "W", "U", ...
     excluded_colors: tuple[str, ...] = ()     # "nonblack"
     excluded_types: tuple[str, ...] = ()      # "nonartifact"
@@ -270,9 +276,12 @@ class ObjectFilter:
             else:
                 payload["type_filter"] = list(self.card_types)
         if self.subtypes:
-            payload["subtype_filter"] = (
-                self.subtypes[0] if len(self.subtypes) == 1 else list(self.subtypes)
-            )
+            if len(self.subtypes) > 1 and self.subtype_match == "all":
+                payload["subtype_filter_all"] = list(self.subtypes)
+            else:
+                payload["subtype_filter"] = (
+                    self.subtypes[0] if len(self.subtypes) == 1 else list(self.subtypes)
+                )
         if self.tapped:
             payload["tapped_only"] = True
         # "an **untapped** creature" (Enthralling Hold). ``tapped`` is tri-state
@@ -532,6 +541,24 @@ class Controls:
 
 
 @dataclass(frozen=True)
+class EveryOf:
+    """"if you control an Urza's Mine **and** an Urza's Tower" — every part must
+    hold (CR 104 has no conjunction rule; this is plain English "and").
+
+    Its own node rather than a repeated field on each condition, because the
+    conjunction is about the clause list and not about any one clause: the
+    Urza's cycle conjoins two `Controls`, and nothing stops a card conjoining a
+    `Controls` with a `DiedThisTurn`.
+
+    Named `EveryOf` rather than the obvious `AllOf` because that name is taken,
+    by the *quantity* node meaning "all damage" / "any amount of mana". Two
+    unrelated senses of "all" under one name in a flat re-export is how a
+    conjunction of conditions ends up standing in for an unbounded amount.
+    """
+    conditions: tuple["Condition", ...]
+
+
+@dataclass(frozen=True)
 class IsState:
     """"it is untapped", "this creature is attacking"."""
     subject: TargetSpec
@@ -692,7 +719,7 @@ class ItHappened:
 
 
 Condition = Union[
-    CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter, ItWas,
+    EveryOf, CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
 ]

@@ -711,3 +711,72 @@ so it is degraded (its ante exchange is unreadable, round 12's job) rather than
 hollow. Found by reading the card's lines instead of the two the census report
 happened to quote, which is the same failure mode Phase 1 warns about for
 reason strings.
+
+## ATQ round 2: the Urza's cycle, and the land mana path that never ran
+
+*(2026-08-21.)* **43 → 47.** The four cards round 1 withdrew are back, this
+time doing what they print. Five changes, in dependency order with the grammar
+last, so the cards stayed honestly unsupported at every intermediate commit.
+
+**A conjunction of subtypes is not a union of them.** "Urza's Mine" is two land
+types, not a name (CR 205.3i): `urza's` and `mine`. The noun parser collected
+subtypes into one list with OR semantics — right for "Djinn or Efreet", and it
+would have let a single Urza's Mine satisfy "an Urza's Power-Plant **and** an
+Urza's Tower", assembling the whole cycle off one land. `ObjectFilter` already
+drew exactly this distinction for card types (`type_match`), so subtypes got
+the symmetric `subtype_match` and a `subtype_filter_all` payload key AND'd by
+both matchers. The demonstrating row in `test_subject_filters.py` is Grizzly
+Bears against `["bear", "wall"]` — a card an OR would *accept* on the first
+alternative, which is what makes the row a demonstration rather than a second
+copy of the `subtype_filter` row above it.
+
+**A latent mis-parse found on the way.** The lexer splits a possessive, so
+"Urza's" arrives as `urza` + `'s` and the land type `urza's` could never match.
+That was not a silent miss but a silent *wrong* match: `Urza` alone is a
+**planeswalker** type, so "an Urza's Mine" was reading as "an Urza planeswalker"
+and leaving `'s mine` behind. `_match_subtype` re-joins the possessive, and only
+when the joined form is itself in the vocabulary — so "that artifact's
+controller" is untouched, `artifact's` being no subtype. It is in the parser
+and not the lexer on purpose: the lexer is vocabulary-free by design, and
+"is this word a subtype" only has an answer in the noun position.
+
+**Two shapes of "and", one node.** "If you control an Urza's Mine and an Urza's
+Tower" shares one player and one verb and repeats only the noun, so the
+shared-verb form is desugared into the same conjunction the clause-level "and"
+builds. It refuses to widen a negated, counted or shared-name clause, where the
+qualifier would have to be distributed over each conjunct and no card in the
+pool says which reading was meant. The node is `EveryOf`, not `AllOf` — that
+name is taken by the *quantity* meaning "all damage", and two senses of "all"
+in a flat re-export is how a conjunction of conditions ends up standing in for
+an unbounded amount. (Found by 104 collection errors, which is the flat
+re-export doing its job.)
+
+**The rider was one type wide.** `_parse_conditional_instead_rider` folded
+"…, X instead" into a `Conditional` only for `GainLife`. `AddMana` joins it, and
+the same-kind check tightened from "is a GainLife" to "is the same type as what
+it replaces", so widening the set cannot let one kind stand in for another.
+
+**And the finding that was not on the plan: the land mana path never ran a
+land's compiled ability.** `tap_land_for_mana` added exactly one symbol chosen
+from `produced_mana` — Scryfall's summary of *which* symbols a land can make,
+which says nothing about how many or under what condition. For every land in
+the pool until now that was indistinguishable from correct: the base sets, the
+duals, the Temples and the gain-lands all produce exactly one mana. Antiquities
+brought the first four that do not, and the compiled ability was right while
+the dispatcher ignored it. So Mishra's Workshop would have paid one {C} even
+after `restricted_mana.py` learned its clause — the round would have reported a
+card supported and still had it playing wrong, which is round 1's lesson
+arriving on the dispatch side.
+
+The land path now runs the compiled ability when there is one and keeps
+`produced_mana` as the fallback for a basic, whose whole ability line is CR
+305.6 reminder text and compiles to nothing. The colour is injected the way the
+activation path delivers it, so "tap Badlands for {R}" means what it did.
+`_is_free_beyond_tapping` compares the cost against a default rather than
+listing the fields that must be empty — a list would silently start ignoring
+any cost component added later, and ignoring a cost component here means
+activating an ability without paying for it.
+
+**Numbers.** ATQ 43 → 47 supported; grammar parses 46.7% → 50.0% of its lines,
+executes 27.5% → 30.8%, cards executing 29 → 33. Shipped pool 668/668 and every
+shipped floor and ceiling unmoved; suite green at 6587 passed. No hook added.

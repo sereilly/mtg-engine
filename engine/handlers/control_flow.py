@@ -75,6 +75,16 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
     """
     kind = payload.get("kind")
 
+    if kind == "all_of":
+        # Every part, and an empty list is False rather than the vacuous True
+        # `all([])` would give: a conjunction that lowered to nothing is a
+        # condition nobody wrote, and answering True would run the effect
+        # unconditionally.
+        parts = payload.get("conditions") or []
+        return bool(parts) and all(
+            evaluate_condition(game, context, part) for part in parts
+        )
+
     if kind == "controls":
         who = payload.get("who", "you")
         players = [context.caster] if who == "you" else list(game.players)

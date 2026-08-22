@@ -1,8 +1,13 @@
 """Antiquities cards reprinted in Revised.
 
-The set is not in the manifest yet, so these build the cards from their printed
-text. Each was blocked on a *rider or a timing window*, never on the effect
-itself — damage, discard, destroy and counters were all implemented already.
+These build their cards from printed text rather than from a fixture, which was
+necessary when they were written (Antiquities was not in the manifest) and is
+merely harmless now that it is: every card here is in the shipped pool through
+Revised, and `load_catalog()` is what the assertions read. Per-card tests for
+Antiquities' *own* cards use `set_pool("ATQ")` — see tests/sets/README.md.
+
+Each was blocked on a *rider or a timing window*, never on the effect itself —
+damage, discard, destroy and counters were all implemented already.
 """
 
 import pytest

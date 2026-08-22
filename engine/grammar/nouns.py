@@ -96,6 +96,35 @@ def _singular(word: str) -> str:
     return word
 
 
+def _match_subtype(stream: TokenStream, start: int) -> tuple[str, int] | None:
+    """The subtype at *start*, and how many **tokens** it consumes.
+
+    Wraps ``match_longest`` for one reason the plain call cannot handle: the
+    lexer splits a possessive into two tokens, so "Urza's" arrives as
+    ``urza`` + ``'s`` and the land type ``urza's`` can never match. That is not
+    a silent miss — it is a silent *wrong* match, because ``Urza`` on its own
+    is a planeswalker type, so "target Urza's Mine" read as "target Urza
+    planeswalker" and left ``'s mine`` for someone else to choke on.
+
+    The join is tried only when the joined form is itself in the vocabulary, so
+    a grammatical possessive ("that artifact's controller", "the sacrificed
+    artifact's mana value") is untouched — ``artifact's`` is not a subtype.
+    Deciding this here rather than in the lexer is deliberate: the lexer is
+    vocabulary-free on purpose, and the question "is this word a subtype" only
+    has an answer in the noun position.
+    """
+    words = stream.words_from(start)
+    if not words:
+        return None
+    if len(words) >= 2 and words[1] == "'s":
+        possessive = (words[0] + "'s",) + words[2:]
+        matched = match_longest(possessive, 0, SUBTYPE_INDEX)
+        if matched is not None:
+            # +1 token: the possessive marker the join swallowed.
+            return matched[0], matched[1] + 1
+    return match_longest(words, 0, SUBTYPE_INDEX)
+
+
 def _accept_card_noun(stream: TokenStream) -> bool:
     """Consume a "card"/"cards" head noun trailing a type word.
 
@@ -284,6 +313,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     zone_owner: ast.PlayerRef | None = None
     saw_head = False
     type_match = "any"
+    subtype_match = "any"
 
     # --- an ability on the stack ----------------------------------------
     # "activated or triggered ability" / "activated ability" / "triggered
@@ -437,7 +467,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             saw_head = True
             break
 
-        matched = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
+        matched = _match_subtype(stream, 0)
         if matched is None and singular != word:
             # A pluralized subtype ("Destroy all Islands", "can't be blocked by
             # Walls"). The catalog stores singulars, except where the singular
@@ -470,6 +500,23 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                     break
                 subtypes.append(alternative[0])
                 stream.advance(alternative[1])
+            # **Adjacent subtypes are a conjunction, not a union.** "Urza's
+            # Power-Plant" is two land types on one permanent (CR 205.3i), and
+            # a type line lists them exactly this way. The union spellings
+            # above all carry a connector ("or", or the comma of a longer
+            # list); a subtype following another with no connector at all can
+            # only be narrowing it further.
+            #
+            # Only entered when no union was collected, so "Djinn or Efreet"
+            # cannot acquire an "all" it would then fail.
+            if len(subtypes) == 1:
+                while True:
+                    adjacent = _match_subtype(stream, 0)
+                    if adjacent is None:
+                        break
+                    subtypes.append(adjacent[0])
+                    stream.advance(adjacent[1])
+                    subtype_match = "all"
             following = stream.peek_word()
             if following is not None and _singular(following) in CARD_TYPES:
                 continue
@@ -690,6 +737,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     return ast.ObjectFilter(
         card_types=tuple(card_types),
         type_match=type_match,
+        subtype_match=subtype_match,
         supertypes=tuple(supertypes),
         subtypes=tuple(subtypes),
         colors=tuple(colors),
