@@ -347,8 +347,10 @@ class TestSmokeUntapSelection:
         opts = game.get_untap_land_selection_options(0)
         assert opts is not None
         assert opts["max_count"] == 1
-        assert opts["creature_max"] == 1
-        assert opts["land_max"] is None  # lands untap freely (no Winter Orb)
+        assert opts["limits"] == {"creature": 1}
+        # Lands untap freely — no Winter Orb, so "land" is simply absent from
+        # the limits map rather than present with a null bound.
+        assert "land" not in opts["limits"]
         assert opts["candidate_indices"] == [1, 2, 3]  # the three creatures
 
     def test_untaps_only_chosen_creature_and_all_lands(self, cards):

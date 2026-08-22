@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 80.2% | 78.9% | 43.7% | 153 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 68.3% | 67.5% | 45.8% | 51 |
+| ATQ *(measured)* | 85 | 120 | 69.2% | 68.3% | 45.8% | 51 |
 | **All (shipped)** | **1533** | **2166** | **80.9%** | **79.7%** | **46.9%** | **880** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,7 +33,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 193 | 75 | expected a subject |  |
+| 192 | 74 | expected a subject |  |
 | 88 | 32 | unrecognized effect verb |  |
 | 49 | 27 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |

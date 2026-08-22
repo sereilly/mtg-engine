@@ -84,7 +84,7 @@ UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRe
     (
         re.compile(
             rf"^players can't untap more than (?P<count>{_COUNT_WORD}) "
-            r"(?P<type>land|creature)s? during their untap steps$"
+            r"(?P<type>land|creature|artifact)s? during their untap steps$"
         ),
         _limit_per_type,
     ),

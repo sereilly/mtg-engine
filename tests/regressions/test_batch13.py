@@ -264,8 +264,8 @@ def test_smoke_untap_selection_names_creatures_and_lists_candidates():
     game.active_player_index = 0
     options = game.get_untap_land_selection_options(0)
     assert options is not None
-    assert options["creature_max"] == 1
-    assert options["land_max"] is None
+    assert options["limits"] == {"creature": 1}
+    assert "land" not in options["limits"]
     session.untap_required_lands = int(options["max_count"])
     session.untap_candidate_indices = [int(i) for i in options["candidate_indices"]]
     session.untap_selected_indices = []
@@ -274,10 +274,10 @@ def test_smoke_untap_selection_names_creatures_and_lists_candidates():
     state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
     info = state["untap_land_selection"]
     assert info is not None
-    # The client names the constrained type from these fields (Smoke: creatures)
-    # and highlights candidate_indices on the board.
-    assert info["creature_max"] == 1
-    assert info["land_max"] is None
+    # The client names the constrained type(s) from the limits map (Smoke:
+    # creatures) and highlights candidate_indices on the board. Lands untap
+    # freely here, so "land" is simply absent rather than present with a null.
+    assert info["limits"] == {"creature": 1}
     assert sorted(info["candidate_indices"]) == [1, 2]
 
 

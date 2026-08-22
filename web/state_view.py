@@ -412,8 +412,11 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             "candidate_indices": valid_candidates,
             "selected_indices": valid_selected,
             "selected_count": len(valid_selected),
-            "land_max": untap_options.get("land_max"),
-            "creature_max": untap_options.get("creature_max"),
+            # One entry per constrained card type — Winter Orb's land, Smoke's
+            # creature, Damping Field's artifact. It was two named fields, and
+            # a third type meant a third field here, in the action handler and
+            # in the browser.
+            "limits": untap_options.get("limits") or {},
         }
 
     # Every prompt a seat owes, rendered by web/prompts.py from the one registry

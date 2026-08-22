@@ -18,13 +18,24 @@ from ..untap_restrictions import (
 )
 
 
+#: The card types a "can't untap more than N" restriction may name. The untap
+#: step asks each one separately, so a card printed with any of them needs no
+#: code here — only a row in engine/untap_restrictions.py.
+_LIMITED_TYPES = ("land", "creature", "artifact")
+
+
 class UntapStepMixin:
     def _untap_constraints(self) -> dict[str, object]:
         """Aggregate every active untap restriction on any battlefield into
         effective limits for the current untap step."""
         skip_all_source: str | None = None
-        max_lands = 999
-        max_creatures = 999
+        # "Players can't untap more than one <type> during their untap steps."
+        # One entry per printed type rather than a counter per type in the
+        # source: Winter Orb says land, Smoke says creature, Damping Field says
+        # artifact, and the only thing that differs between them is the word.
+        # It was two named counters, which is why adding the third meant a
+        # third of everything down to the browser.
+        limits: dict[str, int] = {}
         min_power_block: int | None = None
         blocked_colors: set[str] = set()
         for perm in self.all_permanents():
@@ -39,13 +50,13 @@ class UntapStepMixin:
             if restriction.scope == "all":
                 if restriction.limit == 0:
                     skip_all_source = perm.card.name
-            elif restriction.scope == "land":
+            elif restriction.scope in _LIMITED_TYPES:
                 if restriction.limit is not None:
-                    max_lands = min(max_lands, restriction.limit)
-            elif restriction.scope == "creature":
-                if restriction.limit is not None:
-                    max_creatures = min(max_creatures, restriction.limit)
-                if restriction.min_power is not None:
+                    limits[restriction.scope] = min(
+                        limits.get(restriction.scope, restriction.limit),
+                        restriction.limit,
+                    )
+                if restriction.scope == "creature" and restriction.min_power is not None:
                     min_power_block = (
                         restriction.min_power
                         if min_power_block is None
@@ -55,8 +66,7 @@ class UntapStepMixin:
                 blocked_colors.add(restriction.color)
         return {
             "skip_all_source": skip_all_source,
-            "max_lands": max_lands,
-            "max_creatures": max_creatures,
+            "limits": limits,
             "min_power_block": min_power_block,
             "blocked_colors": blocked_colors,
         }
@@ -72,37 +82,43 @@ class UntapStepMixin:
         if constraints["skip_all_source"] is not None:
             return None
 
-        max_untap_lands = constraints["max_lands"]
-        max_untap_creatures = constraints["max_creatures"]
+        limits = constraints["limits"]
 
-        land_candidates = [
-            idx for idx, p in enumerate(player.battlefield)
-            if p.card.primary_type == "land" and p.tapped
-        ]
-        creature_candidates = [
-            idx for idx, p in enumerate(player.battlefield)
-            if p.card.primary_type == "creature" and p.tapped
-        ]
-        land_constrained = max_untap_lands < 999 and len(land_candidates) > max_untap_lands
-        creature_constrained = max_untap_creatures < 999 and len(creature_candidates) > max_untap_creatures
-        if not land_constrained and not creature_constrained:
+        # A type is only *constrained* when the player has more tapped
+        # permanents of it than the limit allows — otherwise there is nothing
+        # to choose between and no prompt to raise.
+        binding: dict[str, int] = {}
+        candidate_indices: list[int] = []
+        for card_type, limit in sorted(limits.items()):
+            candidates = self._tapped_indices_of_type(player, card_type)
+            if len(candidates) <= limit:
+                continue
+            binding[card_type] = limit
+            candidate_indices += candidates
+        if not binding:
             return None
 
-        candidate_indices: list[int] = []
-        max_count = 0
-        if land_constrained:
-            candidate_indices += land_candidates
-            max_count += max_untap_lands
-        if creature_constrained:
-            candidate_indices += creature_candidates
-            max_count += max_untap_creatures
-
         return {
-            "max_count": max_count,
+            "max_count": sum(binding.values()),
             "candidate_indices": sorted(candidate_indices),
-            "land_max": max_untap_lands if land_constrained else None,
-            "creature_max": max_untap_creatures if creature_constrained else None,
+            "limits": binding,
         }
+
+    @staticmethod
+    def _tapped_indices_of_type(player, card_type: str) -> list[int]:
+        """Battlefield positions of *player*'s tapped permanents of *card_type*.
+
+        ``has_type``, not the printed line's first word: an Ornithopter is an
+        artifact *and* a creature, so Damping Field constrains it and so does
+        Smoke — and with both on the battlefield it really is constrained
+        twice, which is what CR 613 layer 4 makes true of it. Reading
+        ``primary_type`` would have made Damping Field ignore every artifact
+        creature in Antiquities, which is most of them.
+        """
+        return [
+            idx for idx, perm in enumerate(player.battlefield)
+            if perm.tapped and perm.has_type(card_type)
+        ]
 
     def get_optional_untap_permanents(self, player_index: int) -> list[dict]:
         """Tapped permanents whose controller may choose not to untap them
@@ -124,7 +140,14 @@ class UntapStepMixin:
         selected_land_indices: list[int] | None = None,
         selected_creature_indices: list[int] | None = None,
         keep_tapped_indices: list[int] | None = None,
+        selected_indices_by_type: dict[str, list[int]] | None = None,
     ) -> int:
+        """*selected_indices_by_type* is the general form: one list of chosen
+        battlefield positions per constrained card type. The two named
+        parameters beside it are the shape it grew out of and are folded into
+        it here — kept because a caller naming lands or creatures reads better
+        than one building a dict, and because they are what the existing tests
+        say."""
         phase = "beginning"
         step = "untap"
         self._set_phase_and_step(phase, step)
@@ -150,49 +173,40 @@ class UntapStepMixin:
             self.log.append(f"{player.name} skipped untap due to {constraints['skip_all_source']}")
             return 0
 
-        max_untap_creatures = constraints["max_creatures"]
-        max_untap_lands = constraints["max_lands"]
+        limits: dict[str, int] = dict(constraints["limits"])
         min_power_block = constraints["min_power_block"]
         blocked_colors = constraints["blocked_colors"]
 
-        selected_lands: set[int] | None = None
+        # The controller chooses which of the constrained permanents to untap
+        # (CR 502 with a "can't untap more than N" restriction): Winter Orb
+        # picks a land, Smoke a creature, Damping Field an artifact. Absent a
+        # choice — AI or headless play — the loop below takes the first
+        # eligible ones up to the cap.
+        chosen: dict[str, list[int]] = dict(selected_indices_by_type or {})
         if selected_land_indices is not None:
-            selected_lands = set()
-            for idx in selected_land_indices:
-                if idx < 0 or idx >= len(player.battlefield):
-                    raise ValueError("selected land index out of range")
-                permanent = player.battlefield[idx]
-                if permanent.card.primary_type != "land":
-                    raise ValueError("selected permanent is not a land")
-                if not permanent.tapped:
-                    continue
-                selected_lands.add(idx)
-
-            if max_untap_lands < 999 and len(selected_lands) > max_untap_lands:
-                raise ValueError(f"cannot untap more than {max_untap_lands} land(s)")
-
-        # Smoke: the controller chooses which creature(s) to untap (CR 502 with a
-        # "can't untap more than one" constraint). Absent a choice (AI/headless),
-        # the loop below untaps the first eligible creatures up to the cap.
-        selected_creatures: set[int] | None = None
+            chosen.setdefault("land", list(selected_land_indices))
         if selected_creature_indices is not None:
-            selected_creatures = set()
-            for idx in selected_creature_indices:
+            chosen.setdefault("creature", list(selected_creature_indices))
+
+        selected: dict[str, set[int]] = {}
+        for card_type, indices in chosen.items():
+            picked: set[int] = set()
+            for idx in indices:
                 if idx < 0 or idx >= len(player.battlefield):
-                    raise ValueError("selected creature index out of range")
+                    raise ValueError(f"selected {card_type} index out of range")
                 permanent = player.battlefield[idx]
-                if permanent.card.primary_type != "creature":
-                    raise ValueError("selected permanent is not a creature")
+                if permanent.card.primary_type != card_type:
+                    raise ValueError(f"selected permanent is not a {card_type}")
                 if not permanent.tapped:
                     continue
-                selected_creatures.add(idx)
-
-            if max_untap_creatures < 999 and len(selected_creatures) > max_untap_creatures:
-                raise ValueError(f"cannot untap more than {max_untap_creatures} creature(s)")
+                picked.add(idx)
+            limit = limits.get(card_type)
+            if limit is not None and len(picked) > limit:
+                raise ValueError(f"cannot untap more than {limit} {card_type}(s)")
+            selected[card_type] = picked
 
         untapped = 0
-        creatures_untapped = 0
-        lands_untapped = 0
+        untapped_by_type: dict[str, int] = {}
         for idx, permanent in enumerate(player.battlefield):
             if not permanent.tapped:
                 continue
@@ -233,21 +247,26 @@ class UntapStepMixin:
                 # (a separate upkeep effect may untap them anyway, for a cost).
                 if blocked_colors and permanent_effective_colors(permanent) & blocked_colors:
                     continue
-                # Honor the controller's Smoke selection when one was supplied.
-                if selected_creatures is not None and idx not in selected_creatures:
-                    continue
-                if creatures_untapped >= max_untap_creatures:
-                    continue
                 if aura_restriction_active(permanent, "doesnt_untap"):
                     continue
-                creatures_untapped += 1
 
-            if permanent.card.primary_type == "land":
-                if selected_lands is not None and idx not in selected_lands:
-                    continue
-                if lands_untapped >= max_untap_lands:
-                    continue
-                lands_untapped += 1
+            # The per-type cap and the controller's choice within it, asked the
+            # same way for every constrained type. This was two copies keyed on
+            # "creature" and "land", which is why Damping Field's artifact
+            # needed a third of everything.
+            # Every constrained type this permanent answers to, asked through
+            # the layers for the reason `_tapped_indices_of_type` gives — an
+            # artifact creature is under both Damping Field's limit and
+            # Smoke's, and each has to see it.
+            applicable = [t for t in limits if permanent.has_type(t)]
+            if any(
+                (selected.get(t) is not None and idx not in selected[t])
+                or untapped_by_type.get(t, 0) >= limits[t]
+                for t in applicable
+            ):
+                continue
+            for card_type in applicable:
+                untapped_by_type[card_type] = untapped_by_type.get(card_type, 0) + 1
 
             self.become_untapped(permanent)
             untapped += 1

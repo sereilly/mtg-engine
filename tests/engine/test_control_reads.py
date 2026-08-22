@@ -324,13 +324,13 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "engine/phases/combat_phase.py": 11,
     "engine/phases/declare_attackers_step.py": 4,
     "engine/phases/declare_blockers_step.py": 18,
-    "engine/phases/untap_step.py": 2,
+    "engine/phases/untap_step.py": 1,
     "engine/phases/upkeep_step.py": 3,
     "engine/replacements.py": 1,
     # web/actions.py's four sites moved with their handlers when the dispatch
     # became a registry: the cast plumbing's one and the turn handlers' three.
     "web/action_helpers.py": 1,
-    "web/action_turn.py": 3,
+    "web/action_turn.py": 2,
     "web/combat_prompts.py": 4,
     "web/debug_actions.py": 3,
     "web/game_flow.py": 4,

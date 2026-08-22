@@ -1268,3 +1268,41 @@ long function's locals are a namespace too.
 
 **Numbers.** ATQ 67 → 69; grammar parses 66.7% → 68.3%. Shipped pool 668/668,
 floors and ceilings unmoved, suite green at 6633, no hook added.
+
+## ATQ round 14: the third type, and why there was no room for one
+
+*(2026-08-21.)* **69 → 70.** Damping Field, and the deferral round 7 opened
+("one word away in `untap_restrictions.py` and a long way away in
+`phases/untap_step.py`") paid off.
+
+**Two named counters were the whole problem.** "Players can't untap more than
+one <type> during their untap steps" is one restriction whose only variable is
+the word — Winter Orb says land, Smoke says creature, Damping Field says
+artifact — and it was `max_lands` and `max_creatures`: two constants, two
+candidate lists, two validation blocks, two loop branches, two fields on the
+wire, two fields in the browser. A third type meant a third of each, which is
+exactly the shape this repo's other tables exist to avoid.
+
+It is one `limits` map now, keyed by card type, and every layer reads it as
+data: the untap step asks each constrained type the same question, the action
+handler splits the player's selection by iterating the map, and the browser
+builds its noun phrase from the keys. A fourth constrained type needs one row in
+`untap_restrictions.py` and nothing else.
+
+**And the generalisation found a rules bug in the version it replaced.**
+Counting by `primary_type` — the printed line's first word — an Ornithopter is
+a creature and not an artifact, so Damping Field would have ignored **every
+artifact creature in Antiquities**, which is most of them. The count goes
+through `has_type` (CR 613 layer 4) now, and a permanent that is both really is
+constrained by both limits at once: with Smoke and Damping Field on the
+battlefield, an artifact creature is under each. Reading the printed word made
+that impossible to express and the old two-counter shape made it impossible to
+notice.
+
+**Two ratchets fired and both were right.** The positional-indexing baseline
+dropped twice as the refactor removed `battlefield[idx]` reads — accepted
+downward — and then caught the first version of the web-side type check
+subscripting twice where binding once would do.
+
+**Numbers.** ATQ 69 → 70. Shipped pool 668/668, floors and ceilings unmoved,
+positional baselines *down*, suite green at 6636, no hook added.

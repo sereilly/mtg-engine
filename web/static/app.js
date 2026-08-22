@@ -3163,20 +3163,19 @@ function applyUntapPrompt(untapInfo) {
   const maxCount = Number(untapInfo.max_count || 0);
   const selectedCount = Number(untapInfo.selected_count || 0);
 
-  // Name the constrained type(s): Winter Orb restricts lands, Smoke restricts
-  // creatures, and both can be active at once.
-  const landConstrained = untapInfo.land_max != null;
-  const creatureConstrained = untapInfo.creature_max != null;
-  const noun = landConstrained && creatureConstrained
-    ? "lands and creatures"
-    : creatureConstrained
-    ? "creatures"
-    : "lands";
-  const nounTitle = landConstrained && creatureConstrained
+  // Name the constrained type(s) from the limits map — Winter Orb restricts
+  // lands, Smoke creatures, Damping Field artifacts, and any of them can be
+  // active at once. Built from whatever the engine reports rather than from a
+  // fixed pair, so a fourth type needs no change here.
+  const limitedTypes = Object.keys(untapInfo.limits || {}).sort();
+  const plurals = limitedTypes.map((t) => `${t}s`);
+  const noun = plurals.length > 1
+    ? `${plurals.slice(0, -1).join(", ")} and ${plurals[plurals.length - 1]}`
+    : plurals[0] || "permanents";
+  const titleCase = (word) => word.charAt(0).toUpperCase() + word.slice(1);
+  const nounTitle = plurals.length > 1
     ? "Permanents"
-    : creatureConstrained
-    ? "Creatures"
-    : "Lands";
+    : titleCase(plurals[0] || "permanents");
 
   panel.classList.remove("hidden");
   okBtn.classList.remove("hidden");

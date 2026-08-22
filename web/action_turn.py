@@ -133,10 +133,23 @@ def _action_untap_select(session, req, seat_type):
         battlefield = session.game.players[session.current_turn].battlefield
 
         def _ptype(idx: int) -> str:
-            return battlefield[idx].card.primary_type if 0 <= idx < len(battlefield) else ""
+            # The first constrained type this permanent answers to — which is
+            # the one whose cap the message should name.
+            if not 0 <= idx < len(battlefield):
+                return ""
+            permanent = battlefield[idx]
+            limits = options.get("limits") or {}
+            return next(
+                (t for t in sorted(limits) if permanent.has_type(t)),
+                permanent.card.primary_type,
+            )
 
         new_type = _ptype(req.permanent_index)
-        type_max = {"land": options.get("land_max"), "creature": options.get("creature_max")}.get(new_type)
+        # The per-type cap, read from the limits map the engine reports rather
+        # than from a pair of named fields — the message that names the type is
+        # what tells a player *why* the click was refused, and it should not go
+        # generic the moment a third type is constrained.
+        type_max = (options.get("limits") or {}).get(new_type)
         if type_max is not None:
             already = sum(1 for idx in selected if _ptype(idx) == new_type)
             if already >= int(type_max):
@@ -167,19 +180,28 @@ def _action_untap_confirm(session, req, seat_type):
     if len(selected) > required:
         raise HTTPException(status_code=400, detail="selected too many permanents to untap")
 
-    # Split the chosen battlefield indices by type — Winter Orb constrains lands,
-    # Smoke constrains creatures — and hand each list to the untap resolver. Only
-    # pass a (possibly empty) selection for a constrained type; an unconstrained
-    # type stays None so it untaps freely.
+    # Split the chosen battlefield indices by type and hand one list per
+    # constrained type to the untap resolver. Only a *constrained* type gets a
+    # (possibly empty) selection; an unconstrained one stays absent so it
+    # untaps freely. Generic over the limits map, so Damping Field's artifact
+    # needed no branch of its own here.
     options = session.game.get_untap_land_selection_options(session.current_turn) or {}
     battlefield = session.game.players[session.current_turn].battlefield
-    selected_lands = [i for i in selected if 0 <= i < len(battlefield) and battlefield[i].card.primary_type == "land"]
-    selected_creatures = [i for i in selected if 0 <= i < len(battlefield) and battlefield[i].card.primary_type == "creature"]
+    by_type = {
+        card_type: [
+            i for i in selected
+            if 0 <= i < len(battlefield)
+            # `has_type`, matching the engine's own check — an artifact
+            # creature answers to both Damping Field's limit and Smoke's, and a
+            # split that disagreed would hand the resolver a selection it then
+            # rejected.
+            and battlefield[i].has_type(card_type)
+        ]
+        for card_type in (options.get("limits") or {})
+    }
     try:
         session.game.resolve_untap_step(
-            session.current_turn,
-            selected_land_indices=selected_lands if options.get("land_max") is not None else None,
-            selected_creature_indices=selected_creatures if options.get("creature_max") is not None else None,
+            session.current_turn, selected_indices_by_type=by_type
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

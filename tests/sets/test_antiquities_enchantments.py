@@ -169,3 +169,60 @@ def test_cop_artifacts_does_not_stop_a_creature(set_pool):
     )
 
     assert outcome.dealt == 4, game.log
+
+
+# ---------------------------------------------------------------------------
+# Damping Field (round 14) — the third constrained untap type
+# ---------------------------------------------------------------------------
+
+
+def test_damping_field_lets_only_one_artifact_untap(set_pool):
+    pool = set_pool("ATQ")
+    field = Permanent(card=pool["Damping Field"])
+    artifacts = [Permanent(card=pool["Ornithopter"]) for _ in range(3)]
+    for perm in artifacts:
+        perm.tapped = True
+    p1 = PlayerState(name="P1", battlefield=[field, *artifacts])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.resolve_untap_step(0)
+
+    assert sum(1 for perm in artifacts if not perm.tapped) == 1
+
+
+def test_damping_field_leaves_lands_and_creatures_alone(set_pool):
+    """The restriction names artifacts. Winter Orb's land limit and Smoke's
+    creature limit are separate entries in the same map — one constrained type
+    must not constrain the others."""
+    pool = set_pool("ATQ")
+    field = Permanent(card=pool["Damping Field"])
+    lands = [Permanent(card=pool["Mishra's Workshop"]) for _ in range(2)]
+    creatures = [Permanent(card=pool["Citanul Druid"]) for _ in range(2)]
+    for perm in (*lands, *creatures):
+        perm.tapped = True
+    p1 = PlayerState(name="P1", battlefield=[field, *lands, *creatures])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.resolve_untap_step(0)
+
+    assert all(not perm.tapped for perm in lands)
+    assert all(not perm.tapped for perm in creatures)
+
+
+def test_the_untap_prompt_names_artifacts(set_pool):
+    """The limits map is what the browser builds its noun phrase from, so a
+    third constrained type has to arrive there as data rather than as a third
+    named field."""
+    pool = set_pool("ATQ")
+    field = Permanent(card=pool["Damping Field"])
+    artifacts = [Permanent(card=pool["Ornithopter"]) for _ in range(3)]
+    for perm in artifacts:
+        perm.tapped = True
+    p1 = PlayerState(name="P1", battlefield=[field, *artifacts])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    options = game.get_untap_land_selection_options(0)
+
+    assert options is not None
+    assert options["limits"] == {"artifact": 1}
+    assert options["max_count"] == 1
