@@ -167,8 +167,14 @@ class PutOnLibraryTop:
     """"Put target creature on top of its owner's library." (Teferi, Timeless
     Voyager.) Its own node rather than a ReturnToZone: the destination is a
     *position* in a zone, which Zone cannot say, and collapsing it to
-    "library" would lose where in the library the card lands."""
+    "library" would lose where in the library the card lands.
+
+    *in_any_order* is Drafna's Restoration's printed rider, which only means
+    anything when several cards move at once. Recorded rather than consumed,
+    because a card printing it and one not printing it are different cards.
+    """
     target: Recipient
+    in_any_order: bool = False
 
 
 @dataclass(frozen=True)

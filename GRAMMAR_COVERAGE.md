@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 81.0% | 79.7% | 44.2% | 155 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 82.5% | 82.5% | 55.0% | 61 |
+| ATQ *(measured)* | 85 | 120 | 83.3% | 83.3% | 55.8% | 62 |
 | **All (shipped)** | **1533** | **2166** | **81.3%** | **80.1%** | **47.1%** | **885** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -434,6 +434,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{3}, {T}: Target player discards a card. Activate only during your turn.`
 - **Double Vision**
   - `Whenever you cast your first instant or sorcery spell each turn, copy that spell. You may choose new targets for the copy.`
+- **Drafna's Restoration**
+  - `Put any number of target artifact cards from target player's graveyard on top of their library in any order.`
 - **Dragon Engine**
   - `{2}: This creature gets +1/+0 until end of turn.`
   - `{2}: This creature gets +1/+0 until end of turn.`

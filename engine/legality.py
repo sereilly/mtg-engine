@@ -327,6 +327,12 @@ class LegalityMixin:
         spec = derive_cast_spec(card, program) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
         spec["valid_targets"] = self._enumerate_targets(caster_index, card, spec, for_cast=True)
+        # "Any number of target …" (Drafna's Restoration) prints no maximum, so
+        # the cap is however many legal targets there are — a number that exists
+        # here and nowhere earlier. Filled in as an ordinary `max_targets` so
+        # every reader downstream sees the shape it already handles.
+        if spec.pop("unbounded_targets", False):
+            spec["max_targets"] = len(spec["valid_targets"])
         return spec
 
     def enumerate_targets_for_kind(self, caster_index: int, card: CardDefinition, kind: str, **flags) -> list[dict]:

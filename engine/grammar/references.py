@@ -136,8 +136,15 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     # Rewind's "up to four lands": no "target" is printed, so nothing is chosen
     # until the effect resolves (CR 115.1b).
     if stream.accept_phrase("any", "number", "of"):
+        # "any number of **target** artifact cards" (Drafna's Restoration). The
+        # word is recorded, not merely consumed, for the reason it is
+        # everywhere else here: with it the objects are chosen as the spell is
+        # cast (CR 601.2c) and every one of them is a target; without it
+        # nothing is chosen until the effect resolves (CR 115.1b), which is
+        # Siege Striker's "tap any number of untapped creatures you control".
+        targeted_any = bool(stream.accept_word("target"))
         return ast.TargetSpec(
-            "any_number", parse_object_filter(stream), count=0, targeted=False
+            "any_number", parse_object_filter(stream), count=0, targeted=targeted_any
         )
 
     if stream.accept_phrase("up", "to"):

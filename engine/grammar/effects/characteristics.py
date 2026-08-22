@@ -298,8 +298,15 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     except GrammarError:
         moved = None
     if moved is not None and stream.at_word("on", "onto"):
-        if stream.accept_phrase("on", "top", "of", "its", "owner", "'s", "library"):
-            return ast.PutOnLibraryTop(moved)
+        # "…on top of **their** library" (Drafna's Restoration) is the same
+        # destination as "its owner's": CR 404.1 puts a card in the graveyard of
+        # the player who owns it, so the cards this sentence moves are already
+        # that player's. One node, two spellings.
+        if stream.accept_phrase("on", "top", "of", "its", "owner", "'s", "library") or (
+            stream.accept_phrase("on", "top", "of", "their", "library")
+        ):
+            in_any_order = bool(stream.accept_phrase("in", "any", "order"))
+            return ast.PutOnLibraryTop(moved, in_any_order=in_any_order)
         # "Put target card from your graveyard on the bottom of your library."
         # (Epitaph Golem.) The zone the card leaves rides the noun phrase, as
         # in every return; the destination decides the node.

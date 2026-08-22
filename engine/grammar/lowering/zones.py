@@ -500,6 +500,11 @@ def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruct
     """"Put target creature on top of its owner's library." (Teferi, Timeless
     Voyager's −3.) One chosen battlefield creature; the owner is resolved by
     the handler (CR 400.3), which is why no player rides the payload."""
+    if (
+        isinstance(node.target, ast.TargetSpec)
+        and node.target.quantifier == "any_number"
+    ):
+        return _lower_graveyard_cards_on_library_top(node)
     if not _is_target(node.target):
         raise LoweringError("the tuck handler resolves one chosen creature", node=node)
     assert isinstance(node.target, ast.TargetSpec)
@@ -509,6 +514,70 @@ def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruct
     payload: dict[str, object] = {}
     _describe_targets(payload, node.target)
     return (OracleInstruction("put_target_on_library_top", "", payload),)
+
+
+def _lower_graveyard_cards_on_library_top(
+    node: ast.PutOnLibraryTop,
+) -> tuple[OracleInstruction, ...]:
+    """"Put any number of target artifact cards from target player's graveyard
+    on top of their library in any order." (Drafna's Restoration.)
+
+    A different handler from the tuck above, not a count on it: that one moves
+    a *permanent* off the battlefield, and this moves **cards** out of a
+    graveyard — different zone, different objects, and a graveyard slot is not
+    a battlefield slot (CR 400.1).
+
+    Narrowed to exactly what the handler reads. "Their library" and "its
+    owner's library" are the same place here (CR 404.1 puts a card in the
+    graveyard of the player who owns it), so no player rides the payload; the
+    seat comes from the spell's chosen target player.
+    """
+    subject = node.target
+    assert isinstance(subject, ast.TargetSpec)
+    filt = subject.filter
+    if not subject.targeted:
+        raise LoweringError(
+            "the graveyard-to-library handler moves chosen cards", node=node
+        )
+    if not filt.is_card or filt.zone != "graveyard":
+        raise LoweringError(
+            "the graveyard-to-library handler reads cards in a graveyard", node=node
+        )
+    if filt.zone_owner is None or filt.zone_owner.kind != "target_player":
+        raise LoweringError(
+            "the graveyard-to-library handler reads a chosen player's graveyard",
+            node=node,
+        )
+    if len(filt.card_types) != 1:
+        raise LoweringError(
+            "the graveyard-to-library handler narrows by one card type", node=node
+        )
+    leftover = _restrictions_beyond(
+        filt, frozenset({"card_types", "is_card", "zone", "zone_owner"})
+    )
+    if leftover:
+        raise LoweringError(
+            f"the graveyard-to-library handler does not honour {leftover[0]!r}",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "put_graveyard_cards_on_library_top", "",
+            {
+                "card_type": filt.card_types[0],
+                # "In any order" is the printed rider, and it is the *only*
+                # thing that says the controller decides the sequence. Recorded
+                # rather than consumed: a card printing it and one not printing
+                # it are different cards, and the handler reads the order the
+                # targets were named in.
+                "in_any_order": node.in_any_order,
+                # Unbounded rather than a maximum: "any number" prints no
+                # ceiling, so the only cap is how many legal targets there are —
+                # a number the picker knows and this lowering does not.
+                "targets": {"quantifier": "any_number", "kind": "card", "unbounded": True},
+            },
+        ),
+    )
 
 
 def _lower_put_onto_battlefield(node: ast.PutOntoBattlefield) -> tuple[OracleInstruction, ...]:

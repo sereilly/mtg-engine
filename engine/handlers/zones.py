@@ -455,6 +455,48 @@ def _resolve_graveyard_slots(caster, context, count, eligible):
     return [card for _index, card in resolved]
 
 
+@effect_handler("put_graveyard_cards_on_library_top")
+def put_graveyard_cards_on_library_top(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Drafna's Restoration: "Put any number of target artifact cards from
+    target player's graveyard on top of their library in any order."
+
+    Two targets on one line — a player, and the cards in their graveyard — so
+    the seat comes from the spell's chosen target and the slots index *that*
+    player's graveyard rather than the caster's. That is the whole difference
+    from the returns above, and it is why the cards are resolved through
+    :func:`_resolve_graveyard_slots` with the target player passed in.
+
+    **"In any order" is the order the targets were named in.** CR 601.2c
+    chooses the targets in sequence, and there is nothing else on the wire that
+    could carry an ordering — so the controller's choice of order *is* their
+    choice of order, and the first card named ends up on top.
+    """
+    seat = game.players.index(context.target) if context.target in game.players else None
+    if seat is None:
+        game.log.append(f"{context.card.name}: no player chosen")
+        return True, "resolved"
+    victim = game.players[seat]
+    card_type = str(instruction.payload.get("card_type", "artifact"))
+
+    def _eligible(card) -> bool:
+        return card_type in (getattr(card, "type_line", "") or "").lower()
+
+    # "Any number" prints no maximum, so the cap is the pile itself.
+    picked = _resolve_graveyard_slots(victim, context, len(victim.graveyard), _eligible)
+    if not picked:
+        game.log.append(f"{context.card.name}: no card moved out of the graveyard")
+        return True, "resolved"
+    # Last named first, so the first card the controller chose ends up on top.
+    for card in reversed(picked):
+        game.put_card_into_library(victim, card, position="top")
+    game.log.append(
+        f"{context.card.name} put {len(picked)} card(s) on top of {victim.name}'s library"
+    )
+    return True, "resolved"
+
+
 @effect_handler("return_creature_from_graveyard_to_hand")
 def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster

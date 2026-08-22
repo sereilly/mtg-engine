@@ -92,6 +92,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "remove_counter_from_self": "counters",
     "remove_any_number_of_counters_from_self": "counters",
     "exile_any_number_of_own_tokens": "zones",
+    "put_graveyard_cards_on_library_top": "zones",
     # Pestilent Haze's second mode: loyalty stripped from every walker at once.
     "remove_loyalty_from_each_planeswalker": "counters",
     "draw_then_discard_self": "zones",

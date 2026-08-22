@@ -1880,3 +1880,49 @@ another would need a real picker.
 **Numbers.** ATQ 81 → 82; grammar parses 80.8% → 82.5% of its lines, executes
 53.3% → 55.0%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
 6689, no hook added.
+
+## ATQ round 27: a number with no ceiling, and a graveyard that is not yours
+
+*(2026-08-22.)* **82 → 83.** Drafna's Restoration — "Put any number of target
+artifact cards from **target player's** graveyard on top of **their** library in
+any order."
+
+Three phrases the noun parser had never met, and each is a template:
+
+- **"any number of *target* …"** — the quantifier existed (Siege Striker taps
+  any number of creatures) but was hard-coded untargeted. The printed word is
+  recorded now, because it decides *when* the objects are chosen: with it, as
+  the spell is cast (CR 601.2c); without it, not until resolution (CR 115.1b).
+- **"from target player's graveyard"** — a zone owned by a *chosen* player. The
+  `from` postmodifier read "your", "their" and "a"; a second target on the same
+  line is what this one adds.
+- **"on top of their library"** is the same destination as "its owner's": CR
+  404.1 puts a card in the graveyard of the player who owns it, so the cards
+  this sentence moves are already that player's. One node, two spellings.
+
+### "Any number" has no maximum, so the maximum is derived where it exists
+
+Every several-target description in the engine carries a printed count — "up to
+two", "X target lands". This one has none, and the honest cap is *how many legal
+targets there are*, which the lowering cannot know and the enumerator can. So
+the spec carries `unbounded_targets` and `cast_target_spec` turns it into an
+ordinary `max_targets` once it has enumerated them; nothing downstream — the
+client, the cast validator — learns a new shape.
+
+### Two judgements recorded
+
+**"In any order" is the order the targets were named in.** CR 601.2c chooses
+targets in sequence and nothing else on the wire could carry an ordering, so the
+controller's sequence *is* their chosen order — first named ends up on top. The
+rider is recorded on the node rather than consumed, because a card printing it
+and one not printing it are different cards.
+
+**The graveyard is the target player's, not the caster's.** That is the whole
+difference from every other graveyard effect here, all of which pop the caster's
+own pile — `_resolve_graveyard_slots` already took the player as an argument, so
+it took one word to say which, and there is a test that the caster's pile is
+untouched.
+
+**Numbers.** ATQ 82 → 83; grammar parses 82.5% → 83.3% of its lines, executes
+55.0% → 55.8%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
+6694, no hook added.

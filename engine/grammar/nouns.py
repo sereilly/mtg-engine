@@ -599,6 +599,13 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 owner = ast.PlayerRef("you")
             elif stream.accept_word("their"):
                 owner = ast.PlayerRef("owner")
+            # "from **target player's** graveyard" (Drafna's Restoration). A
+            # chosen player rather than a fixed one, and a *second* target on
+            # the same line — the cards are targets too. Recorded so a handler
+            # that only reads the caster's own graveyard refuses the line
+            # instead of searching the wrong pile.
+            elif stream.accept_phrase("target", "player", "'s"):
+                owner = ast.PlayerRef("target_player")
             else:
                 stream.accept_word("a", "an", "the")
             noun = stream.peek_word()

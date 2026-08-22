@@ -553,7 +553,23 @@ def _forced_sacrifice_spec(payload: dict) -> dict | None:
 
 
 # One kind, several specs, decided by payload.
+def _graveyard_to_library_spec(payload: dict) -> dict:
+    """Drafna's Restoration's picker: cards of one type, in *any* graveyard.
+
+    Not scoped to the caster's own — the spell names a target player, and the
+    graveyard the cards come from is theirs. The maximum is deliberately absent:
+    "any number" prints no ceiling, so the only cap is how many legal targets
+    exist, which `cast_target_spec` fills in once it has enumerated them.
+    """
+    return {
+        "kind": GRAVEYARD_TARGET_KIND,
+        "card_type": payload.get("card_type", "artifact"),
+        "unbounded_targets": True,
+    }
+
+
 _KIND_TO_SPEC_FROM_PAYLOAD = {
+    "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
     "target_gains_life": _life_gain_spec,
     "counter_top_stack_spell": _counter_spec,
