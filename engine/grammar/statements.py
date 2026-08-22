@@ -14,7 +14,8 @@ from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import (PT, SELF, WORD)
-from .nouns import (parse_object_filter, parse_player_ref, parse_recipient)
+from .nouns import parse_object_filter
+from .references import parse_player_ref, parse_recipient
 from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, NUMBER_WORDS
 from .stream import TokenStream
 from .amounts import expect_pt

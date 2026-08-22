@@ -261,9 +261,14 @@ class EffectsMixin:
         """Whether an Aura can't be attached to *permanent* — either a per-permanent
         flag set by an effect, or Guardian Beast's continuous grant to the
         noncreature artifacts its controller controls while it's untapped."""
+        from ..auras import cant_be_enchanted_by_own_text
+
         return (
             bool(permanent.metadata.get("cant_be_enchanted_by_auras"))
             or aura_restriction_active(permanent, "cant_be_enchanted_by_auras")
+            # "This token can't be enchanted." — the restriction printed on the
+            # permanent itself rather than granted to it.
+            or cant_be_enchanted_by_own_text(permanent)
             or self._untapped_artifact_protector_active(permanent)
         )
 

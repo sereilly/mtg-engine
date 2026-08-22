@@ -30,7 +30,7 @@ from ...land_types import change_land_type
 from ...models import CardDefinition, Permanent
 from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
 from ...replacement_choices import pending_choices_for
-from ...resumption import resume_after_answer
+from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import plan_payment, untapped_mana_lands
 from ...search_filters import search_matches
 from ...subject_filters import subject_matches
@@ -1225,10 +1225,48 @@ class PendingChoicesMixin:
             return False
         permanent = choice.data.get("permanent")
         if permanent is not None:
-            permanent.metadata["chosen_number"] = value
-            self.log.append(
-                f"{choice.data.get('card_name')}: chose {value}"
-            )
+            if choice.data.get("exile_own_tokens"):
+                # Tetravus's second upkeep trigger. Oldest first, and only as
+                # many as are still there — a token that died while the prompt
+                # was owed is not one this can take.
+                from ...handlers.board_misc import _tokens_created_with
+
+                owned = _tokens_created_with(self, permanent)[:value]
+                for token in owned:
+                    owner_index = self.owner_index_of(token)
+                    self.remove_from_battlefield(token)
+                    # Into exile like any other exiled permanent (CR 400.3,
+                    # owner's zone); CR 111.7's sweep in game_ending.py takes
+                    # the token card out of it, so nothing here special-cases
+                    # the fact that it is a token.
+                    if owner_index is not None:
+                        self.players[owner_index].exile.append(token.card)
+                results = choice.data.get("results")
+                if results is not None:
+                    results["trigger_count"] = len(owned)
+                self.log.append(
+                    f"{choice.data.get('card_name')}: exiled {len(owned)} token(s)"
+                )
+            elif choice.data.get("remove_counters"):
+                # Tetravus: the number *is* how many +1/+1 counters come off,
+                # and the count that actually came off is what the sentence
+                # after it reads — asking for more than are there takes what is
+                # there, so the record is the return value and not the request.
+                from ...pt import remove_plus1_counters
+
+                removed = remove_plus1_counters(permanent, value)
+                results = choice.data.get("results")
+                if results is not None:
+                    results["trigger_count"] = removed
+                self.log.append(
+                    f"{choice.data.get('card_name')}: removed {removed} "
+                    "+1/+1 counter(s)"
+                )
+            else:
+                permanent.metadata["chosen_number"] = value
+                self.log.append(
+                    f"{choice.data.get('card_name')}: chose {value}"
+                )
             # The number *defines* a characteristic (CR 604.3), so the P/T that
             # reads it is stale until the layers are recomputed.
             self._refresh_dynamic_creatures()
@@ -1895,8 +1933,15 @@ class PendingChoicesMixin:
         context = entry.get("_context")
         if not steps or context is None:
             return False
-        for step in steps:
-            self._execute_oracle_instruction(step, context)
+        # Through ``run_resumable`` for the same reason ``handlers/control_flow``'s
+        # sequence is: a step may stop to ask its controller something, and the
+        # steps behind it have to be recorded or they are silently lost.
+        # Tetravus is the card that needed it — "remove any number of +1/+1
+        # counters. **If you do, create that many … tokens**" ran the removal,
+        # suspended on the count, and never made the tokens.
+        run_resumable(
+            self, steps, lambda step: self._execute_oracle_instruction(step, context)
+        )
         return True
 
     def _resolve_mode_choice(self, choice: PendingChoice, mode_index: int) -> bool:
@@ -2557,6 +2602,11 @@ register_choice(
     action="number_choice_confirm",
     prompt_key="number_choice",
     blocked_detail="choose a number before other actions",
+    # Tetravus's removal is one step of a sentence whose next step reads the
+    # answer ("create **that many** … tokens"), so the loop it is a step of has
+    # to stop until the number exists. Shapeshifter's two armings sit at the end
+    # of what they are part of, so suspending costs them nothing.
+    suspends=True,
 )
 
 register_choice(

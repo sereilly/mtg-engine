@@ -16,7 +16,8 @@ from .. import ast
 from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
 from ..lexer import (MANA, render)
-from ..nouns import (parse_object_filter, parse_player_ref, parse_target_spec)
+from ..nouns import parse_object_filter
+from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import _parse_card_alternatives, _parse_zone
 

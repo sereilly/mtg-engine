@@ -1807,3 +1807,76 @@ and no shipped counterspell had met one.
 **Numbers.** ATQ 80 → 81; grammar parses 80.0% → 80.8% of its lines, executes
 52.5% → 53.3%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
 6681, no hook added.
+
+## ATQ round 26: counters into tokens, and four things that were only ever asked once
+
+*(2026-08-22.)* **81 → 82.** Tetravus, the set's most-moving-parts card:
+
+```
+Flying
+This creature enters with three +1/+1 counters on it.
+At the beginning of your upkeep, you may remove any number of +1/+1 counters
+  from this creature. If you do, create that many 1/1 colorless Tetravite
+  artifact creature tokens. They each have flying and "This token can't be
+  enchanted."
+At the beginning of your upkeep, you may exile any number of tokens created
+  with this creature. If you do, put that many +1/+1 counters on this creature.
+```
+
+The new vocabulary is small and each piece is a template: **`AnyNumber`** (a
+count its controller picks, bounded by what is there — distinct from `AllOf`,
+which is not a choice, and from `Fixed`, which is not a range); **`token_only`**
+and **`created_with_source`** on the object filter; and "this token can't be
+enchanted", which is a restriction a permanent prints about *itself* and now
+reaches the same two predicates the Aura-granted form already did.
+
+The counts travel between sentences on the key that already existed:
+`trigger_count`, which the token maker's "that many" has read since Basri Ket.
+Both new instructions record it, so "create that many" and "put that many
+counters" are the ordinary back-reference rather than a fused kind.
+
+### Four bugs, each invisible because only one card asks
+
+1. **The quoted-token entry point dropped everything after the first sentence.**
+   Any line containing a quote is routed to one production, which read a single
+   statement and then *accepted a trailing full stop as the end of the line*.
+   Tetravus prints three sentences; it compiled to the first. It reads every
+   sentence now — the full stop inside the quoted ability is not a boundary,
+   because the token production consumes a quoted line whole.
+
+2. **An accepted "you may" ran its steps in a plain loop.** So a step that
+   stopped to ask a question took the steps behind it down with it: the counters
+   came off and the tokens were never made. It runs through `run_resumable` now,
+   the same way `sequence` does.
+
+3. **The upkeep step stopped at a permanent's first trigger.** CR 603.3 puts
+   *every* ability that triggered on the stack. Tetravus is the only card in the
+   pool that prints two upkeep triggers, so the `break` had never been wrong
+   before.
+
+4. **A token recorded nothing about what made it.** "Tokens created with this
+   creature" needs that, and it is stamped by `permanent_id` rather than by
+   identity — a Tetravus that leaves and returns is a new object (CR 400.7), and
+   its old Tetravites were not created with *it*.
+
+### The split: `nouns.py` → `nouns.py` + `references.py`
+
+The token phrases took `nouns.py` past the thousand-line guard, and the cut it
+suggests is the CR's own: **what a noun phrase describes** (CR 109 — the head
+noun, the adjectives, the postmodifiers, all of it an `ObjectFilter`) against
+**what it points at** (CR 115 — how many, whether they are targets, and the
+player forms that are not objects at all). `references.py` reads `nouns.py` and
+never the other way round, and both are in `PARSE_LAYERS` now so that stays
+true. Same reason `triggers.py` left `phrases.py` earlier this set.
+
+**One judgement recorded.** "Exile any number of tokens created with this
+creature" asks *how many*, not *which*: every token in that set was made by the
+same ability off the same permanent with the same characteristics, so which ones
+go is not a difference the game can observe. They leave oldest first, by
+`permanent_id`, so a replay is a replay — and the lowering admits that one
+phrase and nothing wider, because a card whose tokens could differ from one
+another would need a real picker.
+
+**Numbers.** ATQ 81 → 82; grammar parses 80.8% → 82.5% of its lines, executes
+53.3% → 55.0%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
+6689, no hook added.

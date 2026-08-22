@@ -23,7 +23,8 @@ from .phrases import _parse_card_alternatives
 from .errors import GrammarError
 from .lexer import MANA, PUNCT, SELF
 from .lowering._common import chargeable_card_filter, chargeable_tap_filter
-from .nouns import parse_object_filter, parse_target_spec
+from .nouns import parse_object_filter
+from .references import parse_target_spec
 from .stream import TokenStream
 
 

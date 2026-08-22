@@ -55,6 +55,11 @@ _SIMULATED_CHOICES = (
     # randomness (the shuffle was the search's), but it suspends, so leaving
     # one owed would wedge every later resumable loop.
     "search_destination",
+    # "Choose a number" (Shapeshifter) and "remove any number of counters"
+    # (Tetravus). Appended for the same reason as the two above: no deck the
+    # simulator builds arms one today, so the position cannot change an
+    # existing seed — and the counter form suspends.
+    "number_choice",
 )
 
 

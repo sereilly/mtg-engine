@@ -428,6 +428,33 @@ def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
                 f"the exile sweep does not honour {leftovers[0]!r}", node=node
             )
         return (OracleInstruction("exile_all_matching", "", payload),)
+    if isinstance(subject, ast.TargetSpec) and subject.quantifier == "any_number":
+        # "Exile **any number of** tokens created with this creature."
+        # (Tetravus.) Not a sweep and not a target: the controller says how
+        # many, at resolution (CR 115.1b — nothing is chosen until then), and
+        # the sentence after it reads the number back.
+        filt = subject.filter
+        if filt.zone != "battlefield" or filt.is_card:
+            raise LoweringError(
+                "the counted exile reads battlefield permanents", node=node
+            )
+        if not filt.token_only or not filt.created_with_source:
+            # Deliberately narrow. The handler resolves the set itself, and the
+            # only set it knows how to find is "the tokens this permanent made"
+            # — a wider phrase admitted here would be exiled from a list the
+            # handler never narrowed.
+            raise LoweringError(
+                "the counted exile knows only the tokens this permanent created",
+                node=node,
+            )
+        leftovers = _restrictions_beyond(
+            filt, frozenset({"token_only", "created_with_source", "zone"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the counted exile does not honour {leftovers[0]!r}", node=node
+            )
+        return (OracleInstruction("exile_any_number_of_own_tokens", "", {}),)
     # "Exile it." / "Exile this creature." (Archfiend's Vessel.) The ability's
     # own source, which is not a chosen target at all — nothing is picked, so
     # there is no picker, no legality check and nothing to re-resolve if it has

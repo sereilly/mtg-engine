@@ -464,6 +464,10 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
             return False
     # "nontoken permanent" (Lich). CR 111.1: not a card type, so it is its own
     # key rather than an ``exclude_types`` entry.
+    # "…any number of **tokens**" (Tetravus). The positive of the restriction
+    # below, read off the same record.
+    if payload.get("token_only") and not perm.metadata.get("is_token", False):
+        return False
     if payload.get("nontoken") and perm.metadata.get("is_token", False):
         return False
     # "named <card>" — through `name_key`, so the parser's rendering of the name

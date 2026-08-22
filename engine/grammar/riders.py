@@ -22,7 +22,8 @@ from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import PT, PUNCT, tokenize
-from .nouns import parse_object_filter, parse_target_spec
+from .nouns import parse_object_filter
+from .references import parse_target_spec
 from .effects import _parse_create_token, _parse_gains
 from .phrases import _accept_number, _parse_duration
 from .statements import _parse_condition, parse_statement

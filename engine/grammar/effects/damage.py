@@ -15,7 +15,7 @@ import dataclasses
 from .. import ast
 from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
-from ..nouns import (parse_player_ref, parse_recipient)
+from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS)
 from ..phrases import _parse_duration, _parse_mana_payment, _parse_where_x_is

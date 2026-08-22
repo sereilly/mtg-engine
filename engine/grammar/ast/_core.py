@@ -117,6 +117,18 @@ class AllOf:
 
 
 @dataclass(frozen=True)
+class AnyNumber:
+    """"remove **any number of** +1/+1 counters" (Tetravus) — a count its
+    controller chooses on resolution, bounded by what is there to take.
+
+    Distinct from :class:`AllOf`, which is "all of them" and is not a choice,
+    and from :class:`Fixed`, which is a number the card printed. Keeping the
+    three apart is what stops "any number" being lowered as "one" or as "all",
+    either of which is a different card.
+    """
+
+
+@dataclass(frozen=True)
 class BoardCount:
     """A board-state count identified by *name* rather than built compositionally:
     "the number of untapped lands they controlled at the beginning of this turn".
@@ -151,7 +163,7 @@ class CountersOnSource:
     kind: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, AllOf, BoardCount]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, AllOf, AnyNumber, BoardCount]
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +250,17 @@ class ObjectFilter:
     # "nontoken" (Lich's sacrifice). CR 111.1: a token is not a card, so this is
     # neither an excluded card type nor an excluded subtype.
     nontoken: bool = False
+    # "exile any number of **tokens** created with this creature" (Tetravus) —
+    # the positive of ``nontoken``. Its own field rather than a tri-state,
+    # because every lowering written before it exists refuses an unknown field
+    # by default and would silently ignore a third value of an old one.
+    token_only: bool = False
+    # "…**created with this creature**" (Tetravus). Which permanent made the
+    # token, and therefore *relative*: no read of the token alone can answer it,
+    # exactly like ``other_than_source`` and ``attached_to``. The handler that
+    # has the ability's source tests it; ``permanent_matches_filter`` is
+    # deliberately not told about it.
+    created_with_source: bool = False
     # "a creature **of their choice**" (Run Afoul) — the player performing the
     # action picks. Recorded rather than dropped, because "of *your* choice" is a
     # different sentence; a lowering accepts it only where the rule it lowers to
@@ -333,6 +356,10 @@ class ObjectFilter:
             payload["not_ability_targeted_by_same_name"] = True
         if self.nontoken:
             payload["nontoken"] = True
+        if self.token_only:
+            payload["token_only"] = True
+        if self.created_with_source:
+            payload["created_with_source"] = True
         # "a card **named** Frantic Inventory". Emitted like every other
         # restriction, and tested like one — a key a matcher dropped would be a
         # count over every card in the graveyard.

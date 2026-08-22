@@ -13,7 +13,8 @@ from .. import ast
 from ..amounts import expect_pt, parse_amount, parse_equal_to
 from ..errors import GrammarError
 from ..lexer import (GToken, PT, WORD)
-from ..nouns import (parse_object_filter, parse_recipient)
+from ..nouns import parse_object_filter
+from ..references import parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX, match_longest)
 

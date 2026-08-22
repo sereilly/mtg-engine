@@ -841,6 +841,41 @@ def attached_combat_restrictions(permanent) -> tuple:
     return tuple(found)
 
 
+#: "This token can't be enchanted." (Tetravus's Tetravites.) A restriction the
+#: permanent prints about **itself**, which is the opposite direction from
+#: everything else in this file — those describe what an Aura does to what it is
+#: attached to. It lives here anyway because attachment is what it is about, and
+#: because the two predicates that already answer "can an Aura go on this?" have
+#: to ask one question rather than growing a third source each.
+#:
+#: Anchored on the whole sentence. Consecrate Land's "can't be enchanted by
+#: other auras" is a *narrower* restriction with its own name in the table
+#: above, and a prefix match here would claim it and then enforce the wider one.
+_SELF_CANT_BE_ENCHANTED = re.compile(
+    rf"^this (?:token|{_NOUN}) can't be enchanted$"
+)
+
+
+def self_cant_be_enchanted_line(line: str) -> bool:
+    """Whether one printed line is "this <noun> can't be enchanted", in full.
+
+    Read by the support gate and by both attachment predicates, so what is
+    claimed and what is enforced cannot drift.
+    """
+    return _SELF_CANT_BE_ENCHANTED.match(_line_text(line)) is not None
+
+
+def cant_be_enchanted_by_own_text(permanent) -> bool:
+    """Whether *permanent*'s own text forbids Auras attaching to it.
+
+    Off ``effective_card``, so a copy of a Tetravite carries the restriction
+    (CR 707.2) and a text change can take it away.
+    """
+    card = getattr(permanent, "effective_card", None) or getattr(permanent, "card", None)
+    text = getattr(card, "oracle_text", "") or ""
+    return any(self_cant_be_enchanted_line(line) for line in text.splitlines())
+
+
 def aura_restriction_active(permanent, name: str) -> bool:
     """Whether any Aura attached to *permanent* imposes restriction *name*.
 

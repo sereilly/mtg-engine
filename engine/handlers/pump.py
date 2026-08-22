@@ -513,8 +513,21 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    game.place_plus1_counters(source_permanent)
-    game.log.append(f"{card.name} gets a +1/+1 counter")
+    # "…put **that many** +1/+1 counters on this creature." (Tetravus.) The
+    # count is a back-reference to what the step before it recorded; absent, the
+    # payload means one, which is what every earlier caller emitted.
+    raw_count = instruction.payload.get("count", 1)
+    if raw_count == "trigger_count":
+        count = int(context.results.get("trigger_count", 0))
+    else:
+        count = int(raw_count)
+    if count <= 0:
+        return True, "resolved"
+    game.place_plus1_counters(source_permanent, count)
+    game.log.append(
+        f"{card.name} gets a +1/+1 counter" if count == 1
+        else f"{card.name} gets {count} +1/+1 counters"
+    )
     return True, "resolved"
 
 

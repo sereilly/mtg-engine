@@ -572,7 +572,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                             "effect_kind": triggered_label(kind, cond),
                             "ability_text": trig.source_line or None,
                         })
-                        break
+                        # `continue`, not `break`. CR 603.3 puts **every**
+                        # ability that triggered on the stack, and this loop
+                        # stopped at the first one — invisible until Tetravus,
+                        # the only card in the pool printing two upkeep
+                        # triggers, whose second one never fired.
+                        continue
                 if handler is not None:
                     handler(self, UpkeepContext(
                         game=self,
@@ -589,7 +594,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                         trigger_targets=trigger_targets,
                         enqueue_damage=_enqueue_upkeep_damage,
                     ))
-                    break
+                    continue
 
         # Handle enchant-land auras with upkeep damage (e.g. Cursed Land)
         for controller_seat, permanent in self.permanents_with_controller():

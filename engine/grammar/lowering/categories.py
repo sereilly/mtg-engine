@@ -90,6 +90,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "add_corpse_counters_for_each_creature_died": "counters",
     "add_plus1_counters_for_each_creature_died": "counters",
     "remove_counter_from_self": "counters",
+    "remove_any_number_of_counters_from_self": "counters",
+    "exile_any_number_of_own_tokens": "zones",
     # Pestilent Haze's second mode: loyalty stripped from every walker at once.
     "remove_loyalty_from_each_planeswalker": "counters",
     "draw_then_discard_self": "zones",
@@ -297,6 +299,14 @@ _PRODUCES: dict[str, str] = {
     # it and the conditionals after it read the record, rather than each
     # sentence flipping a coin of its own.
     "flip_coin": "coin_flip",
+    # "Remove any number of +1/+1 counters … create **that many** … tokens"
+    # (Tetravus). The removal records how many it took, under the key the token
+    # maker's "that many" already reads.
+    "remove_any_number_of_counters_from_self": "trigger_count",
+    # "Exile any number of tokens created with this creature. If you do, put
+    # **that many** +1/+1 counters on this creature." The same key, for the same
+    # reason: the count is what the next sentence is about.
+    "exile_any_number_of_own_tokens": "trigger_count",
     # The exile records whose permanent it removed, which is what "Its
     # controller creates a token" reads (Angelic Ascension, Secure the Scene).
     "exile_target_permanent": "exiled_permanent_controller",

@@ -13,7 +13,8 @@ from ...tokens import PREDEFINED_TOKENS
 from .. import ast
 from ..amounts import expect_pt, parse_amount
 from ..lexer import (QUOTE, WORD)
-from ..nouns import (parse_object_filter, parse_target_spec)
+from ..nouns import parse_object_filter
+from ..references import parse_target_spec
 from ..phrases import _parse_for_each
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX, match_longest)
@@ -100,6 +101,24 @@ def _parse_token_quoted_lines(stream: TokenStream) -> tuple[str, ...]:
             continue
         break
     return tuple(lines)
+
+
+def _parse_token_quoted_lines_one(stream: TokenStream) -> tuple[str, ...]:
+    """One quoted ability, without consuming a following "and".
+
+    The list form above owns its own separator; a caller reading a mixed run of
+    keywords and quotes has to own it instead, or the two would each consume the
+    word and the second item would be lost.
+    """
+    if stream.accept_kind(QUOTE) is None:
+        raise stream.error("expected a quoted ability on the token")
+    opened = stream.pos
+    while not stream.exhausted and not stream.at_kind(QUOTE):
+        stream.advance()
+    text = stream.text_between(opened, stream.pos)
+    if stream.accept_kind(QUOTE) is None:
+        raise stream.error("unterminated quoted ability on the token")
+    return (text,)
 
 
 def _parse_token_keywords(stream: TokenStream) -> tuple[str, ...]:
@@ -270,6 +289,36 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
         if not parts:
             raise stream.error("expected a token name after 'named'")
         name = " ".join(parts)
+
+    # "…tokens. **They each have flying and "This token can't be enchanted.""**
+    # (Tetravus.) The tokens' abilities printed as a following sentence rather
+    # than as a `with` clause. The same information, so it lands in the same two
+    # fields — a statement of its own would have nothing to attach to, because
+    # the tokens it describes exist only inside the instruction being built
+    # here. Keywords and quoted lines mix freely in the list, which is why this
+    # reads one item at a time instead of calling either tail parser on the
+    # whole run: `_parse_token_keywords` consumes the "and" itself and would
+    # then demand a keyword where a quote stands.
+    mark_tail = stream.mark()
+    if stream.accept_punct(".") and stream.accept_phrase("they", "each", "have"):
+        while True:
+            if stream.at_kind(QUOTE):
+                granted_lines += _parse_token_quoted_lines_one(stream)
+            else:
+                matched = match_longest(stream.words_from(), 0, KEYWORD_INDEX)
+                if matched is None:
+                    raise stream.error(
+                        "expected a keyword or a quoted ability on the token"
+                    )
+                keyword, consumed = matched
+                keywords += (keyword,)
+                stream.advance(consumed)
+            stream.accept_punct(",")
+            if not stream.accept_word("and"):
+                break
+        stream.accept_punct(".")
+    else:
+        stream.reset(mark_tail)
 
     return ast.CreateToken(
         count=count,

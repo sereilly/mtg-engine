@@ -65,6 +65,11 @@ def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> a
             stream.advance()
             if stream.accept_phrase("amount", "of"):
                 return ast.AllOf()
+            # "remove **any number of** +1/+1 counters" (Tetravus). A different
+            # node from "any amount of" beside it: that one is unbounded and
+            # nobody chooses it, this one is a choice with a ceiling.
+            if stream.accept_phrase("number", "of"):
+                return ast.AnyNumber()
             stream.reset(mark)
 
     raise stream.error("expected a quantity")

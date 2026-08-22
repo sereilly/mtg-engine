@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 81.0% | 79.7% | 44.2% | 155 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 80.8% | 80.8% | 53.3% | 60 |
+| ATQ *(measured)* | 85 | 120 | 82.5% | 82.5% | 55.0% | 61 |
 | **All (shipped)** | **1533** | **2166** | **81.3%** | **80.1%** | **47.1%** | **885** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,19 +34,19 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 185 | 70 | expected a subject |  |
-| 86 | 30 | unrecognized effect verb |  |
+| 85 | 29 | unrecognized effect verb |  |
 | 47 | 23 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
-| 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
+| 27 | 12 | granted ability in quotes | phase 3 (quoted abilities) |
 | 9 | 4 | expected 'the number of' in a where-clause |  |
 | 9 | 4 | expected a keyword ability |  |
 | 8 | 3 | expected a colour or a creature body after 'becomes' |  |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
-| 5 | 2 | expected a quantity |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | expected 'a' |  |
+| 4 | 1 | expected a quantity |  |
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 2 | 1 | expected a permanent to put counters on |  |
@@ -1429,6 +1429,9 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Destroy target nonartifact, nonblack creature. It can't be regenerated.`
 - **Terror of the Peaks**
   - `Whenever another creature you control enters, this creature deals damage equal to that creature's power to any target.`
+- **Tetravus**
+  - `At the beginning of your upkeep, you may remove any number of +1/+1 counters from this creature. If you do, create that many 1/1 colorless Tetravite artifact creature tokens. They each have flying and "This token can't be enchanted."`
+  - `At the beginning of your upkeep, you may exile any number of tokens created with this creature. If you do, put that many +1/+1 counters on this creature.`
 - **The Hive**
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`

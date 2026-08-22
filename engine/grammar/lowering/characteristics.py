@@ -735,6 +735,17 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
         )
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
+    if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):
+        # "…put **that many** +1/+1 counters on this creature." (Tetravus.) The
+        # number is the one the step before it recorded, so it rides the payload
+        # as the same back-reference key the token maker's "that many" reads —
+        # one phrase, one meaning, wherever in a sentence it appears.
+        return (
+            OracleInstruction(
+                "add_counter_to_self", "",
+                {"power": 1, "toughness": 1, "count": "trigger_count"},
+            ),
+        )
     if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
         raise LoweringError("variable counter counts have no handler", node=node)
     if _is_source(node.subject):
@@ -846,6 +857,18 @@ def _lower_remove_counter(node: ast.RemoveCounter) -> tuple[OracleInstruction, .
     if not _is_source(node.subject):
         raise LoweringError(
             "the only counter-removal handler reads the ability's own source", node=node
+        )
+    if isinstance(node.count, ast.AnyNumber):
+        # "Remove **any number of** +1/+1 counters from this creature."
+        # (Tetravus.) Its own kind rather than a count on the one above: that
+        # handler decrements by a number it already knows, and this one has to
+        # ask its controller for the number first. What it removes is recorded,
+        # because the sentence after it ("create **that many** … tokens") reads
+        # it back.
+        return (
+            OracleInstruction(
+                "remove_any_number_of_counters_from_self", "", {"counter": node.counter}
+            ),
         )
     if _amount_payload(node.count) != 1:
         raise LoweringError("no handler removes more than one counter at a time", node=node)

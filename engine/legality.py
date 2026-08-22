@@ -115,11 +115,14 @@ def cast_spec_of(card: CardDefinition) -> dict:
 
 
 def _cant_be_enchanted_by_auras(perm) -> bool:
-    """Aura-derived or flagged; one question, both sources."""
-    from .auras import aura_restriction_active
+    """Aura-derived, printed on the permanent itself, or flagged; one question,
+    every source."""
+    from .auras import aura_restriction_active, cant_be_enchanted_by_own_text
 
-    return bool(perm.metadata.get("cant_be_enchanted_by_auras")) or aura_restriction_active(
-        perm, "cant_be_enchanted_by_auras"
+    return (
+        bool(perm.metadata.get("cant_be_enchanted_by_auras"))
+        or aura_restriction_active(perm, "cant_be_enchanted_by_auras")
+        or cant_be_enchanted_by_own_text(perm)
     )
 
 

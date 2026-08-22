@@ -592,7 +592,16 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         recipients = [i for i, p in enumerate(game.players) if not p.lost]
     for seat in recipients:
       for _ in range(count):
-        token = Permanent(card=token_card, metadata={"is_token": True})
+        metadata: dict = {"is_token": True}
+        # "…any number of tokens **created with this creature**." (Tetravus.)
+        # Which permanent made the token is a fact about its history that
+        # nothing about the token itself records, and it is stamped by
+        # `permanent_id` rather than by identity: a Tetravus that leaves and
+        # comes back is a new object (CR 400.7), and its old Tetravites were
+        # not created with *it*.
+        if context.source_permanent is not None:
+            metadata["created_with_permanent_id"] = context.source_permanent.permanent_id
+        token = Permanent(card=token_card, metadata=metadata)
         game._put_permanent_onto_battlefield(seat, token, None)
         # "…that are tapped and attacking" (Basri Ket): entry state, not an
         # attack declaration — the tokens join the combat the trigger saw
@@ -707,6 +716,102 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
         f"({permanent.metadata[key]} left)"
     )
     return True, "resolved"
+
+
+@effect_handler("remove_any_number_of_counters_from_self")
+def remove_any_number_of_counters_from_self(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Tetravus: "Remove **any number of** +1/+1 counters from this creature."
+
+    Its own handler rather than a count on the one above, because the number is
+    not on the card: its controller picks it at resolution, bounded by what is
+    actually there (CR 701.x — you cannot remove counters that are not on the
+    permanent). The choice suspends the resolution, so the sentence after it —
+    "create **that many** … tokens" — runs against the answer rather than
+    against a number nobody has given yet.
+
+    What is removed is recorded under ``trigger_count``, which is the key the
+    token maker's "that many" already reads.
+    """
+    permanent = context.source_permanent
+    if permanent is None:
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", "+1/+1"))
+    if counter != "+1/+1":
+        # Only the +1/+1 store has a counted remover; a named counter would be
+        # taken off a record this handler does not reach.
+        game.log.append(
+            f"{permanent.card.name}: no counted remover for {counter} counters"
+        )
+        return True, "resolved"
+    available = int(permanent.metadata.get("plus_counters", 0))
+    seat = game.controller_index_of(permanent)
+    if seat is None or available <= 0:
+        context.results["trigger_count"] = 0
+        return True, "resolved"
+    game.arm_pending_choice(
+        "number_choice", seat,
+        card_name=permanent.card.name, permanent=permanent,
+        minimum=0, maximum=available,
+        # The "may" in front of this sentence has already asked whether to do it
+        # at all, so a seat that got here said yes — and the default that keeps
+        # faith with that answer is "all of them", not "none", which would make
+        # accepting the offer do nothing.
+        default_number=available,
+        remove_counters=True, results=context.results,
+    )
+    return True, "resolved"
+
+
+@effect_handler("exile_any_number_of_own_tokens")
+def exile_any_number_of_own_tokens(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Tetravus: "Exile **any number of** tokens created with this creature."
+
+    The set is found here rather than picked by a target picker, because the
+    phrase names no target at all (CR 115.1b) — it names a set the game can
+    identify, and asks its controller how many of it to take.
+
+    **How many, not which.** Every token in that set was made by the same
+    ability off the same permanent with the same characteristics, so which ones
+    go is not a difference the game can observe; the ones taken are the
+    oldest first, by `permanent_id`, so a replay is a replay. A card whose
+    tokens could differ from one another would need a real picker, which is why
+    the lowering admits this phrase and nothing wider.
+    """
+    source = context.source_permanent
+    if source is None:
+        return True, "resolved"
+    owned = _tokens_created_with(game, source)
+    seat = game.controller_index_of(source)
+    if seat is None or not owned:
+        context.results["trigger_count"] = 0
+        return True, "resolved"
+    game.arm_pending_choice(
+        "number_choice", seat,
+        card_name=source.card.name, permanent=source,
+        minimum=0, maximum=len(owned),
+        # The "may" in front of the sentence already asked whether to do this
+        # at all; a seat that got here said yes, so the default takes all of
+        # them rather than making the answer mean nothing.
+        default_number=len(owned),
+        exile_own_tokens=True, results=context.results,
+    )
+    return True, "resolved"
+
+
+def _tokens_created_with(game: Game, source) -> list:
+    """The tokens on the battlefield that *source* created, oldest first."""
+    return sorted(
+        (
+            perm
+            for perm in game.all_permanents()
+            if perm.metadata.get("created_with_permanent_id") == source.permanent_id
+        ),
+        key=lambda perm: perm.permanent_id,
+    )
 
 
 @effect_handler("sacrifice_matching_permanent")

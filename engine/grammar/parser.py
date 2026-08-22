@@ -45,7 +45,8 @@ from .derived import derived_instruction_for_line
 from .errors import GrammarError
 from .lexer import (BULLET, MANA, PT, PUNCT, QUOTE, SELF, tokenize)
 from .costs import _parse_costs
-from .nouns import (parse_object_filter, parse_target_spec)
+from .nouns import parse_object_filter
+from .references import parse_target_spec
 from .registries import registry_for_line
 from .riders import (_RIDER_FOLDED, _attach_if_you_do, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .stream import TokenStream
@@ -170,12 +171,24 @@ def _parse_quoted_token_line(stream: TokenStream) -> ast.Statement | None:
     event = _parse_trigger_event(stream)
     if event is not None:
         stream.accept_punct(",")
+    # Every sentence, not one. This read a single statement and then accepted a
+    # trailing full stop as the end of the line, which silently dropped every
+    # word behind it — Tetravus prints three sentences ("…you may remove any
+    # number of +1/+1 counters… If you do, create that many … tokens. They each
+    # have flying and "This token can't be enchanted."") and compiled to the
+    # first one alone. The quote guard above routes any line carrying a quote
+    # here, so this was the one production in the grammar that could return a
+    # partial match instead of raising.
+    #
+    # The full stop inside the quoted ability is not a sentence boundary here:
+    # the token production consumes a quoted line whole, closing quote included,
+    # before this loop sees the tokens again.
     try:
-        statement = parse_statement(stream)
+        statement = _statements_from_sentences(stream)
     except GrammarError:
         stream.reset(mark)
         return None
-    if not stream.exhausted and not stream.at_punct(".", ";"):
+    if not stream.exhausted:
         stream.reset(mark)
         return None
     if event is not None:

@@ -12,7 +12,7 @@ should own the other's vocabulary.
 import dataclasses
 
 from .. import ast
-from ..nouns import (parse_recipient)
+from ..references import parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES)
 from ..phrases import _parse_mana_payment, _parse_zone

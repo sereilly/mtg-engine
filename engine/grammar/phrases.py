@@ -21,7 +21,8 @@ from dataclasses import replace
 from . import ast
 from .errors import GrammarError
 from .lexer import (MANA, PT, PUNCT, SELF, tokenize)
-from .nouns import (parse_object_filter, parse_target_spec)
+from .nouns import parse_object_filter
+from .references import parse_target_spec
 from .stream import TokenStream
 from .vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, KEYWORD_INDEX,
                          NUMBER_WORDS, match_longest)

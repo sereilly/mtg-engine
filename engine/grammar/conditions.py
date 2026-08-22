@@ -22,7 +22,8 @@ from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import PT
-from .nouns import accept_source_reference, parse_object_filter, parse_player_ref
+from .nouns import accept_source_reference, parse_object_filter
+from .references import parse_player_ref
 from .phrases import _parse_duration
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS

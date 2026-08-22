@@ -8,7 +8,7 @@ player who declines an "unless they pay" cost, and the activation restrictions
 
 from .. import ast
 from ..lexer import DASH, WORD
-from ..nouns import (parse_player_ref, parse_target_spec)
+from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import _parse_mana_payment
 from ..vocabulary import NUMBER_WORDS

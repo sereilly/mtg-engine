@@ -1995,6 +1995,13 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # reported unsupported rather than admitted and dropped.
     if lord_buff_for(normalized) is not None:
         return True
+    # "This token can't be enchanted." (Tetravus's Tetravites.) Asked of the
+    # reader both attachment predicates use, so the claim and the enforcement
+    # are one rule.
+    from .auras import self_cant_be_enchanted_line
+
+    if self_cant_be_enchanted_line(normalized):
+        return True
     # "You may play two additional lands on each of your turns." (Azusa, Lost
     # but Seeking.) The land-drop path derives the allowance from every
     # controlled permanent's own text (engine/land_play_allowance.py), creatures

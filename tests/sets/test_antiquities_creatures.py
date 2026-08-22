@@ -611,3 +611,129 @@ def test_one_artisans_is_not_blocked_by_its_own_ability(set_pool):
         game._settle()
 
     assert [card.name for card in p1.graveyard] == ["Ornithopter"], game.log
+
+
+# ---------------------------------------------------------------------------
+# Tetravus (round 26) — counters into tokens and back
+# ---------------------------------------------------------------------------
+
+
+def _tetravus(set_pool):
+    """Tetravus cast and on the battlefield, with its three counters."""
+    pool = set_pool("ATQ")
+    p1 = PlayerState(name="P1", hand=[pool["Tetravus"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Tetravus")
+    game.active_player_index = 0
+    return game, p1, p1.battlefield[0]
+
+
+def _tetravites(player):
+    return [perm for perm in player.battlefield if perm.card.name.startswith("Tetravite")]
+
+
+def _take_upkeep(game, *, remove=0, exile=0, accept=True):
+    """Run Tetravus's upkeep and answer both of its offers.
+
+    Both triggers fire (CR 603.3) and both print the same card name, so the
+    prompts are told apart by what they are for rather than by who they are
+    from — which is what the queue records.
+    """
+    game.resolve_upkeep(0)
+    game._settle()
+    while game.pending_choices:
+        choice = game.pending_choices[0]
+        if choice.kind == "optional_pay":
+            game.confirm_optional_pay(0, card_name="Tetravus", accept=accept)
+            continue
+        if choice.kind != "number_choice":
+            break
+        wanted = exile if choice.data.get("exile_own_tokens") else remove
+        game.confirm_number_choice(0, min(wanted, int(choice.data["maximum"])))
+
+
+def test_tetravus_enters_with_three_counters(set_pool):
+    game, p1, tetravus = _tetravus(set_pool)
+
+    assert tetravus.metadata["plus_counters"] == 3
+    assert (tetravus.effective_power, tetravus.effective_toughness) == (4, 4)
+
+
+def test_counters_come_off_as_tetravites(set_pool):
+    """"…remove any number of +1/+1 counters. If you do, create **that many**
+    … tokens." The count is the player's, and the second sentence is about the
+    answer to the first."""
+    game, p1, tetravus = _tetravus(set_pool)
+
+    _take_upkeep(game, remove=2)
+
+    assert tetravus.metadata["plus_counters"] == 1
+    assert (tetravus.effective_power, tetravus.effective_toughness) == (2, 2)
+    assert len(_tetravites(p1)) == 2
+
+
+def test_the_tetravites_carry_both_printed_abilities(set_pool):
+    """"They each have flying and "This token can't be enchanted."" — a whole
+    sentence after the token clause, which the quoted-line entry point used to
+    read up to the first full stop and drop."""
+    game, p1, tetravus = _tetravus(set_pool)
+
+    _take_upkeep(game, remove=1)
+
+    token = _tetravites(p1)[0]
+    assert game._has_keyword(token, "flying")
+    assert game._cant_be_enchanted(token)
+
+
+def test_an_ordinary_creature_can_still_be_enchanted(set_pool):
+    """The control on the check above: the restriction is the token's printed
+    line, not something true of every creature."""
+    game, p1, tetravus = _tetravus(set_pool)
+
+    assert not game._cant_be_enchanted(tetravus)
+
+
+def test_declining_removes_no_counters(set_pool):
+    game, p1, tetravus = _tetravus(set_pool)
+
+    _take_upkeep(game, remove=3, accept=False)
+
+    assert tetravus.metadata["plus_counters"] == 3
+    assert _tetravites(p1) == []
+
+
+def test_exiling_the_tetravites_puts_the_counters_back(set_pool):
+    """The second upkeep trigger, which is the first one run backwards."""
+    game, p1, tetravus = _tetravus(set_pool)
+    _take_upkeep(game, remove=3)
+    assert len(_tetravites(p1)) == 3
+
+    _take_upkeep(game, remove=0, exile=3)
+
+    assert _tetravites(p1) == []
+    assert tetravus.metadata["plus_counters"] == 3
+
+
+def test_both_upkeep_triggers_fire(set_pool):
+    """CR 603.3 puts **every** ability that triggered on the stack. The upkeep
+    loop stopped at a permanent's first one, which was invisible until the only
+    card in the pool that prints two."""
+    game, p1, tetravus = _tetravus(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert len(game.pending_choices_of("optional_pay", 0)) == 2
+
+
+def test_a_tetravite_belongs_to_the_tetravus_that_made_it(set_pool):
+    """"…tokens **created with this creature**." A second Tetravus's tokens are
+    not this one's, so its exile trigger must not reach them."""
+    game, p1, tetravus = _tetravus(set_pool)
+    _take_upkeep(game, remove=2)
+
+    made = _tetravites(p1)
+    assert {perm.metadata["created_with_permanent_id"] for perm in made} == {
+        tetravus.permanent_id
+    }
