@@ -203,3 +203,17 @@ class SacrificeUnlessPay:
     """
     subject: Recipient
     cost: ManaCost
+
+
+@dataclass(frozen=True)
+class SacrificeExpansionPermanents:
+    """``Each nontoken permanent with a name originally printed in the <Set>
+    expansion is sacrificed by its controller.`` (Golgothian Sylex.)
+
+    The set is carried as the code the manifest gives for the printed name, so
+    the node says which set rather than which words. City in a Bottle prints the
+    same phrase for a continuous ban, and Homelands' Apocalypse Chime is this
+    exact card for another set — which is why the phrase is a production and not
+    a name-keyed entry.
+    """
+    set_code: str

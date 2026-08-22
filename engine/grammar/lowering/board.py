@@ -626,3 +626,15 @@ def _fused_upkeep_pay_to_untap(
             "upkeep_pay_to_untap_self", "", {"mana": _full_mana_payload(statement.cost)}
         ),
     )
+
+
+def _lower_sacrifice_expansion_permanents(
+    node: ast.SacrificeExpansionPermanents,
+) -> tuple[OracleInstruction, ...]:
+    """Golgothian Sylex. The set code was resolved at parse time from the
+    manifest, so the instruction carries which set rather than which words."""
+    return (
+        OracleInstruction(
+            "sacrifice_expansion_permanents", "", {"set_code": node.set_code}
+        ),
+    )

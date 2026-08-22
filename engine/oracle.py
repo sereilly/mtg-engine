@@ -1981,9 +1981,21 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # (Primal Clay). Carried out by _initialize_permanent_state, which reads the
     # bodies from this same parser — so what is claimed here and what is applied
     # cannot describe different cards.
-    from .enter_effects import choosable_bodies
+    from .enter_effects import choosable_bodies, enter_effect_line
 
     if choosable_bodies(normalized):
+        return True
+    # Every *other* entry-state phrase `_initialize_permanent_state` carries
+    # out, asked as the whole table rather than one of its entries.
+    #
+    # This is the partial-list mistake again, and it had been paid for: the
+    # "enters with seven +1/+0 counters" sentence was admitted by a literal
+    # elsewhere while "…three +1/+1 counters" — the same rule with a different
+    # number — was refused, so Clockwork Beast worked and Triskelion did not,
+    # for no reason anyone had decided. Asking the table means a card printing
+    # any phrase the entry state implements is admitted, and one printing a
+    # phrase it does not is still refused by name.
+    if enter_effect_line(normalized) is not None:
         return True
     # A CR 601.2f cost change the casting path derives from every permanent's
     # own text — "Noncreature spells cost {1} more to cast" (Vryn Wingmare),

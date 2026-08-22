@@ -115,6 +115,7 @@ from .lowering import (
     _lower_remove_counter,
     _lower_return_to_zone,
     _lower_sacrifice,
+    _lower_sacrifice_expansion_permanents,
     _lower_sacrifice_unless_pay,
     _lower_cast_from_exiled_with,
     _lower_cast_permission,
@@ -299,6 +300,8 @@ def lower_statement(
 
     if isinstance(statement, ast.Sacrifice):
         return _lower_sacrifice(statement)
+    if isinstance(statement, ast.SacrificeExpansionPermanents):
+        return _lower_sacrifice_expansion_permanents(statement)
 
     if isinstance(statement, ast.RevealHandAndChoose):
         return _lower_reveal_hand_and_choose(statement)

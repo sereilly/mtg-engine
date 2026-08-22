@@ -50,6 +50,7 @@ from .characteristics import (
 )
 from .board import (
     _parse_sacrifice,
+    _parse_sacrifice_expansion_permanents,
     _parse_gain_control,
     _parse_return,
     _parse_destroy,
@@ -125,6 +126,7 @@ __all__ = [
     "_parse_attach",
     "_parse_draw",
     "_parse_sacrifice",
+    "_parse_sacrifice_expansion_permanents",
     "_parse_discard",
     "_parse_mill",
     "_parse_scry",

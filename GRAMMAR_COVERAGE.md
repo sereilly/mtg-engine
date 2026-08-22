@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.9% | 78.7% | 43.4% | 152 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 57.5% | 56.7% | 37.5% | 41 |
+| ATQ *(measured)* | 85 | 120 | 60.8% | 60.0% | 38.3% | 42 |
 | **All (shipped)** | **1533** | **2166** | **80.7%** | **79.5%** | **46.7%** | **876** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,7 +34,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 202 | 81 | expected a subject |  |
-| 92 | 35 | unrecognized effect verb |  |
+| 88 | 32 | unrecognized effect verb |  |
 | 50 | 28 | unconsumed text |  |
 | 30 | 30 | unrecognized activation cost |  |
 | 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -575,6 +575,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Other Goblins get +1/+1 and have mountainwalk.`
 - **Goblin Wizardry**
   - `Create two 1/1 red Goblin Wizard creature tokens with prowess. (Whenever you cast a noncreature spell, they get +1/+1 until end of turn.)`
+- **Golgothian Sylex**
+  - `{1}, {T}: Each nontoken permanent with a name originally printed in the Antiquities expansion is sacrificed by its controller.`
 - **Goremand**
   - `When this creature enters, each opponent sacrifices a creature.`
 - **Granite Gargoyle**

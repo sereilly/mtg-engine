@@ -106,6 +106,7 @@ from .characteristics import (
     BecomeCreature,
 )
 from .board import (
+    SacrificeExpansionPermanents,
     Attach,
     Destroy,
     Sacrifice,
@@ -230,6 +231,7 @@ __all__ = [
     "ItWas",
     "RevealedCardIs",
     "Controls",
+    "SacrificeExpansionPermanents",
     "EveryOf",
     "IsState",
     "DiedThisTurn",

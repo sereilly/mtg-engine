@@ -57,6 +57,41 @@ CHOOSE_CARD_NAME_ON_ENTER = "as this enchantment enters, choose a card name"
 ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS = "enters with seven +1/+0 counters on it"
 ENTERS_WITH_X_PLUS_1_1_COUNTERS = "enters with x +1/+1 counters on it"
 
+#: "This creature enters with **three +1/+1** counters on it." (Triskelion,
+#: Tetravus) / "…**four +1/+0**…" (Clockwork Avian) / "…**seven +1/+0**…"
+#: (Clockwork Beast). The number and the counter kind are data, the way every
+#: other parameter in this file is: the two constants above were literal
+#: sentences, so Clockwork Beast's seven worked and Triskelion's three did not,
+#: for no reason anyone had decided.
+#:
+#: The X form stays its own constant — its count is not printed at all, it is
+#: the value announced when the spell was cast, so it is read from a different
+#: place at a different time.
+ENTERS_WITH_PT_COUNTERS = re.compile(
+    r"^this [a-z]+ enters with (?P<count>[a-z]+) "
+    r"(?P<counter>\+1/\+1|\+1/\+0|\+0/\+1) counters on it$"
+)
+
+
+def enters_with_pt_counters(line: str) -> tuple[int, str] | None:
+    """``(count, counter kind)`` the line places, or None.
+
+    Read by the entry state and by the support gate, so what is placed and what
+    is claimed cannot drift. A number word the table does not know refuses the
+    whole line rather than defaulting to one — a creature entering with one
+    counter where the card prints four is a strictly smaller card, silently.
+    """
+    from .grammar.vocabulary import NUMBER_WORDS
+
+    match = ENTERS_WITH_PT_COUNTERS.match((line or "").strip().lower().rstrip("."))
+    if match is None:
+        return None
+    count = NUMBER_WORDS.get(match.group("count"))
+    if count is None:
+        return None
+    return count, match.group("counter")
+
+
 #: "This Equipment enters with a soul counter on it." (Malefic Scythe.) A
 #: **named** counter (CR 122.1) rather than a P/T one, so it is matched by shape
 #: and the word is data: a card printing a differently-named counter needs no
@@ -123,7 +158,6 @@ _ENTRY_LINES: tuple[tuple[str, str], ...] = (
     (CHOOSE_OPPONENT_ON_ENTER, ""),
     (CHOOSE_COLOR_AND_OPPONENT_ON_ENTER, ""),
     (CHOOSE_CARD_NAME_ON_ENTER, ""),
-    (ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS, ""),
     (ENTERS_WITH_X_PLUS_1_1_COUNTERS, ""),
     (COPY_CREATURE_ON_ENTER, ""),
     # CR 707.9b — the mixin builds the copied type line with "Enchantment"
@@ -191,6 +225,8 @@ def enter_effect_line(line: str) -> str | None:
     # Equipment gate (engine/oracle.py) started asking.
     if enters_with_named_counter(normalized) is not None:
         return "enters with a named counter"
+    if enters_with_pt_counters(normalized) is not None:
+        return "enters with P/T counters"
     return None
 
 
@@ -202,7 +238,9 @@ __all__ = [
     "COPY_CREATURE_ON_ENTER",
     "ENTERS_TAPPED",
     "ENTERS_WITH_NAMED_COUNTER",
+    "ENTERS_WITH_PT_COUNTERS",
     "ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS",
+    "enters_with_pt_counters",
     "enters_with_named_counter",
     "ENTERS_WITH_X_PLUS_1_1_COUNTERS",
     "LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER",

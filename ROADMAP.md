@@ -980,3 +980,59 @@ condition and both dispatchers are in place for it.
 
 **Numbers.** ATQ 55 → 57; grammar parses 55.8% → 57.5% of its lines. Shipped
 pool 668/668, floors and ceilings unmoved, suite green at 6612. No hook added.
+
+## ATQ round 7: two numbers that were literals, and a set name the registry knew
+
+*(2026-08-21.)* **57 → 59.** Triskelion and Golgothian Sylex, both cases of the
+engine already knowing the answer in a form it could not reach.
+
+**"Enters with seven +1/+0 counters" was a sentence, not a rule.**
+`enter_effects.py` held two literal strings — Clockwork Beast's seven, and Rock
+Hydra's X — so Clockwork Beast worked and Triskelion's *three* did not, for no
+reason anyone had decided. The count and the counter kind are payload now
+(`enters_with_pt_counters`), read by the entry state and the claim alike, and a
+number word the table does not know refuses the line rather than defaulting to
+one: a creature entering with one counter where the card prints four is a
+strictly smaller card, silently. The X form keeps its own constant, because its
+count is not printed at all — it is the value announced when the spell was cast.
+
+**And the creature gate had never asked the entry table.** It asks
+`dynamic_pt_for`, `static_bonus_for`, `combat_restriction_for`,
+`lord_buff_for`, `cost_modifier_claims_line`, `replacement_claims_line`,
+`prevention_claims_line` and `choosable_bodies` — and for entry lines it asked
+nothing, so the seven-counter sentence was admitted by a literal somewhere else
+while the identical rule with a different number was refused by name. This is
+the partial-list mistake the file's own comments keep describing, found once
+more; it asks `enter_effect_line` now.
+
+**A set name is data the manifest already holds.** Golgothian Sylex sacrifices
+"each nontoken permanent with a name originally printed in the **Antiquities**
+expansion" — City in a Bottle's phrase, and Homelands' Apocalypse Chime is this
+exact card for another set. Two real cards and a plausible third put it well
+past `card_hooks.py`'s entry bar, so it is a production: the printed set *name*
+is resolved to its code through `card_loader.set_code_for_expansion_name`, a
+projection of the registry rather than a second table that could disagree with
+it about what a set is called. A name the manifest does not know leaves the
+line unconsumed and its card unsupported, which is right — the alternative is
+sacrificing the permanents of whichever set the caller guessed.
+
+Both manifest roles are searched, and that is deliberate rather than
+convenient: the card asks where a name was *originally printed*, which is a
+fact about card data and is true of a measured set exactly as of a shipped one.
+
+**This is the round that pays for the placement decision.** The effect reads
+`original_printing` — `printings[0]` — and not the set that happened to load
+first. Nineteen Antiquities cards are in the pool through Revised, and with ATQ
+appended after M21 rather than inserted in printing order, the Sylex would have
+missed **every one of them**. `test_golgothian_sylex_sacrifices_antiquities_permanents`
+is where that becomes observable, and it will get sharper at promotion, when
+those nineteen actually flip.
+
+**Numbers.** ATQ 57 → 59; grammar parses 57.5% → 60.0% of its lines. Shipped
+pool 668/668, floors and ceilings unmoved, suite green at 6615, no hook added.
+**Damping Field was looked at and deferred**: "players can't untap more than
+one artifact" is one word away in `untap_restrictions.py` and a long way away in
+`phases/untap_step.py`, which carries `max_lands` and `max_creatures` as
+separate counters with separate selection indices, separate validation and
+separate web parameters. A third type wants that collapsed into one per-type
+map first; that is its own round, not a rider on this one.

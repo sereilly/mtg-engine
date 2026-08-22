@@ -10,8 +10,8 @@ from ..enter_effects import (
     COPY_ARTIFACT_ON_ENTER,
     COPY_CREATURE_ON_ENTER,
     ENTERS_TAPPED,
-    ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS,
     ENTERS_WITH_X_PLUS_1_1_COUNTERS,
+    enters_with_pt_counters,
     enters_with_named_counter,
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
     NO_MAXIMUM_HAND_SIZE,
@@ -284,9 +284,27 @@ class PermanentStateMixin:
             if counter is not None:
                 add_named_counters(permanent, counter, 1)
 
-        if any(ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS == line for line in program.static_lines) or ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS in text:
-            permanent.power_bonus += 7
-            permanent.metadata["plus_1_0_counters"] = 7
+        # "…enters with <N> <kind> counters on it." The count and the kind are
+        # read off the line (engine/enter_effects.enters_with_pt_counters), so
+        # Clockwork Beast's seven, Clockwork Avian's four and Triskelion's
+        # three are one rule. They used to be two literal sentences, which is
+        # why the first worked and the others did not.
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            placement = enters_with_pt_counters(raw_line)
+            if placement is None:
+                continue
+            count, kind = placement
+            if kind == "+1/+1":
+                # Through the seam: entering with counters is a counter
+                # placement like any other, so a replacement that modifies it
+                # applies (CR 614.1c).
+                self.place_plus1_counters(permanent, count)
+            elif kind == "+1/+0":
+                permanent.power_bonus += count
+                permanent.metadata["plus_1_0_counters"] = count
+            else:
+                permanent.toughness_bonus += count
+                permanent.metadata["plus_0_1_counters"] = count
 
         # enters with X +1/+1 counters (Rock Hydra) — recorded as counters, not
         # a bare bonus, so the 704.5q sweep, the card face and any "with a

@@ -31,6 +31,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage_equal_to_swamps": "upkeep",
     "pump_target_creature_until_eot": "pump",
     "pump_target_while_source_tapped": "pump",
+    "sacrifice_expansion_permanents": "destruction",
     # One pump per chosen slot, each with its own P/T delta (Rookie Mistake).
     # The same category as the one-target pump above: what differs is how many
     # targets the sentence names, not what the effect is.

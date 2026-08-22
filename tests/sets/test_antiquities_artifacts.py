@@ -185,3 +185,49 @@ def test_ashnods_battle_gear_is_a_real_drawback(set_pool):
     game.activate_permanent_ability(0, "Ashnod's Battle Gear", target_permanent_index=1)
 
     assert fragile not in list(game.all_permanents())
+
+
+# ---------------------------------------------------------------------------
+# Golgothian Sylex (round 7)
+# ---------------------------------------------------------------------------
+
+
+def test_golgothian_sylex_sacrifices_antiquities_permanents(set_pool):
+    pool = set_pool("ATQ")
+    sylex = Permanent(card=pool["Golgothian Sylex"])
+    thopter = Permanent(card=pool["Ornithopter"])
+    survivor = Permanent(card=pool["Mishra's Workshop"])  # a land, also ATQ
+    p1 = PlayerState(name="P1", battlefield=[sylex, thopter, survivor])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Golgothian Sylex")
+
+    names = {perm.card.name for perm in game.all_permanents()}
+    assert "Ornithopter" not in names
+    assert "Mishra's Workshop" not in names, "every nontoken ATQ permanent, not only creatures"
+    assert "Golgothian Sylex" not in names, "the Sylex is an Antiquities card too"
+
+
+def test_golgothian_sylex_spares_a_permanent_from_another_set(set_pool, catalog_by_name):
+    pool = set_pool("ATQ")
+    sylex = Permanent(card=pool["Golgothian Sylex"])
+    bystander = Permanent(card=catalog_by_name["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[sylex, bystander])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Golgothian Sylex")
+
+    assert "Grizzly Bears" in {perm.card.name for perm in game.all_permanents()}
+
+
+def test_the_set_name_is_resolved_through_the_manifest(set_pool):
+    """The card prints a set *name* and the effect needs its code. Reading the
+    manifest — the registry that already holds both — is what keeps this from
+    being a second table that could disagree with it about what a set is
+    called, and is why Apocalypse Chime would need no code at all."""
+    program = compile_card_oracle(set_pool("ATQ")["Golgothian Sylex"])
+    (ability,) = program.activated_abilities
+
+    assert ability.instruction.payload["set_code"] == "atq"

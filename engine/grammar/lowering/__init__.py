@@ -112,6 +112,7 @@ from .board import (
     _LINKED_STEAL_FILTER,
     _lower_gain_control,
     _lower_sacrifice,
+    _lower_sacrifice_expansion_permanents,
 )
 from .cards import (
     _DAMAGED_PLAYER_EVENTS,
@@ -246,6 +247,7 @@ __all__ = [
     "_LINKED_STEAL_FILTER",
     "_lower_gain_control",
     "_lower_sacrifice",
+    "_lower_sacrifice_expansion_permanents",
     "_EXILED_CREATURE",
     "_lower_exile",
     "_fused_exile_then_controller_life",

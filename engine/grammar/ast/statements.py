@@ -50,6 +50,7 @@ from .characteristics import (
     SetBasePT,
 )
 from .board import (
+    SacrificeExpansionPermanents,
     Destroy,
     Exile,
     Attach,
@@ -118,7 +119,8 @@ from .game import (
 Effect = Union[
     DealDamage, Pump, SetBasePT, GainKeyword, LoseKeyword, PutCounter, RemoveCounter,
     DoublePower,
-    GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice, Exile, Tap, Untap,
+    GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
+    SacrificeExpansionPermanents, Exile, Tap, Untap,
     TapOrUntap, DoesntUntapNextStep, Attach,
     Regenerate, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,

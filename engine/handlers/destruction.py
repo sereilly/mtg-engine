@@ -359,3 +359,38 @@ def destroy_artifact_controller_gains_mana_value(
             f"{game.players[controller_index].name} gained {life} life"
         )
     return True, "resolved"
+
+
+@effect_handler("sacrifice_expansion_permanents")
+def sacrifice_expansion_permanents(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Golgothian Sylex: "Each nontoken permanent with a name originally printed
+    in the Antiquities expansion is sacrificed by its controller."
+
+    The set is a code on the payload, resolved from the manifest when the line
+    was parsed — so this is the same effect for any set, which is what Homelands'
+    Apocalypse Chime is.
+
+    "Originally printed" is ``CardDefinition.original_printing`` — ``printings[0]``,
+    the first set the card appeared in — and *not* whichever set happened to load
+    first. That distinction is the whole content of the word "originally": nineteen
+    Antiquities cards were reprinted in Revised, and reading the loaded set code
+    would miss every one of them. It is the same read City in a Bottle makes.
+
+    The Sylex sacrifices itself: it is an Antiquities card and its own ability
+    does not exempt it. Nothing here excludes the source, deliberately.
+    """
+    wanted = str(instruction.payload.get("set_code", "")).lower()
+    if not wanted:
+        return False, "no expansion named"
+
+    doomed = [
+        (seat, perm)
+        for seat, perm in game.permanents_with_controller()
+        if not perm.metadata.get("is_token")
+        and perm.card.original_printing.lower() == wanted
+    ]
+    for seat, perm in doomed:
+        game._permanent_to_graveyard(game.players[seat], perm)
+        game.log.append(f"{perm.card.name} sacrificed ({context.card.name})")
+    game.remove_all_from_battlefield([perm for _seat, perm in doomed])
+    return True, "resolved"

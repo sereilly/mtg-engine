@@ -62,6 +62,7 @@ from .effects import (
     _parse_return,
     _parse_reveal_top,
     _parse_sacrifice,
+    _parse_sacrifice_expansion_permanents,
     _parse_search_library,
     _parse_doesnt_untap_next_step,
     _parse_tap_untap,
@@ -442,6 +443,14 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     revealed = _parse_reveal_hand_and_choose(stream)
     if revealed is not None:
         return revealed
+    # "Each nontoken permanent with a name originally printed in the <Set>
+    # expansion is sacrificed by its controller." (Golgothian Sylex.) Read
+    # early because the sentence opens with "each", which the subject-verb
+    # reader below would take as a quantified noun phrase and then fail on the
+    # passive verb — losing the line to a less specific error.
+    expansion_sacrifice = _parse_sacrifice_expansion_permanents(stream)
+    if expansion_sacrifice is not None:
+        return expansion_sacrifice
     # "[Until end of turn,] you may play/cast <cards> [this turn] […]" — a
     # cast-or-play permission (CR 601.3). Tried before the "you may" wrapper
     # below: the permission IS the sentence's whole effect, where the wrapper

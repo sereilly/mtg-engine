@@ -290,3 +290,44 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
         return ast.SacrificeUnlessPay(subject, _parse_mana_payment(stream))
     stream.reset(mark)
     return ast.Sacrifice(player, subject)
+
+
+def _parse_sacrifice_expansion_permanents(stream: TokenStream) -> ast.Statement | None:
+    """``Each nontoken permanent with a name originally printed in the <Set>
+    expansion is sacrificed by its controller.`` (Golgothian Sylex.)
+
+    The set *name* is printed and the engine wants its code, so the mapping is
+    asked of the manifest — the registry that already holds both — rather than
+    written out here. A name the manifest does not know leaves the line
+    unconsumed and its card unsupported, which is the right answer: the effect
+    would otherwise sacrifice the permanents of whichever set the caller
+    guessed, or of none, and neither is what the card says.
+    """
+    from ...card_loader import set_code_for_expansion_name
+
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "each", "nontoken", "permanent", "with", "a", "name",
+        "originally", "printed", "in", "the",
+    ):
+        stream.reset(mark)
+        return None
+    words: list[str] = []
+    while not stream.exhausted and not stream.at_word("expansion"):
+        word = stream.peek_word()
+        if word is None:
+            stream.reset(mark)
+            return None
+        words.append(word)
+        stream.advance()
+    if not words or not stream.accept_word("expansion"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("is", "sacrificed", "by", "its", "controller"):
+        stream.reset(mark)
+        return None
+    set_code = set_code_for_expansion_name(" ".join(words))
+    if set_code is None:
+        stream.reset(mark)
+        return None
+    return ast.SacrificeExpansionPermanents(set_code)

@@ -117,6 +117,32 @@ def load_cards(path: Union[str, Path, Sequence[Union[str, Path]]]) -> list[CardD
     ]
 
 
+def set_code_for_expansion_name(
+    name: str, manifest_path: str | Path = MANIFEST_PATH
+) -> str | None:
+    """The set code a printed expansion *name* refers to, or None.
+
+    "…with a name originally printed in the **Antiquities** expansion"
+    (Golgothian Sylex) / "…in the **Arabian Nights** expansion" (City in a
+    Bottle) / Homelands' Apocalypse Chime. The card prints the set's name and
+    every reader downstream wants its code, and the manifest already holds
+    both — so the mapping is a projection of the registry rather than a second
+    table that could disagree with it about what a set is called.
+
+    Both manifest roles are searched. Whether a player may deck the set is not
+    the question here: the card asks where a *name was originally printed*,
+    which is a fact about card data, and is true of a measured set exactly as
+    it is of a shipped one. (The same reasoning `ingest_set.py --all` uses.)
+    """
+    wanted = " ".join((name or "").strip().lower().split())
+    if not wanted:
+        return None
+    for entry in manifest_sets(manifest_path) + manifest_measured_sets(manifest_path):
+        if str(entry.get("name", "")).strip().lower() == wanted:
+            return str(entry["code"]).lower()
+    return None
+
+
 def manifest_sets(manifest_path: str | Path = MANIFEST_PATH) -> list[dict]:
     """Every set entry in ``cards/manifest.json``, in printing order.
 
