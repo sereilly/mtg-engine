@@ -1654,11 +1654,18 @@ def test_aura_upkeep_damage_lowers_to_the_dispatched_pair(card, line):
 
     All that was missing was the trigger phrase: the effect clause already
     lowered, and ``("upkeep_enchanted_controller", "deal_damage")`` is a
-    registered pair in engine/phases/upkeep_effects.py. The payload is the
-    legacy one byte for byte, which is what makes adding the phrase a no-op for
-    behaviour and a gain for the migration.
+    registered pair in engine/phases/upkeep_effects.py.
+
+    ``recipient`` joined the payload with Detonate (round 23): a damage clause
+    that names a player now says so, instead of the handler inferring it from
+    the absence of a permanent index. Inert here — this pair's dispatcher works
+    out the enchanted permanent's controller itself and reads only the amount —
+    but recorded in the golden rather than filtered out of it, because a golden
+    that hides a key is a golden that would not notice the key changing.
     """
-    assert _instructions(line, card) == [("deal_damage", {"amount": 1})]
+    assert _instructions(line, card) == [
+        ("deal_damage", {"amount": 1, "recipient": "target_player"})
+    ]
 
 
 def test_enchanted_land_upkeep_is_deliberately_not_a_trigger_phrase():

@@ -26,6 +26,7 @@ from ._common import (
     _names_several_targets,
     _restrictions_beyond,
     _targets_only,
+    is_mana_value_x,
 )
 
 
@@ -120,7 +121,22 @@ def _lower_destroy(node: ast.Destroy, event: str | None = None) -> tuple[OracleI
     if spec.quantifier not in ("target", "up_to"):
         raise LoweringError("unsupported destroy quantifier", node=node)
 
+    # "Destroy target artifact **with mana value X**." (Detonate.) The bound is
+    # the X chosen on the cast, so it has no literal to ride the payload as an
+    # ordinary narrowing — it is split off into a flag the legality check reads
+    # against that X, exactly as Spell Blast's counter does. Splitting it out
+    # rather than leaving it on the filter is what keeps `_filter_payload` free
+    # to go on refusing every *other* variable bound.
+    mv_equals_x = is_mana_value_x(filt.mana_value)
+    if mv_equals_x:
+        # Off the *spec* as well as the local filter: `_describe_targets` below
+        # builds the picker's description from the spec's own filter, so a copy
+        # left behind there would refuse the line at that call instead.
+        filt = dataclasses.replace(filt, mana_value=None)
+        spec = dataclasses.replace(spec, filter=filt)
     payload = _filter_payload(filt)
+    if mv_equals_x:
+        payload["mv_equals_x"] = True
     if node.no_regen:
         payload["bypass_regeneration"] = True
     _describe_targets(payload, spec)

@@ -1646,3 +1646,67 @@ easy wiring and the wrong rule.
 **Numbers.** ATQ 77 → 78; grammar parses 75.8% → 78.3% of its lines, lowers
 75.0% → 77.5%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
 6663, no hook added.
+
+## ATQ round 23: a target the cast's X decides, and a clause that named a player
+
+*(2026-08-22.)* **78 → 79.** Detonate — "Destroy target artifact **with mana
+value X**. It can't be regenerated. Detonate deals X damage to that artifact's
+controller."
+
+The whole line already *parsed*. It refused in **lowering**, on the filter: a
+mana-value bound whose value is a variable has no payload form, and
+`_filter_payload` refuses rather than dropping it, which is that gate working.
+
+**Spell Blast has printed the same restriction since Alpha** — "counter target
+spell with mana value X" — and lowers it to an `mv_equals_x` flag. So the phrase
+is one reading (`is_mana_value_x`, in `lowering/_common.py`) asked by both, and
+what each does with it stays in each: the counter flow refuses every other
+mana-value shape because its handler can ask only that one question; the destroy
+flow lets a literal bound go on riding the payload as an ordinary narrowing and
+splits off only the variable.
+
+### The picker is right to offer every artifact
+
+`_destroy_target_legal` deliberately says nothing about this restriction. The
+picker runs before any X exists, and "X is not chosen yet" is not "no
+restriction" — it is *every* mana value still being reachable, because the
+caster announces the target and the X together (CR 601.2b, then 601.2c). A
+narrowing there would offer nothing at all.
+
+So the pair is checked where both halves are known, and there are two of those:
+
+- **The cast**, when the caller named an X. `_validate_cast_targets` gets the
+  check **above** its per-kind arms, for the same reason the target-count check
+  is there: Detonate prints two sentences, so its destroy is a step of a
+  `sequence` and `primary` is the wrapper — every arm below would have missed
+  it.
+- **The X**, when the caller named none. A caster who chose the target chose the
+  number, so `_x_implied_by_target` reads it off the target instead of inferring
+  from the mana pool. That is one rule for both cards, and it fixes Spell Blast
+  too: inferring X from available mana produced a legal cast that then countered
+  nothing, a spell spending its cost on the wrong value rather than on a choice.
+
+### The bug behind the second sentence
+
+"Detonate deals X damage to **that artifact's controller**" resolved to no
+damage at all, and the reason generalises past this card. The damage handler
+decides between a permanent and a player by looking for a permanent index on the
+resolution context — but in a `sequence`, that index is the **previous step's**,
+and the previous step here is the destroy. A clause about a player was aimed at
+the artifact it had just destroyed, found it gone, and logged CR 608.2b.
+
+The fix is that a damage clause naming a player now *says so* in its payload
+(`recipient: "target_player"`) instead of being inferred from an absence. Every
+existing card behaves identically — for them the index really was absent — with
+one deliberate exclusion: "target player **or planeswalker**" (Chandra's
+Magmutt) is exactly the clause that may name either, so it keeps the inference,
+where the index is the choice rather than a leftover.
+
+One golden moved: the three upkeep-damage Auras' payload gains the key. It is
+inert for them — that pair's dispatcher works out the enchanted permanent's
+controller itself and reads only the amount — and it is recorded in the golden
+rather than filtered out of it, because a golden that hides a key would not
+notice the key changing.
+
+**Numbers.** ATQ 78 → 79; grammar parses 78.3% → 79.2% of its lines. Shipped
+pool 668/668, floors and ceilings unmoved, suite green at 6667, no hook added.

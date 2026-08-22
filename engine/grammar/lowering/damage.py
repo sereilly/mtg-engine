@@ -514,12 +514,27 @@ def _lower_damage(
         # the caster's living opponents through the same player-damage path a
         # single face takes, so shields and replacements see each event.
         payload["recipient"] = "each_opponent"
-    elif isinstance(recipient, ast.PlayerRef) and recipient.kind not in (
+    elif isinstance(recipient, ast.PlayerRef) and recipient.kind in (
         # "target opponent" joins the chosen-player forms: the damage handler
         # takes the seat off the resolution context either way, and the
         # opponents_only narrowing rides the target description below.
         "target_player", "target_opponent", "that_player", "controller"
     ):
+        # The seat still comes off the context — but the *fact that a seat is
+        # what this clause names* is recorded, instead of being inferred from
+        # the absence of a permanent index. Detonate is why: "Destroy target
+        # artifact … Detonate deals X damage to that artifact's controller" is
+        # one sequence, so by the second step the resolution context is carrying
+        # the first step's permanent index and the handler read it as the thing
+        # to damage. A clause about a player then dealt its damage to a
+        # permanent, quietly, and only because nothing had said which it was.
+        #
+        # "…to target player **or planeswalker**" (Chandra's Magmutt) is exactly
+        # the clause that may name either, so it keeps the inference: there the
+        # permanent index is the choice rather than a leftover.
+        if not recipient.or_planeswalker:
+            payload["recipient"] = "target_player"
+    elif isinstance(recipient, ast.PlayerRef):
         raise LoweringError(f"unsupported damage recipient {recipient.kind!r}", node=node)
     elif (
         isinstance(recipient, ast.TargetSpec)

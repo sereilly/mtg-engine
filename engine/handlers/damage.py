@@ -134,6 +134,24 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             caster, damage, source=source_permanent or card, then=_report, asks=True
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "target_player":
+        # "…to target player" / "…to that artifact's controller" — the seat the
+        # resolution context carries, taken *because the clause names a player*
+        # rather than because no permanent index happens to be set. The two
+        # readings differ exactly once: a sequence whose earlier step targeted a
+        # permanent (Detonate), where the index is set and means something else
+        # entirely.
+        def _report_face(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            # Nothing logged for zero: CR 120.8 makes a source that would deal 0
+            # damage deal none at all, and Detonate for X=0 says it every time.
+            if dealt:
+                game.log.append(f"{card.name} dealt {dealt} damage to {target.name}")
+
+        game._deal_damage_to_player(
+            target, damage, source=source_permanent or card, then=_report_face, asks=True
+        )
+        return True, "resolved"
     if instruction.payload.get("recipient") == "each_player":
         # "…deals N damage to each player" (Armageddon Clock): every living seat
         # in turn order, the source's controller included. One player-damage

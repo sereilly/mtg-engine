@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 81.0% | 79.7% | 44.2% | 155 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 78.3% | 77.5% | 50.8% | 57 |
+| ATQ *(measured)* | 85 | 120 | 78.3% | 78.3% | 51.7% | 58 |
 | **All (shipped)** | **1533** | **2166** | **81.3%** | **80.1%** | **47.1%** | **885** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -403,6 +403,8 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 - **Destructive Tampering**
   - `• Destroy target artifact.`
   - `• Creatures without flying can't block this turn.`
+- **Detonate**
+  - `Destroy target artifact with mana value X. It can't be regenerated. Detonate deals X damage to that artifact's controller.`
 - **Dingus Egg**
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`

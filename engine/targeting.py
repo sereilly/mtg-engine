@@ -630,6 +630,40 @@ def derive_cast_target(card, program) -> str | None:
     return spec["kind"] if spec is not None else None
 
 
+def targets_mana_value_x(instructions) -> bool:
+    """Whether these instructions target an object whose mana value must equal
+    the cast's X — "counter target spell with mana value X" (Spell Blast),
+    "destroy target artifact with mana value X" (Detonate).
+
+    Read off the compiled program rather than the oracle text, and recursing
+    through the wrappers for the reason :func:`_from_instructions` does: Detonate
+    prints two sentences, so its destroy is a step of a ``sequence`` and a reader
+    that stopped at the wrapper would answer no about the card that asks.
+    """
+    for instruction in instructions:
+        if instruction.payload.get("mv_equals_x"):
+            return True
+        nested = _nested_steps(instruction)
+        if nested and targets_mana_value_x(nested):
+            return True
+    return False
+
+
+#: The wrapper kinds above, and the payload keys whose instructions they carry.
+#: The same two ``_from_instructions`` descends into, and for the same reason
+#: it gives — an effect written as two steps carries its targeting on the step
+#: that targets.
+_WRAPPER_STEP_KEYS = {"sequence": ("steps",), "may": ("action", "then")}
+
+
+def _nested_steps(instruction) -> tuple:
+    """The instructions a wrapper carries, empty for anything else."""
+    nested: tuple = ()
+    for key in _WRAPPER_STEP_KEYS.get(instruction.kind, ()):
+        nested += tuple(instruction.payload.get(key) or ())
+    return nested
+
+
 def derive_instruction_spec(instructions) -> dict | None:
     """The target spec a bare instruction sequence describes, or None for none.
 

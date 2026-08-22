@@ -85,6 +85,23 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
 }
 
 
+def is_mana_value_x(comparison: "ast.Comparison | None") -> bool:
+    """Whether a mana-value bound is the printed **X** — "with mana value X"
+    (Spell Blast, Detonate) rather than "with mana value 3 or less" (Eliminate).
+
+    One reading of the phrase, two lowerings that do different things with it:
+    the counter flow refuses everything else, the destroy flow lets a literal
+    bound ride the payload as an ordinary narrowing. The difference is what each
+    handler can ask, so it stays in each; what "X" *is* is one question and lives
+    here.
+    """
+    return (
+        comparison is not None
+        and comparison.op == "eq"
+        and isinstance(comparison.value, ast.Var)
+    )
+
+
 def dropped_narrowings(
     filt: ast.ObjectFilter, payload: dict[str, object]
 ) -> tuple[str, ...]:

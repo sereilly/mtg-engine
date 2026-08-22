@@ -14,6 +14,7 @@ from ..errors import LoweringError
 from ._common import (
     _lower_condition,
     _restrictions_beyond,
+    is_mana_value_x,
 )
 
 
@@ -134,7 +135,7 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
         # that equality is the only mana-value question it can ask, so a fixed
         # number or an inequality ("mana value 3 or less") has to refuse rather
         # than counter regardless of cost.
-        if filt.mana_value.op != "eq" or not isinstance(filt.mana_value.value, ast.Var):
+        if not is_mana_value_x(filt.mana_value):
             raise LoweringError("no handler for this mana-value restriction", node=node)
         payload["mv_equals_x"] = True
     leftover = _restrictions_beyond(filt, _COUNTER_HONOURED_FILTER_FIELDS)

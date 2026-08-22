@@ -34,7 +34,7 @@ from ...oracle_types import x_spend_color_from_text
 from ...target_restrictions import forbidden_target
 from ...targeting import graveyard_target_spec
 from ...subject_filters import filter_head_noun, subject_matches
-from ...targeting import derive_cast_spec
+from ...targeting import derive_cast_spec, targets_mana_value_x
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
 # "creature" uses Permanent.is_creature so animated lands (Kormus Bell / Living
@@ -469,7 +469,7 @@ class SpellCastingMixin:
 
         target_ok, target_reason = self._validate_cast_targets(
             card, caster_index, target_player_index, target_permanent_index, target_stack_item,
-            mode_index=mode_index,
+            mode_index=mode_index, x_value=x_value,
         )
         if not target_ok:
             self.log.append(target_reason)
@@ -505,6 +505,16 @@ class SpellCastingMixin:
 
         x_color = x_spend_color_from_text(card.oracle_text)
         resolved_x_value = x_value
+        if resolved_x_value is None and "{X}" in card.mana_cost.upper():
+            # "…with mana value X" (Spell Blast, Detonate). The target and the X
+            # are announced together (CR 601.2b before 601.2c), and only one X
+            # makes the pair legal — so a caster who named the target and not the
+            # number named the number too. Inferring from the mana pool instead
+            # produced a legal cast that then did nothing, which is a spell
+            # spending its cost on the wrong value rather than on a choice.
+            resolved_x_value = self._x_implied_by_target(
+                card, target_player_index, target_permanent_index, target_stack_item,
+            )
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             resolved_x_value = self._infer_x_value(
                 caster, card.mana_cost, extra_generic_tax, x_color=x_color,
@@ -821,12 +831,44 @@ class SpellCastingMixin:
                     cost_hand_index = None
         return sacrificed
 
+    def _x_implied_by_target(
+        self, card, target_player_index, target_permanent_index, target_stack_item
+    ) -> int | None:
+        """The X a "with mana value X" spell's chosen target fixes, or None.
+
+        None whenever the spell does not print that restriction, or no target
+        was named — those are the ordinary cases and they fall through to the
+        pool-based inference. The stack item is read first because a spell being
+        countered is the only kind of target Spell Blast has; Detonate's is a
+        permanent on some seat's battlefield.
+        """
+        if not targets_mana_value_x(compile_card_oracle(card).instructions):
+            return None
+        if target_stack_item is not None:
+            return int(getattr(target_stack_item.card, "cmc", 0) or 0)
+        if not isinstance(target_permanent_index, int):
+            return None
+        seat = target_player_index if target_player_index is not None else None
+        if seat is None or not (0 <= seat < len(self.players)):
+            return None
+        chosen = self.permanent_at(self.players[seat], target_permanent_index)
+        return None if chosen is None else int(getattr(chosen.card, "cmc", 0) or 0)
+
     def _destroy_target_legal(self, payload: dict, perm: Permanent) -> bool:
         """Whether *perm* satisfies a ``destroy_target_permanent`` instruction's
         target filters (type/subtype/colour/tapped + exclusions). Shared by cast
         validation and the legality enumerator so a destroy ability (Royal
         Assassin's "target tapped creature", Northern Paladin's "target black
-        permanent") offers exactly the permanents it can legally destroy."""
+        permanent") offers exactly the permanents it can legally destroy.
+
+        Deliberately silent about "…with mana value X" (Detonate), which is the
+        one restriction with no literal to test. The picker calls this before any
+        X exists, and "X is not chosen yet" is not "no restriction" — it is
+        *every* mana value still being reachable, since the caster announces the
+        target and the X together (CR 601.2b, then 601.2c). Narrowing here would
+        offer nothing at all; the pair is checked in `_validate_cast_targets`,
+        where both halves are known.
+        """
         return permanent_matches_filter(perm, payload)
     def _validate_cast_targets(
         self,
@@ -836,6 +878,7 @@ class SpellCastingMixin:
         target_permanent_index: int | None = None,
         target_stack_item=None,
         mode_index: int | None = None,
+        x_value: int | None = None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
@@ -968,6 +1011,22 @@ class SpellCastingMixin:
         maximum = (derive_cast_spec(card, program) or {}).get("max_targets")
         if isinstance(maximum, int) and announced is not None and announced > maximum:
             return False, f"too many targets for {card.name}"
+
+        # "…with mana value X" (Spell Blast, Detonate). Here rather than in an
+        # arm below, for the same reason the count check is: Detonate prints two
+        # sentences, so its destroy is a step of a `sequence` and `primary` is
+        # the wrapper. Only an X the caller *named* is checked — an unnamed one
+        # was just derived from this very target, so comparing it would be the
+        # engine checking its own arithmetic.
+        if x_value is not None and targets_mana_value_x(program.instructions):
+            implied = self._x_implied_by_target(
+                card, target_player_index, target_permanent_index, target_stack_item,
+            )
+            if implied is not None and implied != int(x_value):
+                return False, (
+                    f"{card.name} targets an object with mana value X, and X={x_value} "
+                    f"does not match {implied}"
+                )
 
         target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
         if target_idx < 0 or target_idx >= len(self.players):
