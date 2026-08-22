@@ -534,32 +534,59 @@ def prevent_and_count_kind(line: str) -> str | None:
 #: Anchored at both ends. A line saying more than this is a prevention this
 #: file does not implement, and a prefix match would claim it and then enforce
 #: the narrower rule, which is damage prevented that the card does not prevent.
+#:
+#: The subject is captured rather than fixed, because Artifact Ward prints the
+#: same sentence about the creature it **enchants**. Two readers rather than one
+#: permissive matcher: the shield is derived by reading a permanent's text, and
+#: an Aura is itself a permanent — a single matcher would have Artifact Ward
+#: shielding *itself* from artifact sources, which is a card nobody printed.
 _PREVENT_ALL_FROM_SOURCE_TYPE_RE = re.compile(
-    r"^prevent all damage that would be dealt to this "
+    r"^prevent all damage that would be dealt to "
+    r"(?P<subject>this|enchanted|equipped) "
     r"(?:artifact|creature|enchantment|land|permanent) by "
     r"(?P<source_type>artifact|creature|enchantment|land) "
     r"(?:sources|creatures|artifacts|permanents)$"
 )
 
 
-def prevent_all_from_source_type(line: str) -> str | None:
-    """The class of source *line* shields against, or None if it is not that
-    line. One matcher, asked by the interceptor below and by the claim reader,
-    so what is implemented and what is claimed cannot drift."""
-    match = _PREVENT_ALL_FROM_SOURCE_TYPE_RE.match(
+def _source_type_shield_match(line: str):
+    return _PREVENT_ALL_FROM_SOURCE_TYPE_RE.match(
         " ".join(line.strip().lower().rstrip(".").split())
     )
-    return match.group("source_type") if match else None
+
+
+def prevent_all_from_source_type(line: str) -> str | None:
+    """The class of source *line* shields the permanent printing it against, or
+    None if it is not that line. One matcher, asked by the interceptor below and
+    by the claim reader, so what is implemented and what is claimed cannot
+    drift."""
+    match = _source_type_shield_match(line)
+    return match.group("source_type") if match and match.group("subject") == "this" else None
+
+
+def attached_prevent_all_from_source_type(line: str) -> str | None:
+    """The same answer for the "enchanted / equipped" form (Artifact Ward),
+    where the shield covers what the Aura or Equipment is attached to rather
+    than the permanent printing the line.
+
+    Exported for ``engine/auras.py``'s support gate, which claims the line by
+    asking the code that carries it out.
+    """
+    match = _source_type_shield_match(line)
+    return match.group("source_type") if match and match.group("subject") != "this" else None
 
 
 def _source_type_shielded_by(game, event: dict) -> str | None:
-    """The source class the damaged *permanent*'s own text shields it against.
+    """The source class the damaged permanent is shielded against.
 
-    Pure: it reads the recipient's text and answers, spending nothing. The
-    recipient must be the permanent printing the line — this is "dealt to
-    **this** creature", so a second copy on the battlefield shields itself and
-    not its twin.
+    Pure: it reads text and answers, spending nothing. Two places print the
+    line, and both are read here: the recipient's own text ("dealt to **this**
+    creature", so a second copy on the battlefield shields itself and not its
+    twin) and the text of whatever is attached to it ("dealt to **enchanted**
+    creature", which is a shield the recipient's own text says nothing about).
     """
+    from .auras import auras_attached_to
+
     recipient = event["recipient"]
     if isinstance(recipient, PlayerState) or recipient is None:
         return None
@@ -567,6 +594,11 @@ def _source_type_shielded_by(game, event: dict) -> str | None:
         source_type = prevent_all_from_source_type(line)
         if source_type is not None:
             return source_type
+    for attached in auras_attached_to(recipient):
+        for line in attached.effective_card.oracle_text.splitlines():
+            source_type = attached_prevent_all_from_source_type(line)
+            if source_type is not None:
+                return source_type
     return None
 
 
@@ -730,4 +762,5 @@ def prevention_claims_line(line: str) -> bool:
         prevent_and_count_kind(line) is not None
         or per_damage_counter_kind(line) is not None
         or prevent_all_from_source_type(line) is not None
+        or attached_prevent_all_from_source_type(line) is not None
     )

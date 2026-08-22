@@ -378,6 +378,11 @@ class LegalityMixin:
             controller_index, card, spec, for_cast=False,
             ability_instruction=ability_instruction,
             source_permanent=source_permanent,
+            # The *ability's* targets, which is a narrower claim than
+            # "source_permanent is set": the cost picker below is handed the
+            # same permanent and chooses no target at all (CR 601.2b), and Jade
+            # Monolith's source picker chooses a source rather than a target.
+            ability_source=source_permanent,
         )
         # Dwarven Weaponsmith: an ability with a target *and* a choosable cost
         # carries two pickers, and each enumerates its own candidates — the cost
@@ -402,7 +407,7 @@ class LegalityMixin:
     # -- Target enumeration ------------------------------------------------
     def _enumerate_targets(
         self, caster_index: int, card: CardDefinition, spec: dict, *, for_cast: bool,
-        ability_instruction=None, source_permanent=None,
+        ability_instruction=None, source_permanent=None, ability_source=None,
     ) -> list[dict]:
         kind = spec["kind"]
         if kind in ("none", "modal"):
@@ -422,6 +427,7 @@ class LegalityMixin:
             perms = self._enumerate_targets(
                 caster_index, card, {**spec, "kind": spec.get("permanent_kind", "permanent")},
                 for_cast=for_cast, ability_instruction=ability_instruction,
+                ability_source=ability_source,
             )
             return perms + self._enumerate_stack_targets(card, spec)
 
@@ -475,7 +481,10 @@ class LegalityMixin:
                         if not ok:
                             continue
                     else:
-                        if not self._can_be_targeted(perm, card, caster_index=caster_index):
+                        if not self._can_be_targeted(
+                            perm, card, caster_index=caster_index,
+                            ability_source=ability_source,
+                        ):
                             continue
                         # Apply the activated ability's own target restriction (e.g.
                         # Royal Assassin's tapped-only, Nettling Imp's non-Wall) so it

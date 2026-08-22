@@ -774,6 +774,73 @@ def aura_protection_colors(oracle_text: str) -> frozenset[str]:
     return frozenset(found)
 
 
+#: The combat-restriction kinds a reader asks of the *attached* channel below.
+#:
+#: ``engine/combat_restrictions.py``'s table reads a printed line, and an Aura
+#: printing one of its sentences about the permanent it is attached to is the
+#: same restriction — so the table is asked rather than copied, exactly as
+#: ``aura_continuous_claim`` asks the derivation tables rather than listing
+#: their sentences again. But every one of those kinds is enforced by reading
+#: the *creature's own* compiled program, and a kind claimed here with nothing
+#: consulting :func:`attached_combat_restrictions` would be a restriction the
+#: card prints, the support gate admits, and no combat step ever asks about —
+#: an ability that works more often than the card allows. So the set names
+#: exactly the kinds a reader consults, and adding one means adding that
+#: reader.
+ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({"cant_be_blocked_by"})
+
+#: "Enchanted creature" / "equipped creature" in the subject position, with the
+#: noun kept: the table below is written about "this creature", and a line about
+#: an enchanted *artifact* is a sentence about something else that must fail to
+#: match rather than be rewritten into one that does.
+_ATTACHED_SUBJECT = re.compile(rf"^{_ATTACHED} (?P<noun>{_NOUN})(?= )")
+
+
+def aura_combat_restriction(line: str):
+    """The combat restriction an Aura's *line* imposes on what it is attached to.
+
+    "Enchanted creature can't be blocked by artifact creatures." (Artifact
+    Ward.) Argothian Pixies prints the same restriction about itself, so the
+    difference between the two cards is the subject of the sentence and nothing
+    else — which is why this rewrites the subject and asks
+    ``combat_restrictions.combat_restriction_for`` instead of holding a second
+    copy of its table.
+
+    Returns None for a kind nothing consults through the attached channel; see
+    :data:`ENFORCED_ATTACHED_COMBAT_RESTRICTIONS`.
+    """
+    from .combat_restrictions import combat_restriction_for
+
+    normalized = _line_text(line)
+    match = _ATTACHED_SUBJECT.match(normalized)
+    if match is None:
+        return None
+    restriction = combat_restriction_for(
+        f"this {match.group('noun')}{normalized[match.end():]}"
+    )
+    if restriction is None:
+        return None
+    if restriction.kind not in ENFORCED_ATTACHED_COMBAT_RESTRICTIONS:
+        return None
+    return restriction
+
+
+def attached_combat_restrictions(permanent) -> tuple:
+    """Every combat restriction the Auras on *permanent* impose on it.
+
+    Asked at the moment combat reads it, so the restriction ends when the Aura
+    does with nothing having to clear a flag — the same shape
+    :func:`aura_restriction_active` has, carrying a payload.
+    """
+    found = []
+    for aura in auras_attached_to(permanent):
+        for raw_line in (aura.effective_card.oracle_text or "").splitlines():
+            restriction = aura_combat_restriction(raw_line)
+            if restriction is not None:
+                found.append(restriction)
+    return tuple(found)
+
+
 def aura_restriction_active(permanent, name: str) -> bool:
     """Whether any Aura attached to *permanent* imposes restriction *name*.
 
@@ -888,6 +955,42 @@ def attached_ability_cost_reduction(permanent) -> tuple[int, int]:
     return total, floor
 
 
+#: "Enchanted creature can't be the target of abilities from artifact sources."
+#: (Artifact Ward.) Narrower than protection (CR 702.16), which also stops
+#: damage, enchanting and blocking, and narrower than shroud, which stops spells
+#: too — so it is neither of those with a filter bolted on, it is its own rule
+#: about one kind of source choosing one kind of object.
+#:
+#: The source class is payload, like every other text-keyed table's parameter.
+_ATTACHED_ABILITY_TARGET_IMMUNITY = re.compile(
+    rf"^{_ATTACHED} {_NOUN} can't be the target of abilities from "
+    r"(?P<source_type>artifact|creature|enchantment|land) sources$"
+)
+
+
+def aura_ability_target_immunity(line: str) -> str | None:
+    """The class of source whose *abilities* may not target what this Aura is
+    attached to, or None if *line* is not that sentence."""
+    match = _ATTACHED_ABILITY_TARGET_IMMUNITY.match(_line_text(line))
+    return match.group("source_type") if match is not None else None
+
+
+def ability_target_immunity_classes(permanent) -> frozenset[str]:
+    """Every source class the Auras on *permanent* make its abilities-untargetable.
+
+    Asked at the moment a target is chosen, so the immunity ends when the Aura
+    does — the same shape :func:`aura_restriction_active` has.
+    """
+    classes = {
+        source_type
+        for aura in auras_attached_to(permanent)
+        for line in (aura.effective_card.oracle_text or "").splitlines()
+        for source_type in (aura_ability_target_immunity(line),)
+        if source_type is not None
+    }
+    return frozenset(classes)
+
+
 def aura_continuous_claim(line: str) -> str | None:
     """Name the code implementing *line* as a continuous Aura effect, or None.
 
@@ -910,6 +1013,12 @@ def aura_continuous_claim(line: str) -> str | None:
     printings of these Auras carry it and an anchored pattern would otherwise
     stop matching almost all of them.
     """
+    # Imported here rather than at module scope: `prevention` reads this
+    # module's attachment record, so the two are mutually recursive at import.
+    from .prevention import (
+        attached_prevent_all_from_source_type as _attached_prevent_all_from_source_type,
+    )
+
     normalized = _line_text(line)
     if _STATIC_PT_LINE.match(normalized):
         return "static P/T grant (layer 7c) — auras.aura_static_pt_grant"
@@ -919,6 +1028,12 @@ def aura_continuous_claim(line: str) -> str | None:
         return "keyword grant (layer 6) — auras.aura_keyword_grants"
     if aura_restrictions(normalized):
         return "combat/untap restriction — auras.aura_restriction_active"
+    if aura_combat_restriction(normalized) is not None:
+        return "attached combat restriction — auras.attached_combat_restrictions"
+    if aura_ability_target_immunity(normalized) is not None:
+        return "ability-target immunity — auras.ability_target_immunity_classes"
+    if _attached_prevent_all_from_source_type(normalized) is not None:
+        return "prevention from a source class — prevention._source_type_shielded_by"
     if _PROTECTION_LINE.match(normalized):
         return "protection grant — auras.aura_protection_colors"
     if aura_animates_artifact(normalized):

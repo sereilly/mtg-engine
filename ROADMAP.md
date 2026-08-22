@@ -1580,3 +1580,69 @@ looked. The key is `self_action` now.
 **Numbers.** ATQ 76 → 77; grammar parses 74.2% → 75.8% of its lines, executes
 49.2% → 50.8%. Shipped pool 668/668, floors and ceilings unmoved, suite green
 at 6655, no hook added and no new `Game` field.
+
+## ATQ round 22: one card, three sentences, three tables that already existed
+
+*(2026-08-21.)* **77 → 78.** Artifact Ward, the last Aura in the set and the
+only card left whose whole text is three separate effects:
+
+```
+Enchanted creature can't be blocked by artifact creatures.
+Prevent all damage that would be dealt to enchanted creature by artifact sources.
+Enchanted creature can't be the target of abilities from artifact sources.
+```
+
+Two of the three are sentences the engine already implements about a **different
+subject**, and the round is mostly about that difference costing a rewrite of
+the subject rather than a second implementation.
+
+**"Can't be blocked by artifact creatures" is Argothian Pixies' line** — round 4
+put it in `combat_restrictions.py` with the noun phrase as payload. The Ward
+prints it about what it enchants, so `aura_combat_restriction` rewrites the
+attached subject to "this creature" and asks that table; the blockers step
+unions the attacker's own `cant_be_blocked_by` instructions with the ones its
+Auras impose.
+
+The gate that makes the reuse safe is `ENFORCED_ATTACHED_COMBAT_RESTRICTIONS`.
+Asking the table gets *every* row for free, and every row is enforced by reading
+the creature's **own** compiled program — so "enchanted creature attacks each
+combat if able" would have been claimed here, admitted by the support gate, and
+asked about by nothing. That is the M21 round-138 failure exactly: not a missing
+ability, a restriction that silently does not apply. The frozenset names the one
+kind a reader consults, and adding a kind means adding the reader.
+
+**"Prevent all damage … by artifact sources" is Argothian Treefolk's line**, and
+here the subject is load-bearing in the other direction. The shield is derived
+by *reading a permanent's text*, and an Aura is a permanent — so one permissive
+matcher covering both subjects would have Artifact Ward shielding **itself**
+from artifact sources, a card nobody printed. The regex captures the subject and
+two readers split on it: `prevent_all_from_source_type` answers for "this", and
+`attached_prevent_all_from_source_type` for "enchanted / equipped", which
+`_source_type_shielded_by` asks of whatever is attached to the recipient. There
+is a test for the Ward taking its own three damage.
+
+**The third sentence is genuinely new**, and it is neither protection nor
+shroud. Protection (CR 702.16) also stops damage, enchanting and blocking;
+shroud stops spells as well. "Can't be the target of **abilities** from artifact
+sources" is one class of source choosing one class of object, so it is its own
+small reader (`ability_target_immunity_classes`) with the source class as
+payload.
+
+Its enforcement point is `_can_be_targeted`, which took a `CardDefinition` and
+had no way to know whether a spell or an ability was aiming. It now takes
+`ability_source` — **the object whose ability is choosing**, whose presence *is*
+the "this is an ability" flag. One argument rather than a boolean plus an object,
+because the immunity needs the object anyway: an animated artifact land is an
+artifact source and its printed type line says otherwise, so the question goes
+through `prevention.source_has_type` and the layers.
+
+Threading it named three call sites and deliberately skipped two beside them.
+The ability's own target picker passes it; the *cost* picker next to it does not
+(CR 601.2b — a cost payment is not a target), and neither does Jade Monolith's
+source picker (a chosen source is not a target either). Passing
+`source_permanent` wherever it happened to be in scope would have been the
+easy wiring and the wrong rule.
+
+**Numbers.** ATQ 77 → 78; grammar parses 75.8% → 78.3% of its lines, lowers
+75.0% → 77.5%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
+6663, no hook added.

@@ -12,7 +12,7 @@ when a creature becomes blocked.
 import random
 import re
 
-from ..auras import aura_restriction_active
+from ..auras import attached_combat_restrictions, aura_restriction_active
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..pt import add_pt_modifier
@@ -478,9 +478,16 @@ class DeclareBlockersStepMixin:
         # Asked of `subject_matches`, which reads the layer system: an animated
         # artifact land *is* an artifact creature (613 layer 4) and Primal Clay's
         # third body *is* a Wall, and the printed line says otherwise for both.
+        # An Aura prints the same restriction about the creature it is attached
+        # to (Artifact Ward), so the two channels are unioned here rather than
+        # asked in two places: the restriction is the same sentence and the
+        # difference is only whose text it is printed on.
         from ..subject_filters import subject_matches
 
-        for restriction in attacker_program.instructions:
+        for restriction in (
+            *attacker_program.instructions,
+            *attached_combat_restrictions(attacker),
+        ):
             if restriction.kind != "cant_be_blocked_by":
                 continue
             described = {}

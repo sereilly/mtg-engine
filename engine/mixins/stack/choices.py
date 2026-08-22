@@ -1742,9 +1742,14 @@ class PendingChoicesMixin:
                 self._execute_oracle_instruction(step, context)
             return
         card = getattr(context, "card", None)
+        source_permanent = getattr(context, "source_permanent", None)
         candidates = self._enumerate_targets(
             player_index, card, spec, for_cast=False,
-            source_permanent=getattr(context, "source_permanent", None),
+            source_permanent=source_permanent,
+            # A reflexive trigger is an ability (CR 603.1), so its target choice
+            # is one an ability makes. None when a *spell* armed it, which is the
+            # honest answer rather than a default.
+            ability_source=source_permanent,
         )
         # The enumerator addresses a permanent by its slot, which is unstable —
         # anything leaving the battlefield renumbers every later one, and this

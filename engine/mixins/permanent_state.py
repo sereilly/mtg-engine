@@ -1088,12 +1088,22 @@ class PermanentStateMixin:
         source_card: CardDefinition | None,
         *,
         caster_index: int | None = None,
+        ability_source=None,
     ) -> bool:
         """Whether *target* is a legal target for *source_card*
         (CR 702.16b/702.18/702.11).
 
         Shroud forbids any targeting; protection forbids targeting by sources of
         the protected color. A ``None`` source is treated as colorless.
+
+        *ability_source* is the object whose **ability** is choosing this target,
+        and passing it is what says the choice belongs to an ability rather than
+        to a spell. Its presence is the flag rather than a separate boolean: an
+        immunity narrowed to a class of source ("can't be the target of
+        abilities from artifact sources", Artifact Ward) needs the source object
+        itself, because an animated artifact land is an artifact source and its
+        printed type line says otherwise. Every caller that leaves it out is
+        aiming a spell, where the immunity does not apply.
 
         Hexproof (CR 702.11b/d) forbids targeting by spells and abilities an
         *opponent* of the target's controller controls, so it is asked only when
@@ -1105,6 +1115,15 @@ class PermanentStateMixin:
         """
         if self._has_keyword(target, "shroud"):
             return False
+        if ability_source is not None:
+            from ..auras import ability_target_immunity_classes
+            from ..prevention import source_has_type
+
+            if any(
+                source_has_type(self, ability_source, source_type)
+                for source_type in ability_target_immunity_classes(target)
+            ):
+                return False
         if source_card is not None and any(
             self._card_has_quality(source_card, quality)
             for quality in self._protection_qualities(target)
