@@ -183,9 +183,16 @@ def test_303_4a_enchant_creature_aura_attaches_to_target_creature():
 
 @pytest.mark.cr("303.4a", "701.3a")
 def test_303_4a_enchant_land_aura_attaches_to_target_land():
-    """303.4a: 'Enchant land' Aura spell targets and attaches to a land."""
+    """303.4a: 'Enchant land' Aura spell targets and attaches to a land.
+
+    The Aura's effect is incidental to what this asserts, but it still has to
+    be one the engine carries out. The fixture used to print "…its controller
+    adds {G}", which no card prints and nothing implements: it was admitted by
+    the attached-trigger wildcard in engine/auras.py, so the test asserted
+    support for a line that added no mana. It is Wild Growth's real wording now.
+    """
     aura = _mk_card("Land Aura", "Enchantment — Aura",
-                    "Enchant land\nWhenever enchanted land is tapped for mana, its controller adds {G}.")
+                    "Enchant land\nWhenever enchanted land is tapped for mana, its controller adds an additional {G}.")
     land = _mk_card("Forest", "Basic Land — Forest")
     p1 = PlayerState(name="P1", hand=[aura])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=land)])

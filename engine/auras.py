@@ -224,10 +224,10 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         "Vitality counters — phases/upkeep_effects.py",
     ),
     # --- other triggers ------------------------------------------------------
-    (
-        re.compile(rf"^when(?:ever)? {_ATTACHED} .+$"),
-        "Aura-attached trigger — trigger_utils / upkeep_effects",
-    ),
+    # An attached trigger ("when(ever) enchanted/equipped …") used to be claimed
+    # here by a `.+` wildcard. `attached_trigger_claim` below claims it instead,
+    # by *asking* the code that would carry the line out — see the docstring
+    # there for why a wildcard was the wrong shape.
     (
         # The Aura's own enters-the-battlefield trigger. Modern Oracle says
         # "this aura"; older printings and test fixtures name the card, so
@@ -279,6 +279,89 @@ def aura_enchants(oracle_text: str, noun: str) -> bool:
     return clause is not None and clause.startswith(noun)
 
 
+#: "Whenever enchanted land is tapped for mana, its controller adds an
+#: additional {G}." (Wild Growth.) The phrase compiles to no trigger — "tapped
+#: for mana" is not a condition the trigger table produces for an *attached*
+#: subject — so the mana is added by `mixins/turn_management.tap_land_for_mana`
+#: reading the Aura's text at the moment the land is tapped.
+#:
+#: The pattern lives here, once, because two readers need the same answer: that
+#: dispatcher, and the support gate deciding whether the line is implemented.
+#: It used to be written out only in the dispatcher, which is why the gate had
+#: to claim the line with a wildcard instead.
+_ADDITIONAL_MANA_ON_TAP = re.compile(
+    r"^whenever enchanted land is tapped for mana, "
+    r"its controller adds an additional \{([wubrgc])\}$"
+)
+
+
+def aura_additional_mana_on_tap_line(normalized_line: str) -> str | None:
+    """The extra mana symbol *normalized_line* adds when its land is tapped."""
+    match = _ADDITIONAL_MANA_ON_TAP.match(normalized_line.strip().rstrip("."))
+    return match.group(1).upper() if match is not None else None
+
+
+def aura_additional_mana_on_tap(oracle_text: str) -> str | None:
+    """The same answer for a whole card, for the dispatcher that holds the Aura
+    rather than one of its lines."""
+    from .oracle import normalize_creature_line
+
+    for raw_line in (oracle_text or "").splitlines():
+        symbol = aura_additional_mana_on_tap_line(normalize_creature_line(raw_line))
+        if symbol is not None:
+            return symbol
+    return None
+
+
+_ATTACHED_TRIGGER = re.compile(rf"^when(?:ever)? {_ATTACHED} .+$")
+
+
+def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | None:
+    """Name what carries out an attached trigger line, or None if nothing does.
+
+    ``when(ever) enchanted|equipped …`` was claimed by a `.+` wildcard in
+    ``_TEMPLATES``, whose claim string named "trigger_utils / upkeep_effects"
+    without asking either of them. That is a gate satisfied by its own
+    declaration: the sentence matched the shape of a trigger, and matching the
+    shape of a trigger is not evidence that one fires.
+
+    Antiquities' Artifact Possession is the card it cost. Its whole effect is
+    one trigger — "whenever enchanted artifact becomes tapped **or** a player
+    activates an ability of enchanted artifact without {T} in its activation
+    cost" — that nothing in the engine reads. The wildcard claimed it, the gate
+    found no unclaimed effect line, and the Aura entered play and did nothing.
+
+    So the claim asks, in the order the three mechanisms actually run:
+
+    1. **A compiled trigger.** ``_parse_triggered_ability`` recognising the
+       condition is the claim, and deliberately not "…and produced an
+       instruction": Creature Bond compiles ``attached_creature_dies`` with no
+       instruction at all, because its dispatcher (``mixins/effects.py``)
+       builds the effect from the dead creature's toughness at trigger time.
+       Requiring an instruction here would withdraw a card that works.
+    2. **A name-keyed hook**, for an attached trigger whose behaviour is
+       genuinely bespoke (Kudzu's destroy-and-reattach). Asked of the registry,
+       never written out — a card name in a comparison here would be the
+       dispatch `card_hooks.py` exists to keep in one place.
+    3. **The additional-mana clause** above, which has a dispatcher and no
+       trigger.
+
+    Anything else is unclaimed, and its Aura is unsupported naming the line.
+    """
+    from .card_hooks import ENCHANTED_LAND_TAPPED_FOR_MANA
+    from .oracle import _parse_triggered_ability
+
+    if not _ATTACHED_TRIGGER.match(normalized_line):
+        return None
+    if _parse_triggered_ability(normalized_line, card_name) is not None:
+        return "attached trigger — compiled condition"
+    if card_name in ENCHANTED_LAND_TAPPED_FOR_MANA:
+        return "attached trigger — card_hooks.ENCHANTED_LAND_TAPPED_FOR_MANA"
+    if aura_additional_mana_on_tap_line(normalized_line) is not None:
+        return "attached trigger — additional mana on tap"
+    return None
+
+
 def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     """Name the code implementing *normalized_line*, or None if nothing does.
 
@@ -307,6 +390,9 @@ def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     # is the exact shape this file's other comments keep describing: a gate and
     # a dispatch reading two copies of one rule. `aura_continuous_claim` already
     # asks the tables, so asking it here retires the copies.
+    attached = attached_trigger_claim(normalized_line, card_name)
+    if attached is not None:
+        return attached
     return aura_continuous_claim(normalized_line)
 
 

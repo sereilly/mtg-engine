@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import re
 
+from ..auras import aura_additional_mana_on_tap
 from ..card_hooks import ENCHANTED_LAND_TAPPED_FOR_MANA
 from ..game_types import SimulationResult
 from ..oracle import compile_card_oracle
@@ -335,14 +336,16 @@ class TurnManagementMixin:
                     )
             # Wild Growth: "Whenever enchanted land is tapped for mana, its controller
             # adds an additional {G}." The "for mana" phrasing isn't compiled as a
-            # generic trigger, so read the produced mana from the Aura's text here.
-            aura_text = attached_aura.effective_card.oracle_text.lower()
-            mana_match = re.search(
-                r"enchanted land is tapped for mana, its controller adds an additional \{([wubrgc])\}",
-                aura_text,
-            )
-            if mana_match:
-                extra = mana_match.group(1).upper()
+            # generic trigger, so the mana is read from the Aura's text here.
+            #
+            # The pattern is `auras.aura_additional_mana_on_tap`, not a regex of
+            # this method's own. It used to be written out here alone, so the
+            # support gate had no way to ask whether this line was implemented
+            # and claimed every attached trigger with a wildcard instead — which
+            # is how an Aura whose trigger nothing reads reported supported. One
+            # pattern, two readers: this dispatcher and `attached_trigger_claim`.
+            extra = aura_additional_mana_on_tap(attached_aura.effective_card.oracle_text)
+            if extra:
                 player.mana_pool[extra] = player.mana_pool.get(extra, 0) + 1
                 self.log.append(f"{attached_aura.card.name}: {player.name} added an additional {{{extra}}}")
 

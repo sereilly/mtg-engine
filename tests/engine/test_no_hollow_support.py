@@ -330,3 +330,131 @@ def test_an_equipment_with_an_unimplemented_effect_line_is_unsupported():
     assert not probe.supported
     assert "unimplemented equipment effect" in probe.reason
     assert "hexproof from everything" in probe.reason
+
+
+# ---------------------------------------------------------------------------
+# The land half
+# ---------------------------------------------------------------------------
+
+
+def _hollow_lands() -> list[tuple[str, list[str]]]:
+    """Lands that print ability lines and compiled none of them.
+
+    A land's mana comes from ``CardDefinition.produced_mana``, never from
+    parsing, so ``engine/oracle.py``'s land gate passes every land: "an
+    unparsed *bonus* ability degrades just that ability, never the land's own
+    castability". That is the right rule for Desert's damage ping — and the
+    code never implemented the distinction the comment draws, so a land whose
+    unreadable line **is** its mana ability was passed by the same blanket
+    clause.
+
+    Antiquities is what made the difference visible. Urza's Mine, Power Plant
+    and Tower each print one line, that line is the whole card, and none of
+    them parsed: all three reported supported, tapped for the flat ``{C}`` that
+    ``produced_mana`` records and could never assemble. Mishra's Workshop is the
+    sharper one, because nothing about it looks broken — it taps for one ``{C}``
+    where the card prints three, and spends it on anything.
+
+    The property is the same one the artifact half asks, so it is written the
+    same way: a permanent that prints abilities and can read none of them does
+    not do what it says. A land with *some* readable ability (Mishra's Factory
+    taps for mana and pumps, and only its animation is unread) is degraded, not
+    hollow, and stays supported — that is the documented rule working.
+    """
+    hollow: list[tuple[str, list[str]]] = []
+    for card in _whole_pool():
+        if card.primary_type != "land":
+            continue
+        program = compile_card_oracle(card)
+        if not program.supported:
+            continue
+        abilities = (*program.activated_abilities, *program.triggered_abilities)
+        if not abilities:
+            # No printed ability at all: a basic or a dual, whose whole text is
+            # CR 305.6 reminder text. `produced_mana` is the whole card and it
+            # is right.
+            continue
+        if any(a.supported and a.instruction is not None for a in abilities):
+            continue
+        hollow.append((card.name, [a.source_line for a in abilities]))
+    return hollow
+
+
+def test_no_supported_land_prints_only_unreadable_abilities():
+    hollow = _hollow_lands()
+
+    assert not hollow, (
+        "supported land(s) whose every printed ability failed to parse — they "
+        "tap for whatever produced_mana records and do nothing else:\n"
+        + "\n".join(f"  {name}: {lines}" for name, lines in sorted(hollow))
+    )
+
+
+def test_a_land_with_one_readable_ability_is_not_hollow():
+    """The other direction, and the reason the guard asks *all* rather than
+    *any*.
+
+    Mishra's Factory is the boundary case, so it is the control. It taps for
+    mana and it pumps an Assembly-Worker, both read; only its self-animation is
+    unread. That is a land doing less than it prints — degradation, which the
+    coverage instruments report and this guard deliberately does not fail on —
+    as against the four that do nothing they print at all.
+    """
+    factory = {c.name: c for c in _whole_pool()}["Mishra's Factory"]
+    program = compile_card_oracle(factory)
+    abilities = (*program.activated_abilities, *program.triggered_abilities)
+
+    assert program.supported
+    assert any(a.supported and a.instruction is not None for a in abilities), (
+        "the control needs a readable ability, or it is testing the wrong thing"
+    )
+    assert any(not a.supported or a.instruction is None for a in abilities), (
+        "the control needs an unreadable ability too — otherwise it would pass "
+        "against a guard that failed every land with any unread line"
+    )
+
+
+# ---------------------------------------------------------------------------
+# The Aura half: a claim that asks, rather than a wildcard that assumes
+# ---------------------------------------------------------------------------
+
+
+def test_an_aura_trigger_nothing_implements_leaves_the_card_unsupported():
+    """`engine/auras.py` is the Aura gate and the guard above defers to it as
+    "the stricter of the two". It was stricter about everything except its own
+    catch-all: one template matched ``when(ever) enchanted|equipped <anything>``
+    and claimed the line for "trigger_utils / upkeep_effects" without asking
+    either of them.
+
+    That is a guard satisfied by its own declaration — the round-140 shape.
+    Antiquities' Artifact Possession is the card that proves it: its whole
+    effect is one trigger nothing in the engine reads, the wildcard claimed the
+    line, the gate found no unclaimed effect and the card reported supported
+    while enchanting an artifact and doing nothing.
+
+    Verified by injection, because the pool cannot show it: whichever cards
+    currently rest on the wildcard are implemented, so a property test over the
+    pool passes against the wildcard too. The property is that an *invented*
+    attached trigger the engine has never heard of must not be claimed.
+    """
+    program = _probe(
+        "Enchant creature\n"
+        "Whenever enchanted creature is dealt damage by a Wall, "
+        "flip three coins and untap every Forest.",
+        type_line="Enchantment — Aura",
+    )
+
+    assert not program.supported
+    assert "unimplemented aura effect" in program.reason
+
+
+def test_an_attached_trigger_the_engine_does_read_is_still_claimed():
+    """The other direction, and the reason the fix is an *asked* claim rather
+    than deleting the wildcard. Three shipped cards rest on it and all three
+    work — Psychic Venom and Malefic Scythe compile a trigger; Creature Bond
+    compiles a condition whose dispatcher lives in mixins/effects.py and leaves
+    no instruction behind. Deleting the template would have withdrawn all
+    three."""
+    pool = {c.name: c for c in _whole_pool()}
+    for name in ("Psychic Venom", "Malefic Scythe", "Creature Bond"):
+        assert compile_card_oracle(pool[name]).supported, name

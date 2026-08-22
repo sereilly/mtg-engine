@@ -577,9 +577,13 @@ in the same direction, and two more cards join them:
 | Mishra's Workshop | `basic land support` | taps for **one** `{C}` instead of three, restriction unenforced |
 | Mishra's Factory | `basic land support` | mana and pump real; **cannot animate** |
 | Artifact Possession | `pattern-supported effect` | zero abilities compiled — enchants an artifact and does nothing |
-| Bronze Tablet | `pattern-supported effect` | carried by the ante *deck-construction* rule; its only battlefield ability is unreadable |
 
-Three separate blind spots, and the point is that they are separate — this is
+(Bronze Tablet was listed here on first reading and does not belong: it prints
+a third line, "This artifact enters tapped", which `enter_effects` implements.
+Its ante exchange is unreadable, so it is a *degraded* card like Mishra's
+Factory and Battering Ram, not a hollow one. Round 1 records the correction.)
+
+Two separate blind spots, and the point is that they are separate — this is
 not one guard with one hole:
 
 1. `engine/oracle.py`'s land gate passes **every** land. The comment there
@@ -589,11 +593,9 @@ not one guard with one hole:
    ability is indistinguishable from Desert.
 2. `test_no_hollow_support.py::_hollow_permanents` filters to
    `primary_type in ("artifact", "enchantment")` — lands were never in scope.
-3. The same function skips `"Aura" in card.type_line` (on the grounds that
-   `engine/auras.py` is stricter — true of Auras that gate reaches, and
-   Artifact Possession fell to the spell-pattern whitelist instead), and skips
-   any card carrying one non-`spell_pattern` instruction, which Bronze Tablet's
-   `derived_static_rule` satisfies without being battlefield behaviour at all.
+3. `engine/auras.py`'s effect table claimed **any** `when(ever)
+   enchanted|equipped …` line with a `.+` wildcard, naming "trigger_utils /
+   upkeep_effects" as the implementer without asking either of them.
 
 This is the M21 lesson — the census counts cards, not sentences — arriving one
 layer further down: not "a supported card has an unsupported line" but "the
@@ -635,3 +637,77 @@ shared cards reading `3ed` and the Sylex would miss every one of them. Expect
 19 cards to flip `set_code`, `printings[0]`, art and Scryfall link at promotion;
 `test_appending_a_set_never_changes_an_existing_original_printing` compares
 prefixes of the new ordering and stays green.
+
+## ATQ round 1: the gates that could not ask the question
+
+*(2026-08-21.)* No card gained support this round. **48 → 43**, and the five
+that left are the round's whole point: each reported supported while nothing in
+the engine carried out a word of what it prints.
+
+**The land gate.** `engine/oracle.py` passed every land, with a comment
+explaining a distinction the code did not draw — "an unparsed *bonus* ability
+degrades just that ability, never the land's own castability". That is exactly
+right about Desert's damage ping, and it had never been separated from the case
+where the unreadable line *is* the whole card. Antiquities is where the two came
+apart: Urza's Mine, Power Plant and Tower each print one line, none of them
+parsed, and all three reported supported while tapping for the flat `{C}` that
+`produced_mana` records — the assembly they exist for could never happen.
+Mishra's Workshop is the one that hides best, because nothing about it looks
+broken: it taps for one `{C}` where the card prints three, and spends it on
+anything.
+
+The gate now asks the same question the artifact half already asked — a
+permanent that prints abilities and can read *none* of them is unsupported,
+naming the clause. **Mishra's Factory deliberately keeps its support**: it taps
+for mana and pumps an Assembly-Worker, and only its self-animation is unread.
+That is a card doing less than it prints, which the coverage instruments report
+and this gate is not for. It is the control in
+`test_a_land_with_one_readable_ability_is_not_hollow`, chosen over a
+comfortably-passing card precisely because it sits on the boundary.
+
+**The Aura wildcard, which is round 140's shape again.** `engine/auras.py`'s
+effect table claimed any `when(ever) enchanted|equipped …` line with `.+`, and
+its claim string named "trigger_utils / upkeep_effects" without asking either.
+Matching the shape of a trigger is not evidence that one fires. Artifact
+Possession is what it cost: its entire effect is one trigger nothing reads, the
+wildcard claimed the line, the gate found nothing unclaimed, and the Aura
+entered play and did nothing.
+
+The fix is an *asked* claim (`attached_trigger_claim`), and the three shipped
+cards resting on the wildcard are why it could not simply be deleted — all
+three work, by three different mechanisms. It asks for a compiled trigger
+(Psychic Venom, Malefic Scythe), for a `card_hooks` entry (Kudzu), and for the
+additional-mana-on-tap clause (Wild Growth). Deliberately **not** "…and the
+trigger produced an instruction": Creature Bond compiles its condition with no
+instruction at all, because `mixins/effects.py` builds the effect from the dead
+creature's toughness at trigger time, and requiring one would have withdrawn a
+card that works.
+
+**Wild Growth's pattern moved to where both readers can see it.** It was a
+regex inside `tap_land_for_mana` alone, so the support gate had no way to ask
+whether the line was implemented — which is *why* the wildcard existed. It is
+`auras.aura_additional_mana_on_tap` now, one pattern with two readers: the
+dispatcher that adds the mana and the claim that decides the card is supported.
+
+**Two test fixtures were asserting the bug.** An invented "Land Aura" printed
+"…its controller adds {G}" — a wording no card uses and the dispatcher's regex
+never matched. Both tests passed on the wildcard while the Aura added no mana.
+They print Wild Growth's real wording now. This is the M21 round-16 lesson
+arriving from the other direction: there a spec's diagnosis was a hypothesis
+until measured, here a *fixture's* text was.
+
+**What did not move.** The shipped pool is 668/668, the suite is green (6579
+passed), and every `--check` gate passes untouched — no floor lowered, no
+ceiling raised. One line moved in `PARSE_COVERAGE.md` from "auras.py (attached
+effect)" to "card_hooks bespoke (name-keyed)": that is Kudzu, always carried by
+a name-keyed hook and until now credited to the general reader. The number got
+worse and the accounting got true, which is the right direction for a ratchet
+that exists to measure honesty.
+
+**One correction to the census above**, recorded rather than quietly edited:
+Bronze Tablet was listed as a third blind spot and is not one. It prints a
+third line — "This artifact enters tapped" — that `enter_effects` implements,
+so it is degraded (its ante exchange is unreadable, round 12's job) rather than
+hollow. Found by reading the card's lines instead of the two the census report
+happened to quote, which is the same failure mode Phase 1 warns about for
+reason strings.

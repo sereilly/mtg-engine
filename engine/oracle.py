@@ -2599,14 +2599,49 @@ def _compile_card_oracle(
         # Mana production is driven by CardDefinition.produced_mana, not by
         # parsing oracle text (basic lands' whole ability line is reminder
         # text in parens, e.g. "({T}: Add {W}.)", which normalize_creature_line
-        # strips to nothing). A land is therefore ALWAYS at least playable —
-        # unlike creatures/artifacts, an unparsed bonus ability degrades just
-        # that ability, never the land's own castability. Non-reminder-text
-        # ability lines (Desert's damage ping, Bazaar of Baghdad's draw-
-        # discard, …) are parsed the same way artifacts' are, so lands with
-        # abilities beyond mana become activatable too.
+        # strips to nothing). A land is therefore at least playable whatever
+        # its text does — unlike creatures/artifacts, an unparsed *bonus*
+        # ability degrades just that ability, never the land's own castability.
+        # Non-reminder-text ability lines (Desert's damage ping, Bazaar of
+        # Baghdad's draw-discard, …) are parsed the same way artifacts' are, so
+        # lands with abilities beyond mana become activatable too.
         activated_abilities = _parse_noncreature_abilities(oracle_text, name)
         triggered_abilities = _parse_noncreature_triggered(oracle_text, name)
+
+        # **The distinction the paragraph above draws, actually drawn.** The
+        # rule is about a *bonus* ability, and for a long time the code did not
+        # separate one from a land whose unreadable line is the whole card:
+        # every land was passed. Antiquities is where that stopped being
+        # theoretical. Urza's Mine, Power Plant and Tower each print one line,
+        # that line is the entire card, none of them parsed — and all three
+        # reported supported, tapped for the flat {C} that `produced_mana`
+        # records, and could never assemble. Mishra's Workshop is the one that
+        # hides best: nothing about it looks broken, it just taps for one {C}
+        # where the card prints three and spends it on anything.
+        #
+        # So a land that prints abilities and can read *none* of them is
+        # unsupported, naming the clause — the same property the artifact and
+        # enchantment gate below asks, for the same reason. A land with some
+        # readable ability keeps its support and is degraded by whatever it
+        # could not read, which is the documented rule and is what the coverage
+        # instruments are for (Mishra's Factory taps and pumps; only its
+        # animation is unread).
+        #
+        # A land with no printed ability at all — a basic, a dual, anything
+        # whose whole text is CR 305.6 reminder text — has nothing to fail on
+        # and is passed by the `abilities` check, not by an exception to it.
+        abilities = (*activated_abilities, *triggered_abilities)
+        if abilities and not any(
+            ability.supported and ability.instruction is not None
+            for ability in abilities
+        ):
+            return OracleProgram(
+                False,
+                "unsupported",
+                f"no ability of this land is implemented: {abilities[0].source_line}",
+                normalized_text,
+            )
+
         return OracleProgram(
             True, "land_mana", "basic land support", normalized_text,
             activated_abilities=activated_abilities,

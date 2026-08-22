@@ -127,7 +127,7 @@ def test_aura_creature_buff_applies():
 
 
 def test_aura_land_logs_simplified_resolution():
-    aura = _mk_card("Land Aura", "Enchantment — Aura", "Enchant land\nWhenever enchanted land is tapped for mana, its controller adds {G}.")
+    aura = _mk_card("Land Aura", "Enchantment — Aura", "Enchant land\nWhenever enchanted land is tapped for mana, its controller adds an additional {G}.")
     land = _mk_card("Forest", "Basic Land — Forest")
     p1 = PlayerState(name="P1", hand=[aura])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=land)])
