@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.9% | 78.7% | 43.4% | 152 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 50.0% | 48.3% | 30.8% | 33 |
+| ATQ *(measured)* | 85 | 120 | 52.5% | 50.8% | 33.3% | 36 |
 | **All (shipped)** | **1533** | **2166** | **80.7%** | **79.5%** | **46.7%** | **876** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,7 +33,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 207 | 86 | expected a subject |  |
+| 204 | 83 | expected a subject |  |
 | 92 | 35 | unrecognized effect verb |  |
 | 54 | 32 | unconsumed text |  |
 | 30 | 30 | unrecognized activation cost |  |
@@ -275,6 +275,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
+- **Citanul Druid**
+  - `Whenever an opponent casts an artifact spell, put a +1/+1 counter on this creature.`
 - **City of Brass**
   - `Whenever this land becomes tapped, it deals 1 damage to you.`
   - `{T}: Add one mana of any color.`
@@ -1336,6 +1338,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Exile target creature. Its controller gains life equal to its power.`
   - `Exile target creature. Its controller gains life equal to its power.`
   - `Exile target creature. Its controller gains life equal to its power.`
+- **Tablet of Epityr**
+  - `Whenever an artifact you control is put into a graveyard from the battlefield, you may pay {1}. If you do, you gain 1 life.`
 - **Tavern Swindler**
   - `{T}, Pay 3 life: Flip a coin. If you win the flip, you gain 6 life.`
 - **Tawnos's Wand**
@@ -1461,6 +1465,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Return target creature to its owner's hand.`
   - `Return target creature to its owner's hand.`
   - `Return target creature to its owner's hand.`
+- **Urza's Chalice**
+  - `Whenever a player casts an artifact spell, you may pay {1}. If you do, you gain 1 life.`
 - **Urza's Mine**
   - `{T}: Add {C}. If you control an Urza's Power-Plant and an Urza's Tower, add {C}{C} instead.`
 - **Urza's Power Plant**

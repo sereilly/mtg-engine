@@ -23,8 +23,8 @@ from .errors import GrammarError
 from .lexer import (MANA, PT, PUNCT, SELF, tokenize)
 from .nouns import (parse_object_filter, parse_target_spec)
 from .stream import TokenStream
-from .vocabulary import (COLOR_WORDS, CREATURE_TYPES, KEYWORD_INDEX, NUMBER_WORDS,
-                         match_longest)
+from .vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, KEYWORD_INDEX,
+                         NUMBER_WORDS, match_longest)
 _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("land_dies", ("a", "land", "is", "put", "into", "a", "graveyard", "from", "the", "battlefield")),
     # Longest first: the explicit-self spelling (Basri's Lieutenant) names the
@@ -603,6 +603,30 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                         subject=ast.ObjectFilter(colors=(COLOR_WORDS[colour],)),
                     )
         stream.reset(mark)
+        # "…casts an **artifact** spell" (Urza's Chalice, Citanul Druid). The
+        # type narrowing beside the colour one above, and for the same reason:
+        # one dispatcher for every card printed this way. Both scopes are read
+        # here because both are printed, and the bare spellings in the phrase
+        # table below are strict prefixes of these — so a table entry would
+        # claim the shorter reading and strand the type word, which is the
+        # failure this whole file orders longest-first to avoid.
+        for scope, opener in (
+            ("spell_cast", ("a", "player", "casts")),
+            ("opponent_casts_spell", ("an", "opponent", "casts")),
+        ):
+            mark = stream.mark()
+            if stream.accept_phrase(*opener) and (
+                stream.accept_word("a") or stream.accept_word("an")
+            ):
+                type_word = stream.peek_word()
+                if type_word in CARD_TYPES:
+                    stream.advance()
+                    if stream.accept_word("spell"):
+                        return ast.TriggerEvent(
+                            scope, "whenever",
+                            subject=ast.ObjectFilter(card_types=(type_word,)),
+                        )
+            stream.reset(mark)
         # "…you cast a spell that's white, blue, black, or red" (Quirion
         # Dryad): a colour-list narrowing of you_cast_spell. Read before the
         # phrase table, whose bare "you cast a spell" entry is its prefix.
@@ -725,6 +749,28 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         for kind, phrase in _WHENEVER_EVENTS:
             if stream.accept_phrase(*phrase):
                 return ast.TriggerEvent(kind, "whenever")
+        # "Whenever an **artifact you control** is put into a graveyard from
+        # the battlefield" (Tablet of Epityr, Urza's Miter). Subject-led, so it
+        # sits **after** the phrase table for the reason stated just below: the
+        # table holds the specific readings, and "a land is put into a
+        # graveyard from the battlefield" is Dingus Egg's own event with its own
+        # fire site and its own damage shape. Read first, this production would
+        # claim that line as a generic death and Dingus Egg would stop working.
+        #
+        # The article is consumed here rather than by the noun parser, which
+        # refuses "an" as an unknown adjective — the same split the condition
+        # parser makes for "you control **a** Swamp".
+        grave_mark = stream.mark()
+        stream.accept_word("a", "an")
+        try:
+            dying = parse_object_filter(stream)
+        except GrammarError:
+            dying = None
+        if dying is not None and stream.accept_phrase(
+            "is", "put", "into", "a", "graveyard", "from", "the", "battlefield"
+        ):
+            return ast.TriggerEvent("permanent_dies", "whenever", subject=dying)
+        stream.reset(grave_mark)
         # "Whenever a creature you control with deathtouch attacks / deals
         # damage to a planeswalker" (Hooded Blightfang): the subject leads, so
         # there is no fixed prefix to key on — the noun phrase is tried and the

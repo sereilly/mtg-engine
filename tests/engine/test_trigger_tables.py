@@ -37,6 +37,12 @@ from tests.helpers import LEA_PATH
 EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # whenever
     "land_dies": "whenever a land is put into a graveyard from the battlefield",
+    # The general reading of the same event, narrowed by a printed noun phrase
+    # (Tablet of Epityr). Its own kind rather than a widening of land_dies,
+    # which keeps its dedicated dispatcher and Dingus Egg's damage shape.
+    "permanent_dies": (
+        "whenever an artifact you control is put into a graveyard from the battlefield"
+    ),
     # Both printed spellings, because the kind is in both tables: "whenever" for
     # an Equipment (Malefic Scythe) and "when" for an Aura (Creature Bond). One
     # example would leave the other table's pattern unexercised.

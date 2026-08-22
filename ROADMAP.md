@@ -780,3 +780,58 @@ activating an ability without paying for it.
 **Numbers.** ATQ 43 → 47 supported; grammar parses 46.7% → 50.0% of its lines,
 executes 27.5% → 30.8%, cards executing 29 → 33. Shipped pool 668/668 and every
 shipped floor and ceiling unmoved; suite green at 6587 passed. No hook added.
+
+## ATQ round 3: two artifact triggers, and a narrowing nothing produced
+
+*(2026-08-21.)* **47 → 50.** Citanul Druid, Urza's Chalice and Tablet of
+Epityr. Every *effect* half already worked — "you may pay {1}. If you do, you
+gain 1 life." compiles today — so all three were blocked purely on their
+trigger conditions, which is the cheapest shape a card can be blocked in.
+
+**"Casts an artifact spell" was two table rows and a dead branch.**
+`events._spell_cast_filter` already read a `card_type` narrowing off the
+condition payload — and **no pattern in the compiler ever emitted that key**. A
+dispatcher reading a narrowing nothing produces is round 1's shape with the
+halves swapped: harmless while dead, and a second opinion about what "an
+artifact spell" means the moment it is not. The new rows emit `cast_type`, the
+name `you_cast_spell`'s rows already used, and all three cast kinds now ask one
+helper (`_cast_narrowing_admits`) instead of each growing its own type test.
+`_opponent_cast_filter` had no type narrowing at all and now asks the same one.
+
+**A general "put into a graveyard" trigger, announced at the one seam.**
+`land_dies` was the only death condition with a printed-noun form, and it is
+specific — Dingus Egg's own event with its own damage shape. `permanent_dies`
+is the general reading, its subject a filter payload like every other narrowed
+condition, and it is ordered *after* the land row in both front ends so the
+specific reading keeps its line. Its dispatcher hangs off
+`_permanent_to_graveyard`, the seam every path to a graveyard already goes
+through, rather than off the several places a permanent can die — the rule
+CLAUDE.md states for a draw, a life gain or a sacrifice, applied to a death.
+The narrowing is asked with the **observer's** seat, so "an artifact **you
+control**" means the controller of the triggered ability (CR 109.5) and not the
+controller of the dying permanent; that is the assertion
+`test_tablet_of_epityr_ignores_an_opponents_artifact` exists for.
+
+**What the grammar side cost, and the lesson in it.** Adding the oracle row
+alone left both cards compiling a condition with `instruction=None` — the
+condition was recognised and the *effect* never lowered, because the grammar is
+a second front end and had not been taught the phrase. Twice in this round the
+first placement was wrong: the subject-led death production went before the
+phrase table and had to move after it, which is the file's own documented
+ordering (the table holds the specific readings). Placed first it would have
+claimed Dingus Egg's line as a generic death and quietly stopped that card
+working — a widened gate taking a working card with it, which is exactly what
+Phase 3's "grep for readers keyed on the old classification" is about.
+
+**Urza's Miter did not land, and is not a near miss.** Its clause is "…**if it
+wasn't sacrificed**, you may pay {3}" — a CR 603.4 intervening-if about *how*
+the permanent died, which needs a record no path keeps today. Left unsupported
+naming the clause rather than admitted with the qualifier dropped: an artifact
+sacrificed to its own cost would otherwise draw a card the printed card
+refuses.
+
+**Numbers.** ATQ 47 → 50; grammar parses 50.0% → 52.5% of its lines, executes
+30.8% → 33.3%, cards executing 33 → 36. Shipped pool 668/668, every floor and
+ceiling unmoved, suite green at 6597. No hook added. One guard fired and was
+right: `test_every_pattern_has_an_example` wanted a canonical text for the new
+kind.

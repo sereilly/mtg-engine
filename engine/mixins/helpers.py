@@ -650,6 +650,7 @@ class GameHelpersMixin:
 
         if permanent.card.primary_type == "creature":
             self._fire_creature_dies_triggers(permanent)
+        self._fire_permanent_dies_triggers(permanent)
 
         leave_hook = ON_LEAVE_BATTLEFIELD.get(permanent.card.name)
         if leave_hook is not None:
@@ -1515,6 +1516,47 @@ class GameHelpersMixin:
             destroyed.append(permanent)
         self.remove_all_from_battlefield(destroyed)
         return destroyed
+
+    def _fire_permanent_dies_triggers(self, dead_permanent: Permanent) -> None:
+        """"Whenever <noun phrase> is put into a graveyard from the
+        battlefield" — any permanent type, narrowed by the printed phrase
+        (Tablet of Epityr, Urza's Miter).
+
+        Fired from ``_permanent_to_graveyard``, which is the one seam every
+        path to a graveyard already goes through, rather than from the several
+        places a permanent can die. A creature death additionally fires
+        ``_fire_creature_dies_triggers``: that condition is a different kind
+        with its own last-known-information context, and a creature is a
+        permanent, so both are announced and each observer's own condition
+        decides which it answers to.
+
+        The narrowing is asked of ``subject_matches`` with the *observer's*
+        seat, which is what makes "an artifact **you control**" mean the
+        controller of the triggered ability (CR 109.5) rather than the
+        controller of the dying permanent.
+        """
+        from ..subject_filters import subject_matches
+
+        events: list[dict] = []
+        for controller_index, observer in self.permanents_with_controller():
+            for trig in matching_triggers(
+                observer.effective_card, condition_kinds={"permanent_dies"},
+            ):
+                if trig.instruction is None:
+                    continue
+                if not subject_matches(
+                    self,
+                    dead_permanent,
+                    trig.condition.payload.get("dying_filter"),
+                    observer=controller_index,
+                    source=observer,
+                ):
+                    continue
+                events.append(make_trigger_event(
+                    controller_index, observer, trig,
+                    trigger_context={"dead_name": dead_permanent.card.name},
+                ))
+        self._enqueue_triggered_batch(events)
 
     def _fire_creature_dies_triggers(self, dead_permanent: Permanent) -> None:
         """Put "whenever a creature dies" triggers (e.g. Soul Net) onto the stack.

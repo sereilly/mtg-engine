@@ -310,10 +310,13 @@ def _spell_cast_filter(
     colour_word = trig.condition.payload.get("color_word")
     if colour_word and _COLOR_SYMBOLS.get(colour_word) not in card.colors:
         return False
-    wanted_type = trig.condition.payload.get("card_type")
-    if wanted_type and wanted_type not in card.type_line.lower():
-        return False
-    return True
+    # The type narrowing goes through the shared helper below, which the
+    # ordinal-counting path already used. This branch used to read a
+    # `card_type` key **no pattern in the compiler ever emitted** — a
+    # dispatcher reading a narrowing nothing produced, which is round 1's
+    # shape with the halves swapped: harmless while dead, and a second
+    # opinion about what "an artifact spell" means the moment it was not.
+    return _cast_narrowing_admits(trig, card)
 
 
 def _cast_narrowing_admits(trig: ParsedTriggeredAbility, card) -> bool:
@@ -433,7 +436,9 @@ def _opponent_cast_filter(
     not_from = trig.condition.payload.get("not_from_zone")
     if not_from and event.payload.get("cast_from_zone", "hand") == not_from:
         return False
-    return True
+    # "…casts an **artifact** spell" (Citanul Druid), asked of the same helper
+    # the other two cast kinds use.
+    return _cast_narrowing_admits(trig, card)
 
 
 # The controller clause of a "whenever a <filter> becomes tapped" condition, as

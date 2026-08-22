@@ -187,6 +187,13 @@ SUPPORTED_SPELL_PATTERNS = (
 # "whenever" triggers
 WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_dies",                   r"whenever a land is put into a graveyard from the battlefield"),
+    # The same event, any permanent, narrowed by a printed noun phrase:
+    # "Whenever an **artifact you control** is put into a graveyard from the
+    # battlefield" (Tablet of Epityr, Urza's Miter). After the land row, which
+    # keeps its own dispatcher and its own damage shape (Dingus Egg) — this one
+    # is the general reading and would otherwise claim that line too.
+    ("permanent_dies",
+     r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"),
     ("creature_dies",               r"whenever a creature dies"),
     # "Whenever equipped creature dies" (Malefic Scythe) / "When enchanted
     # creature dies" (Creature Bond). One kind for both words: an Equipment and
@@ -336,6 +343,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # captured into the condition payload so one dispatcher covers every card
     # written this way; must precede the unnarrowed form below.
     ("spell_cast",                  r"whenever a player casts a (?P<color_word>white|blue|black|red|green) spell"),
+    # The same narrowing on the spell's *type* rather than its colour (Urza's
+    # Chalice). Written with the group name `you_cast_spell`'s rows already use,
+    # so all three cast kinds ask one helper (`events._cast_narrowing_admits`)
+    # rather than each growing its own type test. Must precede the bare row.
+    ("spell_cast",
+     r"whenever a player casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     # "…from anywhere other than their hand" (Ghostly Pilferer). A narrowing on
     # the *zone the spell was cast from*, which the stack item already records
@@ -343,6 +356,10 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # below is its strict prefix.
     ("opponent_casts_spell",
      r"whenever an opponent casts a spell from anywhere other than their (?P<not_from_zone>hand)"),
+    # "Whenever an opponent casts an artifact spell" (Citanul Druid) — the
+    # type narrowing again, on the opponent-scoped kind. Before the bare row.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
     # A colour-list narrowing ("…a spell that's white, blue, black, or red",
     # Quirion Dryad). The list is condition payload, read by the you_cast_spell
