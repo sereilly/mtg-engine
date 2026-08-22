@@ -259,6 +259,14 @@ class ObjectFilter:
     # "that's one or more colors" (Ugin, the Spirit Dragon's −X): the object
     # has at least one color, read off its effective colors.
     colored: bool = False
+    # "…that isn't the target of an ability from another creature named ~"
+    # (Goblin Artisans). A restriction on the object's *situation* rather than
+    # on the object: it asks what else on the stack is pointing at it. The
+    # source class is not carried because the printed clause names the ability's
+    # source by the asking card's own name, which the lexer has already
+    # collapsed to a SELF token — so the question is "another copy of me",
+    # whatever the copy is called.
+    not_ability_targeted_by_same_name: bool = False
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.
@@ -321,6 +329,8 @@ class ObjectFilter:
             payload["blocking_only"] = True
         if self.other_than_source:
             payload["exclude_self"] = True
+        if self.not_ability_targeted_by_same_name:
+            payload["not_ability_targeted_by_same_name"] = True
         if self.nontoken:
             payload["nontoken"] = True
         # "a card **named** Frantic Inventory". Emitted like every other

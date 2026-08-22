@@ -19,7 +19,7 @@ import dataclasses
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import NUMBER, PT, WORD, render
+from .lexer import NUMBER, PT, SELF, WORD, render
 from .stream import TokenStream
 from .vocabulary import (
     NUMBER_WORDS,
@@ -556,6 +556,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     if not saw_head and not allow_bare:
         raise stream.error("expected an object noun")
 
+    not_ability_targeted_by_same_name = False
+
     # --- postmodifiers ---------------------------------------------------
     while True:
         # "you both own and control" (Obelisk of Undoing). Read before the bare
@@ -686,6 +688,27 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             except Exception:
                 stream.reset(probe)
                 break
+        if stream.at_word("that"):
+            # "…**that isn't the target of an ability from another creature
+            # named ~**" (Goblin Artisans). A guard against two copies aiming
+            # their abilities at the same spell, printed as a restriction on the
+            # noun phrase. The source is named by the asking card's own name,
+            # which the lexer has already collapsed to one SELF token — so
+            # nothing here knows a card name, and a second card printing the
+            # clause about itself gets it for free.
+            probe = stream.mark()
+            stream.advance()
+            if stream.accept_phrase(
+                "isn't", "the", "target", "of", "an", "ability",
+                "from", "another", "creature", "named",
+            ):
+                token = stream.peek()
+                if token is not None and token.kind == SELF:
+                    stream.advance()
+                    not_ability_targeted_by_same_name = True
+                    continue
+            stream.reset(probe)
+            break
         if stream.at_word("named"):
             # "a card **named** Frantic Inventory" — a restriction on what the
             # object *is*, so it belongs on the filter beside every other one.
@@ -757,6 +780,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         excluded_subtypes=tuple(excluded_subtypes),
         with_keywords=tuple(with_keywords),
         without_keywords=tuple(without_keywords),
+        not_ability_targeted_by_same_name=not_ability_targeted_by_same_name,
         controller=controller,
         owner=owned_by,
         tapped=tapped,

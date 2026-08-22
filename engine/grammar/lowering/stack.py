@@ -25,7 +25,10 @@ from ._common import (
 # noun phrase is refused by _restrictions_beyond, because this handler picks
 # the spell to counter itself and would ignore anything it was not told to
 # check.
-_COUNTER_HONOURED_FILTER_FIELDS = frozenset({"colors", "mana_value", "card_types", "zone"})
+_COUNTER_HONOURED_FILTER_FIELDS = frozenset({
+    "colors", "mana_value", "card_types", "zone", "controller",
+    "not_ability_targeted_by_same_name",
+})
 
 # The "unless … pays" costs the counter flow can offer: ``{X}`` (Power Sink,
 # sized from the caster's chosen X) and a fixed generic amount (Miscast's
@@ -138,6 +141,21 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
         if not is_mana_value_x(filt.mana_value):
             raise LoweringError("no handler for this mana-value restriction", node=node)
         payload["mv_equals_x"] = True
+    if filt.controller is not None:
+        # "counter target artifact spell **you control**" (Goblin Artisans).
+        # Whose spell it is, checked by the handler against the caster's seat —
+        # the one restriction here that is about the spell's controller rather
+        # than the card, and refused for any other value because the handler
+        # can only ask about "mine".
+        if filt.controller != "you":
+            raise LoweringError("no handler for this counter controller", node=node)
+        payload["controller"] = "you"
+    if filt.not_ability_targeted_by_same_name:
+        # "…that isn't the target of an ability from another creature named ~"
+        # (Goblin Artisans). Answered off the stack at resolution: the abilities
+        # aiming at that spell are objects on it (CR 113.7a), so there is
+        # nothing to read off the spell itself.
+        payload["not_ability_targeted_by_same_name"] = True
     leftover = _restrictions_beyond(filt, _COUNTER_HONOURED_FILTER_FIELDS)
     if leftover:
         raise LoweringError(

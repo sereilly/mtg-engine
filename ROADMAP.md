@@ -1761,3 +1761,49 @@ a decision, it is what "you may" means.
 **Numbers.** ATQ 79 → 80; grammar parses 78.3% → 80.0% of its lines, executes
 51.7% → 52.5%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
 6675, no hook added.
+
+## ATQ round 25: the type a spell has, and the one it was asked for
+
+*(2026-08-22.)* **80 → 81.** Goblin Artisans — "{T}: Flip a coin. If you win the
+flip, draw a card. If you lose the flip, counter target artifact spell you
+control **that isn't the target of an ability from another creature named Goblin
+Artisans**."
+
+Everything but that last clause already parsed. The clause is the old
+no-infinite-loop guard, and the thing that makes it a *template* rather than a
+card quirk is one the lexer had already done: the card's own name is collapsed
+to a SELF token, so the production reads "another creature named ~" and knows no
+card name at all. A second card printing the same guard about itself gets it for
+free.
+
+**Two narrowings the counter flow had to start honouring**, both refused as
+`_restrictions_beyond` leftovers before this: "you control" (asked of the seat
+that put the spell on the stack) and the guard itself (asked of the stack,
+because the abilities pointing at a spell are objects on it — CR 113.7a — and
+nothing about the spell records who is aiming at it). "Another" is by identity,
+not by name: the ability now resolving is this permanent's own, and counting it
+would make a lone Goblin Artisans unable to counter anything at all. There is a
+test for exactly that.
+
+### The bug the card found on its way in
+
+"Counter target **artifact** spell" refused Ornithopter. The handler tested
+`target.card.primary_type not in card_types`, and CR 205.2 says a card has
+*every* type its line names — Ornithopter is an artifact spell **and** a
+creature spell, and `primary_type` picks one of them by the order of a list. It
+picked "creature".
+
+The same sentence is written correctly one file over: `graveyard_card_matches`'s
+docstring says "the narrowed type is containment in the printed type line rather
+than `primary_type`, because CR 205.2 makes an Ornithopter an artifact card
+*and* a creature card". Two readers of one rule, one of them right. It is
+containment in both now.
+
+Nothing in the shipped pool was affected — the only cards that counter by type
+name "instant or sorcery", where the two readings agree — which is why it
+survived: the wrong rule and the right one differ only on a multi-type spell,
+and no shipped counterspell had met one.
+
+**Numbers.** ATQ 80 → 81; grammar parses 80.0% → 80.8% of its lines, executes
+52.5% → 53.3%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
+6681, no hook added.

@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 81.0% | 79.7% | 44.2% | 155 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 80.0% | 80.0% | 52.5% | 59 |
+| ATQ *(measured)* | 85 | 120 | 80.8% | 80.8% | 53.3% | 60 |
 | **All (shipped)** | **1533** | **2166** | **81.3%** | **80.1%** | **47.1%** | **885** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -35,7 +35,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ---: | ---: | --- | --- |
 | 185 | 70 | expected a subject |  |
 | 86 | 30 | unrecognized effect verb |  |
-| 48 | 24 | unconsumed text |  |
+| 47 | 23 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
 | 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 9 | 4 | expected 'the number of' in a where-clause |  |
@@ -584,6 +584,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Creatures you control get +1/+1.`
 - **Goblin Arsonist**
   - `When this creature dies, you may have it deal 1 damage to any target.`
+- **Goblin Artisans**
+  - `{T}: Flip a coin. If you win the flip, draw a card. If you lose the flip, counter target artifact spell you control that isn't the target of an ability from another creature named Goblin Artisans.`
 - **Goblin Balloon Brigade**
   - `{R}: This creature gains flying until end of turn.`
   - `{R}: This creature gains flying until end of turn.`

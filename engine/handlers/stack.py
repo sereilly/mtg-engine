@@ -167,6 +167,19 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+def _spell_is_one_of(card, card_types) -> bool:
+    """Whether a spell on the stack is of any of *card_types* (CR 205.2).
+
+    Containment in the printed type line, not ``primary_type``: a card has
+    **every** type its line names, so Ornithopter is an artifact spell *and* a
+    creature spell. Asking `primary_type` picks one of them by the order of a
+    list, and it picked "creature" — so Goblin Artisans, whose whole ability is
+    countering an artifact spell, refused every artifact creature in the set.
+    """
+    line = (getattr(card, "type_line", "") or "").lower()
+    return any(str(wanted).lower() in line for wanted in card_types)
+
+
 @effect_handler("counter_top_stack_spell")
 def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
@@ -186,12 +199,48 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # payload carries is tested against the chosen spell's primary type,
         # the same shape as the colour gate above.
         card_types = instruction.payload.get("card_types")
-        if card_types and target.card.primary_type not in card_types:
+        if card_types and not _spell_is_one_of(target.card, card_types):
             game.log.append(
                 f"{card.name}: {target.card.name} is not "
                 f"{' or '.join(card_types)}, cannot counter"
             )
             return True, "resolved"
+        # "counter target artifact spell **you control**" (Goblin Artisans).
+        # Whose spell it is, asked of the seat that put it on the stack.
+        if instruction.payload.get("controller") == "you":
+            if target.caster_index != game.players.index(context.caster):
+                game.log.append(
+                    f"{card.name}: {target.card.name} is not a spell you control, "
+                    "cannot counter"
+                )
+                return True, "resolved"
+        # "…that isn't the target of an ability from another creature named ~"
+        # (Goblin Artisans): a guard against two copies aiming at the same
+        # spell. Asked of the stack, because the abilities pointing at that
+        # spell are objects on it (CR 113.7a) and nothing about the spell itself
+        # records who is aiming at it. "Another" is by identity — an ability of
+        # *this* permanent is the one now resolving, and excluding it is what
+        # keeps the card from countering nothing at all.
+        if instruction.payload.get("not_ability_targeted_by_same_name"):
+            source = context.source_permanent
+            rival = next(
+                (
+                    item
+                    for item in game.stack
+                    if item.target_stack_item is target
+                    and item.source_permanent is not None
+                    and item.source_permanent is not source
+                    and source is not None
+                    and item.source_permanent.card.name == source.card.name
+                ),
+                None,
+            )
+            if rival is not None:
+                game.log.append(
+                    f"{card.name}: {target.card.name} is already the target of "
+                    f"another {rival.source_permanent.card.name}'s ability, cannot counter"
+                )
+                return True, "resolved"
         # Spell Blast: X must equal the target spell's mana value. When no X was
         # chosen (None, or 0 auto-inferred from an empty pool), assume the caster
         # chose the matching value.

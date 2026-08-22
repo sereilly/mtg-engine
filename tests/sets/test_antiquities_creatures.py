@@ -5,6 +5,8 @@ See tests/sets/README.md for the convention.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from engine import Game, PlayerState
 from engine.damage_events import deal_damage
 from engine.models import Permanent
@@ -490,3 +492,122 @@ def test_declining_the_upkeep_offer_keeps_the_last_number(set_pool):
     game.confirm_optional_pay(0, card_name="Shapeshifter", accept=False)
 
     assert (perm.effective_power, perm.effective_toughness) == (2, 5)
+
+
+# ---------------------------------------------------------------------------
+# Goblin Artisans (round 25) — a spell nobody else is already aiming at
+# ---------------------------------------------------------------------------
+
+
+def _artisans_board(set_pool, *, copies=1):
+    pool = set_pool("ATQ")
+    artisans = [Permanent(card=pool["Goblin Artisans"]) for _ in range(copies)]
+    p1 = PlayerState(
+        name="P1",
+        battlefield=list(artisans),
+        hand=[pool["Ornithopter"]],
+        library=[pool["Ornithopter"]] * 5,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+    game.current_step = "precombat_main"
+    return game, p1, pool
+
+
+def _flip(win: bool):
+    """The flip forced through the module object every RNG reader shares —
+    the idiom test_m21_creatures.py's Tavern Swindler tests record."""
+    return patch(
+        "engine.handlers._common.random.random", return_value=0.0 if win else 0.99
+    )
+
+
+def test_goblin_artisans_draws_on_a_won_flip(set_pool):
+    game, p1, pool = _artisans_board(set_pool)
+    before = len(p1.hand)
+
+    with _flip(True):
+        game.queue_permanent_ability(0, "Goblin Artisans", permanent_index=0)
+        game._settle()
+
+    assert len(p1.hand) == before + 1, game.log
+
+
+def test_a_lost_flip_counters_your_own_artifact_spell(set_pool):
+    game, p1, pool = _artisans_board(set_pool)
+    game.queue_from_hand(0, "Ornithopter")
+
+    with _flip(False):
+        game.queue_permanent_ability(
+            0, "Goblin Artisans", permanent_index=0, target_stack_index=0
+        )
+        game._settle()
+
+    assert game.stack == []
+    assert [card.name for card in p1.graveyard] == ["Ornithopter"]
+
+
+def test_an_artifact_creature_spell_is_an_artifact_spell(set_pool):
+    """CR 205.2: a card has every type its line names. Ornithopter is the only
+    thing in the set this ability can legally be pointed at, and asking the
+    card's *primary* type picked "creature" — so the whole card refused every
+    spell it exists to counter. The test above is that check; this names it."""
+    pool = set_pool("ATQ")
+    assert "artifact" in pool["Ornithopter"].type_line.lower()
+    assert pool["Ornithopter"].primary_type != "artifact"
+
+
+def test_it_cannot_counter_an_opponents_artifact_spell(set_pool):
+    """"…target artifact spell **you control**"."""
+    game, p1, pool = _artisans_board(set_pool)
+    p2 = game.players[1]
+    p2.hand.append(pool["Ornithopter"])
+    game.queue_from_hand(1, "Ornithopter")
+
+    with _flip(False):
+        game.queue_permanent_ability(
+            0, "Goblin Artisans", permanent_index=0, target_stack_index=0
+        )
+        game._settle()
+
+    assert [perm.card.name for perm in p2.battlefield] == ["Ornithopter"]
+
+
+def test_a_second_artisans_already_aiming_at_the_spell_locks_it_out(set_pool):
+    """"…that isn't the target of an ability from **another** creature named
+    Goblin Artisans." The guard against two copies pointing at one spell. Both
+    abilities are put on the stack aimed at the same Ornithopter; the one that
+    resolves first sees the other still waiting and does nothing."""
+    game, p1, pool = _artisans_board(set_pool, copies=2)
+    game.queue_from_hand(0, "Ornithopter")
+
+    with _flip(False):
+        game.queue_permanent_ability(
+            0, "Goblin Artisans", permanent_index=1, target_stack_index=0
+        )
+        game.queue_permanent_ability(
+            0, "Goblin Artisans", permanent_index=0, target_stack_index=0
+        )
+        game._settle()
+
+    assert any(
+        "already the target of another" in entry for entry in game.log
+    ), game.log
+
+
+def test_one_artisans_is_not_blocked_by_its_own_ability(set_pool):
+    """"**Another**" is by identity: the ability now resolving is this
+    permanent's own, and a rule that counted it would make a lone Goblin
+    Artisans unable to counter anything at all."""
+    game, p1, pool = _artisans_board(set_pool)
+    game.queue_from_hand(0, "Ornithopter")
+
+    with _flip(False):
+        game.queue_permanent_ability(
+            0, "Goblin Artisans", permanent_index=0, target_stack_index=0
+        )
+        game._settle()
+
+    assert [card.name for card in p1.graveyard] == ["Ornithopter"], game.log
