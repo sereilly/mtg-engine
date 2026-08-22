@@ -50,9 +50,7 @@ from .registries import registry_for_line
 from .riders import (_RIDER_FOLDED, _attach_if_you_do, _attach_riders, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .stream import TokenStream
 from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, match_longest)
-from .phrases import (
-    _parse_trigger_event,
-)
+from .triggers import _parse_trigger_event
 from .effects import (
     _parse_activation_restriction,
     _parse_create_token,

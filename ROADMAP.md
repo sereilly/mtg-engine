@@ -1074,3 +1074,43 @@ Rocket Launcher's self-destruction wants.
 **Numbers.** ATQ 59 → 61; grammar parses 60.8% → 62.5% of its lines, executes
 38.3% → 40.0%. Shipped pool 668/668, floors and ceilings unmoved, suite green
 at 6616, no hook added.
+
+## ATQ round 9: two list separators and a family that had to move
+
+*(2026-08-21.)* **61 → 63.** Urza's Avenger and Gaea's Avenger, plus the
+grammar's size guard collecting on a debt six rounds of trigger work had run up.
+
+**A list of four is punctuated differently from a list of two.**
+`_parse_keywords` read "deathtouch **or** lifelink" and stopped at a comma, so
+"banding, flying, first strike, or trample" collapsed to one keyword and Urza's
+Avenger was refused for offering *a choice of one* — an error message that was
+exactly right about what it saw and said nothing about why. The comma is read
+now, and only when a keyword follows it, which is the same shape the subtype
+list has used since it was written.
+
+**Gaea's Avenger differs from Nightmare in three ways and needed no new
+mechanism for any of them.** "…equal to **1 plus** the number of **artifacts**
+**your opponents** control" is a printed constant, a card type instead of a
+land type, and a different battlefield — all three are payload keys on the
+existing `dynamic_pt_count`, which is what that instruction was for. One row in
+the table, one scope value, one `card_type` branch in the tally.
+
+**And `phrases.py` went back over a thousand lines.** The guard's instruction is
+to split along the family the new work belongs to rather than raise the number,
+and by this round the answer was obvious: rounds 3, 6 and 8 had all added
+trigger productions, and every trigger table in `phrases` was read only by the
+productions beside it. `engine/grammar/triggers.py` is that family, ranked
+between `phrases` (whose durations, numbers and subject filters it reads) and
+everything that reads a whole line.
+
+**This family has now moved twice, and the second move is the interesting
+one.** Its own comment already recorded the first: it lived in `parser.py` and
+left when the counters-put-on production pushed *that* module past the same
+line. A guard that has relocated the same code twice, both times to a smaller
+and more coherent home, is not a nuisance — it is the only thing in the repo
+that notices "this is being appended to whatever was easiest" before anyone
+else does.
+
+**Numbers.** ATQ 61 → 63; grammar parses 62.5% → 65.0% of its lines.
+`phrases.py` 1,011 → 399 lines, `triggers.py` 651. Shipped pool 668/668, floors
+and ceilings unmoved, suite green at 6621, no hook added.

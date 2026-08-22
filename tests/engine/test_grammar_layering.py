@@ -44,7 +44,15 @@ GRAMMAR = Path(__file__).resolve().parent.parent.parent / "engine" / "grammar"
 # durations alone, so nothing in it can reach a statement production. The
 # order is therefore an assertion about the split, not a convention — a
 # condition that grew a need for an effect would fail here.
-PARSE_LAYERS = ["phrases", "effects", "conditions", "statements", "costs", "parser"]
+PARSE_LAYERS = [
+    "phrases",
+    # The trigger tables and the productions that read them. Split out of
+    # `phrases` when Antiquities' trigger work pushed that module past the
+    # thousand-line guard below — above `phrases`, whose shared fragments it
+    # reads, and below everything that reads a whole line.
+    "triggers",
+    "effects", "conditions", "statements", "costs", "parser",
+]
 LOWER_LAYERS = ["lowering", "statics", "lower"]
 
 EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game"]

@@ -125,3 +125,57 @@ def test_argothian_pixies_can_still_be_blocked_by_an_ordinary_creature(set_pool)
     game = Game(players=[p1, p2])
 
     assert game._can_block_attacker(druid, pixies) is True
+
+
+# ---------------------------------------------------------------------------
+# Gaea's Avenger / Urza's Avenger (round 9)
+# ---------------------------------------------------------------------------
+
+
+def test_gaeas_avenger_counts_one_plus_the_opponents_artifacts(set_pool):
+    pool = set_pool("ATQ")
+    avenger = Permanent(card=pool["Gaea's Avenger"])
+    p1 = PlayerState(name="P1", battlefield=[avenger])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=pool["Ornithopter"]), Permanent(card=pool["Jalum Tome"])],
+    )
+    game = Game(players=[p1, p2])
+    game._refresh_dynamic_creatures()
+
+    assert (avenger.effective_power, avenger.effective_toughness) == (3, 3)
+
+
+def test_gaeas_avenger_ignores_your_own_artifacts(set_pool):
+    """"artifacts **your opponents** control" — the constant survives alone."""
+    pool = set_pool("ATQ")
+    avenger = Permanent(card=pool["Gaea's Avenger"])
+    p1 = PlayerState(
+        name="P1", battlefield=[avenger, Permanent(card=pool["Ornithopter"])]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game._refresh_dynamic_creatures()
+
+    assert (avenger.effective_power, avenger.effective_toughness) == (1, 1)
+
+
+def test_urzas_avenger_offers_all_four_printed_keywords(set_pool):
+    """"…gains your choice of banding, flying, first strike, or trample." The
+    keyword-list parser read "or" but not the comma-separated form, so a list
+    of four collapsed to one item and the card was refused for offering a
+    choice of one."""
+    program = compile_card_oracle(set_pool("ATQ")["Urza's Avenger"])
+    (ability,) = program.activated_abilities
+    steps = ability.instruction.payload["steps"]
+    choice = next(step for step in steps if step.kind == "choose_one")
+    labels = {mode["label"] for mode in choice.payload["modes"]}
+
+    assert ability.supported
+    assert labels == {"banding", "flying", "first strike", "trample"}
+    # The drawback is the other half of the sentence and rides in the same
+    # sequence — a card that granted the keyword without the -1/-1 would be
+    # strictly better than the one printed.
+    assert any(
+        step.kind == "pump_self" and step.payload == {"power": -1, "toughness": -1}
+        for step in steps
+    )

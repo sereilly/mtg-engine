@@ -89,6 +89,17 @@ def _graveyard_type_count(match: re.Match) -> dict[str, object]:
     }
 
 
+def _type_count_plus(match: re.Match) -> dict[str, object]:
+    """Gaea's Avenger. A card-type tally on a named battlefield, plus a printed
+    constant — three payload keys rather than three templates."""
+    return {
+        "count": "card_type",
+        "card_type": match.group("card_type"),
+        "scope": "opponents" if match.group("whose") == "your opponents" else "you",
+        "plus": int(match.group("plus")),
+    }
+
+
 def _same_name_count(match: re.Match) -> dict[str, object]:
     return {"count": "same_name", "scope": "all"}
 
@@ -142,6 +153,19 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             rf"(?P<types>[a-z]+(?: and [a-z]+)*) cards in your graveyard$"
         ),
         _graveyard_type_count,
+    ),
+    (
+        # Gaea's Avenger: "…are each equal to **1 plus** the number of
+        # **artifacts your opponents control**." The constant, the card type
+        # and whose battlefield are all payload, so the three ways this card
+        # differs from Nightmare cost no code beyond this row.
+        re.compile(
+            rf"^{_SUBJECT} power and toughness are each equal to "
+            r"(?P<plus>\d+) plus the number of "
+            r"(?P<card_type>artifact|creature|enchantment|land)s "
+            r"(?P<whose>you|your opponents) controls?$"
+        ),
+        _type_count_plus,
     ),
     (
         # Keldon Warlord, and the unqualified "creatures you control" form.

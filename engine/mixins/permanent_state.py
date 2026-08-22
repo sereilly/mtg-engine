@@ -78,6 +78,11 @@ def _count_dynamic_pt(
     scope = payload.get("scope", "you")
     if scope == "all":
         battlefields = [p.battlefield for p in game.players]
+    elif scope == "opponents":
+        # "…the number of artifacts **your opponents** control" (Gaea's
+        # Avenger). Whose battlefield is already payload, so this is one more
+        # value for it rather than a second counter.
+        battlefields = [p.battlefield for p in game.players if p is not player]
     elif (
         scope == "defender_when_attacking"
         and permanent.attacking
@@ -90,6 +95,7 @@ def _count_dynamic_pt(
     what = payload.get("count")
     excluded = payload.get("exclude_type")
     land_type = payload.get("land_type")
+    card_type = payload.get("card_type")
 
     total = 0
     for battlefield in battlefields:
@@ -101,7 +107,13 @@ def _count_dynamic_pt(
                     total += 1
             elif what == "same_name":
                 total += perm.card.name == permanent.card.name
-    return total
+            elif what == "card_type":
+                total += bool(card_type and perm.has_type(str(card_type)))
+    # "…equal to **1 plus** the number of …" (Gaea's Avenger). A printed
+    # constant added to the tally, on the payload because it is part of the
+    # sentence rather than part of the counting — a card printed "2 plus" is
+    # the same template.
+    return total + int(payload.get("plus", 0))
 
 
 def _add_static_pt(permanent: Permanent, power: int, toughness: int) -> None:

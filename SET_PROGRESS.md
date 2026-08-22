@@ -16,7 +16,7 @@ Do not edit by hand — re-run the script instead.
 | 2 | Limited Edition Beta | LEB | 1993-10-04 | 292 | 2 | Complete (292/292 supported) |
 | 3 | Unlimited Edition | 2ED | 1993-12-01 | 292 | 0 | Complete (292/292 supported) |
 | 4 | Arabian Nights | ARN | 1993-12-17 | 78 | 77 | Complete (78/78 supported) |
-| 5 | Antiquities | ATQ | 1994-03-04 | 85 | 85 | Measured (61/85 supported, not shipped) |
+| 5 | Antiquities | ATQ | 1994-03-04 | 85 | 85 | Measured (63/85 supported, not shipped) |
 | 6 | Revised Edition | 3ED | 1994-04-11 | 296 | 0 | Complete (296/296 supported) |
 | 7 | Legends | LEG | 1994-06-01 | 310 | 310 | Not Implemented |
 | 8 | The Dark | DRK | 1994-08-01 | 119 | 119 | Not Implemented |

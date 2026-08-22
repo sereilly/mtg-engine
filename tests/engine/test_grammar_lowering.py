@@ -3529,7 +3529,7 @@ def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
     from engine.card_loader import load_cards, manifest_set_paths
     from engine.grammar.lexer import tokenize
     from engine.grammar.lowering._common import _filter_payload
-    from engine.grammar.phrases import _parse_trigger_event
+    from engine.grammar.triggers import _parse_trigger_event
     from engine.grammar.stream import TokenStream
     from engine.oracle import _parse_trigger_condition, normalize_creature_line
 
