@@ -134,7 +134,9 @@ class ChangeText:
 @dataclass(frozen=True)
 class BecomeCreature:
     """"…becomes a 3/3 Sphinx creature with flying **in addition to its other
-    types** until end of turn." (Riddleform, CR 205.1b / CR 613 layer 4.)
+    types** until end of turn." (Riddleform, CR 205.1b / CR 613 layer 4.) /
+    "…becomes a 2/2 Assembly-Worker artifact creature until end of turn.
+    **It's still a land.**" (Mishra's Factory.)
 
     An *addition*, not a replacement, which is the difference between this and
     :class:`BecomeColor` below and the difference the printed words state: the
@@ -152,6 +154,12 @@ class BecomeCreature:
     toughness: int
     subtypes: tuple[str, ...] = ()
     keywords: tuple[str, ...] = ()
+    #: Card types the animation adds *besides* creature — "becomes a 2/2
+    #: Assembly-Worker **artifact** creature" (Mishra's Factory). Recorded
+    #: rather than collapsed into "creature", because an animated land that is
+    #: not also an artifact is a different permanent: Shatter reaches one and
+    #: not the other.
+    card_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

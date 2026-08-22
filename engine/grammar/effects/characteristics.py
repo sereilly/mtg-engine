@@ -558,6 +558,19 @@ def _parse_become_creature(
             break
         subtypes.append(matched[0])
         stream.advance(matched[1])
+    # "…a 2/2 Assembly-Worker **artifact** creature" (Mishra's Factory). A card
+    # type between the subtypes and the head noun, which the animation adds
+    # alongside "creature" (CR 205.1b). Recorded rather than skipped: an
+    # animated land that is not also an artifact is a different permanent, and
+    # a word consumed and dropped is the rider bug this grammar refuses by
+    # construction.
+    card_types: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word is None or word == "creature" or word not in CARD_TYPES:
+            break
+        card_types.append(word)
+        stream.advance()
     if not stream.accept_word("creature"):
         stream.reset(mark)
         return None
@@ -574,12 +587,31 @@ def _parse_become_creature(
         if not keywords:
             stream.reset(mark)
             return None
-    if not stream.accept_phrase("in", "addition", "to", "its", "other", "types"):
-        stream.reset(mark)
-        return None
+    # The addition clause, in either of the two places the pool prints it:
+    # before the duration ("…in addition to its other types until end of turn",
+    # Riddleform) or as its own sentence after it ("…until end of turn. It's
+    # still a land.", Mishra's Factory). One of the two is **required** — it is
+    # the difference between animating the permanent and replacing what it is,
+    # and a production that let it be absent would also let it be deleted.
+    in_addition = stream.accept_phrase("in", "addition", "to", "its", "other", "types")
     if not stream.accept_phrase("until", "end", "of", "turn"):
         stream.reset(mark)
         return None
+    if not in_addition:
+        stream.accept_punct(".")
+        if not stream.accept_phrase("it", "'s", "still", "a"):
+            stream.reset(mark)
+            return None
+        # The type the sentence names is one the permanent already has, so
+        # nothing reads it — the animation keeps every type either way. It is
+        # still required to *be* a card type, because a sentence naming
+        # something else is one this production has not understood.
+        kept = stream.peek_word()
+        if kept is None or kept not in CARD_TYPES:
+            stream.reset(mark)
+            return None
+        stream.advance()
     return ast.BecomeCreature(
-        subject, power.value, toughness.value, tuple(subtypes), tuple(keywords)
+        subject, power.value, toughness.value, tuple(subtypes), tuple(keywords),
+        tuple(card_types),
     )

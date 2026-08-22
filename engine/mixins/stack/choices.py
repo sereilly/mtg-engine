@@ -1785,6 +1785,12 @@ class PendingChoicesMixin:
 
     def _player_can_pay_optional(self, player, entry: dict) -> bool:
         """CR 601.2h, for an optional cost: whether it *could* be paid."""
+        life_cost = int(entry.get("life_cost", 0) or 0)
+        if life_cost:
+            # CR 119.4: a player may pay N life only with at least N to pay —
+            # paying down to exactly 0 is legal, and the state-based check that
+            # follows is what ends the game.
+            return player.life >= life_cost
         return self._optional_pay_plan(player, entry) is not None
 
     def _pay_optional(self, player_index: int, entry: dict) -> None:
@@ -1797,13 +1803,25 @@ class PendingChoicesMixin:
             drawn = self._draw_with_replacements(player, int(entry["draw"]))
             self.log.append(f"{player.name} drew {drawn} card(s) from {entry['card_name']}")
             return
-        plan = self._optional_pay_plan(player, entry)
-        if plan is None:
-            return
-        for symbol, amount in plan.from_pool.items():
-            player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
-        for land in plan.tapped:
-            self.become_tapped(land)
+        # "That player may pay 10 life." (Bronze Tablet.) A life cost rather
+        # than a mana one, and the two never appear together — a cost of one
+        # kind is not payable out of the other.
+        life_cost = int(entry.get("life_cost", 0) or 0)
+        if life_cost:
+            if player.life < life_cost:
+                return
+            player.life -= life_cost
+            self.log.append(
+                f"{player.name} paid {life_cost} life ({entry.get('card_name', '')})"
+            )
+        else:
+            plan = self._optional_pay_plan(player, entry)
+            if plan is None:
+                return
+            for symbol, amount in plan.from_pool.items():
+                player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
+            for land in plan.tapped:
+                self.become_tapped(land)
         # A grammar-lowered "may" carries its consequence as instructions rather
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.
@@ -2038,7 +2056,15 @@ class PendingChoicesMixin:
         seat that was actually asked."""
         entry = choice.data
         player = self.players[choice.player_index]
-        floating = plan_payment(player.mana_pool, (), entry.get("cost") or {})
+        # A life cost has no "already floating" reading — nothing is held in
+        # reserve to spend — so the stated policy is the one a player at a
+        # healthy life total would take: pay, unless it would be lethal.
+        life_cost = int(entry.get("life_cost", 0) or 0)
+        floating = (
+            (True if player.life > life_cost else None)
+            if life_cost
+            else plan_payment(player.mana_pool, (), entry.get("cost") or {})
+        )
         self.discard_pending_choice(choice)
         if floating is not None:
             self._pay_optional(choice.player_index, entry)

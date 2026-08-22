@@ -309,6 +309,30 @@ class TransmuteBySacrifice:
 
 
 @dataclass(frozen=True)
+class OwnershipExchangeUnlessPaid:
+    """Bronze Tablet's whole four-sentence ability.
+
+    "Exile this artifact and target nontoken permanent an opponent owns. That
+    player may pay 10 life. If they do, put this card into its owner's
+    graveyard. Otherwise, that player owns this card and you own the other
+    exiled card."
+
+    One node, in `paragraphs.py`'s family, because the sentences are one effect:
+    the exile is what there is to exchange, the payment decides whether the
+    exchange happens, and both branches name the two cards the first sentence
+    took. CR 108.3 says ownership never changes — this is one of the handful of
+    ante cards (CR 407) that is the exception, which is why the effect exists at
+    all and why it is inert in a game not played for ante.
+
+    The life and the target's noun phrase ride the node; a card printing the same
+    machine with a different number or a different noun needs no code.
+    """
+
+    life: int
+    target: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class CastPermission:
     """A sentence whose effect is permission to cast or play from somewhere
     the rules alone would not allow (CR 601.3):

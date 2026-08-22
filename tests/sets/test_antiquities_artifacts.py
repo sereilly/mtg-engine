@@ -623,3 +623,80 @@ def test_nothing_comes_back_while_the_coffin_stays_tapped(set_pool):
 
     assert coffin.tapped is True
     assert p2.battlefield == []
+
+
+# ---------------------------------------------------------------------------
+# Bronze Tablet (round 30) — the one place CR 108.3 is not true
+# ---------------------------------------------------------------------------
+
+
+def _tablet_board(set_pool, *, victim_life=20):
+    pool = set_pool("ATQ")
+    tablet = Permanent(card=pool["Bronze Tablet"])
+    prize = Permanent(card=pool["Su-Chi"])
+    p1 = PlayerState(name="P1", battlefield=[tablet])
+    p2 = PlayerState(name="P2", battlefield=[prize], life=victim_life)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def _shake_hands(game):
+    return game.activate_permanent_ability(
+        0, "Bronze Tablet", target_player_index=1, target_permanent_index=0
+    )
+
+
+def test_the_tablet_asks_the_victim_and_not_the_activator(set_pool):
+    """"**That player** may pay 10 life." The seat that owes the decision is
+    the one being robbed, which is the whole tension of the card."""
+    game, p1, p2 = _tablet_board(set_pool)
+
+    result = _shake_hands(game)
+
+    assert result.supported, result.details
+    pending = game.pending_choices_of("optional_pay", 1)
+    assert len(pending) == 1
+    assert pending[0].data["life_cost"] == 10
+
+
+def test_paying_sends_the_tablet_to_its_owners_graveyard(set_pool):
+    """"If they do, put **this card** into its owner's graveyard." Only this
+    card — the other exiled card stays exiled, which is what makes paying a
+    real cost rather than a full undo."""
+    game, p1, p2 = _tablet_board(set_pool)
+    _shake_hands(game)
+
+    game.confirm_optional_pay(1, card_name="Bronze Tablet", accept=True)
+
+    assert p2.life == 10
+    assert [card.name for card in p1.graveyard] == ["Bronze Tablet"]
+    assert [card.name for card in p2.exile] == ["Su-Chi"]
+
+
+def test_declining_exchanges_ownership(set_pool):
+    """"Otherwise, that player owns this card and you own the other exiled
+    card." CR 108.3 says ownership never changes; the ante rules (CR 407) are
+    where the exception lives, and this is one of the cards that is it. The
+    engine's ownership is which player's zone a card sits in, so the exchange
+    is the two piles swapping."""
+    game, p1, p2 = _tablet_board(set_pool)
+    _shake_hands(game)
+
+    game.confirm_optional_pay(1, card_name="Bronze Tablet", accept=False)
+
+    assert p2.life == 20, "declining costs nothing"
+    assert [card.name for card in p1.exile] == ["Su-Chi"]
+    assert [card.name for card in p2.exile] == ["Bronze Tablet"]
+
+
+def test_a_victim_who_cannot_pay_loses_the_permanent(set_pool):
+    """CR 119.4: 10 life is payable only with 10 to pay. A seat at six has no
+    choice to make, and the deterministic answer is the decline."""
+    game, p1, p2 = _tablet_board(set_pool, victim_life=6)
+    _shake_hands(game)
+
+    game.auto_resolve_pending_choices()
+
+    assert p2.life == 6
+    assert [card.name for card in p1.exile] == ["Su-Chi"]

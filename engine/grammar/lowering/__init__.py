@@ -88,6 +88,7 @@ from .characteristics import (
 )
 from .zones import (
     _lower_exile_until_leaves_or_untaps,
+    _lower_ownership_exchange_unless_paid,
     _lower_shuffle_graveyard_into_library,
     _EXILED_CREATURE,
     _reads_no_return_restriction,
@@ -285,6 +286,7 @@ __all__ = [
     "_lower_exile_graveyard_until_leaves",
     "_lower_transmute_by_sacrifice",
     "_lower_exile_until_leaves_or_untaps",
+    "_lower_ownership_exchange_unless_paid",
     "_lower_exile_top_of_library",
     "_lower_look_top_pick",
     "_lower_search_and_exile",

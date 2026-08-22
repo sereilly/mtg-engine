@@ -547,6 +547,14 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         if stream.accept_phrase("an", "opponent", "controls"):
             controller = "opponent"
             continue
+        # "target nontoken permanent an opponent **owns**" (Bronze Tablet).
+        # Ownership, not control (CR 108.3 against CR 613 layer 2) — a card
+        # printed with "owns" excludes the permanent it stole from that
+        # opponent, and reading one as the other is exactly the mistake round
+        # 13 recorded about Obelisk of Undoing.
+        if stream.accept_phrase("an", "opponent", "owns"):
+            owned_by = "opponent"
+            continue
         # "creatures **your opponents** control" (Massacre Wurm, Waker of
         # Waves) — the plural spelling of the same scope: every opponent's
         # creatures, and none of the controller's own.

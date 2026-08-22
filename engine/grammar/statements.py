@@ -16,6 +16,7 @@ from .lexer import (SELF, WORD)
 from .nouns import parse_object_filter
 from .paragraphs import (
     _parse_cast_from_exiled_with,
+    _parse_ownership_exchange_unless_paid,
     _parse_exile_graveyard_until_leaves,
     _parse_exile_until_leaves_or_untaps,
     _parse_name_and_strip,
@@ -221,6 +222,14 @@ def _parse_subject_verb(
         return coffin
     stream.reset(mark_coffin)
     if stream.at_word("exile"):
+        # Bronze Tablet's whole paragraph opens "Exile this artifact and …", and
+        # the ordinary exile would match its first clause and strand three
+        # sentences. Refuses without consuming.
+        mark_tablet = stream.mark()
+        tablet = _parse_ownership_exchange_unless_paid(stream)
+        if tablet is not None:
+            return tablet
+        stream.reset(mark_tablet)
         # "Exile the top three cards of your library" moves library cards, not
         # a permanent — tried first because the recipient parser below refuses
         # "the top" and would fail the sentence with a misleading reason.

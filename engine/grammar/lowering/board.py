@@ -46,11 +46,14 @@ _DESTROY_ALL_KINDS: dict[tuple[str, ...], str] = {
 _BASIC_LAND_TYPES = frozenset({"plains", "island", "swamp", "mountain", "forest"})
 
 
-# Trigger events that bind the creature a delayed "destroy that creature at end
-# of combat" acts on. `delayed_destroy_blocked_or_blocker` reads the blocking
-# pair out of the trigger's own context and takes no payload at all, so the
-# sentence only means what it says while one of these fired.
-_BLOCK_PAIR_EVENTS = frozenset({"creature_blocks_or_blocked_by_nonwall"})
+# Trigger events that bind a *blocking pair*, so "destroy that creature at end
+# of combat" names the other half of it. Both fire sites push the blocker as the
+# trigger's target, which is what the handler resolves — so the sentence only
+# means what it says while one of these fired.
+_BLOCK_PAIR_EVENTS = frozenset({
+    "creature_blocks_or_blocked_by_nonwall",   # Thicket Basilisk, Cockatrice
+    "creature_becomes_blocked",                # Battering Ram
+})
 
 
 # Trigger events whose fire site stamps the object the event was about onto the
@@ -165,13 +168,23 @@ def _lower_delayed_destroy(
         raise LoweringError(
             "the end-of-combat destroy acts on the creature the trigger bound", node=node
         )
-    if spec.filter != ast.ObjectFilter(card_types=("creature",)):
+    filt = spec.filter
+    if filt.card_types != ("creature",) or _restrictions_beyond(
+        filt, frozenset({"card_types", "subtypes"})
+    ):
         raise LoweringError("no delayed-destroy handler narrows what it destroys", node=node)
     if node.no_regen:
         raise LoweringError(
             "the end-of-combat destroy handler does not bypass regeneration", node=node
         )
-    return (OracleInstruction("delayed_destroy_blocked_or_blocker", "", {}),)
+    # "destroy that **Wall**" (Battering Ram). The trigger that fired already
+    # required a Wall, so the noun re-states what was bound rather than choosing
+    # again — but it rides the payload and the handler tests it anyway, because
+    # a word consumed and never read is a word that could be deleted.
+    payload: dict[str, object] = {}
+    if filt.subtypes:
+        payload["subtype_filter"] = filt.subtypes[0]
+    return (OracleInstruction("delayed_destroy_blocked_or_blocker", "", payload),)
 
 
 def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleInstruction, ...]:

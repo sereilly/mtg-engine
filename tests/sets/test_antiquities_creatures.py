@@ -737,3 +737,55 @@ def test_a_tetravite_belongs_to_the_tetravus_that_made_it(set_pool):
     assert {perm.metadata["created_with_permanent_id"] for perm in made} == {
         tetravus.permanent_id
     }
+
+
+# ---------------------------------------------------------------------------
+# Battering Ram (round 30) — a trigger that compiled and fired nothing
+# ---------------------------------------------------------------------------
+
+
+def _ram_blocked_by(set_pool, blocker_name):
+    pool = set_pool("ATQ")
+    ram = Permanent(card=pool["Battering Ram"])
+    blocker = Permanent(card=pool[blocker_name])
+    p1 = PlayerState(name="P1", battlefield=[ram])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game.declare_attackers(0, [0])
+    game.current_step = "declare_blockers"
+    accepted, why = game.declare_blockers(1, {0: 0})
+    assert accepted, why
+    game._settle()
+    game._resolve_end_of_combat_destruction()
+    return game, p2
+
+
+def test_a_wall_that_blocks_the_ram_dies_at_end_of_combat(set_pool):
+    game, p2 = _ram_blocked_by(set_pool, "Wall of Spears")
+
+    assert [perm.card.name for perm in p2.battlefield] == []
+    assert [card.name for card in p2.graveyard] == ["Wall of Spears"]
+
+
+def test_a_creature_that_is_not_a_wall_survives(set_pool):
+    """"…becomes blocked by **a Wall**, destroy that Wall." The noun is what
+    separates this from Thicket Basilisk, which destroys everything *but* a
+    Wall — so a rule that ignored it would be the other card."""
+    game, p2 = _ram_blocked_by(set_pool, "Citanul Druid")
+
+    assert [perm.card.name for perm in p2.battlefield] == ["Citanul Druid"]
+
+
+def test_the_trigger_names_the_blocker_and_not_the_ram(set_pool):
+    """The dispatcher pushed the *attacker* as the trigger's target, which for
+    a "destroy that Wall" rider would have destroyed the Ram. The blocker is
+    what the event bound, so the blocker is what the stack item carries."""
+    game, p2 = _ram_blocked_by(set_pool, "Wall of Spears")
+
+    assert any(
+        "will destroy Wall of Spears" in entry for entry in game.log
+    ), game.log

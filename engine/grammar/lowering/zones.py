@@ -526,6 +526,31 @@ def _lower_exile_until_leaves_or_untaps(
     return (OracleInstruction("exile_until_leaves_or_untaps", "", payload),)
 
 
+def _lower_ownership_exchange_unless_paid(
+    node: "ast.OwnershipExchangeUnlessPaid",
+) -> tuple[OracleInstruction, ...]:
+    """Bronze Tablet. The life total and the target's noun phrase are payload;
+    every other word was required by the production that read it."""
+    from ...subject_filters import object_only_filter
+
+    described = _filter_payload(node.target)
+    described.pop("owner", None)
+    if object_only_filter(described) is None:
+        raise LoweringError(
+            "the ownership exchange cannot test that phrase", node=node
+        )
+    payload: dict[str, object] = {
+        "life": node.life,
+        # The ownership half is carried separately from the rest of the filter:
+        # the picker and the handler both ask `subject_matches`, which needs the
+        # ability's controller to answer "an opponent owns" at all.
+        "owner": node.target.owner,
+        "filter": described,
+    }
+    _describe_targets(payload, ast.TargetSpec("target", node.target, targeted=True))
+    return (OracleInstruction("exchange_ownership_unless_paid", "", payload),)
+
+
 def _lower_graveyard_cards_on_library_top(
     node: ast.PutOnLibraryTop,
 ) -> tuple[OracleInstruction, ...]:

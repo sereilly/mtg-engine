@@ -35,6 +35,7 @@ import pytest
 
 from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.handlers import EFFECT_HANDLERS
+from engine.models import CardDefinition
 from engine.oracle import compile_card_oracle
 
 
@@ -357,27 +358,41 @@ def _hollow_lands() -> list[tuple[str, list[str]]]:
 
     The property is the same one the artifact half asks, so it is written the
     same way: a permanent that prints abilities and can read none of them does
-    not do what it says. A land with *some* readable ability (Mishra's Factory
-    taps for mana and pumps, and only its animation is unread) is degraded, not
+    not do what it says. A land with *some* readable ability is degraded, not
     hollow, and stays supported — that is the documented rule working.
     """
-    hollow: list[tuple[str, list[str]]] = []
-    for card in _whole_pool():
-        if card.primary_type != "land":
-            continue
-        program = compile_card_oracle(card)
-        if not program.supported:
-            continue
-        abilities = (*program.activated_abilities, *program.triggered_abilities)
-        if not abilities:
-            # No printed ability at all: a basic or a dual, whose whole text is
-            # CR 305.6 reminder text. `produced_mana` is the whole card and it
-            # is right.
-            continue
-        if any(a.supported and a.instruction is not None for a in abilities):
-            continue
-        hollow.append((card.name, [a.source_line for a in abilities]))
-    return hollow
+    return [
+        (card.name, [a.source_line for a in _land_abilities(card)])
+        for card in _whole_pool()
+        if _is_hollow_land(card)
+    ]
+
+
+def _land_abilities(card) -> tuple:
+    program = compile_card_oracle(card)
+    return (*program.activated_abilities, *program.triggered_abilities)
+
+
+def _is_hollow_land(card) -> bool:
+    """The predicate itself, so the guard and its control ask one question.
+
+    It used to be written out inside the sweep, and the control below asserted
+    the same property a second time against a card that happened to have it —
+    which stopped being true the moment that card's last unread line was
+    implemented. A predicate has one home.
+    """
+    if card.primary_type != "land":
+        return False
+    program = compile_card_oracle(card)
+    if not program.supported:
+        return False
+    abilities = _land_abilities(card)
+    if not abilities:
+        # No printed ability at all: a basic or a dual, whose whole text is
+        # CR 305.6 reminder text. `produced_mana` is the whole card and it is
+        # right.
+        return False
+    return not any(a.supported and a.instruction is not None for a in abilities)
 
 
 def test_no_supported_land_prints_only_unreadable_abilities():
@@ -390,21 +405,41 @@ def test_no_supported_land_prints_only_unreadable_abilities():
     )
 
 
+def _invented_land(text: str) -> CardDefinition:
+    """A land that exists only for this test, with *text* as its whole rules box.
+
+    Invented rather than borrowed. The control was Mishra's Factory for as long
+    as one of its three abilities was unread, and the day the animation was
+    implemented the control silently stopped testing anything — it asserted the
+    card *had* an unreadable line, which is a fact about the pool and not about
+    the guard. No land in the pool has one now, and none should: a card is the
+    wrong place to keep a fixture.
+    """
+    return CardDefinition(
+        name="Invented Land",
+        mana_cost="",
+        cmc=0.0,
+        type_line="Land",
+        oracle_text=text,
+        colors=(),
+        color_identity=(),
+        keywords=(),
+        produced_mana=("C",),
+        raw={},
+    )
+
+
 def test_a_land_with_one_readable_ability_is_not_hollow():
     """The other direction, and the reason the guard asks *all* rather than
-    *any*.
-
-    Mishra's Factory is the boundary case, so it is the control. It taps for
-    mana and it pumps an Assembly-Worker, both read; only its self-animation is
-    unread. That is a land doing less than it prints — degradation, which the
+    *any*: a land doing *less* than it prints is degradation, which the
     coverage instruments report and this guard deliberately does not fail on —
-    as against the four that do nothing they print at all.
-    """
-    factory = {c.name: c for c in _whole_pool()}["Mishra's Factory"]
-    program = compile_card_oracle(factory)
-    abilities = (*program.activated_abilities, *program.triggered_abilities)
+    as against one that does nothing it prints at all."""
+    mixed = _invented_land(
+        "{T}: Add {C}.\n"
+        "{2}: This land glimmers uncontrollably until end of turn."
+    )
+    abilities = _land_abilities(mixed)
 
-    assert program.supported
     assert any(a.supported and a.instruction is not None for a in abilities), (
         "the control needs a readable ability, or it is testing the wrong thing"
     )
@@ -412,6 +447,19 @@ def test_a_land_with_one_readable_ability_is_not_hollow():
         "the control needs an unreadable ability too — otherwise it would pass "
         "against a guard that failed every land with any unread line"
     )
+    assert not _is_hollow_land(mixed)
+
+
+def test_a_land_with_no_readable_ability_never_reaches_the_sweep():
+    """The other end of the same rule, and where round 1 left it: a land whose
+    only ability is unread is refused by the *support gate* before this guard
+    could see it. So the sweep above is a ratchet on that gate rather than the
+    thing doing the work, and this says which — a land that started reporting
+    supported again would show up there, loudly."""
+    unreadable = _invented_land("{2}: This land glimmers uncontrollably until end of turn.")
+
+    assert not compile_card_oracle(unreadable).supported
+    assert not _is_hollow_land(unreadable)
 
 
 # ---------------------------------------------------------------------------

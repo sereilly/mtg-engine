@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 81.0% | 79.7% | 44.2% | 155 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 85.0% | 85.0% | 57.5% | 64 |
+| ATQ *(measured)* | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
 | **All (shipped)** | **1533** | **2166** | **81.3%** | **80.1%** | **47.1%** | **885** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -35,13 +35,13 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ---: | ---: | --- | --- |
 | 184 | 69 | expected a subject |  |
 | 85 | 29 | unrecognized effect verb |  |
-| 46 | 22 | unconsumed text |  |
+| 45 | 21 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
 | 27 | 12 | granted ability in quotes | phase 3 (quoted abilities) |
 | 9 | 4 | expected 'the number of' in a where-clause |  |
 | 9 | 4 | expected a keyword ability |  |
-| 8 | 3 | expected a colour or a creature body after 'becomes' |  |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
+| 7 | 2 | expected a colour or a creature body after 'becomes' |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 4 | 1 | expected 'that' |  |
@@ -51,10 +51,10 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 3 | 1 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
-| 2 | 2 | expected something to destroy |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | expected a destination zone after 'return' |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | expected something to destroy |  |
 | 1 | 1 | no keyword-grant handler expires at the granting player's next upkeep |  |
 | 1 | 1 | expected 'be' |  |
 | 1 | 1 | expected 'unless defending player controls' |  |
@@ -160,6 +160,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Put a +1/+1 counter on each creature you control.`
 - **Battering Ram**
   - `At the beginning of combat on your turn, this creature gains banding until end of combat. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's blocking.)`
+  - `Whenever this creature becomes blocked by a Wall, destroy that Wall at end of combat.`
 - **Battle-Rattle Shaman**
   - `At the beginning of combat on your turn, you may have target creature get +2/+0 until end of turn.`
 - **Bazaar of Baghdad**
@@ -216,6 +217,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Brass Man**
   - `At the beginning of your upkeep, you may pay {1}. If you do, untap this creature.`
   - `At the beginning of your upkeep, you may pay {1}. If you do, untap this creature.`
+- **Bronze Tablet**
+  - `{4}, {T}: Exile this artifact and target nontoken permanent an opponent owns. That player may pay 10 life. If they do, put this card into its owner's graveyard. Otherwise, that player owns this card and you own the other exiled card.`
 - **Burlfist Oak**
   - `Whenever you draw a card, this creature gets +2/+2 until end of turn.`
 - **Burn Bright**
@@ -923,6 +926,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Counter target instant or sorcery spell unless its controller pays {3}.`
 - **Mishra's Factory**
   - `{T}: Add {C}.`
+  - `{1}: This land becomes a 2/2 Assembly-Worker artifact creature until end of turn. It's still a land.`
   - `{T}: Target Assembly-Worker creature gets +1/+1 until end of turn.`
 - **Mishra's Workshop**
   - `{T}: Add {C}{C}{C}. Spend this mana only to cast artifact spells.`

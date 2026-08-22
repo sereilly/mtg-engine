@@ -493,7 +493,11 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     if animation:
         effects.append(add_types(
             only,
-            card_types=["creature"],
+            # "…a 2/2 Assembly-Worker **artifact** creature" (Mishra's Factory):
+            # every type the sentence named, not just the head noun. A land
+            # animated without the artifact type is a permanent Shatter cannot
+            # reach and Titania's Song does not see.
+            card_types=["creature", *(animation.get("card_types") or ())],
             subtypes=animation.get("subtypes") or (),
             timestamp=0,
             label="animated until end of turn",

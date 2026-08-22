@@ -124,6 +124,7 @@ from .lowering import (
     _lower_exile_graveyard_until_leaves,
     _lower_transmute_by_sacrifice,
     _lower_exile_until_leaves_or_untaps,
+    _lower_ownership_exchange_unless_paid,
     _lower_exile_top_of_library,
     _lower_look_top_pick,
     _lower_search_and_exile,
@@ -341,6 +342,9 @@ def lower_statement(
 
     if isinstance(statement, ast.TransmuteBySacrifice):
         return _lower_transmute_by_sacrifice(statement)
+
+    if isinstance(statement, ast.OwnershipExchangeUnlessPaid):
+        return _lower_ownership_exchange_unless_paid(statement)
 
     if isinstance(statement, ast.ExileUntilLeavesOrUntaps):
         return _lower_exile_until_leaves_or_untaps(statement)

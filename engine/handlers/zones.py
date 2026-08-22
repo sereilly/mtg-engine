@@ -577,6 +577,123 @@ def transmute_by_sacrifice(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("take_ownership_of_exiled")
+def take_ownership_of_exiled(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """The exchange half of Bronze Tablet: each exiled card ends up owned by the
+    other player.
+
+    CR 108.3 makes ownership fixed for the whole game; the ante rules (CR 407)
+    are where the exception lives, and this is one of the handful of cards that
+    is it. The engine models a zone per player, so "that player owns this card"
+    *is* the card sitting in that player's exile — there is nothing else about
+    ownership for anything to read.
+
+    Its own instruction kind because it is the decline branch of an optional
+    payment, and that machinery runs instruction lists.
+    """
+    swap = context.results.get("ownership_exchange")
+    if not swap:
+        return True, "resolved"
+    context.results["ownership_exchange"] = None
+    for from_seat, to_seat, card in swap:
+        holder = game.players[from_seat]
+        if card in holder.exile:
+            holder.exile.remove(card)
+        game.players[to_seat].exile.append(card)
+        game.log.append(
+            f"{game.players[to_seat].name} now owns {card.name}"
+        )
+    return True, "resolved"
+
+
+@effect_handler("return_exiled_source_to_graveyard")
+def return_exiled_source_to_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """The paid branch of Bronze Tablet: "put this card into its owner's
+    graveyard". Only *this* card moves — the other exiled card stays exiled,
+    which is what the printed sentence says and what makes paying a real cost
+    rather than a full undo."""
+    swap = context.results.get("ownership_exchange")
+    if not swap:
+        return True, "resolved"
+    context.results["ownership_exchange"] = None
+    for from_seat, _to_seat, card in swap:
+        if card is not context.card:
+            continue
+        holder = game.players[from_seat]
+        if card in holder.exile:
+            holder.exile.remove(card)
+        holder.graveyard.append(card)
+        game.log.append(f"{card.name} is put into its owner's graveyard")
+    return True, "resolved"
+
+
+@effect_handler("exchange_ownership_unless_paid")
+def exchange_ownership_unless_paid(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Bronze Tablet: "Exile this artifact and target nontoken permanent an
+    opponent owns. That player may pay 10 life. If they do, put this card into
+    its owner's graveyard. Otherwise, that player owns this card and you own the
+    other exiled card."
+
+    An ante card (CR 407): the exchange is the one place CR 108.3's "ownership
+    never changes" is not true, and the engine's ownership *is* which player's
+    zone a card sits in, so the swap is a move between the two exile piles.
+
+    The payment is the ordinary optional-pay entry, which learned a life cost
+    for this card — and it is owed by the **victim**, not by the activator,
+    which is the whole tension of the card and the reason the prompt names a
+    seat rather than defaulting to the controller.
+    """
+    from ..subject_filters import subject_matches
+
+    source = context.source_permanent
+    if source is None:
+        return True, "resolved"
+    caster_index = game.players.index(context.caster)
+    described = dict(instruction.payload.get("filter") or {})
+    owner = instruction.payload.get("owner")
+
+    def _eligible(perm) -> bool:
+        if perm is source or not subject_matches(
+            game, perm, described, observer=caster_index, source=source
+        ):
+            return False
+        seat = game.owner_index_of(perm)
+        return seat is not None and (seat != caster_index) == (owner != "you")
+
+    victim = resolve_target_permanent(game, context, predicate=_eligible)
+    if victim is None:
+        game.log.append(f"{context.card.name}: no valid permanent to exchange")
+        return True, "resolved"
+    victim_seat = game.owner_index_of(victim)
+    if victim_seat is None:
+        return True, "resolved"
+    game.remove_all_from_battlefield([source, victim])
+    game.players[caster_index].exile.append(source.card)
+    game.players[victim_seat].exile.append(victim.card)
+    game.log.append(
+        f"{context.card.name} exiled itself and {victim.card.name}"
+    )
+    # (holder seat, new owner seat, card) — what the two branches below read.
+    context.results["ownership_exchange"] = [
+        (caster_index, victim_seat, source.card),
+        (victim_seat, caster_index, victim.card),
+    ]
+    game.arm_pending_choice(
+        "optional_pay", victim_seat,
+        card_name=context.card.name,
+        cost={},
+        life_cost=int(instruction.payload.get("life", 0)),
+        life=0,
+        prompt=f"Pay {instruction.payload.get('life', 0)} life?",
+        _source_permanent=source,
+        _on_accept=(_OracleInstruction("return_exiled_source_to_graveyard", "", {}),),
+        _on_decline=(_OracleInstruction("take_ownership_of_exiled", "", {}),),
+        _on_reflexive=(),
+        _context=context,
+    )
+    return True, "resolved"
+
+
 @effect_handler("put_graveyard_cards_on_library_top")
 def put_graveyard_cards_on_library_top(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext

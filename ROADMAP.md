@@ -2041,3 +2041,57 @@ rather than beside it.
 executes 56.7% → 57.5%. Shipped pool 668/668, floors and ceilings unmoved, suite
 green at 6705, no hook added — **the whole set is implemented with zero
 name-keyed entries added since the ingest**.
+
+## ATQ round 30: three cards that reported supported and did less than they print
+
+*(2026-08-22.)* **85 → 85, and the hollow-line census for ATQ goes to zero.**
+No card gained support this round; three stopped lying. All three were on the
+round-1 census as *degraded* — supported because some line of theirs was read,
+with another line producing nothing — and `support_report.py --hollow-lines` has
+named them ever since.
+
+**Mishra's Factory could not animate.** `{1}: This land becomes a 2/2
+Assembly-Worker **artifact** creature until end of turn. **It's still a land.**`
+Two words the production had never met: a *card type* between the subtypes and
+the head noun, and the second spelling of the addition clause. "It's still a
+land" and "in addition to its other types" say the same rule — CR 205.1b, the
+animation adds types rather than replacing them — in different places in the
+sentence, so the production takes either and **requires one**: without it the
+Factory would stop being a land, which is a permanent that no longer taps for
+mana. The artifact type rides the same record the subtype does and is added by
+the same layer-4 collector, because an animated Factory that is not an artifact
+is a permanent Shatter cannot reach.
+
+**Battering Ram's Wall lived.** `Whenever this creature becomes blocked by a
+Wall, destroy that Wall at end of combat.` The trigger compiled, the fire site
+existed and ran, and the effect clause lowered to nothing — "that **Wall**" is a
+subtype, and the bound-object production read card types alone. Two changes and
+one of them is the interesting one: the becomes-blocked fire site pushed the
+**attacker** as the trigger's target, so a "destroy that Wall" rider would have
+destroyed the Ram. The blocker is what the event bound, so the blocker is what
+the stack item carries — by id as well as by slot, because a removal in between
+renumbers every later one.
+
+**Bronze Tablet's ante exchange was unread.** It gets a whole-paragraph
+production in `paragraphs.py`, the family this set opened, and two small general
+things fall out. `optional_pay` learned a **life** cost — "you may pay N life" is
+a template with many printings and had none — and the prompt is armed on the
+*victim's* seat rather than the activator's, which is the whole tension of the
+card. CR 108.3 says ownership never changes; CR 407's ante rules are where the
+exception lives, and this is one of the handful of cards that is it. The engine's
+ownership is which player's zone a card sits in, so the exchange is the two exile
+piles swapping — and paying moves **only** the Tablet, which is what makes 10
+life a cost rather than a full undo.
+
+**And a control that had quietly stopped controlling.** `test_no_hollow_support`
+used Mishra's Factory to prove a land with *some* readable ability is not
+reported hollow — an assertion that the card *had* an unread line, which is a
+fact about the pool rather than about the guard. The day the animation landed it
+would have started passing vacuously. The predicate is one function now, the
+control is a land invented for the test, and a second test says where round 1
+actually left the rule: a land whose only ability is unread never reaches this
+guard, because the *support gate* refuses it first.
+
+**Numbers.** ATQ 85/85 supported, **0 hollow lines**; grammar parses 85.0% →
+87.5% of its lines, executes 57.5% → 60.0%. Shipped pool 668/668, floors and
+ceilings unmoved, suite green at 6717, no hook added.

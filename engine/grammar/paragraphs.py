@@ -31,6 +31,61 @@ from .stream import TokenStream
 from .vocabulary import COLOR_WORDS, CREATURE_TYPES
 
 
+def _parse_ownership_exchange_unless_paid(stream: TokenStream) -> ast.Statement | None:
+    """Bronze Tablet's whole ability, as one statement.
+
+    ``Exile this <noun> and target <phrase>. That player may pay <N> life. If
+    they do, put this card into its owner's graveyard. Otherwise, that player
+    owns this card and you own the other exiled card.``
+
+    Every sentence is required and each one is load-bearing: without the exile
+    there is nothing to exchange, without the payment the exchange is
+    unconditional, and without *both* branches the card either always trades or
+    never does. The life total and the target's noun phrase are payload.
+    """
+    if not stream.accept_phrase("exile", "this"):
+        return None
+    if stream.accept_kind(SELF) is None:
+        if not stream.accept_word(
+            "artifact", "creature", "enchantment", "permanent", "land"
+        ):
+            return None
+    if not stream.accept_phrase("and", "target"):
+        return None
+    try:
+        target = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("that", "player", "may", "pay"):
+        return None
+    token = stream.peek()
+    if token is None or not str(token.text).isdigit():
+        return None
+    life = int(token.text)
+    stream.advance()
+    if not stream.accept_word("life"):
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("if", "they", "do"):
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "put", "this", "card", "into", "its", "owner", "'s", "graveyard",
+    ):
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_word("otherwise"):
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "that", "player", "owns", "this", "card", "and",
+        "you", "own", "the", "other", "exiled", "card",
+    ):
+        return None
+    return ast.OwnershipExchangeUnlessPaid(life, target)
+
+
 def _parse_exile_graveyard_until_leaves(stream: TokenStream) -> ast.Statement | None:
     """``Exile all <filter> from your graveyard until this <permanent> leaves
     the battlefield.`` (Idol of Endurance.)

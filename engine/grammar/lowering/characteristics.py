@@ -85,6 +85,10 @@ def _lower_become_creature(
                 "toughness": node.toughness,
                 "subtypes": list(node.subtypes),
                 "keywords": list(node.keywords),
+                # "…a 2/2 Assembly-Worker **artifact** creature" — the types the
+                # animation adds beside "creature", which the layer-4 collector
+                # reads off the same record.
+                "card_types": list(node.card_types),
             },
         ),
     )

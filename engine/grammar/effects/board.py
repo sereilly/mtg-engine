@@ -14,7 +14,7 @@ import dataclasses
 from .. import ast
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..vocabulary import (CARD_TYPES)
+from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, SUBTYPE_INDEX, match_longest)
 from ..phrases import _parse_mana_payment, _parse_zone
 
 
@@ -173,11 +173,22 @@ def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:
     if not stream.accept_word("that"):
         return None
     noun = stream.peek_word()
-    if noun is None or noun not in CARD_TYPES:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
+    if noun is not None and noun in CARD_TYPES:
+        stream.advance()
+        return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
+    # "destroy that **Wall**" (Battering Ram). A subtype names the bound object
+    # just as a card type does — the trigger that fired required it, so the word
+    # is describing what was bound rather than narrowing a fresh choice. Read
+    # through the vocabulary, so a made-up noun still refuses.
+    matched = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
+    if matched is not None and matched[0] in CREATURE_TYPES:
+        stream.advance(matched[1])
+        return ast.TargetSpec(
+            "that",
+            ast.ObjectFilter(card_types=("creature",), subtypes=(matched[0],)),
+        )
+    stream.reset(mark)
+    return None
 
 
 def _parse_doesnt_untap_next_step(

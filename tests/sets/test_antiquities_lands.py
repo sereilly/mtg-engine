@@ -97,3 +97,62 @@ def test_mishras_workshop_taps_for_three_restricted_mana(set_pool):
     assert ability.supported
     assert ability.instruction.payload["pips"] == (("C", 3),)
     assert ability.instruction.payload["spend_only"] == "artifact"
+
+
+# ---------------------------------------------------------------------------
+# Mishra's Factory (round 30) — the animation that reported supported and did
+# nothing
+# ---------------------------------------------------------------------------
+
+
+def _factory(set_pool):
+    pool = set_pool("ATQ")
+    factory = Permanent(card=pool["Mishra's Factory"])
+    p1 = PlayerState(name="P1", battlefield=[factory])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    return game, p1, factory
+
+
+def test_the_factory_animates_into_an_assembly_worker(set_pool):
+    game, p1, factory = _factory(set_pool)
+
+    result = game.activate_permanent_ability(0, "Mishra's Factory", ability_index=1)
+
+    assert result.supported, result.details
+    assert factory.is_creature
+    assert (factory.effective_power, factory.effective_toughness) == (2, 2)
+    assert factory.has_type("assembly-worker")
+
+
+def test_it_is_still_a_land_and_becomes_an_artifact(set_pool):
+    """"…a 2/2 Assembly-Worker **artifact** creature until end of turn. **It's
+    still a land.**" Both words are load-bearing: an animated Factory that was
+    not an artifact is a permanent Shatter cannot reach, and one that stopped
+    being a land is a permanent that no longer taps for mana."""
+    game, p1, factory = _factory(set_pool)
+
+    game.activate_permanent_ability(0, "Mishra's Factory", ability_index=1)
+
+    assert factory.has_type("artifact")
+    assert factory.has_type("land")
+
+
+def test_without_the_ability_it_is_a_plain_land(set_pool):
+    """The control: the animation is what does this, not the card entering."""
+    game, p1, factory = _factory(set_pool)
+
+    assert not factory.is_creature
+    assert not factory.has_type("artifact")
+
+
+def test_the_factory_can_pump_itself_once_animated(set_pool):
+    """Its third ability targets an Assembly-Worker, which is what the second
+    one turns it into — the pair only works if the animation really applies the
+    subtype."""
+    game, p1, factory = _factory(set_pool)
+    game.activate_permanent_ability(0, "Mishra's Factory", ability_index=1)
+
+    spec = game.activation_target_spec(0, 0, ability_index=2)
+
+    assert "Mishra's Factory" in {t["name"] for t in spec["valid_targets"]}

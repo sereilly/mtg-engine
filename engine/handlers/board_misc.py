@@ -450,6 +450,7 @@ def animate_self_until_eot(game: Game, instruction: OracleInstruction, context: 
     source.metadata[ANIMATE_UNTIL_EOT] = {
         "subtypes": list(payload.get("subtypes") or ()),
         "keywords": list(payload.get("keywords") or ()),
+        "card_types": list(payload.get("card_types") or ()),
     }
     game.log.append(
         f"{context.card.name} becomes a "

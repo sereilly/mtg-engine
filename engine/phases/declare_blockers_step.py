@@ -869,12 +869,23 @@ class DeclareBlockersStepMixin:
                         )
                     ]
                 for blocker in matched:
+                    # **The blocker is what the trigger bound**, so it is the
+                    # stack item's target: "destroy that Wall" (Battering Ram)
+                    # names the creature that blocked, and by the time the
+                    # ability resolves nothing else could say which. Stamped by
+                    # id as well as by slot, because a removal in between
+                    # renumbers every later one (CR 400.7).
+                    blocker_seat = self.controller_index_of(blocker)
+                    blocker_slot = self.battlefield_index_of(blocker)
                     self._stack_push(
                         StackItem(
                             card=attacker.card,
                             caster_index=seat,
-                            target_player_index=seat,
-                            target_permanent_index=attacker_idx,
+                            target_player_index=(
+                                blocker_seat if blocker_seat is not None else seat
+                            ),
+                            target_permanent_index=blocker_slot,
+                            target_permanent_id=blocker.permanent_id,
                             x_value=None,
                             ability_instruction=trig.instruction,
                             ability_effect_kind=trig.effect_kind,
@@ -885,7 +896,7 @@ class DeclareBlockersStepMixin:
                             # seat is frozen now (CR 603.10), exactly as the
                             # death triggers freeze theirs.
                             trigger_context={
-                                "event_subject_controller": self.controller_index_of(blocker),
+                                "event_subject_controller": blocker_seat,
                             },
                         )
                     )

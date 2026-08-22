@@ -64,7 +64,16 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
     combat. The victim is identified by the stack item's target indices, captured
     at declaration time (509.3f).
     """
-    victim = resolve_target_permanent(game, context, predicate=lambda p: True, fallback_players=())
+    # "destroy that **Wall**" (Battering Ram). The trigger's own condition
+    # already required one, so this re-states rather than narrows — and it is
+    # tested anyway, because a payload key nothing reads is a printed word that
+    # could be deleted with no change to what the card does.
+    subtype = instruction.payload.get("subtype_filter")
+    victim = resolve_target_permanent(
+        game, context,
+        predicate=lambda p: not subtype or p.has_type(str(subtype)),
+        fallback_players=(),
+    )
     if victim is None:
         game.log.append(f"{context.card.name} block trigger had no valid target")
         return True, "no target"
