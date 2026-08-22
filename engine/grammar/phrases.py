@@ -811,6 +811,24 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             if count is not None and stream.accept_phrase("other", "creatures", "attack"):
                 return ast.TriggerEvent("attackers_declared", "whenever")
         stream.reset(mark)
+        # "Whenever **enchanted artifact** becomes tapped or a player
+        # activates an ability of enchanted artifact without {T} in its
+        # activation cost" (Artifact Possession). The named-subject spelling of
+        # the compound event; read before the phrase table because that table's
+        # "enchanted land becomes tapped" is this line's prefix and would claim
+        # it, stranding the second half of the condition.
+        attached_mark = stream.mark()
+        if stream.accept_word("enchanted"):
+            noun = stream.peek_word()
+            if noun is not None:
+                stream.advance()
+                if stream.accept_phrase("becomes", "tapped") and _accept_ability_activated_tail(stream):
+                    return ast.TriggerEvent(
+                        "permanent_tapped_or_ability_activated",
+                        "whenever",
+                        subject=ast.ObjectFilter(is_enchanted=True),
+                    )
+        stream.reset(attached_mark)
         for kind, phrase in _WHENEVER_EVENTS:
             if stream.accept_phrase(*phrase):
                 return ast.TriggerEvent(kind, "whenever")

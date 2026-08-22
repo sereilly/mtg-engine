@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.9% | 78.7% | 43.4% | 152 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 60.8% | 60.0% | 38.3% | 42 |
+| ATQ *(measured)* | 85 | 120 | 62.5% | 61.7% | 40.0% | 44 |
 | **All (shipped)** | **1533** | **2166** | **80.7%** | **79.5%** | **46.7%** | **876** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,7 +33,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 202 | 81 | expected a subject |  |
+| 200 | 79 | expected a subject |  |
 | 88 | 32 | unrecognized effect verb |  |
 | 50 | 28 | unconsumed text |  |
 | 30 | 30 | unrecognized activation cost |  |
@@ -117,6 +117,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Attacking creatures get +2/+0 until end of turn.`
 - **Artifact Blast**
   - `Counter target artifact spell.`
+- **Artifact Possession**
+  - `Whenever enchanted artifact becomes tapped or a player activates an ability of enchanted artifact without {T} in its activation cost, this Aura deals 2 damage to that artifact's controller.`
 - **Ashnod's Altar**
   - `Sacrifice a creature: Add {C}{C}.`
 - **Ashnod's Battle Gear**
@@ -255,6 +257,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `{5}, {T}: Draw a card for each color among permanents you control.`
 - **Chrome Replicator**
   - `When this creature enters, if you control two or more nonland, nontoken permanents with the same name as one another, create a 4/4 colorless Construct artifact creature token.`
+- **Circle of Protection: Artifacts**
+  - `{2}: The next time an artifact source of your choice would deal damage to you this turn, prevent that damage.`
 - **Circle of Protection: Black**
   - `{1}: The next time a black source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}: The next time a black source of your choice would deal damage to you this turn, prevent that damage.`

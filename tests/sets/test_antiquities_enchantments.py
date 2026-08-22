@@ -96,3 +96,76 @@ def test_powerleech_only_watches_its_opponents_artifacts(set_pool):
     game.become_tapped(mine)
 
     assert game.stack == [], "Powerleech watches an opponent's artifacts, not its own"
+
+
+# ---------------------------------------------------------------------------
+# Artifact Possession (round 8) — the same compound event, attached subject
+# ---------------------------------------------------------------------------
+
+
+def test_artifact_possession_fires_only_for_the_artifact_it_enchants(set_pool):
+    """"Whenever **enchanted artifact** becomes tapped…" is an identity
+    question, not a class one — and identity rather than equality, because two
+    Ornithopters compare equal by value and the Aura is on exactly one."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ATQ")
+    aura = Permanent(card=pool["Artifact Possession"])
+    enchanted = Permanent(card=pool["Ornithopter"])
+    other = Permanent(card=pool["Ornithopter"])
+    p1 = PlayerState(name="P1", battlefield=[aura])
+    p2 = PlayerState(name="P2", battlefield=[enchanted, other])
+    game = Game(players=[p1, p2])
+    attach_aura(aura, enchanted)
+
+    game.become_tapped(other)
+    assert game.stack == [], "the look-alike must not trigger it"
+
+    game.become_tapped(enchanted)
+    assert [item.card.name for item in game.stack] == ["Artifact Possession"]
+
+
+# ---------------------------------------------------------------------------
+# Circle of Protection: Artifacts (round 8)
+# ---------------------------------------------------------------------------
+
+
+def test_cop_artifacts_stops_damage_from_an_artifact_source(set_pool):
+    from engine.damage_events import deal_damage
+
+    pool = set_pool("ATQ")
+    circle = Permanent(card=pool["Circle of Protection: Artifacts"])
+    thopter = Permanent(card=pool["Ornithopter"])
+    p1 = PlayerState(name="P1", battlefield=[circle])
+    p2 = PlayerState(name="P2", battlefield=[thopter])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Circle of Protection: Artifacts")
+    outcome = deal_damage(
+        game, {"recipient": p1, "amount": 4, "source": thopter, "combat": False}
+    )
+
+    assert outcome.dealt == 0, game.log
+
+
+def test_cop_artifacts_does_not_stop_a_creature(set_pool):
+    """CR 615.9 rechecks the property the shield recorded. A colour Circle
+    holding a colour and this one holding a card type are the same shield with
+    different questions, and neither answers the other's."""
+    from engine.damage_events import deal_damage
+
+    pool = set_pool("ATQ")
+    circle = Permanent(card=pool["Circle of Protection: Artifacts"])
+    druid = Permanent(card=pool["Citanul Druid"])
+    p1 = PlayerState(name="P1", battlefield=[circle])
+    p2 = PlayerState(name="P2", battlefield=[druid])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Circle of Protection: Artifacts")
+    outcome = deal_damage(
+        game, {"recipient": p1, "amount": 4, "source": druid, "combat": False}
+    )
+
+    assert outcome.dealt == 4, game.log

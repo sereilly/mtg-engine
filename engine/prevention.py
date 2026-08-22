@@ -265,6 +265,10 @@ def _source_matches(game, shield: Shield, source) -> bool:
             return False
     if shield.color is not None and shield.color not in source_colors(source):
         return False
+    if shield.source_type is not None and not source_has_type(
+        game, source, shield.source_type
+    ):
+        return False
     return True
 
 

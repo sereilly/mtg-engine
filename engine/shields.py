@@ -91,6 +91,12 @@ class Shield:
     uses: int | None = 1
     source: Any | None = None
     color: str | None = None
+    #: "an **artifact** source of your choice" (Circle of Protection:
+    #: Artifacts). The card-type twin of `color`, checked the same way and at
+    #: the same moment — CR 615.9 rechecks a shield's recorded property against
+    #: the source when the damage would be dealt, and which property it is does
+    #: not change when.
+    source_type: str | None = None
     lifetime: str = END_OF_TURN
     source_name: str | None = None
 
@@ -378,3 +384,15 @@ def make_life_gain_charge(source_name: str | None = None) -> Shield:
 
 def make_color_shield(color: str, source_name: str | None = None) -> Shield:
     return Shield(kind=PREVENT_FROM_COLOR, uses=1, color=color, source_name=source_name)
+
+
+def make_source_type_shield(card_type: str, source_name: str | None = None) -> Shield:
+    """A Circle of Protection keyed on a card type rather than a colour.
+
+    The same `kind`, so it sits in the same band, is spent by the same
+    interceptor and is swept at the same moment; only the property it answers
+    to differs.
+    """
+    return Shield(
+        kind=PREVENT_FROM_COLOR, uses=1, source_type=card_type, source_name=source_name
+    )

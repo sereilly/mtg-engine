@@ -343,6 +343,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # became unparseable, which is the only reason the truncation showed up at
     # all. Had the effect happened to parse, the card would have compiled clean
     # and fired on half the events it prints.
+    # The same condition with the Aura's own attached permanent as its subject
+    # (Artifact Possession). One kind, because it is one event asked about a
+    # different set of permanents — the narrowing is payload, exactly as
+    # `tapped_subtype` is — so both emit sites and the dispatcher are unchanged.
+    # Before the quantified row: "enchanted artifact" is not "an artifact", but
+    # keeping the specific subject ahead of the general one is what this table
+    # does everywhere.
+    ("permanent_tapped_or_ability_activated",
+     r"whenever enchanted (?P<tapped_attached>[a-z]+) becomes tapped"
+     r" or (?:a player|an opponent) activates an ability of enchanted [a-z]+"
+     r" without \{t\} in its activation cost"),
     ("permanent_tapped_or_ability_activated",
      r"whenever an? (?P<tapped_subtype>[a-z]+)"
      r"(?: (?P<tapped_controller>an opponent controls|you control))? becomes tapped"

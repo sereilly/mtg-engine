@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..shields import (
+    make_source_type_shield,
     add_shield,
     make_capped_charge,
     make_capped_source,
@@ -67,6 +68,18 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # means the caster/controller is always the beneficiary. Conservator-style
     # abilities ("...dealt to you this turn") set to_self=True for the same reason.
     prevention_color = instruction.payload.get("prevention_color")
+    # Circle of Protection: Artifacts — the same Circle keyed on a card type.
+    # Its own branch rather than a widened colour one: `make_color_shield` sets
+    # the colour field, and a shield holding a card type in it would be
+    # compared against `source_colors` and never match.
+    source_type = instruction.payload.get("prevention_source_type")
+    if instruction.payload.get("protection_kind") == "source_type" and source_type:
+        add_shield(caster, make_source_type_shield(str(source_type), source_name))
+        game.log.append(
+            f"{caster.name} sets a Circle of Protection shield against "
+            f"an {source_type} source"
+        )
+        return True, "resolved"
     if instruction.payload.get("protection_kind") == "color":
         # Circle of Protection: "The next time a <color> source of your choice
         # would deal damage to you this turn, prevent that damage." Each activation

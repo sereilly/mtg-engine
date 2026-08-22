@@ -1036,3 +1036,41 @@ one artifact" is one word away in `untap_restrictions.py` and a long way away in
 separate counters with separate selection indices, separate validation and
 separate web parameters. A third type wants that collapsed into one per-type
 map first; that is its own round, not a rider on this one.
+
+## ATQ round 8: the same shield, the other property
+
+*(2026-08-21.)* **59 → 61.** Artifact Possession and Circle of Protection:
+Artifacts. Both are an existing mechanism asked about a card type instead of
+the thing it was written for, and neither needed a new one.
+
+**Artifact Possession reuses round 6's kind.** Its condition is the same
+compound event with the Aura's own attached permanent as the subject rather
+than a class of permanents — so it is the same kind with a different narrowing
+on the payload, and both emit sites and the dispatcher are untouched. The
+filter answers it by **identity** (`metadata["attached_to"] is tapped`), which
+is the difference between a look-alike and the permanent the Aura is on: two
+Ornithopters compare equal by value and the Aura is on exactly one of them.
+`test_artifact_possession_fires_only_for_the_artifact_it_enchants` puts both on
+the battlefield and taps the wrong one first.
+
+**A Circle of Protection is one production with two narrowings.** "The next
+time an **artifact** source of your choice would deal damage to you this turn"
+is the colour Circles' sentence with a card type in the colour's place, so the
+production reads either, `Shield` gained a `source_type` beside its `color`,
+and `_source_matches` checks whichever one the shield holds — which is exactly
+what CR 615.9 says happens, at exactly the moment it says it happens.
+
+The handler branch is separate rather than a widened colour branch, and that is
+deliberate: `make_color_shield` sets the colour field, so a shield carrying a
+card type there would be compared against `source_colors` and match nothing.
+A shield that silently never fires is the failure this file's other comments
+keep describing.
+
+**Rakalite still does not land**, and its remaining half is not prevention at
+all: "Return this artifact to its owner's hand at the beginning of the next end
+step" is a delayed triggered ability (CR 603.7), which is the same machinery
+Rocket Launcher's self-destruction wants.
+
+**Numbers.** ATQ 59 → 61; grammar parses 60.8% → 62.5% of its lines, executes
+38.3% → 40.0%. Shipped pool 668/668, floors and ceilings unmoved, suite green
+at 6616, no hook added.

@@ -601,10 +601,26 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         # Damage) is a different handler entirely, so refuse rather than emit a
         # colourless Circle of Protection.
         colours = node.from_filter.colors
-        if len(colours) != 1:
+        card_types = node.from_filter.card_types
+        if len(colours) + len(card_types) != 1:
             raise LoweringError("no handler for this source-scoped shield", node=node)
         if not _is_you(recipient):
             raise LoweringError("colour-scoped shields only protect their controller", node=node)
+        if card_types:
+            # Circle of Protection: Artifacts. Same instruction, same handler,
+            # same band — the shield records a card type where the colour
+            # Circles record a colour, and CR 615.9 rechecks whichever one it
+            # holds.
+            return (
+                OracleInstruction(
+                    "grant_prevention_shield", "",
+                    {
+                        "amount": 1,
+                        "protection_kind": "source_type",
+                        "prevention_source_type": card_types[0],
+                    },
+                ),
+            )
         return (
             OracleInstruction(
                 "grant_prevention_shield", "",

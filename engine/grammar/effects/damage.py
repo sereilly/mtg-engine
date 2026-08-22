@@ -17,7 +17,7 @@ from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
 from ..nouns import (parse_player_ref, parse_recipient)
 from ..stream import TokenStream
-from ..vocabulary import (COLOR_WORDS)
+from ..vocabulary import (CARD_TYPES, COLOR_WORDS)
 from ..phrases import _parse_duration, _parse_mana_payment, _parse_where_x_is
 
 
@@ -353,13 +353,28 @@ def _parse_colour_source_prevention(stream: TokenStream) -> ast.PreventDamage | 
     the handler counts shields, not damage.
     """
     mark = stream.mark()
-    if not stream.accept_phrase("the", "next", "time", "a"):
+    # "a red source" / "an artifact source" — the article follows the noun's
+    # first letter, so both are accepted here rather than assuming "a".
+    if not stream.accept_phrase("the", "next", "time"):
+        stream.reset(mark)
+        return None
+    if not (stream.accept_word("a") or stream.accept_word("an")):
         stream.reset(mark)
         return None
     colour = None
+    card_type = None
     token = stream.peek()
-    if token is not None and str(token.text).lower() in COLOR_WORDS:
-        colour = COLOR_WORDS[str(stream.next().text).lower()]
+    word = str(token.text).lower() if token is not None else ""
+    if word in COLOR_WORDS:
+        colour = COLOR_WORDS[word]
+        stream.advance()
+    elif word in CARD_TYPES:
+        # "an **artifact** source of your choice" (Circle of Protection:
+        # Artifacts). The same Circle keyed on a card type instead of a colour
+        # — CR 615.9 rechecks whichever property the shield recorded, so the
+        # two are one production with two narrowings rather than two effects.
+        card_type = word
+        stream.advance()
     if not stream.accept_word("source"):
         stream.reset(mark)
         return None
@@ -375,5 +390,10 @@ def _parse_colour_source_prevention(stream: TokenStream) -> ast.PreventDamage | 
     if not stream.accept_phrase("prevent", "that", "damage"):
         stream.reset(mark)
         return None
-    filt = ast.ObjectFilter(colors=(colour,)) if colour else ast.ObjectFilter()
+    if colour:
+        filt = ast.ObjectFilter(colors=(colour,))
+    elif card_type:
+        filt = ast.ObjectFilter(card_types=(card_type,))
+    else:
+        filt = ast.ObjectFilter()
     return ast.PreventDamage(ast.Fixed(1), to=recipient, from_filter=filt)
