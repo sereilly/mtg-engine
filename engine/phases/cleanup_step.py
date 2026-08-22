@@ -9,6 +9,7 @@ P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
 """
 
 from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissions
+from ..hand_size import maximum_hand_size
 from ..models import Permanent
 from ..keywords import clear_until_eot_keywords
 from ..control import end_until_eot_control_changes
@@ -40,8 +41,13 @@ class CleanupStepMixin:
         active_player = self.players[player_index]
         cleanup_completed = True
         control_reverted = False
-        if not active_player.has_no_max_hand_size:
-            max_hand_size = 7
+        # CR 402.2's seven, and the two printed lines that change it — asked of
+        # `engine/hand_size.py`, which is also what the support gate and the
+        # parse-coverage report ask. It was a literal here, so Cursed Rack's
+        # "the chosen player's maximum hand size is four" compiled, reported
+        # supported, and never took a card off anyone.
+        max_hand_size = maximum_hand_size(self, player_index)
+        if max_hand_size is not None:
             excess = max(0, len(active_player.hand) - max_hand_size)
             if excess:
                 if discard_hand_indices is not None:

@@ -134,6 +134,43 @@ ACTIVATED_LABELS: dict[str, str] = {
     # is for cards seen and chosen among, and a search is chosen from a
     # zone nobody sees.
     "search_library": "activated_search",
+    # --- Antiquities' activated abilities, added at its promotion ------------
+    # Each would otherwise take the `activated_<category>` fallback, which is a
+    # label the support report has never bucketed by. Placed in the bucket the
+    # *ability* belongs to rather than the one its instruction kind reads like —
+    # the rule M21's block above states.
+    #
+    # Recursion, whatever the zone it pulls from and puts into: Argivian
+    # Archaeologist and Feldon's Cane both put cards back where they can be
+    # drawn again, and Obelisk of Undoing returns a permanent to a hand.
+    "return_creature_from_graveyard_to_hand": "activated_recursion",
+    "shuffle_graveyard_into_library": "activated_recursion",
+    "bounce_target_creature": "activated_recursion",
+    # A P/T change with a duration nobody else prints (Ashnod's Battle Gear,
+    # Tawnos's Weaponry: "for as long as this artifact remains tapped"). The
+    # duration is not what the ability is *for*, so it takes the pump bucket
+    # every other P/T change takes.
+    "pump_target_while_source_tapped": "activated_pump",
+    # Xenic Poltergeist turns a noncreature into a creature; Mishra's Factory
+    # turns itself into one. Both are the layer-4 type change the
+    # `characteristics` category names, and the report's existing word for a
+    # permanent changing what it is is `activated_pump` — the P/T comes with it
+    # in both cases.
+    "gain_type": "activated_pump",
+    "animate_self_until_eot": "activated_pump",
+    # Golgothian Sylex sweeps a whole expansion off the board.
+    "sacrifice_expansion_permanents": "activated_destruction",
+    # Priest of Yawgmoth eats a permanent and pays out mana; the mana is the
+    # point, which is what the bucket answers.
+    "sacrifice_creature_for_mana": "activated_mana",
+    # The Urza's cycle. Its assembled bonus is a conditional, and the branch it
+    # guards produces mana — so the wrapper takes the bucket of what it does,
+    # exactly as `sequence` above takes damage's.
+    "if_then": "activated_mana",
+    # Tawnos's Coffin and Bronze Tablet both move objects out of the game and
+    # decide later what becomes of them. Exile is where they go.
+    "exile_until_leaves_or_untaps": "activated_recursion",
+    "exchange_ownership_unless_paid": "activated_recursion",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -175,6 +212,10 @@ TRIGGERED_LABELS: dict[str, str] = {
     "draw_then_discard_self": "triggered_draw",
     "exile_graveyard_until_leaves": "triggered_exile",
     "exile_self": "triggered_exile",
+    # Battering Ram's banding, added at Antiquities' promotion. A keyword
+    # granted until end of combat is the same bucket the activated table gives
+    # one granted until end of turn.
+    "grant_self_keyword_until_eot": "triggered_pump",
     # A keyword granted until end of turn is what `activated_pump` holds on the
     # other side; same ability, other position.
     "grant_self_flying_until_eot": "triggered_pump",
@@ -235,6 +276,10 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # condition is what says when; the wrapper still says nothing about
     # the optional clause behind it.
     ("you_cast_spell", "may"): "triggered_cast",
+    # Antiquities' two optional death triggers (Tablet of Epityr, Urza's
+    # Miter), added at its promotion. `permanent_dies` is the wider condition
+    # `dies` above narrows to a creature, and it names the same moment.
+    ("permanent_dies", "may"): "triggered_death",
 }
 
 

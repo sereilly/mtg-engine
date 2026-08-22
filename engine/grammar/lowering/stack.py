@@ -124,9 +124,21 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
         raise LoweringError("the counter flow reads spells on the stack", node=node)
     payload: dict[str, object] = {}
     if filt.card_types:
-        # "target instant or sorcery spell" (Miscast). The handler tests the
-        # chosen spell's primary type against this union, the same shape as the
-        # colour gate below.
+        # "target instant or sorcery **spell**" (Miscast), "target artifact
+        # **spell**" (Artifact Blast). The handler tests the chosen spell's type
+        # against this union, the same shape as the colour gate below.
+        #
+        # The printed word "spell" is what the noun parser turns into
+        # ``zone == "stack"`` once a type has been named, and requiring it here
+        # is what stops the word being droppable: without it the phrase reads as
+        # "target artifact" — a permanent — and lowered identically, which is
+        # the dropped-rider shape the deletion probe exists to report.
+        if filt.zone != "stack":
+            raise LoweringError(
+                "a typed counter targets a **spell**; this phrase names a "
+                "permanent",
+                node=node,
+            )
         payload["card_types"] = list(filt.card_types)
     if filt.colors:
         if len(filt.colors) > 1:

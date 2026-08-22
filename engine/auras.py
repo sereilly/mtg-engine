@@ -972,6 +972,28 @@ def aura_ability_cost_reduction(oracle_text: str) -> tuple[int, int] | None:
     return int(match.group("generic")), _FLOOR_WORDS[match.group("floor")]
 
 
+def aura_cost_reduction_sentences(oracle_text: str) -> tuple[str, ...]:
+    """The sentences :func:`aura_ability_cost_reduction` reads, or empty.
+
+    The reduction is **two sentences on one printed line** — the amount and the
+    floor — and neither means anything alone: the first without the second is a
+    strictly better card, and the second without the first modifies nothing. So
+    the reader matches them joined, and this names the pair for a caller that
+    walks a card sentence by sentence (``scripts/parse_coverage.py``) and would
+    otherwise report both as text nothing read.
+    """
+    if aura_ability_cost_reduction(oracle_text) is None:
+        return ()
+    effect_lines = [
+        line for line in (_line_text(raw) for raw in (oracle_text or "").splitlines())
+        if line and not line.startswith("enchant ")
+    ]
+    joined = " ".join(" ".join(effect_lines).split())
+    return tuple(
+        sentence.strip() for sentence in joined.split(". ") if sentence.strip()
+    )
+
+
 def attached_ability_cost_reduction(permanent) -> tuple[int, int]:
     """``(reduction, floor)`` every Aura on *permanent* contributes, combined.
 

@@ -65,7 +65,12 @@ from engine.extra_triggers import extra_trigger_line  # noqa: E402
 from engine.named_protection import named_protection_line  # noqa: E402
 from engine.target_restrictions import target_restriction_line  # noqa: E402
 from engine.land_play_allowance import land_play_line  # noqa: E402
-from engine.untap_restrictions import untap_restriction_for  # noqa: E402
+from engine.untap_restrictions import (  # noqa: E402
+    optional_untap_line,
+    untap_restriction_for,
+)
+from engine.hand_size import hand_size_line  # noqa: E402
+from engine.auras import aura_cost_reduction_sentences  # noqa: E402
 from engine.oracle import (  # noqa: E402
     _is_supported_keyword_line,
     _is_supported_static_creature_line,
@@ -192,6 +197,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # whitelist producing a marker nothing performed.
     ("cast_costs.py", cast_cost_claims_line),
     ("untap_restrictions.py", lambda s: untap_restriction_for(s) is not None),
+    # "You may choose not to untap this artifact during your untap step." Not a
+    # restriction — a *permission* the untap step offers — so it has its own
+    # reader beside them, and this asks it rather than repeating the sentence.
+    ("untap_restrictions.py (optional untap)", optional_untap_line),
+    # "The chosen player's maximum hand size is four." (Cursed Rack.) Asked of
+    # the module the cleanup step enforces CR 402.2 with.
+    ("hand_size.py", hand_size_line),
     # Extra land plays (Fastbond). This was a literal in _MIXIN_TEXT_SCANS
     # pointing at a name-keyed count, so the sentence read as claimed for every
     # card printing it while the code behind the claim fired for one name. The
@@ -587,10 +599,27 @@ def _hooked_names() -> set[str]:
     return names
 
 
-def _channel_for(sentence: str) -> str | None:
+# Channels whose predicate needs the **whole card**, not the sentence alone.
+# One reader is like that and it is like that for a reason: Power Artifact's
+# reduction is two sentences that mean nothing apart (the amount and its floor),
+# so the code that carries it out matches them joined and no sentence-only
+# predicate could recognise either half.
+CARD_CHANNELS: tuple[tuple[str, object], ...] = (
+    (
+        "auras.py (attached ability cost reduction)",
+        lambda card, s: s in aura_cost_reduction_sentences(card.oracle_text or ""),
+    ),
+)
+
+
+def _channel_for(sentence: str, card=None) -> str | None:
     for label, predicate in CHANNELS:
         if predicate(sentence):
             return label
+    if card is not None:
+        for label, predicate in CARD_CHANNELS:
+            if predicate(card, sentence):
+                return label
     return None
 
 
@@ -637,7 +666,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
                 if ignored:
                     coverage.probe_findings.append((sentence, ignored))
             return
-        channel = _channel_for(sentence)
+        channel = _channel_for(sentence, card)
         if channel is not None:
             coverage.claims.append((sentence, channel))
             return

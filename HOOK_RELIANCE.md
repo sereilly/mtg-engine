@@ -12,9 +12,9 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**92 of 668 supported cards (13.8%)** carry at least one name-keyed entry, across **98 entries** in 7 registries. The pool is 668 cards, 100.0% supported.
+**92 of 734 supported cards (12.5%)** carry at least one name-keyed entry, across **98 entries** in 7 registries. The pool is 734 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **3,831 hand-written entries** covering **3,596 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **3,486 hand-written entries** covering **3,273 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
@@ -24,12 +24,10 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 | LEB | 292 | 292 (100.0%) | 51 (17.5%) | 389 | 46 (11.8%) | 55 | 18.8 |
 | 2ED | 292 | 292 (100.0%) | 51 (17.5%) | 389 | 46 (11.8%) | 55 | 18.8 |
 | ARN | 78 | 78 (100.0%) | 32 (41.0%) | 107 | 30 (28.0%) | 35 | 44.9 |
+| ATQ | 85 | 85 (100.0%) | 9 (10.6%) | 120 | 6 (5.0%) | 8 | 9.4 |
 | 3ED | 296 | 296 (100.0%) | 54 (18.2%) | 389 | 46 (11.8%) | 56 | 18.9 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ATQ *(measured)* | 85 | 85 (100.0%) | 9 (10.6%) | 120 | 6 (5.0%) | 8 | 9.4 |
-| **ALL (shipped, deduped)** | **668** | **668 (100.0%)** | **92 (13.8%)** | **1022** | **82 (8.0%)** | **98** | **14.7** |
-
-*(measured)* — ATQ are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
+| **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **92 (12.5%)** | **1119** | **82 (7.3%)** | **98** | **13.4** |
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so four of these rows are one data point wearing four hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 

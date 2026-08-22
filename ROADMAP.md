@@ -2095,3 +2095,68 @@ guard, because the *support gate* refuses it first.
 **Numbers.** ATQ 85/85 supported, **0 hollow lines**; grammar parses 85.0% →
 87.5% of its lines, executes 57.5% → 60.0%. Shipped pool 668/668, floors and
 ceilings unmoved, suite green at 6717, no hook added.
+
+## Antiquities ships (Phase 4)
+
+*(2026-08-22.)* The manifest entry moves from `measured` to `sets`, at **index
+4, between Arabian Nights and Revised** — the placement this journal recorded at
+the ingest, and it earned its keep: `original_printing` is the first entry in
+`printings`, so appending would have left the 19 cards Antiquities shares with
+Revised reading `3ed`, and Golgothian Sylex — "each nontoken permanent with a
+name originally printed in the Antiquities expansion" — would have missed every
+one of them. It reaches all three of Ornithopter, Atog and Su-Chi now, which is
+the check that says the ordering is doing the work.
+
+Shipped pool **668 → 734** cards, all supported. The suite grows 6717 → 6845
+because the pool-wide sweeps now parametrize over 85 more cards.
+
+### What promotion surfaced, which is the whole point of the rehearsal
+
+Six guards fail the moment `load_catalog()` widens, and each named real work:
+
+- **A printed timing clause nobody enforced.** Gate to Phyrexia says "Activate
+  only during your upkeep **and only once each turn**", and the restriction
+  table had the upkeep row without that tail — so the whole clause matched
+  nothing and the *timing* went unenforced. It is the same optional tail the
+  "your turn" row beside it already carried, for the same reason: the
+  once-a-turn half is per-permanent state and stays where that state lives.
+- **A conditional's targets had no prompt.** `derive_activation_spec` descended
+  into `sequence` and `may` but not `if_then`, so Goblin Artisans — whose only
+  targeting sits behind "if you lose the flip" — got the picker's silent
+  auto-target. CR 601.2c/602.2b choose targets as the ability is activated,
+  whichever way the coin lands, so both arms are read.
+- **Fourteen activated and three triggered abilities** took the category
+  fallback rather than a label; each is now in `effect_labels.py` in the bucket
+  the *ability* belongs to.
+- **Cursed Rack did nothing.** "The chosen player's maximum hand size is four"
+  compiled, reported supported, and never took a card off anyone: the cleanup
+  step had `max_hand_size = 7` as a literal. CR 402.2's seven and the two
+  sentences the pool prints against it are `engine/hand_size.py` now, asked by
+  the cleanup step that enforces it, the support gate that admits the line and
+  the parse-coverage report that claims it.
+- **Two more channels and one that needed the whole card.** "You may choose not
+  to untap this artifact during your untap step" is a *permission* rather than a
+  restriction and got its own reader beside them; Power Artifact's reduction is
+  two sentences that mean nothing apart, so `parse_coverage.py` grew a
+  card-aware channel rather than a sentence-only predicate that could not
+  recognise either half.
+- **Three droppable words, found by the deletion probe and fixed rather than
+  accepted.** The self-reference noun in `paragraphs.py`'s three productions
+  ("when this **artifact** leaves the battlefield") was accepted-but-optional;
+  so was the one in Phyrexian Gremlins' linked duration; and a *typed* counter
+  did not require the printed word "spell", so "counter target artifact spell"
+  and "counter target artifact" lowered identically. Two probe findings remain
+  and both are genuinely redundant printed words — a subtype implying its type
+  (CR 205.3) and an "or" in a list.
+
+**Ratchets.** Every grammar floor rose: ALL 80.5% → 81.6% parsed and 46.7% →
+47.8% executed, because the productions this set bought read lines the older
+sets print too. Every hook ceiling fell: ALL 13.8% → 12.5% of supported cards
+name-keyed, 14.7 → 13.4 entries per 100. Antiquities enters at 10.6% hooked —
+all of it inherited from the 19 Revised reprints, because **no hook was added
+for this set at any point**.
+
+**Phase 5 is outstanding by design.** 388 of 734 cards are verified in-game;
+Antiquities joins M21 in the untested remainder, which SET_PLAYBOOK.md Phase 5
+owns and deliberately does not gate promotion on. A seeded AI batch over the
+whole manifest pool runs clean.

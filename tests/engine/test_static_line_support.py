@@ -44,6 +44,7 @@ from engine.library_top import library_top_line
 from engine.prevention import prevention_claims_line
 from engine.replacements import replacement_claims_line
 from engine.enter_effects import enter_effect_line
+from engine.hand_size import hand_size_line
 from engine.grammar import compile_line
 from engine.oracle import (
     _is_supported_static_creature_line,
@@ -140,6 +141,10 @@ def _derived(normalized: str) -> bool:
         # M21 prints the phrase on a creature, where the shipped pool only had
         # it on lands.
         or enter_effect_line(normalized) is not None
+        # "The chosen player's maximum hand size is four." (Cursed Rack) — the
+        # eleventh derivation table, read by the cleanup step that enforces
+        # CR 402.2 and by the gate that admits the line.
+        or hand_size_line(normalized)
         # The strongest claim of all, and the last asked: **the grammar lowered
         # this line to an instruction**. "This creature gets +X/+0, where X is
         # the greatest power among creature cards in your graveyard" (Carrion

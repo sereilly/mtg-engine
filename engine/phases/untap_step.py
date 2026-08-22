@@ -13,6 +13,7 @@ from ..auras import aura_restriction_active
 from ..handlers._common import permanent_effective_colors
 from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
 from ..untap_restrictions import (
+    optional_untap_line,
     SELF_DOESNT_UNTAP_PHRASE,
     SELF_MAY_KEEP_TAPPED_PHRASE,
     untap_restriction_for,
@@ -132,7 +133,10 @@ class UntapStepMixin:
             {"index": idx, "name": permanent.card.name}
             for idx, permanent in enumerate(player.battlefield)
             if permanent.tapped
-            and "you may choose not to untap" in permanent.effective_card.oracle_text.lower()
+            and any(
+                optional_untap_line(line)
+                for line in (permanent.effective_card.oracle_text or "").splitlines()
+            )
         ]
 
     def resolve_untap_step(

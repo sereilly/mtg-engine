@@ -189,7 +189,13 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         "only during an upkeep step",
     ),
     ActivationRestriction(
-        re.compile(r"^activate only during your upkeep$"),
+        # "…**and only once each turn**" (Gate to Phyrexia) is the same optional
+        # tail the "your turn" row below carries, and for the same reason: the
+        # once-a-turn half is per-permanent state rather than a property of the
+        # game, so it stays in mixins/stack/activation.py where that state lives
+        # and this row reads the timing half. Without the tail the whole clause
+        # matched nothing and the timing went unenforced.
+        re.compile(r"^activate only during your upkeep(?: and only once each turn)?$"),
         _during_your_upkeep,
         "only during your upkeep",
     ),

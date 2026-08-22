@@ -707,6 +707,20 @@ def _from_instructions(instructions) -> dict | None:
             if nested is not None:
                 return nested
             continue
+        if instruction.kind == "if_then":
+            # "If you lose the flip, counter target artifact spell you control."
+            # (Goblin Artisans.) A branch that may not run still *chooses* — CR
+            # 601.2c and 602.2b pick targets as the ability is activated,
+            # whichever way the coin lands — so both arms are read, and an
+            # ability whose only targeting sits behind a conditional gets its
+            # prompt rather than the picker's silent fallback.
+            nested = _from_instructions(
+                tuple(instruction.payload.get("then") or ())
+                + tuple(instruction.payload.get("else") or ())
+            )
+            if nested is not None:
+                return nested
+            continue
         if instruction.kind == "may":
             # An optional action still targets — "you may tap or untap target
             # creature" names a creature whether or not the offer is taken.

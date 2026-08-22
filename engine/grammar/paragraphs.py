@@ -107,7 +107,14 @@ def _parse_exile_graveyard_until_leaves(stream: TokenStream) -> ast.Statement | 
     if not stream.accept_phrase("until", "this"):
         return None
     if stream.accept_kind(SELF) is None:
-        stream.accept_word("artifact", "creature", "enchantment", "permanent", "land")
+        # The noun is **required**, not merely accepted: without it the sentence
+        # still matched and the word could be deleted with no change to what was
+        # lowered, which is exactly what the parse-coverage deletion probe is
+        # for. A card naming itself gets the SELF token instead.
+        if not stream.accept_word(
+            "artifact", "creature", "enchantment", "permanent", "land"
+        ):
+            return None
     if not stream.accept_phrase("leaves", "the", "battlefield"):
         return None
     return ast.ExileGraveyardUntilLeaves(filt)
@@ -232,7 +239,14 @@ def _parse_exile_until_leaves_or_untaps(stream: TokenStream) -> ast.Statement | 
     if not stream.accept_phrase("when", "this"):
         return None
     if stream.accept_kind(SELF) is None:
-        stream.accept_word("artifact", "creature", "enchantment", "permanent", "land")
+        # The noun is **required**, not merely accepted: without it the sentence
+        # still matched and the word could be deleted with no change to what was
+        # lowered, which is exactly what the parse-coverage deletion probe is
+        # for. A card naming itself gets the SELF token instead.
+        if not stream.accept_word(
+            "artifact", "creature", "enchantment", "permanent", "land"
+        ):
+            return None
     if not stream.accept_phrase("leaves", "the", "battlefield"):
         return None
     if not stream.accept_phrase("or", "becomes", "untapped"):
@@ -287,7 +301,14 @@ def _parse_cast_from_exiled_with(stream: TokenStream) -> ast.Statement | None:
     if not stream.accept_phrase("from", "among", "cards", "exiled", "with", "this"):
         return None
     if stream.accept_kind(SELF) is None:
-        stream.accept_word("artifact", "creature", "enchantment", "permanent", "land")
+        # The noun is **required**, not merely accepted: without it the sentence
+        # still matched and the word could be deleted with no change to what was
+        # lowered, which is exactly what the parse-coverage deletion probe is
+        # for. A card naming itself gets the SELF token instead.
+        if not stream.accept_word(
+            "artifact", "creature", "enchantment", "permanent", "land"
+        ):
+            return None
     if not stream.accept_phrase(
         "without", "paying", "its", "mana", "cost",
     ):

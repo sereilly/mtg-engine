@@ -2002,6 +2002,13 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if self_cant_be_enchanted_line(normalized):
         return True
+    # "The chosen player's maximum hand size is four." (Cursed Rack.) Asked of
+    # the reader the cleanup step enforces with, so what is claimed and what is
+    # carried out are one table.
+    from .hand_size import hand_size_line
+
+    if hand_size_line(normalized):
+        return True
     # "You may play two additional lands on each of your turns." (Azusa, Lost
     # but Seeking.) The land-drop path derives the allowance from every
     # controlled permanent's own text (engine/land_play_allowance.py), creatures

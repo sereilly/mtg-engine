@@ -20,12 +20,10 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | LEB | 292 | 389 | 80.2% | 79.2% | 42.9% | 153 |
 | 2ED | 292 | 389 | 80.2% | 79.2% | 42.9% | 153 |
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
+| ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
 | 3ED | 296 | 389 | 81.0% | 79.7% | 44.2% | 155 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
-| **All (shipped)** | **1533** | **2166** | **81.3%** | **80.1%** | **47.1%** | **885** |
-
-*(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
+| **All (shipped)** | **1618** | **2286** | **81.6%** | **80.5%** | **47.8%** | **950** |
 
 ## Backlog — failure reasons
 
@@ -61,7 +59,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 ## Cards executing through the grammar
 
-885 cards, 1021 lines.
+950 cards, 1093 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`

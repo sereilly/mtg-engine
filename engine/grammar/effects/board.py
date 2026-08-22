@@ -225,8 +225,13 @@ def _parse_doesnt_untap_next_step(
     # spellings do not have to be told apart by their prefixes.
     linked = stream.mark()
     if stream.accept_phrase("untap", "step", "for", "as", "long", "as", "this"):
-        stream.accept_word("creature", "artifact", "enchantment", "land", "permanent")
-        if stream.accept_phrase("remains", "tapped"):
+        # The noun is required. Accepted-but-optional, it could be deleted with
+        # no change to what was lowered — which is what the parse-coverage
+        # deletion probe reports, and the shape three productions in
+        # `paragraphs.py` were tightened out of at the same time.
+        if stream.accept_word(
+            "creature", "artifact", "enchantment", "land", "permanent"
+        ) and stream.accept_phrase("remains", "tapped"):
             return ast.DoesntUntapWhileSourceTapped(subject)
     stream.reset(linked)
     stream.expect_word("next")

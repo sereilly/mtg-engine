@@ -87,20 +87,6 @@
   ]
  },
  {
-  "card": "Idol of Endurance",
-  "clause": "exile all creature cards with mana value 3 or less from your graveyard until this artifact leaves the battlefield",
-  "ignored": [
-   "artifact"
-  ]
- },
- {
-  "card": "Idol of Endurance",
-  "clause": "until end of turn, you may cast a creature spell from among cards exiled with this artifact without paying its mana cost",
-  "ignored": [
-   "artifact"
-  ]
- },
- {
   "card": "Liliana, Death Mage",
   "clause": "target opponent loses 2 life for each creature card in their graveyard",
   "ignored": [
@@ -115,10 +101,10 @@
   ]
  },
  {
-  "card": "Miscast",
-  "clause": "counter target instant or sorcery spell unless its controller pays {3}",
+  "card": "Mishra's Factory",
+  "clause": "target assembly-worker creature gets +1/+1 until end of turn",
   "ignored": [
-   "spell"
+   "creature"
   ]
  },
  {
@@ -203,6 +189,13 @@
   "clause": "you gain 7 life, draw seven cards, then put up to seven permanent cards from your hand onto the battlefield",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Urza's Avenger",
+  "clause": "this creature gets -1/-1 and gains your choice of banding, flying, first strike, or trample until end of turn",
+  "ignored": [
+   "or"
   ]
  },
  {
