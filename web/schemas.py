@@ -64,6 +64,7 @@ ActionKind = Literal[
     "effect_order_confirm",
     "resolve_optional_pay",
     "land_type_confirm",
+    "number_choice_confirm",
     "confirm_mana_payment",
     "kudzu_reattach_confirm",
     "face_down_cast_confirm",
@@ -371,6 +372,10 @@ class GameActionRequest(BaseModel):
     # (a list only for a creature that can block additional creatures), sent with
     # assign_camouflage_piles. Creatures left out go into no pile.
     camouflage_piles: dict[int, int | list[int]] | None = None
+    # Shapeshifter: the number its controller chose, sent with
+    # `number_choice_confirm`. Bounded by the card's printed range, which the
+    # engine re-checks -- an out-of-range answer is refused rather than clamped.
+    number: int | None = Field(default=None, ge=0)
     # Phantasmal Terrain: the basic land type the controller chose for the
     # enchanted land, sent with `land_type_confirm`.
     land_type: Literal["plains", "island", "swamp", "mountain", "forest"] | None = None

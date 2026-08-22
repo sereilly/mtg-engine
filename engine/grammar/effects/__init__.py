@@ -91,6 +91,7 @@ from .combat import (
 )
 from .game import (
     _parse_wins,
+    _parse_choose_number,
     _parse_flip_coin,
     _parse_game_is_a_draw,
     _parse_token_keywords,
@@ -155,6 +156,7 @@ __all__ = [
     "_CANT_BE_ACTIONS",
     "_parse_cant_be",
     "_parse_wins",
+    "_parse_choose_number",
     "_parse_flip_coin",
     "_parse_game_is_a_draw",
     "_parse_token_keywords",

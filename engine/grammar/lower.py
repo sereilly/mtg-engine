@@ -378,6 +378,17 @@ def lower_statement(
     if isinstance(statement, ast.WinGame):
         return _lower_win_game(statement)
 
+    if isinstance(statement, ast.ChooseNumber):
+        # The bounds are all there is to carry: what the number is *for* is a
+        # different sentence on the card (Shapeshifter's characteristic-defining
+        # P/T), which reads it back off the permanent.
+        return (
+            OracleInstruction(
+                "choose_number", "",
+                {"minimum": statement.minimum, "maximum": statement.maximum},
+            ),
+        )
+
     if isinstance(statement, ast.FlipCoin):
         # CR 705.1: the flip is the whole sentence, and it takes no payload. What
         # happens next is the conditional sentences after it, which read the

@@ -109,6 +109,31 @@ def enters_with_named_counter(line: str) -> str | None:
     match = ENTERS_WITH_NAMED_COUNTER.match((line or "").strip().lower().rstrip("."))
     return match.group("counter") if match is not None else None
 
+#: "As this creature enters, choose a number between 0 and 7." (Shapeshifter.)
+#: The bounds are data, like every other parameter in this file: a card printed
+#: "between 1 and 5" is the same choice. Matched by shape rather than listed as
+#: a phrase for that reason, and anchored so a sentence continuing past the
+#: range is not claimed by a rule that stops reading at the number.
+CHOOSE_NUMBER_ON_ENTER = re.compile(
+    r"^as this [a-z]+ enters, choose a number between (?P<low>\d+) and (?P<high>\d+)$"
+)
+
+
+def choose_number_on_enter(line: str) -> tuple[int, int] | None:
+    """``(low, high)`` the entry choice is bounded by, or None.
+
+    Read by the entry state that arms the choice *and* by the support gate, so
+    what is asked and what is claimed cannot drift. Reversed bounds refuse
+    rather than being sorted: a range nobody prints is a line this does not
+    understand, and quietly repairing it would admit the card on a guess.
+    """
+    match = CHOOSE_NUMBER_ON_ENTER.match((line or "").strip().lower().rstrip("."))
+    if match is None:
+        return None
+    low, high = int(match.group("low")), int(match.group("high"))
+    return (low, high) if low <= high else None
+
+
 # Copy-on-enter (CR 707.2). Clone's line is exactly the creature phrase; Copy
 # Artifact adds a tail the mixin also performs (it appends "Enchantment" to the
 # copied type line), which is why the tail is spelled out below rather than
@@ -227,6 +252,8 @@ def enter_effect_line(line: str) -> str | None:
         return "enters with a named counter"
     if enters_with_pt_counters(normalized) is not None:
         return "enters with P/T counters"
+    if choose_number_on_enter(normalized) is not None:
+        return "chooses a number as it enters"
     return None
 
 

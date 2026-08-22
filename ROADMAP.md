@@ -1710,3 +1710,54 @@ notice the key changing.
 
 **Numbers.** ATQ 78 → 79; grammar parses 78.3% → 79.2% of its lines. Shipped
 pool 668/668, floors and ceilings unmoved, suite green at 6667, no hook added.
+
+## ATQ round 24: a number nobody counts
+
+*(2026-08-22.)* **79 → 80.** Shapeshifter, three lines that are one mechanic:
+
+```
+As this creature enters, choose a number between 0 and 7.
+At the beginning of your upkeep, you may choose a number between 0 and 7.
+Shapeshifter's power is equal to the last chosen number and its toughness is
+  equal to 7 minus that number.
+```
+
+**The choice is at entry, not on a trigger.** CR 614.1c, and it is load-bearing
+rather than pedantic: the P/T is *defined* by the number, so a trigger would put
+a 0/0 on the battlefield and the state-based check would bin it before the
+trigger could resolve. It goes where Black Vise's opponent and Runed Halo's card
+name go — `_initialize_permanent_state` stamps a default and arms a prompt that
+overwrites it. The default is the middle of the printed range, because that is
+the only value the card's own arithmetic makes defensible with no board to read:
+the extremes are a body that cannot fight or one that dies to any ping, and a
+seat that never answers should not be handed either.
+
+**`characteristic_defining.py` gains its first entry that counts nothing.** Every
+other row there tallies objects; this one reads back a number a player picked.
+The printed 7 is payload (`complement`), so a card splitting a different total is
+the same template — and both halves of the sentence are one pattern, because a
+rule claiming the power clause alone would leave a printed toughness of 0
+standing and kill the creature on arrival.
+
+**The upkeep half needed a production and nothing else.** "Choose a number
+between N and M" is a `ChooseNumber` node in the `game` family, tried before the
+naming production and non-consuming on refusal so every other "choose" sentence
+keeps its owner. Its own category (`chosen_numbers`) for the reason the coin
+flip has one: it produces a *value*, and what reads the value is a different
+sentence with a category of its own.
+
+**One new prompt, all five parts.** `number_choice` joins the pending-choice
+registry — resolver, default, `ActionKind`, renderer, and the browser getter and
+buttons. `tests/engine/test_pending_choices.py` and
+`tests/ui/test_prompt_client_coverage.py` between them named the two halves I
+had not written yet, which is what those guards are for.
+
+Two rules the prompt makes explicit. An out-of-range answer is **rejected, not
+clamped**: the range is the card's, and an answer quietly repaired into a legal
+one is a caller told its illegal request worked. And a seat that does not answer
+**keeps the number it had** — for the upkeep trigger that is not a stand-in for
+a decision, it is what "you may" means.
+
+**Numbers.** ATQ 79 → 80; grammar parses 78.3% → 80.0% of its lines, executes
+51.7% → 52.5%. Shipped pool 668/668, floors and ceilings unmoved, suite green at
+6675, no hook added.

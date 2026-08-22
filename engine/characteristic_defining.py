@@ -104,6 +104,18 @@ def _same_name_count(match: re.Match) -> dict[str, object]:
     return {"count": "same_name", "scope": "all"}
 
 
+def _chosen_number(match: re.Match) -> dict[str, object]:
+    """Shapeshifter. The only CDA in the pool that counts nothing: its value is
+    a number a player chose (CR 614.1c as it enters, and again each upkeep).
+
+    ``complement`` is what the toughness clause subtracts from — printed as
+    "7 minus that number" and read as data, so a card splitting a different
+    total is the same template. It is on the payload rather than in the kind
+    for the reason every other parameter here is.
+    """
+    return {"count": "chosen_number", "complement": int(match.group("total"))}
+
+
 def _attacking_split_land_count(match: re.Match) -> dict[str, object]:
     return {
         "count": "land",
@@ -173,6 +185,16 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             rf"^{_SUBJECT} {_PT} (?:non-(?P<excluded>[a-z]+) )?creatures you control$"
         ),
         _creature_count,
+    ),
+    (
+        # Shapeshifter. Both halves in one pattern, because the second is not a
+        # rider: a rule claiming the power clause alone would leave a printed
+        # toughness of 0 standing and the creature would die on arrival.
+        re.compile(
+            rf"^{_SUBJECT} power is equal to the last chosen number and "
+            r"its toughness is equal to (?P<total>\d+) minus that number$"
+        ),
+        _chosen_number,
     ),
 )
 

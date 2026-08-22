@@ -1099,7 +1099,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2266,6 +2266,15 @@ function getEffectOrderInfo(state = currentState) {
   return info;
 }
 
+// Shapeshifter: "choose a number between 0 and 7", as it enters and again at
+// each of its controller's upkeeps.
+function getNumberChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.number_choice;
+  if (!info || !Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 function getLandTypeChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.land_type_choice;
@@ -2959,7 +2968,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -3971,6 +3980,48 @@ function renderDrawChoiceModals(state) {
     subtitle: (n) =>
       `Choose a card you own from outside the game to put into your hand ` +
       `(${n} available).`,
+  });
+}
+
+// Shapeshifter: "Choose a number between 0 and 7." The range is the card's, so
+// the buttons come from the server rather than being counted out here.
+function applyNumberChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "";
+  title.textContent = "Choose a number";
+  body.textContent = `${cardName}: choose a number between ${info.minimum} and ${info.maximum}.`;
+  const buttons = info.options
+    .map(
+      (n) =>
+        `<button type="button" class="prompt-choice-btn" data-number="${escapeHtml(String(n))}">` +
+        `${escapeHtml(String(n))}</button>`
+    )
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-number]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "number_choice_confirm",
+        number: Number(btn.dataset.number),
+      });
+    });
   });
 }
 
@@ -6037,6 +6088,12 @@ function renderActivationPrompt() {
   const effectOrderInfo = getEffectOrderInfo();
   if (effectOrderInfo) {
     applyEffectOrderPrompt(effectOrderInfo);
+    return;
+  }
+
+  const numberChoiceInfo = getNumberChoiceInfo();
+  if (numberChoiceInfo) {
+    applyNumberChoicePrompt(numberChoiceInfo);
     return;
   }
 

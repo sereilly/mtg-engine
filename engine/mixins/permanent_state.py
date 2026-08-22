@@ -11,6 +11,7 @@ from ..enter_effects import (
     COPY_CREATURE_ON_ENTER,
     ENTERS_TAPPED,
     ENTERS_WITH_X_PLUS_1_1_COUNTERS,
+    choose_number_on_enter,
     enters_with_pt_counters,
     enters_with_named_counter,
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
@@ -93,6 +94,12 @@ def _count_dynamic_pt(
         battlefields = [player.battlefield]
 
     what = payload.get("count")
+    if what == "chosen_number":
+        # Shapeshifter: the value is a number a player chose, not a tally of
+        # anything, so it answers before the battlefield loop rather than inside
+        # it. It is on this payload anyway because what it *defines* is a
+        # characteristic-defining P/T (CR 604.3) like every other entry here.
+        return int(permanent.metadata.get("chosen_number") or 0)
     excluded = payload.get("exclude_type")
     land_type = payload.get("land_type")
     card_type = payload.get("card_type")
@@ -283,6 +290,33 @@ class PermanentStateMixin:
                 needs_card_name=True, choices=sorted(set(seen)),
                 default_card_name=permanent.metadata["chosen_card_name"],
             )
+
+        # "As this creature enters, choose a number between 0 and 7."
+        # (Shapeshifter.) CR 614.1c puts the choice at entry, not on a trigger:
+        # the number is what the card's P/T is *defined* by, so a trigger would
+        # leave it on the battlefield as a 0/0 long enough to die to the
+        # state-based check.
+        #
+        # A default is stamped first and the prompt overwrites it, exactly as
+        # the opponent-and-colour choice above works. The default is the middle
+        # of the printed range because that is the only value the card's own
+        # arithmetic makes defensible without knowing the board: the extremes
+        # are a body that cannot fight (0 power) or one that dies to any ping
+        # (1 toughness at the top of Shapeshifter's range), and a seat that
+        # never answers should not be handed either.
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            bounds = choose_number_on_enter(raw_line)
+            if bounds is None:
+                continue
+            low, high = bounds
+            permanent.metadata["chosen_number"] = (low + high) // 2
+            self.arm_pending_choice(
+                "number_choice", caster_index,
+                card_name=permanent.card.name, permanent=permanent,
+                minimum=low, maximum=high,
+                default_number=permanent.metadata["chosen_number"],
+            )
+            break
 
         # enters with fixed counters (Clockwork Beast). Track the counter count so
         # the end-of-combat trigger and the upkeep activated ability can adjust it.
@@ -631,7 +665,14 @@ class PermanentStateMixin:
                 # (Kinetic Augur is */4). ``set_base_pt`` takes None for "leave
                 # this one tracking whatever else applies", which is exactly the
                 # difference and is why it is not two instruction kinds.
-                if dynamic_pt.payload.get("defines") == "power":
+                # "…and its toughness is equal to 7 minus that number"
+                # (Shapeshifter). The second half is derived from the same
+                # value rather than counted again, which is what makes the
+                # printed total a payload number instead of a second template.
+                complement = dynamic_pt.payload.get("complement")
+                if complement is not None:
+                    set_base_pt(permanent, value, max(0, int(complement) - value))
+                elif dynamic_pt.payload.get("defines") == "power":
                     set_base_pt(permanent, value, None)
                 else:
                     set_base_pt(permanent, value, value)

@@ -57,6 +57,25 @@ def _parse_flip_coin(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_choose_number(stream: TokenStream) -> ast.Statement | None:
+    """``Choose a number between 0 and 7.`` (Shapeshifter.)
+
+    Returns None without consuming anything for any other "choose" sentence, so
+    the naming and modal productions beside it keep the ones they own. Both
+    bounds must be printed numbers: a range with a word in it would be a
+    different sentence, and reading only the first would silently halve the card.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("choose", "a", "number", "between"):
+        low = parse_amount(stream)
+        if isinstance(low, ast.Fixed) and stream.accept_word("and"):
+            high = parse_amount(stream)
+            if isinstance(high, ast.Fixed) and low.value <= high.value:
+                return ast.ChooseNumber(low.value, high.value)
+    stream.reset(mark)
+    return None
+
+
 def _parse_token_quoted_lines(stream: TokenStream) -> tuple[str, ...]:
     """The ``with "<line>"[ and "<line>"]`` tail — printed abilities in quotes.
 

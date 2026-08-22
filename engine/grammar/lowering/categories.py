@@ -276,6 +276,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # keeps the category of whatever that branch does — a coin flip over a
     # damage effect must not be able to turn "damage" on.
     "flip_coin": "coin_flips",
+    # "Choose a number between 0 and 7." (Shapeshifter.) Its own category for
+    # the reason the coin flip has one: the number is a *value* a player picks,
+    # and what reads it back is a different sentence with a category of its own.
+    "choose_number": "chosen_numbers",
     "create_emblem": "tokens",
     # Optional actions. Parsed and lowered, not switched on — see _WRAPPER_KINDS.
     "may": "optional",

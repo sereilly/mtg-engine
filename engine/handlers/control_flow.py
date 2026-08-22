@@ -287,6 +287,40 @@ def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecu
     return True, "resolved"
 
 
+@effect_handler("choose_number")
+def choose_number(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose a number between 0 and 7." (Shapeshifter.)
+
+    Beside the coin flip for the same reason: it produces a *value* and no
+    effect of its own, and what reads the value is a separate sentence on the
+    card. The value is recorded on the permanent rather than in this
+    resolution's scratchpad, because the sentence that reads it back is a
+    characteristic-defining ability (CR 604.3) that keeps asking long after this
+    resolution is over.
+
+    The choice goes on the pending-choice queue, so an interactive controller is
+    asked and every other seat takes the default the queue's resolver applies —
+    which for a "you may" upkeep is *not changing the number*, the honest
+    reading of declining the offer.
+    """
+    permanent = context.source_permanent
+    if permanent is None:
+        game.log.append(f"{context.card.name}: no permanent to choose a number for")
+        return True, "resolved"
+    low = int(instruction.payload.get("minimum", 0))
+    high = int(instruction.payload.get("maximum", 0))
+    seat = game.controller_index_of(permanent)
+    if seat is None:
+        return True, "resolved"
+    game.arm_pending_choice(
+        "number_choice", seat,
+        card_name=permanent.card.name, permanent=permanent,
+        minimum=low, maximum=high,
+        default_number=int(permanent.metadata.get("chosen_number", low)),
+    )
+    return True, "resolved"
+
+
 @effect_handler("if_then")
 def if_then(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"If <condition>, <then>" — including CR 603.4 intervening-if conditions,

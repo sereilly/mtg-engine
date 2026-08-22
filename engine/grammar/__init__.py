@@ -157,6 +157,11 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         # branches behind a flip carry their own categories, so this switch
         # gates the randomiser and nothing more.
         "coin_flips",
+        # Choosing a number (CR 614.1c as a permanent enters, and again on an
+        # upkeep trigger). Switched on with the production for the reason every
+        # category above is: with nothing underneath the grammar, a category
+        # left off costs the card its support rather than routing it elsewhere.
+        "chosen_numbers",
     }
 )
 

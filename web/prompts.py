@@ -573,6 +573,19 @@ def _hand_reveal(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("number_choice")
+def _number_choice(ctx: PromptContext, choices: list) -> dict:
+    data = choices[0].data
+    low, high = int(data["minimum"]), int(data["maximum"])
+    return {
+        "card_name": data["card_name"],
+        "minimum": low,
+        "maximum": high,
+        "options": list(range(low, high + 1)),
+        "default": int(data.get("default_number", low)),
+    }
+
+
 @prompt_renderer("land_type_choice")
 def _land_type_choice(ctx: PromptContext, choices: list) -> dict:
     return {

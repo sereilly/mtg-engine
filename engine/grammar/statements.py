@@ -44,6 +44,7 @@ from .effects import (
     _parse_extra_turn,
     _parse_gain_control,
     _parse_gains,
+    _parse_choose_number,
     _parse_flip_coin,
     _parse_game_is_a_draw,
     _parse_gets,
@@ -246,6 +247,12 @@ def _parse_subject_verb(
         return dataclasses.replace(token, recipient_players="each_opponent")
     stream.reset(mark_recipient)
     if stream.at_word("choose"):
+        # "Choose a number between 0 and 7." (Shapeshifter.) Tried first and
+        # non-consuming on refusal, so every other "choose" sentence still
+        # reaches the naming production behind it.
+        chosen_number = _parse_choose_number(stream)
+        if chosen_number is not None:
+            return chosen_number
         return _parse_name_and_strip(stream)
     if stream.at_word("draw"):
         return _parse_draw(stream, ast.PlayerRef("you"))

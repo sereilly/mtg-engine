@@ -129,6 +129,20 @@ class FlipCoin:
 
 
 @dataclass(frozen=True)
+class ChooseNumber:
+    """``Choose a number between 0 and 7.`` (Shapeshifter.)
+
+    The bounds are the card's, so they ride the node rather than being baked
+    into it: a card printed "between 1 and 5" is the same sentence. Nothing
+    about *what the number is for* is here — Shapeshifter's P/T reads it back
+    through a characteristic-defining line, which is a separate sentence and a
+    separate rule (CR 604.3).
+    """
+    minimum: int
+    maximum: int
+
+
+@dataclass(frozen=True)
 class EndTheTurn:
     """``End the turn.`` (Discontinuity, Time Stop, Sundial of the Infinite.)
 

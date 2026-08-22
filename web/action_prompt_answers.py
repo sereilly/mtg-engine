@@ -385,6 +385,15 @@ def _action_enter_choice_confirm(session, req, seat_type):
     if not session.game.confirm_enter_choice(req.seat, req.target_seat, req.mana_color):
         raise HTTPException(status_code=400, detail="invalid enter choice")
 
+@action_handler("number_choice_confirm")
+def _action_number_choice_confirm(session, req, seat_type):
+    # Shapeshifter: "choose a number between 0 and 7", as it enters and again
+    # at each of its controller's upkeeps.
+    if req.number is None:
+        raise HTTPException(status_code=400, detail="number is required")
+    if not session.game.confirm_number_choice(req.seat, req.number):
+        raise HTTPException(status_code=400, detail="no number choice is pending for you")
+
 @action_handler("body_choice_confirm")
 def _action_body_choice_confirm(session, req, seat_type):
     # Primal Clay: the controller picks which printed body the creature

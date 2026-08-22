@@ -1200,6 +1200,50 @@ class PendingChoicesMixin:
         self.discard_pending_choice(choice)
         return True
 
+    # -- "Choose a number between N and M" -----------------------------------
+
+    def confirm_number_choice(self, player_index: int, number: int) -> bool:
+        """Answer Shapeshifter's "choose a number" prompt with *number*."""
+        return self.resolve_pending_choice(
+            "number_choice", player_index, number=number
+        )
+
+    def _resolve_number_choice(self, choice: PendingChoice, number) -> bool:
+        """Record the chosen number on the permanent that asked for it.
+
+        Out of range is a **rejection**, not a clamp: the prompt names the range
+        the card prints, and silently repairing an answer would let a caller ask
+        for a 12/-5 body and be told it worked.
+        """
+        try:
+            value = int(number)
+        except (TypeError, ValueError):
+            return False
+        low = int(choice.data.get("minimum", 0))
+        high = int(choice.data.get("maximum", 0))
+        if not (low <= value <= high):
+            return False
+        permanent = choice.data.get("permanent")
+        if permanent is not None:
+            permanent.metadata["chosen_number"] = value
+            self.log.append(
+                f"{choice.data.get('card_name')}: chose {value}"
+            )
+            # The number *defines* a characteristic (CR 604.3), so the P/T that
+            # reads it is stale until the layers are recomputed.
+            self._refresh_dynamic_creatures()
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_number_choice(self, choice: PendingChoice) -> bool:
+        """A seat that is not asked keeps the number already stamped — the
+        middle of the printed range at entry, and whatever was chosen before at
+        an upkeep. "May" means the upkeep default is genuinely *not* to change
+        it, so this is the rule rather than a stand-in for one."""
+        return self._resolve_number_choice(
+            choice, choice.data.get("default_number", choice.data.get("minimum", 0))
+        )
+
     # -- "As this enters, choose an opponent [and a color]" -------------------
 
     def confirm_name_and_strip(self, player_index: int, card_name: str) -> bool:
@@ -2504,6 +2548,15 @@ register_choice(
     blocked_detail=None,
     spectator_visible=True,
     hidden_for_ai=False,
+)
+
+register_choice(
+    "number_choice",
+    resolve=lambda game, choice, r: game._resolve_number_choice(choice, r["number"]),
+    default=lambda game, choice: game._default_number_choice(choice),
+    action="number_choice_confirm",
+    prompt_key="number_choice",
+    blocked_detail="choose a number before other actions",
 )
 
 register_choice(

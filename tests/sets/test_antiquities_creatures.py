@@ -385,3 +385,108 @@ def test_martyrs_of_korlis_ignores_a_nonartifact_source(set_pool):
     p1, martyrs = _martyrs_hit_by(set_pool, "Citanul Druid")
 
     assert martyrs.damage_marked == 0
+
+
+# ---------------------------------------------------------------------------
+# Shapeshifter (round 24) — a number a player picks, read back as P/T
+# ---------------------------------------------------------------------------
+
+
+def _shapeshifter(set_pool, *, chosen=None):
+    pool = set_pool("ATQ")
+    metadata = {} if chosen is None else {"chosen_number": chosen}
+    perm = Permanent(card=pool["Shapeshifter"], metadata=metadata)
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._refresh_dynamic_creatures()
+    return game, p1, perm
+
+
+def test_shapeshifter_splits_seven_between_power_and_toughness(set_pool):
+    game, p1, perm = _shapeshifter(set_pool, chosen=2)
+
+    assert (perm.effective_power, perm.effective_toughness) == (2, 5)
+
+
+def test_the_total_is_the_printed_one_not_a_fixed_body(set_pool):
+    """The control on the test above: nothing about the card is 2/5. The
+    toughness is derived from the same number the power is, which is why the
+    printed 7 is payload rather than a second template."""
+    game, p1, perm = _shapeshifter(set_pool, chosen=6)
+
+    assert (perm.effective_power, perm.effective_toughness) == (6, 1)
+
+
+def test_it_chooses_a_number_as_it_enters(set_pool):
+    """CR 614.1c: the choice is part of entering, not a trigger. A trigger
+    would leave a 0/0 on the battlefield long enough for the state-based check
+    to bin it."""
+    pool = set_pool("ATQ")
+    p1 = PlayerState(name="P1", hand=[pool["Shapeshifter"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Shapeshifter")
+
+    perm = p1.battlefield[0]
+    assert perm.metadata["chosen_number"] == 3, "the middle of the printed range"
+    assert (perm.effective_power, perm.effective_toughness) == (3, 4)
+    assert [choice.kind for choice in game.pending_choices] == ["number_choice"]
+
+
+def test_the_controller_can_answer_the_prompt(set_pool):
+    pool = set_pool("ATQ")
+    p1 = PlayerState(name="P1", hand=[pool["Shapeshifter"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Shapeshifter")
+    perm = p1.battlefield[0]
+
+    assert game.confirm_number_choice(0, 7)
+    assert (perm.effective_power, perm.effective_toughness) == (7, 0)
+
+
+def test_a_number_outside_the_printed_range_is_refused(set_pool):
+    """Rejected, not clamped. The prompt names the range the card prints, and
+    an answer quietly repaired into a legal one is a caller told its illegal
+    request worked."""
+    pool = set_pool("ATQ")
+    p1 = PlayerState(name="P1", hand=[pool["Shapeshifter"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Shapeshifter")
+    perm = p1.battlefield[0]
+
+    assert not game.confirm_number_choice(0, 8)
+    assert perm.metadata["chosen_number"] == 3
+    assert [choice.kind for choice in game.pending_choices] == ["number_choice"]
+
+
+def test_the_upkeep_trigger_offers_a_new_number(set_pool):
+    """"You **may** choose a number" — an optional upkeep trigger, so the offer
+    comes first and the number choice only after it is taken."""
+    game, p1, perm = _shapeshifter(set_pool, chosen=2)
+    game.active_player_index = 0
+
+    game.resolve_upkeep(0)
+    game._settle()
+    assert [choice.kind for choice in game.pending_choices] == ["optional_pay"]
+
+    game.confirm_optional_pay(0, card_name="Shapeshifter", accept=True)
+    assert game.confirm_number_choice(0, 5)
+
+    assert (perm.effective_power, perm.effective_toughness) == (5, 2)
+
+
+def test_declining_the_upkeep_offer_keeps_the_last_number(set_pool):
+    """"The **last** chosen number" is what the P/T reads, so declining is a
+    real answer rather than a missing one."""
+    game, p1, perm = _shapeshifter(set_pool, chosen=2)
+    game.active_player_index = 0
+
+    game.resolve_upkeep(0)
+    game._settle()
+    game.confirm_optional_pay(0, card_name="Shapeshifter", accept=False)
+
+    assert (perm.effective_power, perm.effective_toughness) == (2, 5)
