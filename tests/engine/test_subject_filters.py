@@ -45,6 +45,10 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # what makes this row a demonstration of AND rather than a second copy of
     # the row above.
     ("subtype_filter_all", {"subtype_filter_all": ["bear", "wall"]}, "Grizzly Bears"),
+    # "target **artifact creature**" — one permanent that is both. Grizzly
+    # Bears is a creature and not an artifact, so a union would accept it on
+    # the "creature" alternative, exactly as with the subtype row above.
+    ("type_filter_all", {"type_filter_all": ["artifact", "creature"]}, "Grizzly Bears"),
     ("color_filter", {"color_filter": "W"}, "Grizzly Bears"),
     ("exclude_colors", {"exclude_colors": ["G"]}, "Grizzly Bears"),
     ("exclude_types", {"exclude_types": ["creature"]}, "Grizzly Bears"),
@@ -182,6 +186,25 @@ _COVERED_ELSEWHERE = {
     "controller": "test_the_relative_keys_refuse_without_the_context_they_need",
     "exclude_self": "test_the_relative_keys_refuse_without_the_context_they_need",
 }
+
+
+def test_a_conjunction_of_types_matches_only_a_permanent_that_is_both(pool):
+    """The positive half. An artifact creature answers "artifact creature";
+    neither of its halves does on its own."""
+    thopter = Permanent(card=pool["Ornithopter"])
+    bears = Permanent(card=pool["Grizzly Bears"])
+    lotus = Permanent(card=pool["Black Lotus"])
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[thopter, bears, lotus]),
+            PlayerState(name="P2"),
+        ]
+    )
+    both = {"type_filter_all": ["artifact", "creature"]}
+
+    assert subject_matches(game, thopter, both)
+    assert not subject_matches(game, bears, both)
+    assert not subject_matches(game, lotus, both)
 
 
 def test_a_conjunction_of_subtypes_matches_a_permanent_carrying_both(pool):

@@ -835,3 +835,53 @@ refuses.
 ceiling unmoved, suite green at 6597. No hook added. One guard fired and was
 right: `test_every_pattern_has_an_example` wanted a canonical text for the new
 kind.
+
+## ATQ round 4: three ways to say "artifact", and one filter key that was owed
+
+*(2026-08-21.)* **50 → 53.** Argivian Blacksmith, Argothian Treefolk and
+Argothian Pixies. The round is really one observation: Antiquities keeps naming
+a *class of object* where the engine had only ever been asked about a single
+type, and the answer is the same each time — make the noun phrase payload, and
+ask the one matcher.
+
+**`type_filter_all` was a debt from round 2 and cost one card.** The grammar has
+drawn "artifact **creature**" apart from "artifact, creature, **or** land"
+since `ObjectFilter` had a `type_match` field: it emitted `type_filter_all` and
+lowering refused the line, because nothing answered it. Round 2 added the
+symmetric key for subtypes and left this one; Argivian Blacksmith needed
+nothing else. Both matchers answer it now and `test_subject_filters.py`
+demonstrates it in both directions — the rejection row is Grizzly Bears, which a
+union would *accept* on the "creature" alternative.
+
+**A source class is a shield narrowing.** `_source_matches` already narrowed by
+the chosen source (CR 615.8) and by colour (the Circles); "by artifact sources"
+is the same question with a different property, so it is one text table, one
+predicate and one interceptor in the `SOURCE_TYPE_BLANKET` band — beside the
+other blankets, because it has no charges and applying it costs its recipient
+nothing. `source_has_type` asks a Permanent through the layer system, so an
+*animated* artifact land is an artifact source; reading its printed line would
+have said otherwise.
+
+**One block restriction became one rule.** `combat_restrictions.py` held
+`cant_be_blocked_by_walls` — a whole kind for one noun — and the blockers step
+tested it with a literal `has_type("wall")`. The noun is payload now, so
+Argothian Pixies and Artifact Ward's blocking line cost a table row rather than
+a branch, and the enforcement site asks `subject_matches` (which reads layer 4,
+so Primal Clay's Wall body and an animated artifact both answer correctly).
+
+Two things this widening had to get right, and one of them was caught by a
+guard rather than by me. The bare-plural pattern reads any noun ("by walls"),
+which is what keeps it from needing a 350-entry alternation — but a word the
+vocabulary has never heard of would build a filter matching nothing, the
+restriction would go **inert**, and the creature would be blockable by anything.
+That is the widening direction, so the line refuses and its card is reported
+unsupported. And `test_grammar_derived_lines` failed on the rename, naming
+`cant_be_blocked_by_walls` in its unclaimed-kinds set — Phase 3's "grep for
+readers keyed on the old classification", working as a guard instead of as a
+grep.
+
+**Numbers.** ATQ 50 → 53. Shipped pool 668/668, every floor and ceiling
+unmoved, suite green at 6603. No hook added. Circle of Protection: Artifacts and
+Rakalite are still out — both are *activated* prevention with riders (a chosen
+source of a class; a delayed self-return), not the static shield this round
+built.

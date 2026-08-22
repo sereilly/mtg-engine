@@ -469,13 +469,32 @@ class DeclareBlockersStepMixin:
         if self._is_protected_from(attacker, blocker):
             return False
 
-        # `has_type`, not the printed line. Three lines below, Invisibility's
-        # mirror restriction already asked it that way — so the same question
-        # about the same creature had two answers in one function, and they
-        # disagreed for anything that *became* a Wall (Primal Clay's third
-        # body) or stopped being one.
-        if "cant_be_blocked_by_walls" in attacker_kinds and blocker.has_type("wall"):
-            return False
+        # "…can't be blocked by Walls" / "…by artifact creatures" — one
+        # restriction whose noun phrase is payload (engine/combat_restrictions).
+        # It used to be a Wall-only kind tested with a literal `has_type("wall")`;
+        # the phrase is a filter now, so Argothian Pixies and Artifact Ward cost
+        # a table row rather than a second branch here.
+        #
+        # Asked of `subject_matches`, which reads the layer system: an animated
+        # artifact land *is* an artifact creature (613 layer 4) and Primal Clay's
+        # third body *is* a Wall, and the printed line says otherwise for both.
+        from ..subject_filters import subject_matches
+
+        for restriction in attacker_program.instructions:
+            if restriction.kind != "cant_be_blocked_by":
+                continue
+            described = {}
+            subtype = restriction.payload.get("blocker_subtype")
+            if subtype:
+                described["subtype_filter"] = subtype
+            blocker_type = restriction.payload.get("blocker_type")
+            if blocker_type:
+                # "artifact **creatures**" — both halves, so a non-creature
+                # artifact (which could not block anyway) is not what is
+                # described and an animated one is.
+                described["type_filter_all"] = [blocker_type, "creature"]
+            if described and subject_matches(self, blocker, described):
+                return False
 
         # Invisibility: attacker can only be blocked by Walls
         # Invisibility. Asked of the Auras attached right now, so the

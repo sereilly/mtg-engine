@@ -27,10 +27,6 @@ from ..errors import LoweringError
 def _filter_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     """A filter's payload, refusing shapes no handler implements."""
     payload = filt.to_payload()
-    if "type_filter_all" in payload:
-        raise LoweringError(
-            "no handler matches a permanent that is several types at once", node=filt
-        )
     # `to_payload` cannot express a zone, so every handler reached through here
     # searches the battlefield. Emitting a graveyard-scoped filter as a plain
     # one would point the handler — and engine/targeting.py's picker — at the

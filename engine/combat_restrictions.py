@@ -21,6 +21,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from .grammar.vocabulary import CREATURE_TYPES
+
 # Basic land types a "controls a <type>" clause can name. Restricted to the five
 # basics deliberately: the enforcing check in declare_attackers_step scopes its
 # search to lands, and a nonbasic type would need the same scoping decided
@@ -51,7 +53,7 @@ class CombatRestriction:
 #   cant_attack                     phases/declare_attackers_step.can_attack
 #   cant_block                      phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
-#   cant_be_blocked_by_walls        phases/declare_blockers_step
+#   cant_be_blocked_by              phases/declare_blockers_step
 #   cant_block_power_n_or_greater   phases/declare_blockers_step
 #   can_block_only_with_keyword     phases/declare_blockers_step
 #   must_be_blocked                 phases/declare_blockers_step
@@ -83,7 +85,25 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # would have to know which cards are tokens.
     (re.compile(r"^this (?:creature|token) can't block$"), "cant_block"),
     (re.compile(r"^this creature attacks each combat if able$"), "must_attack_each_combat"),
-    (re.compile(r"^this creature can't be blocked by walls$"), "cant_be_blocked_by_walls"),
+    # "…can't be blocked by **Walls**" (Invisibility's mirror, Ali Baba's
+    # targets) and "…can't be blocked by **artifact creatures**" (Argothian
+    # Pixies, Artifact Ward). One restriction: what differs is the noun phrase,
+    # which is payload for the same reason the land type and the power
+    # threshold in this file are. Two rows because a subtype and a card type
+    # are different captures, not because they are different rules — both
+    # produce `cant_be_blocked_by` and one enforcement site asks
+    # `subject_matches` about the blocker.
+    (
+        re.compile(r"^this creature can't be blocked by (?P<blocker_subtype>[a-z]+)s$"),
+        "cant_be_blocked_by",
+    ),
+    (
+        re.compile(
+            r"^this creature can't be blocked by "
+            r"(?P<blocker_type>artifact|enchantment|land) creatures$"
+        ),
+        "cant_be_blocked_by",
+    ),
     # A blocking *requirement* rather than a restriction (CR 509.1c), and
     # weaker than Lure's: **one** able creature must block it, not every
     # able creature. The two are enforced a dozen lines apart in the
@@ -144,5 +164,15 @@ def combat_restriction_for(normalized_line: str) -> CombatRestriction | None:
                 payload[key] = number
                 continue
             payload[key] = value
+        # A captured subtype must actually be one. The blocker pattern above
+        # reads any bare plural noun ("by walls"), which is what keeps it from
+        # needing a 350-entry alternation — but a word the vocabulary has never
+        # heard of would produce a filter matching nothing, the restriction
+        # would go inert, and the creature would be blockable by anything. That
+        # is the widening direction, so the line refuses instead and its card is
+        # reported unsupported naming the clause.
+        subtype = payload.get("blocker_subtype")
+        if subtype is not None and subtype not in CREATURE_TYPES:
+            return None
         return CombatRestriction(kind, payload)
     return None

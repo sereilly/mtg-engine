@@ -89,6 +89,11 @@ COMBAT_BLANKET = 10  # "Prevent all combat damage that would be dealt this turn"
 # no charges, so applying it costs its recipient nothing.
 COMBAT_BLANKET_SCOPED = 11
 COMBAT_SHIELD = 20  # "…dealt to and dealt by that creature this turn"
+# "Prevent all damage that would be dealt to this creature by artifact
+# sources." (Argothian Treefolk.) A permanent's own blanket shield against a
+# class of source — no charges, so applying it costs its recipient nothing, and
+# it belongs with the other blankets rather than with the consumables below.
+SOURCE_TYPE_BLANKET = 25
 SOURCE_CAP = 100  # Forcefield against a chosen attacker
 GENERIC_CAP = 200  # Forcefield with no chosen attacker
 SOURCE_SHIELD = 300  # Reverse Damage against a chosen source
@@ -200,6 +205,23 @@ def source_colors(source) -> tuple[str, ...]:
         return (str(meta["color_override"]),)
     card = getattr(source, "card", source)
     return tuple(getattr(card, "colors", ()) or ())
+
+
+def source_has_type(game, source, card_type: str) -> bool:
+    """Whether a damage source is of *card_type* ("artifact", "creature", …).
+
+    A source is a Permanent or, for a spell, the CardDefinition itself
+    (CR 109.5), so both shapes are read. A permanent answers through the layer
+    system — an animated artifact land *is* an artifact source, and reading its
+    printed line would say otherwise — and a card in no zone has only what is
+    printed on it.
+    """
+    if source is None:
+        return False
+    if hasattr(source, "has_type"):
+        return bool(source.has_type(card_type))
+    card = getattr(source, "card", source)
+    return card_type in (getattr(card, "type_line", "") or "").lower()
 
 
 # Ebony Horse: "Prevent all combat damage that would be dealt to and dealt by
@@ -500,6 +522,68 @@ def prevent_and_count_kind(line: str) -> str | None:
     return match.group("counter") if match else None
 
 
+#: "Prevent all damage that would be dealt to this creature by artifact
+#: sources." (Argothian Treefolk.) / "…by artifact creatures." (Argothian
+#: Pixies.) The source class is payload, the way every other text-keyed table
+#: here holds its parameter — a card printed "by red sources" needs no code.
+#:
+#: Anchored at both ends. A line saying more than this is a prevention this
+#: file does not implement, and a prefix match would claim it and then enforce
+#: the narrower rule, which is damage prevented that the card does not prevent.
+_PREVENT_ALL_FROM_SOURCE_TYPE_RE = re.compile(
+    r"^prevent all damage that would be dealt to this "
+    r"(?:artifact|creature|enchantment|land|permanent) by "
+    r"(?P<source_type>artifact|creature|enchantment|land) "
+    r"(?:sources|creatures|artifacts|permanents)$"
+)
+
+
+def prevent_all_from_source_type(line: str) -> str | None:
+    """The class of source *line* shields against, or None if it is not that
+    line. One matcher, asked by the interceptor below and by the claim reader,
+    so what is implemented and what is claimed cannot drift."""
+    match = _PREVENT_ALL_FROM_SOURCE_TYPE_RE.match(
+        " ".join(line.strip().lower().rstrip(".").split())
+    )
+    return match.group("source_type") if match else None
+
+
+def _source_type_shielded_by(game, event: dict) -> str | None:
+    """The source class the damaged *permanent*'s own text shields it against.
+
+    Pure: it reads the recipient's text and answers, spending nothing. The
+    recipient must be the permanent printing the line — this is "dealt to
+    **this** creature", so a second copy on the battlefield shields itself and
+    not its twin.
+    """
+    recipient = event["recipient"]
+    if isinstance(recipient, PlayerState) or recipient is None:
+        return None
+    for line in getattr(recipient, "effective_card", recipient.card).oracle_text.splitlines():
+        source_type = prevent_all_from_source_type(line)
+        if source_type is not None:
+            return source_type
+    return None
+
+
+def _applies_source_type_blanket(game, event: dict) -> bool:
+    source_type = _source_type_shielded_by(game, event)
+    return source_type is not None and source_has_type(game, event.get("source"), source_type)
+
+
+@prevention_effect(SOURCE_TYPE_BLANKET, applies=_applies_source_type_blanket)
+def _prevent_all_from_source_type(game, event: dict) -> PreventionOutcome | None:
+    source_type = _source_type_shielded_by(game, event)
+    if source_type is None:
+        return None
+    recipient = event["recipient"]
+    game.log.append(
+        f"{recipient.card.name} prevented {event['amount']} damage "
+        f"from an {source_type} source"
+    )
+    return PreventionOutcome(prevented=event["amount"])
+
+
 def _static_prevention_source(game, event: dict):
     """The recipient's own permanent whose static prevention covers this event,
     with the counter it charges — or None.
@@ -638,4 +722,8 @@ def prevention_claims_line(line: str) -> bool:
     nothing; a card printing only this one would have reported unsupported while
     working perfectly, which is the other half of the same hole.
     """
-    return prevent_and_count_kind(line) is not None or per_damage_counter_kind(line) is not None
+    return (
+        prevent_and_count_kind(line) is not None
+        or per_damage_counter_kind(line) is not None
+        or prevent_all_from_source_type(line) is not None
+    )

@@ -22,7 +22,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.9% | 78.7% | 43.4% | 152 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 52.5% | 50.8% | 33.3% | 36 |
+| ATQ *(measured)* | 85 | 120 | 54.2% | 53.3% | 34.2% | 37 |
 | **All (shipped)** | **1533** | **2166** | **80.7%** | **79.5%** | **46.7%** | **876** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -35,7 +35,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | ---: | ---: | --- | --- |
 | 204 | 83 | expected a subject |  |
 | 92 | 35 | unrecognized effect verb |  |
-| 54 | 32 | unconsumed text |  |
+| 52 | 30 | unconsumed text |  |
 | 30 | 30 | unrecognized activation cost |  |
 | 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 9 | 4 | expected 'the number of' in a where-clause |  |
@@ -99,6 +99,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `When this creature enters, if it entered from your graveyard or you cast it from your graveyard, exile it. If you do, create a 5/5 black Demon creature token with flying.`
 - **Argivian Archaeologist**
   - `{W}{W}, {T}: Return target artifact card from your graveyard to your hand.`
+- **Argivian Blacksmith**
+  - `{T}: Prevent the next 2 damage that would be dealt to target artifact creature this turn.`
 - **Armageddon**
   - `Destroy all lands.`
   - `Destroy all lands.`

@@ -185,6 +185,14 @@ def _card_matches_filter(card, filt: dict) -> bool:
     wanted_all_subtypes = filt.get("subtype_filter_all") or ()
     if wanted_all_subtypes and not all(s in subtypes for s in wanted_all_subtypes):
         return False
+    # The card-level twin of `type_filter_all`: "an **artifact creature** card".
+    # Off the printed type line, which for a card in a zone is the whole of
+    # what there is (CR 613.1).
+    wanted_all_types = filt.get("type_filter_all") or ()
+    if wanted_all_types:
+        printed = (card.type_line or "").lower()
+        if not all(name in printed for name in wanted_all_types):
+            return False
     # "Discard a **legendary** card" (Niambi, Esteemed Speaker). Off the printed
     # line, which for a card in a zone is the whole of what there is (CR 613.1).
     wanted_supertypes = filt.get("supertypes") or ()
@@ -400,6 +408,15 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     subtype_filter_all = payload.get("subtype_filter_all")
     if subtype_filter_all:
         if not all(perm.has_type(s) for s in subtype_filter_all):
+            return False
+    # "target **artifact creature**" — one permanent that is both types, as
+    # against "target artifact, creature, or land", which is a union. The
+    # grammar has drawn this distinction since it had a `type_match` field; it
+    # emitted `type_filter_all` and lowering refused the line, because no
+    # matcher answered it. This is that matcher.
+    type_filter_all = payload.get("type_filter_all")
+    if type_filter_all:
+        if not all(_has_type(name) for name in type_filter_all):
             return False
     if tapped_only and not perm.tapped:
         return False

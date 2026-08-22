@@ -113,7 +113,11 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
     # that parses to nothing is the silent drop this whole invariant exists to
     # prevent.
     unclaimed_kinds = {
-        "must_attack_each_combat", "cant_be_blocked_by_walls", "cant_attack", "cant_block",
+        # `cant_be_blocked_by` covers both printed spellings — "by Walls" and
+        # "by artifact creatures" — since the noun phrase became payload. The
+        # grammar reads neither, so the derivation table is still the only
+        # implementer and the line must keep failing the parser.
+        "must_attack_each_combat", "cant_be_blocked_by", "cant_attack", "cant_block",
         # "This creature can block only creatures with flying." (Shacklegeist,
         # M21's first printing of the shape.) The derivation table implements it
         # and the declare-blockers step dispatches on it; the grammar has no
