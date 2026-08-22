@@ -118,6 +118,27 @@ class EndStepMixin:
         for name in destroyed_names:
             self.log.append(f"{name} was destroyed at end step")
 
+        # "Return this artifact to its owner's hand at the beginning of the
+        # next end step." (Rakalite.) The bounce twin of the destruction sweep
+        # above, and beside it rather than folded in: a delayed *removal* and a
+        # delayed *return* end in different zones, and the sweep above is
+        # explicitly the one that does not offer regeneration because its flags
+        # conflate sacrifice with destruction. Nothing about that reasoning
+        # extends to a bounce.
+        for controller in list(self.players):
+            for permanent in list(self.controlled_by(controller)):
+                if not permanent.metadata.pop("bounce_at_next_end_step", False):
+                    continue
+                owner_index = self.owner_index_of(permanent)
+                owner = (
+                    self.players[owner_index] if owner_index is not None else controller
+                )
+                self.remove_from_battlefield(permanent)
+                self.put_card_into_hand(owner, permanent.card)
+                self.log.append(
+                    f"{permanent.card.name} returned to {owner.name}'s hand at end step"
+                )
+
         # "At the beginning of the end step" triggered abilities go on the stack
         # (CR 603.3) and resolve through the end-step priority window opened below.
         events: list[dict] = []

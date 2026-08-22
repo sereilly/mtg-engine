@@ -51,6 +51,7 @@ from .characteristics import (
 from .board import (
     _parse_sacrifice,
     _parse_sacrifice_expansion_permanents,
+    _parse_delayed_self_action,
     _parse_shuffle_graveyard_into_library,
     _parse_gain_control,
     _parse_return,
@@ -128,6 +129,7 @@ __all__ = [
     "_parse_draw",
     "_parse_sacrifice",
     "_parse_sacrifice_expansion_permanents",
+    "_parse_delayed_self_action",
     "_parse_shuffle_graveyard_into_library",
     "_parse_discard",
     "_parse_mill",

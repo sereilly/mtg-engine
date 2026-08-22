@@ -682,3 +682,20 @@ def _lower_doesnt_untap_while_source_tapped(
             node=node,
         )
     return (OracleInstruction("restrict_untap_while_source_tapped", "", {}),)
+
+
+def _lower_delayed_self_action(
+    node: ast.DelayedSelfAction,
+) -> tuple[OracleInstruction, ...]:
+    """Rocket Launcher / Rakalite. The action is payload, the delay is the kind
+    — because what a reader downstream must not get wrong is *when*."""
+    return (
+        OracleInstruction(
+            # Keyed `self_action`, not `action`: a payload key called
+            # "action" is read as *nested instructions* by the composition
+            # readers (test_front_end_safety's flattener among them), and a
+            # bare word sitting where a list of steps is expected is a crash
+            # rather than a wrong answer — but only because something looked.
+            "arm_self_action_at_next_end_step", "", {"self_action": node.action}
+        ),
+    )

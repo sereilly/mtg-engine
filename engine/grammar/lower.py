@@ -128,6 +128,7 @@ from .lowering import (
     _lower_search_library,
     _lower_set_base_pt,
     _lower_doesnt_untap_next_step,
+    _lower_delayed_self_action,
     _lower_doesnt_untap_while_source_tapped,
     _lower_condition,
     _lower_tap,
@@ -203,6 +204,8 @@ def lower_statement(
         # `produced` is the whole gate: this sentence acts on what an earlier
         # step of the same effect recorded, so it refuses when nothing did.
         return _lower_doesnt_untap_next_step(statement, produced)
+    if isinstance(statement, ast.DelayedSelfAction):
+        return _lower_delayed_self_action(statement)
     if isinstance(statement, ast.DoesntUntapWhileSourceTapped):
         return _lower_doesnt_untap_while_source_tapped(statement)
     if isinstance(statement, (ast.Tap, ast.Untap)):

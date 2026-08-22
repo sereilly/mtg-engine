@@ -35,6 +35,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "shuffle_graveyard_into_library": "zones",
     "gain_type": "characteristics",
     "restrict_untap_while_source_tapped": "tapping",
+    "arm_self_action_at_next_end_step": "destruction",
     "add_power_counters_to_self": "counters",
     # One pump per chosen slot, each with its own P/T delta (Rookie Mistake).
     # The same category as the one-target pump above: what differs is how many

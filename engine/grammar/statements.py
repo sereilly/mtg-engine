@@ -63,6 +63,7 @@ from .effects import (
     _parse_reveal_top,
     _parse_sacrifice,
     _parse_sacrifice_expansion_permanents,
+    _parse_delayed_self_action,
     _parse_shuffle_graveyard_into_library,
     _parse_search_library,
     _parse_doesnt_untap_next_step,
@@ -459,6 +460,13 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     graveyard_shuffle = _parse_shuffle_graveyard_into_library(stream)
     if graveyard_shuffle is not None:
         return graveyard_shuffle
+    # "Destroy this artifact at the beginning of the next end step." (Rocket
+    # Launcher, Rakalite.) Read before the plain destroy/return productions,
+    # whose sentences are this one's prefix — matched first they would perform
+    # the action immediately, which is the opposite of what the card says.
+    delayed_self = _parse_delayed_self_action(stream)
+    if delayed_self is not None:
+        return delayed_self
     # "[Until end of turn,] you may play/cast <cards> [this turn] […]" — a
     # cast-or-play permission (CR 601.3). Tried before the "you may" wrapper
     # below: the permission IS the sentence's whole effect, where the wrapper

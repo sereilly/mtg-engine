@@ -20,10 +20,10 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | LEB | 292 | 389 | 80.2% | 79.2% | 42.9% | 153 |
 | 2ED | 292 | 389 | 80.2% | 79.2% | 42.9% | 153 |
 | ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
-| 3ED | 296 | 389 | 80.7% | 79.4% | 44.0% | 154 |
+| 3ED | 296 | 389 | 81.0% | 79.7% | 44.2% | 155 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| ATQ *(measured)* | 85 | 120 | 74.2% | 73.3% | 49.2% | 55 |
-| **All (shipped)** | **1533** | **2166** | **81.3%** | **80.1%** | **47.1%** | **884** |
+| ATQ *(measured)* | 85 | 120 | 75.8% | 75.0% | 50.8% | 57 |
+| **All (shipped)** | **1533** | **2166** | **81.3%** | **80.1%** | **47.1%** | **885** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -35,7 +35,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 | ---: | ---: | --- | --- |
 | 186 | 71 | expected a subject |  |
 | 87 | 31 | unrecognized effect verb |  |
-| 53 | 28 | unconsumed text |  |
+| 50 | 26 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
 | 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 9 | 4 | expected 'the number of' in a where-clause |  |
@@ -61,7 +61,7 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
 
 ## Cards executing through the grammar
 
-884 cards, 1020 lines.
+885 cards, 1021 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -1084,6 +1084,8 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
   - `Return target creature card from your graveyard to your hand.`
   - `Return target creature card from your graveyard to your hand.`
   - `Return target creature card from your graveyard to your hand.`
+- **Rakalite**
+  - `{2}: Prevent the next 1 damage that would be dealt to any target this turn. Return this artifact to its owner's hand at the beginning of the next end step.`
 - **Rambunctious Mutt**
   - `When this creature enters, destroy target artifact or enchantment an opponent controls.`
 - **Ranger's Guile**
@@ -1152,6 +1154,9 @@ Categories currently switched on: `attachments, characteristics, coin_flips, com
   - `{R}{R}{R}: Put a +1/+1 counter on this creature. Activate only during your upkeep.`
   - `{R}: Prevent the next 1 damage that would be dealt to this creature this turn.`
   - `{R}{R}{R}: Put a +1/+1 counter on this creature. Activate only during your upkeep.`
+- **Rocket Launcher**
+  - `{2}: This artifact deals 1 damage to any target. Destroy this artifact at the beginning of the next end step. Activate only if you've controlled this artifact continuously since the beginning of your most recent turn.`
+  - `{2}: This artifact deals 1 damage to any target. Destroy this artifact at the beginning of the next end step. Activate only if you've controlled this artifact continuously since the beginning of your most recent turn.`
 - **Rod of Ruin**
   - `{3}, {T}: This artifact deals 1 damage to any target.`
   - `{3}, {T}: This artifact deals 1 damage to any target.`

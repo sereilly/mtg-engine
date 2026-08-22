@@ -108,6 +108,7 @@ from .characteristics import (
 )
 from .board import (
     SacrificeExpansionPermanents,
+    DelayedSelfAction,
     DoesntUntapWhileSourceTapped,
     ShuffleGraveyardIntoLibrary,
     Attach,
@@ -235,6 +236,7 @@ __all__ = [
     "RevealedCardIs",
     "Controls",
     "SacrificeExpansionPermanents",
+    "DelayedSelfAction",
     "DoesntUntapWhileSourceTapped",
     "ShuffleGraveyardIntoLibrary",
     "EveryOf",

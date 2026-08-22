@@ -363,3 +363,43 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
         stream.reset(mark)
         return None
     return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"))
+
+
+def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
+    """``Destroy this artifact at the beginning of the next end step.`` /
+    ``Return this artifact to its owner's hand at the beginning of the next end
+    step.``
+
+    The whole sentence, delay included, because the action on its own is
+    performed *now* — an artifact that destroys itself the moment its ability
+    resolves is a different card from one that survives until the end step.
+    Every word of the timing is required for the same reason the "next" in
+    ``_parse_doesnt_untap_next_step`` is.
+    """
+    mark = stream.mark()
+    if stream.accept_word("destroy"):
+        action = "destroy"
+    elif stream.accept_word("return"):
+        action = "bounce"
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("this"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word(
+        "artifact", "creature", "enchantment", "land", "permanent"
+    ):
+        stream.reset(mark)
+        return None
+    if action == "bounce" and not stream.accept_phrase(
+        "to", "its", "owner", "'s", "hand"
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "at", "the", "beginning", "of", "the", "next", "end", "step"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.DelayedSelfAction(action)

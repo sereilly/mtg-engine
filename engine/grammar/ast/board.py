@@ -243,3 +243,19 @@ class DoesntUntapWhileSourceTapped:
     step at all.
     """
     subject: Recipient
+
+
+@dataclass(frozen=True)
+class DelayedSelfAction:
+    """``Destroy this artifact at the beginning of the next end step.`` (Rocket
+    Launcher.) ``Return this artifact to its owner's hand at the beginning of
+    the next end step.`` (Rakalite.)
+
+    A delayed triggered ability (CR 603.7): the effect creates it now and it
+    fires once, at a moment fixed when it was created. One node for both
+    actions because the *delay* is the whole content — what happens when it
+    fires is a word — and one node for the whole sentence because the action
+    alone would be performed immediately, which is the opposite of what the
+    card says.
+    """
+    action: str   # destroy | bounce

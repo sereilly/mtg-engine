@@ -394,3 +394,29 @@ def sacrifice_expansion_permanents(game: Game, instruction: OracleInstruction, c
         game.log.append(f"{perm.card.name} sacrificed ({context.card.name})")
     game.remove_all_from_battlefield([perm for _seat, perm in doomed])
     return True, "resolved"
+
+
+@effect_handler("arm_self_action_at_next_end_step")
+def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Destroy this artifact at the beginning of the next end step." (Rocket
+    Launcher.) "Return this artifact to its owner's hand …" (Rakalite.)
+
+    Creates a delayed triggered ability (CR 603.7) rather than doing anything
+    now. The permanent is recorded by ``permanent_id``, so one that leaves and
+    comes back is a new object (CR 400.7) and the ability that was waiting for
+    the old one finds nothing — which is right: the delayed trigger names the
+    object it was created for, not whatever is standing in its place.
+    """
+    source = context.source_permanent
+    if source is None:
+        return False, "ability not implemented"
+    # Onto the flags the end step's existing delayed-removal sweep already
+    # reads. Rocket Launcher's self-destruction has been marked this way since
+    # before the grammar could read its sentence — the damage handler set it
+    # from a payload flag — so writing a second queue beside it would have been
+    # two mechanisms for one rule, and the *older* one is the one every other
+    # delayed removal in the engine (Dragon Whelp, Berserk) already uses.
+    action = str(instruction.payload.get("self_action", "destroy"))
+    key = "bounce_at_next_end_step" if action == "bounce" else "destroy_at_next_end_step"
+    source.metadata[key] = True
+    return True, "resolved"

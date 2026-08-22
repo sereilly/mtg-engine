@@ -24,10 +24,10 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 | LEB | 292 | 292 (100.0%) | 51 (17.5%) | 389 | 46 (11.8%) | 55 | 18.8 |
 | 2ED | 292 | 292 (100.0%) | 51 (17.5%) | 389 | 46 (11.8%) | 55 | 18.8 |
 | ARN | 78 | 78 (100.0%) | 32 (41.0%) | 107 | 30 (28.0%) | 35 | 44.9 |
-| 3ED | 296 | 296 (100.0%) | 54 (18.2%) | 389 | 47 (12.1%) | 56 | 18.9 |
+| 3ED | 296 | 296 (100.0%) | 54 (18.2%) | 389 | 46 (11.8%) | 56 | 18.9 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ATQ *(measured)* | 85 | 76 (89.4%) | 9 (11.8%) | 102 | 7 (6.9%) | 8 | 10.5 |
-| **ALL (shipped, deduped)** | **668** | **668 (100.0%)** | **92 (13.8%)** | **1022** | **83 (8.1%)** | **98** | **14.7** |
+| ATQ *(measured)* | 85 | 77 (90.6%) | 9 (11.7%) | 103 | 6 (5.8%) | 8 | 10.4 |
+| **ALL (shipped, deduped)** | **668** | **668 (100.0%)** | **92 (13.8%)** | **1022** | **82 (8.0%)** | **98** | **14.7** |
 
 *(measured)* — ATQ are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 

@@ -1534,3 +1534,49 @@ that does not exist.
 **Numbers.** ATQ 75 → 76; grammar unchanged (the line is a derived replacement,
 not a parsed one). Shipped pool 668/668, floors and ceilings unmoved, suite
 green at 6650, no hook added.
+
+## ATQ round 21: a delayed trigger, and a queue that already existed
+
+*(2026-08-21.)* **76 → 77.** Rakalite — "{2}: Prevent the next 1 damage that
+would be dealt to any target this turn. **Return this artifact to its owner's
+hand at the beginning of the next end step.**"
+
+The prevention half has worked since Amulet of Kroog. The second sentence is a
+delayed triggered ability (CR 603.7), and it is one production for the whole
+sentence rather than an action plus a rider — the action alone is performed
+*now*, and an artifact that bounces itself the moment its ability resolves can
+be used once per turn cycle instead of once per activation. Every word of the
+timing is required, for the reason `_parse_doesnt_untap_next_step` gives about
+its "next".
+
+### The part worth recording: the queue I wrote and deleted
+
+The first version added `Game.pending_end_step_self_actions` — a list of
+`{permanent_id, action}` drained at the end step, modelled on
+`pending_end_step_tokens` beside it. It worked, and it was a **second copy**.
+Rocket Launcher's "Destroy this artifact at the beginning of the next end step"
+has been implemented since before the grammar could read that sentence: the
+damage handler sets `destroy_at_next_end_step` from a payload flag, and the end
+step already sweeps it — along with `sacrifice_at_next_end_step`, Dragon
+Whelp's and Berserk's. My census had listed Rocket Launcher as degraded on the
+strength of a refused *grammar* line, which is exactly the mistake round 5
+recorded about Ashnod's Battle Gear: **a line the grammar refuses is not a line
+nothing implements.**
+
+So the handler writes the flag the sweep already reads, and the bounce gets a
+pass beside the destruction rather than inside it — the two end in different
+zones, and that sweep is explicitly the one that offers no regeneration because
+its flags conflate sacrifice with destruction, reasoning that does not extend to
+a return.
+
+**Two guards caught the duplicate before I did.**
+`test_game_carries_no_per_card_pending_field` names the `pending_*` fields
+`Game` may carry and refused the new one. And `test_front_end_safety` crashed on
+a payload key called `action`: that name is read as *nested instructions* by the
+composition flatteners, so a bare word sitting where a list of steps belongs is
+an `AttributeError` rather than a wrong answer — but only because something
+looked. The key is `self_action` now.
+
+**Numbers.** ATQ 76 → 77; grammar parses 74.2% → 75.8% of its lines, executes
+49.2% → 50.8%. Shipped pool 668/668, floors and ceilings unmoved, suite green
+at 6655, no hook added and no new `Game` field.

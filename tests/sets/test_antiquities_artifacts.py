@@ -467,3 +467,50 @@ def test_urzas_miter_stays_quiet_when_the_artifact_was_sacrificed(set_pool):
     assert game.stack == [], (
         "the Miter fires more often than it prints if the qualifier is dropped"
     )
+
+
+# ---------------------------------------------------------------------------
+# Rakalite (round 21) — a delayed triggered ability on itself
+# ---------------------------------------------------------------------------
+
+
+def test_rakalite_prevents_one_damage_and_returns_itself(set_pool):
+    from engine.damage_events import deal_damage
+
+    pool = set_pool("ATQ")
+    rakalite = Permanent(card=pool["Rakalite"])
+    p1 = PlayerState(name="P1", battlefield=[rakalite])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Rakalite", target_player_index=0)
+    outcome = deal_damage(
+        game, {"recipient": p1, "amount": 3, "source": None, "combat": False}
+    )
+
+    assert outcome.dealt == 2, "one of the three prevented"
+    assert "Rakalite" in {perm.card.name for perm in game.all_permanents()}, (
+        "it is still there until the end step — the return is delayed (CR 603.7)"
+    )
+
+    game.resolve_end_step(0)
+
+    assert "Rakalite" not in {perm.card.name for perm in game.all_permanents()}
+    assert [card.name for card in p1.hand] == ["Rakalite"]
+
+
+def test_the_return_is_delayed_not_immediate(set_pool):
+    """The whole sentence is one production for this reason: the action on its
+    own is performed *now*, and an artifact that bounces itself the moment its
+    ability resolves can only be used once per turn cycle instead of once per
+    activation."""
+    pool = set_pool("ATQ")
+    rakalite = Permanent(card=pool["Rakalite"])
+    p1 = PlayerState(name="P1", battlefield=[rakalite])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Rakalite", target_player_index=0)
+    game.activate_permanent_ability(0, "Rakalite", target_player_index=0)
+
+    assert p1.damage_prevention_pool == 2, "two activations, two shields"
