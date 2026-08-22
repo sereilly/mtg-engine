@@ -13,6 +13,8 @@ from ._common import (
     resolve_target_permanent,
     resolve_target_permanents,
 )
+# The runtime class. The bare name is a TYPE_CHECKING-only import above, and
+# two handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..resumption import run_resumable
 from ..search_filters import search_matches
@@ -1849,17 +1851,13 @@ def exile_graveyard_until_leaves(game: Game, instruction: OracleInstruction, con
     return True, "resolved"
 
 
-#: The counter records a permanent carries, as ``(metadata key, restore)`` —
-#: what to read when Tawnos's Coffin notes "the number and kind of counters"
-#: and what to do when it puts them back.
-#:
-#: +1/+1 counters are not a plain number: they are the P/T channel too
-#: (engine/pt.py), so restoring them by writing the record would give back the
-#: marker and not the size. Every other kind is CR 122.1's inert marker and its
-#: whole existence *is* the number.
 def _note_counters(permanent) -> dict[str, int]:
-    """Every counter on *permanent*, by kind. The keys are the engine's own
-    metadata spelling, so nothing has to enumerate which kinds exist."""
+    """Every counter on *permanent*, by kind — what Tawnos's Coffin "notes".
+
+    Keyed by the engine's own metadata spelling, so nothing here has to
+    enumerate which kinds of counter exist; :func:`restore_noted_counters` is
+    the half that knows +1/+1 is not a plain number.
+    """
     noted: dict[str, int] = {}
     for key, value in permanent.metadata.items():
         if not key.endswith("_counters") or not isinstance(value, int) or value <= 0:

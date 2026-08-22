@@ -105,29 +105,6 @@ UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRe
 )
 
 
-#: "You may choose not to untap this artifact during your untap step."
-#: (Old Man of the Sea, and Antiquities' three tapped-duration artifacts.) Not a
-#: restriction on untapping at all — it is a *permission* the untap step offers
-#: its controller — so it has no ``UntapRestriction`` and its own reader. The
-#: noun is payload for the reason every other one in this file is: the same
-#: sentence on a creature and on an artifact is the same permission.
-_OPTIONAL_UNTAP = re.compile(
-    r"^you may choose not to untap this "
-    r"(?:artifact|creature|enchantment|land|permanent) during your untap step$"
-)
-
-
-def optional_untap_line(line: str) -> bool:
-    """Whether one printed line is the "you may choose not to untap" permission.
-
-    Read by the untap step that offers it and by the parse-coverage report that
-    decides whether the sentence was read — one reader, two callers, so a
-    wording one of them accepted and the other did not cannot exist.
-    """
-    text = " ".join((line or "").strip().lower().rstrip(".").split())
-    return _OPTIONAL_UNTAP.match(text) is not None
-
-
 def _restriction_from_line(line: str) -> UntapRestriction | None:
     qualifier = _WHILE_UNTAPPED.match(line)
     only_while_untapped = qualifier is not None

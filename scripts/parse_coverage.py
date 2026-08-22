@@ -66,7 +66,7 @@ from engine.named_protection import named_protection_line  # noqa: E402
 from engine.target_restrictions import target_restriction_line  # noqa: E402
 from engine.land_play_allowance import land_play_line  # noqa: E402
 from engine.untap_restrictions import (  # noqa: E402
-    optional_untap_line,
+    self_untap_line,
     untap_restriction_for,
 )
 from engine.hand_size import hand_size_line  # noqa: E402
@@ -76,7 +76,6 @@ from engine.oracle import (  # noqa: E402
     _is_supported_static_creature_line,
     _parse_activated_ability,
     _parse_delayed_attack_trigger,
-    _planeswalker_static_line,
     _parse_loyalty_ability,
     _parse_trigger_condition,
     _parse_triggered_ability,
@@ -197,10 +196,11 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # whitelist producing a marker nothing performed.
     ("cast_costs.py", cast_cost_claims_line),
     ("untap_restrictions.py", lambda s: untap_restriction_for(s) is not None),
-    # "You may choose not to untap this artifact during your untap step." Not a
-    # restriction — a *permission* the untap step offers — so it has its own
-    # reader beside them, and this asks it rather than repeating the sentence.
-    ("untap_restrictions.py (optional untap)", optional_untap_line),
+    # The per-source untap lines — "this artifact doesn't untap during your
+    # untap step" and "you may choose not to untap this artifact …" — which the
+    # untap step reads off the permanent rather than compiling.
+    ("untap_restrictions.py (self untap line)",
+     lambda s: self_untap_line(s) is not None),
     # "The chosen player's maximum hand size is four." (Cursed Rack.) Asked of
     # the module the cleanup step enforces CR 402.2 with.
     ("hand_size.py", hand_size_line),

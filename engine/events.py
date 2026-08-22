@@ -30,7 +30,7 @@ converts to an ``emit`` without touching the cards.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Iterable
+from typing import TYPE_CHECKING, Callable
 
 from .subject_filters import subject_matches
 from .trigger_utils import iter_triggered_abilities, make_trigger_event

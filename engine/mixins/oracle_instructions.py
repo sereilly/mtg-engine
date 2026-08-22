@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import dataclasses
-import re
 
 from ..card_hooks import ON_SELF_RESOLVED
 from ..control import BASE_CONTROLLER, CONTROL_EFFECTS
 from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
-from ..handlers._common import X_FROM_COUNT, count_from_payload
+from ..handlers._common import count_from_payload
+from ..oracle_types import X_FROM_COUNT
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import attach_aura, aura_animates_artifact, aura_keyword_grants
 from ..auras import aura_enchant_clause, aura_enchants

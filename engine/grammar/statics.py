@@ -19,7 +19,7 @@ from ..lord_buffs import (LORD_BUFF_KIND, LordBuff, LordBuffFilter,
 from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
-from .lowering import _filter_payload, _is_source, _lower_pump, _signed
+from .lowering import _is_source, _lower_pump, _signed
 
 
 def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:

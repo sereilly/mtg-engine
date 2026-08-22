@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import Iterator
 
 from ..card_hooks import ON_LEAVE_BATTLEFIELD
 from ..auras import auras_attached_to, detach_aura

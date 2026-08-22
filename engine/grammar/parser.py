@@ -34,30 +34,23 @@ whole-pool snapshot of every compiled program and every line's parse result,
 diffed before and after.
 """
 
-import dataclasses
 import re
 from dataclasses import replace
 
 from ..oracle_types import strip_ability_word
 from . import ast
-from .amounts import parse_amount
 from .derived import derived_instruction_for_line
 from .errors import GrammarError
-from .lexer import (BULLET, MANA, PT, PUNCT, QUOTE, SELF, tokenize)
+from .lexer import (BULLET, PUNCT, QUOTE, tokenize)
 from .costs import _parse_costs
-from .nouns import parse_object_filter
-from .references import parse_target_spec
 from .registries import registry_for_line
 from .riders import (_RIDER_FOLDED, _attach_if_you_do, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .stream import TokenStream
-from .vocabulary import (COLOR_WORDS, KEYWORD_INDEX, match_longest)
+from .vocabulary import (KEYWORD_INDEX, match_longest)
 from .triggers import _parse_trigger_event
 from .effects import (
     _parse_activation_restriction,
-    _parse_create_token,
     _parse_damage_rider_sentence,
-    _parse_gains,
-    _parse_loses,
     _parse_unpaid_penalty_sentence,
 )
 from .statements import (

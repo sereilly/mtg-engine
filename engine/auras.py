@@ -12,12 +12,14 @@ requires every non-enchant line of an Aura to match something here, so an Aura
 whose effect is not implemented is reported unsupported (loud) instead of
 entering play and doing nothing.
 
-**This is classification, not dispatch.** The behaviour still lives in
-``mixins/oracle_instructions.py:_apply_aura_effect`` — a 270-line text-reading
-if-chain. Giving each of these entries a real ``ContinuousEffect`` owned by the
-Aura is the phase-6 job, and this table is the enumeration that work needs: 52
-distinct lines across 44 cards, every one appearing exactly once, which is the
-signature of a mechanism that grows one branch per card.
+**This is classification, not dispatch.** Much of the behaviour still lives in
+``mixins/oracle_instructions.py:_apply_aura_effect``, a text-reading if-chain,
+though the continuous halves have been migrating out of it a family at a time —
+the P/T grant, the keyword grants, the restrictions, the protection cycle and
+the artifact animation are all derived here now, from the Aura's own text on
+every recompute. What is left in that chain is the enumeration the rest of the
+migration needs: near enough one branch per card, which is the signature of a
+mechanism that grows with the pool rather than with the rules.
 
 Entries are ordered most-specific first, and each names the code that carries
 it out — a line recognized here but implemented nowhere is worse than one that

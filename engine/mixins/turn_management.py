@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import random
-import re
 
 from ..auras import aura_additional_mana_on_tap
 from ..card_hooks import ENCHANTED_LAND_TAPPED_FOR_MANA

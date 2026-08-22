@@ -20,12 +20,11 @@ from dataclasses import replace
 
 from . import ast
 from .errors import GrammarError
-from .lexer import (MANA, PT, PUNCT, SELF, tokenize)
+from .lexer import (MANA, PUNCT, tokenize)
 from .nouns import parse_object_filter
 from .references import parse_target_spec
 from .stream import TokenStream
-from .vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, KEYWORD_INDEX,
-                         NUMBER_WORDS, match_longest)
+from .vocabulary import (KEYWORD_INDEX, NUMBER_WORDS, match_longest)
 _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # "for as long as this artifact remains tapped" (Ashnod's Battle Gear,
     # Tawnos's Weaponry). A *linked* duration: it ends when the source untaps

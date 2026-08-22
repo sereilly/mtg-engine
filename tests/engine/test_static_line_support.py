@@ -45,6 +45,7 @@ from engine.prevention import prevention_claims_line
 from engine.replacements import replacement_claims_line
 from engine.enter_effects import enter_effect_line
 from engine.hand_size import hand_size_line
+from engine.untap_restrictions import self_untap_line
 from engine.grammar import compile_line
 from engine.oracle import (
     _is_supported_static_creature_line,
@@ -58,10 +59,6 @@ from engine.static_bonuses import static_bonus_for
 IMPLEMENTED_ELSEWHERE: dict[str, str] = {
     "damage that would reduce your life total to less than 1":
         "replacements.py:_floor_life_at_one (Ali from Cairo)",
-    "this creature doesn't untap during your untap step":
-        "phases/untap_step.py via untap_restrictions.SELF_DOESNT_UNTAP_PHRASE",
-    "you may choose not to untap this creature":
-        "phases/untap_step.py via untap_restrictions.SELF_MAY_KEEP_TAPPED_PHRASE",
     "as long as this creature is attacking, prevent all damage deserts":
         "replacements.py:_prevent_desert_damage (Camel)",
     "prevent all damage that would be dealt to this creature by deserts":
@@ -145,6 +142,12 @@ def _derived(normalized: str) -> bool:
         # eleventh derivation table, read by the cleanup step that enforces
         # CR 402.2 and by the gate that admits the line.
         or hand_size_line(normalized)
+        # "This artifact doesn't untap during your untap step" / "You may choose
+        # not to untap this artifact …" — the twelfth derivation table, and two
+        # `IMPLEMENTED_ELSEWHERE` entries retired: those named the *creature*
+        # spelling, so the artifact printings were unbacked by this guard while
+        # the untap step read them perfectly well.
+        or self_untap_line(normalized) is not None
         # The strongest claim of all, and the last asked: **the grammar lowered
         # this line to an instruction**. "This creature gets +X/+0, where X is
         # the greatest power among creature cards in your graveyard" (Carrion

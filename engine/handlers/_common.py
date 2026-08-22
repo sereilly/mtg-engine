@@ -10,7 +10,6 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from ..oracle_types import X_FROM_COUNT
 
 if TYPE_CHECKING:
     from ..game import Game

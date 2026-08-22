@@ -21,13 +21,11 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
-    _amount_payload,
     _describe_targets,
     _filter_payload,
     _is_source,
     _is_target,
     _restrictions_beyond,
-    _targets_only,
     _describe_several_card_targets,
     _describe_several_targets,
     _names_several_targets,

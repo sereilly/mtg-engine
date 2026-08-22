@@ -2131,13 +2131,18 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
         # relevant site rather than a compiled instruction.
         "as long as this creature is untapped, noncreature artifacts you control can't be enchanted, "
         "they have indestructible, and other players can't gain control of them",
-        # Old Man of the Sea: a pure player option with no forced game-state
-        # consequence if unused (the untap step already defaults to
-        # untapping); its actual gameplay hook is the linked-duration control
-        # ability, which cares about the CURRENT tapped state, not this line.
-        "you may choose not to untap this creature during your untap step",
     )
-    return any(normalized.startswith(pattern) for pattern in static_patterns)
+    if any(normalized.startswith(pattern) for pattern in static_patterns):
+        return True
+    # "This <noun> doesn't untap during your untap step." / "You may choose not
+    # to untap this <noun> during your untap step." (Old Man of the Sea, and
+    # Antiquities' three tapped-duration artifacts.) A literal for the *creature*
+    # spelling used to sit in the list above — a second copy of a sentence
+    # `engine/untap_restrictions.py` already reads, and one that named a single
+    # noun, so the artifact printings were admitted by an unrelated route.
+    from .untap_restrictions import self_untap_line
+
+    return self_untap_line(normalized) is not None
 
 
 # ---------------------------------------------------------------------------

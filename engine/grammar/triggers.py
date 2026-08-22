@@ -25,17 +25,15 @@ from dataclasses import replace
 
 from . import ast
 from .errors import GrammarError
-from .lexer import MANA, PT, PUNCT, SELF
+from .lexer import MANA, PT, SELF
 from .nouns import parse_object_filter
 from .references import parse_target_spec
 from .phrases import (
     _accept_number,
-    _parse_duration,
     parse_subject_filter_at,
 )
 from .stream import TokenStream
-from .vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, KEYWORD_INDEX,
-                         NUMBER_WORDS, match_longest)
+from .vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, NUMBER_WORDS)
 
 
 _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (

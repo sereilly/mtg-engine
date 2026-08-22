@@ -13,9 +13,9 @@ from ..auras import aura_restriction_active
 from ..handlers._common import permanent_effective_colors
 from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
 from ..untap_restrictions import (
-    optional_untap_line,
     SELF_DOESNT_UNTAP_PHRASE,
     SELF_MAY_KEEP_TAPPED_PHRASE,
+    self_untap_line,
     untap_restriction_for,
 )
 
@@ -133,8 +133,12 @@ class UntapStepMixin:
             {"index": idx, "name": permanent.card.name}
             for idx, permanent in enumerate(player.battlefield)
             if permanent.tapped
+            # Anchored per line through `self_untap_line`, not a substring over
+            # the whole text: the probe below still reads the loose form for the
+            # keep-tapped decision itself, but what the *prompt offers* has to be
+            # the same set the support gate admits.
             and any(
-                optional_untap_line(line)
+                self_untap_line(line) == "may_keep_tapped"
                 for line in (permanent.effective_card.oracle_text or "").splitlines()
             )
         ]

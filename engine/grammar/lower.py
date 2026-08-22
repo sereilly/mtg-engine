@@ -32,7 +32,6 @@ callers outside the package import them from this module
 the table did not move its address.
 """
 
-from ..lord_buffs import (LORD_BUFF_KIND, LordBuff, LordBuffFilter, QUALIFIER_FIELDS, grantable_keywords, lord_buff_payload)
 from ..oracle_types import OracleInstruction
 from . import ast
 from .derived import derived_instruction_for_line
@@ -57,12 +56,9 @@ from .lowering import (
     _mentions_x,
     _refuse_unfused_distinctness,
     _stamp_x_from_count,
-    _full_mana_payload,
     _fused_discard_then_draw,
     _fused_draw_then_discard,
     _fused_exile_then_controller_life,
-    _is_source,
-    _is_you,
     _lower_add_mana,
     _lower_add_mana_for_tapped_land,
     _lower_become_color,
@@ -138,7 +134,6 @@ from .lowering import (
     _lower_tap_or_untap,
     _lower_attach,
     _lower_win_game,
-    _signed,
 )
 
 

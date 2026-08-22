@@ -532,8 +532,8 @@ adding entries, not editing dispatch**:
   (spell-resolved and counterspell riders, leave-battlefield effects,
   draw-step modifiers, the Aura on a land tapped for mana) plus
   `CARD_LINE_INSTRUCTIONS`, the instruction one printed *line* of one card
-  compiles to. The compiler reads it after the grammar refuses and before the
-  legacy rules, so a line that later grows a production makes its entry dead
+  compiles to. The compiler reads it after the grammar refuses and there is
+  nothing after it, so a line that later grows a production makes its entry dead
   rather than wrong — and `tests/engine/test_card_lines.py` fails on a dead
   one. The entry bar is that **no second card, real or plausibly printable,
   shares the shape**: a sentence two cards could carry belongs in

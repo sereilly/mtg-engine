@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # Re-exported for backwards compatibility with external importers.
-from .game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
+from .game_types import SimulationResult, StackItem
 from .models import CardDefinition, PlayerState
 from .mixins import (
     GameEndingMixin,

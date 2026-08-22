@@ -21,7 +21,7 @@ from __future__ import annotations
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import NUMBER, PT, SELF, WORD, render
+from .lexer import PT, SELF, WORD, render
 from .stream import TokenStream
 from .vocabulary import (
     ALL_SUBTYPES,
@@ -504,7 +504,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # nouns. Neither contributes a card type, so the union restricts
             # nothing and the filter is unchanged — but the tokens still have to
             # be consumed, or the line fails the full-consumption invariant and
-            # the whole card falls back to the legacy rules.
+            # the card reports unsupported naming the clause.
             while True:
                 probe = stream.mark()
                 if not stream.accept_word("or", "and"):

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
-from ..pt import add_pt_modifier, set_base_pt
+from ..pt import set_base_pt
 from ._common import (
     apply_temp_pt_boost,
     permanent_matches_filter,
