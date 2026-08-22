@@ -683,6 +683,13 @@ class GameHelpersMixin:
             return False
         permanent.tapped = True
         emit(self, "permanent_becomes_tapped", subject=permanent)
+        # "Whenever an artifact becomes tapped **or** a player activates an
+        # artifact's ability without {T} in its activation cost" (Haunting
+        # Wind, Powerleech) — one printed ability with two trigger events, so
+        # one condition kind announced from both. This is the tapping half; the
+        # other is in stack/activation.py, where an ability whose cost has no
+        # {T} finishes paying.
+        emit(self, "permanent_tapped_or_ability_activated", subject=permanent)
         return True
 
     def playable_card_of(self, permanent: "Permanent"):

@@ -85,6 +85,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "enchanted_land_tapped": "whenever enchanted land becomes tapped",
     "self_becomes_tapped": "whenever this land becomes tapped",
     "permanent_becomes_tapped": "whenever a forest an opponent controls becomes tapped",
+    # One printed ability with two trigger events (Haunting Wind).
+    "permanent_tapped_or_ability_activated": (
+        "whenever an artifact becomes tapped or a player activates an "
+        "artifact's ability without {t} in its activation cost"
+    ),
     "land_tapped_for_mana": "whenever a player taps a land for mana",
     "spell_cast": "whenever a player casts a spell",
     "opponent_casts_spell": "whenever an opponent casts a spell",

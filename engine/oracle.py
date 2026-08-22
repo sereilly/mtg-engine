@@ -331,6 +331,23 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # (engine/events.py::_becomes_tapped_filter) covers every card written this
     # way. Must follow the two specific forms above, which name their subject
     # ("enchanted land", "this land") rather than quantifying it.
+    # "Whenever an artifact becomes tapped **or a player activates an
+    # artifact's ability without {T} in its activation cost**" (Haunting Wind,
+    # Powerleech). One printed ability with two trigger events, so it is one
+    # kind announced from two sites rather than two conditions.
+    #
+    # **Before the bare tapped row, and this ordering is load-bearing.** That
+    # row's pattern is unanchored at the end, so it matches this line's prefix
+    # and silently drops the activation half: the condition compiled as a plain
+    # tap trigger and the effect clause — everything from "or a player…" —
+    # became unparseable, which is the only reason the truncation showed up at
+    # all. Had the effect happened to parse, the card would have compiled clean
+    # and fired on half the events it prints.
+    ("permanent_tapped_or_ability_activated",
+     r"whenever an? (?P<tapped_subtype>[a-z]+)"
+     r"(?: (?P<tapped_controller>an opponent controls|you control))? becomes tapped"
+     r" or (?:a player|an opponent) activates an? [a-z']+ ability"
+     r" without \{t\} in its activation cost"),
     ("permanent_becomes_tapped",
      r"whenever an? (?P<tapped_subtype>[a-z]+)"
      r"(?: (?P<tapped_controller>an opponent controls|you control))? becomes tapped"),

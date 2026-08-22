@@ -485,6 +485,11 @@ def _self_becomes_target_filter(
     return (source_seat == observer) if scope == "you" else (source_seat != observer)
 
 
+# The compound kind shares this filter: both its events name the same subject —
+# the permanent that tapped, or the one whose ability was activated — and the
+# printed narrowing ("an artifact", "an artifact an opponent controls") is the
+# same question about it either way.
+@event_filter("permanent_tapped_or_ability_activated")
 @event_filter("permanent_becomes_tapped")
 def _becomes_tapped_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event

@@ -936,3 +936,47 @@ pool 668/668, every floor and ceiling unmoved, suite green at 6607. No hook
 added — and Old Man of the Sea's hook is now the only remaining user of a
 linked-tapped duration, so retiring it is a candidate round rather than a
 speculative one.
+
+## ATQ round 6: one printed ability, two trigger events
+
+*(2026-08-21.)* **55 → 57.** Haunting Wind and Powerleech — "Whenever an
+artifact becomes tapped **or** a player activates an artifact's ability without
+{T} in its activation cost". One ability, two events, and the round found a
+live truncation on the way in.
+
+**The bare tap pattern was eating this line's prefix.** `permanent_becomes_tapped`'s
+regex is unanchored at the end, so it matched "…an artifact becomes tapped" and
+handed everything from "or a player…" to the *effect* parser. The condition
+compiled as a plain tap trigger and the effect failed, which is the only reason
+anyone noticed: had the remainder happened to parse, the card would have
+compiled clean and fired on **half the events it prints** — a trigger that
+works less often than the card says, silent in the direction nothing tests for.
+The compound row is ordered before it, and its comment says why.
+
+**Two events, one kind, two emit sites.** The card prints one ability, so it
+gets one condition kind, announced from the tap seam (`become_tapped`) and from
+the activation seam (`stack/activation.py`). "Without {T} in its activation
+cost" is exactly `requires_tap` being false, and the guard is load-bearing
+rather than decorative: an ability that *does* tap has already announced the
+same condition through `become_tapped`, so emitting from both would fire one
+printed ability twice for one activation.
+`test_haunting_wind_does_not_fire_twice_for_a_tap_ability` is that assertion,
+and it fails on the version of this round without the guard.
+
+The activation emit sits where the loyalty event does — after every guard and
+cost has passed — for the reason recorded there: the legality gate returns
+early, so announcing at the gate fires triggers on activations the rules
+refused.
+
+**Round 140's lesson, applied rather than rediscovered.** A condition in both
+front-end tables with a filter and a compiled effect is still a trigger that
+might fire nowhere, so both halves have a behaviour test that watches the
+damage, not the declaration — and the activation half is the one that had no
+dispatcher at all.
+
+**Artifact Possession is still out.** Its subject is "enchanted artifact"
+rather than a quantified noun phrase, which is a different production; the
+condition and both dispatchers are in place for it.
+
+**Numbers.** ATQ 55 → 57; grammar parses 55.8% → 57.5% of its lines. Shipped
+pool 668/668, floors and ceilings unmoved, suite green at 6612. No hook added.

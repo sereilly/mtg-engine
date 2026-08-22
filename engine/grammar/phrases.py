@@ -541,6 +541,44 @@ _CAST_TYPE_UNIONS: tuple[tuple[tuple[str, ...], "ast.ObjectFilter"], ...] = (
 )
 
 
+def _accept_ability_activated_tail(stream: TokenStream) -> bool:
+    """"…or a player activates an artifact's ability without {T} in its
+    activation cost" — the second trigger event of a tap-or-activate ability.
+
+    All-or-nothing: a partial match rewinds, so a line that says something else
+    after "becomes tapped" keeps its tokens and the plain tap reading stands.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("or"):
+        stream.reset(mark)
+        return False
+    if not (
+        stream.accept_phrase("a", "player", "activates")
+        or stream.accept_phrase("an", "opponent", "activates")
+    ):
+        stream.reset(mark)
+        return False
+    # "an artifact's ability" / "an ability of enchanted artifact" — the object
+    # whose ability it is repeats the subject already parsed, so it is consumed
+    # rather than re-read. Whatever it named, the ability belongs to the same
+    # set of permanents the tap half describes; a card pairing two *different*
+    # subjects would not consume its line and would fall back.
+    while not stream.exhausted and not stream.at_word("without"):
+        stream.advance()
+    if not stream.accept_word("without"):
+        stream.reset(mark)
+        return False
+    token = stream.peek()
+    if token is None or token.kind != MANA or token.text != "{T}":
+        stream.reset(mark)
+        return False
+    stream.advance()
+    if not stream.accept_phrase("in", "its", "activation", "cost"):
+        stream.reset(mark)
+        return False
+    return True
+
+
 def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
     """"Whenever **a Forest an opponent controls** becomes tapped" (Lifetap) /
     "Whenever **a Mountain** is tapped for mana" (Gauntlet of Might).
@@ -564,6 +602,20 @@ def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
     # different event, and "this"/"enchanted" belong to the table above.
     if spec is not None and spec.quantifier == "a" and spec.filter is not None:
         if stream.accept_phrase("becomes", "tapped"):
+            # "…**or a player activates an artifact's ability without {T} in
+            # its activation cost**" (Haunting Wind, Powerleech). One printed
+            # ability with two trigger events, so one kind — and read here,
+            # attached to the tap reading, because the tap clause is its
+            # prefix: returning the plain tap event first would leave the
+            # second half of the *condition* to be parsed as the effect, and a
+            # card whose effect happened to parse anyway would fire on half the
+            # events it prints.
+            if _accept_ability_activated_tail(stream):
+                return ast.TriggerEvent(
+                    "permanent_tapped_or_ability_activated",
+                    "whenever",
+                    subject=spec.filter,
+                )
             return ast.TriggerEvent(
                 "permanent_becomes_tapped", "whenever", subject=spec.filter
             )

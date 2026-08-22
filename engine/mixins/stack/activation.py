@@ -742,6 +742,23 @@ class AbilityActivationMixin:
                 + " to pay its cost"
             )
 
+        # The activation half of "…becomes tapped **or** a player activates an
+        # artifact's ability without {T} in its activation cost" (Haunting
+        # Wind, Powerleech). "Without {T} in its activation cost" is exactly
+        # `requires_tap` being false — an ability that *does* tap has already
+        # announced the same condition through `become_tapped` above, so
+        # emitting here as well would fire it twice for one activation.
+        #
+        # Here rather than at the legality gate, which returns early: every
+        # guard and cost has passed at this point, so the trigger sees only
+        # activations the rules allowed. That is the same placement, and the
+        # same reason, as the loyalty event below.
+        if not requires_tap:
+            emit(
+                self, "permanent_tapped_or_ability_activated",
+                subject=permanent, seat=controller_index,
+            )
+
         # All guards/costs passed — mark a "once each turn" ability as used.
         if once_each_turn:
             permanent.metadata["ability_used_turn"] = self.turn
