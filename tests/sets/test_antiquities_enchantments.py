@@ -226,3 +226,56 @@ def test_the_untap_prompt_names_artifacts(set_pool):
     assert options is not None
     assert options["limits"] == {"artifact": 1}
     assert options["max_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Power Artifact (round 19) — the first cost *reduction*
+# ---------------------------------------------------------------------------
+
+
+def _tome_with_power_artifact(set_pool, mana, attached=True):
+    from engine.auras import attach_aura
+
+    pool = set_pool("ATQ")
+    tome = Permanent(card=pool["Jalum Tome"])  # "{2}, {T}: Draw a card, then discard a card."
+    aura = Permanent(card=pool["Power Artifact"])
+    battlefield = [tome, aura] if attached else [tome]
+    p1 = PlayerState(
+        name="P1", battlefield=battlefield,
+        library=[pool["Ornithopter"]] * 3, hand=[pool["Detonate"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = True
+    if attached:
+        attach_aura(aura, tome)
+    p1.mana_pool["C"] = mana
+    return game, p1
+
+
+def test_power_artifact_reduces_the_enchanted_artifacts_ability(set_pool):
+    game, p1 = _tome_with_power_artifact(set_pool, mana=1)
+
+    result = game.activate_permanent_ability(0, "Jalum Tome")
+
+    assert result.supported, "a {2} ability costs {1} under Power Artifact"
+    assert p1.mana_pool["C"] == 0
+
+
+def test_the_floor_stops_the_ability_becoming_free(set_pool):
+    """"This effect **can't reduce the mana in that cost to less than one
+    mana**." A {2} ability reduced by {2} pays {1}, not nothing — the floor is
+    the second half of the printed card and a reduction without it is a
+    strictly better Power Artifact."""
+    game, p1 = _tome_with_power_artifact(set_pool, mana=0)
+
+    result = game.activate_permanent_ability(0, "Jalum Tome")
+
+    assert not result.supported
+
+
+def test_without_the_aura_the_ability_costs_what_it_prints(set_pool):
+    """The control. Without it the test above would pass against a rule that
+    made every ability cost {1}."""
+    game, p1 = _tome_with_power_artifact(set_pool, mana=1, attached=False)
+
+    assert not game.activate_permanent_ability(0, "Jalum Tome").supported

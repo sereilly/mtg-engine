@@ -833,6 +833,61 @@ _PROTECTION_TAIL = r"(?:\. this effect doesn't remove this aura)?"
 _PROTECTION_LINE = re.compile(_PROTECTION_GRANT.pattern + _PROTECTION_TAIL + "$")
 
 
+#: "Enchanted artifact's activated abilities cost {2} less to activate. This
+#: effect can't reduce the mana in that cost to less than one mana." (Power
+#: Artifact.) Both sentences are matched together and both are required: the
+#: floor is not a decoration, it is what stops a {2} ability becoming free, and
+#: a pattern claiming only the first sentence would leave the second unclaimed
+#: while quietly implementing a cheaper card.
+_ABILITY_COST_REDUCTION = re.compile(
+    rf"^{_ATTACHED} {_NOUN}'s activated abilities cost \{{(?P<generic>\d+)\}} "
+    r"less to activate\. this effect can't reduce the mana in that cost to "
+    r"less than (?P<floor>one|two|three) mana$"
+)
+
+_FLOOR_WORDS = {"one": 1, "two": 2, "three": 3}
+
+
+def aura_ability_cost_reduction(oracle_text: str) -> tuple[int, int] | None:
+    """``(generic reduction, minimum mana)`` an attached Aura grants, or None.
+
+    Read off the Aura's whole text rather than one line, because the two
+    sentences are printed as one paragraph and the floor belongs to the
+    reduction in front of it.
+    """
+    # The "Enchant <noun>" line is the targeting restriction, not an effect —
+    # flattening it in with the rest would put four words in front of an
+    # anchored pattern and match nothing. Dropped here for the same reason
+    # `unclaimed_aura_lines` drops it there.
+    effect_lines = [
+        line for line in (_line_text(raw) for raw in oracle_text.splitlines())
+        if line and not line.startswith("enchant ")
+    ]
+    text = " ".join(" ".join(effect_lines).split())
+    match = _ABILITY_COST_REDUCTION.match(text)
+    if match is None:
+        return None
+    return int(match.group("generic")), _FLOOR_WORDS[match.group("floor")]
+
+
+def attached_ability_cost_reduction(permanent) -> tuple[int, int]:
+    """``(reduction, floor)`` every Aura on *permanent* contributes, combined.
+
+    Reductions add; the floor is the *highest* any of them names, which is the
+    reading that keeps two Auras from cancelling each other's protection
+    against a free ability.
+    """
+    total = 0
+    floor = 0
+    for aura in auras_attached_to(permanent):
+        found = aura_ability_cost_reduction(aura.effective_card.oracle_text)
+        if found is None:
+            continue
+        total += found[0]
+        floor = max(floor, found[1])
+    return total, floor
+
+
 def aura_continuous_claim(line: str) -> str | None:
     """Name the code implementing *line* as a continuous Aura effect, or None.
 
@@ -868,6 +923,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "protection grant — auras.aura_protection_colors"
     if aura_animates_artifact(normalized):
         return "artifact animation (layers 4 and 7b) — auras.animating_auras"
+    if aura_ability_cost_reduction(normalized):
+        return "activation cost reduction — auras.attached_ability_cost_reduction"
     return None
 
 

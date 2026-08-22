@@ -1466,3 +1466,39 @@ equal by value and the look-alike is the bug this engine keeps finding.
 
 **Numbers.** ATQ 73 → 74; grammar parses 71.7% → 72.5%. Shipped pool 668/668,
 floors and ceilings unmoved, suite green at 6647, no hook added.
+
+## ATQ round 19: the first cost reduction, and its floor
+
+*(2026-08-21.)* **74 → 75.** Power Artifact. `engine/cost_modifiers.py` has been
+increases-only by design, with CLAUDE.md's note that reduction "should arrive
+with the card that needs it, since it clamps at zero and there is nothing to
+verify against". This is that card, and it brings its own thing to verify
+against: **"This effect can't reduce the mana in that cost to less than one
+mana."**
+
+The floor is not a decoration. Without it a {2} ability under Power Artifact is
+*free*, which is a strictly better card than the one printed — so the pattern
+matches both sentences together and requires both. A rule claiming only the
+first would leave the second unclaimed while quietly implementing the cheaper
+card, which is the shape this repo's tables keep being written to prevent.
+
+**The reduction lives on the Aura, not on the permanent whose ability it is.**
+`ability_self_reduction_amount` reads a permanent's own text (Sanctum of
+Tranquil Light's "costs {1} less for each Shrine you control"); this one has to
+be read off what is *attached*, so it is an `auras.py` derivation and the
+activation path asks both. Two Auras add their reductions and take the highest
+floor — the reading that stops one from cancelling the other's protection
+against a free ability.
+
+**The floor is over the whole cost, coloured pips included.** "The mana in that
+cost" is not "the generic part of it", so it is applied after the subtraction
+rather than as a clamp inside it: a {2} ability reduced by {2} pays {1}, and a
+{B} ability is already at the floor and pays {B}.
+
+**A small trap on the way in.** Flattening the Aura's text put "Enchant
+artifact" in front of an anchored pattern and matched nothing. The enchant line
+is the targeting restriction rather than an effect — `unclaimed_aura_lines`
+drops it for the same reason — so this drops it too.
+
+**Numbers.** ATQ 74 → 75; grammar parses 72.5% → 73.3%. Shipped pool 668/668,
+floors and ceilings unmoved, suite green at 6650, no hook added.

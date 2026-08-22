@@ -12,7 +12,7 @@ from __future__ import annotations
 import random
 
 from ...activation_restrictions import activation_denial
-from ...auras import aura_restriction_active
+from ...auras import attached_ability_cost_reduction, aura_restriction_active
 from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
 from ...mana_payment import is_mana_ability
 from ...events import emit
@@ -740,6 +740,31 @@ class AbilityActivationMixin:
                 f"{permanent.card.name}'s ability costs "
                 f"{{{before - required_cost['generic']}}} less to activate"
             )
+        # "Enchanted artifact's activated abilities cost {2} less to activate.
+        # **This effect can't reduce the mana in that cost to less than one
+        # mana.**" (Power Artifact.) The reduction is on the *Aura*, not on the
+        # permanent whose ability it is, so it is read off what is attached
+        # rather than off this card's own text.
+        #
+        # The floor is over the *whole* cost, coloured pips included — "the
+        # mana in that cost", not the generic part of it — which is why it is
+        # applied after the subtraction rather than as a clamp inside it. A {2}
+        # ability reduced by {2} pays {1}, not nothing; a {B} ability is
+        # already at the floor and pays {B}.
+        aura_discount, floor = attached_ability_cost_reduction(permanent)
+        if aura_discount:
+            before_total = sum(required_cost.values())
+            generic = required_cost.get("generic", 0)
+            coloured = before_total - generic
+            reduced_generic = max(0, generic - aura_discount)
+            if reduced_generic + coloured < floor:
+                reduced_generic = max(0, floor - coloured)
+            required_cost["generic"] = reduced_generic
+            if before_total != reduced_generic + coloured:
+                self.log.append(
+                    f"{permanent.card.name}'s ability costs "
+                    f"{{{before_total - reduced_generic - coloured}}} less to activate"
+                )
         if self.enforce_mana_costs and any(required_cost.values()):
             if not self._pay_mana_cost(controller, required_cost):
                 details = f"insufficient mana to activate {permanent.card.name}"
