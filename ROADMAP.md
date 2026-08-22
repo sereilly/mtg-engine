@@ -527,3 +527,111 @@ on both. The tightened dispatcher guard is the ninth, and it names Nine Lives.
 than gaps**: Shahrazad's subgame (the life clause *is* implemented) and Word of
 Command's control-of-player (modelled as forcing the chosen card to be played).
 Neither is a card doing less than it prints without saying so.
+
+---
+
+## Antiquities: ingest and census (Phase 1)
+
+*(2026-08-21.)* The set journal for ATQ, opened per `SET_PLAYBOOK.md`. Ingested
+at 85 unique cards (100 printings), registered under `measured`.
+
+**Phase 0 was a no-op except for one stale tracker** — `RULES_PROGRESS.md` sat
+one test behind (1357 → 1358, rule coverage unchanged at 302/611). Committed on
+its own so it could not be read as an ATQ diff.
+
+**The ingest broke nothing.** M21's ingest surfaced 66 failures from a
+never-run import; ATQ's surfaced zero, and nine previously-skipped tests began
+running. That is a real difference between the two sets rather than luck: ATQ
+introduces no card type, no layout, no keyword and no vocabulary the engine has
+not already met.
+
+**Census.** 48/85 supported (56.5%); 120 rules lines, 46.7% parsed, 45.0%
+lowered, 27.5% executed, against a shipped-pool 80.7/79.5/46.7. The shipped
+floors and ceilings did not move, which is the `measured` role working as
+designed.
+
+**The three big rocks are all absent.** Every card is `layout: normal`; the
+types are Artifact / Artifact Creature / Creature / Enchantment / Aura /
+Instant / Sorcery / Land. The keyword lines are banding, defender, first strike,
+flying, trample and vigilance — every one already in
+`vocabulary.IMPLEMENTED_KEYWORDS`. `data/vocabulary/` already carries `urza's`,
+`mine`, `power-plant` and `tower` as land types and `book` as an artifact type.
+So there is no subsystem project gating Phase 4, which is what makes this set
+cheap at the top and long in the tail: the work is almost entirely grammar
+productions over one recurring theme.
+
+**19 of the 85 are already shipped through Revised** (Atog, Ornithopter, The
+Rack, Millstone, Crumble, Shatterstorm, Ivory Tower, Primal Clay, Energy Flux,
+Titania's Song, Hurkyl's Recall, Reverse Polarity, Reconstruction, Armageddon
+Clock, Dragon Engine, Dwarven Weaponsmith, Mishra's War Machine, Onulet, Rocket
+Launcher). Net new cards: **66**.
+
+### The census overstates support, and the guards cannot see it
+
+`support_report.py --set ATQ` reports `land: 6/6 supported`. All six are wrong
+in the same direction, and two more cards join them:
+
+| Card | Reported as | Actually does |
+| --- | --- | --- |
+| Urza's Mine / Power Plant / Tower | `basic land support` | taps for `{C}` off `produced_mana`; **never assembles** |
+| Mishra's Workshop | `basic land support` | taps for **one** `{C}` instead of three, restriction unenforced |
+| Mishra's Factory | `basic land support` | mana and pump real; **cannot animate** |
+| Artifact Possession | `pattern-supported effect` | zero abilities compiled — enchants an artifact and does nothing |
+| Bronze Tablet | `pattern-supported effect` | carried by the ante *deck-construction* rule; its only battlefield ability is unreadable |
+
+Three separate blind spots, and the point is that they are separate — this is
+not one guard with one hole:
+
+1. `engine/oracle.py`'s land gate passes **every** land. The comment there
+   states the intended rule correctly ("an unparsed *bonus* ability degrades
+   just that ability, never the land's own castability") and the code does not
+   implement the distinction, so a land whose unreadable line *is* its mana
+   ability is indistinguishable from Desert.
+2. `test_no_hollow_support.py::_hollow_permanents` filters to
+   `primary_type in ("artifact", "enchantment")` — lands were never in scope.
+3. The same function skips `"Aura" in card.type_line` (on the grounds that
+   `engine/auras.py` is stricter — true of Auras that gate reaches, and
+   Artifact Possession fell to the spell-pattern whitelist instead), and skips
+   any card carrying one non-`spell_pattern` instruction, which Bronze Tablet's
+   `derived_static_rule` satisfies without being battlefield behaviour at all.
+
+This is the M21 lesson — the census counts cards, not sentences — arriving one
+layer further down: not "a supported card has an unsupported line" but "the
+gate that decides support cannot ask the question". Round 1 therefore fixes the
+**gates** before any card work, and is expected to *lower* the supported count.
+
+### Round plan
+
+Ranked by cards-per-change, generalise-first:
+
+1. **Honesty** — close the three hollow-support blind spots above.
+2. **Artifact-matter noun phrases** — `artifact creature(s)`, `artifact
+   source(s)`, `an artifact spell`, `noncreature artifact`, `nonartifact
+   creature`, `artifacts your opponents control`. The set's spine; ~15 cards.
+3. **`enters with <N> <kind> counters`** — collapse two literal strings in
+   `enter_effects.py` into one pattern (Triskelion, Tetravus, Clockwork Avian).
+4. **Assembly mana + restricted mana** — the Urza's cycle as one production;
+   Mishra's Workshop is one row in `restricted_mana.py`.
+5. **Prevention keyed on a source class** — colour-keyed shields generalised
+   (6 cards).
+6. **"for as long as this permanent remains tapped"** — promotes Old Man of the
+   Sea's hook to a production; 3 cards and hook reliance falls.
+7. **Becomes an artifact creature with CDA P/T** — 4 cards.
+8. **Artifact-spell-cast / artifact-dies triggers** — narrowings of two existing
+   rows; 4 cards.
+9. **The ability-activated trigger** — the one genuinely new dispatcher.
+10. Counting and chosen numbers; cost *reduction* (Power Artifact); ante
+    exchange (Bronze Tablet); exile-with-noted-counters (Tawnos's Coffin, to be
+    landed against the standing exiled-with linkage block); then the long tail.
+
+**Placement decision, recorded now because it is load-bearing at promotion.**
+ATQ's entry goes into `sets` at **index 4, between ARN and 3ED** — not appended.
+The manifest describes itself as printing-ordered, `SET_PROGRESS.md` already
+credits ATQ with 85 new cards and 3ED with 0, and Golgothian Sylex *requires*
+it: it sacrifices "each nontoken permanent with a name originally printed in
+the Antiquities expansion", read through `CardDefinition.original_printing` —
+the seam City in a Bottle already uses. Appending after M21 would leave those 19
+shared cards reading `3ed` and the Sylex would miss every one of them. Expect
+19 cards to flip `set_code`, `printings[0]`, art and Scryfall link at promotion;
+`test_appending_a_set_never_changes_an_existing_original_printing` compares
+prefixes of the new ordering and stays green.

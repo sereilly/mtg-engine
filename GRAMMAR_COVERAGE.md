@@ -22,7 +22,10 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 | ARN | 78 | 108 | 65.7% | 63.0% | 40.7% | 36 |
 | 3ED | 296 | 389 | 79.9% | 78.7% | 43.4% | 152 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
+| ATQ *(measured)* | 85 | 120 | 46.7% | 45.0% | 27.5% | 29 |
 | **All (shipped)** | **1533** | **2166** | **80.7%** | **79.5%** | **46.7%** | **876** |
+
+*(measured)* — ATQ are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
 ## Backlog — failure reasons
 
@@ -30,29 +33,29 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 188 | 70 | expected a subject |  |
-| 83 | 27 | unrecognized effect verb |  |
-| 40 | 21 | unconsumed text |  |
-| 29 | 29 | unrecognized activation cost |  |
-| 26 | 12 | granted ability in quotes | phase 3 (quoted abilities) |
+| 211 | 90 | expected a subject |  |
+| 92 | 35 | unrecognized effect verb |  |
+| 54 | 32 | unconsumed text |  |
+| 30 | 30 | unrecognized activation cost |  |
+| 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
+| 9 | 4 | expected 'the number of' in a where-clause |  |
+| 9 | 4 | expected a colour or a creature body after 'becomes' |  |
+| 9 | 4 | expected a keyword ability |  |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
-| 7 | 4 | expected 'the number of' in a where-clause |  |
-| 7 | 2 | expected a colour or a creature body after 'becomes' |  |
-| 7 | 4 | expected a keyword ability |  |
 | 6 | 3 | no lowering for RawEffect |  |
+| 6 | 3 | expected something to destroy |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
-| 5 | 2 | expected something to destroy |  |
+| 5 | 2 | expected 'mana' |  |
+| 5 | 2 | expected a quantity |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | expected 'a' |  |
-| 4 | 1 | expected 'mana' |  |
-| 4 | 1 | expected a quantity |  |
 | 3 | 1 | expected 'your' |  |
 | 3 | 1 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
+| 3 | 2 | expected a destination zone after 'return' |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 1 | expected something to shield |  |
 | 1 | 1 | expected what to gain control of |  |
-| 1 | 1 | expected a destination zone after 'return' |  |
 | 1 | 1 | expected 'be' |  |
 | 1 | 1 | expected 'unless defending player controls' |  |
 
@@ -74,6 +77,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 - **Alpine Houndmaster**
   - `When this creature enters, you may search your library for a card named Alpine Watchdog and/or a card named Igneous Cur, reveal them, put them into your hand, then shuffle.`
   - `Whenever this creature attacks, it gets +X/+0 until end of turn, where X is the number of other attacking creatures.`
+- **Amulet of Kroog**
+  - `{2}, {T}: Prevent the next 1 damage that would be dealt to any target this turn.`
 - **Ancestral Recall**
   - `Target player draws three cards.`
   - `Target player draws three cards.`
@@ -92,6 +97,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `{4}{W}: This creature gets +3/+3 until end of turn.`
 - **Archfiend's Vessel**
   - `When this creature enters, if it entered from your graveyard or you cast it from your graveyard, exile it. If you do, create a 5/5 black Demon creature token with flying.`
+- **Argivian Archaeologist**
+  - `{W}{W}, {T}: Return target artifact card from your graveyard to your hand.`
 - **Armageddon**
   - `Destroy all lands.`
   - `Destroy all lands.`
@@ -101,9 +108,17 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `At the beginning of your upkeep, put a doom counter on this artifact.`
   - `At the beginning of your draw step, this artifact deals damage equal to the number of doom counters on it to each player.`
   - `{4}: Remove a doom counter from this artifact. Any player may activate this ability but only during any upkeep step.`
+  - `At the beginning of your upkeep, put a doom counter on this artifact.`
+  - `At the beginning of your draw step, this artifact deals damage equal to the number of doom counters on it to each player.`
+  - `{4}: Remove a doom counter from this artifact. Any player may activate this ability but only during any upkeep step.`
 - **Army of Allah**
   - `Attacking creatures get +2/+0 until end of turn.`
+- **Artifact Blast**
+  - `Counter target artifact spell.`
+- **Ashnod's Altar**
+  - `Sacrifice a creature: Add {C}{C}.`
 - **Atog**
+  - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
 - **Aven Gagglemaster**
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
@@ -135,6 +150,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Whenever this creature or another creature you control dies, if it had a +1/+1 counter on it, create a 2/2 white Knight creature token with vigilance.`
 - **Basri's Solidarity**
   - `Put a +1/+1 counter on each creature you control.`
+- **Battering Ram**
+  - `At the beginning of combat on your turn, this creature gains banding until end of combat. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's blocking.)`
 - **Battle-Rattle Shaman**
   - `At the beginning of combat on your turn, you may have target creature get +2/+0 until end of turn.`
 - **Bazaar of Baghdad**
@@ -261,11 +278,15 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 - **City of Brass**
   - `Whenever this land becomes tapped, it deals 1 damage to you.`
   - `{T}: Add one mana of any color.`
+- **Clay Statue**
+  - `{2}: Regenerate this creature.`
 - **Cockatrice**
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
+- **Colossus of Sardia**
+  - `{9}: Untap this creature. Activate only during your upkeep.`
 - **Conclave Mentor**
   - `When this creature dies, you gain life equal to its power.`
 - **Conservator**
@@ -390,6 +411,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Whenever you cast your first instant or sorcery spell each turn, copy that spell. You may choose new targets for the copy.`
 - **Dragon Engine**
   - `{2}: This creature gets +1/+0 until end of turn.`
+  - `{2}: This creature gets +1/+0 until end of turn.`
 - **Drudge Skeletons**
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
@@ -407,6 +429,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `{T}: Target creature with power 2 or less can't be blocked this turn.`
   - `{T}: Target creature with power 2 or less can't be blocked this turn.`
 - **Dwarven Weaponsmith**
+  - `{T}, Sacrifice an artifact: Put a +1/+1 counter on target creature. Activate only during your upkeep.`
   - `{T}, Sacrifice an artifact: Put a +1/+1 counter on target creature. Activate only during your upkeep.`
 - **Earthquake**
   - `Earthquake deals X damage to each creature without flying and each player.`
@@ -505,6 +528,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Whenever a creature you control with power 4 or greater enters, draw a card.`
 - **Garruk's Warsteed**
   - `When this creature enters, you may search your library and/or graveyard for a card named Garruk, Savage Herald, reveal it, and put it into your hand. If you search your library this way, shuffle.`
+- **Gate to Phyrexia**
+  - `Sacrifice a creature: Destroy target artifact. Activate only during your upkeep and only once each turn.`
 - **Gauntlet of Might**
   - `Red creatures get +1/+1.`
   - `Whenever a Mountain is tapped for mana, its controller adds an additional {R}.`
@@ -551,6 +576,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `{R}: This creature gets +0/+1 until end of turn.`
   - `{R}: This creature gets +0/+1 until end of turn.`
   - `{R}: This creature gets +0/+1 until end of turn.`
+- **Grapeshot Catapult**
+  - `{T}: This creature deals 1 damage to target creature with flying.`
 - **Grasp of Darkness**
   - `Target creature gets -4/-4 until end of turn.`
 - **Griffin Aerie**
@@ -659,6 +686,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
+- **Jalum Tome**
+  - `{2}, {T}: Draw a card, then discard a card.`
 - **Jandor's Ring**
   - `{2}, {T}, Discard the last card you drew this turn: Draw a card.`
   - `{2}, {T}, Discard the last card you drew this turn: Draw a card.`
@@ -843,7 +872,10 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
 - **Meteorite**
   - `When this artifact enters, it deals 2 damage to any target.`
   - `{T}: Add one mana of any color.`
+- **Mightstone**
+  - `Attacking creatures get +1/+0.`
 - **Millstone**
+  - `{2}, {T}: Target player mills two cards.`
   - `{2}, {T}: Target player mills two cards.`
 - **Mind Rot**
   - `Target player discards two cards.`
@@ -854,6 +886,9 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Target player discards X cards at random.`
 - **Miscast**
   - `Counter target instant or sorcery spell unless its controller pays {3}.`
+- **Mishra's Factory**
+  - `{T}: Add {C}.`
+  - `{T}: Target Assembly-Worker creature gets +1/+1 until end of turn.`
 - **Mox Emerald**
   - `{T}: Add {G}.`
   - `{T}: Add {G}.`
@@ -901,6 +936,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `{2}{U}{B}, {T}, Sacrifice this creature: Return target creature card from your graveyard to the battlefield.`
 - **Onulet**
   - `When this creature dies, you gain 2 life.`
+  - `When this creature dies, you gain 2 life.`
 - **Opt**
   - `Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `Draw a card.`
@@ -909,6 +945,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
   - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
   - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
+- **Orcish Mechanics**
+  - `{T}, Sacrifice an artifact: This creature deals 2 damage to any target.`
 - **Orcish Oriflamme**
   - `Attacking creatures you control get +1/+0.`
   - `Attacking creatures you control get +1/+0.`
@@ -1016,6 +1054,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `• Return up to two target creatures to their owners' hands.`
 - **Reconstruction**
   - `Return target artifact card from your graveyard to your hand.`
+  - `Return target artifact card from your graveyard to your hand.`
 - **Red Elemental Blast**
   - `• Counter target blue spell.`
   - `• Destroy target blue permanent.`
@@ -1095,6 +1134,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Target opponent sacrifices a creature of their choice with flying.`
 - **Sabertooth Mauler**
   - `At the beginning of your end step, if a creature died this turn, put a +1/+1 counter on this creature and untap it.`
+- **Sage of Lat-Nam**
+  - `{T}, Sacrifice an artifact: Draw a card.`
 - **Samite Healer**
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
@@ -1175,6 +1216,7 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Destroy target artifact.`
 - **Shatterstorm**
   - `Destroy all artifacts. They can't be regenerated.`
+  - `Destroy all artifacts. They can't be regenerated.`
 - **Shipwreck Dowser**
   - `When this creature enters, return target instant or sorcery card from your graveyard to your hand.`
 - **Shivan Dragon**
@@ -1246,6 +1288,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `When this creature dies, each opponent loses 1 life and you gain 1 life.`
 - **Sporeweb Weaver**
   - `Whenever this creature is dealt damage, you gain 1 life and create a 1/1 green Saproling creature token.`
+- **Staff of Zegon**
+  - `{3}, {T}: Target creature gets -2/-0 until end of turn.`
 - **Stasis**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
@@ -1265,6 +1309,11 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Target player gains X life.`
   - `Target player gains X life.`
   - `Target player gains X life.`
+- **Strip Mine**
+  - `{T}: Add {C}.`
+  - `{T}, Sacrifice this land: Destroy target land.`
+- **Su-Chi**
+  - `When this creature dies, add {C}{C}{C}{C}.`
 - **Subira, Tulzidi Caravanner**
   - `{1}: Another target creature with power 2 or less can't be blocked this turn.`
 - **Sublime Epiphany**
@@ -1287,6 +1336,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Exile target creature. Its controller gains life equal to its power.`
 - **Tavern Swindler**
   - `{T}, Pay 3 life: Flip a coin. If you win the flip, you gain 6 life.`
+- **Tawnos's Wand**
+  - `{2}, {T}: Target creature with power 2 or less can't be blocked this turn.`
 - **Teferi's Protege**
   - `{1}{U}, {T}: Draw a card, then discard a card.`
 - **Teferi's Tutelage**
@@ -1378,6 +1429,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Destroy all enchantments.`
 - **Transmogrify**
   - `Exile target creature. That creature's controller reveals cards from the top of their library until they reveal a creature card. That player puts that card onto the battlefield, then shuffles the rest into their library.`
+- **Triskelion**
+  - `Remove a +1/+1 counter from this creature: It deals 1 damage to any target.`
 - **Trufflesnout**
   - `• Put a +1/+1 counter on this creature.`
   - `• You gain 4 life.`
@@ -1470,6 +1523,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
 - **Watcher of the Spheres**
   - `Whenever another creature you control with flying enters, this creature gets +1/+1 until end of turn.`
+- **Weakstone**
+  - `Attacking creatures get -1/-0.`
 - **Wildwood Scourge**
   - `Whenever one or more +1/+1 counters are put on another non-Hydra creature you control, put a +1/+1 counter on this creature.`
 - **Will-o'-the-Wisp**
@@ -1494,6 +1549,8 @@ Categories currently switched on: `attachments, coin_flips, combat_restrictions,
   - `Destroy all creatures. They can't be regenerated.`
 - **Wyluli Wolf**
   - `{T}: Target creature gets +1/+1 until end of turn.`
+- **Yawgmoth Demon**
+  - `At the beginning of your upkeep, you may sacrifice an artifact. If you don't, tap this creature and it deals 2 damage to you.`
 - **Zombie Master**
   - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`
   - `Other Zombies have "{B}: Regenerate this permanent."`
