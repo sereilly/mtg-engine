@@ -337,3 +337,28 @@ class TestPhantasmalTerrainDefersChoice:
         assert game.confirm_land_type(0, "mountain") is True
         assert land.changed_land_types == ("mountain",)
         assert game.pending_land_type_choice is None
+
+    def test_the_choice_holds_priority_until_it_is_answered(self, cards):
+        """The comment above says "don't resolve the spell until I finish the
+        choice" — which needs the game to wait, not just to defer the land
+        change. The prompt carried no ``blocked_detail`` and so held nothing:
+        both players could pass straight past it. It holds priority now, with
+        ``_stack_item=None`` because the Aura is already on the battlefield."""
+        land = Permanent(card=cards["Forest"])
+        p0 = PlayerState(name="P0", hand=[cards["Phantasmal Terrain"]])
+        p1 = PlayerState(name="P1", battlefield=[land])
+        game = _game(p0, p1)
+        game.interactive_seats = {0, 1}
+        assert game._cast_onto_stack(
+            0, "Phantasmal Terrain", target_player_index=1, target_permanent_index=0
+        ).supported
+        game.priority_player_index = 0
+        game.pass_priority(0)
+
+        assert game.pass_priority(1) == "awaiting_choice"
+        assert game.waiting_prompt().kind == "land_type_choice"
+        assert land.changed_land_types == ()
+
+        assert game.confirm_land_type(0, "mountain") is True
+        assert land.changed_land_types == ("mountain",)
+        assert game.pending_land_type_choice is None

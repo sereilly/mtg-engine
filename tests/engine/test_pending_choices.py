@@ -277,6 +277,22 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
     }, suspending
 
 
+def test_the_only_prompt_that_holds_nothing_is_hand_reveal():
+    """``holds_priority`` is what makes "the game waits" a property of the queue
+    rather than a hand-kept list, so the set of kinds that *don't* wait is the
+    ratchet. Everything else is armed part-way through a resolution and the
+    game must stop for it (CR 117.3b); ``hand_reveal`` is the one notification —
+    the viewer has already seen the hand, and nothing waits on dismissing it.
+
+    Three kinds (land_type_choice, kudzu_reattach, face_down_cast) were on this
+    list by omission: each is armed from an effect handler mid-resolution and so
+    should have held priority, but carried no ``blocked_detail`` and so did not.
+    A new prompt that lands here needs to prove it decides nothing the rest of
+    the resolution reads."""
+    non_holding = {kind for kind, spec in CHOICE_SPECS.items() if not spec.holds_priority}
+    assert non_holding == {"hand_reveal"}, non_holding
+
+
 def test_game_carries_no_per_card_pending_field():
     """The queue replaced sixteen one-card ``Game`` fields. A new one would be
     a prompt outside the registry again, with none of the five parts enforced."""

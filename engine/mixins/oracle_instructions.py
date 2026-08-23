@@ -536,6 +536,9 @@ class OracleInstructionsMixin:
                 # land change before the player finishes the choice.
                 self.arm_pending_choice(
                     "land_type_choice", caster_index,
+                    # The Aura resolved and is on the battlefield; the prompt
+                    # holds priority (below) but holds no spell on the stack.
+                    _stack_item=None,
                     card_name=aura_permanent.card.name,
                     land_owner_index=target_idx,
                     # Identity: ``list.index`` compares by value, so two

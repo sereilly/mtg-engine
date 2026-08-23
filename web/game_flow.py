@@ -300,15 +300,17 @@ def _advance_ai_turn(session: Session) -> None:
 
 def _advance_phase(session: Session) -> None:
     game = session.game
-    # A human caster still owes the Word of Command card choice; hold the turn
-    # structure until they confirm (the choice happens while the spell resolves).
-    # Once chosen, the spell is just waiting on the stack — advance normally.
-    pending_woc = game.pending_word_of_command
-    if (
-        pending_woc is not None
-        and "chosen_hand_index" not in pending_woc
-        and _seat_type(session, pending_woc.get("caster_index")) == "human"
-    ):
+    # A decision somebody still owes holds the turn structure where it is.
+    # AI seats answer theirs with the kind's default first, so what is left is
+    # a human's — and advancing past it would resolve it into a board that has
+    # already moved on. This named Word of Command by hand while
+    # _auto_advance_after_all_passed asked the queue, and the AI-turn path
+    # (_advance_ai_turn) reaches here without passing through that function:
+    # an AI's Mind Rot resolved, the human's discard was armed, and the turn
+    # walked on. Word of Command's own ``is_open`` reproduces the old
+    # "chosen, but not yet finished" distinction.
+    _auto_resolve_ai_pending(session)
+    if game.waiting_prompt() is not None:
         return
     phase = game.current_turn_phase
     step = game.current_step

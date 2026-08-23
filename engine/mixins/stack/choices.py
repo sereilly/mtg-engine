@@ -2792,6 +2792,12 @@ register_choice(
     default=lambda game, choice: game._resolve_land_type(choice, "island"),
     action="land_type_confirm",
     prompt_key="land_type_choice",
+    # Phantasmal Terrain arms this as it enters, and its own comment says "the
+    # spell never visibly resolves the land change before the player finishes
+    # the choice" — which needs the game to actually wait. The Aura is already
+    # on the battlefield (not a spell held on the stack), so it is armed with
+    # ``_stack_item=None``: holds priority, holds no finished object.
+    blocked_detail="choose the land type before other actions",
 )
 
 register_choice(
@@ -2820,6 +2826,7 @@ register_choice(
     # not the seat's interactivity: a tap that already names the land re-attaches
     # inline. So an armed Kudzu choice queues for every seat and is drained by
     # the auto-resolver, rather than defaulting the moment it is armed.
+    blocked_detail="choose where Kudzu moves before other actions",
 )
 
 register_choice(
@@ -2828,6 +2835,9 @@ register_choice(
     default=lambda game, choice: game._default_face_down_cast(choice),
     action="face_down_cast_confirm",
     prompt_key="face_down_cast",
+    # Illusionary Mask's own comment: "the actual cast happens in
+    # confirm_face_down_cast" — armed mid-resolution, so the game waits.
+    blocked_detail="choose the face-down creature before other actions",
 )
 
 register_choice(
