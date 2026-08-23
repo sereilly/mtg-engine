@@ -85,3 +85,10 @@ class PreventDamage:
     # while this describes the event. Conflating them would make a Fog read as
     # a shield against every source, which is a strictly larger effect.
     combat_only: bool = False
+    # "Prevent all combat damage that would be dealt **by** target creature
+    # this turn." (Horn of Deafening, Lady Evangela.) The other end of the
+    # event: `to` names who is protected, this names whose damage is stopped.
+    # A Recipient rather than `from_filter`'s ObjectFilter, because the source
+    # is *chosen* (CR 115.1c) rather than described — a filter cannot say
+    # "the creature the player targeted".
+    dealt_by: Recipient | None = None

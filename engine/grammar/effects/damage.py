@@ -325,10 +325,18 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
     if not stream.accept_phrase("that", "would", "be", "dealt"):
         raise stream.error("expected 'that would be dealt' in a prevention effect")
     recipient: ast.Recipient | None = None
+    dealt_by: ast.Recipient | None = None
     if stream.accept_word("to"):
         recipient = parse_recipient(stream)
         if recipient is None:
             raise stream.error("expected something to shield")
+    elif stream.accept_word("by"):
+        # "…that would be dealt **by** target creature this turn." The word is
+        # the whole difference between a creature that cannot be hurt and one
+        # that cannot hurt anything, so it is read rather than skipped.
+        dealt_by = parse_recipient(stream)
+        if dealt_by is None:
+            raise stream.error("expected whose damage to prevent")
     duration = _parse_duration(stream)
     # "…that would be dealt **this turn to Dogs you control**" (Pack Leader).
     # The printed order puts the duration first, and both orders are the same
@@ -340,7 +348,8 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
         if recipient is None:
             raise stream.error("expected something to shield")
     return ast.PreventDamage(
-        ast.AllOf(), to=recipient, duration=duration, combat_only=combat_only
+        ast.AllOf(), to=recipient, duration=duration, combat_only=combat_only,
+        dealt_by=dealt_by,
     )
 
 

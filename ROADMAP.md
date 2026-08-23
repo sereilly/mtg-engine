@@ -709,3 +709,34 @@ what makes CR 602.2b's refusal fire — a pinger with nothing in combat to shoot
 is refused with nothing paid rather than activated and pointed at whatever the
 picker offered. The test asserts the *reason* string, because a refusal for any
 other cause would pass while leaving the restriction unenforced.
+
+## LEG round 5: a combat shield has a direction, and it was a boolean
+
+**145 → 149 supported.** Horn of Deafening, Lady Evangela, Gaseous Form,
+Demonic Torment — the first four of the census's nineteen prevention cards, and
+the four that share one mechanism.
+
+The engine had exactly one combat shield: Ebony Horse's
+`prevent_combat_damage_to_and_by_until_eot`, a boolean read at both ends of the
+event. Legends prints the halves. **Gaseous Form and Demonic Torment differ by
+one word** — "dealt to and dealt by enchanted creature" against "dealt by
+enchanted creature" — and reading them as the same shield makes Demonic
+Torment's host unkillable in combat, which is a strictly better card than the
+one printed. So a shield now answers `shields_combat_damage(perm,
+dealt_to=…)`: the old boolean still means both ends and nothing that reads it
+changed, and two new sources carry a direction beside it.
+
+The two sources have different lifetimes, which is why both exist. The
+**activated** form (Horn of Deafening, Lady Evangela) is a turn-long marker the
+cleanup sweep clears — that is what "this turn" means. The **Aura** form
+(Gaseous Form, Demonic Torment) is read off the attached Aura's own text at the
+moment damage would be dealt, so it ends when the Aura does with nothing having
+to clear it — the shape `_source_type_shielded_by` one screen up already used.
+
+Two smaller findings. The `by` half of the prevention production had to be
+*parsed*, not skipped: "to" and "by" are the whole difference between a
+creature that cannot be hurt and one that cannot hurt anything. And Demonic
+Torment's second line, "Enchanted creature can't attack", was unclaimed —
+the Aura restriction table carried only the compound "can't attack or block",
+beneath a comment saying in so many words that a card printing one half is a
+different card. It is now that card, with its own row.

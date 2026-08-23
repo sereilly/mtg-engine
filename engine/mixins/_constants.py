@@ -33,6 +33,10 @@ _EOT_METADATA_KEYS = (
     # is a lace and must survive the turn, which is why this is a second key
     # rather than a flag on the first.
     "color_override_until_eot",
+    # "Prevent all combat damage that would be dealt by target creature this
+    # turn" (Horn of Deafening, Lady Evangela). The direction is the value, so
+    # the key is one rather than one per direction.
+    "prevent_combat_damage_direction_until_eot",
 )
 
 _TURN_PHASES: tuple[str, ...] = (

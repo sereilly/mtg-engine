@@ -273,3 +273,36 @@ def arm_mirror_damage(game: Game, instruction: OracleInstruction, context: Oracl
             f"to its source's controller ({context.card.name})"
         )
     return True, "resolved"
+
+
+@effect_handler("prevent_combat_damage_by_target_until_eot")
+def prevent_combat_damage_by_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Prevent all combat damage that would be dealt by target creature this
+    turn." (Horn of Deafening, Lady Evangela.)
+
+    A shield on the damage's **source**, not on a recipient: the creature is
+    still perfectly able to be dealt combat damage and to die to it. That
+    direction is what the marker carries, and it is why this is not Ebony
+    Horse's two-way flag with a different name — folding them together would
+    make every creature either card touches unkillable in combat.
+
+    Cleared by the cleanup step through ``_EOT_METADATA_KEYS``, which is what
+    "this turn" means here.
+    """
+    from ..prevention import COMBAT_SHIELD_BY, _COMBAT_SHIELD_DIRECTION_KEY
+
+    perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda p: p.is_creature,
+        fallback_players=tuple(game.players),
+        fallback_on_invalid_choice=False,
+    )
+    if perm is None:
+        game.log.append(f"{context.card.name}: no creature to silence")
+        return True, "resolved"
+    perm.metadata[_COMBAT_SHIELD_DIRECTION_KEY] = COMBAT_SHIELD_BY
+    game.log.append(
+        f"all combat damage {perm.card.name} would deal this turn is prevented "
+        f"({context.card.name})"
+    )
+    return True, "resolved"

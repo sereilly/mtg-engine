@@ -229,6 +229,93 @@ def source_has_type(game, source, card_type: str) -> bool:
 # untap_attacker_and_prevent_combat_damage handler, cleared in cleanup.
 _COMBAT_SHIELD_KEY = "prevent_combat_damage_to_and_by_until_eot"
 
+#: Which end of the event a combat shield covers. Ebony Horse's marker means
+#: BOTH, and it stays a bare boolean so nothing that reads it has to change;
+#: the Legends cards need the halves, because "Prevent all combat damage that
+#: would be dealt **by** target creature this turn" (Horn of Deafening, Lady
+#: Evangela) leaves the creature perfectly able to *take* combat damage, and
+#: folding it into the two-way shield would make those creatures unkillable in
+#: combat.
+COMBAT_SHIELD_BY = "by"
+COMBAT_SHIELD_TO = "to"
+COMBAT_SHIELD_BOTH = "to_and_by"
+
+#: The directional turn-long marker, beside Ebony Horse's boolean rather than
+#: replacing it. Both are swept by ``_EOT_METADATA_KEYS``.
+_COMBAT_SHIELD_DIRECTION_KEY = "prevent_combat_damage_direction_until_eot"
+
+#: The Aura form (Gaseous Form, Demonic Torment). Not a marker at all - it is
+#: read off the attached Aura's own text at the moment damage would be dealt,
+#: so the shield ends when the Aura leaves with nothing having to clear it.
+#: The same shape ``_source_type_shielded_by`` uses one screen down.
+_ATTACHED_COMBAT_SHIELD_RE = re.compile(
+    r"^prevent all combat damage that would be dealt "
+    r"(?P<direction>to and dealt by|to|by) "
+    r"(?:enchanted|equipped) (?:artifact )?creature$"
+)
+
+
+def attached_combat_shield_direction(line: str) -> str | None:
+    """Which end of a combat damage event one printed Aura line shields, or None.
+
+    One matcher, asked by the interceptor below and by ``engine/auras.py``'s
+    support gate, so what is claimed and what is carried out are one rule.
+    """
+    match = _ATTACHED_COMBAT_SHIELD_RE.match(
+        " ".join(line.strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    printed = match.group("direction")
+    return COMBAT_SHIELD_BOTH if printed == "to and dealt by" else printed
+
+
+def _attached_combat_shield(perm) -> str | None:
+    """The direction an Aura attached to *perm* shields it in, if any."""
+    from .auras import auras_attached_to
+
+    if not hasattr(perm, "metadata"):
+        return None
+    for aura in auras_attached_to(perm):
+        for line in (aura.effective_card.oracle_text or "").splitlines():
+            direction = attached_combat_shield_direction(line)
+            if direction is not None:
+                return direction
+    return None
+
+
+def _combat_shield_directions(perm) -> frozenset[str]:
+    """Every direction *perm* is currently shielded in, from either source.
+
+    Accepts None and non-permanent damage sources (a spell's
+    ``CardDefinition``), which carry no shield at all.
+    """
+    metadata = getattr(perm, "metadata", None)
+    if not metadata:
+        return frozenset()
+    directions: set[str] = set()
+    if metadata.get(_COMBAT_SHIELD_KEY):
+        directions.add(COMBAT_SHIELD_BOTH)
+    marker = metadata.get(_COMBAT_SHIELD_DIRECTION_KEY)
+    if marker:
+        directions.add(str(marker))
+    attached = _attached_combat_shield(perm)
+    if attached is not None:
+        directions.add(attached)
+    return frozenset(directions)
+
+
+def shields_combat_damage(perm, *, dealt_to: bool) -> bool:
+    """Whether *perm*'s combat shields cover an event it is on one end of.
+
+    *dealt_to* says which end: True when *perm* is the recipient, False when it
+    is the source. The two-way marker answers both; a one-way one answers only
+    its own end, which is the whole point of carrying the direction.
+    """
+    directions = _combat_shield_directions(perm)
+    wanted = COMBAT_SHIELD_TO if dealt_to else COMBAT_SHIELD_BY
+    return COMBAT_SHIELD_BOTH in directions or wanted in directions
+
 
 def combat_shielded(perm) -> bool:
     """Whether *perm* carries a "prevent all combat damage to and by this
@@ -371,8 +458,16 @@ def _applies_scoped_combat(game, event: dict) -> bool:
 
 
 def _applies_combat_to_and_by(game, event: dict) -> bool:
+    """Whether either end of this combat damage event is shielded.
+
+    Each end is asked with the direction it is on, so a "dealt **by**" shield
+    stops the shielded creature's own damage without also stopping damage dealt
+    *to* it — which is the difference between Gaseous Form and Demonic Torment,
+    printed one word apart.
+    """
     return bool(event.get("combat")) and (
-        combat_shielded(event["recipient"]) or combat_shielded(event.get("source"))
+        shields_combat_damage(event["recipient"], dealt_to=True)
+        or shields_combat_damage(event.get("source"), dealt_to=False)
     )
 
 
@@ -763,4 +858,5 @@ def prevention_claims_line(line: str) -> bool:
         or per_damage_counter_kind(line) is not None
         or prevent_all_from_source_type(line) is not None
         or attached_prevent_all_from_source_type(line) is not None
+        or attached_combat_shield_direction(line) is not None
     )

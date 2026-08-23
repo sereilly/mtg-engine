@@ -689,6 +689,29 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
     """
     if not node.combat_only:
         raise LoweringError("no handler prevents all damage of every kind", node=node)
+    if node.dealt_by is not None:
+        # "…dealt **by** target creature this turn" (Horn of Deafening, Lady
+        # Evangela). A shield on the damage's *source*, which is why it is a
+        # different instruction from every branch below: those protect a
+        # recipient, and a creature whose damage is prevented is still perfectly
+        # able to be dealt damage itself.
+        if node.to is not None:
+            raise LoweringError(
+                "no handler shields a recipient and a source at once", node=node
+            )
+        if node.duration.kind not in _REST_OF_TURN:
+            raise LoweringError(
+                "the directional combat shield lasts exactly this turn", node=node
+            )
+        if not isinstance(node.dealt_by, ast.TargetSpec) or node.dealt_by.quantifier != "target":
+            raise LoweringError(
+                "no handler prevents the damage of an untargeted source", node=node
+            )
+        payload: dict[str, object] = {}
+        _describe_targets(payload, node.dealt_by)
+        return (
+            OracleInstruction("prevent_combat_damage_by_target_until_eot", "", payload),
+        )
     if node.to is not None:
         # "…to Dogs you control" (Pack Leader). A *set* named by a printed noun
         # phrase, which the scoped record can carry and re-match when damage

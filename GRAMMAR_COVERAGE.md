@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
 | 3ED | 296 | 389 | 81.2% | 79.9% | 44.5% | 156 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| LEG *(measured)* | 310 | 431 | 48.5% | 43.2% | 21.8% | 85 |
+| LEG *(measured)* | 310 | 431 | 49.7% | 44.3% | 22.3% | 87 |
 | **All (shipped)** | **1618** | **2286** | **81.8%** | **80.7%** | **48.0%** | **954** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -36,29 +36,29 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ---: | ---: | --- | --- |
 | 260 | 142 | expected a subject |  |
 | 112 | 51 | unrecognized effect verb |  |
-| 87 | 62 | unconsumed text |  |
+| 82 | 57 | unconsumed text |  |
 | 42 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
 | 30 | 30 | unrecognized activation cost |  |
-| 13 | 8 | expected 'the number of' in a where-clause |  |
+| 14 | 9 | expected 'the number of' in a where-clause |  |
 | 12 | 7 | expected a keyword ability |  |
 | 11 | 7 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 10 | 7 | expected 'a' |  |
 | 9 | 4 | expected a colour or a creature body after 'becomes' |  |
 | 9 | 5 | no handler for non-targeted tap/untap |  |
 | 8 | 4 | no lowering for RawEffect |  |
-| 7 | 7 | expected 'unless defending player controls' |  |
+| 6 | 6 | expected 'unless defending player controls' |  |
 | 5 | 2 | expected a quantity |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 2 | expected 'your' |  |
 | 4 | 2 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 4 | 4 | unrecognized "can't be" restriction |  |
-| 3 | 2 | expected something to shield |  |
 | 3 | 2 | expected a destination zone after 'return' |  |
 | 3 | 3 | expected a spell to counter |  |
 | 3 | 3 | no return handler honours this restriction |  |
 | 3 | 3 | expected 'the' |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
+| 2 | 2 | expected something to destroy |  |
 
 ## Cards executing through the grammar
 
@@ -736,6 +736,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Hooded Blightfang**
   - `Whenever a creature you control with deathtouch attacks, each opponent loses 1 life and you gain 1 life.`
   - `Whenever a creature you control with deathtouch deals damage to a planeswalker, destroy that planeswalker.`
+- **Horn of Deafening**
+  - `{2}, {T}: Prevent all combat damage that would be dealt by target creature this turn.`
 - **Howl from Beyond**
   - `Target creature gets +X/+0 until end of turn.`
   - `Target creature gets +X/+0 until end of turn.`
@@ -876,6 +878,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `All Swamps are 1/1 black creatures that are still lands.`
 - **Lady Caleria**
   - `{T}: Lady Caleria deals 3 damage to target attacking or blocking creature.`
+- **Lady Evangela**
+  - `{W}{B}, {T}: Prevent all combat damage that would be dealt by target creature this turn.`
 - **Leafkin Avenger**
   - `{T}: Add {G} for each creature with power 4 or greater you control.`
   - `{7}{R}: This creature deals damage equal to its power to target player or planeswalker.`

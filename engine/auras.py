@@ -719,6 +719,14 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         "cant_block",
     ),
     (
+        # Demonic Torment / Pacifism's half. The compound rows above say in so
+        # many words that a card printing only "can't attack" is a different
+        # card; this is that card, and without the row its line was unclaimed
+        # and the Aura reported unsupported.
+        re.compile(rf"^enchanted {_NOUN} can't attack$"),
+        "cant_attack",
+    ),
+    (
         # Faith's Fetters, second half. CR 605.1a's exception is part of the
         # name, because the clause without it is a strictly harsher restriction
         # — an Aura that stopped a land tapping for mana would lock its
@@ -1075,6 +1083,7 @@ def aura_continuous_claim(line: str) -> str | None:
     # Imported here rather than at module scope: `prevention` reads this
     # module's attachment record, so the two are mutually recursive at import.
     from .prevention import (
+        attached_combat_shield_direction as _attached_combat_shield_direction,
         attached_prevent_all_from_source_type as _attached_prevent_all_from_source_type,
     )
 
@@ -1093,6 +1102,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "ability-target immunity — auras.ability_target_immunity_classes"
     if _attached_prevent_all_from_source_type(normalized) is not None:
         return "prevention from a source class — prevention._source_type_shielded_by"
+    if _attached_combat_shield_direction(normalized) is not None:
+        return "combat-damage shield — prevention._attached_combat_shield"
     if _PROTECTION_LINE.match(normalized):
         return "protection grant — auras.aura_protection_colors"
     if aura_animates_artifact(normalized):
