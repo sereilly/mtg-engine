@@ -297,6 +297,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # — this one is announced for every seat, that one only for the caster.
     ("opponent_casts_nth_spell_each_turn",
      r"whenever an opponent casts their (?P<spell_ordinal>[a-z]+) spell each turn"),
+    # "Whenever this creature attacks and isn't blocked" (Merchant Ship). Its
+    # own condition, ordered before the bare "attacks" it is a prefix of: the
+    # event is the same declaration, but "isn't blocked" can only be known once
+    # blockers are (CR 509.1h), so it is announced at the combat damage step
+    # (engine/phases/combat_damage_step._fire_unblocked_attack_triggers) rather
+    # than at declare-attackers with the generic attack triggers.
+    ("attacks_unblocked",           r"whenever this creature attacks and isn't blocked"),
     ("creature_attacks",            r"whenever this creature attacks"),
     # "…blocks **a creature with flying**" (Snarespinner) narrows the source's
     # own block trigger by what it blocked. Before the bare form, which is its

@@ -63,6 +63,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature deals combat damage to a player or planeswalker",
     "creature_blocks_or_blocked_by_nonwall": "whenever this creature blocks or becomes blocked by a non-wall creature",
     "creature_deals_damage_to_opponent": "whenever this creature deals damage to an opponent",
+    "attacks_unblocked": "whenever this creature attacks and isn't blocked",
     "creature_attacks": "whenever this creature attacks",
     # A narrowed spelling beside its bare one: the subject filter is what makes
     # the pair two different firings (CR 509.3c/509.3d), so both are checked

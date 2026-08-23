@@ -405,15 +405,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'mana':
             _line('tap_target_player_lands_and_drain_mana', 'spell_pattern'),
     },
-    # "attacks and isn't blocked" is not a condition the trigger tables carry:
-    # combat_damage_step.py finds this trigger by its `creature_attacks`
-    # condition and then re-reads the source line for the rider. Until that
-    # condition exists, a production would have to drop the rider — which is the
-    # legacy rule's bug, not a migration of it.
-    'Merchant Ship': {
-        "whenever this creature attacks and isn't blocked, you gain 2 life":
-            _line("target_gains_life", "spell_pattern", amount=2, recipient="caster"),
-    },
     # Mana bought with the mana value of the creature its additional cost ate.
     # The cost itself is not the hook's — it is the general CR 601.2b table
     # (engine/cast_costs.py), paid while casting — so the key is the *effect*

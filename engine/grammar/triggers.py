@@ -92,6 +92,9 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_blocks_or_blocked_by_nonwall",
      ("this", "creature", "blocks", "or", "becomes", "blocked", "by", "a", "non-wall", "creature")),
     ("creature_attacks_or_blocks", ("this", "creature", "attacks", "or", "blocks")),
+    # "attacks and isn't blocked" (Merchant Ship) — before the bare "attacks"
+    # it is a prefix of, so the longer condition matches first.
+    ("attacks_unblocked", ("this", "creature", "attacks", "and", "isn't", "blocked")),
     ("creature_attacks", ("this", "creature", "attacks")),
     ("creature_blocks", ("this", "creature", "blocks")),
     ("creature_becomes_blocked", ("this", "creature", "becomes", "blocked")),

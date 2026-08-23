@@ -19,11 +19,11 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | LEA | 290 | 388 | 80.2% | 79.1% | 42.8% | 152 |
 | LEB | 292 | 389 | 80.2% | 79.2% | 42.9% | 153 |
 | 2ED | 292 | 389 | 80.2% | 79.2% | 42.9% | 153 |
-| ARN | 78 | 108 | 66.7% | 63.0% | 40.7% | 36 |
+| ARN | 78 | 108 | 67.6% | 63.9% | 41.7% | 36 |
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
 | 3ED | 296 | 389 | 81.0% | 79.7% | 44.2% | 155 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| **All (shipped)** | **1618** | **2286** | **81.6%** | **80.5%** | **47.8%** | **950** |
+| **All (shipped)** | **1618** | **2286** | **81.7%** | **80.5%** | **47.9%** | **950** |
 
 ## Backlog — failure reasons
 
@@ -31,7 +31,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 184 | 69 | expected a subject |  |
+| 183 | 68 | expected a subject |  |
 | 85 | 29 | unrecognized effect verb |  |
 | 45 | 21 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
@@ -59,7 +59,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 ## Cards executing through the grammar
 
-950 cards, 1093 lines.
+950 cards, 1094 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -904,6 +904,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `When there are four or more page counters on this artifact, exile it. If you do, you gain 4 life.`
 - **Merchant Ship**
   - `This creature can't attack unless defending player controls an Island.`
+  - `Whenever this creature attacks and isn't blocked, you gain 2 life.`
   - `When you control no Islands, sacrifice this creature.`
 - **Meteorite**
   - `When this artifact enters, it deals 2 damage to any target.`

@@ -52,10 +52,8 @@ class CombatDamageStepMixin:
             if permanent.blocked or self._attacker_all_blockers(idx):
                 continue
             for trig in matching_triggers(
-                permanent.effective_card, condition_kinds={"creature_attacks"}
+                permanent.effective_card, condition_kinds={"attacks_unblocked"}
             ):
-                if "isn't blocked" not in (trig.source_line or "").lower():
-                    continue
                 self._stack_push(
                     StackItem(
                         card=permanent.card,

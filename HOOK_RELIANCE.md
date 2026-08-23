@@ -12,9 +12,9 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**86 of 734 supported cards (11.7%)** carry at least one name-keyed entry, across **93 entries** in 7 registries. The pool is 734 cards, 100.0% supported.
+**85 of 734 supported cards (11.6%)** carry at least one name-keyed entry, across **92 entries** in 7 registries. The pool is 734 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **3,309 hand-written entries** covering **3,060 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **3,273 hand-written entries** covering **3,024 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
@@ -23,11 +23,11 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 | LEA | 290 | 290 (100.0%) | 49 (16.9%) | 388 | 46 (11.9%) | 53 | 18.3 |
 | LEB | 292 | 292 (100.0%) | 49 (16.8%) | 389 | 46 (11.8%) | 53 | 18.2 |
 | 2ED | 292 | 292 (100.0%) | 49 (16.8%) | 389 | 46 (11.8%) | 53 | 18.2 |
-| ARN | 78 | 78 (100.0%) | 31 (39.7%) | 107 | 30 (28.0%) | 34 | 43.6 |
+| ARN | 78 | 78 (100.0%) | 30 (38.5%) | 107 | 29 (27.1%) | 33 | 42.3 |
 | ATQ | 85 | 85 (100.0%) | 6 (7.1%) | 120 | 6 (5.0%) | 6 | 7.1 |
 | 3ED | 296 | 296 (100.0%) | 48 (16.2%) | 389 | 46 (11.8%) | 51 | 17.2 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **86 (11.7%)** | **1119** | **82 (7.3%)** | **93** | **12.7** |
+| **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **85 (11.6%)** | **1119** | **81 (7.2%)** | **92** | **12.5** |
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so four of these rows are one data point wearing four hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 
@@ -35,7 +35,7 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 80 | 82 |
+| `CARD_LINE_INSTRUCTIONS` | 79 | 81 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ENCHANTED_LAND_TAPPED_FOR_MANA` | 1 | 1 |
@@ -95,7 +95,6 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 - **Lord of the Pit** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Magnetic Mountain** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Mana Short** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Merchant Ship** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Metamorphosis** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Mijae Djinn** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Mishra's War Machine** (`CARD_LINE_INSTRUCTIONS`) — 1 line
