@@ -314,7 +314,7 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "engine/handlers/destruction.py": 4,
     "engine/handlers/prevention.py": 2,
     "engine/handlers/zones.py": 2,
-    "engine/legality.py": 3,
+    "engine/legality.py": 2,
     "engine/mixins/effects.py": 2,
     "engine/mixins/permanent_state.py": 1,
     "engine/mixins/stack/activation.py": 3,
