@@ -180,6 +180,13 @@ def _pause_beginning_phase(session: Session, marker: str, player_index: int) -> 
         if not game.stack:
             return False
         game._resolve_priority_window()
+    # A default that fails to clear its own prompt would loop here forever; the
+    # cap breaks it, and the log says so rather than carrying on silently (the
+    # same precedent as resolution.py's _settle abort).
+    game.log.append(
+        f"_pause_beginning_phase aborted after {_MAX_PROMPT_ROUNDS} rounds at {marker} "
+        "(a prompt default is not clearing itself)"
+    )
     return False
 
 

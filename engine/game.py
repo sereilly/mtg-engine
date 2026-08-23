@@ -227,7 +227,7 @@ class Game(
     # nobody receives priority until then. Kept live across an *answer* as well,
     # because answering one prompt is how the next one of the same resolution is
     # armed (Sanctum of All's "you may …" arms the search it offered).
-    resolving_stack_item: object | None = None
+    resolving_stack_item: "StackItem | None" = None
     # What each interrupted loop still owes, innermost last. Empty except while a
     # decision is outstanding; a leftover entry means a loop recorded a
     # continuation nobody came back for.
