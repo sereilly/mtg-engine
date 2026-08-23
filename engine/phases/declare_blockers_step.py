@@ -13,6 +13,7 @@ import random
 import re
 
 from ..auras import attached_combat_restrictions, aura_restriction_active
+from ..evasion_negation import negated_evasion_abilities
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..pt import add_pt_modifier
@@ -545,11 +546,35 @@ class DeclareBlockersStepMixin:
 
         return True
 
+    def _negated_evasion_abilities(self) -> frozenset[str]:
+        """Evasion abilities that currently restrict no block at all, because
+        some permanent on the battlefield says they don't (CR 509.1b).
+
+        "Creatures with islandwalk can be blocked as though they didn't have
+        islandwalk" (Undertow and its seven Legends siblings). The source is a
+        permanent nobody is attacking or blocking, so this is asked of the
+        **board** rather than of the attacker — and of every permanent, not
+        only the defender's: the sentence says "creatures", so an Undertow its
+        own controller is attacking through switches off their islandwalk too.
+        """
+        negated: set[str] = set()
+        for perm in self.all_permanents():
+            negated.update(negated_evasion_abilities(perm.effective_card.oracle_text or ""))
+        return frozenset(negated)
+
     def _attacker_has_active_landwalk(self, attacker: Permanent, blocker: Permanent) -> bool:
         defender_index = self.controller_index_of(blocker)
         if defender_index is None:
             return False
+        negated = self._negated_evasion_abilities()
         for walk, land_type in _LANDWALK_TO_LAND_TYPE.items():
+            # Switched off for blocking, but **not removed** — CR 702.14b makes
+            # landwalk an evasion ability and this text lifts the restriction it
+            # creates, nothing more. `_has_keyword` still answers True below and
+            # everywhere else, which is why the skip lives here rather than as a
+            # layer-6 removal.
+            if walk in negated:
+                continue
             # Computed through CR 613 layer 6, so a landwalk granted by an Aura
             # (Burrowing, Fishliver Oil) counts alongside a printed one and
             # ends when the Aura does — without this reader knowing an Aura

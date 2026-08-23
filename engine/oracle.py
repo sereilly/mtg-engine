@@ -2025,6 +2025,15 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # reported unsupported rather than admitted and dropped.
     if lord_buff_for(normalized) is not None:
         return True
+    # "Creatures with islandwalk can be blocked as though they didn't have
+    # islandwalk." (Gosta Dirk, Lord Magnus, Ur-Drago print it on a creature;
+    # five Legends enchantments print the same sentence.) Asked of the reader
+    # the blockers step enforces with, so the claim and the enforcement are one
+    # function rather than two tables held equal by hand.
+    from .evasion_negation import evasion_negation_for
+
+    if evasion_negation_for(normalized) is not None:
+        return True
     # "This token can't be enchanted." (Tetravus's Tetravites.) Asked of the
     # reader both attachment predicates use, so the claim and the enforcement
     # are one rule.
@@ -2590,6 +2599,7 @@ def _derived_static_claims(
     from .cost_modifiers import cost_modifier_claims_line
     from .draw_step_modifiers import draw_step_bonus_for
     from .enter_effects import enter_effect_line
+    from .evasion_negation import negated_evasion_abilities
     from .extra_triggers import extra_triggers_for
     from .global_statics import global_static_for
     from .land_play_allowance import land_play_allowance_for
@@ -2627,6 +2637,13 @@ def _derived_static_claims(
     # working perfectly.
     if global_static_for(oracle_text) is not None:
         claims.append("global_statics")
+    # "Creatures with mountainwalk can be blocked as though they didn't have
+    # mountainwalk." (Crevasse and its four siblings.) The blockers step reads
+    # the permanent's own text, so there is no instruction — and on an
+    # enchantment whose *whole* text is this sentence, no instruction means the
+    # card reports unsupported however well the effect works.
+    if negated_evasion_abilities(oracle_text):
+        claims.append("evasion_negation")
     if draw_step_bonus_for(oracle_text) is not None:
         claims.append("draw_step_modifiers")
     # The *name-keyed* half of the same CR 504 story (Island Sanctuary's

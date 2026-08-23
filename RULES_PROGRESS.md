@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**302 / 611 tracked rules covered (49%)** — 1360 tests, 0 unannotated.
+**302 / 611 tracked rules covered (49%)** — 1366 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -626,7 +626,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(30 tests, subrules abcghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(32 tests, subrules abcghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(9 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -879,7 +879,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.10** Haste *(3 tests, subrules bc)*
 - [x] **702.11** Hexproof *(2 tests, subrules bd)*
 - [x] **702.12** Indestructible *(2 tests, subrules b)*
-- [x] **702.14** Landwalk *(7 tests, subrules abc)*
+- [x] **702.14** Landwalk *(9 tests, subrules abc)*
 - [x] **702.15** Lifelink *(6 tests, subrules b)*
 - [x] **702.16** Protection *(40 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
@@ -887,7 +887,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.19** Trample *(9 tests, subrules bf)*
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(25 tests, subrules acdefghjk)*
-- [x] **702.23** Rampage *(3 tests, subrules a)*
+- [x] **702.23** Rampage *(6 tests, subrules abc)*
 - [x] **702.25** Flanking *(3 tests, subrules a)*
 - [x] **702.26** Phasing *(5 tests, subrules ad)*
 - [x] **702.36** Fear *(4 tests, subrules b)*

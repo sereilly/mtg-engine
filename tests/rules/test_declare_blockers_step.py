@@ -601,3 +601,65 @@ def test_509_3a_a_narrowed_blocks_trigger_reads_what_was_blocked():
 
     assert gained(("Flying",)) == 1
     assert gained(()) == 0, "the rider is enforced, not consumed and dropped"
+
+
+# ---------------------------------------------------------------------------
+# 509.1b — an evasion restriction a board-wide static lifts
+# ---------------------------------------------------------------------------
+
+
+def _walker_vs_island(negation_text: str | None) -> tuple[Game, bool, Permanent]:
+    """An islandwalker attacks a defender who controls an Island. Optionally
+    put a permanent printing *negation_text* on the battlefield first."""
+    attacker = Permanent(card=_mk_creature("Walker", 2, 2, keywords=("Islandwalk",)))
+    blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
+    island = Permanent(card=CardDefinition(
+        name="Island", mana_cost="", cmc=0.0, type_line="Basic Land - Island",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=("U",), raw={"name": "Island", "type_line": "Basic Land - Island"},
+    ))
+    defender_board = [blocker, island]
+    if negation_text is not None:
+        defender_board.append(Permanent(card=CardDefinition(
+            name="Negator", mana_cost="", cmc=0.0, type_line="Enchantment",
+            oracle_text=negation_text, colors=(), color_identity=(), keywords=(),
+            produced_mana=(), raw={"name": "Negator", "type_line": "Enchantment"},
+        )))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=defender_board)
+    game = Game(players=[p1, p2])
+    _to_declare_blockers(game, [0])
+    ok, _ = game.declare_blockers(1, {0: 0})
+    return game, ok, attacker
+
+
+@pytest.mark.cr("509.1b", "702.14c")
+def test_509_1b_landwalk_restricts_the_block_with_nothing_lifting_it():
+    """The control for the two tests below: the evasion ability creates a
+    restriction, and a declaration that disobeys it is illegal."""
+    _, ok, _ = _walker_vs_island(None)
+    assert not ok
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_a_board_wide_static_can_lift_an_evasion_restriction():
+    """"Creatures with islandwalk can be blocked as though they didn't have
+    islandwalk." An evasion ability creates a *restriction* (509.1b), and this
+    is a permanent that lifts it — for every creature, since the sentence says
+    "creatures" and names no controller."""
+    _, ok, _ = _walker_vs_island(
+        "Creatures with islandwalk can be blocked as though they didn't have islandwalk."
+    )
+    assert ok
+
+
+@pytest.mark.cr("702.14b")
+def test_702_14b_lifting_the_restriction_does_not_remove_the_ability():
+    """"As though it didn't have" is not "loses". The creature still has
+    islandwalk — anything that asks about the keyword, rather than about
+    whether a block is legal, must still see it."""
+    _, ok, attacker = _walker_vs_island(
+        "Creatures with islandwalk can be blocked as though they didn't have islandwalk."
+    )
+    assert ok
+    assert attacker.has_keyword("islandwalk")

@@ -18,7 +18,7 @@ Do not edit by hand — re-run the script instead.
 | 4 | Arabian Nights | ARN | 1993-12-17 | 78 | 77 | Complete (78/78 supported) |
 | 5 | Antiquities | ATQ | 1994-03-04 | 85 | 85 | Complete (85/85 supported) |
 | 6 | Revised Edition | 3ED | 1994-04-11 | 296 | 0 | Complete (296/296 supported) |
-| 7 | Legends | LEG | 1994-06-01 | 310 | 310 | Measured (121/310 supported, not shipped) |
+| 7 | Legends | LEG | 1994-06-01 | 310 | 310 | Measured (136/310 supported, not shipped) |
 | 8 | The Dark | DRK | 1994-08-01 | 119 | 119 | Not Implemented |
 | 9 | Fallen Empires | FEM | 1994-11-01 | 102 | 102 | Not Implemented |
 | 10 | Fourth Edition | 4ED | 1995-04-01 | 368 | 0 | Not Implemented |

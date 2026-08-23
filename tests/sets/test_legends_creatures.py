@@ -98,3 +98,94 @@ def test_hunding_gjornersen_gets_nothing_from_a_lone_blocker(set_pool):
     _, p1 = _blocked_by(hunding, [Permanent(card=_vanilla("Blocker", 1, 1))])
 
     assert p1.battlefield[0].effective_power == base
+
+
+# ---------------------------------------------------------------------------
+# Landwalk negation (round 2) — the creatures printing it. CR 509.1b
+# ---------------------------------------------------------------------------
+
+
+def _islandwalker() -> CardDefinition:
+    return CardDefinition(
+        name="Islandwalker", mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="Islandwalk", colors=(), color_identity=(),
+        keywords=("Islandwalk",), produced_mana=(),
+        raw={"name": "Islandwalker", "type_line": "Creature - Test",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _island() -> CardDefinition:
+    return CardDefinition(
+        name="Island", mana_cost="", cmc=0.0, type_line="Basic Land - Island",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=("U",),
+        raw={"name": "Island", "type_line": "Basic Land - Island"},
+    )
+
+
+def _blocked_declaration(defender_extra: list[Permanent]) -> tuple[Game, bool]:
+    """An islandwalker attacks a defender who controls an Island; report
+    whether the block the defender attempts is legal."""
+    attacker = Permanent(card=_islandwalker())
+    blocker = Permanent(card=_vanilla("Blocker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[blocker, Permanent(card=_island()), *defender_extra],
+    )
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()
+    ok, _ = game.declare_blockers(1, {0: 0})
+    return game, ok
+
+
+def test_islandwalk_stops_the_block_with_no_undertow_out(set_pool):
+    """The control: CR 702.14c, the defender controls an Island."""
+    _, ok = _blocked_declaration([])
+    assert not ok
+
+
+def test_undertow_lets_an_islandwalker_be_blocked(set_pool):
+    """"Creatures with islandwalk can be blocked as though they didn't have
+    islandwalk." The Island is still there and the attacker still has the
+    keyword; what is gone is the blocking restriction (CR 509.1b)."""
+    undertow = Permanent(card=set_pool("LEG")["Undertow"])
+    game, ok = _blocked_declaration([undertow])
+    assert ok
+    assert game.players[0].battlefield[0].has_keyword("islandwalk"), (
+        "the ability is lifted for blocking only — the creature still has it"
+    )
+
+
+def test_a_negation_of_a_different_landwalk_does_not_help(set_pool):
+    """Quagmire names swampwalk; the attacker walks islands. Matching on the
+    keyword rather than on the sentence is what keeps these apart."""
+    quagmire = Permanent(card=set_pool("LEG")["Quagmire"])
+    _, ok = _blocked_declaration([quagmire])
+    assert not ok
+
+
+def test_gosta_dirk_negates_islandwalk_from_a_creature(set_pool):
+    """The same sentence printed on a creature rather than an enchantment. It
+    is a board-wide static either way, so the card that carries it is not the
+    card it acts on."""
+    gosta = Permanent(card=set_pool("LEG")["Gosta Dirk"])
+    _, ok = _blocked_declaration([gosta])
+    assert ok
+
+
+def test_lord_magnus_negates_both_of_the_landwalks_it_names(set_pool):
+    """Two of these lines on one card. Answering with the first would leave the
+    second silently unenforced, which is why the reader returns a set."""
+    from engine.evasion_negation import negated_evasion_abilities
+
+    magnus = set_pool("LEG")["Lord Magnus"]
+    assert negated_evasion_abilities(magnus.oracle_text) == {"plainswalk", "forestwalk"}
+    assert compile_card_oracle(magnus).supported

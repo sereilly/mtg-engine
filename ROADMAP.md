@@ -616,3 +616,36 @@ moving it would be a card's worth of work with nothing to verify it against.
 `IMPLEMENTED_KEYWORDS` entry; a bespoke branch in the declare-blockers step
 deleted. No hook. Three new CR tests (702.23a's stack, 702.23b's resolution
 timing, 702.23c's second instance) and one new blocklist guard.
+
+## LEG round 2: landwalk negation, and why it is not a keyword removal
+
+**128 → 136 supported**, the census's largest family: five enchantments
+(Crevasse, Deadfall, Great Wall, Quagmire, Undertow) and three creatures (Gosta
+Dirk, Lord Magnus, Ur-Drago) printing one sentence per basic land type —
+"Creatures with islandwalk can be blocked as though they didn't have
+islandwalk."
+
+`engine/evasion_negation.py` is the table, in the shape
+`untap_restrictions.py` established: **no instruction kind at all.** The
+enforcement site reads the permanent's own text at the moment it needs the
+answer, so the gate's claim and the blockers step's check are the *same
+function* rather than two tables held equal by hand — and a card printed with
+this template in any other set needs no registration.
+
+**The rule the shortcut would have got wrong.** The cheap implementation is a
+layer-6 removal: take islandwalk off, blocks become legal, done in three lines.
+It is a different card. CR 702.14b makes landwalk an *evasion ability* and
+509.1b says an evasion ability creates a **blocking restriction**; this text
+lifts the restriction and nothing else. The creature still has the keyword —
+`has_keyword("islandwalk")` still answers True, a lord counting islandwalkers
+still counts it, Magical Hack remapping the word still finds it. So the skip
+lives in `_attacker_has_active_landwalk`, one line above the check it disables,
+and a test asserts the keyword survives the block it allowed.
+
+Two smaller decisions worth the words. The reader returns a **set**, because
+Lord Magnus prints two of these lines and answering with the first would leave
+the second silently unenforced — the same shape as round 1's rampage regex
+returning one instance of two. And the template requires the keyword to match
+**on both halves** of the sentence: it names the ability twice, and matching the
+first half alone would let an invented "…as though they didn't have swampwalk"
+negate islandwalk instead.
