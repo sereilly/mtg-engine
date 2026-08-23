@@ -2224,6 +2224,17 @@ h2.targeting-valid {
   object-fit: cover;
 }
 
+/* `display: block` above is a class plus an element, so it beats the global
+   `.hidden` utility on specificity and the class silently did nothing here: a
+   preview with nothing hovered kept its srcless <img>, which browsers draw as a
+   broken-image glyph with the alt text, sitting next to the "hover a card" note
+   it was supposed to give way to. Re-assert it at matching specificity.
+   `#editorPreviewFrame`'s own re-assertion further down is still needed — its
+   display rules are keyed by id, which outranks any number of classes. */
+.card-preview-frame img.hidden {
+  display: none;
+}
+
 .empty-preview {
   border-style: dashed;
 }
@@ -2803,13 +2814,41 @@ pre {
   min-height: 0;
 }
 
-.search-preview-layout .library-card-grid {
+/* The zone column is what the flex row stretches now: a two-zone search stacks
+   Graveyard above Library and the pair scrolls together, so a card near the end
+   of the library is still reachable and the preview pane stays put beside it. */
+.search-zone-column {
   flex: 1 1 auto;
   min-width: 0;
-  /* The flex row stretches the grid to the preview pane's height, making its
+  display: flex;
+  flex-direction: column;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+
+.search-preview-layout .library-card-grid {
+  flex: 0 0 auto;
+  min-width: 0;
+  /* The flex row stretches the column to the preview pane's height, making its
      height definite — without this, the auto rows compress the tiles (they
-     have overflow:hidden, so they can shrink) instead of scrolling. */
+     have overflow:hidden, so they can shrink) instead of scrolling. The column
+     owns the scrolling, so each grid inside it sizes to its own content. */
   grid-auto-rows: max-content;
+  overflow-y: visible;
+  max-height: none;
+}
+
+/* A heading is only a label for the grid under it — it must not stretch, and it
+   must not scroll away from a grid that is empty. */
+.search-zone-column .modal-section-title {
+  flex: 0 0 auto;
+}
+
+/* "Nothing in your library can be found by this search" is a sentence, not a
+   card: without this it lands in one ~110px grid cell and wraps a word per
+   line. Spanning every column lets it read as prose. */
+.library-card-grid .modal-empty-note {
+  grid-column: 1 / -1;
 }
 
 .search-preview-pane {

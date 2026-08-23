@@ -29,6 +29,7 @@ from .seats import _seat_type
 from .turn_steps import (
     _cleanup_discard_requirement,
     _optional_trigger_pending,
+    _resume_paused_beginning_phase,
     _untap_land_selection_requirement,
     _upkeep_mana_prevention_pending,
     _upkeep_pay_pending,
@@ -517,6 +518,13 @@ def do_action(session_id: str, req: GameActionRequest):
         raise HTTPException(status_code=400, detail=spec.human_only)
 
     spec.handler(session, req, seat_type)
+
+    # A turn step that stopped on a decision picks up here, once nothing is
+    # owed. In the tail rather than in the handler that answers the prompt,
+    # because *which* prompt paused the phase is not something the answering
+    # handler knows — the sacrifice confirm used to carry that resume alone, so
+    # a phase paused on any other decision would have stayed paused.
+    _resume_paused_beginning_phase(session)
 
     _notify_session_change(session.id, "action")
     return build_state(session, viewer_seat=req.seat)

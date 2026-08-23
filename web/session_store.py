@@ -122,11 +122,15 @@ class Session:
     # so the player isn't answering them before they can act.
     upkeep_decisions_deferred: bool = False
     island_sanctuary_pending: bool = False
-    # Lord of the Pit: a mandatory upkeep sacrifice pauses the beginning phase for
-    # the human to choose which creature. This records (marker, player_index) so
-    # the post-sacrifice resume (draw step + main phase) can finish the phase once
-    # the choice is confirmed. None when no such pause is outstanding.
-    pending_post_sacrifice: tuple[str, int] | None = None
+    # An upkeep decision stopped the beginning phase part-way: the phase runs no
+    # further until it is answered (CR 117.3b — nobody receives priority while a
+    # resolution is still asking). Records (marker, player_index) so the draw
+    # step and the main phase are run once the queue drains; None when no such
+    # pause is outstanding. It was Lord of the Pit's sacrifice alone, which is
+    # how Sanctum of All's "you may search your library" ran the rest of the turn
+    # with its prompt still on screen — the pause is about the queue, not about
+    # which card filled it.
+    paused_beginning_phase: tuple[str, int] | None = None
     # Time Vault: the begin-of-turn "skip your turn to untap" decision. Holds the
     # permanent names offering the skip while the human decides; cleared once they
     # skip or decline. `time_vault_resolved_turn` records the turn already decided

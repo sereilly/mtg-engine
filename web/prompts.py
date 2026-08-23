@@ -192,6 +192,13 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
         "card_type": choice.data["card_type"],
         "card_name": choice.data.get("card_name", ""),
         "zones": list(zones),
+        # Where the find actually goes. The dialog wrote "into your hand" into
+        # its own copy, so Sanctum of All — "…and put it onto the battlefield" —
+        # offered an "Add to Hand" button for a card that was never going there,
+        # and Fabled Passage's tapped land said nothing about being tapped. The
+        # engine has known since the search was armed; this is it saying so.
+        "destination": choice.data.get("destination", "hand"),
+        "enters_tapped": bool(choice.data.get("enters_tapped")),
         "cards": [ctx.serialize_card(card) for card in caster.library],
         "legal_indices": [
             index for index, card in enumerate(caster.library)

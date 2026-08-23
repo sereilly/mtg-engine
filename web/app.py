@@ -643,7 +643,7 @@ def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0)):
     session.upkeep_mana_prevention_resolved = snapshot.upkeep_mana_prevention_resolved
     session.upkeep_decisions_deferred = snapshot.upkeep_decisions_deferred
     session.island_sanctuary_pending = snapshot.island_sanctuary_pending
-    session.pending_post_sacrifice = snapshot.pending_post_sacrifice
+    session.paused_beginning_phase = snapshot.paused_beginning_phase
 
     _notify_session_change(session.id, "undo")
     return build_state(session, viewer_seat=seat)

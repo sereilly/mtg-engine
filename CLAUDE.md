@@ -326,6 +326,19 @@ adding entries, not editing dispatch**:
   loops that drive it. Adding a prompt is one `register_choice` + one renderer +
   the code that arms it — never a new `Game` field, and never another branch in
   a per-card cascade.
+  **While a prompt is owed, the game waits**, and that too is the registry's
+  answer rather than a list of kinds. A prompt armed part-way through a
+  resolution records the stack object that armed it (`_stack_item`, stamped in
+  `arm_pending_choice`); the object stays on the stack, `Game.waiting_prompt`
+  reports the decision, and no step advances and nobody receives priority until
+  the last of that object's prompts is answered (CR 608.2, CR 117.3b) — including
+  a prompt armed by *answering* an earlier one, which is how a chain of decisions
+  stays one resolution. `ChoiceSpec.holds_priority` is which kinds count, derived
+  from `blocked_detail` so "refuses every action" and "the game waits" cannot
+  disagree. This was three kinds named by hand in `pass_priority` and one more in
+  `web/turn_steps.py`, so Sanctum of All's "you may search your library" logged
+  itself resolved, left the stack a decision early, and let the turn run on to
+  the main phase with the offer still on screen.
 - `engine/commander.py` — CR 903, the Commander variant and its Brawl option
   (CR 903.12). Opt-in like `engine/ante.py`: every seam is inert unless
   `Game.commander_variant` is `"commander"` or `"brawl"`, so an ordinary duel is

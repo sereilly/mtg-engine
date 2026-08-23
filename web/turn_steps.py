@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from .session_store import Session
 
+from .prompts import auto_resolve_ai_prompts
 from .seats import (
     _ai_should_hold,
     _hold_priority_for_human,
@@ -146,6 +147,62 @@ def _gather_upkeep_decisions(session: Session, player_index: int) -> bool:
     return True
 
 
+#: Backstop on the answer/resolve alternation below. Each round either empties
+#: the stack or stops on a prompt, so a real turn needs a handful; a run of this
+#: many means a default that fails to clear its own prompt.
+_MAX_PROMPT_ROUNDS = 64
+
+
+def _pause_beginning_phase(session: Session, marker: str, player_index: int) -> bool:
+    """Whether the beginning phase must stop here, owing somebody a decision.
+
+    CR 117.3b: nobody receives priority — and no step advances — while a spell
+    or ability is still resolving, and a resolution that armed a prompt is. The
+    engine holds the ability on the stack for it; this is the turn structure's
+    half, because the step's own priority window has already been drained by
+    ``_resolve_priority_window`` and the *next* step is what would run.
+
+    Only a human's prompt stops anything: an AI seat answers its own here and
+    the drain carries on, which is also what re-enters the window a held object
+    stopped — the rest of the step's triggers are still on the stack behind it.
+
+    This asked about Lord of the Pit's sacrifice and nothing else, the one card
+    anyone had been bitten by. Sanctum of All's "you may search your library" is
+    the same fact with a different prompt in it, and used to run the draw step
+    and land in the main phase with its offer still unanswered.
+    """
+    game = session.game
+    for _ in range(_MAX_PROMPT_ROUNDS):
+        auto_resolve_ai_prompts(game, lambda seat: _seat_type(session, seat))
+        if game.waiting_prompt() is not None:
+            session.paused_beginning_phase = (marker, player_index)
+            return True
+        if not game.stack:
+            return False
+        game._resolve_priority_window()
+    return False
+
+
+def _resume_paused_beginning_phase(session: Session) -> None:
+    """Pick a beginning phase back up once nothing is owed.
+
+    Called from ``web/actions.py``'s tail after every action rather than from
+    the handler that answers the prompt: *which* prompt paused the phase is not
+    something the answering handler knows, and the sacrifice confirm carrying
+    this alone is why only that one prompt could ever pause it.
+    """
+    if session.paused_beginning_phase is None:
+        return
+    marker, player_index = session.paused_beginning_phase
+    if _pause_beginning_phase(session, marker, player_index):
+        return
+    session.paused_beginning_phase = None
+    if marker == "begin_turn":
+        _finish_beginning_phase(session, player_index)
+    elif marker == "main_phase":
+        session.game._enter_main_phase(precombat=True)
+
+
 def _advance_after_upkeep_choices(session: Session) -> None:
     """Called once all upkeep decisions (pay-or-sacrifice and optional) are resolved."""
     choices = dict(session.upkeep_resolved_choices)
@@ -170,10 +227,7 @@ def _advance_after_upkeep_choices(session: Session) -> None:
         mana_prevention=mana_prevention,
         trigger_targets=trigger_targets,
     )
-    # Lord of the Pit: a mandatory upkeep sacrifice armed an interactive choice.
-    # Pause here; the sacrifice_confirm handler resumes _finish_beginning_phase.
-    if session.game.pending_sacrifice is not None:
-        session.pending_post_sacrifice = ("begin_turn", session.current_turn)
+    if _pause_beginning_phase(session, "begin_turn", session.current_turn):
         return
     _finish_beginning_phase(session, session.current_turn)
 
@@ -343,11 +397,7 @@ def _resolve_upkeep_step(session: Session, player_index: int) -> bool:
         return True
 
     game.resolve_upkeep(player_index)
-    # Lord of the Pit: a mandatory upkeep sacrifice armed an interactive choice.
-    # Pause the beginning phase here; the human confirms, then _finish_beginning_phase
-    # runs from the sacrifice_confirm handler.
-    if game.pending_sacrifice is not None:
-        session.pending_post_sacrifice = ("begin_turn", player_index)
+    if _pause_beginning_phase(session, "begin_turn", player_index):
         return False
     return _finish_beginning_phase(session, player_index)
 
@@ -364,8 +414,7 @@ def _resume_deferred_upkeep(session: Session, player_index: int) -> None:
         return
     _clear_upkeep_pay_choices(session)
     game.resolve_upkeep(player_index)
-    if game.pending_sacrifice is not None:
-        session.pending_post_sacrifice = ("begin_turn", player_index)
+    if _pause_beginning_phase(session, "begin_turn", player_index):
         return
     _finish_beginning_phase(session, player_index)
 
@@ -392,6 +441,10 @@ def _finish_beginning_phase(session: Session, player_index: int) -> bool:
         return True
 
     game.resolve_draw_step(player_index, pay_life_loss=pay_life_loss)
+    # The draw step asks too — a draw trigger's prompt is owed before the main
+    # phase begins, exactly as the upkeep's is before the draw step.
+    if _pause_beginning_phase(session, "main_phase", player_index):
+        return False
     game._enter_main_phase(precombat=True)
     return True
 

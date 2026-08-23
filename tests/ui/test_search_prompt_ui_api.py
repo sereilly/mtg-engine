@@ -242,3 +242,113 @@ def test_a_doubled_slot_is_a_refused_assignment():
     )
     assert resp.status_code == 400
     assert _state(sid)["search_destination"] is not None, "still owed"
+
+
+# ---------------------------------------------------------------------------
+# Where the find goes — the dialog's copy is derived from it, not assumed
+# ---------------------------------------------------------------------------
+
+def test_the_prompt_names_where_the_find_goes():
+    """The client wrote "into your hand" and an "Add to Hand" button into its
+    own copy, whatever the card printed — so Sanctum of All's "…and put it onto
+    the battlefield" offered a button for a zone the card was never going to.
+    The zone has been in the choice since the search was armed; the payload is
+    what lets the dialog say it."""
+    sid = _session()[0]
+
+    prompt = _state(sid)["search_library"]
+    assert prompt["destination"] == "hand"
+    assert prompt["enters_tapped"] is False
+
+
+def test_a_battlefield_search_says_so():
+    sid, session, game = _session()
+    game.clear_pending_choices("search_library")
+    game.arm_pending_choice(
+        "search_library", 0,
+        count=1, card_type="any", zones=("library",),
+        restrictions={}, destination="battlefield", destinations=[],
+        tapped=[], enters_tapped=True, untap_found_if=None, up_to=False,
+        reveal=False, card_name="Fabled Passage",
+    )
+
+    prompt = _state(sid)["search_library"]
+    assert prompt["destination"] == "battlefield"
+    assert prompt["enters_tapped"] is True
+
+
+# ---------------------------------------------------------------------------
+# "…your library and/or graveyard" — two zones, one answer
+# ---------------------------------------------------------------------------
+
+def _two_zone_session():
+    """A search armed over both zones, with a findable card in each."""
+    sid, _sess, game = _session()
+    game.clear_pending_choices("search_library")
+    game.players[0].graveyard = [_CARDS["Mox Pearl"], _CARDS["Grizzly Bears"]]
+    game.arm_pending_choice(
+        "search_library", 0,
+        count=1, card_type="artifact", zones=("library", "graveyard"),
+        restrictions={}, destination="battlefield",
+        destinations=[], tapped=[], enters_tapped=False, untap_found_if=None,
+        up_to=False, reveal=False, card_name="Sanctum of All",
+    )
+    return sid, game
+
+
+def test_both_zones_are_offered_with_their_own_legal_picks():
+    sid, game = _two_zone_session()
+
+    prompt = _state(sid)["search_library"]
+    assert prompt["zones"] == ["library", "graveyard"]
+    # The Lotus is the only artifact in the library; the Pearl the only one in
+    # the graveyard. Each zone's legality is answered against that zone's list.
+    assert [prompt["cards"][i]["name"] for i in prompt["legal_indices"]] == ["Black Lotus"]
+    assert [
+        prompt["graveyard_cards"][i]["name"] for i in prompt["legal_graveyard_indices"]
+    ] == ["Mox Pearl"]
+
+
+def test_a_graveyard_card_can_be_the_find():
+    """The whole point: the client could only ever send a library index, so a
+    "library and/or graveyard" search had a half no player could reach."""
+    sid, game = _two_zone_session()
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "search_library_confirm",
+            "hand_index": 0,
+            "search_zone": "graveyard",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Mox Pearl"]
+    # The Pearl left the graveyard; the Tutor that was still resolving lands
+    # there behind it (CR 608.2n), which is the resolution finishing the whole
+    # way through on the answer.
+    assert [c.name for c in game.players[0].graveyard] == ["Grizzly Bears", "Demonic Tutor"]
+    assert _state(sid)["search_library"] is None
+
+
+def test_a_zone_the_search_was_not_armed_with_is_refused():
+    """The payload is a hint; the zone is checked against what the search may
+    look in, so a client cannot promote "search your library" into one that
+    also reads the graveyard."""
+    sid, _sess, game = _session()  # Demonic Tutor: library only
+    game.players[0].graveyard = [_CARDS["Mox Pearl"]]
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "search_library_confirm",
+            "hand_index": 0,
+            "search_zone": "graveyard",
+        },
+    )
+    assert resp.status_code == 400
+    assert [c.name for c in game.players[0].graveyard] == ["Mox Pearl"], "untouched"
+    assert _state(sid)["search_library"] is not None, "still owed"

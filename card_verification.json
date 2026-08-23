@@ -70,6 +70,11 @@
       "status": "pass",
       "updated_at": 1784515412.0878656
     },
+    "Ashnod's Altar": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1787458163.2135077
+    },
     "Aspect of Wolf": {
       "reason": "",
       "status": "pass",
@@ -224,6 +229,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782797545.2013893
+    },
+    "Chromatic Orrery": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1787458736.0762954
     },
     "Circle of Protection: Black": {
       "reason": "",
@@ -634,6 +644,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782543228.3974519
+    },
+    "Gaea's Avenger": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1787458385.902812
     },
     "Gaea's Liege": {
       "reason": "",
@@ -1395,6 +1410,11 @@
       "status": "pass",
       "updated_at": 1782107959.368606
     },
+    "Sanctum of Calm Waters": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1787457050.125414
+    },
     "Sandals of Abdallah": {
       "reason": "",
       "status": "pass",
@@ -1490,6 +1510,11 @@
       "status": "pass",
       "updated_at": 1781585859.2176287
     },
+    "Silent Dart": {
+      "reason": "I get an error saying no valid creature targets but the card sacrifices itself",
+      "status": "fail",
+      "updated_at": 1787458319.702542
+    },
     "Simulacrum": {
       "reason": "",
       "status": "pass",
@@ -1584,6 +1609,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782021420.3454254
+    },
+    "Swiftwater Cliffs": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1787458119.0190837
     },
     "Swords to Plowshares": {
       "reason": "",
@@ -1799,6 +1829,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781761495.226897
+    },
+    "Weakstone": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1787458508.1981003
     },
     "Web": {
       "reason": "",

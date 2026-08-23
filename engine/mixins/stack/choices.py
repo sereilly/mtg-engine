@@ -54,6 +54,18 @@ class PendingChoicesMixin:
         if spec.default_at_arm and player_index not in self.interactive_seats:
             spec.default(self, choice)
             return None
+        # Which stack object is still resolving because of this prompt. Stamped
+        # here rather than by each arming site, because the sites are handlers
+        # that know nothing about the stack — and because the prompt that keeps
+        # a resolution open is often armed by the *answer* to an earlier one.
+        # A prompt that blocks nothing is a notification the game carries on
+        # around (`hand_reveal`), so it never holds an object on the stack.
+        if (
+            self.resolving_stack_item is not None
+            and spec.holds_priority
+            and "_stack_item" not in choice.data
+        ):
+            choice.data["_stack_item"] = self.resolving_stack_item
         self.pending_choices.append(choice)
         if spec.suspends:
             # Nothing is waiting on a default taken inline above — it already
@@ -88,6 +100,69 @@ class PendingChoicesMixin:
         for choice in self.pending_choices_of(kind, player_index):
             self.discard_pending_choice(choice)
 
+    # -- The stack object a prompt belongs to -------------------------------
+    #
+    # A prompt armed while something was resolving carries that stack object
+    # (``_stack_item``, stamped in ``arm_pending_choice``). The object stays on
+    # the stack until nothing it armed is queued any more, which is what makes
+    # "the ability is still resolving" a property of the queue instead of three
+    # kinds named by hand in ``pass_priority``.
+
+    def choices_for_stack_item(self, item) -> list[PendingChoice]:
+        """Queued prompts belonging to *item*'s resolution, oldest first.
+
+        Identity, not equality: two stack objects can look alike (two copies of
+        one spell), and a resolution that answered to a look-alike's prompts
+        would leave the wrong one on the stack."""
+        return [c for c in self.pending_choices if c.data.get("_stack_item") is item]
+
+    def stack_item_is_waiting(self, item) -> bool:
+        """Whether *item*'s resolution still owes somebody a decision."""
+        return any(
+            spec_for(c.kind).open_for(self, c) for c in self.choices_for_stack_item(item)
+        )
+
+    def _release_stack_item(self, item, force: bool = False) -> None:
+        """Take a held stack object off the stack once its resolution is done.
+
+        No-op while any prompt it armed is still queued — an answer can arm the
+        next step's prompt (Sanctum of All's "you may search" arms the search),
+        and popping between the two would report the ability as resolved with
+        the player still owing a decision. Word of Command keeps its prompt
+        queued past the answer on purpose (``is_open``), so it is *queued*, not
+        *open*, that holds the object here; the ability that finishes it removes
+        it itself. ``force`` is the priority path's backstop, releasing an object
+        whose prompts went away without releasing it."""
+        if item is None or (not force and self.choices_for_stack_item(item)):
+            return
+        for index, entry in enumerate(self.stack):
+            if entry is item:
+                del self.stack[index]
+                item.resolution_held = False
+                self.log.append(f"{item.card.name} finished resolving")
+                return
+
+    def _answer_pending_choice(self, choice: PendingChoice, apply):
+        """Run one answer with the resolution it belongs to still in progress.
+
+        Both halves matter. Keeping ``resolving_stack_item`` set means a prompt
+        the answer arms inherits the same object, so a chain of decisions is one
+        resolution rather than a first step that resolved and a remainder that
+        happens with nothing on the stack. Releasing afterwards is the only
+        place the object leaves: every answer path — a player's confirm, an AI
+        seat's default — goes through here."""
+        item = choice.data.get("_stack_item")
+        previous = self.resolving_stack_item
+        if item is not None:
+            self.resolving_stack_item = item
+        try:
+            answered = apply()
+        finally:
+            self.resolving_stack_item = previous
+        if item is not None:
+            self._release_stack_item(item)
+        return answered
+
     def resolve_pending_choice(self, kind: str, player_index: int, **response) -> bool:
         """Answer the oldest pending choice of *kind* owed by *player_index*.
 
@@ -97,7 +172,12 @@ class PendingChoicesMixin:
         choice = self.pending_choice_of(kind, player_index)
         if choice is None:
             return False
-        spec = spec_for(kind)
+        return self._answer_pending_choice(
+            choice, lambda: self._apply_choice_answer(choice, response)
+        )
+
+    def _apply_choice_answer(self, choice: PendingChoice, response: dict) -> bool:
+        spec = spec_for(choice.kind)
         if not spec.suspends:
             return bool(spec.resolve(self, choice, response))
         # The suspension ends *before* the answer is applied, never after:
@@ -113,14 +193,18 @@ class PendingChoicesMixin:
 
     def take_choice_default(self, choice: PendingChoice) -> None:
         """Apply the deterministic answer a non-interactive seat gives."""
+        self._answer_pending_choice(choice, lambda: self._apply_choice_default(choice))
+
+    def _apply_choice_default(self, choice: PendingChoice) -> bool:
         spec = spec_for(choice.kind)
         if not spec.suspends:
             spec.default(self, choice)
-            return
+            return True
         self.effect_suspended = False
         spec.default(self, choice)
         resume_after_answer(self)
         self._settle_resumed_resolution()
+        return True
 
     def _settle_resumed_resolution(self) -> None:
         """CR 704.3 for a resolution that finished on an *answer*.
@@ -177,6 +261,26 @@ class PendingChoicesMixin:
                 yield spec, choice
             for choice in pending_choices_for(self, kind):
                 yield spec, choice
+
+    def waiting_prompt(self, player_index: int | None = None):
+        """The first open decision the game is waiting on, or None.
+
+        The question about *time*, where ``iter_pending_prompts`` is the whole
+        queue and ``blocking_prompt`` is about one action: while this answers,
+        no step advances and nobody receives priority (CR 117.3b). A prompt that
+        refuses nothing is a notification play carries on around
+        (``hand_reveal``), which is what ``holds_priority`` reads.
+        """
+        return next(
+            (
+                choice
+                for spec, choice in self.iter_pending_prompts()
+                if spec.holds_priority
+                and spec.open_for(self, choice)
+                and (player_index is None or choice.player_index == player_index)
+            ),
+            None,
+        )
 
     def auto_resolve_choice(self, choice) -> None:
         """Take one queued choice's default, whichever queue it came from."""
@@ -2030,7 +2134,9 @@ class PendingChoicesMixin:
         )
         if choice is None:
             return False
-        return self._resolve_optional_pay(choice, accept)
+        return self._answer_pending_choice(
+            choice, lambda: self._resolve_optional_pay(choice, accept)
+        )
 
     def _resolve_optional_pay(self, choice: PendingChoice, accept: bool) -> bool:
         player_index = choice.player_index
@@ -2041,8 +2147,12 @@ class PendingChoicesMixin:
         else:
             self._apply_optional_pay_decline(player_index, entry)
         # The trigger ability that raised this prompt was held on the stack (human
-        # priority path); now that the choice is made, it leaves the stack.
-        self._remove_optional_pay_stack_item(entry)
+        # priority path). Whether it now leaves is `_release_stack_item`'s answer,
+        # not this one: accepting can arm the *next* prompt of the same
+        # resolution — "you may search your library …" (Sanctum of All) offers
+        # the search here — and the ability is still resolving until that is
+        # answered too.
+        self._release_stack_item(entry.get("_stack_item"))
         return True
 
     def _default_optional_pay(self, choice: PendingChoice) -> None:
@@ -2075,15 +2185,7 @@ class PendingChoicesMixin:
             # non-interactive seat — Transmute Artifact's found card simply
             # vanished instead of going to a graveyard.
             self._apply_optional_pay_decline(choice.player_index, entry)
-        self._remove_optional_pay_stack_item(entry)
-
-    def _remove_optional_pay_stack_item(self, entry: dict) -> None:
-        """Remove the triggered-ability stack object an optional-pay prompt was linked
-        to, now that the prompt has been answered. No-op for entries created on the
-        headless/auto path (where the ability already left the stack)."""
-        stack_item = entry.get("_stack_item")
-        if stack_item is not None and stack_item in self.stack:
-            self.stack.remove(stack_item)
+        self._release_stack_item(entry.get("_stack_item"))
 
     def auto_resolve_pending_optional_pays(self, only_player_index: int | None = None) -> None:
         """Pay every pending optional "pay {N}" trigger when able — the
@@ -2695,6 +2797,14 @@ register_choice(
     default=lambda game, choice: game._default_mana_payment(choice),
     action="confirm_mana_payment",
     prompt_key="mana_payment",
+    # "…unless its controller pays {X}" (Power Sink) is paid *during* the
+    # counterspell's resolution, so the game genuinely waits on it — this used
+    # to say so by being named in ``pass_priority`` instead, which is a second
+    # place to state one fact and the reason every other prompt was left out of
+    # it. Paying means tapping lands and activating mana abilities, so those two
+    # answer the prompt as much as the confirm does; everything else waits.
+    blocked_detail="pay for the spell on the stack before other actions",
+    also_answers=("tap", "activate"),
 )
 
 register_choice(

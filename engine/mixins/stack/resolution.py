@@ -209,36 +209,44 @@ class StackResolutionMixin:
                     f"_settle aborted after {self.MAX_SETTLE_ITERS} iterations (possible loop)"
                 )
                 break
-    def resolve_stack(self) -> None:
+    def resolve_stack(self, pause_for_choices: bool = False) -> None:
         while self.stack:
-            if not self.resolve_top_of_stack():
-                # The top item is paused on a pending choice (Word of Command);
-                # it resolves when the choice is confirmed.
+            if not self.resolve_top_of_stack(pause_for_choices=pause_for_choices):
+                # The top item is paused on a decision somebody owes; it finishes
+                # when the choice is confirmed.
                 break
     def resolve_top_of_stack(self, pause_for_choices: bool = False) -> bool:
         """Resolve (and remove) the top stack object. Returns True if an object was
-        resolved, False if the stack was empty.
+        resolved, False if the stack was empty or its top is mid-resolution.
 
-        ``pause_for_choices`` is used by the human priority path (pass_priority): when
-        a triggered ability resolves into an optional "you may pay {N} / draw" choice
-        (Soul Net, the color Rods, Verduran Enchantress), the ability is kept on the
-        stack and its pay-prompt is linked to it, so the ability stays visible on the
-        stack until the player submits the prompt (CR 603.3 — the choice is made as the
-        ability resolves). confirm_optional_pay / auto_resolve_pending_optional_pays
-        then removes the ability from the stack. Headless/auto paths leave this False,
-        so the ability resolves and pops immediately (the pending pay is auto-resolved
-        by the caller, preserving deterministic behavior)."""
+        ``pause_for_choices`` is used by the human priority path (pass_priority).
+        CR 608.2 — a resolution is not over until its last instruction is done —
+        and CR 117.3b — nobody receives priority until then. So a resolution that
+        stops to ask somebody something ("you may search your library …",
+        Sanctum of All; "you may pay {2}", the colour Rods) keeps its object on
+        the stack, with every prompt it armed recording that object
+        (``_stack_item``, stamped in ``arm_pending_choice``). The object leaves
+        through ``_release_stack_item`` when the last of those prompts is
+        answered — and *only* then, because answering one prompt is how the next
+        step of the same resolution arms its own.
+
+        Headless/auto paths leave this False, so the object resolves and pops
+        immediately and the caller drains the prompts deterministically,
+        preserving seeded behaviour."""
         if not self.stack:
             return False
+        top = self.stack[-1]
         # A Word of Command paused mid-resolution stays on the stack until its
-        # card choice is confirmed; it can't be resolved a second time. Once the
-        # choice has been recorded (deferred confirm), releasing priority lands
-        # here and finishes the resolution: the forced card is played and the
-        # spell heads to the graveyard. The forced spell is left on the stack on
-        # the interactive path (pause_for_choices) so it gets its own priority
-        # round; headless loops drain it on their next iteration.
+        # card choice is confirmed. Once the choice has been recorded (deferred
+        # confirm), releasing priority lands here and finishes the resolution:
+        # the forced card is played and the spell heads to the graveyard. The
+        # forced spell is left on the stack on the interactive path
+        # (pause_for_choices) so it gets its own priority round; headless loops
+        # drain it on their next iteration. It is the one prompt that outlives
+        # its own answer, which is why it finishes here rather than through the
+        # generic release below.
         waiting_woc = self.pending_choice_of("word_of_command")
-        if waiting_woc is not None and waiting_woc.data.get("_stack_item") is self.stack[-1]:
+        if waiting_woc is not None and waiting_woc.data.get("_stack_item") is top:
             if "chosen_hand_index" not in waiting_woc.data:
                 return False
             self.discard_pending_choice(waiting_woc)
@@ -247,11 +255,25 @@ class StackResolutionMixin:
                 auto_resolve_forced=False, caster_index=waiting_woc.player_index,
             )
             return True
+        # Anything else that has already run its instructions is never run
+        # again: it waits while it still owes somebody a decision, and otherwise
+        # simply leaves. The second half is the backstop — an answer path that
+        # returns without releasing the object strands it here, and re-resolving
+        # it would apply the whole ability twice.
+        if top.resolution_held:
+            if self.stack_item_is_waiting(top):
+                return False
+            self._release_stack_item(top, force=True)
+            return True
 
         item = self.stack.pop()
-        pays_before = len(self.pending_choices_of("optional_pay"))
         woc_before = self.pending_choice_of("word_of_command")
-        self._run_stack_item_resolution(item)
+        previous_resolving = self.resolving_stack_item
+        self.resolving_stack_item = item if pause_for_choices else None
+        try:
+            self._run_stack_item_resolution(item)
+        finally:
+            self.resolving_stack_item = previous_resolving
         # Power Sink armed a pending "pay {X} or be countered" for the targeted
         # spell's controller. On the human priority path leave it for the prompt;
         # headless/AI resolves it deterministically (pay if able, else countered).
@@ -260,18 +282,16 @@ class StackResolutionMixin:
             payment.data.pop("_new", None)
             if not pause_for_choices:
                 self._auto_resolve_mana_payment()
-        new_pays = self.pending_choices_of("optional_pay")[pays_before:]
-        if pause_for_choices and new_pays:
-            # The ability raised an optional pay/draw choice — keep it on the stack
-            # until the choice is submitted (the only effect so far is registering the
-            # prompt; the life gain / draw happens on confirm). Link each new prompt
-            # entry to this stack item so confirming it removes the ability.
+        # Still resolving: hold the object on the stack until every prompt it
+        # armed has been answered.
+        if self.choices_for_stack_item(item):
+            item.resolution_held = True
             self.stack.append(item)
-            for pay in new_pays:
-                pay.data["_stack_item"] = item
+            return True
         # Word of Command pauses mid-resolution for the caster's card choice
         # (CR 608.2: the spell is still resolving). Keep it on the stack until
-        # confirm_word_of_command finishes the resolution and removes it.
+        # confirm_word_of_command finishes the resolution and removes it. The
+        # headless path gets no stamp above, so this is where it is linked there.
         woc_after = self.pending_choice_of("word_of_command")
         if (
             woc_after is not None
@@ -281,6 +301,23 @@ class StackResolutionMixin:
             self.stack.append(item)
             woc_after.data["_stack_item"] = item
         return True
+    def _log_ability_outcome(self, item: StackItem, supported: bool, details: str) -> None:
+        """What the game log says an ability's resolution did.
+
+        "Resolved" is a claim about a resolution that is *over*. One that armed a
+        prompt is not — the search has not been made, the life has not been
+        gained — and saying so anyway was the visible half of the bug this link
+        fixes: Sanctum of All read "ability resolved" in the log with its "you
+        may search your library" prompt still unanswered on screen. The
+        completion line is ``_release_stack_item``'s to write, once the last
+        answer arrives."""
+        if not supported:
+            self.log.append(f"{item.card.name} ability fizzled: {details}")
+        elif self.choices_for_stack_item(item):
+            self.log.append(f"{item.card.name} ability is resolving, awaiting a choice")
+        else:
+            self.log.append(f"{item.card.name} ability resolved")
+
     def _run_stack_item_resolution(self, item: StackItem) -> None:
         # **An index is not an identity** (ROADMAP idiom #11) and a graveyard is
         # the zone with no identity to fall back on, so what ``_stack_push``
@@ -314,7 +351,7 @@ class StackResolutionMixin:
             handler = TRIGGER_HOOKS.get(item.hook_key)
             if handler is not None:
                 handler(self, item)
-                self.log.append(f"{item.card.name} ability resolved")
+                self._log_ability_outcome(item, True, "")
             return
         if item.ability_instruction is not None:
             caster = self.players[item.caster_index]
@@ -354,10 +391,7 @@ class StackResolutionMixin:
                 return
             state_machine = OracleStateMachine(self, context)
             supported, details = state_machine.run(item.ability_instruction)
-            if supported:
-                self.log.append(f"{item.card.name} ability resolved")
-            else:
-                self.log.append(f"{item.card.name} ability fizzled: {details}")
+            self._log_ability_outcome(item, supported, details)
             return
 
         # A copy of an instant/sorcery (Fork) resolves like the original but is a

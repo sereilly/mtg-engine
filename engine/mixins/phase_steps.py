@@ -4,10 +4,24 @@ from ._constants import _TURN_PHASES, _PHASE_STEPS
 
 class PhaseStepsMixin:
     def _resolve_priority_window(self) -> None:
-        # 500.2 simplified: both players pass in succession once the stack is empty.
+        """Drain the stack for a step nobody is holding priority through.
+
+        500.2 simplified: both players pass in succession once the stack is
+        empty. CR 608.2 still applies *inside* that — a resolution that stops to
+        ask an interactive seat something is not finished, so it holds its object
+        on the stack and this returns with it there rather than draining the
+        step's remaining triggers into a board the answer has not shaped yet. The
+        caller resumes once the prompt is answered.
+
+        With no interactive seat there is nobody to stop for: headless and AI
+        play queue the same prompts and drain them deterministically afterwards,
+        so those runs resolve exactly as they did. That is also what keeps a
+        seeded simulation reproducible.
+        """
+        pause_for_choices = bool(self.interactive_seats)
         while True:
-            self.resolve_stack()
-            if not self.stack:
+            self.resolve_stack(pause_for_choices=pause_for_choices)
+            if not self.stack or self.stack[-1].resolution_held:
                 return
 
     def _close_or_defer_step(self, phase: str, step: str, defer_priority: bool) -> None:
@@ -94,38 +108,20 @@ class PhaseStepsMixin:
         self.priority_pass_count = 0
         if self.stack:
             self.resolve_top_of_stack(pause_for_choices=True)
-            # A triggered ability that resolved into an optional "you may pay {N} /
-            # draw" choice (Soul Net, the color Rods, Verduran Enchantress) is kept on
-            # the stack until the choice is submitted (CR 603.3). Hand priority to the
-            # player who must choose; the ability leaves the stack when they answer
-            # (confirm_optional_pay) or the AI auto-resolves it.
-            paused = next(
-                (
-                    c for c in self.pending_choices_of("optional_pay")
-                    if c.data.get("_stack_item") in self.stack
-                ),
-                None,
-            )
-            if paused is not None:
-                self.priority_player_index = paused.player_index
-                return "awaiting_choice"
-            # Power Sink: the targeted spell stays on the stack while its controller
-            # is asked to pay {X}. Hand them priority so they can tap lands and pay.
-            payment = self.pending_choice_of("mana_payment")
-            if payment is not None:
-                self.priority_player_index = payment.player_index
-                return "awaiting_choice"
-            # Word of Command stays on the stack while the caster chooses a card
-            # from the target's hand; hand the caster priority to answer. Once the
-            # choice is recorded the spell is just a stack object waiting on the
-            # normal priority release, so fall through to the usual handling.
-            woc = self.pending_choice_of("word_of_command")
-            if (
-                woc is not None
-                and woc.data.get("_stack_item") in self.stack
-                and "chosen_hand_index" not in woc.data
-            ):
-                self.priority_player_index = woc.player_index
+            # CR 117.3b gives the active player priority "after a spell or
+            # ability resolves" — a resolution that stopped to ask somebody
+            # something has not, so nobody gets priority yet and the seat that
+            # owes the decision gets the window instead. This used to name three
+            # kinds (the optional pay, Power Sink's payment, Word of Command) and
+            # so every other prompt armed mid-resolution fell straight through to
+            # the active player: Sanctum of All's "search your library" was
+            # armed, the game moved on, and only the action gate — which refuses
+            # by *seat*, not by whose turn it is — kept the board from being
+            # played around. Asking the queue covers every prompt instead, this
+            # card and the next one.
+            waiting = self.waiting_prompt()
+            if waiting is not None:
+                self.priority_player_index = waiting.player_index
                 return "awaiting_choice"
             # 704.3: state-based actions are checked before any player would
             # receive priority after a spell or ability resolves (e.g. an Aura

@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **734**
-- Passed: **388** (373 checked in-game, 15 auto-passed)
-- Failed: **0**
+- Passed: **394** (379 checked in-game, 15 auto-passed)
+- Failed: **1**
 - Equivalent to a passing card: **4**
-- Untested: **342**
+- Untested: **335**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -45,7 +45,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Artifact Blast | ⬜ untested |  |
 | Artifact Possession | ⬜ untested |  |
 | Artifact Ward | ⬜ untested |  |
-| Ashnod's Altar | ⬜ untested |  |
+| Ashnod's Altar | ✅ pass |  |
 | Ashnod's Battle Gear | ⬜ untested |  |
 | Ashnod's Transmogrant | ⬜ untested |  |
 | Aspect of Wolf | ✅ pass |  |
@@ -115,7 +115,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Channel | ✅ pass |  |
 | Chaos Orb | ✅ pass |  |
 | Chaoslace | ✅ pass |  |
-| Chromatic Orrery | ⬜ untested |  |
+| Chromatic Orrery | ✅ pass |  |
 | Chrome Replicator | ⬜ untested |  |
 | Circle of Protection: Artifacts | ⬜ untested |  |
 | Circle of Protection: Black | ✅ pass |  |
@@ -255,7 +255,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Furious Rise | ⬜ untested |  |
 | Furor of the Bitten | ⬜ untested |  |
 | Gadrak, the Crown-Scourge | ⬜ untested |  |
-| Gaea's Avenger | ⬜ untested |  |
+| Gaea's Avenger | ✅ pass |  |
 | Gaea's Liege | ✅ pass |  |
 | Gale Swooper | ⬜ untested |  |
 | Garruk's Gorehorn | ✅ pass | auto-pass: no abilities |
@@ -536,7 +536,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sage of Lat-Nam | ⬜ untested |  |
 | Samite Healer | ✅ pass |  |
 | Sanctum of All | ⬜ untested |  |
-| Sanctum of Calm Waters | ⬜ untested |  |
+| Sanctum of Calm Waters | ✅ pass |  |
 | Sanctum of Fruitful Harvest | ⬜ untested |  |
 | Sanctum of Shattered Heights | ⬜ untested |  |
 | Sanctum of Stone Fangs | ⬜ untested |  |
@@ -576,7 +576,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Short Sword | ⬜ untested |  |
 | Siege Striker | ⬜ untested |  |
 | Sigiled Contender | ⬜ untested |  |
-| Silent Dart | ⬜ untested |  |
+| Silent Dart | ❌ fail | I get an error saying no valid creature targets but the card sacrifices itself |
 | Silversmote Ghoul | ⬜ untested |  |
 | Simulacrum | ✅ pass |  |
 | Sindbad | ✅ pass |  |
@@ -619,7 +619,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sure Strike | ⬜ untested |  |
 | Swamp | ✅ pass |  |
 | Swift Response | ⬜ untested |  |
-| Swiftwater Cliffs | ⬜ untested |  |
+| Swiftwater Cliffs | ✅ pass |  |
 | Swords to Plowshares | ✅ pass |  |
 | Tablet of Epityr | ⬜ untested |  |
 | Taiga | ✅ pass |  |
@@ -726,7 +726,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Watcher of the Spheres | ⬜ untested |  |
 | Water Elemental | ✅ pass |  |
 | Weakness | ✅ pass |  |
-| Weakstone | ⬜ untested |  |
+| Weakstone | ✅ pass |  |
 | Web | ✅ pass |  |
 | Wheel of Fortune | ✅ pass |  |
 | White Knight | ✅ pass |  |

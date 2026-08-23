@@ -98,9 +98,14 @@ let holdPriorityActive = false;
 // holding shift indices, while distance-from-bottom stays stable.
 let stackClickHold = null;
 let stackCanvasHoverActive = false;
-let searchLibrarySelectedIndex = null;
+// The picked card as "<zone>:<index>", or null. Keyed by zone because
+// "…search your library **and/or graveyard**" (Sanctum of All) offers both and
+// the answer has to say which one it came from — a bare index meant the client
+// could only ever answer with a library card, so the graveyard half of those
+// searches was unreachable however the engine resolved it.
+let searchLibrarySelectedKey = null;
 // A counted search ("up to two basic land cards", Cultivate) multi-selects:
-// the picked library indices, capped at the prompt's max_picks.
+// the picked "<zone>:<index>" keys, capped at the prompt's max_picks.
 let searchLibrarySelectedMulti = new Set();
 let searchLibraryFilter = "";
 let searchLibraryShowAll = false;
@@ -4995,6 +5000,33 @@ function updateSearchLibraryPreview(card) {
   empty.classList.add("hidden");
 }
 
+// Where a search puts what it finds, in words. The dialog used to say "into
+// your hand" whatever the card printed — Sanctum of All puts its Shrine onto
+// the battlefield, and the button still read "Add to Hand". The zone rides on
+// the prompt (`destination`), so this is only the wording for it; an
+// unrecognized zone falls back to the neutral phrasing rather than guessing.
+const SEARCH_DESTINATION_WORDS = {
+  hand: { into: "into your hand", button: "Add to Hand" },
+  battlefield: { into: "onto the battlefield", button: "Put onto Battlefield" },
+  graveyard: { into: "into your graveyard", button: "Put into Graveyard" },
+  exile: { into: "into exile", button: "Exile It" },
+};
+const SEARCH_DESTINATION_FALLBACK = { into: "", button: "Confirm" };
+
+function searchDestinationWords(destination, entersTapped) {
+  const words = SEARCH_DESTINATION_WORDS[destination] || SEARCH_DESTINATION_FALLBACK;
+  // "…put it onto the battlefield **tapped**" (Fabled Passage). Part of what the
+  // player is agreeing to, so it belongs in the sentence, not just in the result.
+  if (entersTapped && words.into) return { ...words, into: `${words.into} tapped` };
+  return words;
+}
+
+// "Choose a card to put onto the battlefield." / "Choose a card." when the
+// destination is one this build has no phrasing for.
+function searchSubtitle(lead, words) {
+  return words.into ? `${lead} to put ${words.into}.` : `${lead}.`;
+}
+
 function renderSearchLibraryModal(info) {
   const modal = document.getElementById("searchLibraryModal");
   if (!modal) return;
@@ -5005,7 +5037,7 @@ function renderSearchLibraryModal(info) {
     // refreshed payload, so a refused action leaves the dialog usable.
     if (!modal.classList.contains("hidden")) {
       modal.classList.add("hidden");
-      searchLibrarySelectedIndex = null;
+      searchLibrarySelectedKey = null;
       searchLibrarySelectedMulti = new Set();
       searchLibraryFilter = "";
       searchLibraryShowAll = false;
@@ -5018,35 +5050,86 @@ function renderSearchLibraryModal(info) {
     return;
   }
 
-  const cards = info.cards || [];
   const count = info.count || 1;
   // A counted search is answered whole: multi-select up to max_picks, one
   // confirm. Where each find goes is the next prompt's question.
   const multi = !!info.multi;
   const maxPicks = multi ? (info.max_picks || count) : 1;
-  // What this search may find (Cultivate's "basic land card", …). The engine
-  // re-checks the answer, so this is presentation — but offering an illegal
-  // pick would only invite an answer the server then refuses.
-  const legal = new Set(
-    Array.isArray(info.legal_indices) ? info.legal_indices : cards.map((_, idx) => idx)
+  // The zones this search may look in, each with its cards and — the engine's
+  // answer, not a second reading of the restriction here — which of them it may
+  // find. A library-only search is the one-entry case it always was.
+  const searchesGraveyard = (info.zones || ["library"]).includes("graveyard");
+  const zones = [
+    ...(searchesGraveyard
+      ? [{
+          zone: "graveyard",
+          cards: info.graveyard_cards || [],
+          legalIndices: info.legal_graveyard_indices,
+          gridId: "searchLibraryGraveyardGrid",
+          headingId: "searchLibraryGraveyardHeading",
+        }]
+      : []),
+    {
+      zone: "library",
+      cards: info.cards || [],
+      legalIndices: info.legal_indices,
+      gridId: "searchLibraryGrid",
+      headingId: "searchLibraryLibraryHeading",
+    },
+  ].map((entry) => ({
+    ...entry,
+    // The engine re-checks the answer, so this is presentation — but offering
+    // an illegal pick would only invite an answer the server then refuses.
+    legal: new Set(
+      Array.isArray(entry.legalIndices)
+        ? entry.legalIndices
+        : entry.cards.map((_, idx) => idx)
+    ),
+  }));
+  const cardAt = (key) => {
+    const [zone, idx] = key.split(":");
+    return zones.find((entry) => entry.zone === zone)?.cards[Number(idx)] || null;
+  };
+  // Counted across both zones: "53 ineligible" is about the search, not about
+  // one of the piles it reads.
+  const illegalCount = zones.reduce(
+    (total, entry) => total + entry.cards.length - entry.legal.size, 0
   );
-  const illegalCount = cards.length - legal.size;
+  // Nothing findable anywhere: "fail to find" is the only answer left
+  // (CR 701.19b), so say so once rather than per pile.
+  const nothingFindable = zones.every((entry) => entry.legal.size === 0);
+
+  const title = document.getElementById("searchLibraryTitle");
+  if (title) {
+    title.textContent = searchesGraveyard ? "Search Library and Graveyard" : "Search Library";
+  }
+  // A counted search whose printed slots differ (Cultivate) asks where each
+  // find goes as its own prompt, so this one only names the slots when they
+  // agree; otherwise it says that the question is coming.
+  const dests = multi ? (info.destinations || []) : [];
+  const oneDestination = multi
+    ? (dests.length && dests.every((d) => d === dests[0]) ? dests[0] : null)
+    : (info.destination || "hand");
+  const words = searchDestinationWords(oneDestination, info.enters_tapped);
   const subtitle = document.getElementById("searchLibrarySubtitle");
   if (subtitle) {
     if (multi) {
-      const dests = info.destinations || [];
-      const allToHand = dests.every((d) => d === "hand");
-      subtitle.textContent = allToHand
-        ? `Choose up to ${maxPicks} cards to put into your hand.`
+      subtitle.textContent = oneDestination
+        ? searchSubtitle(`Choose up to ${maxPicks} cards`, words)
         : `Choose up to ${maxPicks} cards. You'll choose where each one goes next.`;
+    } else if (nothingFindable) {
+      // The only legal answer left is the decline, so ask for that rather than
+      // for a card the player cannot pick (CR 701.19b).
+      subtitle.textContent = "Nothing can be found by this search — click Fail to Find.";
     } else {
-      subtitle.textContent = `Choose ${count === 1 ? "a card" : `${count} cards`} to put into your hand.`;
+      subtitle.textContent = searchSubtitle(
+        `Choose ${count === 1 ? "a card" : `${count} cards`}`, words
+      );
     }
   }
 
   modal.classList.remove("hidden");
 
-  const grid = document.getElementById("searchLibraryGrid");
   const filterInput = document.getElementById("searchLibraryFilter");
   const confirmBtn = document.getElementById("searchLibraryConfirmBtn");
   const declineBtn = document.getElementById("searchLibraryDeclineBtn");
@@ -5065,7 +5148,7 @@ function renderSearchLibraryModal(info) {
   // the action's refreshed payload decides — gone for a finished search, a
   // fresh grid for the next find of an "up to N", unchanged for a refusal.
   function resetSelectionState() {
-    searchLibrarySelectedIndex = null;
+    searchLibrarySelectedKey = null;
     searchLibrarySelectedMulti = new Set();
     searchLibraryFilter = "";
     searchLibraryShowAll = false;
@@ -5075,58 +5158,78 @@ function renderSearchLibraryModal(info) {
   }
 
   const renderSig = () => JSON.stringify([
-    cards.map((card) => card.name),
-    info.legal_indices || null,
+    zones.map((entry) => [entry.zone, entry.cards.map((card) => card.name), [...entry.legal]]),
     searchLibraryShowAll,
     searchLibraryFilter,
-    searchLibrarySelectedIndex,
-    [...searchLibrarySelectedMulti].sort((a, b) => a - b),
+    searchLibrarySelectedKey,
+    [...searchLibrarySelectedMulti].sort(),
   ]);
 
-  function buildGrid() {
+  function buildZoneGrid(entry, showHeadings) {
+    const grid = document.getElementById(entry.gridId);
+    const heading = document.getElementById(entry.headingId);
+    if (heading) heading.classList.toggle("hidden", !showHeadings);
     if (!grid) return;
-    searchLibraryRenderSig = renderSig();
+    grid.classList.remove("hidden");
     const term = searchLibraryFilter.toLowerCase();
-    const items = cards
+    const items = entry.cards
       .map((card, idx) => {
-        const isLegal = legal.has(idx);
+        const isLegal = entry.legal.has(idx);
         if (!isLegal && !searchLibraryShowAll) return "";
         if (term && !card.name.toLowerCase().includes(term) && !(card.type || "").toLowerCase().includes(term)) {
           return "";
         }
+        const key = `${entry.zone}:${idx}`;
         const classes = ["library-card-choice"];
         const isSelected = multi
-          ? searchLibrarySelectedMulti.has(idx)
-          : searchLibrarySelectedIndex === idx;
+          ? searchLibrarySelectedMulti.has(key)
+          : searchLibrarySelectedKey === key;
         if (isSelected) classes.push("selected");
         if (!isLegal) classes.push("illegal");
         const inner = card.image_uri
           ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
           : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
-        return `<div class="${classes.join(" ")}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+        return `<div class="${classes.join(" ")}" data-key="${escapeHtml(key)}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
       })
       .join("");
     grid.innerHTML = items || `<div class="modal-empty-note">${
-      term ? "No cards match the filter." : "Nothing here can be found by this search — click Fail to Find."
+      term
+        ? "No cards match the filter."
+        : nothingFindable && !showHeadings
+          ? "Nothing here can be found by this search — click Fail to Find."
+          : `Nothing in your ${entry.zone} can be found by this search.`
     }</div>`;
 
     grid.querySelectorAll(".library-card-choice").forEach((el) => {
-      const idx = Number(el.dataset.idx);
-      el.addEventListener("mouseenter", () => updateSearchLibraryPreview(cards[idx]));
+      const key = el.dataset.key;
+      el.addEventListener("mouseenter", () => updateSearchLibraryPreview(cardAt(key)));
       if (el.classList.contains("illegal")) return; // visible via Show All, but not a legal find
       el.addEventListener("click", () => {
         if (multi) {
           // Toggle, capped at the printed count — "up to two" never takes three.
-          if (searchLibrarySelectedMulti.has(idx)) searchLibrarySelectedMulti.delete(idx);
-          else if (searchLibrarySelectedMulti.size < maxPicks) searchLibrarySelectedMulti.add(idx);
+          if (searchLibrarySelectedMulti.has(key)) searchLibrarySelectedMulti.delete(key);
+          else if (searchLibrarySelectedMulti.size < maxPicks) searchLibrarySelectedMulti.add(key);
           else return;
         } else {
-          searchLibrarySelectedIndex = idx;
+          searchLibrarySelectedKey = key;
         }
         updateConfirmButton();
         buildGrid();
       });
     });
+  }
+
+  function buildGrid() {
+    searchLibraryRenderSig = renderSig();
+    // Headings only earn their space when there are two piles to tell apart.
+    const showHeadings = zones.length > 1;
+    for (const entry of zones) buildZoneGrid(entry, showHeadings);
+    // A library-only search leaves the graveyard grid out of the document flow
+    // entirely rather than as an empty box under a hidden heading.
+    if (!showHeadings) {
+      document.getElementById("searchLibraryGraveyardGrid")?.classList.add("hidden");
+      document.getElementById("searchLibraryGraveyardHeading")?.classList.add("hidden");
+    }
   }
 
   function updateConfirmButton() {
@@ -5138,8 +5241,8 @@ function renderSearchLibraryModal(info) {
         : `Take Cards`;
       confirmBtn.disabled = n === 0;
     } else {
-      confirmBtn.textContent = "Add to Hand";
-      confirmBtn.disabled = searchLibrarySelectedIndex === null;
+      confirmBtn.textContent = words.button;
+      confirmBtn.disabled = searchLibrarySelectedKey === null;
     }
   }
 
@@ -5170,17 +5273,28 @@ function renderSearchLibraryModal(info) {
       const liveInfo = getSearchLibraryInfo();
       if (liveInfo?.multi) {
         if (searchLibrarySelectedMulti.size === 0) return;
-        const picks = [...searchLibrarySelectedMulti]
-          .sort((a, b) => a - b)
-          .map((index) => ({ zone: "library", index }));
+        // Sorted so the picks read in zone-then-position order, which is the
+        // order they were offered in; the engine validates the set as a whole.
+        const picks = [...searchLibrarySelectedMulti].sort().map((key) => {
+          const [zone, index] = key.split(":");
+          return { zone, index: Number(index) };
+        });
         resetSelectionState();
         await sendAction({ seat, action: "search_library_confirm", search_picks: picks });
         return;
       }
-      if (searchLibrarySelectedIndex === null) return;
-      const idx = searchLibrarySelectedIndex;
+      if (searchLibrarySelectedKey === null) return;
+      const [pickZone, pickIndex] = searchLibrarySelectedKey.split(":");
       resetSelectionState();
-      await sendAction({ seat, action: "search_library_confirm", hand_index: idx });
+      await sendAction({
+        seat,
+        action: "search_library_confirm",
+        hand_index: Number(pickIndex),
+        // The zone the index addresses. The engine checks it against the zones
+        // the search was armed with, so naming the graveyard on a library-only
+        // search is refused rather than widening the effect.
+        search_zone: pickZone,
+      });
     });
   }
 

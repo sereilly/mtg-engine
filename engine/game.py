@@ -220,6 +220,14 @@ class Game(
     # it stops instead of carrying on past a step that has not happened. Cleared
     # when the answer arrives. See engine/resumption.py.
     effect_suspended: bool = False
+    # The stack object currently resolving, on the interactive path only. Every
+    # prompt armed while it is set records it (``_stack_item``), and the object
+    # stays on the stack until nothing it armed is queued any more — CR 608.2:
+    # a resolution is not over until its last instruction is done, and CR 117.3b:
+    # nobody receives priority until then. Kept live across an *answer* as well,
+    # because answering one prompt is how the next one of the same resolution is
+    # armed (Sanctum of All's "you may …" arms the search it offered).
+    resolving_stack_item: object | None = None
     # What each interrupted loop still owes, innermost last. Empty except while a
     # decision is outstanding; a leftover entry means a loop recorded a
     # continuation nobody came back for.

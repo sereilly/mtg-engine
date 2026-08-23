@@ -752,7 +752,7 @@ def test_lord_of_the_pit_upkeep_sacrifice_pauses_then_resumes_turn():
     session.game.interactive_seats = {0}
     session.game.resolve_upkeep(0)
     assert session.game.pending_sacrifice is not None
-    session.pending_post_sacrifice = ("begin_turn", 0)
+    session.paused_beginning_phase = ("begin_turn", 0)
     session.game._set_phase_and_step("beginning", "upkeep")
 
     # The prompt offers only the OTHER creature (the Lord excludes itself).
@@ -774,7 +774,7 @@ def test_lord_of_the_pit_upkeep_sacrifice_pauses_then_resumes_turn():
     assert "Lord of the Pit" in names
     assert payload["current_turn_phase"] == "precombat_main"
     assert store.get(sid).game.pending_sacrifice is None
-    assert store.get(sid).pending_post_sacrifice is None
+    assert store.get(sid).paused_beginning_phase is None
 
 
 def test_activate_emblem_grants_prevention_and_requires_priority():

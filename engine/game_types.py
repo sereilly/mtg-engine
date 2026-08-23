@@ -163,6 +163,15 @@ class StackItem:
     # this dataclass *and* one on OracleExecutionContext. Handlers already read
     # their instruction payloads this way, so it is the same idiom.
     choices: dict = field(default_factory=dict)
+    # This object's instructions have run and it is on the stack only because
+    # somebody still owes a decision it asked for (CR 608.2: the resolution is
+    # not over until its last instruction is done; CR 117.3b: nobody receives
+    # priority until then). It is the flag rather than the queue that says so,
+    # because the two can disagree in one direction that matters: an answer path
+    # that forgets to release the object would otherwise leave it looking
+    # unresolved, and the next priority pass would run its instructions a second
+    # time. Held means resolved — the only thing left is to leave.
+    resolution_held: bool = False
 
 
 @dataclass

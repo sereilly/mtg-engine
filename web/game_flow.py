@@ -210,15 +210,15 @@ def _auto_advance_after_all_passed(session: Session, pass_result: str | None) ->
     if pass_result != "all_passed_empty":
         return
 
-    # A human caster still owes the Word of Command card choice — the game must
-    # not advance past it (an AI caster's choice was already auto-resolved). A
-    # chosen-but-unresolved spell is just a stack object; don't hold for it.
-    pending_woc = session.game.pending_word_of_command
-    if (
-        pending_woc is not None
-        and "chosen_hand_index" not in pending_woc
-        and _seat_type(session, pending_woc.get("caster_index")) == "human"
-    ):
+    # A decision somebody still owes holds the turn where it is. An AI seat's
+    # prompts were answered by _auto_resolve_ai_pending before this ran, so what
+    # is left is a human's — and advancing the step past it would resolve it
+    # into a board that has already moved on. This named Word of Command alone,
+    # which was the only prompt anyone had been bitten by; the rest of the queue
+    # is the same fact about a different card. A prompt that blocks nothing
+    # (``hand_reveal``) is a notification and holds nothing, which is what
+    # ``holds_priority`` says.
+    if session.game.waiting_prompt() is not None:
         return
 
     # Advance turn structure automatically after both players pass with an empty stack.
@@ -233,16 +233,17 @@ def _run_priority_exchange(session: Session, acting_seat: int) -> None:
         _auto_advance_after_all_passed(session, result)
 
         if result == "awaiting_choice":
-            # A triggered ability paused on the stack for an optional "you may pay /
-            # draw" choice (Soul Net, the color Rods, Verduran Enchantress). An AI
-            # chooser's pay was auto-resolved by _auto_resolve_ai_pending above (the
-            # ability left the stack), so keep resolving by passing priority again on
-            # the AI's behalf. A human chooser keeps the prompt — stop and surface it.
+            # The resolution stopped to ask somebody something, so nobody has
+            # priority until they answer (CR 117.3b) and the object stays on the
+            # stack. An AI chooser's prompt was answered by
+            # _auto_resolve_ai_pending above — the object has left the stack —
+            # so priority can go round again on its behalf. A human's is still
+            # owed: stop here and surface it. Asking the queue rather than the
+            # optional-pay list is what makes that true of the search, the
+            # discard and the mode choice as well.
             chooser = session.game.priority_player_index
-            human_pending = any(
-                e["player_index"] == chooser for e in session.game.pending_optional_pays
-            )
-            if not human_pending and chooser is not None and _seat_type(session, chooser) == "ai":
+            still_owed = chooser is not None and session.game.waiting_prompt(chooser)
+            if not still_owed and chooser is not None and _seat_type(session, chooser) == "ai":
                 result = session.game.pass_priority(chooser)
                 continue
             break

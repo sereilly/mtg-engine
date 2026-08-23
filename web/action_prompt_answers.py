@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 from .action_registry import action_handler
-from .turn_steps import _begin_turn, _finish_beginning_phase, _start_next_turn
+from .turn_steps import _begin_turn, _start_next_turn
 
 
 @action_handler("search_library_confirm")
@@ -475,13 +475,9 @@ def _action_sacrifice_confirm(session, req, seat_type):
     ok = session.game.confirm_sacrifice(req.seat, list(req.sacrifice_indices or []))
     if not ok:
         raise HTTPException(status_code=400, detail="invalid sacrifice selection")
-    # Lord of the Pit: if this sacrifice paused the beginning phase, resume it
-    # (draw step + main phase) now that the choice is made.
-    if session.pending_post_sacrifice is not None and session.game.pending_sacrifice is None:
-        marker, pidx = session.pending_post_sacrifice
-        session.pending_post_sacrifice = None
-        if marker == "begin_turn":
-            _finish_beginning_phase(session, pidx)
+    # A beginning phase this sacrifice paused resumes from the action tail in
+    # web/actions.py, along with every other prompt's — that resume lived here,
+    # so it was the one prompt a paused phase could be waiting on.
 
 @action_handler("effect_order_confirm")
 def _action_effect_order_confirm(session, req, seat_type):

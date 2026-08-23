@@ -9,6 +9,16 @@ Every interactive choice in this engine has the same five parts:
 4. the web layer **renders** it for the seat that owes it;
 5. every other action by that seat is **refused** until it is answered.
 
+A sixth thing follows from all of them: while a prompt is owed, the game
+**waits**. A prompt armed part-way through a resolution records the stack object
+that armed it, that object stays on the stack, and no step advances and nobody
+receives priority until the last of its prompts is answered — CR 608.2 and
+CR 117.3b. That link is stamped in ``arm_pending_choice`` and read by
+``Game.waiting_prompt``; ``holds_priority`` below is which kinds it applies to.
+It replaced three kinds named by hand in ``pass_priority``, which is why Sanctum
+of All's "you may search your library" resolved, reported itself resolved, and
+let the turn run on with the offer still on screen.
+
 Those five used to be five unrelated places — a one-card ``pending_*`` field on
 ``Game``, a ``confirm_*`` method, an ``auto_resolve_*`` method, a branch in the
 state serializer and a branch in the action guard — with nothing tying them
@@ -113,6 +123,18 @@ class ChoiceSpec:
     def open_for(self, game, choice) -> bool:
         """Whether *choice* is still waiting on its seat."""
         return self.is_open is None or bool(self.is_open(game, choice))
+
+    @property
+    def holds_priority(self) -> bool:
+        """Whether the game waits on this prompt instead of handing out priority.
+
+        The same fact ``blocked_detail`` already states: a kind that refuses
+        every other action is one the game is waiting on, and a kind that
+        refuses nothing is a notification play carries on around
+        (``hand_reveal``). Derived rather than declared so the two cannot say
+        different things — a prompt that blocked the board but let priority pass
+        would be answered into a board somebody else had already changed."""
+        return self.blocked_detail is not None
 
 
 CHOICE_SPECS: dict[str, ChoiceSpec] = {}

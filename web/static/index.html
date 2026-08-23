@@ -642,7 +642,10 @@
     <div id="searchLibraryModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="searchLibraryTitle">
       <div class="modal-box modal-box--search-preview">
         <h2 id="searchLibraryTitle" class="modal-title">Search Library</h2>
-        <p id="searchLibrarySubtitle" class="modal-subtitle">Choose a card to put into your hand.</p>
+        <!-- Both this and the confirm button below are rewritten from the
+             prompt's `destination` before the dialog is shown; the defaults
+             here name no zone rather than naming the wrong one. -->
+        <p id="searchLibrarySubtitle" class="modal-subtitle">Choose a card.</p>
         <div class="modal-search-row search-controls-row">
           <input id="searchLibraryFilter" type="text" placeholder="Filter by name or type…" autocomplete="off" />
           <label id="searchLibraryShowAllRow" class="modal-checkbox-row hidden">
@@ -651,7 +654,17 @@
           </label>
         </div>
         <div class="search-preview-layout">
-          <div id="searchLibraryGrid" class="library-card-grid"></div>
+          <!-- "…search your library **and/or graveyard**" (Sanctum of All) is
+               two zones and one answer, so both are picked from here and each
+               choice carries the zone it came from. The headings and the
+               graveyard grid appear only when the search reads both; a
+               library-only search is the single grid it always was. -->
+          <div class="search-zone-column">
+            <h3 id="searchLibraryGraveyardHeading" class="modal-section-title hidden">Graveyard</h3>
+            <div id="searchLibraryGraveyardGrid" class="library-card-grid hidden"></div>
+            <h3 id="searchLibraryLibraryHeading" class="modal-section-title hidden">Library</h3>
+            <div id="searchLibraryGrid" class="library-card-grid"></div>
+          </div>
           <aside class="search-preview-pane" aria-label="Card preview">
             <div id="searchLibraryPreviewFrame" class="card-preview-frame empty-preview">
               <div class="card-preview-image-wrap">
@@ -668,7 +681,7 @@
         </div>
         <div class="modal-footer">
           <button id="searchLibraryDeclineBtn" type="button" class="secondary-btn">Fail to Find</button>
-          <button id="searchLibraryConfirmBtn" type="button" disabled>Add to Hand</button>
+          <button id="searchLibraryConfirmBtn" type="button" disabled>Confirm</button>
         </div>
       </div>
     </div>

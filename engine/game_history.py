@@ -23,7 +23,7 @@ class GameSnapshot:
     upkeep_mana_prevention_resolved: dict[str, int] = field(default_factory=dict)
     upkeep_decisions_deferred: bool = False
     island_sanctuary_pending: bool = False
-    pending_post_sacrifice: tuple[str, int] | None = None
+    paused_beginning_phase: tuple[str, int] | None = None
 
 
 class GameHistory:
@@ -49,7 +49,7 @@ class GameHistory:
                 upkeep_mana_prevention_resolved=dict(session.upkeep_mana_prevention_resolved),
                 upkeep_decisions_deferred=session.upkeep_decisions_deferred,
                 island_sanctuary_pending=session.island_sanctuary_pending,
-                pending_post_sacrifice=session.pending_post_sacrifice,
+                paused_beginning_phase=session.paused_beginning_phase,
             )
         )
 
