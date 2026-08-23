@@ -121,6 +121,7 @@ python scripts/run_duel.py            # scripted deterministic duel, no server (
 python scripts/simulate_ai_games.py   # AI-vs-AI batch; deterministic per seed (default LEA)
 python scripts/support_report.py      # per-category card-support coverage (whole pool)
 python scripts/support_report.py --set ATQ --hollow-lines   # supported cards carrying an ability with no instruction behind it (a Phase 3 exit criterion)
+python scripts/support_report.py --set LEG --refusals   # every refused line of every unsupported card with its exact refusal site (the plain census quotes only the first) — the work list backlog rounds are planned from
 python scripts/retrieve_oracle.py "Black Lotus"   # oracle text by name (whole pool)
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests

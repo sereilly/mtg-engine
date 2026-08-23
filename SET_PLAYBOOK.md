@@ -36,9 +36,16 @@ isolation*, each group edits its own copy of the repo and authorship
 parallelises — the serial rule then applies to **integration**: merge one
 branch at a time, running the full suite and every `--check` between merges,
 because two groups that each pass alone can still collide in
-`lowering/categories.py`, `effect_labels.py` or `tests/sets/`. Without
-isolation (this repo currently refuses it — git resolves a redirect that
-would let a worktree write outside itself), fan out **design** instead:
+`lowering/categories.py`, `effect_labels.py` or `tests/sets/`. Worktree
+isolation **works** (verified 2026-08-23: `git worktree add` succeeds, the
+worktree imports its *own* copy of `engine/` — no editable-install redirect
+back to the main checkout — and the suite runs inside it through the main
+checkout's venv by absolute path). An earlier note here said the repo
+refused it; that refusal was an agent *sandbox* reading the worktree's
+`.git`-file redirect into the main repo as a write outside itself — a
+property of the harness's managed isolation, not of git. Create worktrees
+with plain `git worktree add <dir> -b <branch>` and point agents at them.
+Where worktrees are unavailable, fan out **design** instead:
 each agent verifies its group against the live compiler and returns an
 exact spec — file, function, current code, replacement code, tests — and
 one applier lands them in sequence. The second shape is slower per round but
@@ -102,7 +109,10 @@ is green, the trackers carry its row, and the census is in hand.
    Phase 2. Know what the histogram is: each reason quotes only the **first**
    refused line of its card, so a card counted under a keyword may carry three
    more gaps behind it — the histogram sizes the buckets, it does not promise
-   a bucket's fix supports its cards.
+   a bucket's fix supports its cards. `--refusals` is the whole list: every
+   refused line of every unsupported card with the grammar's exact refusal
+   site, plus a rollup by site — run it too, and plan Phase 3's rounds from
+   it rather than re-probing the compiler card by card.
 
 ## Phase 2 — Machinery census (the big rocks)
 
