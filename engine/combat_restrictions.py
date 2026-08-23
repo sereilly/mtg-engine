@@ -21,13 +21,18 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .grammar.vocabulary import CREATURE_TYPES
+from .grammar.vocabulary import COLOR_WORDS, CREATURE_TYPES, IMPLEMENTED_KEYWORDS
 
 # Basic land types a "controls a <type>" clause can name. Restricted to the five
 # basics deliberately: the enforcing check in declare_attackers_step scopes its
 # search to lands, and a nonbasic type would need the same scoping decided
 # per card.
 _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
+
+# Colour words a blocker narrowing can name, as one alternation. Read from the
+# grammar's vocabulary rather than spelled out, so this file and the parser
+# cannot come to disagree about what a colour word is.
+_COLOR_WORD = "|".join(sorted(COLOR_WORDS))
 
 # Printed number words a threshold can be written with. Shared with nothing on
 # purpose: the compiler's own `_NUMBER_WORDS` covers trigger counts and is a
@@ -54,6 +59,7 @@ class CombatRestriction:
 #   cant_block                      phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
 #   cant_be_blocked_by              phases/declare_blockers_step
+#   cant_be_blocked_except_by       phases/declare_blockers_step
 #   cant_block_power_n_or_greater   phases/declare_blockers_step
 #   can_block_only_with_keyword     phases/declare_blockers_step
 #   must_be_blocked                 phases/declare_blockers_step
@@ -104,6 +110,40 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"(?P<blocker_type>artifact|enchantment|land) creatures$"
         ),
         "cant_be_blocked_by",
+    ),
+    (
+        # "…can't be blocked by **red** creatures" (Elder Spawn). A colour, and
+        # payload for the reason the subtype above is: the restriction is the
+        # same sentence with a different word in it.
+        re.compile(
+            rf"^this creature can't be blocked by (?P<blocker_color>{_COLOR_WORD}) creatures$"
+        ),
+        "cant_be_blocked_by",
+    ),
+    (
+        # "…can't be blocked by creatures with power 3 or greater" (Amrou
+        # Kithkin). The mirror of `cant_block_power_n_or_greater` below, which
+        # reads the same threshold off the *blocker's* text instead — one says
+        # "nothing that big may block me" and the other "I may not block
+        # anything that big", and they are different cards.
+        re.compile(
+            r"^this creature can't be blocked by creatures with power "
+            r"(?P<blocker_power>\d+) or greater$"
+        ),
+        "cant_be_blocked_by",
+    ),
+    (
+        # "…can't be blocked **except by** Walls and/or creatures with flying"
+        # (Elven Riders, Evil Eye of Orms-by-Gore). The inverse of the rows
+        # above: those name what may not block, this names the only things that
+        # may, and a blocker matching *any* member of the union is legal.
+        #
+        # Its own kind rather than a negated `cant_be_blocked_by`, because the
+        # two differ in what they say about everything unnamed — "can't be
+        # blocked by Walls" lets the rest of the board through, "except by
+        # Walls" lets none of it through.
+        re.compile(r"^this creature can't be blocked except by (?P<allowed>.+)$"),
+        "cant_be_blocked_except_by",
     ),
     # A blocking *requirement* rather than a restriction (CR 509.1c), and
     # weaker than Lure's: **one** able creature must block it, not every
@@ -193,5 +233,74 @@ def combat_restriction_for(normalized_line: str) -> CombatRestriction | None:
         subtype = payload.get("blocker_subtype")
         if subtype is not None and subtype not in CREATURE_TYPES:
             return None
+        # A captured colour reaches the payload as its **symbol**, converted
+        # here for the reason a captured number is converted to an int here: a
+        # payload whose shape depends on which regex matched is how a filter
+        # silently stops matching. Every other reader of `color_filter` in this
+        # engine takes a symbol.
+        colour = payload.get("blocker_color")
+        if colour is not None:
+            payload["blocker_color"] = COLOR_WORDS[colour]
+        # "…except by Walls and/or creatures with flying". The union is parsed
+        # **here**, and a phrase this cannot read refuses the line — the regex
+        # above ends in `.+`, so admitting the match and leaving the tail to the
+        # enforcement site would be a restriction the gate accepts and nobody
+        # applies. That is the widening direction: an evasion ability nothing
+        # enforces makes the creature blockable by everything.
+        allowed = payload.pop("allowed", None)
+        if allowed is not None:
+            filters = _blocker_union(allowed)
+            if filters is None:
+                return None
+            payload["allowed_blockers"] = filters
         return CombatRestriction(kind, payload)
+    return None
+
+
+#: One member of an "except by" union, as the subject-filter payload that tests
+#: it. Each entry is a whole printed noun phrase rather than a word, because
+#: "creatures with flying" and "artifact creatures" are two words doing two
+#: different jobs and splitting them would need the noun parser this file
+#: deliberately does not have.
+def _blocker_union(phrase: str) -> list[dict] | None:
+    """The filters a "can't be blocked except by <phrase>" line allows, or None.
+
+    None means "this file does not read that phrase", which keeps the card
+    unsupported with the clause named. Returning a partial union instead would
+    be an evasion ability that lets through more than the card allows.
+    """
+    filters: list[dict] = []
+    for part in re.split(r"\s*(?:and/or|and|or)\s+", phrase.strip()):
+        part = part.strip()
+        if not part:
+            continue
+        described = _blocker_noun(part)
+        if described is None:
+            return None
+        filters.append(described)
+    return filters or None
+
+
+def _blocker_noun(part: str) -> dict | None:
+    """One member of the union, as a subject-filter payload."""
+    keyword = re.fullmatch(r"creatures with ([a-z ]+)", part)
+    if keyword is not None:
+        # The word has to be a keyword the engine implements, checked here for
+        # the reason the subtype is checked in `combat_restriction_for`: the
+        # matcher would answer "no permanent has that" for anything else, and a
+        # *whitelist* whose members match nothing is a creature that cannot be
+        # blocked at all. Loud refusal instead.
+        word = keyword.group(1).strip()
+        if word not in IMPLEMENTED_KEYWORDS:
+            return None
+        return {"type_filter": "creature", "with_keywords": [word]}
+    colored = re.fullmatch(rf"({_COLOR_WORD}) creatures", part)
+    if colored is not None:
+        return {"type_filter": "creature", "color_filter": COLOR_WORDS[colored.group(1)]}
+    typed = re.fullmatch(r"(artifact|enchantment|land) creatures", part)
+    if typed is not None:
+        return {"type_filter_all": [typed.group(1), "creature"]}
+    singular = part[:-1] if part.endswith("s") else part
+    if singular in CREATURE_TYPES:
+        return {"subtype_filter": singular}
     return None

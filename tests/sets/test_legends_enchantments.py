@@ -138,3 +138,57 @@ def test_lady_evangela_carries_the_same_ability(set_pool):
     assert [a.instruction.kind for a in program.activated_abilities] == [
         "prevent_combat_damage_by_target_until_eot"
     ]
+
+
+# ---------------------------------------------------------------------------
+# Seeker (round 7) — the whitelist evasion printed on an Aura
+# ---------------------------------------------------------------------------
+
+
+def _seeker_blocked_by(set_pool, blocker: Permanent) -> bool:
+    """Whether *blocker* may block a creature enchanted with Seeker."""
+    host = Permanent(card=_creature("Host"))
+    seeker = Permanent(card=set_pool("LEG")["Seeker"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host, seeker]),
+        PlayerState(name="P2", battlefield=[blocker]),
+    ])
+    attach_aura(seeker, host)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()
+    return game.declare_blockers(1, {0: 0})[0]
+
+
+def _typed(name: str, type_line: str, colors=()) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text="", colors=colors, color_identity=colors, keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line, "power": "2", "toughness": "2"},
+    )
+
+
+def test_seeker_admits_an_artifact_creature(set_pool):
+    """"…except by artifact creatures and/or white creatures." The Aura form of
+    Elven Riders' whitelist, read through the same subject rewrite — the
+    difference between the two cards is whose text the sentence is on."""
+    assert _seeker_blocked_by(
+        set_pool, Permanent(card=_typed("Golem", "Artifact Creature - Golem"))
+    )
+
+
+def test_seeker_admits_a_white_creature(set_pool):
+    assert _seeker_blocked_by(
+        set_pool, Permanent(card=_typed("Cleric", "Creature - Cleric", colors=("W",)))
+    )
+
+
+def test_seeker_refuses_a_creature_matching_neither_half(set_pool):
+    assert not _seeker_blocked_by(
+        set_pool, Permanent(card=_typed("Goblin", "Creature - Goblin", colors=("R",)))
+    )

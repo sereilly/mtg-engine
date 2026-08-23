@@ -517,6 +517,20 @@ class DeclareBlockersStepMixin:
             *attacker_program.instructions,
             *attached_combat_restrictions(attacker),
         ):
+            # "…can't be blocked **except by** X" (Elven Riders, Evil Eye of
+            # Orms-by-Gore, Seeker). The inverse of the restriction below, and
+            # its own branch because it is a *whitelist*: a blocker matching no
+            # member of the union is illegal, where the restriction below only
+            # rejects blockers that do match. An empty union never reaches here
+            # — `combat_restriction_for` refuses a phrase it cannot parse
+            # rather than admitting one that would allow everything.
+            if restriction.kind == "cant_be_blocked_except_by":
+                allowed = restriction.payload.get("allowed_blockers") or ()
+                if not any(
+                    subject_matches(self, blocker, described) for described in allowed
+                ):
+                    return False
+                continue
             if restriction.kind != "cant_be_blocked_by":
                 continue
             described = {}
@@ -529,14 +543,26 @@ class DeclareBlockersStepMixin:
                 # artifact (which could not block anyway) is not what is
                 # described and an animated one is.
                 described["type_filter_all"] = [blocker_type, "creature"]
+            colour = restriction.payload.get("blocker_color")
+            if colour:
+                # Through `subject_matches`, so it is layer 5 that answers: a
+                # Grizzly Bears laced red is a red creature, and the printed
+                # line would say otherwise.
+                described["color_filter"] = colour
+            power = restriction.payload.get("blocker_power")
+            if power is not None:
+                # "power 3 **or greater**", against the blocker's *effective*
+                # power (CR 613 layer 7) — a 2/2 that has been pumped stops
+                # being a legal blocker while it is pumped.
+                described["power"] = {"op": "ge", "value": int(power)}
             if described and subject_matches(self, blocker, described):
                 return False
 
-        # Invisibility: attacker can only be blocked by Walls
-        # Invisibility. Asked of the Auras attached right now, so the
-        # restriction ends when the Aura does without anything clearing a flag.
-        if aura_restriction_active(attacker, "only_blockable_by_walls") and not blocker.has_type("wall"):
-            return False
+        # Invisibility's "can't be blocked except by Walls" used to be its own
+        # aura restriction and its own check here. It is not any more: the loop
+        # above reads the whitelist form through the same subject rewrite as
+        # every other attached restriction, so Invisibility, Seeker and Elven
+        # Riders are one rule printed on three different kinds of card.
 
         # "Can't block creatures with power N or greater" (Ironclaw Orcs). The
         # threshold rides on the payload rather than the instruction kind, so a

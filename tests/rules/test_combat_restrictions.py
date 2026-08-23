@@ -71,14 +71,48 @@ def test_506_3_a_non_island_restriction_is_actually_enforced():
 
 @pytest.mark.cr("506.3")
 def test_506_3_unrelated_lines_impose_no_combat_restriction():
-    """A loose match here would silently stop a creature attacking."""
+    """A loose match here would silently stop a creature attacking.
+
+    "…can't be blocked except by walls" used to be in this list, because the
+    table did not read the whitelist form at all and Invisibility's version was
+    an Aura restriction of its own. It is a restriction now (Evil Eye of
+    Orms-by-Gore prints it about itself), so the negative case it stood for is
+    made by the unreadable union below instead.
+    """
     for line in (
-        "this creature can't be blocked except by walls",
+        "this creature can't be blocked except by gorillas riding unicycles",
         "this creature gets +1/+1 as long as you control a swamp",
         "flying",
         "",
     ):
         assert combat_restriction_for(line) is None, line
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_an_except_by_clause_names_the_only_legal_blockers():
+    """"…can't be blocked except by Walls and/or creatures with flying"
+    (Elven Riders). A whitelist: a blocker matching no member of the union is
+    illegal, where "can't be blocked by Walls" lets the rest of the board
+    through."""
+    restriction = combat_restriction_for(
+        "this creature can't be blocked except by walls and/or creatures with flying"
+    )
+    assert restriction is not None
+    assert restriction.kind == "cant_be_blocked_except_by"
+    assert restriction.payload["allowed_blockers"] == [
+        {"subtype_filter": "wall"},
+        {"type_filter": "creature", "with_keywords": ["flying"]},
+    ]
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_an_unreadable_union_refuses_the_whole_line():
+    """The pattern ends in a catch-all, so the union is parsed where the
+    restriction is built. A phrase it cannot read must refuse the line rather
+    than admit a restriction that allows everything — the widening direction."""
+    assert combat_restriction_for(
+        "this creature can't be blocked except by creatures with three heads"
+    ) is None
 
 
 # ---------------------------------------------------------------------------

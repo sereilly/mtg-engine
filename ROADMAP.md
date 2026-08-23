@@ -775,3 +775,38 @@ form — one loop, two sources. The narrowing is translated into the
 subject-filter vocabulary the same way `cant_be_blocked_by` is four screens
 down; left untranslated it would have compelled the whole board, which is Lure
 rather than Marble Priest.
+
+## LEG round 7: a whitelist is not a negated blacklist
+
+**153 → 156 supported.** Amrou Kithkin, Elven Riders, Seeker — the evasion
+family. Two of the three narrowings were payload the table did not carry
+(a colour, a power threshold); the third is a different *kind* of restriction
+and got its own instruction kind.
+
+**"Can't be blocked except by X" is `cant_be_blocked_except_by`, not
+`cant_be_blocked_by` with a `not`.** The two differ in what they say about
+everything the sentence does *not* name: "can't be blocked by Walls" lets the
+rest of the board through, "except by Walls" lets none of it through. Written
+as one kind with a flag, an unreadable member of the union would flip a card
+from unblockable-by-almost-everything to blockable-by-everything.
+
+Two things the round is worth recording for:
+
+**The regex ends in a catch-all, so the union is parsed where the restriction
+is built.** "Walls and/or creatures with flying" cannot be delimited by an
+alternation without the noun parser this file deliberately does not have, so
+`_blocker_union` reads it and a phrase it cannot read **refuses the whole
+line**. Admitting the match and leaving the tail to the enforcement site is the
+shape this file's own comments keep describing.
+
+**And the test written for that found the hole in it.** The first version
+accepted "creatures with three heads" as a keyword filter — which, in a
+whitelist, is a creature that cannot be blocked *at all*. The keyword is
+checked against `IMPLEMENTED_KEYWORDS` now, the same way the subtype is checked
+against `CREATURE_TYPES` five lines up.
+
+Invisibility's hardcoded `only_blockable_by_walls` Aura restriction and its own
+check in the blockers step are **gone**: the general template reads its line
+through the same subject rewrite every other attached restriction uses, so
+Invisibility, Seeker and Elven Riders are one rule printed on three kinds of
+card.

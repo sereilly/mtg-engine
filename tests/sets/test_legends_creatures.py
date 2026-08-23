@@ -265,3 +265,74 @@ def test_a_pinger_cannot_be_activated_outside_combat(set_pool):
     # while leaving the restriction unenforced.
     assert result.details == "no valid target for Tor Wauki"
     assert not pinger.tapped, "a refused activation pays no cost"
+
+
+# ---------------------------------------------------------------------------
+# Evasion (round 7) — "can't be blocked by X" and its whitelist twin
+# ---------------------------------------------------------------------------
+
+
+def _wall(name: str, power: int = 0, toughness: int = 4) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Wall",
+        oracle_text="Defender", colors=(), color_identity=(),
+        keywords=("Defender",), produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Wall",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _flier(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bird",
+        oracle_text="Flying", colors=(), color_identity=(),
+        keywords=("Flying",), produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bird",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _may_block(attacker_card, blocker_perm) -> bool:
+    """Whether *blocker_perm* may legally block a creature with *attacker_card*."""
+    attacker = Permanent(card=attacker_card)
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker_perm])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()
+    return game.declare_blockers(1, {0: 0})[0]
+
+
+def test_amrou_kithkin_dodges_the_big_creatures_only(set_pool):
+    """"…can't be blocked by creatures with power 3 or greater." The threshold
+    is payload, and it is read against *effective* power."""
+    kithkin = set_pool("LEG")["Amrou Kithkin"]
+
+    assert not _may_block(kithkin, Permanent(card=_vanilla("Big", 3, 3)))
+    assert _may_block(kithkin, Permanent(card=_vanilla("Small", 2, 2)))
+
+
+def test_elven_riders_admits_either_half_of_its_union(set_pool):
+    """"…except by Walls **and/or** creatures with flying" — a whitelist, so a
+    blocker matching either member is legal and one matching neither is not."""
+    riders = set_pool("LEG")["Elven Riders"]
+
+    assert _may_block(riders, Permanent(card=_wall("Some Wall")))
+    assert _may_block(riders, Permanent(card=_flier("Some Bird")))
+    assert not _may_block(riders, Permanent(card=_vanilla("Ground Bear", 2, 2)))
+
+
+def test_a_whitelist_is_not_a_blacklist(set_pool):
+    """The distinction the two kinds exist for. Elven Riders lets through only
+    what it names; Amrou Kithkin lets through everything it does *not* name."""
+    riders = set_pool("LEG")["Elven Riders"]
+    kithkin = set_pool("LEG")["Amrou Kithkin"]
+    ordinary = Permanent(card=_vanilla("Ordinary", 1, 1))
+
+    assert not _may_block(riders, ordinary)
+    assert _may_block(kithkin, Permanent(card=_vanilla("Ordinary", 1, 1)))

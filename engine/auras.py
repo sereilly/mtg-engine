@@ -663,10 +663,6 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
 # Each name is the vocabulary the readers use; the pattern is the printed line.
 _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
-        re.compile(rf"^{_ATTACHED} {_NOUN} can't be blocked except by walls$"),
-        "only_blockable_by_walls",
-    ),
-    (
         re.compile(rf"^all creatures able to block {_ATTACHED} creature do so$"),
         "must_be_blocked_by_all_able",
     ),
@@ -797,7 +793,14 @@ def aura_protection_colors(oracle_text: str) -> frozenset[str]:
 #: an ability that works more often than the card allows. So the set names
 #: exactly the kinds a reader consults, and adding one means adding that
 #: reader.
-ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({"cant_be_blocked_by"})
+ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({
+    "cant_be_blocked_by",
+    # "Enchanted creature can't be blocked except by artifact creatures and/or
+    # white creatures." (Seeker.) The whitelist form, read through the same
+    # subject rewrite as the blacklist beside it — the difference between
+    # Seeker and Elven Riders is whose text the sentence is printed on.
+    "cant_be_blocked_except_by",
+})
 
 #: "Enchanted creature" / "equipped creature" in the subject position, with the
 #: noun kept: the table below is written about "this creature", and a line about
