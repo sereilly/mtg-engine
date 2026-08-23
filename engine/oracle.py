@@ -52,6 +52,7 @@ from .cast_costs import cast_cost_claims_line
 from .combat_restrictions import combat_restriction_for
 from .effect_labels import activated_label, triggered_label
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
+from .rampage import rampage_amount, rampage_triggers
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
 from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
@@ -86,8 +87,22 @@ __all__ = [
 # read the SAME table. Held by `tests/engine/test_keyword_registry.py`, which
 # checks the gate's *behaviour* against the registry rather than comparing two
 # lists — comparing them is something a future second copy would also pass.
+# Keyword *mechanics* the engine does not model at all, named as the ingested
+# `keywords` field spells them. This is not the negation of the registry above —
+# "Enchant", "Regenerate" and "Landwalk" are Scryfall keyword tags whose
+# behaviour lives elsewhere (`engine/auras.py`, the regeneration handler, the
+# evasion table), so deriving this set from `KEYWORD_ABILITIES -
+# IMPLEMENTED_KEYWORDS` would refuse every Aura in the pool.
+#
+# It is a *third* place a keyword's name can appear, and the one that fails
+# silently in the expensive direction: an entry here outranks every line gate,
+# so a keyword implemented in full still costs its cards their support until
+# the word is deleted from this set. Rampage sat here through the whole of
+# round 1's implementation and the seven Legends cards stayed unsupported with
+# the behaviour built and tested. `tests/engine/test_keyword_registry.py`
+# compiles a card carrying each implemented keyword *in its ingested field* for
+# exactly that reason.
 UNSUPPORTED_KEYWORDS = {
-    "Rampage",
     "Cumulative upkeep",
     "Phasing",
 }
@@ -1538,6 +1553,12 @@ def _protection_quality_word(word: str) -> bool:
 
 
 def _qualified_keyword_part(part: str) -> bool:
+    # Rampage carries a number rather than a quality (CR 702.23a: "Rampage N"),
+    # and the number is the whole of it — so the reader that *implements* it is
+    # the one that admits it, exactly as the protection arm below admits only
+    # the qualities `_protection_qualities` models.
+    if rampage_amount(part) is not None:
+        return True
     for prefix, admit in (
         ("protection from ", _protection_quality_word),
         # Hexproof stays colour-only: _can_be_targeted's hexproof branch reads
@@ -2200,6 +2221,15 @@ def _parse_creature_program(
             normalized = normalize_creature_line(line)
             instructions.append(OracleInstruction("keyword_line", normalized))
             static_lines.append(normalized)
+            # Rampage is a keyword whose rules text *is* a triggered ability
+            # (CR 702.23a), so the line produces one — the same rewrite equip
+            # gets, one layer earlier because the grammar has no production for
+            # "for each creature blocking it beyond the first". From here the
+            # becomes-blocked dispatcher fires it like any other trigger.
+            for trig in rampage_triggers(normalized):
+                triggered.append(trig)
+                any_supported_trigger = True
+                instructions.append(trig.instruction)
             continue
 
         # 1b. An additional cost to cast this spell (CR 601.2b). Not an effect

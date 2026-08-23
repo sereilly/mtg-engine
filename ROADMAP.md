@@ -563,3 +563,56 @@ way on every card that has it.
 **Round plan:** keywords first (Phase 2's rule — highest cards-unlocked per
 change), then the families above in the order of that table, with the long tail
 last. Rounds are numbered from 1 and their narratives land below as they go.
+
+## LEG round 1: rampage was already built, and a blocklist was hiding it
+
+**121 → 128 supported.** The round was scheduled as "implement the keyword the
+census ranks second", and the first thing it found was that the engine already
+resolved rampage — `declare_blockers_step._apply_rampage_and_flanking`, with
+three passing CR-cited tests over it — while every card that prints the keyword
+compiled unsupported.
+
+**The finding is a third table.** `engine/oracle.py`'s `UNSUPPORTED_KEYWORDS` is
+a hand-written set of keyword *mechanics* the engine does not model, matched
+against the ingested `keywords` field before any line is classified. It is not
+the negation of `IMPLEMENTED_KEYWORDS` and cannot be derived from it — "Enchant"
+and "Landwalk" are Scryfall tags whose behaviour lives in `auras.py` and the
+evasion table — so it is a genuinely separate list, and it **outranks every
+other gate**. "Rampage" sat in it, so the keyword registry, the line classifier
+and the behaviour behind them agreed with each other and lost anyway. The
+comment above that set now says so, and
+`tests/engine/test_keyword_registry.py` compiles a card carrying each
+implemented keyword *in its ingested field*, which is the direction that catches
+it: the previous guards all built their probe cards from oracle text, which the
+blocklist never reads.
+
+**What replaced the inline implementation.** CR 702.23a does not describe
+rampage, it defines it — "Rampage N" *means* "Whenever this creature becomes
+blocked, it gets +N/+N until end of turn for each creature blocking it beyond
+the first." So the keyword line now compiles to that triggered ability
+(`engine/rampage.py`), the same rewrite `engine/equipment.py` gives equip, one
+layer earlier because the grammar has no production for "for each creature
+blocking it beyond the first". From there the becomes-blocked dispatcher fires
+it, the stack carries it, and one handler resolves it — no combat step knows
+the word.
+
+That is not tidying: the inline version got three things wrong that the pool had
+no card to expose.
+
+- **CR 702.23b** — "the bonus is calculated only once per combat, when the
+  triggered ability resolves". Applied at declaration, it was calculated a step
+  early and could not be responded to at all.
+- **CR 702.23c** — several instances each trigger separately. `_rampage_value`
+  returned the *first* regex match, so a second instance was silently dropped.
+- **Band-propagated blocks.** It counted `_combat_blockers_for_attacker` where
+  the damage step counts `_attacker_all_blockers`, so a banded block gave the
+  attacker a different blocker count depending on which code asked.
+
+Flanking (CR 702.25) stays where it was, deliberately: it is a triggered ability
+with no card in the pool — the keyword is not in `IMPLEMENTED_KEYWORDS` — so
+moving it would be a card's worth of work with nothing to verify it against.
+
+**Cost.** One new module, one handler, one line off the blocklist, one
+`IMPLEMENTED_KEYWORDS` entry; a bespoke branch in the declare-blockers step
+deleted. No hook. Three new CR tests (702.23a's stack, 702.23b's resolution
+timing, 702.23c's second instance) and one new blocklist guard.

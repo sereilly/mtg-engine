@@ -33,6 +33,7 @@ from __future__ import annotations
 import pytest
 
 from engine.grammar.vocabulary import IMPLEMENTED_KEYWORDS, KEYWORD_ABILITIES
+from engine.models import CardDefinition
 from engine.oracle import _is_supported_keyword_line, compile_card_oracle
 
 from tests.helpers import _mk_creature_card
@@ -64,6 +65,40 @@ def test_a_creature_whose_whole_text_is_one_keyword_compiles_supported(keyword):
     card = _mk_creature_card(f"Keyword Test {keyword}", 2, 2, oracle_text=keyword.title())
     assert compile_card_oracle(card).supported, (
         f"a 2/2 whose only printed text is {keyword.title()!r} compiles unsupported"
+    )
+
+
+@pytest.mark.parametrize("keyword", sorted(IMPLEMENTED_KEYWORDS))
+def test_an_implemented_keyword_is_not_also_on_the_blocklist(keyword):
+    """The third place a keyword's name can live, and the one that outranks
+    everything else.
+
+    ``oracle.UNSUPPORTED_KEYWORDS`` names keyword *mechanics* the engine does
+    not model, matched against the **ingested** ``keywords`` field before any
+    line is classified. It is not the negation of the registry — "Enchant" and
+    "Landwalk" are Scryfall tags whose behaviour lives elsewhere — so it cannot
+    be derived, and a word left in it after the mechanic is built costs every
+    card printed with that keyword its support with the behaviour sitting right
+    there. Rampage did exactly that: the declare-blockers step resolved it, three
+    CR-cited tests passed over it, and every card that printed it compiled
+    unsupported.
+
+    Asserted behaviourally rather than by comparing the two sets, because the
+    field is what the gate actually reads — a card whose ingested keywords name
+    an implemented keyword must compile.
+    """
+    card = CardDefinition(
+        name=f"Blocklist Probe {keyword}",
+        mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text=keyword.title(),
+        colors=(), color_identity=(),
+        keywords=(keyword.title(),), produced_mana=(),
+        raw={"name": f"Blocklist Probe {keyword}", "type_line": "Creature - Test",
+             "power": "2", "toughness": "2"},
+    )
+    assert compile_card_oracle(card).supported, (
+        f"{keyword!r} is implemented but a card carrying it in its ingested "
+        "keywords field compiles unsupported — check oracle.UNSUPPORTED_KEYWORDS"
     )
 
 

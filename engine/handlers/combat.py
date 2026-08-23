@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 from ._common import flip_coin, resolve_own_combatant, resolve_target_permanent
 from .registry import effect_handler
 from ..keywords import grant_keyword
+from ..pt import add_pt_modifier
+from ..rampage import rampage_bonus
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -79,6 +81,37 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
         return True, "no target"
     victim.metadata["destroy_at_end_of_combat"] = True
     game.log.append(f"{context.card.name} will destroy {victim.card.name} at end of combat")
+    return True, "resolved"
+
+
+@effect_handler("rampage_pump")
+def rampage_pump(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Rampage N (CR 702.23a): +N/+N until end of turn for each creature
+    blocking this one beyond the first.
+
+    The count is taken **here**, at resolution, which is the whole of CR
+    702.23b — blockers added or removed after the ability triggered do not
+    change the bonus, and a bonus applied back in the declare-blockers step
+    could not have said that. `_attacker_all_blockers` is the same reader the
+    damage step uses, so "how many creatures are blocking this attacker"
+    (band-propagated blocks included, CR 702.22h) has one answer rather than
+    two that can disagree.
+    """
+    attacker = context.source_permanent
+    if attacker is None or not game.is_on_battlefield(attacker):
+        return True, "resolved"
+    attacker_idx = game.battlefield_index_of(attacker)
+    if attacker_idx is None or attacker_idx not in game.combat_attackers:
+        # Removed from combat between the trigger and its resolution: it is no
+        # longer blocked by anything, so the bonus is nothing.
+        return True, "resolved"
+    amount = int(instruction.payload.get("amount", 0))
+    bonus = rampage_bonus(amount, len(game._attacker_all_blockers(attacker_idx)))
+    if bonus:
+        add_pt_modifier(attacker, bonus, bonus, until_eot=True)
+        game.log.append(
+            f"{attacker.card.name} gets +{bonus}/+{bonus} until end of turn (rampage {amount})"
+        )
     return True, "resolved"
 
 

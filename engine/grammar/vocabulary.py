@@ -78,7 +78,7 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
     "defender", "reach", "banding", "protection", "landwalk", "swampwalk",
     "forestwalk", "islandwalk", "mountainwalk", "plainswalk", "desertwalk",
     "lifelink", "deathtouch", "indestructible", "flash", "menace", "hexproof",
-    "prowess",
+    "prowess", "rampage",
 })
 
 

@@ -710,10 +710,35 @@ def test_702_23a_rampage_buffs_per_blocker_beyond_the_first():
     _to_declare_blockers(game, [0])
     ok, _ = game.declare_blockers(1, {0: 0, 1: 0, 2: 0})
     assert ok
+    game._settle()
 
     # 3 blockers -> 2 beyond the first -> +2/+2 twice = +4/+4.
     assert p1.battlefield[0].effective_power == 7
     assert p1.battlefield[0].effective_toughness == 7
+
+
+@pytest.mark.cr("702.23a")
+def test_702_23a_rampage_is_a_triggered_ability_and_uses_the_stack():
+    """"Rampage is a triggered ability", so it goes on the stack (CR 603.3)
+    and can be responded to — it is not a bonus applied as blockers lock in.
+
+    Asserted by watching the declaration leave something on the stack and the
+    P/T not move until it resolves. The engine resolved rampage inline in the
+    declare-blockers step until Legends brought the first cards that print it;
+    that version could not have been responded to, and calculated its bonus a
+    step too early for the rule below."""
+    ramp = Permanent(card=_mk_rampage("Rampager", 2, 3, 3))
+    b1 = Permanent(card=_mk_creature("B1", 1, 1))
+    b2 = Permanent(card=_mk_creature("B2", 1, 1))
+    game, p1, _ = _game([ramp], [b1, b2])
+    _to_declare_blockers(game, [0])
+    game.declare_blockers(1, {0: 0, 1: 0})
+
+    assert [item.ability_instruction.kind for item in game.stack] == ["rampage_pump"]
+    assert p1.battlefield[0].effective_power == 3
+
+    game._settle()
+    assert p1.battlefield[0].effective_power == 5
 
 
 @pytest.mark.cr("702.23a")
@@ -723,9 +748,60 @@ def test_702_23a_rampage_no_bonus_with_a_single_blocker():
     game, p1, _ = _game([ramp], [b1])
     _to_declare_blockers(game, [0])
     game.declare_blockers(1, {0: 0})
+    game._settle()
 
     assert p1.battlefield[0].effective_power == 3
     assert p1.battlefield[0].effective_toughness == 3
+
+
+@pytest.mark.cr("702.23b")
+def test_702_23b_bonus_is_calculated_when_the_ability_resolves():
+    """"The rampage bonus is calculated only once per combat, when the
+    triggered ability resolves. Adding or removing blockers later in combat
+    won't change the bonus."
+
+    Removing a blocker *before* the trigger resolves therefore does change it:
+    the count is taken at resolution, not at declaration. Two blockers declare,
+    one leaves while the ability is still on the stack, and the bonus is the
+    one blocker's worth of nothing rather than the two blockers' +2/+2."""
+    ramp = Permanent(card=_mk_rampage("Rampager", 2, 3, 3))
+    b1 = Permanent(card=_mk_creature("B1", 1, 1))
+    b2 = Permanent(card=_mk_creature("B2", 1, 1))
+    game, p1, p2 = _game([ramp], [b1, b2])
+    _to_declare_blockers(game, [0])
+    game.declare_blockers(1, {0: 0, 1: 0})
+    assert game.stack, "the rampage trigger should still be waiting to resolve"
+
+    game.remove_from_battlefield(b2)
+    game._settle()
+
+    assert p1.battlefield[0].effective_power == 3
+    assert p1.battlefield[0].effective_toughness == 3
+
+
+@pytest.mark.cr("702.23c")
+def test_702_23c_each_instance_of_rampage_triggers_separately():
+    """"If a creature has multiple instances of rampage, each triggers
+    separately." Two abilities on the stack, not one ability with a doubled N —
+    which is why the compiler derives one trigger per printed instance."""
+    two_instances = _mk_creature(
+        "Doubly Rampaging", 3, 3,
+        keywords=("Rampage 1", "Rampage 2"),
+        oracle_text="Rampage 1, rampage 2",
+    )
+    ramp = Permanent(card=two_instances)
+    b1 = Permanent(card=_mk_creature("B1", 1, 1))
+    b2 = Permanent(card=_mk_creature("B2", 1, 1))
+    b3 = Permanent(card=_mk_creature("B3", 1, 1))
+    game, p1, _ = _game([ramp], [b1, b2, b3])
+    _to_declare_blockers(game, [0])
+    game.declare_blockers(1, {0: 0, 1: 0, 2: 0})
+
+    assert len(game.stack) == 2
+    game._settle()
+    # Two blockers beyond the first: rampage 1 gives +2/+2, rampage 2 gives +4/+4.
+    assert p1.battlefield[0].effective_power == 9
+    assert p1.battlefield[0].effective_toughness == 9
 
 
 @pytest.mark.cr("702.23a", "514.2")
@@ -736,6 +812,7 @@ def test_702_23b_rampage_bonus_wears_off_end_of_turn():
     game, p1, _ = _game([ramp], [b1, b2])
     _to_declare_blockers(game, [0])
     game.declare_blockers(1, {0: 0, 1: 0})
+    game._settle()
     assert p1.battlefield[0].effective_power == 5
 
     game.resolve_cleanup_step(0)

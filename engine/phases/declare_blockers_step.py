@@ -228,7 +228,7 @@ class DeclareBlockersStepMixin:
         self._fire_block_triggers(controller_index)
         self._fire_creature_blocks_triggers(controller_index, assignments)
         self._fire_becomes_blocked_triggers(controller_index, assignments)
-        self._apply_rampage_and_flanking(controller_index)
+        self._apply_flanking(controller_index)
         # CR 509.4/802.4: once every defending player has declared, the active
         # player receives priority.
         if self.combat_blockers_locked:
@@ -908,26 +908,22 @@ class DeclareBlockersStepMixin:
         """Apply an "until end of turn" P/T change that the cleanup step reverts."""
         add_pt_modifier(permanent, power, toughness, until_eot=True)
 
-    def _rampage_value(self, permanent: Permanent) -> int:
-        """The N of "Rampage N" on this creature, or 0 if it has no rampage."""
-        card = permanent.effective_card
-        if not self._has_keyword(permanent, "rampage"):
-            # Keyword may be printed as "Rampage 2"; _has_keyword won't match that
-            # against the bare word, so also scan the keyword list directly.
-            if not any("rampage" in kw.lower() for kw in card.keywords):
-                return 0
-        for source in (*card.keywords, card.oracle_text or ""):
-            match = re.search(r"rampage (\d+)", source.lower())
-            if match:
-                return int(match.group(1))
-        return 0
+    def _apply_flanking(self, controller_index: int) -> None:
+        """Resolve Flanking (CR 702.25) on declared blocks: each blocking
+        creature without flanking gets -1/-1 until end of turn.
 
-    def _apply_rampage_and_flanking(self, controller_index: int) -> None:
-        """Resolve Rampage (CR 702.23) and Flanking (CR 702.25) on declared blocks.
-
-        Both trigger when a creature becomes blocked. Rampage gives the attacker
-        +N/+N for each blocker beyond the first; flanking gives each non-flanking
-        blocker -1/-1. Applied as until-end-of-turn effects.
+        **Rampage used to be resolved here too**, and it is not any more. CR
+        702.23a defines it as a triggered ability, so it now compiles to one
+        (``engine/rampage.py``) and goes on the stack through the
+        becomes-blocked dispatcher above like every other trigger — which is
+        what buys 702.23b's "calculated only once per combat, when the
+        triggered ability resolves". Applied inline here it was calculated at
+        declaration, read only the first of several instances (702.23c), and
+        missed band-propagated blocks. Flanking stays because CR 702.25a is a
+        triggered ability the engine has no *card* for: the keyword is not in
+        `IMPLEMENTED_KEYWORDS`, so nothing in the pool reaches it, and moving
+        it would be inventing a card's worth of work with nothing to verify it
+        against.
         """
         if self.active_player_index < 0 or self.active_player_index >= len(self.players):
             return
@@ -936,8 +932,8 @@ class DeclareBlockersStepMixin:
             return
         defender = self.players[controller_index]
 
-        # Scoped to attackers aimed at this defender (CR 802.4a) — rampage/flanking
-        # act on the block just declared against controller_index specifically.
+        # Scoped to attackers aimed at this defender (CR 802.4a) — flanking acts
+        # on the block just declared against controller_index specifically.
         for attacker_idx, defending_idx in self.combat_attackers.items():
             if defending_idx != controller_index:
                 continue
@@ -947,16 +943,6 @@ class DeclareBlockersStepMixin:
             blocker_indices = self._combat_blockers_for_attacker(attacker_idx)
             if not blocker_indices:
                 continue
-
-            # CR 702.23a: Rampage N — +N/+N for each blocker beyond the first.
-            rampage_n = self._rampage_value(attacker)
-            if rampage_n and len(blocker_indices) > 1:
-                bonus = rampage_n * (len(blocker_indices) - 1)
-                self._apply_temporary_buff(attacker, bonus, bonus)
-                self.log.append(
-                    f"{attacker.card.name} gets +{bonus}/+{bonus} from rampage "
-                    f"({len(blocker_indices)} blockers)"
-                )
 
             # CR 702.25a: Flanking — each non-flanking blocker gets -1/-1 per instance.
             if self._has_keyword(attacker, "flanking"):
