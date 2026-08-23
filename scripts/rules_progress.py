@@ -426,15 +426,23 @@ def main(argv: list[str] | None = None) -> int:
     sections, edition = parse_comprehensive_rules(CR_PATH)
     tests = collect_tests(TESTS_DIR)
     report, unannotated, unknown = build_report(sections, tests, edition)
+    if args.check:
+        # A check reads; it does not write. Every other tracker's --check
+        # returns before touching its file, and SET_PLAYBOOK Phase 0 runs all of
+        # them on a tree that has to stay clean — this one used to rewrite
+        # RULES_PROGRESS.md on the way to its verdict.
+        print(f"{len(tests)} tests, {len(unannotated)} unannotated, "
+              f"{len(unknown)} bad citations.")
+        if unannotated or unknown:
+            for node in unannotated:
+                print(f"UNANNOTATED: {node}", file=sys.stderr)
+            for entry in unknown:
+                print(f"BAD CITATION: {entry}", file=sys.stderr)
+            return 1
+        return 0
     OUTPUT_PATH.write_text(report, encoding="utf-8")
     print(f"Wrote {OUTPUT_PATH.name}: {len(tests)} tests, "
           f"{len(unannotated)} unannotated, {len(unknown)} bad citations.")
-    if args.check and (unannotated or unknown):
-        for node in unannotated:
-            print(f"UNANNOTATED: {node}", file=sys.stderr)
-        for entry in unknown:
-            print(f"BAD CITATION: {entry}", file=sys.stderr)
-        return 1
     return 0
 
 

@@ -131,8 +131,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "aura leaves the battlefield, that creature's controller sacrifices it":
             _line('reanimate_creature', 'spell_pattern'),
     },
-    'Armageddon Clock': {
-    },
     'Balance': {
         'each player chooses a number of lands they control equal to the number '
         'of lands controlled by the player who controls the fewest, then '
@@ -269,12 +267,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "least power, you choose one of them":
             _line("upkeep_destroy_least_power_creature", "upkeep_effect"),
     },
-    'Dwarven Weaponsmith': {
-        '{t}, sacrifice an artifact: put a +1/+1 counter on target creature. '
-        'activate only during your upkeep':
-            _line('add_counter_to_target', 'triggered_counter', power=1,
-                toughness=1),
-    },
     'Earthbind': {
         'when this aura enters, if enchanted creature has flying, this aura '
         'deals 2 damage to that creature and this aura gains "enchanted '
@@ -388,20 +380,10 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
             _line('animate_self_until_end_of_combat', 'activated_animate', power=3,
                 toughness=6),
     },
-    "Jandor's Saddlebags": {
-        '{3}, {t}: untap target creature':
-            _line('untap_target_permanent', 'spell_pattern'),
-    },
     'Jeweled Bird': {
         "{t}: ante this artifact. if you do, put all other cards you own from the "
         "ante into your graveyard, then draw a card":
             _line("ante_self_then_clear_ante_and_draw", "activated_ante"),
-    },
-    'Living Artifact': {
-        'at the beginning of your upkeep, you may remove a vitality counter '
-        'from this aura. if you do, you gain 1 life':
-            _line('target_gains_life', 'spell_pattern', amount=1,
-                recipient='caster'),
     },
     'Lord of the Pit': {
         "at the beginning of your upkeep, sacrifice a creature other than this "
@@ -432,15 +414,13 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "whenever this creature attacks and isn't blocked, you gain 2 life":
             _line("target_gains_life", "spell_pattern", amount=2, recipient="caster"),
     },
-    # Metamorphosis and Sacrifice each print one bespoke sentence: mana bought
-    # with the mana value of the creature their additional cost ate. The cost
-    # itself is no longer theirs — it is the general CR 601.2b table
-    # (engine/cast_costs.py), paid while casting, and these two hooks were
-    # re-keyed off that shared cost line and onto the *effect* line each of them
-    # alone prints. That is the honest key: the cost sentence is identical on
-    # four cards and says nothing about what either buys, while these two
-    # sentences differ in the three ways the payload records (colour, amount,
-    # spend restriction) and no third card shares either shape.
+    # Mana bought with the mana value of the creature its additional cost ate.
+    # The cost itself is not the hook's — it is the general CR 601.2b table
+    # (engine/cast_costs.py), paid while casting — so the key is the *effect*
+    # sentence alone. Sacrifice's plainer spelling ("an amount of {B} equal to
+    # the sacrificed creature's mana value") is a production now and its entry
+    # went with it; what keeps this one is the "1 plus" and the spend
+    # restriction, which no second card prints together.
     'Metamorphosis': {
         "add x mana of any one color, where x is 1 plus the sacrificed creature's "
         "mana value. spend this mana only to cast creature spells":
@@ -568,28 +548,12 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "turn, instead put a card you own from outside the game into your hand":
             _line("arm_outside_game_draw_replacement", "activated_draw"),
     },
-    'Rocket Launcher': {
-        '{2}: this artifact deals 1 damage to any target. destroy this artifact '
-        "at the beginning of the next end step. activate only if you've "
-        'controlled this artifact continuously since the beginning of your most '
-        'recent turn':
-            _line('deal_damage', 'activated_damage', amount=1,
-                destroys_source_at_end_step=True,
-                requires_control_since_turn_start=True, targets={'quantifier':
-                'any_target', 'kind': 'any'}),
-    },
     'Rukh Egg': {
         'when this creature dies, create a 4/4 red bird creature token with '
         'flying at the beginning of the next end step':
             _line('arm_end_step_token', 'triggered_token', name='Bird Token',
                 power=4, toughness=4, type_line='Creature — Bird',
                 colors=('R',), keywords=('Flying',)),
-    },
-    # The other half of the pair; see the note on Metamorphosis above.
-    'Sacrifice': {
-        "add an amount of {b} equal to the sacrificed creature's mana value":
-            _line("sacrifice_creature_for_mana", "spell_pattern",
-                color="B", bonus=0, spend_only=None),
     },
     'Sandals of Abdallah': {
         "{2}, {t}: target creature gains islandwalk until end of turn. when that "

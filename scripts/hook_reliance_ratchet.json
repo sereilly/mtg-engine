@@ -1,38 +1,38 @@
 {
   "ceilings": {
     "2ED": {
-      "entries_per_100_supported_cards": 18.8,
-      "hooked_cards_pct_of_supported": 17.5,
+      "entries_per_100_supported_cards": 18.2,
+      "hooked_cards_pct_of_supported": 16.8,
       "hooked_lines_pct_of_supported": 11.8
     },
     "3ED": {
-      "entries_per_100_supported_cards": 18.9,
-      "hooked_cards_pct_of_supported": 18.2,
+      "entries_per_100_supported_cards": 17.2,
+      "hooked_cards_pct_of_supported": 16.2,
       "hooked_lines_pct_of_supported": 11.8
     },
     "ALL": {
-      "entries_per_100_supported_cards": 13.4,
-      "hooked_cards_pct_of_supported": 12.5,
+      "entries_per_100_supported_cards": 12.7,
+      "hooked_cards_pct_of_supported": 11.7,
       "hooked_lines_pct_of_supported": 7.3
     },
     "ARN": {
-      "entries_per_100_supported_cards": 44.9,
-      "hooked_cards_pct_of_supported": 41.0,
+      "entries_per_100_supported_cards": 43.6,
+      "hooked_cards_pct_of_supported": 39.7,
       "hooked_lines_pct_of_supported": 28.0
     },
     "ATQ": {
-      "entries_per_100_supported_cards": 9.4,
-      "hooked_cards_pct_of_supported": 10.6,
+      "entries_per_100_supported_cards": 7.1,
+      "hooked_cards_pct_of_supported": 7.1,
       "hooked_lines_pct_of_supported": 5.0
     },
     "LEA": {
-      "entries_per_100_supported_cards": 19.0,
-      "hooked_cards_pct_of_supported": 17.6,
+      "entries_per_100_supported_cards": 18.3,
+      "hooked_cards_pct_of_supported": 16.9,
       "hooked_lines_pct_of_supported": 11.9
     },
     "LEB": {
-      "entries_per_100_supported_cards": 18.8,
-      "hooked_cards_pct_of_supported": 17.5,
+      "entries_per_100_supported_cards": 18.2,
+      "hooked_cards_pct_of_supported": 16.8,
       "hooked_lines_pct_of_supported": 11.8
     },
     "M21": {

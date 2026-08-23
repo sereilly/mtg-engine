@@ -12,22 +12,22 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**92 of 734 supported cards (12.5%)** carry at least one name-keyed entry, across **98 entries** in 7 registries. The pool is 734 cards, 100.0% supported.
+**86 of 734 supported cards (11.7%)** carry at least one name-keyed entry, across **93 entries** in 7 registries. The pool is 734 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **3,486 hand-written entries** covering **3,273 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **3,309 hand-written entries** covering **3,060 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 51 (17.6%) | 388 | 46 (11.9%) | 55 | 19.0 |
-| LEB | 292 | 292 (100.0%) | 51 (17.5%) | 389 | 46 (11.8%) | 55 | 18.8 |
-| 2ED | 292 | 292 (100.0%) | 51 (17.5%) | 389 | 46 (11.8%) | 55 | 18.8 |
-| ARN | 78 | 78 (100.0%) | 32 (41.0%) | 107 | 30 (28.0%) | 35 | 44.9 |
-| ATQ | 85 | 85 (100.0%) | 9 (10.6%) | 120 | 6 (5.0%) | 8 | 9.4 |
-| 3ED | 296 | 296 (100.0%) | 54 (18.2%) | 389 | 46 (11.8%) | 56 | 18.9 |
+| LEA | 290 | 290 (100.0%) | 49 (16.9%) | 388 | 46 (11.9%) | 53 | 18.3 |
+| LEB | 292 | 292 (100.0%) | 49 (16.8%) | 389 | 46 (11.8%) | 53 | 18.2 |
+| 2ED | 292 | 292 (100.0%) | 49 (16.8%) | 389 | 46 (11.8%) | 53 | 18.2 |
+| ARN | 78 | 78 (100.0%) | 31 (39.7%) | 107 | 30 (28.0%) | 34 | 43.6 |
+| ATQ | 85 | 85 (100.0%) | 6 (7.1%) | 120 | 6 (5.0%) | 6 | 7.1 |
+| 3ED | 296 | 296 (100.0%) | 48 (16.2%) | 389 | 46 (11.8%) | 51 | 17.2 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **92 (12.5%)** | **1119** | **82 (7.3%)** | **98** | **13.4** |
+| **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **86 (11.7%)** | **1119** | **82 (7.3%)** | **93** | **12.7** |
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so four of these rows are one data point wearing four hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 
@@ -35,7 +35,7 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 86 | 87 |
+| `CARD_LINE_INSTRUCTIONS` | 80 | 82 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ENCHANTED_LAND_TAPPED_FOR_MANA` | 1 | 1 |
@@ -49,7 +49,6 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 - **Aladdin** (`ON_LEAVE_BATTLEFIELD`)
 - **Aladdin's Lamp** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Animate Dead** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Armageddon Clock** (`CARD_LINE_INSTRUCTIONS`)
 - **Balance** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Berserk** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Blaze of Glory** (`CARD_LINE_INSTRUCTIONS`) — 1 line
@@ -71,7 +70,6 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 - **Drain Life** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Drain Power** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Drop of Honey** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Dwarven Weaponsmith** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Earthbind** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Ebony Horse** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **El-Hajjâj** (`CARD_LINE_INSTRUCTIONS`) — 1 line
@@ -92,10 +90,8 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 - **Ivory Tower** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Jade Monolith** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Jade Statue** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Jandor's Saddlebags** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Jeweled Bird** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Kudzu** (`ENCHANTED_LAND_TAPPED_FOR_MANA`)
-- **Living Artifact** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Lord of the Pit** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Magnetic Mountain** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Mana Short** (`CARD_LINE_INSTRUCTIONS`) — 1 line
@@ -119,9 +115,7 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 - **Reverse Damage** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Reverse Polarity** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Ring of Ma'rûf** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Rocket Launcher** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Rukh Egg** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Sacrifice** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Sandals of Abdallah** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Serendib Djinn** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Shahrazad** (`CARD_LINE_INSTRUCTIONS`) — 1 line

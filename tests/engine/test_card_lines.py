@@ -12,7 +12,15 @@ neither holds by inspection:
 * **the entry is still load-bearing.** The grammar is consulted first, so a line
   that grows a production leaves its entry claiming nothing. A dead entry is
   worse than none: it reads as the card's implementation while the real one is
-  somewhere else.
+  somewhere else. Asked two ways, because the first way was not enough: the
+  *kind* check below let five entries sit dead for weeks, since the production
+  that overtook each of them emitted the very kind the hook named (Jandor's
+  Saddlebags: ``untap_target_permanent`` on both sides). So the sharper
+  question is asked of the key itself — the grammar must *refuse* it.
+* **the card has lines.** ``hook_reliance.py`` counts hooked *cards* off the
+  outer keys, so an entry left as ``{}`` when its last line moved to the grammar
+  kept counting against the ceiling while implementing nothing (Armageddon
+  Clock, for one round).
 
 A third check stood here — *the reading is the same one the legacy rule gave* —
 and it retired with `engine/parsing/`, as this docstring always said it would.
@@ -29,6 +37,7 @@ import pytest
 import engine.oracle as oracle
 from engine.card_hooks import CARD_LINE_INSTRUCTIONS
 from engine.card_loader import load_catalog
+from engine.grammar import compile_line
 
 
 @pytest.fixture(scope="module")
@@ -85,6 +94,34 @@ def test_every_entry_supplies_an_instruction_the_card_compiles_with(catalog_by_n
     assert not inert, (
         "CARD_LINE_INSTRUCTIONS entries whose instruction the card no longer "
         f"compiles with — the grammar has taken the line over, so delete them: {inert}"
+    )
+
+
+def test_every_card_in_the_registry_has_at_least_one_line():
+    """An empty entry implements nothing and is still counted as a hooked card."""
+    empty = [name for name, lines in CARD_LINE_INSTRUCTIONS.items() if not lines]
+    assert not empty, (
+        "CARD_LINE_INSTRUCTIONS entries with no lines — the grammar took the "
+        f"last one, so delete the card: {empty}"
+    )
+
+
+def test_every_key_is_a_line_the_grammar_refuses():
+    """The compiler asks the grammar first and the registry second, so an entry
+    whose key the grammar compiles is never reached — whatever kind it names.
+
+    ``compile_line`` is the grammar's front door (the same call the compiler
+    makes); a key it parses *and* lowers is a production's line now.
+    """
+    overtaken = []
+    for card_name, key, entry in _entries():
+        compiled = compile_line(key, card_name=card_name)
+        if compiled.instructions and not compiled.parse_error and not compiled.lowering_error:
+            overtaken.append((card_name, key, [i.kind for i in compiled.instructions]))
+
+    assert not overtaken, (
+        "CARD_LINE_INSTRUCTIONS keys the grammar compiles — the production is "
+        f"the implementation, so delete the entry: {overtaken}"
     )
 
 
