@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction
@@ -172,6 +172,14 @@ class StackItem:
     # unresolved, and the next priority pass would run its instructions a second
     # time. Held means resolved — the only thing left is to leave.
     resolution_held: bool = False
+    # The last step of a held *spell's* resolution — CR 608.2n, the card going
+    # to its owner's graveyard — deferred until the last prompt is answered.
+    # Binning at the usual point put the card in two zones at once: on the
+    # stack, held, and in the graveyard, with the log already saying "resolved
+    # and moved to graveyard" while the discard it asked for was still owed.
+    # ``_release_stack_item`` runs it and clears it; None for an ability, or a
+    # spell nothing held.
+    finish_resolution: Callable[[], None] | None = None
 
 
 @dataclass

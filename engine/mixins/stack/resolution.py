@@ -624,30 +624,52 @@ class StackResolutionMixin:
                 choices=choices,
             )
 
+        # ``finish`` may run twice: once at the end of the resolution, and — if
+        # a prompt this resolution armed was still queued then — again from
+        # ``_release_stack_item`` when the last answer lands. The hook and the
+        # end-the-turn flag are read on the first pass only.
+        first_pass = {"ends_turn": None}
+
         def finish() -> None:
-            self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
-            pending_woc = self.pending_choice_of("word_of_command")
-            if (
-                pending_woc is not None
-                and "_spell_card" not in pending_woc.data
-                and pending_woc.data.get("card_name") == card.name
-            ):
-                # Word of Command is still resolving while the caster chooses a
-                # card from the target's hand; it goes to the graveyard only when
-                # confirm_word_of_command finishes the resolution.
-                pending_woc.data["_spell_card"] = card
-                pending_woc.data["_spell_caster_index"] = caster_index
-                pending_woc.data["_spell_exile_instead"] = exile_instead_of_graveyard
+            if first_pass["ends_turn"] is None:
+                self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
+                pending_woc = self.pending_choice_of("word_of_command")
+                if (
+                    pending_woc is not None
+                    and "_spell_card" not in pending_woc.data
+                    and pending_woc.data.get("card_name") == card.name
+                ):
+                    # Word of Command is still resolving while the caster chooses a
+                    # card from the target's hand; it goes to the graveyard only when
+                    # confirm_word_of_command finishes the resolution.
+                    pending_woc.data["_spell_card"] = card
+                    pending_woc.data["_spell_caster_index"] = caster_index
+                    pending_woc.data["_spell_exile_instead"] = exile_instead_of_graveyard
+                    return
+                # CR 724.1b: "End the turn" exiles every object on the stack
+                # *including the object that's resolving*. That object was popped
+                # before its handler ran, so the process flags it here instead of
+                # reaching back into a list it is no longer in.
+                first_pass["ends_turn"] = bool(getattr(self, "exile_resolving_spell", False))
+                self.exile_resolving_spell = False
+            # CR 608.2n makes the graveyard the *last* step, and a resolution
+            # that armed a prompt still queued is not at its last step: a
+            # discard, a Power Sink payment, Balance's removals. Binning here
+            # put the card in two zones at once — held on the stack and in the
+            # graveyard, with the log already reading "moved to graveyard" while
+            # the decision was owed. The step is handed to the held object
+            # instead, and ``_release_stack_item`` runs it with the last answer.
+            # A suspending prompt (a search, a scry) never reaches here early —
+            # ``run_resumable`` holds this step back for it — so this is the
+            # non-suspending half of the same rule.
+            held = self.resolving_stack_item
+            if held is not None and held.card is card and self.choices_for_stack_item(held):
+                held.finish_resolution = finish
+                self.log.append(f"{card.name} is resolving, awaiting a choice")
                 return
-            # CR 724.1b: "End the turn" exiles every object on the stack
-            # *including the object that's resolving*. That object was popped
-            # before its handler ran, so the process flags it here instead of
-            # reaching back into a list it is no longer in.
-            ends_turn = getattr(self, "exile_resolving_spell", False)
-            self.exile_resolving_spell = False
             self._bin_spell_card(
                 caster, card,
-                exile_instead=exile_instead_of_graveyard or ends_turn,
+                exile_instead=exile_instead_of_graveyard or first_pass["ends_turn"],
                 verb="resolved",
             )
 

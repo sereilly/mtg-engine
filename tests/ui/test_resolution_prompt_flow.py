@@ -219,3 +219,77 @@ def test_the_ability_leaves_the_stack_when_the_search_is_answered(set_pool):
     assert state["optional_pay"] is None
     board = [p.card.name for p in session.game.players[0].battlefield]
     assert "Sanctum of Tranquil Light" in board
+
+
+# ---------------------------------------------------------------------------
+# A held *spell* is on the stack and nowhere else while its prompt is owed
+# ---------------------------------------------------------------------------
+
+
+def _mind_rot_session(set_pool, seed=5151):
+    """Host casts Mind Rot at Guest; both pass; Guest (human) owes the discard."""
+    pool = set_pool("M21")
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": seed,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    session = store.get(sid)
+    game = session.game
+    game.enforce_mana_costs = False
+    game.players[0].hand = [pool["Mind Rot"]]
+    game.players[0].graveyard = []
+    game.players[1].hand = [pool["Opt"], pool["Storm Caller"], pool["Forest"]]
+    session.current_turn = 0
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+    game.interactive_seats = {0, 1}
+    assert game._cast_onto_stack(0, "Mind Rot", target_player_index=1).supported
+    game.start_priority_window(0)
+    return sid, session
+
+
+def test_a_held_spell_is_reported_on_the_stack_and_not_in_the_graveyard(set_pool):
+    """The card was in both: the stack payload carried it (held) and the
+    graveyard payload carried it too, because the engine binned it before the
+    discard it asked for was answered. CR 608.2n puts the graveyard last."""
+    sid, _ = _mind_rot_session(set_pool)
+
+    _pass(sid, 0)
+    assert _pass(sid, 1).status_code == 200
+
+    state = _state(sid, 1)
+    assert [item["card"]["name"] for item in state["stack"]] == ["Mind Rot"]
+    assert state["stack"][0]["resolution_held"] is True
+    host = state["players"][0]
+    assert [c["name"] for c in host["graveyard"]] == []
+    assert state["discard_select"] is not None
+    assert state["discard_select"]["player_seat"] == 1
+
+
+def test_answering_the_discard_moves_the_spell_to_the_graveyard(set_pool):
+    sid, _ = _mind_rot_session(set_pool)
+    _pass(sid, 0)
+    _pass(sid, 1)
+
+    answered = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "discard_confirm", "discard_indices": [0, 1]},
+    )
+    assert answered.status_code == 200, answered.text
+
+    state = _state(sid, 0)
+    assert state["stack"] == []
+    assert [c["name"] for c in state["players"][0]["graveyard"]] == ["Mind Rot"]
+    assert state["discard_select"] is None
+    # CR 117.3b: the active player has priority again, not the seat that answered.
+    assert state["priority_player"] == 0

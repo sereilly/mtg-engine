@@ -689,3 +689,63 @@ def test_405_3_one_players_several_objects_keep_a_deterministic_relative_order()
     game._enqueue_triggered_batch(collect(game, Event("upkeep_self")))
 
     assert [item.card.name for item in game.stack] == ["First", "Second"]
+
+
+# ---------------------------------------------------------------------------
+# 608.2n / 704.3 / 117.3b — a resolution that stops to ask finishes on the answer
+# ---------------------------------------------------------------------------
+
+
+def _held_discard_game() -> tuple[Game, PlayerState, PlayerState]:
+    """P1's "target player discards two cards" on the stack, both passed, P2
+    (interactive) owing the discard: the spell is held, not resolved."""
+    rot = _mk_card("Rot", "Sorcery", "Target player discards two cards.", "{2}{B}")
+    p1 = PlayerState(name="P1", hand=[rot])
+    p2 = PlayerState(name="P2", hand=[
+        _mk_card("A", "Instant", "Draw a card."),
+        _mk_card("B", "Instant", "Draw a card."),
+        _mk_card("C", "Instant", "Draw a card."),
+    ])
+    game = _game_in_main_phase(p1, p2)
+    game.interactive_seats = {0, 1}
+    game.queue_from_hand(0, "Rot", target_player_index=1)
+    game.note_priority_action_taken(0)
+    game.pass_priority(0)
+    assert game.pass_priority(1) == "awaiting_choice"
+    return game, p1, p2
+
+
+@pytest.mark.cr("608.2n")
+def test_608_2n_the_card_leaves_the_stack_as_the_last_step_of_resolution():
+    """"As the final part of an instant or sorcery spell's resolution, the
+    spell is put into its owner's graveyard." A resolution waiting on the
+    discard it asked for has not reached its final part: the card is on the
+    stack and nowhere else until the answer lands."""
+    game, p1, p2 = _held_discard_game()
+
+    assert [item.card.name for item in game.stack] == ["Rot"]
+    assert game.stack[0].resolution_held is True
+    assert p1.graveyard == []
+
+    assert game.resolve_pending_choice("discard", 1, hand_indices=[0, 1], to_library=False)
+
+    assert game.stack == []
+    assert [c.name for c in p1.graveyard] == ["Rot"]
+    assert [c.name for c in p2.hand] == ["C"]
+
+
+@pytest.mark.cr("704.3", "117.3b")
+def test_704_3_and_117_3b_apply_when_the_held_resolution_finishes():
+    """The seat that owes the answer holds the priority window only because it
+    owes it. Once the last answer lands, the resolution is over: state-based
+    actions are checked (704.3) and the *active* player receives priority
+    (117.3b), not the seat that answered."""
+    game, p1, p2 = _held_discard_game()
+    assert game.priority_player_index == 1  # P2 owes the discard
+    p2.life = 0  # 704.5a, waiting for the check that precedes priority
+
+    assert game.resolve_pending_choice("discard", 1, hand_indices=[0, 1], to_library=False)
+
+    assert p2.lost is True
+    assert game.priority_player_index == game.active_player_index == 0
+    assert game.priority_pass_count == 0

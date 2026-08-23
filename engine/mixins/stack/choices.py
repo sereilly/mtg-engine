@@ -139,7 +139,23 @@ class PendingChoicesMixin:
             if entry is item:
                 del self.stack[index]
                 item.resolution_held = False
+                # The step the resolution handed over (a spell's CR 608.2n
+                # bin) — run after the object has left the stack, so the card
+                # is in exactly one zone at every moment a client can see.
+                tail, item.finish_resolution = item.finish_resolution, None
+                if tail is not None:
+                    tail()
                 self.log.append(f"{item.card.name} finished resolving")
+                # The resolution is over *now*, so what ``pass_priority`` does
+                # after one that ran straight through happens here for one that
+                # stopped to ask: CR 704.3's check before anyone receives
+                # priority, and CR 117.3b's priority to the active player. The
+                # seat that owed the answer was holding the window only because
+                # it owed it.
+                self.check_state_based_actions()
+                if self.priority_player_index is not None:
+                    self.priority_player_index = self.active_player_index
+                    self.priority_pass_count = 0
                 return
 
     def _answer_pending_choice(self, choice: PendingChoice, apply):

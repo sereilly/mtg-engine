@@ -601,6 +601,10 @@ def _serialize_stack_item(item, game: Game) -> dict:
         "source_permanent_index": source_permanent_index,
         "ability_text": item.ability_text,
         "x_value": item.x_value,
+        # Its instructions have run; it is on the stack only because a prompt
+        # it armed is still owed (CR 608.2). The client can say "resolving"
+        # rather than drawing an object that looks like it has yet to resolve.
+        "resolution_held": item.resolution_held,
     }
 
 
