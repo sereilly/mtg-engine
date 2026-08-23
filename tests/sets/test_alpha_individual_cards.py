@@ -166,8 +166,10 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         # Animate Wall needs a Wall on the battlefield to target (Rule 115.1b)
         wall = next(c for c in all_cards if "wall" in c.type_line.lower())
         p2.battlefield.append(Permanent(card=wall))
-    if card.name == "Tunnel":
-        # Tunnel ("Destroy target Wall") needs a Wall to target.
+    if card.name in {"Tunnel", "Dwarven Demolition Team"}:
+        # "Destroy target Wall" needs a Wall to target (CR 602.2b — the gate
+        # refuses activation with no legal target, so the generic empty board
+        # is not enough).
         wall = next(c for c in all_cards if "wall" in c.type_line.lower())
         p2.battlefield.append(Permanent(card=wall))
     if card.name == "False Orders":

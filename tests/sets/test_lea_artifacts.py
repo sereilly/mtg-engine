@@ -447,7 +447,7 @@ def test_helm_of_chatzuk_requires_valid_creature_target(all_cards):
     result = game.activate_permanent_ability(0, "Helm of Chatzuk", target_player_index=0)
 
     assert result.supported is False
-    assert result.details == "no valid creature target for banding effect"
+    assert result.details == "no valid target for Helm of Chatzuk"
     assert p1.battlefield[0].tapped is False
 
 

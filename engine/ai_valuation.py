@@ -152,6 +152,28 @@ def counters_a_spell(card: CardDefinition) -> CounterProfile | None:
     return CounterProfile(color=instruction.payload.get("color_filter"))
 
 
+#: The battlefield an object-targeted activated ability aims at, by the
+#: instruction's migration category — so which cards a heuristic reaches stays
+#: derived from the compiled program (CLAUDE.md's ai_valuation rule) rather than
+#: named. "opponent" for removal/damage, "you" for the buffs a player puts on
+#: their own creatures; None means no side preference (the picker/handler owns it).
+_OPPONENT_CATEGORIES = frozenset({"damage", "destruction", "tapping", "counterspells"})
+_OWN_CATEGORIES = frozenset({"pump", "counters", "regeneration", "evasion", "attachments", "characteristics"})
+
+
+def activation_target_side(instruction: OracleInstruction) -> str | None:
+    """"opponent" / "you" / None — whose permanent an object-targeted activated
+    ability should be aimed at, derived from ``INSTRUCTION_CATEGORIES``."""
+    from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
+
+    category = INSTRUCTION_CATEGORIES.get(getattr(instruction, "kind", None))
+    if category in _OPPONENT_CATEGORIES:
+        return "opponent"
+    if category in _OWN_CATEGORIES:
+        return "you"
+    return None
+
+
 def is_mana_ability(instruction: OracleInstruction) -> bool:
     """Whether *instruction* adds mana to its controller's pool."""
     return instruction.kind in MANA_ABILITY_KINDS

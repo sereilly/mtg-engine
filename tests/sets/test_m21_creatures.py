@@ -939,10 +939,12 @@ def test_a_dealt_damage_trigger_is_not_gated_on_surviving(set_pool):
     assert p2.life == 11
 
 
-def test_the_fight_needs_two_creatures_or_neither_deals(set_pool):
-    """CR 701.14b, and the reason this is one instruction rather than two
-    damage steps: written as two, the first would resolve and the second would
-    not."""
+def test_the_fight_cannot_be_activated_with_nothing_to_fight(set_pool):
+    """"Brash Taunter fights another target creature" needs a legal target, so
+    with no other creature the ability can't be activated (CR 602.2b) — the gate
+    refuses before the {1}{R} is paid, rather than activating and fizzling. The
+    atomicity of the fight itself (CR 701.14b, one instruction) is exercised
+    where both creatures exist and one leaves in response."""
     pool = set_pool("M21")
     taunter = Permanent(card=pool["Brash Taunter"])
     p1 = PlayerState(name="P1", battlefield=[taunter])
@@ -950,12 +952,12 @@ def test_the_fight_needs_two_creatures_or_neither_deals(set_pool):
     game = Game(players=[p1, p2])
     game.enforce_mana_costs = False
 
-    game.activate_permanent_ability(0, "Brash Taunter", target_player_index=1)
+    result = game.activate_permanent_ability(0, "Brash Taunter", target_player_index=1)
     game._settle()
 
+    assert result.supported is False
     assert taunter.damage_marked == 0
     assert p2.life == 20
-    assert any("neither deals damage" in line for line in game.log)
 
 
 # --- What a sacrificed source is still worth ---------------------------------
@@ -2021,18 +2023,19 @@ def test_the_savior_saves_another_creature_and_dies_doing_it(set_pool):
 
 
 def test_the_grant_refuses_a_creature_its_activator_does_not_control(set_pool):
-    """The resolution half of the printed noun phrase. ``derive_activation_spec``
-    narrows what is *offered*, but nothing validates an announcement that did
-    not come through the picker — so the handler has to ask the same question,
-    which it did not: it resolved with the default "is it a creature?" predicate
-    and read no filter at all."""
+    """"Another target creature **you control**" — so a creature you do not
+    control is not a legal target, and the ability can't be activated at it
+    (CR 601.2c/602.2b). The activation gate asks the same question the picker
+    does, so the opponent's creature is refused before any cost, rather than the
+    old path activating and then refusing at resolution."""
     game, _p1, _p2, _savior, mine, theirs = _savior_board(set_pool)
 
     result = game.activate_permanent_ability(
         0, "Selfless Savior", ability_index=0,
         target_player_index=1, target_permanent_index=0,
     )
-    assert result.supported, result.details
+
+    assert result.supported is False
     game._settle()
 
     assert not theirs.has_keyword("indestructible")

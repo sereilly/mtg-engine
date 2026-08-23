@@ -418,7 +418,15 @@ adding entries, not editing dispatch**:
   it. Returns None when the program lacks the evidence rather than guessing; the
   guards in `tests/engine/test_targeting.py` and
   `tests/engine/test_activation_targeting.py` ratchet what still needs
-  `legality.py`'s one surviving text fallback.
+  `legality.py`'s one surviving text fallback. **Whether an ability may be
+  activated at all is `legality.activation_target_refusal`** (CR 602.2b/601.2c):
+  one gate, read once in `mixins/stack/activation.py` before any cost is paid,
+  over the same `_enumerate_targets` list the web picker gets — so the engine
+  and the picker agree on what is a legal target, and an ability with a
+  mandatory object target it cannot fill is refused with nothing paid rather
+  than activated to hit the face (Silent Dart) or no-op. It replaced a per-kind
+  if-chain that named four instruction kinds and left every other one
+  unenforced.
 - `engine/cost_modifiers.py` — text-keyed cost taxes (CR 601.2f): "<colour>
   spells cost {N} more to cast", "activated abilities of <colour> <type>s cost
   {N} more to activate". Increases only; reduction should arrive with the card

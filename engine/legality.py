@@ -204,6 +204,41 @@ def _activation_spec(abilities) -> tuple[dict, object | None]:
     return {"kind": "none"}, None
 
 
+_TARGET_STEP_KEYS = ("steps", "then", "else", "action", "otherwise", "effect")
+
+
+#: Instruction kinds that target an object but carry no ``targets`` quantifier
+#: in their payload (the derivation encodes the target elsewhere). Only banding
+#: today; kept as a set so a second such kind is one entry, not a second branch.
+_QUANTIFIERLESS_TARGET_KINDS = frozenset({"grant_banding_to_target"})
+
+
+def _ability_target_quantifiers(instruction) -> list[str]:
+    """Every *mandatory-context* ``targets`` quantifier this ability carries.
+
+    Walks only the unconditional ``sequence`` steps, never a conditional branch
+    (``then``/``else``/``action``): a target inside "if you lose the flip,
+    counter target artifact spell" (Goblin Artisans) is not chosen at
+    activation, so an empty stack must not make the *whole* ability
+    unactivatable — the draw before the flip always happens. Basri Ket's "up to
+    one target creature" sits directly in the sequence, so it is seen (and, as
+    an "up_to", does not make a target mandatory)."""
+    quantifiers: list[str] = []
+
+    def walk(instr) -> None:
+        if instr is None:
+            return
+        payload = getattr(instr, "payload", None) or {}
+        targets = payload.get("targets")
+        if isinstance(targets, dict) and "quantifier" in targets:
+            quantifiers.append(targets.get("quantifier"))
+        for step in payload.get("steps") or ():
+            walk(step)
+
+    walk(instruction)
+    return quantifiers
+
+
 class LegalityMixin:
     """Backend legality queries surfaced to the web UI. Composed onto ``Game``."""
 
@@ -400,6 +435,127 @@ class LegalityMixin:
                 for_cast=False,
             )
         return spec
+
+    def activation_target_refusal(
+        self, controller_index: int, source_permanent, ability, *,
+        target_player_index=None, target_permanent_index=None,
+        target_permanent_ids=None, target_stack_item=None,
+    ) -> str | None:
+        """CR 602.2b/601.2c enforced once, before any cost is paid: an ability
+        that targets cannot be activated unless a legal target exists, and a
+        *named* target must itself be legal.
+
+        The same ``valid_targets`` the web picker is handed (engine derives it
+        from the compiled program), so the list offered and the list enforced
+        are one list. This replaced a per-kind if-chain in ``activation.py``
+        that checked four instruction kinds by hand and let every other
+        object-targeted ability be activated with nothing to target — paying
+        the cost (tapping the source, most often) and then dealing to the face
+        or doing nothing. Returns the refusal text, or None when the ability
+        does not target (so nothing is gated).
+        """
+        card = source_permanent.effective_card
+        spec, _ = _activation_spec([ability])
+        kind = spec.get("kind")
+        if kind in ("none", "modal", "hand_card"):
+            return None
+        # A cost payment (Sacrifice) and a chosen *source* (Jade Monolith,
+        # Circle of Protection) are not targets — CR 601.2b/601.2c — so an empty
+        # board does not make them unactivatable. Their own paths validate them.
+        if (
+            spec.get("sacrifice_cost") or spec.get("discard_cost")
+            or spec.get("also_stack") or spec.get("requires_source")
+        ):
+            return None
+        instruction = getattr(ability, "instruction", None)
+        quantifiers = _ability_target_quantifiers(instruction)
+        mandatory = "target" in quantifiers or (
+            instruction is not None and instruction.kind in _QUANTIFIERLESS_TARGET_KINDS
+        )
+        if not mandatory:
+            # No mandatory target to enforce — an all-"up to" target may choose
+            # none, and a kind with no target quantifier resolves its own choice
+            # (a shield's "of your choice", an attacker the handler picks). Only
+            # a *named* target still has to be legal, which the per-kind pickers
+            # and the resolution already check for these.
+            return None
+        ability_instruction = (
+            instruction
+            if instruction is not None and instruction.kind in _FILTERABLE_ABILITY_KINDS
+            else None
+        )
+        valid = self._enumerate_targets(
+            controller_index, card, spec, for_cast=False,
+            ability_instruction=ability_instruction,
+            source_permanent=source_permanent,
+            ability_source=source_permanent,
+        )
+        # A player/"any" ability always has a legal target (a player is always
+        # there), so those never refuse for want of one — the whole set of
+        # legal permanents, graveyard cards and stack spells is what an empty
+        # board can leave empty.
+        legal_perm = {
+            (t["seat"], t["index"]) for t in valid
+            if t.get("kind") in ("permanent", "graveyard")
+        }
+        legal_stack = [t for t in valid if t.get("kind") == "stack"]
+        refused = f"no valid target for {card.name}"
+
+        # A named target must be legal. The web layer sends ids; a test or the
+        # AI may send an index on a seat.
+        if target_permanent_ids:
+            chosen = [pid for pid in target_permanent_ids if pid is not None]
+            if chosen:
+                for pid in chosen:
+                    perm = self.permanent_by_id(pid)
+                    if perm is None:
+                        return refused
+                    seat = self.controller_index_of(perm)
+                    idx = self.battlefield_index_of(perm)
+                    if (seat, idx) not in legal_perm:
+                        return refused
+                return None
+        if target_permanent_index is not None:
+            # A bare index carries no seat, so it is legal if it names a legal
+            # target on the seat the caller gave — or, when none was given, on
+            # either battlefield (Xenic Poltergeist may animate your own
+            # artifact; the resolution finds it by index without a seat).
+            seats = (
+                [target_player_index] if target_player_index is not None
+                else list(range(len(self.players)))
+            )
+            indices = (
+                target_permanent_index
+                if isinstance(target_permanent_index, list)
+                else [target_permanent_index]
+            )
+            for idx in indices:
+                if idx is not None and not any((seat, idx) in legal_perm for seat in seats):
+                    return refused
+            return None
+        if target_stack_item is not None:
+            # A named stack spell (Deathgrip, Goblin Artisans): re-locate the
+            # legal items by their top-first index, the convention
+            # _enumerate_stack_targets emits, and compare by identity.
+            depth = len(self.stack)
+            legal_items = [
+                self.stack[depth - 1 - t["stack_index"]]
+                for t in legal_stack
+                if 0 <= depth - 1 - t["stack_index"] < depth
+            ]
+            if not any(item is target_stack_item for item in legal_items):
+                return refused
+            return None
+
+        # Nothing was named, and the target is mandatory: the ability is
+        # activatable only if some legal target exists (CR 602.2b). This is the
+        # census case — an empty board for a "destroy target creature" / "deals
+        # N damage to target creature" ability, which used to pay the cost and
+        # no-op (or, with an opponent creature present but none chosen, hit the
+        # face).
+        if not valid:
+            return refused
+        return None
 
     # -- Target enumeration ------------------------------------------------
     def _enumerate_targets(
@@ -604,7 +760,7 @@ class LegalityMixin:
                     return True
                 return False
             if spec.get("enchant_wall"):
-                return "wall" in type_line
+                return perm.has_type("wall")
             # Forcefield: only unblocked attacking creatures are legal choices.
             if spec.get("unblocked_attacker") and not (perm.attacking and not perm.blocked):
                 return False
@@ -615,7 +771,7 @@ class LegalityMixin:
             if spec.get("flying_only") and not self._has_keyword(perm, "flying"):
                 return False
             # Ali Baba: only Walls are legal choices.
-            if spec.get("wall_only") and "wall" not in type_line:
+            if spec.get("wall_only") and not perm.has_type("wall"):
                 return False
             return True
         if kind == "artifact":

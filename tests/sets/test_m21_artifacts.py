@@ -574,3 +574,75 @@ def test_malefic_scythe_grows_when_the_equipped_creature_dies(set_pool):
     attach_aura(scythe, second)
 
     assert (second.effective_power, second.effective_toughness) == (4, 4)
+
+
+# --- Silent Dart: an object-targeted activated ability (CR 602.2b) -----------
+# Recorded failing in-game: "no valid creature targets but the card sacrifices
+# itself." Two bugs, one class — an ability that targets an object could be
+# activated with no legal target (paying its cost, then dealing to the face or
+# no-op), because the pre-cost target check was a per-kind if-chain that named
+# only four instruction kinds.
+
+
+def _silent_dart_board(set_pool, opponent=()):
+    pool = set_pool("M21")
+    dart = Permanent(card=pool["Silent Dart"])
+    p1 = PlayerState(name="P1", battlefield=[dart])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=pool[n]) for n in opponent])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+    return game, p1, p2, dart
+
+
+def test_silent_dart_cannot_be_activated_with_no_creature_to_target(set_pool):
+    game, p1, p2, dart = _silent_dart_board(set_pool)  # empty opposing board
+
+    result = game.activate_permanent_ability(0, "Silent Dart")
+
+    assert result.supported is False
+    assert dart.tapped is False          # nothing was paid
+    assert p1.graveyard == []            # not sacrificed
+    assert p2.life == 20                 # and the opponent took nothing
+
+
+def test_silent_dart_refuses_a_noncreature_target(set_pool):
+    game, p1, p2, dart = _silent_dart_board(set_pool, opponent=["Forest"])
+    forest = next(iter(game.controlled_by(1)))
+
+    result = game.activate_permanent_ability(
+        0, "Silent Dart", target_permanent_ids=[game.permanent_id_of(forest)]
+    )
+
+    assert result.supported is False
+    assert dart.tapped is False
+    assert p1.graveyard == []
+
+
+def test_silent_dart_damages_a_named_creature(set_pool):
+    game, p1, p2, dart = _silent_dart_board(set_pool, opponent=["Alpine Watchdog"])
+    bear = next(iter(game.controlled_by(1)))
+
+    result = game.activate_permanent_ability(
+        0, "Silent Dart", target_permanent_ids=[game.permanent_id_of(bear)]
+    )
+
+    assert result.supported
+    assert [c.name for c in p2.graveyard] == ["Alpine Watchdog"]  # 3 > toughness
+    assert [c.name for c in p1.graveyard] == ["Silent Dart"]    # sacrificed as its cost
+    assert p2.life == 20                                        # the face is never the target
+
+
+def test_silent_dart_with_no_named_target_hits_a_creature_not_the_player(set_pool):
+    """A headless/AI caller names no target. The target is an object, so a
+    legal creature is scanned for — the face is never the fallback, which is
+    the reported bug (opponent took 3 with a creature on the board unchosen)."""
+    game, p1, p2, dart = _silent_dart_board(set_pool, opponent=["Alpine Watchdog"])
+
+    result = game.activate_permanent_ability(0, "Silent Dart")
+
+    assert result.supported
+    assert [c.name for c in p2.graveyard] == ["Alpine Watchdog"]
+    assert p2.life == 20

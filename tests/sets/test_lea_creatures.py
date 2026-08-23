@@ -528,7 +528,28 @@ def test_nether_shadow_upkeep_prompt_declined(all_cards):
 
 def test_northern_paladin_destroys_black_permanent(all_cards):
     paladin = _get(all_cards, "Northern Paladin")
-    black_knight = _get(all_cards, "Black Knight")
+    bog_wraith = _get(all_cards, "Bog Wraith")  # black, no protection
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=paladin)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bog_wraith)])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Northern Paladin", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert any(card.name == "Bog Wraith" for card in p2.graveyard)
+    assert p1.battlefield[0].tapped is True
+
+
+def test_northern_paladin_cannot_target_a_creature_with_protection_from_white(all_cards):
+    """Northern Paladin is a white source, so a black permanent with protection
+    from white (Black Knight) is not a legal target — the ability can't be
+    activated at it (CR 702.16e, 602.2b), and no cost is paid. The activation
+    gate asks the same question the target picker does, so the engine no longer
+    destroys what the picker would never have offered."""
+    paladin = _get(all_cards, "Northern Paladin")
+    black_knight = _get(all_cards, "Black Knight")  # protection from white
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=paladin)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=black_knight)])
@@ -536,10 +557,9 @@ def test_northern_paladin_destroys_black_permanent(all_cards):
 
     result = game.activate_permanent_ability(0, "Northern Paladin", target_player_index=1)
 
-    assert result.supported
-    assert not p2.battlefield
-    assert any(card.name == "Black Knight" for card in p2.graveyard)
-    assert p1.battlefield[0].tapped is True
+    assert result.supported is False
+    assert p2.battlefield  # Black Knight survives
+    assert p1.battlefield[0].tapped is False  # nothing paid
 
 
 def test_obsianus_golem_classifies_supported(all_cards):

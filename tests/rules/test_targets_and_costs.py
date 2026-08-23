@@ -504,3 +504,90 @@ def test_118_6_spell_with_no_mana_cost_cannot_be_cast():
     assert not result.supported
     assert p2.life == 20
     assert costless in p1.hand  # never left the hand
+
+
+# ---------------------------------------------------------------------------
+# Rule 602.2b / 601.2c — an activated ability with no legal target cannot be
+# activated, and its cost is not paid. One gate for every object-targeted
+# ability (engine/legality.activation_target_refusal), replacing a per-kind
+# if-chain that named only four instruction kinds.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("602.2b", "601.2c")
+def test_602_2b_a_banding_grant_needs_a_creature_to_target(cards):
+    """Helm of Chatzuk: "{T}: Target creature gains banding." With no creature,
+    the ability can't be activated, and the {T} is not paid."""
+    helm = _perm(cards["Helm of Chatzuk"])
+    p1 = PlayerState(name="P1", battlefield=[helm])
+    game = _two_player_game(p1, PlayerState(name="P2"))
+
+    result = game.activate_permanent_ability(0, "Helm of Chatzuk", target_player_index=0)
+
+    assert result.supported is False
+    assert helm.tapped is False
+
+
+@pytest.mark.cr("602.2b", "601.2c")
+def test_602_2b_a_targeted_counter_needs_a_matching_spell(cards):
+    """Deathgrip: "{B}{B}: Counter target green spell." With no green spell on
+    the stack the ability can't be activated."""
+    deathgrip = _perm(cards["Deathgrip"])
+    p1 = PlayerState(name="P1", battlefield=[deathgrip])
+    game = _two_player_game(p1, PlayerState(name="P2"))
+
+    result = game.activate_permanent_ability(0, "Deathgrip")
+
+    assert result.supported is False
+
+
+@pytest.mark.cr("602.2b", "601.2c")
+def test_602_2b_destroy_target_permanent_needs_a_matching_permanent(cards):
+    """Northern Paladin: "{W}{W}, {T}: Destroy target black permanent." With no
+    black permanent it can't be activated, and the {T} is not paid."""
+    paladin = _perm(cards["Northern Paladin"])
+    p1 = PlayerState(name="P1", battlefield=[paladin])
+    game = _two_player_game(p1, PlayerState(name="P2", battlefield=[_perm(cards["Grizzly Bears"])]))
+
+    result = game.activate_permanent_ability(0, "Northern Paladin", target_player_index=1)
+
+    assert result.supported is False
+    assert paladin.tapped is False
+
+
+@pytest.mark.cr("602.2b", "601.2c", "702.6c")
+def test_602_2b_equip_needs_a_creature_you_control(set_pool):
+    """An equip ability targets "creature you control"; with none, activating it
+    is refused before the equip cost is paid (CR 702.6a rewrites equip into that
+    activated ability, so the same gate covers it)."""
+    pool = set_pool("M21")
+    scythe = _nosick(Permanent(card=pool["Malefic Scythe"]))
+    p1 = PlayerState(name="P1", battlefield=[scythe])
+    game = _two_player_game(p1, PlayerState(name="P2"))
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+
+    result = game.activate_permanent_ability(0, "Malefic Scythe")
+
+    assert result.supported is False
+
+
+@pytest.mark.cr("608.2b")
+def test_608_2b_object_targeted_damage_with_no_target_does_not_hit_the_player(set_pool):
+    """Silent Dart: "It deals 3 damage to target creature." Activated with no
+    creature named and none on the board, the object target is not the player —
+    the ability is refused (602.2b), and even reached with the target gone it
+    does nothing rather than redirecting to a face (608.2b)."""
+    pool = set_pool("M21")
+    dart = Permanent(card=pool["Silent Dart"])
+    p1 = PlayerState(name="P1", battlefield=[dart])
+    p2 = PlayerState(name="P2")
+    game = _two_player_game(p1, p2)
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+
+    result = game.activate_permanent_ability(0, "Silent Dart")
+
+    assert result.supported is False
+    assert p2.life == 20
+    assert dart.tapped is False

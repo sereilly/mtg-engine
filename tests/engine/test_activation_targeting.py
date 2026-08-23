@@ -453,3 +453,81 @@ def test_diamond_valley_is_not_asked_twice_for_one_creature():
     spec = game.activation_target_spec(0, 0)
 
     assert spec["sacrifice_cost"] is True and "cost_spec" not in spec
+
+
+# ===========================================================================
+# CR 602.2b — a mandatory target that does not exist makes the ability
+# unactivatable, and no cost is paid
+# ===========================================================================
+
+_OBJECT_KINDS = {
+    "creature", "artifact", "land", "permanent", "planeswalker", "any",
+    "stack", "graveyard_creature", "spell_or_permanent",
+}
+
+
+def _mandatory_object_target_abilities(cards):
+    """Every supported ability whose instruction takes a *mandatory* object
+    target (not "up to", not a cost payment or "of your choice" source)."""
+    from engine.legality import _ability_target_quantifiers, _QUANTIFIERLESS_TARGET_KINDS
+
+    for card in cards:
+        for index, ability in enumerate(_abilities(card)):
+            spec = derive_activation_spec(ability)
+            if spec is None or spec.get("kind") not in _OBJECT_KINDS:
+                continue
+            if any(spec.get(k) for k in ("sacrifice_cost", "discard_cost", "also_stack", "requires_source")):
+                continue
+            instruction = ability.instruction
+            quantifiers = _ability_target_quantifiers(instruction)
+            mandatory = "target" in quantifiers or (
+                instruction is not None and instruction.kind in _QUANTIFIERLESS_TARGET_KINDS
+            )
+            if mandatory:
+                yield card, index, ability
+
+
+def test_the_no_target_sweep_covers_the_pool(supported_cards):
+    assert len(list(_mandatory_object_target_abilities(supported_cards))) > 15
+
+
+def test_no_mandatory_target_ability_can_be_activated_with_nothing_to_target(supported_cards):
+    """The Silent Dart class, as a ratchet over the whole pool.
+
+    An ability that must target a creature / artifact / permanent that isn't
+    there can't be activated (CR 602.2b), and — the half the in-game report was
+    about — nothing is paid: the source is not tapped or sacrificed, the game
+    state does not move. This used to be a per-kind if-chain that named four
+    instruction kinds, so every other object-targeted ability paid its cost and
+    then dealt to the face (Silent Dart) or no-op."""
+    import copy
+
+    offenders = []
+    for card, index, ability in _mandatory_object_target_abilities(supported_cards):
+        source = _nosick(Permanent(card=card))
+        p1 = PlayerState(name="P1", battlefield=[source])
+        p2 = PlayerState(name="P2")
+        game = _game(p1, p2)
+        game.active_player_index = 0
+        game.current_turn_phase = "main"
+        game.current_step = "precombat_main"
+        # A source that can target itself (a creature targeting creatures) has a
+        # legal target on an empty opposing board — not a no-target case.
+        if game.activation_target_spec(0, 0, ability_index=index).get("valid_targets"):
+            continue
+        snapshot = (
+            source.tapped, [c.name for c in p1.graveyard], [c.name for c in p1.exile],
+            p2.life, len(game.stack), copy.deepcopy(source.metadata),
+        )
+        result = game.activate_permanent_ability(0, card.name, ability_index=index)
+        after = (
+            source.tapped, [c.name for c in p1.graveyard], [c.name for c in p1.exile],
+            p2.life, len(game.stack), copy.deepcopy(source.metadata),
+        )
+        if result.supported or snapshot != after:
+            offenders.append((card.name, index, result.supported, snapshot != after))
+
+    assert not offenders, (
+        "activated with no legal target — should be refused with nothing paid: "
+        f"{offenders}"
+    )

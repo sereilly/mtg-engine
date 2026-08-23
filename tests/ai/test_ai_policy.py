@@ -266,3 +266,54 @@ def test_ai_does_not_self_target_x_damage_spell(all_cards):
     assert action is not None
     assert action.card_name == "Disintegrate"
     assert action.target_player_index == 1, "AI must aim X-damage burn at the opponent, not itself"
+
+
+def test_object_targeted_activation_names_a_legal_creature(set_pool):
+    """Silent Dart's "{4}, {T}, Sacrifice: deal 3 to target creature" is an
+    object-targeted ability. The AI must name a legal creature, or the gate
+    refuses the activation with nothing paid (CR 602.2b) — before the fix it
+    sent no target and the damage went to the face."""
+    pool = set_pool("M21")
+    dart = Permanent(card=pool["Silent Dart"])
+    dart.metadata["summoning_sickness_turn"] = -99
+    bear = Permanent(card=pool["Alpine Watchdog"])
+    p1 = PlayerState(name="P1", battlefield=[dart])
+    p2 = PlayerState(name="P2", battlefield=[bear])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+
+    action = choose_activation_action(game, 0)
+
+    assert action is not None
+    assert action.permanent_name == "Silent Dart"
+    assert action.target_player_index == 1
+    assert action.target_permanent_index == 0
+    # And executing it destroys the creature, never touching the face.
+    result = game.activate_permanent_ability(
+        0, "Silent Dart", target_player_index=action.target_player_index,
+        target_permanent_index=action.target_permanent_index,
+    )
+    assert result.supported
+    assert p2.life == 20
+    assert [c.name for c in p2.graveyard] == ["Alpine Watchdog"]
+
+
+def test_object_targeted_activation_is_skipped_with_no_legal_target(set_pool):
+    """With no creature to hit, the AI does not activate Silent Dart at all —
+    the alternative is burning {4} and the artifact on an ability the gate would
+    refuse."""
+    pool = set_pool("M21")
+    dart = Permanent(card=pool["Silent Dart"])
+    dart.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[dart])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+
+    action = choose_activation_action(game, 0)
+
+    assert action is None or action.permanent_name != "Silent Dart"

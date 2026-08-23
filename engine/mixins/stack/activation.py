@@ -334,37 +334,25 @@ class AbilityActivationMixin:
             self.log.append(f"No implemented activated ability for {permanent.card.name}")
             return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
 
-        if ability.instruction.kind == "grant_banding_to_target":
-            # Helm of Chatzuk targets any creature (the chosen target_player; falls
-            # back to any creature on the battlefield when no target was supplied).
-            has_valid_target = any(perm.is_creature for perm in self.all_permanents())
-            if not has_valid_target:
-                details = "no valid creature target for banding effect"
-                self.log.append("No valid creature target for banding effect")
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        if ability.instruction.kind == "counter_top_stack_spell":
-            # Already text-changed: the ability came from
-            # ``compile_card_oracle(permanent.effective_card)`` above, so layer 3
-            # has been applied once and must not be applied again here.
-            color_filter = ability.instruction.payload.get("color_filter")
-            if target_stack_item is not None:
-                # A specific spell was chosen — it must itself be a legal target.
-                if target_stack_item not in self.stack or (
-                    color_filter and color_filter not in self._stack_item_colors(target_stack_item)
-                ):
-                    details = f"no valid target for {permanent.card.name}"
-                    self.log.append(details)
-                    return SimulationResult(permanent.card.name, False, "unsupported", details)
-            else:
-                has_valid_target = any(
-                    not color_filter or color_filter in self._stack_item_colors(item)
-                    for item in self.stack
-                )
-                if not has_valid_target:
-                    details = f"no valid target for {permanent.card.name}"
-                    self.log.append(details)
-                    return SimulationResult(permanent.card.name, False, "unsupported", details)
+        # CR 602.2b/601.2c, once, before any cost is paid: an ability that
+        # targets is unactivatable with no legal target, and a named target
+        # must be legal. Derived from the same valid_targets the web picker
+        # gets (engine/legality.py), so the list offered and the list enforced
+        # are one. This replaced a per-kind if-chain here — banding, the
+        # counterspell, destroy-target, equip — that checked four instruction
+        # kinds by hand and let every other object-targeted ability (Silent
+        # Dart, Royal Assassin, Xenic Poltergeist, …) pay its cost with nothing
+        # to target and then deal to the face or no-op.
+        target_refusal = self.activation_target_refusal(
+            controller_index, permanent, ability,
+            target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
+            target_stack_item=target_stack_item,
+        )
+        if target_refusal is not None:
+            self.log.append(target_refusal)
+            return SimulationResult(permanent.card.name, False, "unsupported", target_refusal)
 
         # Scavenging Ghoul: 'Remove a corpse counter from this creature: Regenerate
         # this creature.' — the counter removal is the activation cost.
@@ -484,44 +472,6 @@ class AbilityActivationMixin:
         # satisfy the ability's color/type/subtype filter (601.2c) — an
         # illegal target makes the ability impossible to activate, so it's
         # rejected before any cost is paid rather than silently fizzling.
-        if ability.instruction.kind == "destroy_target_permanent" and isinstance(target_permanent_index, int):
-            bf = target_player.battlefield
-            legal = 0 <= target_permanent_index < len(bf) and permanent_matches_filter(
-                bf[target_permanent_index], ability.instruction.payload
-            )
-            if not legal:
-                details = f"no valid target for {permanent.card.name}"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        # An equip ability (CR 702.6a): "target creature you control". CR
-        # 602.2b chooses the target as the ability is activated and CR 115.5 /
-        # 601.2c make an illegal choice an ability that cannot be activated, so
-        # a named target that is not a creature the activator controls — or one
-        # the Equipment may not legally equip (CR 301.5, 702.16d) — is refused
-        # here, before the cost, rather than paid for and fizzled. The web
-        # picker never offers such a creature; this is for the engine's own
-        # callers. A target named by neither id nor index is left to the
-        # resolution, which declines it with no fallback.
-        if ability.instruction.kind == "attach_source_to_target":
-            named = None
-            if target_permanent_ids:
-                named = self.permanent_by_id(target_permanent_ids[0])
-            elif isinstance(target_permanent_index, int):
-                named = self.permanent_at(target_player, target_permanent_index)
-            if named is not None and not (
-                self.controls(controller_index, named)
-                and self._ability_target_legal(
-                    ability.instruction, named,
-                    candidate_seat=self.controller_index_of(named),
-                    controller_index=controller_index,
-                    source_permanent=permanent,
-                )
-            ):
-                details = f"no valid target for {permanent.card.name}'s equip ability"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-
         # Jandor's Ring: "Discard the last card you drew this turn" is an
         # additional cost — unpayable (so the ability can't be activated) if no
         # card drawn this turn is still in hand. Checked before any cost is paid;

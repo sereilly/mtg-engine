@@ -318,6 +318,32 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             then=lambda dealt: context.results.__setitem__("damage_dealt", dealt),
             asks=True,
         )
+    elif several.get("kind") == "object":
+        from ..subject_filters import subject_matches
+        # "…deals N damage to target creature" (Silent Dart), activated with no
+        # index named — a headless or AI caller. The target is an object, so a
+        # legal one is scanned for the way every other single-target handler
+        # does; the face is never the fallback for an object target, which is
+        # how the ability came to deal to the player when no creature was
+        # chosen. None left → CR 608.2b, the ability does nothing.
+        victim = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: subject_matches(game, perm, described),
+        )
+        if victim is None:
+            game.log.append(f"{card.name}: no legal target, no effect (CR 608.2b)")
+            return True, "resolved"
+        if victim.is_creature:
+            if instruction.payload.get("no_regen"):
+                victim.metadata["cant_be_regenerated_this_turn"] = True
+            if instruction.payload.get("exile_if_dies"):
+                victim.metadata["exile_if_dies_this_turn"] = True
+        apply_damage_to_creature(
+            game, victim, damage, source_permanent or card,
+            log_message=lambda dealt: f"{card.name} dealt {dealt} damage to {victim.card.name}",
+            then=lambda dealt: context.results.__setitem__("damage_dealt", dealt),
+            asks=True,
+        )
     else:
         def _report(damage: int) -> None:
             context.results["damage_dealt"] = damage

@@ -533,9 +533,12 @@ def _coffin_board(set_pool, *, aura=True, counters=2):
     game = Game(players=[p1, p2])
     game.enforce_mana_costs = False
     if aura:
-        ward = Permanent(card=pool["Artifact Ward"])
-        game._put_permanent_onto_battlefield(1, ward, None)
-        attach_aura(ward, victim)
+        # A plain P/T Aura, not Artifact Ward: the Coffin is an artifact source,
+        # and Artifact Ward gives its creature protection from artifact sources
+        # (so the Coffin can't target it — that interaction has its own test).
+        holy = Permanent(card=set_pool("LEA")["Holy Strength"])
+        game._put_permanent_onto_battlefield(1, holy, None)
+        attach_aura(holy, victim)
     if counters:
         add_plus1_counters(victim, counters)
     return game, p1, p2, coffin, victim
@@ -547,6 +550,31 @@ def _shut_the_lid(game):
     )
 
 
+def test_artifact_ward_stops_the_artifact_coffin_from_targeting_the_creature(set_pool):
+    """Artifact Ward: "Enchanted creature can't be the target of abilities from
+    artifact sources." Tawnos's Coffin is an artifact, so its exile ability
+    can't be activated at a warded creature (CR 702.16, 602.2b) — the activation
+    gate refuses it before any cost, the same answer the target picker gives."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ATQ")
+    coffin = Permanent(card=pool["Tawnos's Coffin"])
+    victim = Permanent(card=pool["Citanul Druid"])
+    p1 = PlayerState(name="P1", battlefield=[coffin])
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    ward = Permanent(card=pool["Artifact Ward"])
+    game._put_permanent_onto_battlefield(1, ward, None)
+    attach_aura(ward, victim)
+
+    result = _shut_the_lid(game)
+
+    assert result.supported is False
+    assert p2.battlefield  # the Druid is untouched
+    assert coffin.tapped is False
+
+
 def test_the_coffin_exiles_the_creature_and_its_auras(set_pool):
     game, p1, p2, coffin, victim = _coffin_board(set_pool)
 
@@ -554,7 +582,7 @@ def test_the_coffin_exiles_the_creature_and_its_auras(set_pool):
 
     assert result.supported, result.details
     assert p2.battlefield == []
-    assert [card.name for card in p2.exile] == ["Citanul Druid", "Artifact Ward"]
+    assert [card.name for card in p2.exile] == ["Citanul Druid", "Holy Strength"]
 
 
 def test_untapping_the_coffin_gives_everything_back(set_pool):
@@ -568,7 +596,7 @@ def test_untapping_the_coffin_gives_everything_back(set_pool):
     game.become_untapped(coffin)
 
     returned = {perm.card.name: perm for perm in p2.battlefield}
-    assert set(returned) == {"Citanul Druid", "Artifact Ward"}
+    assert set(returned) == {"Citanul Druid", "Holy Strength"}
     assert returned["Citanul Druid"].tapped is True, "…to the battlefield tapped"
     assert p2.exile == []
 
@@ -577,7 +605,7 @@ def test_the_noted_counters_come_back_with_it(set_pool):
     """"…with the noted number and kind of counters on it." Noted, not derived:
     by the time the return runs the permanent is gone, and what comes back is a
     new object (CR 400.7) with no counters at all."""
-    game, p1, p2, coffin, victim = _coffin_board(set_pool, counters=2)
+    game, p1, p2, coffin, victim = _coffin_board(set_pool, counters=2, aura=False)
     _shut_the_lid(game)
 
     game.become_untapped(coffin)
@@ -596,7 +624,7 @@ def test_the_auras_go_back_onto_the_creature(set_pool):
 
     game.become_untapped(coffin)
 
-    aura = next(p for p in p2.battlefield if p.card.name == "Artifact Ward")
+    aura = next(p for p in p2.battlefield if p.card.name == "Holy Strength")
     druid = next(p for p in p2.battlefield if p.card.name == "Citanul Druid")
     assert aura.metadata.get("attached_to") is druid
 
@@ -610,7 +638,7 @@ def test_the_coffin_leaving_gives_everything_back_too(set_pool):
     game.remove_from_battlefield(coffin)
 
     assert {perm.card.name for perm in p2.battlefield} == {
-        "Citanul Druid", "Artifact Ward",
+        "Citanul Druid", "Holy Strength",
     }
 
 

@@ -5,6 +5,7 @@ import re
 
 from .ai_valuation import (
     SPELL_TYPES,
+    activation_target_side,
     cards_drawn_by_controller,
     cards_drawn_by_target,
     counters_a_spell,
@@ -25,7 +26,7 @@ from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import x_spend_color_from_text
 from .search_filters import search_matches
-from .targeting import derive_cast_spec
+from .targeting import derive_activation_spec, derive_cast_spec
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
@@ -182,10 +183,47 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             # Banding grants go to the controller's own creatures.
             target = player_index
             target_creatures = [
-        perm for perm in game.controlled_by(player_index) if perm.card.primary_type == "creature"
-    ]
+                perm for perm in game.controlled_by(player_index) if perm.is_creature
+            ]
             if not target_creatures:
                 continue
+
+        # An object-targeted ability (Silent Dart's "deal 3 to target creature",
+        # a "destroy target …") must name a legal permanent, or the activation
+        # is refused with nothing paid (CR 602.2b). Derive the target the way the
+        # picker does and aim it by the effect's category; skip when nothing is
+        # worth (or legal) to target, so the AI does not burn a turn on an
+        # ability it cannot resolve.
+        spec = derive_activation_spec(ability)
+        object_kinds = {"creature", "artifact", "land", "permanent", "planeswalker"}
+        if (
+            target_permanent_index is None
+            and spec is not None
+            and spec.get("kind") in object_kinds
+            and not spec.get("sacrifice_cost")
+            and not spec.get("discard_cost")
+        ):
+            # The AI activates the first usable ability (selected above), which
+            # is usable_activated_abilities()[0] — the index activation_target_spec
+            # narrows by.
+            legal = game.activation_target_spec(
+                player_index, permanent_index, ability_index=0,
+            ).get("valid_targets") or []
+            perms = [t for t in legal if t.get("kind") == "permanent"]
+            if not perms:
+                continue
+            side = activation_target_side(ability.instruction)
+            if side == "you":
+                perms = [t for t in perms if t["seat"] == player_index] or perms
+            elif side == "opponent":
+                perms = [t for t in perms if t["seat"] != player_index] or perms
+            def _power(t):
+                perm = game.permanent_at(t["seat"], t["index"])
+                return perm.effective_power if perm is not None else 0
+
+            chosen = max(perms, key=_power)
+            target = chosen["seat"]
+            target_permanent_index = chosen["index"]
 
         land_taps: tuple[int, ...] = ()
         required = dict(ability.cost.mana)
