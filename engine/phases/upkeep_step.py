@@ -596,26 +596,6 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     ))
                     continue
 
-        # Handle enchant-land auras with upkeep damage (e.g. Cursed Land)
-        for controller_seat, permanent in self.permanents_with_controller():
-            if permanent.card.primary_type != "enchantment":
-                continue
-            prog = compile_card_oracle(permanent.effective_card)
-            text = prog.normalized_text
-            if not aura_enchants(permanent.effective_card.oracle_text, "land"):
-                continue
-            attached_land = permanent.metadata.get("attached_to")
-            if attached_land is None:
-                continue
-            # Find which player controls the enchanted land
-            if self.controller_index_of(attached_land) != player_index:
-                continue
-            instr = next((i for i in prog.instructions if i.kind == "deal_damage"), None)
-            if instr is None:
-                continue
-            amount = int(instr.payload.get("amount", 1))
-            _enqueue_upkeep_damage(permanent, controller_seat, player_index, amount)
-
         # Unstable Mutation: enchant-creature auras that decay the enchanted
         # creature at the beginning of its controller's upkeep. The counters
         # are real -1/-1 counters, not an aura grant — they stay if the Aura

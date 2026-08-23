@@ -552,11 +552,13 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
 AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("upkeep_self",         r"at the beginning of your upkeep"),
     ("upkeep_each",         r"at the beginning of each (?:player's )?upkeep"),
-    # Deliberately excludes `land`: Cursed Land's upkeep damage is already dealt
-    # by the enchant-land upkeep pass in phases/upkeep_step.py. Adding `land`
-    # here compiles a *second* trigger and the card deals its damage twice —
-    # caught by test_cursed_land_deals_upkeep_damage_to_land_controller.
-    ("upkeep_enchanted_controller", r"at the beginning of the upkeep of enchanted (?:creature|artifact|enchantment)'s controller"),
+    # Cursed Land's "enchanted land's controller" is here too: the deal_damage
+    # handler (phases/upkeep_effects.py) reads `attached_to` and does not care
+    # what the enchanted permanent is, so a land Aura routes through it like the
+    # creature/artifact/enchantment ones. The bespoke enchant-land pass that
+    # used to deal it (and the double-fire that excluding `land` guarded against)
+    # are both gone.
+    ("upkeep_enchanted_controller", r"at the beginning of the upkeep of enchanted (?:creature|artifact|enchantment|land)'s controller"),
     ("upkeep_chosen",       r"at the beginning of the chosen player's upkeep"),
     # "Your draw step" is a scope narrowing and so its own kind, exactly as
     # upkeep_self is beside upkeep_each: it fires only on its controller's draw

@@ -197,15 +197,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
             _line('destroy_artifact_controller_gains_mana_value', 'spell_pattern',
                 bypass_regeneration=True),
     },
-    # The damage is dealt by the enchant-land pass in phases/upkeep_step.py,
-    # which reads the *amount* off this instruction. Deliberately not a trigger:
-    # compiling one makes the Aura deal its damage twice (pinned by
-    # test_cursed_land_deals_upkeep_damage_to_land_controller).
-    'Cursed Land': {
-        "at the beginning of the upkeep of enchanted land's controller, this aura "
-        "deals 1 damage to that player":
-            _line("deal_damage", "spell_pattern", amount=1),
-    },
     'Cyclone': {
         'at the beginning of your upkeep, put a wind counter on this '
         'enchantment, then sacrifice this enchantment unless you pay {g} for '

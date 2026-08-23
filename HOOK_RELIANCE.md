@@ -12,22 +12,22 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**85 of 734 supported cards (11.6%)** carry at least one name-keyed entry, across **92 entries** in 7 registries. The pool is 734 cards, 100.0% supported.
+**84 of 734 supported cards (11.4%)** carry at least one name-keyed entry, across **91 entries** in 7 registries. The pool is 734 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **3,273 hand-written entries** covering **3,024 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **3,237 hand-written entries** covering **2,988 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 49 (16.9%) | 388 | 46 (11.9%) | 53 | 18.3 |
-| LEB | 292 | 292 (100.0%) | 49 (16.8%) | 389 | 46 (11.8%) | 53 | 18.2 |
-| 2ED | 292 | 292 (100.0%) | 49 (16.8%) | 389 | 46 (11.8%) | 53 | 18.2 |
+| LEA | 290 | 290 (100.0%) | 48 (16.6%) | 388 | 45 (11.6%) | 52 | 17.9 |
+| LEB | 292 | 292 (100.0%) | 48 (16.4%) | 389 | 45 (11.6%) | 52 | 17.8 |
+| 2ED | 292 | 292 (100.0%) | 48 (16.4%) | 389 | 45 (11.6%) | 52 | 17.8 |
 | ARN | 78 | 78 (100.0%) | 30 (38.5%) | 107 | 29 (27.1%) | 33 | 42.3 |
 | ATQ | 85 | 85 (100.0%) | 6 (7.1%) | 120 | 6 (5.0%) | 6 | 7.1 |
-| 3ED | 296 | 296 (100.0%) | 48 (16.2%) | 389 | 46 (11.8%) | 51 | 17.2 |
+| 3ED | 296 | 296 (100.0%) | 47 (15.9%) | 389 | 45 (11.6%) | 50 | 16.9 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **85 (11.6%)** | **1119** | **81 (7.2%)** | **92** | **12.5** |
+| **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **84 (11.4%)** | **1119** | **80 (7.1%)** | **91** | **12.4** |
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so four of these rows are one data point wearing four hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 
@@ -35,7 +35,7 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 79 | 81 |
+| `CARD_LINE_INSTRUCTIONS` | 78 | 80 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ENCHANTED_LAND_TAPPED_FOR_MANA` | 1 | 1 |
@@ -59,7 +59,6 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 - **Consecrate Land** (`ON_LEAVE_BATTLEFIELD`)
 - **Contract from Below** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Crumble** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Cursed Land** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Cyclone** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Cyclopean Tomb** (`CARD_LINE_INSTRUCTIONS`, `ON_LEAVE_BATTLEFIELD`) — 1 line
 - **Darkpact** (`CARD_LINE_INSTRUCTIONS`) — 1 line

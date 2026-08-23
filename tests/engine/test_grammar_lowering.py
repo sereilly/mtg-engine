@@ -1647,6 +1647,11 @@ def test_registry_claims_stay_stricter_than_their_enforcement():
             "At the beginning of the upkeep of enchanted artifact's controller, "
             "this Aura deals 1 damage to that player.",
         ),
+        (
+            "Cursed Land",
+            "At the beginning of the upkeep of enchanted land's controller, "
+            "this Aura deals 1 damage to that player.",
+        ),
     ],
 )
 def test_aura_upkeep_damage_lowers_to_the_dispatched_pair(card, line):
@@ -1668,15 +1673,18 @@ def test_aura_upkeep_damage_lowers_to_the_dispatched_pair(card, line):
     ]
 
 
-def test_enchanted_land_upkeep_is_deliberately_not_a_trigger_phrase():
-    """Cursed Land reads the same way but must NOT be claimed.
+def test_enchanted_land_upkeep_is_dispatched_like_its_peers():
+    """Cursed Land reads exactly like Feedback/Wanderlust/Warp Artifact, and is
+    dispatched by the same pair.
 
-    Its upkeep damage is already dealt by the enchant-land pass in
-    engine/phases/upkeep_step.py, and the legacy condition table excludes
-    ``land`` for exactly that reason. Adding a fourth table row would give the
-    grammar a trigger the engine never dispatches -- the line would count as
-    "executing through the grammar" in GRAMMAR_COVERAGE.md while nothing about
-    the card changed. False coverage is worse than none.
+    ``land`` used to be excluded from the trigger table because the damage was
+    dealt by a bespoke enchant-land pass in engine/phases/upkeep_step.py — so
+    a trigger row would have fired the damage twice. That pass is gone; the
+    ``("upkeep_enchanted_controller", "deal_damage")`` handler reads
+    ``attached_to`` and does not care about the enchanted type, so the land
+    Aura routes through it and the line is honestly claimed. The
+    ``test_cursed_land_deals_upkeep_damage_to_land_controller`` regression pins
+    that the damage still lands exactly once.
     """
     result = compile_line(
         "At the beginning of the upkeep of enchanted land's controller, "
@@ -1684,7 +1692,10 @@ def test_enchanted_land_upkeep_is_deliberately_not_a_trigger_phrase():
         card_name="Cursed Land",
     )
 
-    assert not result.parsed
+    assert result.parsed
+    assert [(i.kind, dict(i.payload)) for i in result.instructions] == [
+        ("deal_damage", {"amount": 1, "recipient": "target_player"})
+    ]
 
 
 @pytest.mark.parametrize(

@@ -182,16 +182,18 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # (Feedback, Wanderlust, Warp Artifact). Written out per enchanted type
     # rather than as "enchanted <any noun>'s controller" so the set stays
     # exactly the one the legacy condition table admits — `enchanted land's
-    # controller` is deliberately NOT here. Cursed Land's upkeep damage is
-    # already dealt by the enchant-land pass in phases/upkeep_step.py, so a
-    # fourth entry would compile a *second* trigger and the card would deal its
-    # damage twice (pinned by test_cursed_land_deals_upkeep_damage_to_land_controller).
+    # All four attached types read the same condition — the deal_damage handler
+    # (phases/upkeep_effects.py) reads `attached_to`, not the enchanted type —
+    # so Cursed Land's "enchanted land's controller" is one of them now, and the
+    # bespoke enchant-land pass it used to need is gone.
     ("upkeep_enchanted_controller",
      ("the", "beginning", "of", "the", "upkeep", "of", "enchanted", "creature", "'s", "controller")),
     ("upkeep_enchanted_controller",
      ("the", "beginning", "of", "the", "upkeep", "of", "enchanted", "artifact", "'s", "controller")),
     ("upkeep_enchanted_controller",
      ("the", "beginning", "of", "the", "upkeep", "of", "enchanted", "enchantment", "'s", "controller")),
+    ("upkeep_enchanted_controller",
+     ("the", "beginning", "of", "the", "upkeep", "of", "enchanted", "land", "'s", "controller")),
     ("upkeep_chosen", ("the", "beginning", "of", "the", "chosen", "player", "'s", "upkeep")),
     # "Your draw step" beside "each player's", the same pair as the upkeep two
     # above and for the same reason: the scope is what the dispatcher reads, and

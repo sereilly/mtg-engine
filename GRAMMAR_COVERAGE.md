@@ -16,14 +16,14 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 80.2% | 79.1% | 42.8% | 152 |
-| LEB | 292 | 389 | 80.2% | 79.2% | 42.9% | 153 |
-| 2ED | 292 | 389 | 80.2% | 79.2% | 42.9% | 153 |
+| LEA | 290 | 388 | 80.4% | 79.4% | 43.0% | 153 |
+| LEB | 292 | 389 | 80.5% | 79.4% | 43.2% | 154 |
+| 2ED | 292 | 389 | 80.5% | 79.4% | 43.2% | 154 |
 | ARN | 78 | 108 | 67.6% | 63.9% | 41.7% | 36 |
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
-| 3ED | 296 | 389 | 81.0% | 79.7% | 44.2% | 155 |
+| 3ED | 296 | 389 | 81.2% | 79.9% | 44.5% | 156 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| **All (shipped)** | **1618** | **2286** | **81.7%** | **80.5%** | **47.9%** | **950** |
+| **All (shipped)** | **1618** | **2286** | **81.8%** | **80.7%** | **48.0%** | **954** |
 
 ## Backlog — failure reasons
 
@@ -31,7 +31,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 183 | 68 | expected a subject |  |
+| 179 | 67 | expected a subject |  |
 | 85 | 29 | unrecognized effect verb |  |
 | 45 | 21 | unconsumed text |  |
 | 29 | 29 | unrecognized activation cost |  |
@@ -59,7 +59,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 ## Cards executing through the grammar
 
-950 cards, 1094 lines.
+954 cards, 1098 lines.
 
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
@@ -355,6 +355,11 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.`
 - **Cuombajj Witches**
   - `{T}: This creature deals 1 damage to any target and 1 damage to any target of an opponent's choice.`
+- **Cursed Land**
+  - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
+  - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
+  - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
+  - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
 - **Dandân**
   - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`

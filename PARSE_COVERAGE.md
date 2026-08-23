@@ -63,9 +63,9 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 604 |
+| parse rule | 605 |
 | activation cost | 233 |
-| trigger table | 230 |
+| trigger table | 231 |
 | keyword table | 139 |
 | static-line table | 137 |
 | card_hooks bespoke (name-keyed) | 130 |
@@ -74,7 +74,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | loyalty cost | 33 |
 | activation_restrictions.py | 21 |
 | mixin text scan | 16 |
-| auras.py (attached effect) | 15 |
+| auras.py (attached effect) | 14 |
 | oracle.py (modal trigger head) | 9 |
 | cast_costs.py | 7 |
 | untap_restrictions.py | 6 |
