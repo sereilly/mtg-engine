@@ -20,8 +20,8 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** ~6,845 tests at a steady 40s, against a CI budget
-   of 60s. The budget catches a step change; the *baseline* recorded beside it
+2. **The suite stays fast.** ~6,870 tests at a steady 40s locally, against a
+   CI budget of 120s. The budget catches a step change; the *baseline* recorded beside it
    in `ci.yml` is what catches creep, and it is the number to keep honest — it
    went 9s → 17s across four phases with the gate green the whole way. Raising
    the budget is a decision, not maintenance.
@@ -37,7 +37,11 @@ Anything that weakens these is a regression regardless of what it enables:
    The second move put the suite *at* the old 35s budget, so the budget was
    raised 35 → 60 as a decision (2026-08-19, ahead of the next set ingestion):
    the next set's tests need somewhere to land, and the cliff detector stays
-   well above honest growth.
+   well above honest growth. It went 60 → 120 two days later (2026-08-21) for
+   a different reason — GitHub's runners take the same suite two to three
+   times as long as a local run, so a budget tuned to local timings failed on
+   the runner with nothing wrong; the local baseline of 40s is still the
+   number that shows creep.
 
    **The variance recorded here earlier did not reproduce.** Two back-to-back
    local runs once measured 43.98s and 16.79s, which read as a runner-weather
@@ -135,48 +139,39 @@ needs two rounds is worth splitting only if neither half ships a card alone
   Phase 3 exit criterion, not only a Phase 2 reading** — Antiquities read 85/85
   supported for thirty rounds with three cards in it (ATQ 30), and reaching zero
   took a round of its own.
-- **The verification tracker holds 346 unrecorded cards** of 734 — M21 and
+- **The verification tracker holds ~335 unrecorded cards** of 734 — M21 and
   Antiquities, both promoted before their in-game pass (SET_PLAYBOOK Phase 5
   owns that delta and promotion deliberately does not gate on it); four read
   `equivalent` off a passing peer. A headless sweep is not a manual in-game
-  pass, and `card_verification.json` records what a human checked. A generated
+  pass, and `card_verification.json` records what a human checked — including
+  a **failure**, which is a bug report with a card name on it. A generated
   artifact that is stale does not read as stale; it reads as an answer — this
   bullet itself said "19 untested" for a week after M21 shipped, which is why
-  CI regenerates the tracker now.
+  CI regenerates the tracker now, and why the count here is approximate on
+  purpose: `CARD_VERIFICATION.md` is the number.
 
 ### Deliberate refusals, with their reasons
 
-Not gaps to close on sight — each was measured and left refusing:
+Not gaps to close on sight — each was measured and left refusing. This list
+used to be three times as long; the pre-set cleanup round before the next
+ingest found nine of its entries implemented (Pursued Whale's target
+narrowing and the {X} self-reductions in `cost_modifiers.py`, Enthralling
+Hold in `target_restrictions.py`, Runed Halo in `named_protection.py`, Feat of
+Resistance as `PROTECTION_FROM_CHOSEN_COLOR`, Demonic Embrace in
+`cast_costs.py`, Crypt Lurker as `may → choose_one`, Faith's Fetters and
+Feline Sovereign in `auras.py` / `lord_buffs.py`) and still listed as
+refusing. A refusal recorded here is a claim about the code; re-verify it
+against `compile_line` before citing it.
 
-- **Pursued Whale** — "spells your opponents cast **that target this
-  creature**": a narrowing about the spell's *targets*, which no filter here
-  expresses.
-- **Faith's Fetters / Enthralling Hold** — "its activated abilities can't be
-  activated unless they're mana abilities"; "you can't choose an untapped
-  creature as this spell's target as you cast it".
-- **Crypt Lurker** — an either/or action cost ("sacrifice a creature **or**
-  discard a creature card") needs an or-composed cost prompt, not round 23's
-  single-action one.
-- **Protection past what the shields test.** Round 25 gave qualities colours,
-  "multicolored", planeswalkers and creature subtypes; Feat of Resistance
-  ("protection from the color of your choice" — a chosen-colour grant plus a
-  layer-6 read), Runed Halo (player protection from a chosen *name*) and Feline
-  Sovereign (protection as a lord-buff grant) stay out. Hexproof stays
-  colour-only, because its targeting branch reads colour words alone.
-- **Cost reductions that cannot be computed** — the {X} self-reductions
-  (Volcanic Salvo, Chandra's Incinerator) and Sanctum of Tranquil Light's
-  per-Shrine *activation* reduction. Reading an unrecognized condition as
-  satisfied makes a spell cheaper than it is, and cheaper is the one direction a
-  cost error must never go.
 - **El-Hajjâj's "you gain that much life"** is deliberately *not* a row in
   `_EVENT_QUANTITIES`: its fire site records the amount under a different key,
   so claiming its line would retire a hook onto a handler reading the wrong
   name.
+- **Hexproof stays colour-only**, because its targeting branch reads colour
+  words alone.
 - **A durationless doubling** (a continuous effect the layers would have to own)
   and **doubling toughness** (a different effect — consuming the noun without
   checking it is how one card's production quietly claims another's).
-- **Demonic Embrace's graveyard cast** — "by paying 3 life and discarding a
-  card", a *cast* additional cost over the round-19 permission seam.
 - **A filter with no card behind it is untested by construction** — round 43's
   sacrifice *trigger* is unnarrowed for that reason, even though the
   subject-group machinery could read a narrowing. Still standing for the
@@ -498,7 +493,9 @@ Six guards fail the moment `load_catalog()` widens, and each named real work:
   the parse-coverage report that claims it.
 - **Two more channels and one that needed the whole card.** "You may choose not
   to untap this artifact during your untap step" is a *permission* rather than a
-  restriction and got its own reader beside them; Power Artifact's reduction is
+  restriction and got its own reader beside them (folded into the existing
+  `self_untap_line` three commits later, which already read the sentence with
+  any noun — the reader was a duplicate); Power Artifact's reduction is
   two sentences that mean nothing apart, so `parse_coverage.py` grew a
   card-aware channel rather than a sentence-only predicate that could not
   recognise either half.

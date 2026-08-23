@@ -120,6 +120,7 @@ python scripts/serve_lan.py --port 8010   # same app, dual-stack IPv4+IPv6 for L
 python scripts/run_duel.py            # scripted deterministic duel, no server (default LEA)
 python scripts/simulate_ai_games.py   # AI-vs-AI batch; deterministic per seed (default LEA)
 python scripts/support_report.py      # per-category card-support coverage (whole pool)
+python scripts/support_report.py --set ATQ --hollow-lines   # supported cards carrying an ability with no instruction behind it (a Phase 3 exit criterion)
 python scripts/retrieve_oracle.py "Black Lotus"   # oracle text by name (whole pool)
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
@@ -128,7 +129,7 @@ python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavio
 python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text
 python scripts/grammar_coverage.py    # regenerate GRAMMAR_COVERAGE.md (how much of the pool the parser reads); --check fails on regression, --accept re-snapshots floors
 python scripts/hook_reliance.py       # regenerate HOOK_RELIANCE.md (how much of the pool is supported by its *name*); --check fails on a rise, --accept re-snapshots ceilings
-python scripts/fetch_vocabulary.py    # re-fetch data/vocabulary/*.json from Scryfall (run when a new set adds creature/land types)
+python scripts/fetch_vocabulary.py    # re-fetch data/vocabulary/*.json from Scryfall (run when a new set adds creature/land types); --check only confirms the catalogs are present (CI)
 python scripts/ingest_set.py 3ED --fetch   # add a new set: download from Scryfall into the engine's card format
 python scripts/ingest_set.py --all --check # report card-file sizes without writing
 ```
@@ -733,13 +734,15 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (388 of the 734 catalog cards passing — 373 checked
-in-game and 15 auto-passed — 4 more reported `equivalent`; the rest — almost
-all of M21 and Antiquities, both promoted before their in-game pass — have no
-recorded result yet,
-which SET_PLAYBOOK.md Phase 5 owns and deliberately does not gate promotion
-on). **Generated automatically** — results are edited via the in-game Debug
-Menu, not by hand.
+manually validated in-game (roughly 394 of the 734 catalog cards passing —
+379 checked in-game and 15 auto-passed — 4 more reported `equivalent`; the
+rest — almost all of M21 and Antiquities, both promoted before their in-game
+pass — have no recorded result yet, which SET_PLAYBOOK.md Phase 5 owns and
+deliberately does not gate promotion on; the summary at the top of the
+markdown is the current number). A card can also be recorded **failing**: that
+is an in-game bug report with a card name on it, and it stays in the tracker
+until the card is fixed and re-checked. **Generated automatically** — results
+are edited via the in-game Debug Menu, not by hand.
 
 A *simple* card — no abilities at all, or nothing but keyword lines the engine
 implements (`engine.oracle.simple_card_keywords`: a vanilla creature, a

@@ -15,7 +15,7 @@ The engine is registry-based so the card pool can scale to thousands of cards by
 - `engine/phases/` — one mixin per turn phase and step (CR 500–514).
 - `engine/mixins/` — cross-cutting game flow: turn-structure navigation, priority, the stack, and state-based actions.
 
-To add support for a new card: add a parse rule that emits an instruction kind, add an effect handler for that kind if it is new, and add a test. See `engine/ARCHITECTURE.md` for the full pipeline, the rule-ordering conventions, and the step-by-step recipe.
+To add support for a new card: add a grammar production in `engine/grammar/` that lowers to an instruction kind, add an effect handler for that kind if it is new, and add a test. See `engine/ARCHITECTURE.md` for the full pipeline and the step-by-step recipe (there is no rule ordering to learn — a production consumes its line or refuses it).
 
 ## Rules Support
 

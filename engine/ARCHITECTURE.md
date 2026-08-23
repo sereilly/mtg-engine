@@ -70,6 +70,18 @@ and dropped whatever followed) is deleted. See "Grammar front end" below.
 | `engine/land_play_allowance.py` | Text-keyed extra land plays (CR 305.2): "You may play any number of lands on each of your turns", the "\[N] additional land(s)" forms, and the self-damage rider that may accompany them. Every land-drop gate — cast validation, the AI's land policy, the web layer's playable list — and the support gate all ask this one table, so they cannot disagree about what a card grants. |
 | `engine/ai_valuation.py` | What a card does in the terms `ai_policy`'s heuristics ask about — how many cards it makes its target draw, whether it bounces a creature, what it destroys, whether it counters a spell, how much mana its ability adds — derived from the compiled program. Replaced eight `card.name == "…"` comparisons that had already decayed: Shatter, Terror, Stone Rain and Desert Twister print Disenchant's template, were not on the list, and the AI aimed all four at its own permanents. A heuristic's *weight* stays tuning in `ai_policy`; **which cards it reaches** is a claim about the pool and lives here. |
 | `engine/card_hooks.py` | Name-keyed registries for truly bespoke card behavior: spell-resolved triggers, counterspell riders, leave-battlefield effects, draw-step modifiers, the Aura on a land tapped for mana, and `CARD_LINE_INSTRUCTIONS` — the instruction one printed *line* of one card compiles to, for texts that are a single card's sentence rather than a template. `engine/oracle.py` reads it after the grammar refuses, and it is the last front end there is, so a line that grows a production leaves its entry dead rather than wrong; `tests/engine/test_card_lines.py` fails on a dead entry and on a key matching no printed line, and `tests/engine/test_front_end_safety.py` fails if the production that took a hooked line over produces less than the hook did. The only sanctioned place in the engine to key behavior on a card name — enforced by `tests/engine/test_card_name_reads.py`, which scans `engine/` for a name in a comparison (dispatch) rather than in a log line (data), with one acknowledgement: `ai_simulator._assert_expected`, a test oracle whose expectations must stay independent of the parse they check. |
+| `engine/control.py` | CR 613 layer 2: a control change is a recorded *contribution* with a source and a timestamp (`change_control` / `end_control_change`), never a move; `base_controller_index` is the seat the permanent entered under and is never rewritten. `Game._sync_control` projects the derived controller onto the battlefield lists. |
+| `engine/commander.py` | CR 903, the Commander variant and its Brawl option — inert unless `Game.commander_variant` is set. Colour identity is derived here (not read off the ingested field), the designation is per seat by card-object identity, and CR 903.9b's return-to-command-zone is why every "put into a hand / a library" goes through `Game.put_card_into_hand` / `put_card_into_library`. |
+| `engine/subject_filters.py` | What a printed noun phrase means, tested against one permanent: `subject_matches` is the one answer, `TESTABLE_SUBJECT_FILTER_KEYS` names exactly the payload keys it can test, and a compiler admits a narrowed line only when every key is in that set. |
+| `engine/search_filters.py` | What a library/graveyard search may *find* — one predicate over a `ObjectFilter` payload, asked by the search prompt, its default and the AI. |
+| `engine/target_restrictions.py` | Printed restrictions on what a spell may *choose* (CR 601.2c — "you can't choose an untapped creature as this spell's target"), read by the cast path and the AI's Aura chooser. |
+| `engine/named_protection.py` | Protection a *player* has from a card name (CR 702.16i, Runed Halo): the cast-target check and the player-damage path both ask it. |
+| `engine/activation_restrictions.py` | Text-keyed "Activate only …" clauses (CR 602.5) — an ordered predicate table the activation path *and* the support gate read, so a printed restriction nobody listed cannot be admitted unenforced. |
+| `engine/cast_costs.py` / `engine/cast_permissions.py` | The CR 601.2b additional costs a spell prints in its own text, and permission to cast from somewhere other than the hand (a graveyard, the top of the library) — both tables, not per-card. |
+| `engine/mana_payment.py` | Whether a cost can be paid from the board and how: `plan_payment` is an exact matching of coloured pips to lands, because "you may pay {1}{B}" inside a resolution gives its player no priority window to produce the mana themselves. |
+| `engine/restricted_mana.py` | Mana that may be spent only on certain spells (CR 106.6) — the spend restriction travels with the mana in the pool. |
+| `engine/hand_size.py` | CR 402.2's seven and the printed lines that change it, read by the cleanup step, the support gate and the parse-coverage report. |
+| `engine/named_counters.py` / `engine/text_changes.py` / `engine/land_types.py` | Single write APIs: counters with no rules meaning of their own (CR 122), text-changing effects (layer 3), basic-land-type changes (layer 4). |
 | `engine/phases/` | One mixin per turn phase and per step within a phase (CR 500–514): `beginning_phase` + `untap_step`/`upkeep_step`/`draw_step`, `precombat_main_phase`, `combat_phase` + its five step modules, `postcombat_main_phase`, `ending_phase` + `end_step`/`cleanup_step`. Each is composed onto `Game`. See `engine/phases/__init__.py` for the full taxonomy. |
 | `engine/mixins/` | Cross-cutting game flow not tied to a single phase: turn-structure navigation and priority (`phase_steps`), per-turn/pregame management (`turn_management`), state-based actions, effects, helpers. Consumes compiled programs; should never parse oracle text itself. |
 | `engine/mixins/stack/` | The stack (CR 405), one mixin per stage of an object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution` (CR 603/608), and `choices` — the `pending_choices` queue every part-way-through decision uses, plus the table registering them. |
@@ -115,18 +127,26 @@ Work top-down; stop at the first step that covers the card.
 ## Grammar front end
 
 `engine/grammar/` parses an oracle line into a typed AST and lowers it to the
-`OracleInstruction` IR. Modules:
+`OracleInstruction` IR. Both halves are layered bottom to top, and the seven
+effect *families* carry the same names on each side — so one template has one
+home per side. The order is asserted by `tests/engine/test_grammar_layering.py`
+(`PARSE_LAYERS` / `LOWER_LAYERS`), along with family independence, the flat
+re-export from each `__init__`, and a 1,000-line cap per module that is a
+scheduling signal, not style: a family that crosses it has stopped absorbing
+new work and splits along a CR boundary (`nouns.py` → `references.py`,
+`statements.py` → `paragraphs.py`, `lowering/characteristics.py` →
+`lowering/counters.py` are the precedents).
 
-| Module | Role |
-| --- | --- |
-| `lexer.py` | Tokenizer. Keeps P/T as one token, preserves source spans for error offsets, strips reminder text (recording it), and collapses a card's self-references to a single `SELF` token so productions never need card names. |
-| `vocabulary.py` | Creature/land/artifact types, supertypes, and keywords loaded from `data/vocabulary/` (fetched by `scripts/fetch_vocabulary.py`). Never touches the network at import. |
-| `ast.py` | Frozen dataclass node inventory. Imports nothing from the engine. **Append-only** — repurposing a field invalidates every golden and ratchet entry at once. |
-| `amounts.py` / `nouns.py` | Quantity and object-phrase sub-parsers (`Fixed`/`Var`/`CountOf`/`ThatMuch`, `ObjectFilter`/`TargetSpec`/`PlayerRef`). |
-| `parser.py` | Line classification (keyword / activated / triggered / static / spell) and the recursive-descent statement grammar. |
-| `registries.py` | Which text-keyed sidecar registry, if any, implements a whole line — the untap table, the cast-timing gate, the cost taxes, the CR 614 interceptors, the entry-state phrases. Those lines carry no instruction because the registry already runs them off the card's raw text. Every entry delegates to the implementing matcher, never to a copy of it. |
-| `derived.py` | Derivation tables consulted **after** every production has refused: the lord/anthem table, the land animations, the land type changes. Each hands over the table's own instruction rather than rebuilding it. |
-| `lower.py` | AST → instructions, emitting the payload keys the existing handlers already read. |
+| Layer | Parse side | Lowering side |
+| --- | --- | --- |
+| vocabulary | `lexer.py` (tokenizer; P/T as one token, reminder text stripped and recorded, self-references collapsed to `SELF`), `stream.py`, `errors.py`, `vocabulary.py` (creature/land/artifact types, supertypes, keywords from `data/vocabulary/` — never the network at import), `amounts.py` | — |
+| nodes | `ast/_core.py` (the vocabulary nodes everything is built from), `ast/{damage,characteristics,board,cards,stack,combat,game}.py`, `ast/statements.py` (the `Effect` / `Statement` / `AbilityNode` unions). Frozen dataclasses, **append-only** — repurposing a field invalidates every golden and ratchet entry at once. | — |
+| noun phrases | `nouns.py` (what an object phrase *describes*: `ObjectFilter`, `TargetSpec`, `PlayerRef`), `references.py` (what it *points at*: "that creature", "it", the enchanted permanent), `paragraphs.py` (a whole paragraph: the self-reference and linked-duration shapes) | `lowering/_common.py` (shared payload builders) |
+| phrases | `phrases.py` (word tables and fragment productions shared by every family), `triggers.py` (trigger heads), `conditions.py`, `riders.py` | — |
+| effects | `effects/{damage,characteristics,board,cards,stack,combat,game}.py` — one family per module | `lowering/` — the same seven, plus `zones`, `library`, `mana`, `counters`, whose lowering halves outgrew the cap while their parse halves stayed small |
+| sentence | `statements.py` (one whole sentence), `costs.py` (activation and additional costs), `statics.py` | `lowering/categories.py` (the instruction → category table the support report and `GRAMMAR_CATEGORIES` read) |
+| line | `parser.py` (`parse_line`: classification as keyword / activated / triggered / static / spell, then the statement grammar) | `lower.py` (dispatch: AST → instructions emitting the payload keys the existing handlers already read) |
+| sidecars | `registries.py` — which text-keyed registry, if any, implements a whole line (the untap table, the cast-timing gate, the cost taxes, the CR 614 interceptors, the entry-state phrases); those lines carry no instruction because the registry runs them off the card's text. `derived.py` — derivation tables consulted **after** every production has refused (the lord/anthem table, the land animations, the land type changes), each handing over the table's own instruction. | — |
 
 Two properties define how it behaves:
 
@@ -201,12 +221,13 @@ engine pure and testable directly against the rule text
 (`tests/rules/test_layers.py`), while the storage it reads from can move without
 the rules logic changing.
 
-**Layers 3–7 are live.** The accessors that read them:
+**Layers 1–7 are live.** The accessors that read them:
 
 | Accessor | Layer |
 | --- | --- |
 | `Permanent.effective_card` | 1 (copy), then 3 (text-changing) |
 | `Permanent.copied_from` | 1 (copy) |
+| `Game.controller_index_of` / `controls` / `controlled_by` | 2 (control-changing; `engine/control.py`, contributions with timestamps over `base_controller_index`) |
 | `Permanent.is_creature`, `Permanent.has_type`, `Permanent.basic_land_types` | 4 (type-changing) |
 | `Permanent.effective_colors` | 5 (colour-changing) |
 | `Permanent.has_keyword` | 6 (ability add/remove) |
