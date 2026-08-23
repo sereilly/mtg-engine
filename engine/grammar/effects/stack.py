@@ -42,6 +42,17 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         if stream.accept_phrase("that", "spell"):
             subject = ast.TargetSpec("that", ast.ObjectFilter())
             replaces_prior = True
+        elif stream.accept_word("it"):
+            # "Whenever a player casts a spell, **counter it**." (Nether Void,
+            # Presence of the Master, In the Eye of Chaos.) The pronoun is
+            # bound by the trigger's own condition, not chosen — so it is its
+            # own quantifier, for the reason "that spell" beside it has one.
+            #
+            # A stand-alone spell line reading "Counter it." would be a card
+            # with nothing to refer to, and there is none; the handler answers
+            # by reading the trigger's event, and an absent event resolves
+            # having countered nothing rather than reaching for the stack top.
+            subject = ast.TargetSpec("it", ast.ObjectFilter())
         else:
             raise stream.error("expected a spell to counter")
 
@@ -49,10 +60,15 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         payer = parse_player_ref(stream)
         if payer is None:
             raise stream.error("expected who pays after 'unless'")
-        if payer.kind != "controller":
+        if payer.kind not in ("controller", "that_player"):
             # Only the countered spell's own controller has a payment flow.
             # Anyone else paying is a different effect, so refuse instead of
             # dropping the distinction.
+            #
+            # "that player" is admitted beside "its controller" because in a
+            # trigger they name the same person by construction: the condition
+            # is "whenever **a player** casts a spell", so the player it bound
+            # is the spell's controller. What is refused is a *third* party.
             raise stream.error("only the spell's controller can pay to avoid a counter")
         stream.expect_word("pays", "pay")
         payment = _parse_mana_payment(stream, allow_variable=True)
@@ -68,6 +84,7 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
             raise stream.error(
                 "a counter of the spell already targeted must say what it replaces"
             )
+
         return ast.CounterSpell(
             subject, unless_pays=payment, replaces_prior_amount=replaces_prior
         )

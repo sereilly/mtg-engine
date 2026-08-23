@@ -204,7 +204,15 @@ class OracleInstructionsMixin:
         trigger's own parsed condition, which is why one call covers the whole
         cycle instead of five name-keyed hooks.
         """
-        emit(self, "spell_cast", subject=card, caster_index=caster_index)
+        # `cast_card` rides the event for the same reason it rides the
+        # first-spell one above: a trigger whose effect is *about* that spell
+        # ("counter it", "where X is its mana value") needs the object, not
+        # just the fact of the cast, and by the time the trigger resolves the
+        # stack top is something else.
+        emit(
+            self, "spell_cast", subject=card, caster_index=caster_index,
+            cast_card=card,
+        )
         # The zone rides along so "…from anywhere other than their hand"
         # (Ghostly Pilferer) has something to test. Every cast announces it;
         # only a trigger that narrows on it reads it.

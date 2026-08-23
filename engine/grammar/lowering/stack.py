@@ -114,7 +114,13 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
     than dropped — countering the wrong spell is worse than not supporting the
     card."""
     spec = node.subject
-    if spec.quantifier != "target":
+    # "Whenever a player casts a spell, **counter it**." The spell is the one
+    # the trigger's own condition bound, so there is nothing to target and no
+    # picker to raise — the handler reads it off the trigger's event. Everything
+    # past this point is shared with the targeted form, which is the point: the
+    # filters and the "unless … pays" flow are the same card mechanics.
+    bound_to_trigger = spec.quantifier == "it"
+    if not bound_to_trigger and spec.quantifier != "target":
         raise LoweringError("no handler for a non-targeted counter", node=node)
     filt = spec.filter
     if filt.zone not in ("battlefield", "stack"):
@@ -194,6 +200,12 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
                 f"nothing performs the {node.unpaid_penalty!r} penalty", node=node
             )
 
+    if bound_to_trigger:
+        # No `targets` description at all: a trigger chooses nothing (CR 603.3),
+        # and describing one would raise a spell picker in front of an ability
+        # that has already been given its spell.
+        payload["bound_to_trigger"] = True
+        return (OracleInstruction("counter_top_stack_spell", "", payload),)
     # A counterspell targets a *spell on the stack*, not a permanent. Describing
     # it with the generic object shape would tell the targeting layer to offer
     # battlefield permanents.

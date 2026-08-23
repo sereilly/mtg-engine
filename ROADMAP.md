@@ -810,3 +810,39 @@ check in the blockers step are **gone**: the general template reads its line
 through the same subject rewrite every other attached restriction uses, so
 Invisibility, Seeker and Elven Riders are one rule printed on three kinds of
 card.
+
+## LEG round 8: two where-clause parsers, and a spell a trigger already named
+
+**156 → 160 supported.** Nether Void, Presence of the Master, In the Eye of
+Chaos, Great Defender — two families that turned out to share a sentence
+fragment.
+
+**The parser had two where-clauses and they accepted different things.**
+`statements._parse_where_x` read the sentence-level clause and
+`effects/characteristics._parse_gets` read the pump's own. Only the pump knew
+"the greatest power among"; only the sentence knew "that died under your
+control". So *which definitions a card could use depended on which sentence it
+printed them in*, which is not a rule Magic has — and adding "its mana value"
+to one of them would have made a third such difference. The fork is closed:
+one `phrases.parse_where_x_definition`, called by both, and the pump's
+type-test on `CountOf` is gone in favour of the spec builder that already
+refuses what it cannot build.
+
+**"Where X is its mana value" is a different kind of definition.** Every
+existing one aggregates over a *set* of objects; this reads a characteristic off
+the single object the sentence already named. It needs no filter at all, which
+is why it is its own node — and CR 202.3 makes it a characteristic of the
+**card**, so the resolution reads the printed cost rather than anything on the
+battlefield.
+
+**And "it" is not "that spell".** "Whenever a player casts a spell, counter
+**it**" binds its object through the trigger's own condition — nothing is
+chosen, so no picker is described and the handler finds the spell on the stack
+**by identity**, not at the top: CR 603.3 puts the trigger above the spell, and
+anything cast in response sits between them. `cast_card` rides the `spell_cast`
+event for that, the way it already rode the first-spell one.
+
+Which of the two objects "its" names is decided **at lowering**, by looking at
+the sentence being stamped: an instruction bound to a trigger names the spell,
+anything else names the target. A resolution-time fallback order would have had
+to guess for a sentence carrying both.

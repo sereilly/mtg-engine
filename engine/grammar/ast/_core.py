@@ -485,6 +485,19 @@ class Duration:
 
 
 @dataclass(frozen=True)
+class ManaValueOfSubject:
+    """"…, where X is **its** mana value." (Great Defender, Subdue, Kry Shield,
+    In the Eye of Chaos.)
+
+    The other kind of where-clause: `CountOf` counts a set of objects, this one
+    reads a characteristic off the single object the sentence already named —
+    the creature it pumps, the spell it counters. So it carries nothing at all;
+    "its" is the sentence's own subject and the lowering is what knows which
+    object that is.
+    """
+
+
+@dataclass(frozen=True)
 class Zone:
     name: str                       # battlefield | graveyard | hand | library | exile | stack
     owner: PlayerRef | None = None

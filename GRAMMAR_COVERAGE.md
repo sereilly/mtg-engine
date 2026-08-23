@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
 | 3ED | 296 | 389 | 81.2% | 79.9% | 44.5% | 156 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| LEG *(measured)* | 310 | 431 | 51.0% | 45.7% | 22.3% | 87 |
+| LEG *(measured)* | 310 | 431 | 52.2% | 46.6% | 23.2% | 91 |
 | **All (shipped)** | **1618** | **2286** | **81.8%** | **80.7%** | **48.0%** | **954** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -39,7 +39,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 76 | 52 | unconsumed text |  |
 | 42 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
 | 30 | 30 | unrecognized activation cost |  |
-| 14 | 9 | expected 'the number of' in a where-clause |  |
+| 12 | 7 | expected 'the number of' in a where-clause |  |
 | 12 | 7 | expected a keyword ability |  |
 | 11 | 7 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 10 | 7 | expected 'a' |  |
@@ -53,12 +53,12 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 4 | 2 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 4 | 4 | unrecognized "can't be" restriction |  |
 | 3 | 2 | expected a destination zone after 'return' |  |
-| 3 | 3 | expected a spell to counter |  |
 | 3 | 3 | no return handler honours this restriction |  |
 | 3 | 3 | expected 'the' |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 2 | expected something to destroy |  |
+| 2 | 1 | expected something to shield |  |
 
 ## Cards executing through the grammar
 
@@ -680,6 +680,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: This creature deals 1 damage to target creature with flying.`
 - **Grasp of Darkness**
   - `Target creature gets -4/-4 until end of turn.`
+- **Great Defender**
+  - `Target creature gets +0/+X until end of turn, where X is its mana value.`
 - **Greed**
   - `{B}, Pay 2 life: Draw a card.`
 - **Green Mana Battery**
@@ -772,6 +774,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{G}: This creature deals 1 damage to each creature with flying and each player. Any player may activate this ability.`
 - **Igneous Cur**
   - `{1}{R}: This creature gets +2/+0 until end of turn.`
+- **In the Eye of Chaos**
+  - `Whenever a player casts an instant spell, counter it unless that player pays {X}, where X is its mana value.`
 - **Indulging Patrician**
   - `At the beginning of your end step, if you gained 3 or more life this turn, each opponent loses 3 life.`
 - **Infernal Medusa**
@@ -1057,6 +1061,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever you draw your second card each turn, this creature gains flying until end of turn.`
 - **Necromentia**
   - `Choose a card name other than a basic land card name. Search target opponent's graveyard, hand, and library for any number of cards with that name and exile them. That player shuffles, then creates a 2/2 black Zombie creature token for each card exiled from their hand this way.`
+- **Nether Void**
+  - `Whenever a player casts a spell, counter it unless that player pays {3}.`
 - **Nevinyrral's Disk**
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
@@ -1168,6 +1174,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever an artifact an opponent controls becomes tapped or an opponent activates an artifact's ability without {T} in its activation cost, you gain 1 life.`
 - **Pradesh Gypsies**
   - `{1}{G}, {T}: Target creature gets -2/-0 until end of turn.`
+- **Presence of the Master**
+  - `Whenever a player casts an enchantment spell, counter it.`
 - **Pridemalkin**
   - `When this creature enters, put a +1/+1 counter on target creature you control.`
   - `Each creature you control with a +1/+1 counter on it has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)`

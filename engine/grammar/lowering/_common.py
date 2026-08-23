@@ -895,8 +895,17 @@ def _stamp_x_from_count(
 
 
 def _mentions_x(instructions: tuple[OracleInstruction, ...]) -> bool:
-    """Whether anything in *instructions* actually reads an X."""
+    """Whether anything in *instructions* actually reads an X.
+
+    Most amounts carry the literal string; ``unless_pays_x`` is the one that
+    says so with a flag instead ("counter it unless that player pays {X}"), and
+    it is named here because a where-clause over that sentence is a real card
+    (In the Eye of Chaos) that would otherwise be refused for defining an X
+    nothing reads.
+    """
     for instruction in instructions:
+        if instruction.payload.get("unless_pays_x"):
+            return True
         for key, value in instruction.payload.items():
             if value == "x":
                 return True

@@ -40,6 +40,27 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
     (Alpine Houndmaster) excludes it, and `permanent_matches_filter` cannot —
     that is an identity comparison, not a property of a permanent.
     """
+    # "…where X is **its** mana value" — a characteristic of one named object
+    # rather than a count of a set, so it is answered here, where the context
+    # knows which object the sentence named. `evaluate_count` is owner-scoped
+    # and could not: a mana value belongs to a permanent, not to a player.
+    named = spec.get("object_mana_value")
+    if named == "triggering_spell":
+        # The spell the trigger's condition bound, carried on the event by the
+        # cast fire site. Read here rather than off the stack top: by the time
+        # the trigger resolves, anything could be above the spell that caused
+        # it, and the stack top is a different object.
+        cast_card = (context.trigger_context or {}).get("cast_card")
+        return max(0, int(getattr(cast_card, "cmc", 0) or 0)) if cast_card else 0
+    if named == "target":
+        perm = resolve_target_permanent(
+            game, context, predicate=lambda p: True, fallback_on_invalid_choice=False
+        )
+        if perm is None:
+            return 0
+        # CR 202.3: mana value is a characteristic of the *card*, unaffected by
+        # anything on the battlefield, so it is read off the printed cost.
+        return max(0, int(getattr(perm.card, "cmc", 0) or 0))
     owner = context.caster if spec.get("owner", "you") == "you" else (context.target or context.caster)
     return evaluate_count(game, owner, spec, exclude=context.source_permanent)
 

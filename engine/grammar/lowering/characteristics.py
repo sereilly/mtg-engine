@@ -58,6 +58,12 @@ def _x_definition_spec(definition: ast.Amount, node) -> dict:
         return count_spec(definition.filter, node, aggregate="distinct_colors")
     if isinstance(definition, ast.CountOf):
         return count_spec(definition.filter, node)
+    if isinstance(definition, ast.ManaValueOfSubject):
+        # "…, where X is **its** mana value" (Great Defender, Subdue, Kry
+        # Shield). Not an aggregate over a set: the object is the one the
+        # sentence already named, and the resolution reads the characteristic
+        # off it (CR 202.3, so off the card rather than off the battlefield).
+        return {"object_mana_value": "target"}
     raise LoweringError("only a count or a maximum can define X here", node=node)
 
 
@@ -141,8 +147,12 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         on_source = _is_source(node.subject)
         if not on_source and not _is_target(node.subject):
             raise LoweringError("a where-clause pump needs a single target", node=node)
-        if not isinstance(node.x_definition, ast.CountOf):
-            raise LoweringError("only a count can define X here", node=node)
+        # Whichever definition the clause carried — a count, a maximum, or a
+        # characteristic of the object the sentence named. Through the one spec
+        # builder rather than a type test here, which is what kept "where X is
+        # its mana value" out of a sentence that reads a where-clause perfectly
+        # well; `_x_definition_spec` refuses what it cannot build.
+        definition_spec = _x_definition_spec(node.x_definition, node)
         # Only the characteristics the card writes as X are variable: "+X/+0"
         # pumps power alone, so the literal half stays literal.
         payload: dict[str, object] = {
@@ -158,7 +168,7 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
             # graveyard-only restriction that stood here was the handler's own
             # counter talking; with the shared evaluator behind it, the zone is
             # data like everything else.
-            "x_from_count": count_spec(node.x_definition.filter, node),
+            "x_from_count": definition_spec,
         }
         if on_source:
             # ``pump_self`` already boosts the source until end of turn; what was

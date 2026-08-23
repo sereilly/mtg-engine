@@ -95,3 +95,50 @@ def test_a_permanent_lace_outlives_a_turn_long_colour_change(set_pool):
 
     game.resolve_cleanup_step(0)
     assert laced.effective_colors == {"R"}, "the indefinite lace is still there"
+
+
+# ---------------------------------------------------------------------------
+# Great Defender (round 8) — "where X is its mana value"
+# ---------------------------------------------------------------------------
+
+
+def _costed(name: str, mana_cost: str, cmc: float) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost=mana_cost, cmc=cmc, type_line="Creature - Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def test_great_defender_reads_the_targets_mana_value(set_pool):
+    """"Target creature gets +0/+X until end of turn, where X is **its** mana
+    value." The other kind of where-clause: not a count of a set, but a
+    characteristic of the one object the sentence already named."""
+    bear = Permanent(card=_costed("Costly Bear", "{3}{G}{G}", 5.0))
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEG")["Great Defender"]], battlefield=[bear]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.cast_from_hand(0, "Great Defender", target_player_index=0, target_permanent_index=0)
+    game._settle()
+
+    assert bear.effective_power == 2, "only toughness is variable in +0/+X"
+    assert bear.effective_toughness == 7
+
+
+def test_great_defender_gives_nothing_to_a_free_creature(set_pool):
+    """CR 202.3: mana value is the printed cost's, so a 0-cost creature gets
+    +0/+0 — the honest answer rather than a default."""
+    ornithopter = Permanent(card=_costed("Free Bear", "{0}", 0.0))
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEG")["Great Defender"]], battlefield=[ornithopter]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.cast_from_hand(0, "Great Defender", target_player_index=0, target_permanent_index=0)
+    game._settle()
+
+    assert ornithopter.effective_toughness == 2

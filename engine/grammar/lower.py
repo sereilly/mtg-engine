@@ -488,6 +488,8 @@ def _lower_where_x(
     """
     if isinstance(node.definition, ast.CountOfDeaths):
         return _lower_where_x_deaths(node, produced, event)
+    if isinstance(node.definition, ast.ManaValueOfSubject):
+        return _lower_where_x_mana_value(node, produced, event)
     if not isinstance(node.definition, ast.CountOf):
         raise LoweringError("only a count can define X in a where-clause", node=node)
     spec = count_spec(node.definition.filter, node)
@@ -498,6 +500,34 @@ def _lower_where_x(
         # sentence with the definition quietly discarded.
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
     return _stamp_x_from_count(inner, spec)
+
+
+def _lower_where_x_mana_value(
+    node: ast.WhereX, produced: frozenset[str], event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
+    """"…, where X is **its** mana value." (Great Defender, Subdue, Kry Shield.)
+
+    Stamped like every other where-clause and resolved at the same single
+    dispatch point, so the sentence in front of it needs no special case: what
+    changes is only *what* is counted. "Its" is the object the sentence already
+    named — the resolution reads it off the chosen target, which is the one
+    object a resolution can name without a second choice.
+    """
+    inner = lower_statement(node.statement, produced, event=event, whole_effect=False)
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    # "Its" is whatever object the sentence already named, and the sentence
+    # names it one of two ways: by targeting a permanent, or by binding the
+    # spell its trigger fired on ("Whenever a player casts an instant spell,
+    # counter it unless that player pays {X}, where X is **its** mana value").
+    # Decided here, where both the definition and the lowered sentence are in
+    # hand, rather than by a resolution-time fallback order that would have to
+    # guess when a sentence has both.
+    names_a_spell = any(i.payload.get("bound_to_trigger") for i in inner)
+    return _stamp_x_from_count(
+        inner,
+        {"object_mana_value": "triggering_spell" if names_a_spell else "target"},
+    )
 
 
 def _lower_where_x_deaths(

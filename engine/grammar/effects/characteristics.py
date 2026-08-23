@@ -18,7 +18,8 @@ from ..references import parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX, match_longest)
 
-from ..phrases import _COUNTER_KINDS, _parse_duration, _parse_for_each, _parse_keywords
+from ..phrases import (_COUNTER_KINDS, _parse_duration, _parse_for_each,
+                       _parse_keywords, parse_where_x_definition)
 
 
 def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -42,24 +43,12 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     else:
         stream.reset(tapped_mark)
 
-    x_definition: ast.Amount | None = None
-    mark = stream.mark()
-    stream.accept_punct(",")
-    if stream.accept_word("where"):
-        if not (stream.accept_word("x") and stream.accept_word("is")):
-            raise stream.error("expected 'X is' after 'where'")
-        stream.accept_word("the")
-        # Two aggregates over the same noun phrase, and the words are what tell
-        # them apart: "the number of" counts the objects, "the greatest power
-        # among" takes a maximum over them (Carrion Grub).
-        if stream.accept_phrase("greatest", "power", "among"):
-            x_definition = ast.GreatestPowerAmong(parse_object_filter(stream))
-        elif stream.accept_phrase("number", "of"):
-            x_definition = ast.CountOf(parse_object_filter(stream))
-        else:
-            raise stream.error("expected 'the number of' in a where-clause")
-    else:
-        stream.reset(mark)
+    # The same clause the statement level reads, through the same parser
+    # (`phrases.parse_where_x_definition`). It used to be a second copy here,
+    # accepting "the greatest power among" where the other accepted "that died
+    # under your control" — so which definitions a card could use depended on
+    # which sentence it printed them in.
+    x_definition = parse_where_x_definition(stream)
 
     pump = ast.Pump(
         subject, power, toughness, duration, power_negative, toughness_negative,

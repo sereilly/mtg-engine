@@ -29,6 +29,7 @@ from .conditions import _parse_condition
 from .phrases import (
     _parse_duration,
     _parse_mana_payment,
+    parse_where_x_definition,
 )
 from .effects import (
     _parse_add_mana,
@@ -698,31 +699,12 @@ def _round_every_half(node, rounding: str):
 
 
 def _parse_where_x(stream: TokenStream) -> ast.Amount | None:
-    """``[,] where X is the number of <filter>`` — or None when absent.
+    """``[,] where X is <definition>`` at the sentence level.
 
-    Refuses anything else after "where X is" rather than skipping the clause:
-    an undefined X silently reads as the *cast's* X, and a permanent's
-    triggered ability has no cast at all.
+    The clause itself is `phrases.parse_where_x_definition`; this is the name
+    the statement parser has always called it by.
     """
-    mark = stream.mark()
-    stream.accept_punct(",")
-    if not stream.accept_word("where"):
-        stream.reset(mark)
-        return None
-    if not (stream.accept_word("x") and stream.accept_word("is")):
-        raise stream.error("expected 'X is' after 'where'")
-    stream.accept_word("the")
-    if not stream.accept_phrase("number", "of"):
-        raise stream.error("expected 'the number of' in a where-clause")
-    filt = parse_object_filter(stream)
-    # "…the number of creatures **that died under your control this turn**"
-    # (Liliana's Standard Bearer). A history, and the opposite set from the one
-    # the bare filter names: these are exactly the creatures the battlefield no
-    # longer holds.
-    if stream.accept_phrase("that", "died", "under", "your", "control"):
-        _parse_duration(stream)
-        return ast.CountOfDeaths(filt)
-    return ast.CountOf(filt)
+    return parse_where_x_definition(stream)
 
 
 def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:

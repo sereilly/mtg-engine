@@ -403,3 +403,50 @@ def _parse_card_alternatives(
     if len(alternatives) == 1 and not chargeable_card_filter(alternatives[0]):
         return ()
     return tuple(alternatives)
+
+
+def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
+    """``[,] where X is <definition>`` — or None when the clause is absent.
+
+    **One parser**, because there were two. `statements._parse_where_x` read the
+    sentence-level clause and `effects/characteristics._parse_gets` read the
+    pump's own, and the two accepted different definitions: only the pump knew
+    "the greatest power among", only the sentence knew "that died under your
+    control". Which alternatives a card could use therefore depended on which
+    sentence it was printed in, which is not a rule Magic has. Adding "its mana
+    value" to one of them would have made a third such difference, so the fork
+    is closed instead.
+
+    Refuses anything it cannot read rather than skipping the clause: an
+    undefined X silently reads as the *cast's* X, and a permanent's triggered
+    ability has no cast at all.
+    """
+    mark = stream.mark()
+    stream.accept_punct(",")
+    if not stream.accept_word("where"):
+        stream.reset(mark)
+        return None
+    if not (stream.accept_word("x") and stream.accept_word("is")):
+        raise stream.error("expected 'X is' after 'where'")
+    # "…where X is **its** mana value." A characteristic of the object the
+    # sentence already named rather than an aggregate over a set, so it carries
+    # no filter — read first because it does not open with "the".
+    if stream.accept_phrase("its", "mana", "value"):
+        return ast.ManaValueOfSubject()
+    stream.accept_word("the")
+    # Three aggregates over one noun phrase, and the words are what tell them
+    # apart: "the number of" counts the objects, "the greatest power among"
+    # takes a maximum over them (Carrion Grub).
+    if stream.accept_phrase("greatest", "power", "among"):
+        return ast.GreatestPowerAmong(parse_object_filter(stream))
+    if not stream.accept_phrase("number", "of"):
+        raise stream.error("expected 'the number of' in a where-clause")
+    filt = parse_object_filter(stream)
+    # "…the number of creatures **that died under your control this turn**"
+    # (Liliana's Standard Bearer). A history, and the opposite set from the one
+    # the bare filter names: these are exactly the creatures the battlefield no
+    # longer holds.
+    if stream.accept_phrase("that", "died", "under", "your", "control"):
+        _parse_duration(stream)
+        return ast.CountOfDeaths(filt)
+    return ast.CountOf(filt)

@@ -192,6 +192,23 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
     if game.stack:
         # Counter the chosen spell if one was targeted, otherwise the top of stack.
         chosen = context.stack_target
+        if instruction.payload.get("bound_to_trigger"):
+            # "Whenever a player casts a spell, counter **it**." (Nether Void,
+            # Presence of the Master, In the Eye of Chaos.) The spell is the one
+            # the trigger fired on, found on the stack by identity — CR 603.3
+            # puts the trigger *above* it, so the stack top is this ability's
+            # own object and everything cast in response sits between them.
+            cast_card = (context.trigger_context or {}).get("cast_card")
+            chosen = next(
+                (item for item in game.stack if item.card is cast_card), None
+            )
+            if chosen is None:
+                # Countered, exiled or already resolved while the trigger waited
+                # (CR 608.2b's shape: the object is gone, the rest happens).
+                game.log.append(
+                    f"{card.name}: the spell it would counter is no longer on the stack"
+                )
+                return True, "resolved"
         target = chosen if (chosen is not None and chosen in game.stack) else game.stack[-1]
         if color_filter and color_filter not in game._stack_item_colors(target):
             game.log.append(f"{card.name}: {target.card.name} is not color {color_filter}, cannot counter")
