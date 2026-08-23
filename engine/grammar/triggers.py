@@ -21,6 +21,7 @@ above.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import replace
 
 from . import ast
@@ -99,11 +100,9 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_blocks", ("this", "creature", "blocks")),
     ("creature_becomes_blocked", ("this", "creature", "becomes", "blocked")),
     ("creature_dealt_damage", ("this", "creature", "is", "dealt", "damage")),
-    ("enchanted_land_tapped", ("enchanted", "land", "becomes", "tapped")),
     ("permanent_becomes_untapped", ("this", "creature", "becomes", "untapped")),
     ("permanent_becomes_untapped", ("this", "artifact", "becomes", "untapped")),
     ("permanent_becomes_untapped", ("this", "permanent", "becomes", "untapped")),
-    ("self_becomes_tapped", ("this", "land", "becomes", "tapped")),
     ("land_tapped_for_mana", ("a", "player", "taps", "a", "land", "for", "mana")),
     ("spell_cast", ("a", "player", "casts", "a", "spell")),
     # Longest first: the bare phrase below is a strict prefix of this one, so
@@ -250,6 +249,64 @@ _CAST_TYPE_UNIONS: tuple[tuple[tuple[str, ...], "ast.ObjectFilter"], ...] = (
 )
 
 
+def _rebound(node, subject: ast.ObjectFilter):
+    """*node* with every bare pronoun rebound to *subject*, or *node* itself.
+
+    A structural walk rather than a per-node table: a pronoun can sit anywhere
+    a recipient can, and a list of the productions that admit one goes stale
+    the way every fire-site list in this engine has.
+    """
+    if isinstance(node, ast.TargetSpec):
+        if node.quantifier == "it" and node.filter.is_source:
+            return replace(node, filter=subject)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changes = {
+            field.name: rebound
+            for field in dataclasses.fields(node)
+            for rebound in (_rebound(getattr(node, field.name), subject),)
+            if rebound is not getattr(node, field.name)
+        }
+        return replace(node, **changes) if changes else node
+    # Tuples and lists alike: the AST is all-tuple today, and a walk that knew
+    # only about tuples would step over the first list field somebody adds
+    # without saying so — a pronoun quietly left pointing at the wrong object,
+    # which is the exact failure this function exists to prevent.
+    if isinstance(node, (tuple, list)):
+        walked = [_rebound(item, subject) for item in node]
+        if all(a is b for a, b in zip(walked, node)):
+            return node
+        return type(node)(walked)
+    return node
+
+
+def rebind_pronoun_to_event_subject(
+    event: ast.TriggerEvent, statement: ast.Statement
+) -> ast.Statement:
+    """"When enchanted land becomes tapped, destroy **it**" (Blight) — the
+    pronoun names the object the *condition* was about.
+
+    ``parse_recipient`` reads a bare "it" as the ability's own source, which is
+    what it means on every line whose trigger has no other subject to name, and
+    on every line with no trigger at all. Where the condition does name one, the
+    pronoun is a back-reference to it, and this is the one place both halves of
+    the sentence are in hand — the same decision round 8 made for "its", made at
+    the same moment for the same reason.
+
+    Only a *bare pronoun* is rebound. A card naming itself mid-sentence ("this
+    Aura deals 2 damage to that land's controller", Psychic Venom) is a
+    different reference that happens to be spelled with the same filter, and
+    rewriting it would aim an Aura's own effect at the permanent it enchants —
+    which is why the pronoun carries its own quantifier.
+
+    An event with no subject, or one whose subject *is* the source, leaves the
+    statement untouched: there is nothing else for the word to name.
+    """
+    subject = event.subject
+    if not isinstance(subject, ast.ObjectFilter) or subject.is_source:
+        return statement
+    return _rebound(statement, subject)
+
+
 def _accept_ability_activated_tail(stream: TokenStream) -> bool:
     """"…or a player activates an artifact's ability without {T} in its
     activation cost" — the second trigger event of a tap-or-activate ability.
@@ -286,6 +343,58 @@ def _accept_ability_activated_tail(stream: TokenStream) -> bool:
         stream.reset(mark)
         return False
     return True
+
+
+def _parse_named_subject_tap_event(
+    stream: TokenStream, word: str
+) -> ast.TriggerEvent | None:
+    """"When(ever) **enchanted <noun>** / **this <noun>** becomes tapped" —
+    CR 701.26a's event about a subject the sentence *names* rather than
+    quantifies.
+
+    One production for both subjects and both trigger words, because they are
+    one event: `engine/oracle.py`'s table used to spell "enchanted land"
+    (Psychic Venom) and "this land" (City of Brass) as conditions of their own,
+    and a kind of its own is what let each be dispatched by a pass inside
+    `tap_land_for_mana` that fired on the single tapper it sat in. The subject
+    rides the event; who tapped is `become_tapped`'s business either way.
+
+    The compound tail is read first where it is present (Artifact Possession's
+    "…**or a player activates an ability of enchanted artifact**"): that clause
+    has the plain tap reading as a strict prefix, so returning the plain event
+    first would leave the rest of the *condition* to be parsed as the effect.
+    """
+    mark = stream.mark()
+    if stream.accept_word("enchanted"):
+        noun = stream.peek_word()
+        if noun is not None:
+            stream.advance()
+            if stream.accept_phrase("becomes", "tapped"):
+                subject = ast.ObjectFilter(is_enchanted=True)
+                if _accept_ability_activated_tail(stream):
+                    return ast.TriggerEvent(
+                        "permanent_tapped_or_ability_activated", word,
+                        subject=subject,
+                    )
+                return ast.TriggerEvent(
+                    "permanent_becomes_tapped", word, subject=subject,
+                )
+    stream.reset(mark)
+    # "**This** land becomes tapped" — the source itself. The self-reference
+    # arrives either as the SELF token (the card's own name, which
+    # `normalize_creature_line` leaves in place) or as the word "this" with the
+    # printed type behind it.
+    if stream.at_kind(SELF) or stream.at_word("this"):
+        stream.advance()
+        if not stream.at_kind(SELF):
+            stream.accept_word("creature", "artifact", "enchantment", "land", "permanent")
+        if stream.accept_phrase("becomes", "tapped"):
+            return ast.TriggerEvent(
+                "permanent_becomes_tapped", word,
+                subject=ast.ObjectFilter(is_source=True),
+            )
+    stream.reset(mark)
+    return None
 
 
 def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
@@ -520,24 +629,12 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             if count is not None and stream.accept_phrase("other", "creatures", "attack"):
                 return ast.TriggerEvent("attackers_declared", "whenever")
         stream.reset(mark)
-        # "Whenever **enchanted artifact** becomes tapped or a player
-        # activates an ability of enchanted artifact without {T} in its
-        # activation cost" (Artifact Possession). The named-subject spelling of
-        # the compound event; read before the phrase table because that table's
-        # "enchanted land becomes tapped" is this line's prefix and would claim
-        # it, stranding the second half of the condition.
-        attached_mark = stream.mark()
-        if stream.accept_word("enchanted"):
-            noun = stream.peek_word()
-            if noun is not None:
-                stream.advance()
-                if stream.accept_phrase("becomes", "tapped") and _accept_ability_activated_tail(stream):
-                    return ast.TriggerEvent(
-                        "permanent_tapped_or_ability_activated",
-                        "whenever",
-                        subject=ast.ObjectFilter(is_enchanted=True),
-                    )
-        stream.reset(attached_mark)
+        # The two named-subject tap events (Artifact Possession, Psychic Venom,
+        # City of Brass, Spirit Shackle). Read before the phrase table, whose
+        # entries would claim their prefixes.
+        named_tap = _parse_named_subject_tap_event(stream, "whenever")
+        if named_tap is not None:
+            return named_tap
         for kind, phrase in _WHENEVER_EVENTS:
             if stream.accept_phrase(*phrase):
                 return ast.TriggerEvent(kind, "whenever")
@@ -645,6 +742,12 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                                 return ast.TriggerEvent(
                                     "counters_reach_threshold", "when",
                                 )
+        # "**When** enchanted land becomes tapped, destroy it" (Blight). The
+        # same event as the whenever spelling — one printed word apart — so it
+        # is the same production, asked with the word this branch read.
+        named_tap = _parse_named_subject_tap_event(stream, "when")
+        if named_tap is not None:
+            return named_tap
         if stream.accept_phrase("you", "control", "no", "islands"):
             return ast.TriggerEvent("no_islands", "when")
         if stream.accept_phrase("you", "control", "no", "lands"):

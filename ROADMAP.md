@@ -129,7 +129,12 @@ needs two rounds is worth splitting only if neither half ships a card alone
   run held **four cards** (Creature Bond, Howling Mine, Paralyze, Capture
   Sphere), each leaning on a registry the compiler cannot see — and each
   verified *live* by a per-card test in `tests/sets/`, so the pool's known
-  members are all honest today. Rock Hydra's automatic counter shield — the
+  members are all honest today. LEG round 9 makes it **five**: Kudzu's "when
+  enchanted land becomes tapped" reached no trigger table before that round, so
+  the ability was instruction-less and invisible to the census at the same time.
+  Its registry (`ENCHANTED_LAND_TAPPED_FOR_MANA`) does implement the line — but
+  only from the mana-tap path, which is the half of that round's finding it did
+  not close. Rock Hydra's automatic counter shield — the
   one the bullet below used to call "the Nine Lives class hiding behind a
   verified-sounding acknowledgement" — is implemented
   (`prevention.py:_remove_counter_per_damage`) rather than acknowledged, and
@@ -281,6 +286,23 @@ against `compile_line` before citing it.
     a fact about the pool, not about the guard, which would have started passing
     vacuously the day that line was implemented (ATQ 30). A fixture the test
     invents cannot go stale underneath it.
+19. **A condition kind is a dispatcher's address, so spelling the subject into
+    the kind gives one card its own fire site.** `enchanted_land_tapped` and
+    `self_becomes_tapped` were CR 701.26a asked about two named subjects; each
+    got a kind, and each kind then got a hand-written pass inside
+    `tap_land_for_mana` instead of riding the tap seam beside the quantified
+    spelling (LEG 9). One event is one kind and the subject is *payload* — the
+    arrangement `permanent_becomes_tapped` already used for
+    `tapped_subtype`/`tapped_controller`. The symptom is silent in the way this
+    engine's worst bugs are: the seam emits, nothing listens for that name, and
+    an emit nobody listens for reads exactly like an event that never happened.
+20. **A pronoun names the object the sentence already named** — the same rule
+    as idiom 7, one word smaller. "It" is the source only where the trigger's
+    condition names nothing else, so it is resolved where both halves of the
+    line are in hand rather than at the noun (LEG 9). It needs its own AST
+    quantifier: a card naming *itself* mid-sentence parses to the same filter
+    and means the opposite thing, and rewriting that would aim an Aura's effect
+    at the permanent it enchants.
 
 ---
 
@@ -882,3 +904,112 @@ than one card left, best first:
 | 2 | ante | `engine/ante.py` exists; both cards print the CR 407 opt-out line as well |
 
 Everything past that is one card at a time, which is what Legends is.
+
+## LEG round 9: three conditions for one event, two of them dispatched by one tapper
+
+**160 → 162 supported.** Blight and Spirit Shackle, the two Auras whose whole
+effect is a trigger on the permanent they enchant becoming tapped. What the
+round actually found is underneath them: `become_tapped` has been the single
+CR 701.26a transition since Lifetap's hook was deleted, and **two conditions
+were still being dispatched by a hand-written pass inside
+`tap_land_for_mana`** — so each fired on that one tapper and on none of the
+other ways a permanent taps.
+
+**One event, one condition kind, the subject as payload.** `engine/oracle.py`'s
+table spelled the subject into the *kind*: `enchanted_land_tapped` for Psychic
+Venom, `self_becomes_tapped` for City of Brass, `permanent_becomes_tapped` for
+Lifetap's quantified class. A kind of its own is exactly what let the first two
+be dispatched somewhere else — the emit was there, nothing listened for those
+two names, and an emit nobody listens for is indistinguishable from an event
+that never happened. All three are `permanent_becomes_tapped` now, narrowed by
+`tapped_attached` / `tapped_self` / `tapped_subtype`, and `_becomes_tapped_filter`
+reads whichever is present. Both new narrowings are **identity** checks, not
+characteristic ones: two Cities of Brass on one battlefield compare equal by
+value, and so do two Forests under one Aura.
+
+Two shipped cards changed behaviour, both in the direction the card prints.
+Psychic Venom and City of Brass fire when the land is tapped by an Icy
+Manipulator, by a cost, or by anything else — and they use the stack, because
+CR 605.1b makes a trigger a mana ability only if it *could add mana*, which
+these cannot. Their tests now resolve the ability rather than reading the life
+total straight after the tap.
+
+**"It" names the object the condition was about.** Blight says "destroy **it**",
+and `parse_recipient` read a bare "it" as the ability's own source — correct on
+every line in the pool until now, because every trigger printing the word had
+the source as its subject. Read that way, Blight destroys Blight. The pronoun
+has its own quantifier now and `parser.py` rebinds it once the whole line is in
+hand, which is round 8's decision about "its" made at the same moment for the
+same reason.
+
+The rebinding is *only* the bare pronoun, and that is the whole reason the
+quantifier exists: a card naming itself mid-sentence ("**Psychic Venom** deals 2
+damage to that land's controller") parses to the same `is_source` filter and
+means the opposite thing — rewriting it would aim an Aura's own effect at the
+permanent it enchants. The walk over the statement is structural rather than a
+list of the productions that admit a pronoun, because such a list goes stale the
+way every fire-site list in this engine has.
+
+### A P/T counter is named by the P/T it carries
+
+Spirit Shackle's "-0/-2 counter" was refused as an *unsupported counter kind* by
+a four-entry tuple that admitted "-1/-1" beside it. CR 122.1a does not have a
+list — "a +X/+Y counter … similarly, -X/-Y counters subtract" — so the numbers
+are the counter's name, and `engine/pt.py` derives the pair from it. Takklemaggot
+and Lesser Werewolf's "-0/-1" come for free when their other lines land.
+
+Three things fell out of writing the channel:
+
+- **Unstable Mutation was not placing counters at all.** Its upkeep pass wrote
+  `power_bonus -= 1; toughness_bonus -= 1` under a comment saying "the counters
+  are real -1/-1 counters … 704.5f/704.5q apply" — which 704.5q could not,
+  because the sweep cancels by reading `minus_counters` and nothing had ever
+  written one. A claim in a comment falsified by the code two lines below it.
+- **Clockwork Beast's cap was counting a different pile from the one it fills.**
+  `+1/+0` counters had their own metadata key and their own direct
+  `power_bonus` poke; they go through the seam now, so "can't cause the total
+  number of +1/+0 counters to be greater than seven" reads the pile the
+  placement fills.
+- **The counter record is keyed by the counter's *name*** (CR 122.1: counters
+  with the same name are interchangeable), through `named_counters.counters_key`
+  rather than a second spelling of it. A -0/-2 counter is not a -1/-1 counter,
+  so it must not join the pile CR 704.5q cancels — the test says so directly.
+
+`Game.place_pt_counters` is the seam, handing "+1/+1" to `place_plus1_counters`
+because that kind is the one with an *event*: the CR 614 replacements the pool
+prints (Conclave Mentor) and the trigger watching for them (Wildwood Scourge)
+name +1/+1 counters specifically. The day a card prints either for another kind
+the event moves up; until then, routing a -0/-2 counter through that event would
+ask a replacement about a counter its card does not mention. The placement guard
+now bans both library operations, not just the +1/+1 one.
+
+### What this round did not close, and why it is now visible
+
+**Kudzu's hook still fires on the mana path alone.** Its first sentence *is*
+Blight's, but the second — "That land's controller may attach this Aura to a
+land of their choice" — is a paragraph the grammar does not read, so the whole
+line still refuses and `ENCHANTED_LAND_TAPPED_FOR_MANA` still carries it. The
+hook is unchanged and so is its behaviour; what changed is that the compiler now
+recognises the *condition*, so the shipped pool's hollow-line census went **4 →
+5** and names Kudzu. That is the census gaining sight of a card, not a card
+getting worse: the ability produced no instruction before too, and the census
+could not see it because "**When** enchanted land becomes tapped" reached no
+table. Closing it is one production plus an attach instruction, over machinery
+that already exists (`kudzu_reattach` is a registered pending choice, not a
+`Game` field).
+
+**Numbers.** LEG 160 → 162 of 310 (51.6% → 52.3%); the set's grammar reads
+52.2% → 52.9% of its lines and executes 23.2% → 23.7%. Shipped pool 734/734
+supported with every floor and ceiling unmoved — these productions read lines
+the older sets already had claimed, so the movement is all in Legends. No hook
+added; one bespoke fire site and two condition kinds deleted. Suite 6,993 →
+7,009 at ~44s against the 40s baseline — proportional growth, no budget change.
+
+**Where round 10 starts.** The other half of the attached-trigger family:
+Spirit Link's "whenever enchanted creature deals damage, you gain that much
+life" and Backfire's "…deals damage **to you**". Their condition has no seam
+yet — `_fire_combat_damage_to_player_triggers` fires "this creature deals
+damage" from the combat-damage-to-a-player path alone, which its own docstring
+has recorded as a gap since El-Hajjâj was written. `damage_events.deal_damage`
+is the one place every damage event passes through, and that is where the
+announcement belongs.

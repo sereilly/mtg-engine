@@ -47,7 +47,7 @@ from .registries import registry_for_line
 from .riders import (_RIDER_FOLDED, _attach_if_you_do, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
-from .triggers import _parse_trigger_event
+from .triggers import _parse_trigger_event, rebind_pronoun_to_event_subject
 from .effects import (
     _parse_activation_restriction,
     _parse_damage_rider_sentence,
@@ -185,7 +185,9 @@ def _parse_quoted_token_line(stream: TokenStream) -> ast.Statement | None:
         stream.reset(mark)
         return None
     if event is not None:
-        return ast.TriggeredAbilityNode(event, statement)
+        return ast.TriggeredAbilityNode(
+            event, rebind_pronoun_to_event_subject(event, statement)
+        )
     return statement
 
 
@@ -543,7 +545,11 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
                 stream.reset(mark)
                 intervening = None
         statement = _statements_from_sentences(stream)
-        return ast.TriggeredAbilityNode(event, statement, intervening)
+        return ast.TriggeredAbilityNode(
+            event,
+            rebind_pronoun_to_event_subject(event, statement),
+            intervening,
+        )
     stream.reset(0)
 
     # "…as long as <condition>" is a whole-line shape: the condition qualifies

@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
 | 3ED | 296 | 389 | 81.2% | 79.9% | 44.5% | 156 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| LEG *(measured)* | 310 | 431 | 52.2% | 46.6% | 23.2% | 91 |
+| LEG *(measured)* | 310 | 431 | 52.9% | 47.3% | 23.7% | 93 |
 | **All (shipped)** | **1618** | **2286** | **81.8%** | **80.7%** | **48.0%** | **954** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,8 +34,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 260 | 142 | expected a subject |  |
-| 112 | 51 | unrecognized effect verb |  |
+| 253 | 138 | expected a subject |  |
+| 116 | 52 | unrecognized effect verb |  |
 | 76 | 52 | unconsumed text |  |
 | 42 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
 | 30 | 30 | unrecognized activation cost |  |
@@ -52,10 +52,10 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 4 | 2 | expected 'your' |  |
 | 4 | 2 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 4 | 4 | unrecognized "can't be" restriction |  |
+| 3 | 2 | expected a permanent to put counters on |  |
 | 3 | 2 | expected a destination zone after 'return' |  |
 | 3 | 3 | no return handler honours this restriction |  |
 | 3 | 3 | expected 'the' |  |
-| 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 2 | expected something to destroy |  |
 | 2 | 1 | expected something to shield |  |
@@ -201,6 +201,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{W}: Enchanted creature gets +1/+1 until end of turn.`
   - `{W}: Enchanted creature gets +1/+1 until end of turn.`
   - `{W}: Enchanted creature gets +1/+1 until end of turn.`
+- **Blight**
+  - `When enchanted land becomes tapped, destroy it.`
 - **Bloodfell Caves**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {B} or {R}.`
@@ -1502,6 +1504,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Destroy target blue creature.`
 - **Spined Megalodon**
   - `Whenever this creature attacks, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
+- **Spirit Shackle**
+  - `Whenever enchanted creature becomes tapped, put a -0/-2 counter on it.`
 - **Spirit of Malevolence**
   - `When this creature dies, each opponent loses 1 life and you gain 1 life.`
 - **Sporeweb Weaver**

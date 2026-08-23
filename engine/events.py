@@ -505,13 +505,19 @@ def _becomes_tapped_filter(
     tapped = event.subject
     if tapped is None or not hasattr(tapped, "tapped"):
         return False
-    # "Whenever **enchanted artifact** becomes tapped…" (Artifact Possession).
-    # The subject is the one permanent this Aura is attached to rather than a
-    # class of them, so the narrowing is an identity check — and by identity,
-    # because two copies of a permanent compare equal by value and the Aura is
-    # on exactly one of them.
+    # "Whenever **enchanted artifact** becomes tapped…" (Artifact Possession,
+    # Psychic Venom, Blight, Spirit Shackle). The subject is the one permanent
+    # this Aura is attached to rather than a class of them, so the narrowing is
+    # an identity check — and by identity, because two copies of a permanent
+    # compare equal by value and the Aura is on exactly one of them.
     if trig.condition.payload.get("tapped_attached"):
         return permanent.metadata.get("attached_to") is tapped
+    # "Whenever **this land** becomes tapped…" (City of Brass). The source
+    # itself, and by identity for the same reason: a second City of Brass on
+    # the same battlefield is a different permanent and must not take the
+    # damage its look-alike's tap deals.
+    if trig.condition.payload.get("tapped_self"):
+        return tapped is permanent
     subtype = trig.condition.payload.get("tapped_subtype")
     if subtype and not tapped.has_type(str(subtype)):
         return False

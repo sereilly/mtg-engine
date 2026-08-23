@@ -1644,7 +1644,33 @@ def test_psychic_venom_deals_damage_when_enchanted_land_tapped(all_cards):
 
     game.tap_land_for_mana(1, "Island", "U")
 
+    # On the stack (CR 603.3) rather than dealt inline: the pass in
+    # `tap_land_for_mana` that used to deal it is gone, and with it the reason
+    # this Aura only ever noticed one of the ways a land becomes tapped.
+    assert [item.card.name for item in game.stack] == ["Psychic Venom"]
+    game.resolve_top_of_stack()
     assert p2.life == 18
+
+
+def test_psychic_venom_fires_when_the_land_is_tapped_by_anything(all_cards):
+    """Not "tapped for mana" — "becomes tapped". A land tapped by an opponent's
+    Icy Manipulator never reaches the mana path, and the printed trigger has
+    nothing to say about how the tap happened."""
+    from engine.auras import attach_aura
+
+    venom = _get(all_cards, "Psychic Venom")
+    island = _get(all_cards, "Island")
+    aura, land = Permanent(card=venom), Permanent(card=island)
+    p1 = PlayerState(name="P1", battlefield=[aura])
+    p2 = PlayerState(name="P2", battlefield=[land], life=20)
+    game = Game(players=[p1, p2])
+    attach_aura(aura, land)
+
+    game.become_tapped(land)
+
+    assert [item.card.name for item in game.stack] == ["Psychic Venom"]
+    game.resolve_top_of_stack()
+    assert p2.life == 18, "the damage goes to the land's controller, not the Aura's"
 
 
 def test_red_ward_grants_protection_from_red(all_cards):

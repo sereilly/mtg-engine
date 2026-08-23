@@ -1100,7 +1100,41 @@ def test_city_of_brass_damages_controller_when_tapped(arn_by_name):
     ok = game.tap_land_for_mana(0, "City of Brass", chosen_color="W")
 
     assert ok
+    # CR 605.1b: a "becomes tapped" trigger could not add mana, so it is not a
+    # mana ability and uses the stack. It used to be dealt inline by a pass
+    # inside `tap_land_for_mana`, which is also why it fired on that one tapper
+    # and on no other.
+    assert [item.card.name for item in game.stack] == ["City of Brass"]
+    game.resolve_top_of_stack()
     assert p1.life == 19
+
+
+def test_city_of_brass_damages_its_controller_however_it_was_tapped(arn_by_name):
+    """The tap seam, not the mana path. Icy Manipulator taps a land without any
+    mana being produced, and the printed trigger says "becomes tapped"."""
+    brass = arn_by_name["City of Brass"]
+    perm = Permanent(card=brass)
+    p1 = PlayerState(name="P1", battlefield=[perm], life=20)
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.become_tapped(perm)
+    assert [item.card.name for item in game.stack] == ["City of Brass"]
+    game.resolve_top_of_stack()
+    assert p1.life == 19
+
+
+def test_city_of_brass_does_not_fire_for_a_look_alike(arn_by_name):
+    """"**This** land" is an identity question: two Cities on one battlefield
+    compare equal by value, so a filter reading characteristics alone would
+    have each of them answer for the other's tap."""
+    brass = arn_by_name["City of Brass"]
+    tapped, other = Permanent(card=brass), Permanent(card=brass)
+    p1 = PlayerState(name="P1", battlefield=[tapped, other], life=20)
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.become_tapped(tapped)
+
+    assert len(game.stack) == 1, "one City became tapped, so one ability triggered"
 
 
 # ===========================================================================

@@ -21,6 +21,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.events import Event, collect, emit
 from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
 from engine.trigger_utils import iter_triggered_abilities
 
 
@@ -41,6 +42,61 @@ def _game(*permanents: Permanent) -> tuple[Game, PlayerState, PlayerState]:
     game = Game(players=[owner, opponent])
     game.enforce_mana_costs = False
     return game, owner, opponent
+
+
+@pytest.mark.cr("603.3", "701.26a")
+def test_the_three_printed_subjects_are_one_becomes_tapped_condition():
+    """CR 701.26a is one event; what differs between the cards printing it is
+    *which* permanent the sentence is about.
+
+    The subject used to decide the condition **kind** — "enchanted land"
+    (Psychic Venom) and "this land" (City of Brass) each had one — and a kind of
+    its own is what let each be dispatched by a hand-written pass inside
+    ``tap_land_for_mana``. So both fired on the one tapper that pass sits in and
+    on none of the others, while the quantified spelling beside them rode the
+    tap seam and fired on all of them. All three are the same condition now,
+    narrowed by payload, so the dispatcher cannot be told apart by the wording.
+    """
+    from engine.auras import attach_aura
+
+    aura = Permanent(card=_card(
+        "Watcher Aura",
+        "Enchant land\nWhenever enchanted land becomes tapped, you gain 1 life.",
+        type_line="Enchantment — Aura",
+    ))
+    itself = Permanent(card=_card(
+        "Self Watcher",
+        "Whenever this land becomes tapped, you gain 1 life.",
+        type_line="Land",
+    ))
+    quantified = Permanent(card=_card(
+        "Class Watcher",
+        "Whenever a Forest an opponent controls becomes tapped, you gain 1 life.",
+        type_line="Enchantment",
+    ))
+    forest = Permanent(card=_card("Forest", "", type_line="Basic Land — Forest"))
+    owner = PlayerState(name="P1", battlefield=[aura, itself, quantified], life=20)
+    opponent = PlayerState(name="P2", battlefield=[forest], life=20)
+    game = Game(players=[owner, opponent])
+    attach_aura(aura, forest)
+
+    kinds = {
+        trig.condition.kind
+        for perm in (aura, itself, quantified)
+        for trig in compile_card_oracle(perm.card).triggered_abilities
+    }
+    assert kinds == {"permanent_becomes_tapped"}
+
+    # The opponent's Forest: the Aura's subject and the quantified one, not the
+    # land watching itself.
+    game.become_tapped(forest)
+    assert sorted(item.card.name for item in game.stack) == [
+        "Class Watcher", "Watcher Aura",
+    ]
+
+    game.stack.clear()
+    game.become_tapped(itself)
+    assert [item.card.name for item in game.stack] == ["Self Watcher"]
 
 
 @pytest.mark.cr("603.3")

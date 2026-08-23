@@ -95,6 +95,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "put_graveyard_cards_on_library_top": "zones",
     # Pestilent Haze's second mode: loyalty stripped from every walker at once.
     "remove_loyalty_from_each_planeswalker": "counters",
+    "add_pt_counters_to_attached": "counters",
     "draw_then_discard_self": "zones",
     "discard_then_draw_that_many": "zones",
     "target_gains_life": "life",
@@ -106,6 +107,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "destroy_all_lands": "destruction",
     "destroy_all_lands_of_type": "destruction",
     "destroy_all_matching": "destruction",
+    "destroy_attached_permanent": "destruction",
     "destroy_all_artifacts_creatures_enchantments": "destruction",
     "delayed_destroy_blocked_or_blocker": "destruction",
     "tap_target_permanent": "tapping",

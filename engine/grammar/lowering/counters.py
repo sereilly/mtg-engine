@@ -12,11 +12,12 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
-from ..phrases import _COUNTER_KINDS
+from ..phrases import is_pt_counter
 from ._common import (
     _amount_payload,
     _describe_several_targets,
     _describe_targets,
+    _is_enchanted,
     _is_source,
     _is_target,
     _names_several_targets,
@@ -110,7 +111,7 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
     # engine/named_counters.py holds them, and what they mean is whatever the
     # card's other lines say about them. Only on the source, because that is the
     # only permanent the placement can name without a picker.
-    if node.counter not in _COUNTER_KINDS and not node.up_to and _is_source(node.subject):
+    if not is_pt_counter(node.counter) and not node.up_to and _is_source(node.subject):
         if not isinstance(node.count, ast.Fixed):
             raise LoweringError("a named counter is placed a fixed number at a time", node=node)
         return (
@@ -138,6 +139,25 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
                     "cap": node.cap,
                     "up_to": bool(node.up_to),
                 },
+            ),
+        )
+    # A CR 122.1a counter on the permanent this Aura enchants (Spirit Shackle's
+    # -0/-2, Unstable Mutation's -1/-1). No target is chosen — an Aura's effect
+    # on its own host names one permanent — so it is its own handler beside
+    # `untap_enchanted_creature` and `grant_regeneration_to_enchanted_creature`,
+    # and the counter's *name* is payload: CR 122.1a reads the numbers off the
+    # name, so a card printing any other pair needs nothing here.
+    if is_pt_counter(node.counter) and not node.up_to and _is_enchanted(node.subject):
+        if not isinstance(node.count, ast.Fixed):
+            raise LoweringError(
+                "a counter on the enchanted permanent is placed a fixed "
+                "number at a time",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "add_pt_counters_to_attached", "",
+                {"counter": node.counter, "count": node.count.value},
             ),
         )
     if node.counter != "+1/+1" or node.up_to:

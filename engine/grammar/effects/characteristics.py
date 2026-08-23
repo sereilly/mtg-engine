@@ -18,7 +18,7 @@ from ..references import parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX, match_longest)
 
-from ..phrases import (_COUNTER_KINDS, _parse_duration, _parse_for_each,
+from ..phrases import (is_pt_counter, _parse_duration, _parse_for_each,
                        _parse_keywords, parse_where_x_definition)
 
 
@@ -311,7 +311,7 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     count = parse_amount(stream)
 
     token = _expect_counter_kind(stream)
-    if token.kind == PT and token.text not in _COUNTER_KINDS:
+    if token.kind == PT and not is_pt_counter(token.text):
         raise stream.error(f"unsupported counter kind {token.text!r}")
     counter = token.text
     stream.expect_word("counter", "counters")

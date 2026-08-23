@@ -237,11 +237,23 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     player = parse_player_ref(stream)
     if player is not None:
         return player
-    # A bare "it" refers back to the ability's own source ("put a +1/+1 counter
-    # on it" on a trigger whose subject was "this creature").
+    # A bare "it" refers back to the object the sentence already named. Its own
+    # quantifier, because *which* object that is depends on the sentence: under
+    # a trigger whose subject is the source ("whenever this creature attacks,
+    # put a +1/+1 counter on it") it is the source, and under one whose subject
+    # is a different named object ("when enchanted land becomes tapped, destroy
+    # it") it is that object. `parser.py` rebinds it once the whole line is in
+    # hand — see `rebind_pronoun_to_event_subject`.
+    #
+    # The source reading is the default rather than a placeholder: it is what
+    # "it" means on every line with no trigger subject to name, which is every
+    # line in the pool before this one. A card naming itself mid-sentence
+    # ("this Aura deals 2 damage") is the SELF branch below and keeps
+    # quantifier "this", which is the whole reason the two are not one node —
+    # an Aura's own name and the permanent it enchants are different objects.
     if stream.at_word("it"):
         stream.advance()
-        return ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
+        return ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
     # The card naming itself mid-sentence ("put a loyalty counter on Garruk") —
     # the lexer already collapsed the name to one SELF token.
     token = stream.peek()

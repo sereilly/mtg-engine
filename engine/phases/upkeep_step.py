@@ -600,6 +600,13 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # creature at the beginning of its controller's upkeep. The counters
         # are real -1/-1 counters, not an aura grant — they stay if the Aura
         # leaves, and 704.5f/704.5q apply.
+        #
+        # That last clause was a promise this loop broke: it wrote the two P/T
+        # bonuses and no counter record at all, so the 704.5q sweep — which
+        # cancels +1/+1 against -1/-1 by reading `minus_counters` — had nothing
+        # to find, and a creature carrying both kinds kept both. The placement
+        # goes through the counter seam now, which writes the record and the
+        # P/T channel together.
         mutation_decay_applied = False
         for permanent in self.all_permanents():
             if permanent.card.primary_type != "enchantment":
@@ -616,8 +623,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 continue
             if self.controller_index_of(attached) != player_index:
                 continue
-            attached.power_bonus -= 1
-            attached.toughness_bonus -= 1
+            self.place_pt_counters(attached, "-1/-1")
             mutation_decay_applied = True
             self.log.append(
                 f"{permanent.card.name}: {attached.card.name} gets a -1/-1 counter"

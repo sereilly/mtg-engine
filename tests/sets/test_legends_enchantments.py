@@ -192,3 +192,127 @@ def test_seeker_refuses_a_creature_matching_neither_half(set_pool):
     assert not _seeker_blocked_by(
         set_pool, Permanent(card=_typed("Goblin", "Creature - Goblin", colors=("R",)))
     )
+
+
+# ---------------------------------------------------------------------------
+# Round 9 — the attached "becomes tapped" trigger
+# ---------------------------------------------------------------------------
+
+
+def _land(name: str = "Forest") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Basic Land - Forest",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=("G",),
+        raw={"name": name, "type_line": "Basic Land - Forest"},
+    )
+
+
+def test_blight_destroys_the_land_it_enchants_when_it_becomes_tapped(set_pool):
+    """"When enchanted land becomes tapped, destroy it." The pronoun is the
+    *land*, not the Aura — resolved as the source it would be on a line whose
+    trigger names no other object, this would destroy Blight itself."""
+    aura = Permanent(card=set_pool("LEG")["Blight"])
+    land = Permanent(card=_land())
+    p1 = PlayerState(name="P1", battlefield=[aura])
+    p2 = PlayerState(name="P2", battlefield=[land])
+    game = Game(players=[p1, p2])
+    attach_aura(aura, land)
+
+    game.become_tapped(land)
+    assert [item.card.name for item in game.stack] == ["Blight"]
+    game.resolve_top_of_stack()
+
+    assert [perm.card.name for perm in p2.battlefield] == []
+    assert p2.graveyard[-1].name == "Forest"
+    assert any(perm.card.name == "Blight" for perm in p1.battlefield), (
+        "the Aura goes to the graveyard by CR 303.4c's state-based action, "
+        "which has not been checked yet — not by its own effect"
+    )
+
+
+def test_blight_ignores_a_land_it_does_not_enchant(set_pool):
+    """The narrowing is an identity check on the Aura's own host. Two Forests
+    on one battlefield compare equal by value, so a filter reading
+    characteristics would have Blight fire on the wrong one."""
+    aura = Permanent(card=set_pool("LEG")["Blight"])
+    enchanted, other = Permanent(card=_land()), Permanent(card=_land())
+    p1 = PlayerState(name="P1", battlefield=[aura])
+    p2 = PlayerState(name="P2", battlefield=[enchanted, other])
+    game = Game(players=[p1, p2])
+    attach_aura(aura, enchanted)
+
+    game.become_tapped(other)
+
+    assert game.stack == []
+
+
+def test_spirit_shackle_puts_a_real_counter_on_its_host(set_pool):
+    """"Whenever enchanted creature becomes tapped, put a -0/-2 counter on it."
+
+    Both channels: the P/T the counter carries (CR 122.1a) and the counter
+    itself, because a bare P/T bonus is not something CR 704.5q or "a creature
+    with a counter on it" can find."""
+    host = Permanent(card=_creature("Host", 3, 3))
+    aura = Permanent(card=set_pool("LEG")["Spirit Shackle"])
+    p1 = PlayerState(name="P1", battlefield=[host, aura])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    attach_aura(aura, host)
+
+    game.become_tapped(host)
+    game.resolve_top_of_stack()
+
+    assert host.effective_power == 3
+    assert host.effective_toughness == 1
+    assert host.metadata.get("-0/-2_counters") == 1
+
+
+def test_spirit_shackle_stacks_its_counters(set_pool):
+    """Untapping and tapping again is a second event, and a counter is not a
+    marker that is already there — CR 122.1a adds each one's toughness."""
+    host = Permanent(card=_creature("Host", 3, 5))
+    aura = Permanent(card=set_pool("LEG")["Spirit Shackle"])
+    p1 = PlayerState(name="P1", battlefield=[host, aura])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    attach_aura(aura, host)
+
+    for _ in range(2):
+        game.become_tapped(host)
+        game.resolve_top_of_stack()
+        game.become_untapped(host)
+
+    assert host.metadata.get("-0/-2_counters") == 2
+    assert host.effective_toughness == 1
+
+
+def test_spirit_shackle_counters_are_not_the_minus_one_pile(set_pool):
+    """CR 122.1: counters are interchangeable with counters *of the same name*.
+    A "-0/-2" counter is not a "-1/-1" counter, so it must not land in the pile
+    CR 704.5q cancels against +1/+1 counters."""
+    host = Permanent(card=_creature("Host", 3, 3))
+    aura = Permanent(card=set_pool("LEG")["Spirit Shackle"])
+    p1 = PlayerState(name="P1", battlefield=[host, aura])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    attach_aura(aura, host)
+
+    game.become_tapped(host)
+    game.resolve_top_of_stack()
+
+    assert host.metadata.get("minus_counters", 0) == 0
+
+
+def test_spirit_shackle_survives_the_aura_leaving(set_pool):
+    """The counters are on the creature, not a grant from the Aura — detaching
+    Spirit Shackle takes back nothing (CR 122.2)."""
+    host = Permanent(card=_creature("Host", 3, 4))
+    aura = Permanent(card=set_pool("LEG")["Spirit Shackle"])
+    p1 = PlayerState(name="P1", battlefield=[host, aura])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    attach_aura(aura, host)
+
+    game.become_tapped(host)
+    game.resolve_top_of_stack()
+    game.remove_from_battlefield(aura)
+
+    assert host.effective_toughness == 2
+    assert host.metadata.get("-0/-2_counters") == 1

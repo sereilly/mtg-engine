@@ -318,19 +318,15 @@ class TurnManagementMixin:
             if not land.basic_land_types:
                 return False
 
+        # CR 701.26a's event, announced by the one tap seam. City of Brass
+        # ("Whenever this land becomes tapped, it deals 1 damage to you") and
+        # Psychic Venom ("Whenever enchanted land becomes tapped…") each used to
+        # be dispatched by a hand-written pass here, which meant each fired on
+        # *this* tapper and on none of the others — an Icy Manipulator, an
+        # attack cost, or any of the other places `become_tapped` is called.
+        # Both are ordinary `permanent_becomes_tapped` triggers now, so they go
+        # on the stack (CR 603.3) from wherever the tap happens.
         self.become_tapped(land)
-        # City of Brass: "Whenever this land becomes tapped, it deals 1 damage
-        # to you." Scoped to the mana-tap path (matching enchanted_land_tapped
-        # below) rather than every tap site in the engine.
-        for trig in compile_card_oracle(land.effective_card).triggered_abilities:
-            if trig.condition.kind == "self_becomes_tapped" and trig.instruction is not None:
-                amount = int(trig.instruction.payload.get("amount", 0))
-                self._deal_damage_to_player(
-                    player, amount, source=land,
-                    then=lambda damage: self.log.append(
-                        f"{land.card.name} dealt {damage} damage to {player.name}"
-                    ),
-                )
         # **The land's own compiled mana ability, when it has one.** This used
         # to add exactly one symbol chosen from `produced_mana`, which is right
         # for every land in the 1993-94 base sets and for the dual cycles — all
@@ -395,19 +391,8 @@ class TurnManagementMixin:
                     kudzu_reattach_index, defer_kudzu_choice,
                 )
 
-        # Aura attached to this land: fire enchanted_land_tapped triggers (e.g. Psychic Venom)
         attached_aura = land.metadata.get("attached_aura")
         if attached_aura is not None:
-            aura_prog = compile_card_oracle(attached_aura.card)
-            for trig in aura_prog.triggered_abilities:
-                if trig.condition.kind == "enchanted_land_tapped" and trig.instruction is not None:
-                    amount = int(trig.instruction.payload.get("amount", 0))
-                    self._deal_damage_to_player(
-                        player, amount, source=attached_aura,
-                        then=lambda damage: self.log.append(
-                            f"{attached_aura.card.name} dealt {damage} damage to {player.name}"
-                        ),
-                    )
             # Wild Growth: "Whenever enchanted land is tapped for mana, its controller
             # adds an additional {G}." The "for mana" phrasing isn't compiled as a
             # generic trigger, so the mana is read from the Aura's text here.

@@ -18,6 +18,7 @@ has to be found first.
 
 from dataclasses import replace
 
+from ..pt import pt_counter_deltas
 from . import ast
 from .errors import GrammarError
 from .lexer import (MANA, PUNCT, tokenize)
@@ -51,7 +52,18 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("this_turn", ("this", "turn")),
 )
 
-_COUNTER_KINDS = ("+1/+1", "+1/+0", "+0/+1", "-1/-1")
+def is_pt_counter(kind: str) -> bool:
+    """Whether *kind* names a CR 122.1a power/toughness counter.
+
+    The one table in this file that is *not* data: CR 122.1a names a counter by
+    the P/T it carries ("a +X/+Y counter … similarly, -X/-Y counters subtract"),
+    so which ones exist is a rule and `engine/pt.py` derives the pair from the
+    name. The tuple that used to sit here held four kinds and refused "-0/-2"
+    (Spirit Shackle) and "-0/-1" (Takklemaggot, Lesser Werewolf) as unsupported
+    counter kinds while admitting "-1/-1" beside them — a parser deciding what
+    Magic prints.
+    """
+    return pt_counter_deltas(kind) is not None
 
 # Board-state counts that bind a clause's X, one literal phrase per name. Not
 # parsed compositionally, and that is the design rather than a shortcut: each

@@ -420,3 +420,37 @@ def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction,
     key = "bounce_at_next_end_step" if action == "bounce" else "destroy_at_next_end_step"
     source.metadata[key] = True
     return True, "resolved"
+
+
+@effect_handler("destroy_attached_permanent")
+def destroy_attached_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When enchanted land becomes tapped, destroy it." (Blight.)
+
+    The victim is read off the source's own attachment rather than from a
+    target: CR 303.4b makes "enchanted" a name for the object this Aura is
+    already attached to, so the sentence chooses nothing and there is nothing
+    for a picker to have offered or for the resolution context to carry.
+
+    It goes through ``_destroy_swept_permanents`` — the same seam every other
+    "destroy this particular permanent" handler uses — so regeneration, the
+    indestructible check and the graveyard move behave exactly as they do for a
+    targeted destroy. An Aura that has come unattached destroys nothing, which
+    is the window CR 303.4c's state-based action has not closed yet.
+    """
+    source = context.source_permanent
+    attached = source.metadata.get("attached_to") if source is not None else None
+    if attached is None:
+        game.log.append(f"{context.card.name}: nothing attached to destroy")
+        return True, "resolved"
+    seat = game.controller_index_of(attached)
+    if seat is None:
+        game.log.append(f"{context.card.name}: nothing attached to destroy")
+        return True, "resolved"
+    destroyed = game._destroy_swept_permanents(
+        game.players[seat],
+        lambda candidate: candidate is attached,
+        allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+    )
+    if destroyed:
+        game.log.append(f"{context.card.name} destroyed {attached.card.name}")
+    return True, "resolved"

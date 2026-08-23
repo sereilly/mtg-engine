@@ -51,9 +51,10 @@ def test_only_the_seam_calls_the_library_operation():
         for line in _calls_in(path)
     ]
     assert not offenders, (
-        "add_plus1_counters called outside engine/pt.py and the "
-        "place_plus1_counters seam — a counter placed this way skips CR 614 "
-        "replacements and fires no trigger:\n  " + "\n  ".join(offenders)
+        "a P/T counter library operation called outside engine/pt.py and "
+        "the place_plus1_counters / place_pt_counters seam — a counter "
+        "placed this way skips CR 614 replacements, fires no trigger and "
+        "lands in no record:\n  " + "\n  ".join(offenders)
     )
 
 

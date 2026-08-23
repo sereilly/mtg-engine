@@ -83,9 +83,16 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "creature_attacks_or_blocks": "whenever this creature attacks or blocks",
     "creature_dealt_damage": "whenever this creature is dealt damage",
     "creature_dealt_damage_by_self_dies": "whenever a creature dealt damage by this creature this turn dies",
-    "enchanted_land_tapped": "whenever enchanted land becomes tapped",
-    "self_becomes_tapped": "whenever this land becomes tapped",
-    "permanent_becomes_tapped": "whenever a forest an opponent controls becomes tapped",
+    # One kind, four printed subjects: a quantified class (Lifetap), the
+    # source itself (City of Brass), the permanent this one is attached to
+    # (Spirit Shackle) and that same subject with the one-shot trigger word
+    # (Blight), which is the row the "when" table carries.
+    "permanent_becomes_tapped": (
+        "whenever a forest an opponent controls becomes tapped",
+        "whenever this land becomes tapped",
+        "whenever enchanted creature becomes tapped",
+        "when enchanted land becomes tapped",
+    ),
     # One printed ability with two trigger events (Haunting Wind).
     "permanent_tapped_or_ability_activated": (
         "whenever an artifact becomes tapped or a player activates an "
@@ -195,12 +202,35 @@ def _examples(kind: str) -> tuple[str, ...]:
     return (found,) if isinstance(found, str) else tuple(found)
 
 
+def _examples_in(table_name: str, kind: str) -> tuple[str, ...]:
+    """*kind*'s canonical texts that this table would actually be asked about.
+
+    ``_parse_trigger_condition`` routes a line to one table by its printed
+    trigger word — "whenever " first, then "when ", then "at " — so an example
+    of one word says nothing about a table keyed on another. Checking every
+    example against every table conflated the two the moment a kind was printed
+    with both words: `permanent_becomes_tapped` is spelled "whenever" on three
+    cards and "when" on Blight, and the unfiltered guard demanded that the
+    "when" table hold a pattern for Lifetap's wording — a row no card would
+    ever reach.
+    """
+    prefix = f"{table_name} "
+    return tuple(
+        example for example in _examples(kind)
+        if example.startswith(prefix)
+        and not (table_name == "when" and example.startswith("whenever "))
+    )
+
+
 def test_every_pattern_has_an_example():
+    """Every (table, kind) pair needs an example *that table* would be asked
+    about — a kind listed in the "when" table with only "whenever" examples has
+    a row nothing here exercises."""
     missing = [
-        kind
-        for _, table in _TABLES
+        f"{table_name}:{kind}"
+        for table_name, table in _TABLES
         for kind, _ in table
-        if kind not in EXAMPLE_TEXTS
+        if not _examples_in(table_name, kind)
     ]
     assert not missing, f"add canonical examples for: {missing}"
 
@@ -215,12 +245,12 @@ def test_every_example_matches_its_own_pattern():
     least one keeps the guard's real purpose, which is that no kind is
     unreachable.
     """
-    for _, table in _TABLES:
+    for table_name, table in _TABLES:
         patterns_by_kind: dict[str, list] = {}
         for kind, pattern in table:
             patterns_by_kind.setdefault(kind, []).append(pattern)
         for kind, patterns in patterns_by_kind.items():
-            for example in _examples(kind):
+            for example in _examples_in(table_name, kind):
                 assert any(re.match(pattern, example) for pattern in patterns), (
                     f"{kind}: canonical example {example!r} matches none of its patterns"
                 )
@@ -241,7 +271,7 @@ def test_no_pattern_shadows_a_later_one(table_name, table):
         for later_kind, _ in table[i + 1:]:
             if later_kind == early_kind:
                 continue
-            for example in _examples(later_kind):
+            for example in _examples_in(table_name, later_kind):
                 assert not re.match(early_pattern, example), (
                     f"{table_name}: pattern {early_kind!r} shadows {later_kind!r} "
                     f"(matches its example {example!r}); move the specific pattern first"

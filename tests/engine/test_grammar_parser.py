@@ -512,3 +512,62 @@ def test_registry_claim_matches_the_registry_phrase_exactly():
     assert registry_for_line(DAMAGE_LIFE_FLOOR_TEXT + ".") == "replacements"
     # Truncate the phrase and the claim disappears with it.
     assert registry_for_line(LIFE_GAIN_TO_DRAW_TEXT[:-8] + ".") is None
+
+
+# ---------------------------------------------------------------------------
+# The bare pronoun names the object the trigger's condition was about
+# ---------------------------------------------------------------------------
+
+
+def test_a_pronoun_under_a_self_subject_trigger_still_means_the_source():
+    """"Whenever this creature is dealt damage, put a +1/+1 counter on it."
+
+    The reading every line in the pool had before the rebinding existed, and
+    the one it must keep: with nothing else named, "it" is the source."""
+    statement = _statement(
+        "Whenever this creature is dealt damage, put a +1/+1 counter on it.",
+        card_name="Fungusaur",
+    )
+    assert statement.subject.filter.is_source
+    assert not statement.subject.filter.is_enchanted
+
+
+def test_a_pronoun_under_an_attached_subject_trigger_means_that_permanent():
+    """"When enchanted land becomes tapped, destroy it." (Blight.) Read as the
+    source, this destroys the Aura instead of the land."""
+    statement = _statement(
+        "When enchanted land becomes tapped, destroy it.", card_name="Blight",
+    )
+    assert statement.subject.filter.is_enchanted
+    assert not statement.subject.filter.is_source
+
+
+def test_the_card_naming_itself_is_not_rebound():
+    """"Whenever enchanted land becomes tapped, Psychic Venom deals 2 damage to
+    that land's controller."
+
+    The same filter as a pronoun's default and a different reference: rewriting
+    it would make the Aura's own effect come from the permanent it enchants.
+    Pinned on the *node*, because the instruction this line lowers to carries
+    no subject at all and so could not tell the two apart."""
+    node = parse_line(
+        "Whenever enchanted creature becomes tapped, Probe Aura deals 2 damage "
+        "to any target.",
+        card_name="Probe Aura",
+    )
+    assert isinstance(node, ast.TriggeredAbilityNode)
+    assert node.statement.source.filter.is_source
+    assert not node.statement.source.filter.is_enchanted
+
+
+def test_the_rebinding_reaches_a_pronoun_inside_a_wrapper():
+    """Structural, not a table of the productions that admit a pronoun: the
+    walk has to reach one nested inside a `may`, a `sequence` or anything else
+    the AST grows."""
+    node = parse_line(
+        "When enchanted creature becomes tapped, you may destroy it.",
+        card_name="Probe Aura",
+    )
+    assert isinstance(node, ast.TriggeredAbilityNode)
+    assert isinstance(node.statement, ast.May)
+    assert node.statement.action.subject.filter.is_enchanted

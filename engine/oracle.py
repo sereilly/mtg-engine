@@ -347,20 +347,30 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("self_becomes_target",
      r"whenever this creature becomes the target of a spell or ability"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
-    ("enchanted_land_tapped",       r"whenever enchanted land becomes tapped"),
     # "Whenever this creature becomes untapped" (Ghostly Pilferer). CR 701.26b's
     # event, announced by the one untap seam — which is why the seam had to
     # exist first: eleven places set the flag, and a trigger wired into one of
     # them would have missed the other ten.
     ("permanent_becomes_untapped",
      r"whenever this (?:creature|artifact|enchantment|land|permanent) becomes untapped"),
-    ("self_becomes_tapped",         r"whenever this land becomes tapped"),
     # "Whenever a Forest an opponent controls becomes tapped" (Lifetap). The
     # type and the controller scope are named groups, so the restriction
     # arrives as condition-payload data and one dispatcher
     # (engine/events.py::_becomes_tapped_filter) covers every card written this
-    # way. Must follow the two specific forms above, which name their subject
-    # ("enchanted land", "this land") rather than quantifying it.
+    # way.
+    #
+    # **One kind for every "becomes tapped" trigger, and the two that used to
+    # have their own are the reason.** `enchanted_land_tapped` (Psychic Venom)
+    # and `self_becomes_tapped` (City of Brass) named the same CR 701.26a event
+    # about a different subject, and each was dispatched by a hand-written pass
+    # inside `tap_land_for_mana` — so both fired on the *one* tapper that pass
+    # sits in and on none of the other ways a land becomes tapped. That is the
+    # failure `become_tapped` was built to end, and a second condition kind is
+    # what let it survive the seam: an emit nobody listens for is indistinguish-
+    # able from an event that never happened. The subject is payload now —
+    # `tapped_attached` for the permanent this one is attached to,
+    # `tapped_self` for the source itself, `tapped_subtype`/`tapped_controller`
+    # for a quantified class — and the one dispatcher reads whichever is there.
     # "Whenever an artifact becomes tapped **or a player activates an
     # artifact's ability without {T} in its activation cost**" (Haunting Wind,
     # Powerleech). One printed ability with two trigger events, so it is one
@@ -389,6 +399,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"(?: (?P<tapped_controller>an opponent controls|you control))? becomes tapped"
      r" or (?:a player|an opponent) activates an? [a-z']+ ability"
      r" without \{t\} in its activation cost"),
+    # The two named subjects, ahead of the quantified row they are not a
+    # wording of. "Enchanted <noun>" is the permanent this Aura is attached to
+    # (Psychic Venom, Blight, Spirit Shackle); "this <noun>" is the source
+    # itself (City of Brass). Both spellings appear in the "when" table too,
+    # because Blight prints the one-shot trigger word for the same event.
+    ("permanent_becomes_tapped",
+     r"when(?:ever)? enchanted (?P<tapped_attached>[a-z]+) becomes tapped"),
+    ("permanent_becomes_tapped",
+     r"when(?:ever)? this (?P<tapped_self>creature|artifact|enchantment|land|permanent)"
+     r" becomes tapped"),
     ("permanent_becomes_tapped",
      r"whenever an? (?P<tapped_subtype>[a-z]+)"
      r"(?: (?P<tapped_controller>an opponent controls|you control))? becomes tapped"),
@@ -543,6 +563,16 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("enters_battlefield",          r"when (?:this|.+) enters(?: the battlefield)?"),
     ("leaves_battlefield",          r"when (?:this|.+) leaves(?: the battlefield)?"),
     ("attached_creature_dies",      r"when(?:ever)? (?:equipped|enchanted) creature dies"),
+    # CR 701.26a's event with the one-shot trigger word (Blight: "**When**
+    # enchanted land becomes tapped, destroy it"). Here for the reason
+    # `attached_creature_dies` above is in both tables: which word a card
+    # printed is not a difference the dispatcher can act on, and a table holding
+    # only one of them leaves the other's cards refusing a condition the engine
+    # implements. The *self* spelling has no row here — a permanent becoming
+    # tapped is a repeatable event, so every printing of that one says
+    # "whenever", the same argument the `you_gain_life` note below makes.
+    ("permanent_becomes_tapped",
+     r"when(?:ever)? enchanted (?P<tapped_attached>[a-z]+) becomes tapped"),
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is

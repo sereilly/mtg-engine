@@ -34,6 +34,8 @@ Channel → sublayer mapping:
 
 from __future__ import annotations
 
+import re
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -86,22 +88,94 @@ def switch_pt(perm: Permanent) -> None:
     perm.metadata["pt_switched"] = not perm.metadata.get("pt_switched", False)
 
 
-def add_plus1_counters(perm: Permanent, count: int = 1) -> None:
-    """Place *count* +1/+1 counters: the persistent P/T channel plus the
-    ``plus_counters`` record (CR 122).
+_PT_COUNTER = re.compile(r"^([+-])(\d+)/([+-])(\d+)$")
 
-    The record is not cosmetic. The 704.5q sweep cancels it against -1/-1
-    counters, the web layer renders it on the card face, and "target creature
-    with a +1/+1 counter on it" (Tempered Veteran) is a question about
-    *counters*, which a bare P/T bonus cannot answer — a Giant Growth also
-    writes power_bonus, and reading the bonus as the counter would let it
-    qualify. Every handler that places a +1/+1 counter goes through here, so
-    the two channels cannot drift.
+# The three kinds with a metadata key the engine already reads, kept as they
+# are spelled. CR 704.5q's cancellation sweep, the web card face and "a
+# creature with a +1/+1 counter on it" were written against the first two;
+# Clockwork Beast's cap ("can't cause the total number of +1/+0 counters … to
+# be greater than seven") reads the third, and a second spelling would make the
+# cap count a different pile from the one the placement fills.
+#
+# Every other CR 122.1a counter is a counter like any other and lives in the
+# named-counter store under the name CR 122.1 makes its identity — a "-0/-2"
+# counter and a "-1/-1" counter are not interchangeable, and two -0/-2 counters
+# are.
+_PT_COUNTER_KEYS = {
+    "+1/+1": "plus_counters",
+    "-1/-1": "minus_counters",
+    "+1/+0": "plus_1_0_counters",
+}
+
+
+def pt_counter_deltas(kind: str) -> tuple[int, int] | None:
+    """CR 122.1a: what one *kind* counter adds to power and toughness, or None
+    if *kind* is not a P/T counter at all.
+
+    Derived from the name rather than looked up in a list of the kinds the pool
+    happens to print. The rule is written as "+X/+Y … similarly, -X/-Y", so the
+    numbers are the counter's *name* and a table of them would be a list of the
+    cards printed so far — which is exactly what it was: "-0/-2" (Spirit
+    Shackle) and "-0/-1" (Takklemaggot, Lesser Werewolf) were rejected as
+    unsupported counter kinds while "-1/-1" beside them was admitted.
     """
+    match = _PT_COUNTER.match(kind)
+    if match is None:
+        return None
+    power_sign, power, toughness_sign, toughness = match.groups()
+    return (
+        int(power) * (-1 if power_sign == "-" else 1),
+        int(toughness) * (-1 if toughness_sign == "-" else 1),
+    )
+
+
+def pt_counter_key(kind: str) -> str:
+    """The metadata key *kind*'s counters are recorded under.
+
+    Everything outside the three established keys falls through to
+    ``engine/named_counters.py``'s spelling rather than a second one of this
+    module's own — that file's whole opening argument is that two stores for
+    one concept is how a card ends up putting counters somewhere nothing reads.
+    """
+    from .named_counters import counters_key
+
+    return _PT_COUNTER_KEYS.get(kind) or counters_key(kind)
+
+
+def add_pt_counters(perm: Permanent, kind: str, count: int = 1) -> None:
+    """Place *count* CR 122.1a counters of *kind*: the persistent P/T channel
+    plus the counter record.
+
+    The record is not cosmetic. The 704.5q sweep cancels +1/+1 against -1/-1,
+    the web layer renders counters on the card face, and "target creature with
+    a +1/+1 counter on it" (Tempered Veteran) is a question about *counters*,
+    which a bare P/T bonus cannot answer — a Giant Growth also writes
+    power_bonus, and reading the bonus as the counter would let it qualify.
+    Unstable Mutation is the other half of that: its upkeep pass wrote the two
+    bonuses and no record at all, under a comment saying "the counters are real
+    -1/-1 counters … 704.5q applies" — which it could not, because nothing had
+    put a counter anywhere for the sweep to find.
+
+    Every handler that places a P/T counter goes through here, so the two
+    channels cannot drift.
+    """
+    deltas = pt_counter_deltas(kind)
+    if deltas is None:
+        raise ValueError(f"{kind!r} is not a power/toughness counter")
     if count <= 0:
         return
-    add_pt_modifier(perm, count, count)
-    perm.metadata["plus_counters"] = int(perm.metadata.get("plus_counters", 0)) + count
+    power, toughness = deltas
+    add_pt_modifier(perm, power * count, toughness * count)
+    key = pt_counter_key(kind)
+    perm.metadata[key] = int(perm.metadata.get(key, 0)) + count
+
+
+def add_plus1_counters(perm: Permanent, count: int = 1) -> None:
+    """Place *count* +1/+1 counters — :func:`add_pt_counters` with the one kind
+    most of the pool prints, kept as its own name because the seam above it
+    (``Game.place_plus1_counters``) and its CR 614 replacements are about that
+    kind specifically."""
+    add_pt_counters(perm, "+1/+1", count)
 
 
 def remove_plus1_counters(perm: Permanent, count: int = 1) -> int:

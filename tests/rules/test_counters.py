@@ -64,6 +64,41 @@ def test_122_1a_a_plus_one_counter_adds_to_power_and_toughness():
     assert (perm.effective_power, perm.effective_toughness) == (5, 5)
 
 
+@pytest.mark.cr("122.1a", "613.4c")
+def test_122_1a_reads_the_deltas_off_the_counter_s_name():
+    """"Similarly, -X/-Y counters subtract from power and toughness."
+
+    The rule names the counter by the numbers it carries, so which P/T counters
+    exist is derivable rather than a list of the ones printed so far. The list
+    it replaced held four kinds and refused "-0/-2" (Spirit Shackle) and
+    "-0/-1" (Takklemaggot) as unsupported counter kinds while admitting "-1/-1"
+    beside them.
+    """
+    from engine.pt import pt_counter_deltas
+
+    assert pt_counter_deltas("+1/+1") == (1, 1)
+    assert pt_counter_deltas("-0/-2") == (0, -2)
+    assert pt_counter_deltas("+3/+0") == (3, 0)
+    assert pt_counter_deltas("page") is None, "an invented counter carries no P/T"
+    assert pt_counter_deltas("loyalty") is None
+
+
+@pytest.mark.cr("122.1a")
+def test_122_1a_a_minus_counter_subtracts_and_is_recorded_as_itself():
+    """A -0/-2 counter takes two toughness and leaves power alone, and is
+    recorded under its own name: CR 122.1 makes counters interchangeable with
+    counters *of the same name*, so it must not join the -1/-1 pile CR 704.5q
+    cancels against +1/+1 counters."""
+    perm = Permanent(card=_mk_creature("Shackled", 3, 3))
+    game, _, _ = _duel(perm)
+
+    game.place_pt_counters(perm, "-0/-2", 1)
+
+    assert (perm.effective_power, perm.effective_toughness) == (3, 1)
+    assert perm.metadata["-0/-2_counters"] == 1
+    assert perm.metadata.get("minus_counters", 0) == 0
+
+
 @pytest.mark.cr("122.1")
 def test_122_1_a_counter_of_another_kind_modifies_nothing_on_its_own():
     """A counter modifies characteristics only where a rule or ability says so.

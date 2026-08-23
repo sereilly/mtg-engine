@@ -68,13 +68,13 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | trigger table | 231 |
 | keyword table | 139 |
 | static-line table | 137 |
-| card_hooks bespoke (name-keyed) | 130 |
+| card_hooks bespoke (name-keyed) | 128 |
 | aura enchant noun (oracle_instructions attach) | 57 |
 | aura static (oracle_instructions/permanent_state) | 35 |
 | loyalty cost | 33 |
 | activation_restrictions.py | 21 |
 | mixin text scan | 16 |
-| auras.py (attached effect) | 14 |
+| auras.py (attached effect) | 15 |
 | oracle.py (modal trigger head) | 9 |
 | cast_costs.py | 7 |
 | untap_restrictions.py | 6 |

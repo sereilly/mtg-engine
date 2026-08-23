@@ -12,7 +12,7 @@ from ..damage_events import damage_source_seat, deal_damage, lifelink_life_gaine
 from ..events import Event, collect, emit
 from ..land_play_allowance import LandPlayAllowance, land_play_allowance_for
 from ..models import CardDefinition, Permanent, PlayerState
-from ..pt import add_plus1_counters
+from ..pt import add_plus1_counters, add_pt_counters
 from ..replacement_choices import pending_choices_for, resolve_choice
 from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
 from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
@@ -776,6 +776,27 @@ class EffectsMixin:
                 subject=permanent, seat=seat, count=placed,
             )
         return placed
+
+    def place_pt_counters(self, permanent: Permanent, kind: str, count: int = 1) -> int:
+        """Put *count* CR 122.1a counters of *kind* on *permanent*; returns how
+        many arrived.
+
+        The general seam beside :meth:`place_plus1_counters`, which it hands
+        the one kind that has an *event*. The CR 614 replacements the pool
+        prints ("that many plus one", Conclave Mentor) and the trigger that
+        watches for them (Wildwood Scourge) are written about +1/+1 counters
+        by name, so putting a -0/-2 counter through that event would ask a
+        replacement about a counter its card does not mention. The day a card
+        prints either for another kind, the event moves here and the +1/+1
+        path becomes a narrowing of it — which is why this is the seam every
+        placement calls rather than a second one beside it.
+        """
+        if kind == "+1/+1":
+            return self.place_plus1_counters(permanent, count)
+        if count <= 0:
+            return 0
+        add_pt_counters(permanent, kind, count)
+        return count
 
     def _draw_with_replacements(
         self, player: PlayerState, count: int, *, turn_based: bool = False

@@ -445,7 +445,7 @@ class PlayerRef:
 class TargetSpec:
     """A quantified object reference: "target creature", "each creature with
     flying", "up to two creatures", "any target"."""
-    quantifier: str            # target | each | all | up_to | any_target | this | a
+    quantifier: str            # target | each | all | up_to | any_target | this | it | a
     filter: ObjectFilter = field(default_factory=ObjectFilter)
     count: int = 1
     # "**X** target lands" (Candelabra of Tawnos). The count is the announced X

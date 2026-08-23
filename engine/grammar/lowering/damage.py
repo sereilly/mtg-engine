@@ -290,9 +290,11 @@ def _fused_prepare_then_interact(
     # The second sentence has to be *about* the first one's target: either the
     # bare "it"/self reference or the bound "that <noun>". Anything else names
     # something this instruction does not resolve.
-    if not isinstance(subject, ast.TargetSpec) or subject.quantifier not in ("this", "that"):
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier not in (
+        "this", "it", "that"
+    ):
         return None
-    if subject.quantifier == "this" and not subject.filter.is_source:
+    if subject.quantifier in ("this", "it") and not subject.filter.is_source:
         return None
     if not _is_target(first) or not _is_target(second):
         return None

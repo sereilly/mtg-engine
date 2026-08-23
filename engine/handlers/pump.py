@@ -487,8 +487,12 @@ def add_power_counters_to_self(game: Game, instruction: OracleInstruction, conte
     current = int(source_permanent.metadata.get("plus_1_0_counters", 0))
     added = min(max(0, requested), max(0, cap - current))
     if added:
-        source_permanent.power_bonus += added
-        source_permanent.metadata["plus_1_0_counters"] = current + added
+        # Through the counter seam rather than the two channels by hand: the
+        # cap above reads the record, so a placement that wrote only
+        # `power_bonus` would let the ability run past its own limit, and a
+        # direct `power_bonus` poke is the P/T write `engine/pt.py` exists to
+        # keep in one place.
+        game.place_pt_counters(source_permanent, "+1/+0", added)
     game.log.append(f"{card.name} gets {added} +1/+0 counter(s)")
     return True, "resolved"
 
@@ -528,6 +532,35 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
         f"{card.name} gets a +1/+1 counter" if count == 1
         else f"{card.name} gets {count} +1/+1 counters"
     )
+    return True, "resolved"
+
+
+@effect_handler("add_pt_counters_to_attached")
+def add_pt_counters_to_attached(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever enchanted creature becomes tapped, put a -0/-2 counter on it."
+    (Spirit Shackle.)
+
+    The recipient is the permanent this Aura is attached to — no target was
+    chosen, because an Aura's effect on its own host never offers one — and the
+    counter's kind is payload, so any CR 122.1a pair the grammar reads lands
+    here without a second handler.
+
+    Through ``place_pt_counters``: a counter placed by poking the P/T channels
+    is a counter no sweep can find, which is what Unstable Mutation's upkeep
+    pass did under a comment promising that 704.5q applied to it.
+    """
+    source = context.source_permanent
+    attached = source.metadata.get("attached_to") if source is not None else None
+    if attached is None:
+        return True, "resolved"
+    kind = str(instruction.payload.get("counter", ""))
+    count = int(instruction.payload.get("count", 1))
+    placed = game.place_pt_counters(attached, kind, count)
+    if placed:
+        game.log.append(
+            f"{context.card.name}: {attached.card.name} gets "
+            + (f"a {kind} counter" if placed == 1 else f"{placed} {kind} counters")
+        )
     return True, "resolved"
 
 

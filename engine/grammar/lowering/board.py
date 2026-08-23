@@ -101,6 +101,23 @@ def _lower_destroy(node: ast.Destroy, event: str | None = None) -> tuple[OracleI
         payload = {"bypass_regeneration": True} if node.no_regen else {}
         return (OracleInstruction(kind, "", payload),)
 
+    # "Destroy **it**", where the sentence's "it" is the permanent this Aura
+    # enchants (Blight: "When enchanted land becomes tapped, destroy it"), and
+    # the equivalent spelling that names it outright. Its own handler for the
+    # reason `untap_enchanted_creature` and
+    # `grant_regeneration_to_enchanted_creature` have theirs: the subject is
+    # known from the source's own attachment, so routing it through the
+    # targeted destroy would ask for a pick the card never offers — and would
+    # find a permanent by index on whichever battlefield the context happened
+    # to carry.
+    if _is_enchanted(spec):
+        attached_payload: dict[str, object] = {}
+        if node.no_regen:
+            attached_payload["bypass_regeneration"] = True
+        return (
+            OracleInstruction("destroy_attached_permanent", "", attached_payload),
+        )
+
     # "…destroy **that planeswalker**." (Hooded Blightfang.) "That" is not a
     # target the card ever asked for — it is the object the trigger's event was
     # about, which the fire site stamps onto the stack item by permanent id. So
@@ -702,7 +719,10 @@ def _lower_doesnt_untap_while_source_tapped(
     # one that chooses.
     if not (
         isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "this"
+        # "**It** doesn't untap…" or the card naming itself — both spellings of
+        # the same back-reference, which is why the pronoun's own quantifier is
+        # accepted beside "this".
+        and subject.quantifier in ("this", "it")
         and subject.filter == ast.ObjectFilter(is_source=True)
     ):
         raise LoweringError(
