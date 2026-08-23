@@ -253,6 +253,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     attacking: bool | None = None
     blocking: bool | None = None
     blocked: bool | None = None
+    attacking_or_blocking = False
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
     toughness: ast.Comparison | None = None
@@ -360,6 +361,17 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             colors.append(COLOR_WORDS[word])
             stream.advance()
             continue
+
+        # "attacking **or** blocking creature" — a union of two state
+        # adjectives, read before either of them is taken on its own. Consuming
+        # "attacking" first and leaving "or blocking" would end the noun phrase
+        # mid-sentence, which is how the four Legends pingers refused.
+        if word in ("attacking", "blocking") and stream.peek_word(1) == "or":
+            other = "blocking" if word == "attacking" else "attacking"
+            if stream.peek_word(2) == other:
+                stream.advance(3)
+                attacking_or_blocking = True
+                continue
 
         if word in _STATE_ADJECTIVES:
             attribute, value = _STATE_ADJECTIVES[word]
@@ -784,6 +796,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         tapped=tapped,
         attacking=attacking,
         blocking=blocking,
+        attacking_or_blocking=attacking_or_blocking,
         blocked=blocked,
         power=power,
         toughness=toughness,

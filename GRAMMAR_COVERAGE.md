@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
 | 3ED | 296 | 389 | 81.2% | 79.9% | 44.5% | 156 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| LEG *(measured)* | 310 | 431 | 47.6% | 42.2% | 20.9% | 81 |
+| LEG *(measured)* | 310 | 431 | 48.5% | 43.2% | 21.8% | 85 |
 | **All (shipped)** | **1618** | **2286** | **81.8%** | **80.7%** | **48.0%** | **954** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -47,7 +47,6 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 9 | 5 | no handler for non-targeted tap/untap |  |
 | 8 | 4 | no lowering for RawEffect |  |
 | 7 | 7 | expected 'unless defending player controls' |  |
-| 6 | 6 | expected a damage recipient |  |
 | 5 | 2 | expected a quantity |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 2 | expected 'your' |  |
@@ -59,6 +58,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 3 | 3 | no return handler honours this restriction |  |
 | 3 | 3 | expected 'the' |  |
 | 2 | 1 | expected a permanent to put counters on |  |
+| 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 
 ## Cards executing through the grammar
 
@@ -370,6 +370,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Crash Through**
   - `Creatures you control gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
   - `Draw a card.`
+- **Crimson Manticore**
+  - `{R}, {T}: This creature deals 1 damage to target attacking or blocking creature.`
 - **Crusade**
   - `White creatures get +1/+1.`
   - `White creatures get +1/+1.`
@@ -393,6 +395,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `At the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.`
 - **Cyclopean Mummy**
   - `When this creature dies, exile it.`
+- **D'Avenant Archer**
+  - `{T}: This creature deals 1 damage to target attacking or blocking creature.`
 - **Dandân**
   - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
@@ -870,6 +874,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `All Swamps are 1/1 black creatures that are still lands.`
   - `All Swamps are 1/1 black creatures that are still lands.`
   - `All Swamps are 1/1 black creatures that are still lands.`
+- **Lady Caleria**
+  - `{T}: Lady Caleria deals 3 damage to target attacking or blocking creature.`
 - **Leafkin Avenger**
   - `{T}: Add {G} for each creature with power 4 or greater you control.`
   - `{7}{R}: This creature deals damage equal to its power to target player or planeswalker.`
@@ -1632,6 +1638,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Add {U}.`
 - **Tolarian Kraken**
   - `Whenever you draw a card, you may pay {1}. When you do, you may tap or untap target creature.`
+- **Tor Wauki**
+  - `{T}: Tor Wauki deals 2 damage to target attacking or blocking creature.`
 - **Tormod's Crypt**
   - `{T}, Sacrifice this artifact: Exile target player's graveyard.`
 - **Touch of Darkness**

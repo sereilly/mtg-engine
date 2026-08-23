@@ -220,6 +220,11 @@ class ObjectFilter:
     attacking: bool | None = None
     blocking: bool | None = None
     blocked: bool | None = None
+    # "target **attacking or blocking** creature" (the Legends pinger cycle).
+    # Its own field rather than both booleans set at once: every matcher ANDs
+    # the payload keys, so `attacking=True, blocking=True` would describe a
+    # creature that is somehow doing both — a set that is always empty.
+    attacking_or_blocking: bool = False
     power: Comparison | None = None
     toughness: Comparison | None = None
     mana_value: Comparison | None = None
@@ -350,6 +355,8 @@ class ObjectFilter:
             payload["attacking_only"] = True
         if self.blocking:
             payload["blocking_only"] = True
+        if self.attacking_or_blocking:
+            payload["attacking_or_blocking"] = True
         if self.other_than_source:
             payload["exclude_self"] = True
         if self.not_ability_targeted_by_same_name:

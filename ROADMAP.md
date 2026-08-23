@@ -681,3 +681,31 @@ the reason string named only the first.
   picker through the same `unbounded_targets` route Drafna's Restoration's "any
   number of" takes, and `legality.py` fills in the cap once it knows how many
   legal targets exist.
+
+## LEG round 4: "attacking or blocking" is one restriction, not two
+
+**141 → 145 supported.** Crimson Manticore, D'Avenant Archer, Lady Caleria and
+Tor Wauki all print the same pinger: "deals N damage to target attacking or
+blocking creature". The parser read either adjective on its own and stopped at
+the "or", which ended the noun phrase mid-sentence.
+
+The field is `attacking_or_blocking`, and it is a **third** field rather than
+both booleans set at once. Every matcher ANDs the payload keys, so
+`attacking_only` and `blocking_only` together describe a creature doing both —
+a set that is always empty, and a card that would refuse every target while
+reporting itself supported.
+
+It is answerable by the **pure** matcher, which is what keeps it out of
+`subject_filters`: "attacking" is a field, and CR 509.1a makes "blocking" one
+too — a creature is blocking once it has been *declared*, which is exactly what
+`blocking_attacker_index` records. That is the same test
+`layer_bridge._QUALIFIER_HOLDS` already uses for a conditional buff, so a
+narrowing and a buff cannot come to different conclusions about what "blocking"
+means.
+
+Enforced in **both** places, deliberately. At resolution the filter narrows the
+target; at activation `legality.py`'s enumerator narrows the picker, which is
+what makes CR 602.2b's refusal fire — a pinger with nothing in combat to shoot
+is refused with nothing paid rather than activated and pointed at whatever the
+picker offered. The test asserts the *reason* string, because a refusal for any
+other cause would pass while leaving the restriction unenforced.

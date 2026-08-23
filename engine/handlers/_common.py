@@ -362,6 +362,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     exclude_colors = payload.get("exclude_colors") or []
     exclude_types = payload.get("exclude_types") or []
 
+    # "target **attacking or blocking** creature" (the four Legends pingers).
+    # Answerable purely: "attacking" is a field and CR 509.1a makes "blocking"
+    # one too — a creature is blocking once it has been *declared* as a blocker,
+    # which is exactly what `blocking_attacker_index` records. The same test
+    # `layer_bridge._QUALIFIER_HOLDS` uses, so a conditional buff and a target
+    # restriction cannot disagree about what "blocking" means.
+    if payload.get("attacking_or_blocking"):
+        if not (perm.attacking or perm.blocking_attacker_index is not None):
+            return False
+
     # Pyramids: "target Aura attached to a land" — only Auras whose enchanted
     # permanent is currently a land qualify.
     if payload.get("attached_to_land"):

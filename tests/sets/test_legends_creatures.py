@@ -189,3 +189,79 @@ def test_lord_magnus_negates_both_of_the_landwalks_it_names(set_pool):
     magnus = set_pool("LEG")["Lord Magnus"]
     assert negated_evasion_abilities(magnus.oracle_text) == {"plainswalk", "forestwalk"}
     assert compile_card_oracle(magnus).supported
+
+
+# ---------------------------------------------------------------------------
+# The pinger cycle (round 4) — "target attacking or blocking creature"
+# ---------------------------------------------------------------------------
+
+_PINGERS = ("Crimson Manticore", "D'Avenant Archer", "Lady Caleria", "Tor Wauki")
+
+
+@pytest.mark.parametrize("name", _PINGERS)
+def test_the_pingers_compile_with_the_union_filter(name, set_pool):
+    """"attacking **or** blocking" is one restriction, not two ANDed — a
+    creature cannot be doing both, so setting both booleans would describe an
+    always-empty set."""
+    program = compile_card_oracle(set_pool("LEG")[name])
+    assert program.supported, program.reason
+    ability = program.activated_abilities[0]
+    filt = (ability.instruction.payload.get("targets") or {}).get("filter") or {}
+    assert filt.get("attacking_or_blocking") is True
+    assert "attacking_only" not in filt and "blocking_only" not in filt
+
+
+def _combat_board(set_pool, pinger_name: str):
+    """The pinger's controller is attacked by one creature, which one of their
+    own creatures blocks — so the board holds one attacker, one blocker and two
+    creatures in no combat at all."""
+    pinger = Permanent(card=set_pool("LEG")[pinger_name])
+    blocker = Permanent(card=_vanilla("Blocker", 2, 2))
+    bystander = Permanent(card=_vanilla("Bystander", 2, 2))
+    attacker = Permanent(card=_vanilla("Attacker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[pinger, blocker, bystander])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()
+    ok, msg = game.declare_blockers(1, {1: 0})
+    assert ok, msg
+    game._settle()
+    return game, pinger, attacker, blocker, bystander
+
+
+def test_tor_wauki_may_shoot_either_end_of_the_combat(set_pool):
+    """The attacker and the creature blocking it are both legal; the two
+    creatures standing outside combat are not."""
+    game, pinger, attacker, blocker, bystander = _combat_board(set_pool, "Tor Wauki")
+    spec = game.activation_target_spec(1, game.battlefield_index_of(pinger), 0)
+    offered = {t["name"] for t in spec["valid_targets"]}
+
+    assert offered == {"Attacker", "Blocker"}
+    assert "Bystander" not in offered
+    assert "Tor Wauki" not in offered
+
+
+def test_a_pinger_cannot_be_activated_outside_combat(set_pool):
+    """CR 602.2b: an ability with a mandatory target it cannot fill is refused
+    with nothing paid, rather than activated to hit whatever the picker
+    happened to offer. Nothing is attacking or blocking here."""
+    pinger = Permanent(card=set_pool("LEG")["Tor Wauki"])
+    idle = Permanent(card=_vanilla("Idle", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[pinger])
+    p2 = PlayerState(name="P2", battlefield=[idle])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(0, "Tor Wauki", permanent_index=0)
+
+    assert not result.supported
+    # The *reason* matters: a refusal for any other cause would pass this test
+    # while leaving the restriction unenforced.
+    assert result.details == "no valid target for Tor Wauki"
+    assert not pinger.tapped, "a refused activation pays no cost"

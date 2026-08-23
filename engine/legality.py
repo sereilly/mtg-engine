@@ -767,6 +767,15 @@ class LegalityMixin:
             # Singing Tree: only currently-attacking creatures are legal choices.
             if spec.get("attacking_only") and not perm.attacking:
                 return False
+            # The Legends pinger cycle: "target attacking or blocking creature".
+            # Enforced here as well as at resolution, because CR 602.2b refuses
+            # the activation outright when no legal target exists — a pinger
+            # with nothing in combat to shoot must cost nothing rather than
+            # resolve at whatever the picker happened to offer.
+            if spec.get("attacking_or_blocking") and not (
+                perm.attacking or perm.blocking_attacker_index is not None
+            ):
+                return False
             # Island of Wak-Wak: only flying creatures are legal choices.
             if spec.get("flying_only") and not self._has_keyword(perm, "flying"):
                 return False

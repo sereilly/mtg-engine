@@ -152,7 +152,7 @@ def _narrowing_flags(source: dict) -> dict:
     from the same compiled payload; only the vocabulary differs.
     """
     flags: dict = {}
-    for key in ("attacking_only", "flying_only"):
+    for key in ("attacking_only", "flying_only", "attacking_or_blocking"):
         if source.get(key):
             flags[key] = True
     if source.get("subtype_filter") == "wall":
