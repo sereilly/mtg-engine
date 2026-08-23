@@ -846,3 +846,39 @@ Which of the two objects "its" names is decided **at lowering**, by looking at
 the sentence being stamped: an instruction bound to a trigger names the spell,
 anything else names the target. A resolution-time fallback order would have had
 to guess for a sentence carrying both.
+
+## Legends: where rounds 1–8 leave it
+
+**121 → 160 of 310 supported (39.0% → 51.6%).** The set stays `measured`; the
+promotion gate is Phase 4 and 150 cards are still unsupported. Every gate is
+green, the trackers are current, and the suite is 6,845 → 6,993 tests at 42.5s
+against a 40s baseline — proportional growth, no budget change.
+
+**No name-keyed hook was added at any point.** LEG's hook reliance is 0.0% and
+the ALL ceilings are untouched; the grammar floors are unchanged too, because
+these eight rounds bought *Legends'* sentences and the shipped pool does not
+print them. That is the honest reading of the ratchets rather than a
+disappointment: a set this old shares less of its templating with the rest of
+the pool than Antiquities did.
+
+**What the rounds bought, in order:** rampage (7), landwalk negation (8),
+colour change (5), the pinger target filter (4), directional combat shields (4),
+described prevention sources (4), the evasion whitelist (3), the mana-value
+where-clause and the trigger-bound counter (4).
+
+**Where the next round starts.** The generalise-first ranking has flattened:
+**113 of the 135 cards that still refuse a line refuse exactly one**, and the
+largest group among them shares only an opening phrase. The families with more
+than one card left, best first:
+
+| Cards | Family | What it needs |
+| ---: | --- | --- |
+| 4 | attached triggers | "Whenever enchanted creature deals damage / becomes tapped" — two trigger conditions, both with a dispatcher already in place (`become_tapped`, `deal_damage`), plus a `-0/-2` counter kind and a damage-amount back-reference |
+| 4 | named-card lords | "Creatures you control named X get +2/+2" — a lord buff whose filter is a card name |
+| 4 | base P/T rewrites | "Change this creature's base power and toughness to …" against another permanent's current values |
+| 3 | linked control changes | "Gain control of target creature for as long as you control this and it remains tapped" — `engine/control.py` has the contribution model; the linked duration is what is missing |
+| 2 | poison counters | CR 122.1's counter plus the CR 704.5c state-based action — a subsystem, two cards |
+| 2 | hidden information | "Players play with their hands / the top card of their libraries revealed" |
+| 2 | ante | `engine/ante.py` exists; both cards print the CR 407 opt-out line as well |
+
+Everything past that is one card at a time, which is what Legends is.

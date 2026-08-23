@@ -121,16 +121,29 @@ provides?* Three sweeps, in order of blast radius:
    first — they gate Phase 4 absolutely and their size decides whether the
    set is one session or ten.
 2. **Keywords.** Diff the set's keyword lines against
-   `vocabulary.IMPLEMENTED_KEYWORDS`. Each missing keyword is one frozenset
-   entry plus behaviour that covers **everywhere the CR says it applies, not
-   just the paths this pool exercises** — CLAUDE.md's lifelink precedent is
-   the cautionary tale. Keyword tests go in `tests/rules/` with
+   `vocabulary.IMPLEMENTED_KEYWORDS` — **and against
+   `oracle.UNSUPPORTED_KEYWORDS`, which is a third table and outranks both.**
+   That set is matched against the *ingested* `keywords` field before any line
+   is classified, so a keyword can be implemented in full and still cost every
+   card that prints it: Legends' rampage had working behaviour and three
+   passing CR-cited tests while all seven of its cards compiled unsupported.
+   The registry diff alone reports such a keyword as *missing*, which sends the
+   round off to build what is already there. Each genuinely missing keyword is
+   one frozenset entry plus behaviour that covers **everywhere the CR says it
+   applies, not just the paths this pool exercises** — CLAUDE.md's lifelink
+   precedent is the cautionary tale. Keyword tests go in `tests/rules/` with
    `@pytest.mark.cr` markers; widen `scripts/rules_progress.py`'s `SCOPE` if
    the CR section is new. Keywords usually open Phase 3: highest
    cards-unlocked-per-change in the census.
 3. **Everything else** goes to the backlog via `GRAMMAR_COVERAGE.md`'s
    reason table, sorted by the Lines/Distinct ratio — many lines over few
    distinct shapes is where a production pays best.
+
+   Rank by the **sentence shape**, never by a word the sentences share. Legends'
+   largest census bucket was "prevention", nineteen cards; it took two rounds to
+   reach eight of them and needed four different mechanisms, because "prevent"
+   is a verb rather than a template. The bucket that actually paid was the one
+   where nineteen cards printed *the same sentence with one word changed*.
 
 Optional tactic, recorded because it worked: fan out read-only subagents to
 classify the unsupported cards into *implementable now* (recipe steps 2–3),
@@ -188,6 +201,20 @@ measured set so per-card tests can land as the cards do. **Exit:**
    declaration itself was a place the engine "named the kind". Point a
    census classifier or a guard at the corpus that *acts* (emit sites, the
    registries, the sweeps), not at where the name occurs.
+   **When a round extends a fragment production, look for the other one
+   first.** Round 8 went to add an alternative to "the" where-clause parser and
+   found two, accepting different definitions — so which definitions a card
+   could use depended on which sentence it printed them in. Nothing was failing
+   and no guard could have caught it: both halves worked. A fork in a *fragment*
+   is only ever found by someone extending it, which makes the extension the
+   moment to grep.
+
+   **And write a refusing gate's refusal test before trusting the gate.** A
+   production that ends in a catch-all has to parse the tail itself and refuse
+   what it cannot read. Round 7's did, and the test written to prove it found
+   that it accepted "creatures with three heads" as a keyword filter — which,
+   in a whitelist, is a creature nothing can legally block. The positive cases
+   all passed.
 2. Every card lands with a focused test in `tests/sets/test_<set>_cards.py`
    (conventions and the split-by-type rule: `tests/sets/README.md`). A new
    set needs zero `tests/conftest.py` changes; the fixture factory covers any
@@ -436,3 +463,28 @@ while the work that crossed the line is still in hand.
 Known gaps: still empty. Phase 5 stands open, as for M21 — 346 of 734 cards have
 no in-game result, and the two promoted-before-verification sets are the whole
 of it.
+
+**LEG — 2026-08-23 (partial: Phases 0–2 and rounds 1–8; set still measured).**
+The largest set the engine has taken (310 cards) and the lowest starting
+coverage (121, 39.0%). Eight rounds took it to 160. Three findings moved into
+the phase text above.
+
+**A keyword can be implemented and refused, and the census says "missing".**
+Round 1's whole finding: `oracle.UNSUPPORTED_KEYWORDS` is a third keyword table
+that outranks the registry and the line gate, and rampage sat in it with working
+behaviour and three passing CR tests behind it. Phase 2's keyword sweep now
+names that table. The guard added with the fix compiles a card carrying each
+implemented keyword **in its ingested field** — every previous probe built its
+card from oracle text, which the blocklist never reads.
+
+**A census bucket is not a unit of work.** "Prevention" was nineteen cards and
+needed four mechanisms across two rounds; "landwalk negation" was eight cards
+and one table. Phase 2 now says to rank by sentence shape rather than by a
+shared verb.
+
+**And the long tail is the set.** After eight rounds the ranking is flat: 113 of
+the 135 cards still unsupported refuse *exactly one line*, and the largest group
+of those shares only an opening phrase. Legends was designed before templating
+existed, so the generalise-first rule runs out of general work earlier than in a
+modern set — which is a fact about this set to plan around, not a reason to
+abandon the rule.
