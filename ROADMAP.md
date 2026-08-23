@@ -740,3 +740,38 @@ Torment's second line, "Enchanted creature can't attack", was unclaimed —
 the Aura restriction table carried only the compound "can't attack or block",
 beneath a comment saying in so many words that a card printing one half is a
 different card. It is now that card, with its own row.
+
+## LEG round 6: a source class stopped being a card type
+
+**149 → 153 supported.** Enchanted Being, Marble Priest, Wall of Putrid Flesh,
+Wall of Vapor — the other end of round 5's shield. "Prevent all damage that
+would be dealt to this creature by <something>" already existed for Artifact
+Ward, and the something was one of four card types.
+
+Legends prints three narrowings that are not card types at all, and each is a
+**different kind** of thing:
+
+- **"Walls"** is a subtype (CR 205.3) — Marble Priest.
+- **"enchanted creatures"** is a *state of the source object* — Wall of Putrid
+  Flesh, Enchanted Being. (Not the Aura's "enchanted creature": these are
+  creatures that happen to have an Aura on them.)
+- **"creatures it's blocking"** is a *relationship* between the source and the
+  recipient, which neither object carries on its own — Wall of Vapor. It is
+  directional, and the test says so: a creature blocking the Wall is not a
+  creature the Wall is blocking, and reading the combat map either way round
+  would shield both.
+
+So the reader returns a **dict of fields** rather than a type string, and
+`_SOURCE_CLASSES` maps each printed phrase to the fields that test it. The
+"combat" narrowing joins them as a flag on the same dict: Enchanted Being's
+line is Wall of Putrid Flesh's with the word "combat" in it, and a shield that
+dropped it would stop a ping the card does not stop.
+
+Marble Priest's other line came along for the ride: "All Walls able to block
+this creature do so" is Lure's requirement (CR 509.1c) narrowed to a printed
+noun and printed on the creature rather than on an Aura. It is a
+`combat_restrictions.py` row, and the blockers step reads it beside the Aura
+form — one loop, two sources. The narrowing is translated into the
+subject-filter vocabulary the same way `cant_be_blocked_by` is four screens
+down; left untranslated it would have compelled the whole board, which is Lure
+rather than Marble Priest.

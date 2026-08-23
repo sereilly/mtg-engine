@@ -14,6 +14,7 @@ import re
 
 from ..auras import attached_combat_restrictions, aura_restriction_active
 from ..evasion_negation import negated_evasion_abilities
+from ..subject_filters import subject_matches
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..pt import add_pt_modifier
@@ -145,12 +146,39 @@ class DeclareBlockersStepMixin:
             if attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
-            if not aura_restriction_active(attacker, "must_be_blocked_by_all_able"):
+            # Two sources for one requirement: an Aura granting it (Lure) and
+            # the creature's own printed line (Marble Priest). Read together so
+            # the check is written once — and the printed form may narrow which
+            # creatures it compels ("All **Walls** able to block this creature
+            # do so"), which the Aura form never does.
+            printed = next(
+                (
+                    instr for instr in compile_card_oracle(attacker.effective_card).instructions
+                    if instr.kind == "must_be_blocked_by_all_able"
+                ),
+                None,
+            )
+            if printed is None and not aura_restriction_active(
+                attacker, "must_be_blocked_by_all_able"
+            ):
                 continue
+            # The printed noun, translated into the subject-filter vocabulary
+            # the same way `_can_block_attacker` translates `cant_be_blocked_by`
+            # a few screens down — one payload key means one filter key, and a
+            # narrowing this loop failed to translate would silently compel the
+            # whole board, which is Lure rather than Marble Priest.
+            compelled: dict[str, object] = {}
+            subtype = (printed.payload if printed is not None else {}).get("blocker_subtype")
+            if subtype:
+                compelled["subtype_filter"] = subtype
             for blocker_idx, blocker in enumerate(defender.battlefield):
                 if not blocker.is_creature or blocker.tapped:
                     continue
                 if not self._can_block_attacker(blocker, attacker):
+                    continue
+                if compelled and not subject_matches(
+                    self, blocker, compelled, observer=controller_index, source=attacker
+                ):
                     continue
                 if blocker_idx not in assignments:
                     return False, f"{blocker.card.name} must block {attacker.card.name} due to Lure"

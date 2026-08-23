@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
 | 3ED | 296 | 389 | 81.2% | 79.9% | 44.5% | 156 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| LEG *(measured)* | 310 | 431 | 49.7% | 44.3% | 22.3% | 87 |
+| LEG *(measured)* | 310 | 431 | 50.8% | 45.5% | 22.3% | 87 |
 | **All (shipped)** | **1618** | **2286** | **81.8%** | **80.7%** | **48.0%** | **954** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -36,7 +36,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ---: | ---: | --- | --- |
 | 260 | 142 | expected a subject |  |
 | 112 | 51 | unrecognized effect verb |  |
-| 82 | 57 | unconsumed text |  |
+| 77 | 53 | unconsumed text |  |
 | 42 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
 | 30 | 30 | unrecognized activation cost |  |
 | 14 | 9 | expected 'the number of' in a where-clause |  |

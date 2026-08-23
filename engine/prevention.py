@@ -636,12 +636,88 @@ def prevent_and_count_kind(line: str) -> str | None:
 #: an Aura is itself a permanent — a single matcher would have Artifact Ward
 #: shielding *itself* from artifact sources, which is a card nobody printed.
 _PREVENT_ALL_FROM_SOURCE_TYPE_RE = re.compile(
-    r"^prevent all damage that would be dealt to "
+    r"^prevent all (?P<combat>combat )?damage that would be dealt to "
     r"(?P<subject>this|enchanted|equipped) "
     r"(?:artifact|creature|enchantment|land|permanent) by "
-    r"(?P<source_type>artifact|creature|enchantment|land) "
-    r"(?:sources|creatures|artifacts|permanents)$"
+    r"(?P<source>"
+    r"(?:artifact|creature|enchantment|land) (?:sources|creatures|artifacts|permanents)"
+    r"|enchanted creatures"
+    r"|walls"
+    r"|creatures it's blocking"
+    r")$"
 )
+
+#: What each printed source phrase means, as the fields
+#: :func:`_source_shield_matches` tests. Data rather than a branch per phrase,
+#: for the reason the land type in ``combat_restrictions.py`` is data: a card
+#: printed with another noun in the same sentence is the same effect.
+#:
+#: The three Legends phrases are each a *different kind* of narrowing, which is
+#: why the value is a dict rather than the type string this used to return.
+#: "Walls" is a subtype (CR 205.3), "enchanted creatures" is a state of the
+#: source object, and "creatures it's blocking" is a relationship between the
+#: source and the recipient that neither object carries on its own.
+_SOURCE_CLASSES: dict[str, dict[str, object]] = {
+    "artifact sources": {"card_type": "artifact"},
+    "artifact creatures": {"card_type": "artifact"},
+    "artifact permanents": {"card_type": "artifact"},
+    "creature sources": {"card_type": "creature"},
+    "creature creatures": {"card_type": "creature"},
+    "creature permanents": {"card_type": "creature"},
+    "enchantment sources": {"card_type": "enchantment"},
+    "enchantment creatures": {"card_type": "enchantment"},
+    "enchantment permanents": {"card_type": "enchantment"},
+    "land sources": {"card_type": "land"},
+    "land creatures": {"card_type": "land"},
+    "land permanents": {"card_type": "land"},
+    "walls": {"subtype": "wall"},
+    "enchanted creatures": {"card_type": "creature", "enchanted": True},
+    "creatures it's blocking": {"card_type": "creature", "blocked_by_recipient": True},
+}
+
+
+def _source_shield_matches(game, source, recipient, wanted: dict) -> bool:
+    """Whether *source* is in the class *wanted* names.
+
+    Every key is checked, never a subset: a shield whose phrase this file
+    admits and whose narrowing it then ignores is damage prevented that the
+    card does not prevent, which is the direction every gate in this codebase
+    is written against.
+    """
+    card_type = wanted.get("card_type")
+    if card_type and not source_has_type(game, source, str(card_type)):
+        return False
+    subtype = wanted.get("subtype")
+    if subtype:
+        if not hasattr(source, "has_type") or not source.has_type(str(subtype)):
+            return False
+    if wanted.get("enchanted"):
+        from .auras import auras_attached_to
+
+        if not hasattr(source, "metadata") or not auras_attached_to(source):
+            return False
+    if wanted.get("blocked_by_recipient"):
+        # "…by creatures **it's blocking**" (Wall of Shadows, Wall of Vapor).
+        # The Wall is the blocker and the source is an attacker it was declared
+        # against, so the relationship is read off combat rather than off
+        # either object — and it is directional: a creature blocking the Wall
+        # is not a creature the Wall is blocking.
+        if not _recipient_is_blocking(game, recipient, source):
+            return False
+    return True
+
+
+def _recipient_is_blocking(game, recipient, source) -> bool:
+    """Whether *recipient* was declared as a blocker of *source* (CR 509.1a)."""
+    if not hasattr(recipient, "metadata") or not hasattr(source, "metadata"):
+        return False
+    attacker_index = game.battlefield_index_of(source)
+    blocker_index = game.battlefield_index_of(recipient)
+    blocker_seat = game.controller_index_of(recipient)
+    if attacker_index is None or blocker_index is None or blocker_seat is None:
+        return False
+    assignments = game.combat_blockers.get(blocker_seat, {})
+    return attacker_index in (assignments.get(blocker_index) or ())
 
 
 def _source_type_shield_match(line: str):
@@ -650,16 +726,28 @@ def _source_type_shield_match(line: str):
     )
 
 
-def prevent_all_from_source_type(line: str) -> str | None:
+def _shield_from_match(match) -> dict | None:
+    """The source class and event narrowing one matched line describes."""
+    wanted = _SOURCE_CLASSES.get(match.group("source"))
+    if wanted is None:
+        # A phrase the pattern admits with no class behind it would be a shield
+        # against everything. Answering None keeps the card unsupported.
+        return None
+    return {**wanted, "combat_only": bool(match.group("combat"))}
+
+
+def prevent_all_from_source_type(line: str) -> dict | None:
     """The class of source *line* shields the permanent printing it against, or
     None if it is not that line. One matcher, asked by the interceptor below and
     by the claim reader, so what is implemented and what is claimed cannot
     drift."""
     match = _source_type_shield_match(line)
-    return match.group("source_type") if match and match.group("subject") == "this" else None
+    if match is None or match.group("subject") != "this":
+        return None
+    return _shield_from_match(match)
 
 
-def attached_prevent_all_from_source_type(line: str) -> str | None:
+def attached_prevent_all_from_source_type(line: str) -> dict | None:
     """The same answer for the "enchanted / equipped" form (Artifact Ward),
     where the shield covers what the Aura or Equipment is attached to rather
     than the permanent printing the line.
@@ -668,10 +756,12 @@ def attached_prevent_all_from_source_type(line: str) -> str | None:
     asking the code that carries it out.
     """
     match = _source_type_shield_match(line)
-    return match.group("source_type") if match and match.group("subject") != "this" else None
+    if match is None or match.group("subject") == "this":
+        return None
+    return _shield_from_match(match)
 
 
-def _source_type_shielded_by(game, event: dict) -> str | None:
+def _source_type_shielded_by(game, event: dict) -> dict | None:
     """The source class the damaged permanent is shielded against.
 
     Pure: it reads text and answers, spending nothing. Two places print the
@@ -686,20 +776,27 @@ def _source_type_shielded_by(game, event: dict) -> str | None:
     if isinstance(recipient, PlayerState) or recipient is None:
         return None
     for line in getattr(recipient, "effective_card", recipient.card).oracle_text.splitlines():
-        source_type = prevent_all_from_source_type(line)
-        if source_type is not None:
-            return source_type
+        wanted = prevent_all_from_source_type(line)
+        if wanted is not None:
+            return wanted
     for attached in auras_attached_to(recipient):
         for line in attached.effective_card.oracle_text.splitlines():
-            source_type = attached_prevent_all_from_source_type(line)
-            if source_type is not None:
-                return source_type
+            wanted = attached_prevent_all_from_source_type(line)
+            if wanted is not None:
+                return wanted
     return None
 
 
 def _applies_source_type_blanket(game, event: dict) -> bool:
-    source_type = _source_type_shielded_by(game, event)
-    return source_type is not None and source_has_type(game, event.get("source"), source_type)
+    wanted = _source_type_shielded_by(game, event)
+    if wanted is None:
+        return False
+    if wanted.get("combat_only") and not event.get("combat"):
+        # "Prevent all **combat** damage … by Walls" (Marble Priest). A shield
+        # that ignored the word would stop a Wall's ping as well, which is a
+        # strictly larger effect than the card prints.
+        return False
+    return _source_shield_matches(game, event.get("source"), event["recipient"], wanted)
 
 
 @prevention_effect(SOURCE_TYPE_BLANKET, applies=_applies_source_type_blanket)

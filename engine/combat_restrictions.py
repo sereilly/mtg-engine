@@ -57,6 +57,7 @@ class CombatRestriction:
 #   cant_block_power_n_or_greater   phases/declare_blockers_step
 #   can_block_only_with_keyword     phases/declare_blockers_step
 #   must_be_blocked                 phases/declare_blockers_step
+#   must_be_blocked_by_all_able     phases/declare_blockers_step
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(
@@ -111,6 +112,24 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # printed "must be blocked" would forbid the defender keeping a blocker
     # back, which is a legal declaration.
     (re.compile(r"^this creature must be blocked if able$"), "must_be_blocked"),
+    (
+        # "All Walls able to block this creature do so." (Marble Priest.) Lure's
+        # requirement (CR 509.1c) narrowed to a printed noun, and printed on the
+        # creature itself rather than on an Aura — so it is a template here
+        # beside the others rather than a second copy of the Aura reader. The
+        # noun is payload for the reason every noun in this file is: a card
+        # printed "All Zombies able to block…" is the same requirement.
+        re.compile(
+            rf"^all (?P<blocker_subtype>{'|'.join(sorted(CREATURE_TYPES))})s able to "
+            r"block this creature do so$"
+        ),
+        "must_be_blocked_by_all_able",
+    ),
+    (
+        # The unnarrowed form on a creature's own text, for the same reason.
+        re.compile(r"^all creatures able to block this creature do so$"),
+        "must_be_blocked_by_all_able",
+    ),
     (
         # The threshold is data for the same reason the land type is: "power 4 or
         # greater" is the same restriction Ironclaw Orcs has, and baking 2 into
