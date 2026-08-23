@@ -38,9 +38,6 @@ class GToken:
     def is_word(self, *values: str) -> bool:
         return self.kind == WORD and self.text in values
 
-    def is_punct(self, *values: str) -> bool:
-        return self.kind == PUNCT and self.text in values
-
 
 _REMINDER_RE = re.compile(r"\([^)]*\)")
 _WHITESPACE_RE = re.compile(r"\s+")

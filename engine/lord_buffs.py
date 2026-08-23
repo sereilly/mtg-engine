@@ -373,20 +373,6 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
     )
 
 
-def lord_buff_in_text(normalized_text: str) -> LordBuff | None:
-    """The first lord buff in a card's whole normalized text.
-
-    A card whose anthem shares its text with other sentences (Jihad's enter
-    choice and sacrifice trigger) never reaches the per-line path, because the
-    compiler's legacy fallback collapses the card to one string.
-    """
-    for sentence in normalized_text.split("."):
-        buff = lord_buff_for(sentence)
-        if buff is not None:
-            return buff
-    return None
-
-
 # ---------------------------------------------------------------------------
 # Instruction payloads
 # ---------------------------------------------------------------------------
@@ -440,5 +426,5 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
 __all__ = [
     "CONDITIONS", "GRANTED_ACTIVATED_ABILITIES", "LORD_BUFF_KIND", "LordBuff",
     "LordBuffFilter", "QUALIFIER_FIELDS", "grantable_keywords", "lord_buff_for",
-    "lord_buff_from_payload", "lord_buff_in_text", "lord_buff_payload",
+    "lord_buff_from_payload", "lord_buff_payload",
 ]

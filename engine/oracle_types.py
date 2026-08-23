@@ -123,12 +123,6 @@ class ActivatedAbilityCost:
     loyalty_x_sign: int | None = None
 
     @property
-    def sacrifice_excludes_source(self) -> bool:
-        """The word "another" (CR 109.5), read off the filter rather than kept
-        beside it — two fields for one printed word is how they disagree."""
-        return bool((self.sacrifice_filter or {}).get("exclude_self"))
-
-    @property
     def is_loyalty(self) -> bool:
         """Whether this is a loyalty-ability cost (CR 606.2)."""
         return self.loyalty is not None or self.loyalty_x_sign is not None

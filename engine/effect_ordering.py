@@ -99,11 +99,6 @@ class OrderingTrace:
     #: arrives it is visible instead of silent.
     unasked: list[tuple[str, ...]] = field(default_factory=list)
 
-    @property
-    def had_a_choice(self) -> bool:
-        """Whether the affected player was ever in a position to choose."""
-        return any(len(round_) > 1 for round_ in self.contended)
-
 
 # Upper bound on 616.1f iterations. Each application should reduce the
 # applicable set, so this is a backstop against an effect whose predicate stays

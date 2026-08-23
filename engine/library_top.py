@@ -167,11 +167,6 @@ def granted_top_abilities(game, permanent) -> tuple[str, ...]:
     return tuple(granted)
 
 
-def top_grant_line(line: str) -> bool:
-    """Whether one printed line is the grant above, in full."""
-    return _TOP_GRANTS_ABILITIES.match(line.strip().lower().rstrip(".")) is not None
-
-
 def _filter_for(phrase: str) -> dict | None:
     """The printed noun phrase as a card-filter payload, or None to refuse.
 
@@ -189,7 +184,6 @@ __all__ = [
     "REVEALED_TEXT",
     "granted_top_abilities",
     "library_top_line",
-    "top_grant_line",
     "top_castable",
     "top_is_public",
     "top_is_visible",

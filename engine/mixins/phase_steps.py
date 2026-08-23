@@ -158,24 +158,6 @@ class PhaseStepsMixin:
             self.custom_phase_steps[phase_name] = tuple(steps)
         return True
 
-    def add_extra_step(
-        self,
-        step_name: str,
-        *,
-        after_step: str | None = None,
-        before_step: str | None = None,
-        controller_index: int | None = None,
-        only_on_controllers_turn: bool = False,
-    ) -> bool:
-        # 500.9 and 500.10a
-        if only_on_controllers_turn and controller_index is not None and controller_index != self.active_player_index:
-            return False
-        if after_step is None and before_step is None:
-            raise ValueError("either after_step or before_step must be provided")
-        anchor = after_step if after_step is not None else f"before:{before_step}"
-        self.extra_steps_after.setdefault(anchor, []).insert(0, step_name)
-        return True
-
     def add_additional_step_after_phase(
         self,
         after_phase: str,
@@ -197,9 +179,6 @@ class PhaseStepsMixin:
     def skip_next_turn(self, player_index: int, count: int = 1) -> None:
         # 500.11
         self.skip_turn_counts[player_index] = self.skip_turn_counts.get(player_index, 0) + max(0, count)
-
-    def skip_next_phase(self, phase_name: str, count: int = 1) -> None:
-        self.skip_phase_counts[phase_name] = self.skip_phase_counts.get(phase_name, 0) + max(0, count)
 
     def skip_next_step(self, step_name: str, count: int = 1) -> None:
         self.skip_step_counts[step_name] = self.skip_step_counts.get(step_name, 0) + max(0, count)

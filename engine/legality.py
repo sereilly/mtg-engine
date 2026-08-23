@@ -264,18 +264,6 @@ class LegalityMixin:
             and any(self.can_attack(perm, opp) for opp in opponents)
         ]
 
-    def legal_defenders_for_attacker(self, attacker_index: int, permanent_index: int) -> list[int]:
-        """Which of ``attacker_index``'s living opponents the creature at
-        ``permanent_index`` could legally attack — lets a 3+ player UI offer a
-        per-attacker defending-player picker (CR 802.3)."""
-        player = self.players[attacker_index]
-        if not (0 <= permanent_index < len(player.battlefield)):
-            return []
-        perm = player.battlefield[permanent_index]
-        if not self._is_creature(perm) or perm.tapped or self._is_summoning_sick(perm):
-            return []
-        return [opp for opp in self.opponents_of(attacker_index) if self.can_attack(perm, opp)]
-
     def legal_blocker_assignments(self, defender_index: int) -> list[dict[str, int]]:
         """Every legal ``{"blocker_index", "attacker_index"}`` pair for the
         defending player, mirroring ``declare_blockers`` acceptance (creature,

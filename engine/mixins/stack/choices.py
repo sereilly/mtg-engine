@@ -1802,14 +1802,6 @@ class PendingChoicesMixin:
 
     # -- Balance -------------------------------------------------------------
 
-    def _balance_remove(self, player_index: int, land_indices, creature_indices, hand_indices) -> bool:
-        """Remove the chosen lands/creatures (to graveyard) and hand cards (discard)
-        for one player's Balance plan. Validates the counts against the plan."""
-        choice = self.pending_choice_of("balance", player_index)
-        if choice is None:
-            return False
-        return self._resolve_balance(choice, land_indices, creature_indices, hand_indices)
-
     def _resolve_balance(self, choice: PendingChoice, land_indices, creature_indices, hand_indices) -> bool:
         player_index = choice.player_index
         plan = choice.data["plan"]
@@ -2452,11 +2444,6 @@ class PendingChoicesMixin:
             choice.player_index, int(data["count"]), data["filter"],
             data["exclude"], data["reason"], data["on_short"], data.get("record"),
         )
-
-    def auto_resolve_pending_sacrifice(self, only_player_index: int | None = None) -> None:
-        """Resolve a pending forced sacrifice inline with the deterministic
-        heuristic. Used for AI seats and headless simulation."""
-        self.auto_resolve_pending_choices(only_player_index=only_player_index, kinds=("sacrifice",))
 
     # Upper bound on resolve/SBA cycles in one _settle() call. A genuine infinite
     # loop (a pathological card pool) is bounded here so the seeded simulator can

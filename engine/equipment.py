@@ -170,14 +170,6 @@ def equipped_creature(equipment: "Permanent") -> "Permanent | None":
     return equipment.metadata.get("attached_to")
 
 
-def equipment_attached_to(permanent: "Permanent") -> list:
-    """Every Equipment currently attached to *permanent*."""
-    return [
-        attachment for attachment in auras_attached_to(permanent)
-        if is_equipment(attachment)
-    ]
-
-
 def equip_refusal(game: "Game", equipment: "Permanent", creature: "Permanent") -> str | None:
     """Why *equipment* may not be attached to *creature*, or None when it may.
 
@@ -304,7 +296,6 @@ __all__ = [
     "attach_equipment",
     "equip_line_parts",
     "equip_refusal",
-    "equipment_attached_to",
     "equipped_creature",
     "expand_equip_line",
     "expand_equip_lines",

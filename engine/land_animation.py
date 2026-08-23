@@ -121,19 +121,6 @@ def land_animation_for(normalized_line: str) -> LandAnimation | None:
     )
 
 
-def land_animation_in_text(normalized_text: str) -> LandAnimation | None:
-    """The first land animation in a card's whole normalized text.
-
-    The compiler's legacy fallback collapses a card to one string, so the
-    per-line matcher above is reached through this.
-    """
-    for sentence in normalized_text.split("."):
-        animation = land_animation_for(sentence)
-        if animation is not None:
-            return animation
-    return None
-
-
 def land_animation_payload(animation: LandAnimation) -> dict[str, object]:
     """*animation* as an ``OracleInstruction`` payload."""
     payload: dict[str, object] = {
@@ -161,6 +148,5 @@ __all__ = [
     "LandAnimation",
     "land_animation_for",
     "land_animation_from_payload",
-    "land_animation_in_text",
     "land_animation_payload",
 ]

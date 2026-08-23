@@ -420,14 +420,6 @@ class CommanderMixin:
             existing is card for existing in self.players[player_index].commanders
         )
 
-    def commander_owner_index(self, card: Any) -> int | None:
-        """The seat whose commander *card* is, or None. For the callers that do
-        not already know the owner (a card sitting in a graveyard)."""
-        for seat in range(len(self.players)):
-            if self.is_commander_card(seat, card):
-                return seat
-        return None
-
     def is_commander_permanent(self, permanent) -> bool:
         """CR 903.3d — "if an effect refers to controlling a commander, it refers
         to a permanent on the battlefield that is a commander".
