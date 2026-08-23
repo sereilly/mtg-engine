@@ -519,3 +519,47 @@ for this set at any point**.
 Antiquities joins M21 in the untested remainder, which SET_PLAYBOOK.md Phase 5
 owns and deliberately does not gate promotion on. A seeded AI batch over the
 whole manifest pool runs clean.
+
+---
+
+## Legends: ingest and census (Phases 0–2)
+
+*(2026-08-23.)* LEG joins `measured` at **310 cards, 121 supported (39.0%)** —
+the largest set the engine has taken and the lowest starting coverage of any of
+them. The manifest entry goes under `measured`; its eventual home in `sets` is
+**index 6, between Revised and M21**, since Legends printed 1994-06-01 and every
+one of its 310 cards is a first printing (no reprint's `original_printing`
+moves either way, so the placement costs nothing here and keeps the invariant
+honest for the sets that follow).
+
+**Phase 1 surfaced nothing.** The suite is green on the ingest, which is worth
+recording because it is not what M21 did (66 failures from a never-run import).
+The difference is that LEG carries no new layout and no new card type: all 310
+are `normal`, and the two supertypes it brings in bulk — **Legendary** (61) and
+**World** (12) — already have their state-based actions (CR 704.5j/704.5k in
+`mixins/game_ending.py`). Nothing in this set gates on a subsystem the way a
+planeswalker or a split card would.
+
+**Census (Phase 2), 189 unsupported cards.** Compiled rather than read: every
+printed line of every unsupported card went through `parse_line`, which puts
+280 lines on the board of which 205 refuse. Ranked by cards-per-change, the
+families that pay:
+
+| Cards | Family | Shape |
+| ---: | --- | --- |
+| 8 | landwalk negation | "Creatures with \<type\>walk can be blocked as though they didn't have \<type\>walk" |
+| 7 | **rampage** (CR 702.23) | a keyword the vocabulary does not have |
+| ~12 | prevention | "Prevent all combat damage that would be dealt by target creature this turn" and its statics |
+| 5 | colour change | "One or more target creatures become \<colour\> until end of turn" |
+| 5 | the Glyph cycle | effects keyed on "the creature that target Wall blocked this turn" |
+| 4 | pinger targets | "deals N damage to target attacking or blocking creature" |
+| 4 | tax counters | "Whenever a player casts \<a spell\>, counter it unless that player pays …" |
+| 2 | poison counters | a subsystem this engine does not have (CR 122.1) |
+
+The rest is a long tail of one-card sentences, which is what Legends is: a set
+designed before templating existed, where the same idea is printed a different
+way on every card that has it.
+
+**Round plan:** keywords first (Phase 2's rule — highest cards-unlocked per
+change), then the families above in the order of that table, with the long tail
+last. Rounds are numbered from 1 and their narratives land below as they go.
