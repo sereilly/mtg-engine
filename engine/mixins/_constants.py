@@ -28,6 +28,11 @@ _EOT_METADATA_KEYS = (
     "land_destruction_shield_this_turn",
     # Ebony Horse: combat-damage shield on the untapped attacker
     "prevent_combat_damage_to_and_by_until_eot",
+    # "One or more target creatures become red until end of turn" (Dwarven Song
+    # and its four Legends siblings). The indefinite `color_override` beside it
+    # is a lace and must survive the turn, which is why this is a second key
+    # rather than a flag on the first.
+    "color_override_until_eot",
 )
 
 _TURN_PHASES: tuple[str, ...] = (

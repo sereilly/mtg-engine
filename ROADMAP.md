@@ -649,3 +649,35 @@ returning one instance of two. And the template requires the keyword to match
 **on both halves** of the sentence: it names the ability twice, and matching the
 first half alone would let an invented "…as though they didn't have swampwalk"
 negate islandwalk instead.
+
+## LEG round 3: one sentence, five cards, and a second colour channel
+
+**136 → 141 supported.** "One or more target creatures become <colour> until
+end of turn" — Dwarven Song, Heaven's Gate, Sea Kings' Blessing, Sylvan
+Paradise, Touch of Darkness, one per colour, one production.
+
+Landed bottom-up with the grammar last, as M21 round 17's lesson says: the
+until-end-of-turn colour channel, then the handler, then the targeting spec,
+then the lowering, then the production that makes the five cards reachable. At
+every intermediate point the cards stayed honestly unsupported rather than
+becoming castable with half the effect wired.
+
+**Three gaps, not one**, which the compile-not-read census is what surfaced —
+the reason string named only the first.
+
+- **"until end of turn" on a colour change.** `BecomeColor` carried no
+  duration, because the Lace cycle prints none. Adding the field is what stops
+  the parser from either refusing the line or — worse — consuming those four
+  words and making Sylvan Paradise a permanent lace.
+- **A second colour channel.** `color_override` is indefinite and must survive
+  the turn (CR 105 and the Lace cycle print no duration). So layer 5 now reads
+  two keys in timestamp order, exactly as layer 7b does, and only the newer one
+  is in the cleanup sweep. A test casts Heaven's Gate at an already-Chaoslaced
+  creature and checks the red is still there after cleanup.
+- **"One or more target" is a quantifier the parser did not have.** Not
+  "any number of" with a floor bolted on: the two differ in precisely the thing
+  a picker enforces — "any number" may legally name none (CR 601.2c) and this
+  may not — and in nothing else. It is unbounded above, so it reaches the
+  picker through the same `unbounded_targets` route Drafna's Restoration's "any
+  number of" takes, and `legality.py` fills in the cap once it knows how many
+  legal targets exist.

@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
 | 3ED | 296 | 389 | 81.2% | 79.9% | 44.5% | 156 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| LEG *(measured)* | 310 | 431 | 46.4% | 41.1% | 19.7% | 76 |
+| LEG *(measured)* | 310 | 431 | 47.6% | 42.2% | 20.9% | 81 |
 | **All (shipped)** | **1618** | **2286** | **81.8%** | **80.7%** | **48.0%** | **954** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,7 +34,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 265 | 147 | expected a subject |  |
+| 260 | 142 | expected a subject |  |
 | 112 | 51 | unrecognized effect verb |  |
 | 87 | 62 | unconsumed text |  |
 | 42 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -493,6 +493,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Destroy target Wall.`
   - `{T}: Destroy target Wall.`
   - `{T}: Destroy target Wall.`
+- **Dwarven Song**
+  - `One or more target creatures become red until end of turn.`
 - **Dwarven Warriors**
   - `{T}: Target creature with power 2 or less can't be blocked this turn.`
   - `{T}: Target creature with power 2 or less can't be blocked this turn.`
@@ -701,6 +703,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `• Prevent the next 3 damage that would be dealt to any target this turn.`
 - **Heartfire Immolator**
   - `{R}, Sacrifice this creature: It deals damage equal to its power to target creature or planeswalker.`
+- **Heaven's Gate**
+  - `One or more target creatures become white until end of turn.`
 - **Hell Swarm**
   - `All creatures get -1/-0 until end of turn.`
 - **Hell's Caretaker**
@@ -1359,6 +1363,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Scoured Barrens**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {W} or {B}.`
+- **Sea Kings' Blessing**
+  - `One or more target creatures become blue until end of turn.`
 - **Sea Serpent**
   - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
@@ -1530,6 +1536,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Exile target creature. Its controller gains life equal to its power.`
   - `Exile target creature. Its controller gains life equal to its power.`
   - `Exile target creature. Its controller gains life equal to its power.`
+- **Sylvan Paradise**
+  - `One or more target creatures become green until end of turn.`
 - **Tablet of Epityr**
   - `Whenever an artifact you control is put into a graveyard from the battlefield, you may pay {1}. If you do, you gain 1 life.`
 - **Tavern Swindler**
@@ -1626,6 +1634,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever you draw a card, you may pay {1}. When you do, you may tap or untap target creature.`
 - **Tormod's Crypt**
   - `{T}, Sacrifice this artifact: Exile target player's graveyard.`
+- **Touch of Darkness**
+  - `One or more target creatures become black until end of turn.`
 - **Track Down**
   - `Scry 3, then reveal the top card of your library. If it's a creature or land card, draw a card. (To scry 3, look at the top three cards of your library, then put any number of them on the bottom and the rest on top in any order.)`
 - **Traitorous Greed**

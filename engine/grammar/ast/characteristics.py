@@ -169,9 +169,16 @@ class BecomeColor:
     A colour *replacement*, not an addition — the object becomes that colour
     instead of its own. Mana symbols are unaffected, which is reminder text the
     lexer already strips.
+
+    The Lace cycle prints no duration and the change is indefinite; the five
+    Legends colour spells print "until end of turn". Both are this node, because
+    the sentence is the same one with a clause on the end — and carrying the
+    duration is what stops the parser consuming those four words and dropping
+    them, which would have made Sylvan Paradise a permanent lace.
     """
     subject: Recipient
     color: str
+    duration: Duration = field(default_factory=Duration)
 
 
 @dataclass(frozen=True)

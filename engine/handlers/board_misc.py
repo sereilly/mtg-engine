@@ -9,7 +9,8 @@ from ..oracle_types import OracleInstruction
 from ..pt import set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import make_token_card
-from ._common import permanent_matches_filter, resolve_amount, resolve_target_permanent
+from ._common import (permanent_matches_filter, resolve_amount,
+                      resolve_target_permanent, resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -350,6 +351,37 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     perm_idx = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
     changed = game._apply_color_override(target, symbol, target_permanent_index=perm_idx) if symbol else False
     game.log.append("Changed target color" if changed else "No valid permanent to recolor")
+    return True, "resolved"
+
+
+@effect_handler("recolor_targets_until_eot")
+def recolor_targets_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"One or more target creatures become <colour> until end of turn."
+    (Dwarven Song, Heaven's Gate, Sea Kings' Blessing, Sylvan Paradise, Touch of
+    Darkness.)
+
+    A colour *replacement* like the Lace cycle above (CR 105.2: "becomes" is
+    not "in addition"), but with a duration and with several targets. It writes
+    the until-end-of-turn channel, which layer 5 reads beside the indefinite one
+    and the cleanup step sweeps — so a creature laced permanently earlier in the
+    game keeps its colour when this wears off.
+
+    A target that is no longer legal is simply skipped (CR 608.2b); the rest of
+    the effect still happens, which is what `resolve_target_permanents` gives
+    without a per-slot fallback that would recolour the same creature twice.
+    """
+    symbol = str(instruction.payload.get("target_color", ""))
+    if not symbol:
+        return True, "resolved"
+    targets = resolve_target_permanents(game, context)
+    if not targets:
+        game.log.append(f"{context.card.name}: no creature to recolour")
+        return True, "resolved"
+    for perm in targets:
+        perm.metadata["color_override_until_eot"] = symbol
+        game.log.append(
+            f"{perm.card.name} became {symbol} until end of turn ({context.card.name})"
+        )
     return True, "resolved"
 
 

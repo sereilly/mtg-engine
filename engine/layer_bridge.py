@@ -622,10 +622,21 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     inexpressible, because "keeps its own colour" then had to mean "no effect was
     recorded", which is also what a copy of a colourless artifact looked like.
     """
-    override = perm.metadata.get("color_override")
-    if not override:
-        return []
-    return [set_colors(scope_only(oid), [override], timestamp=0, label="colour override")]
+    effects = []
+    # Two channels, in timestamp order (CR 613.7b), for the reason layer 7b
+    # keeps two: an indefinite lace ("Target permanent becomes red", CR 105)
+    # and a turn-long one ("One or more target creatures become red until end
+    # of turn", the five Legends colour spells). Sharing one key would make the
+    # cleanup step's sweep either drop a lace that should outlive the turn, or
+    # keep a colour that should have worn off.
+    for suffix, stamp in (("", 0), ("_until_eot", 1)):
+        override = perm.metadata.get(f"color_override{suffix}")
+        if override:
+            effects.append(
+                set_colors(scope_only(oid), [override], timestamp=stamp,
+                           label=f"colour override{suffix}")
+            )
+    return effects
 
 
 def computed_abilities(perm: Permanent) -> set[str]:

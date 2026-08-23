@@ -146,6 +146,20 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
             "any_number", parse_object_filter(stream), count=0, targeted=targeted_any
         )
 
+    # "**one or more** target creatures" (the five Legends colour spells). Its
+    # own quantifier rather than an "any number of" with a floor bolted on: the
+    # two differ in exactly the thing a picker enforces — "any number" may
+    # legally name none (CR 601.2c) and this one may not — and they differ in
+    # nothing else, so the distinction has to be the quantifier or it is
+    # nowhere. Unbounded above, like "any number of": the sentence prints no
+    # maximum, so the cap is however many legal targets exist.
+    if stream.accept_phrase("one", "or", "more"):
+        targeted_one_or_more = bool(stream.accept_word("target"))
+        return ast.TargetSpec(
+            "one_or_more", parse_object_filter(stream), count=0,
+            targeted=targeted_one_or_more,
+        )
+
     if stream.accept_phrase("up", "to"):
         quantifier = "up_to"
         token = stream.peek()

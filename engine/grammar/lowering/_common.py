@@ -233,6 +233,13 @@ def _describe_several_targets(payload: dict[str, object], recipient: ast.TargetS
         # picker that offers nothing.
         "count": "x" if recipient.count_from_x else recipient.count,
     }
+    if recipient.quantifier == "one_or_more":
+        # No printed maximum, so the cap is however many legal targets there
+        # are — a number that only exists once the picker has enumerated them
+        # (engine/legality.py fills it in as an ordinary `max_targets`). A
+        # `count` of 0 here would otherwise read as "no targets" and show a
+        # picker that offers nothing.
+        payload["targets"]["unbounded"] = True
 
 
 def _describe_several_card_targets(
@@ -461,6 +468,11 @@ def _names_several_targets(subject: ast.Recipient) -> bool:
             (subject.quantifier == "up_to" and subject.count > 1)
             or (subject.quantifier == "exactly"
                 and (subject.count_from_x or subject.count > 1))
+            # "One or more target creatures" prints no number at all, so it
+            # qualifies on the quantifier alone — the same way "X target lands"
+            # above does, and for the same reason: the count is not knowable
+            # here, only that it can exceed one.
+            or subject.quantifier == "one_or_more"
         )
     )
 

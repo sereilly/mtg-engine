@@ -19,12 +19,14 @@ from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._common import (
     _amount_payload,
+    _describe_several_targets,
     _describe_targets,
     _durationless_reason,
     _filter_payload,
     _is_enchanted,
     _is_source,
     _is_target,
+    _names_several_targets,
     _restrictions_beyond,
     _signed,
     count_spec,
@@ -619,9 +621,27 @@ def _lower_lose_keyword(node: ast.LoseKeyword) -> tuple[OracleInstruction, ...]:
 
 
 def _lower_become_color(node: ast.BecomeColor) -> tuple[OracleInstruction, ...]:
-    """The Lace cycle. `recolor_target_from_text` re-reads the card's own text
-    to find the colour, so the payload only names it; the subject must still be
-    a chosen target, since the handler recolours what was targeted."""
+    """The Lace cycle, and the five Legends colour spells beside it.
+
+    Two instructions, told apart by the *duration* rather than by the number of
+    targets: an indefinite change writes the permanent colour channel and a
+    turn-long one writes the until-end-of-turn channel the cleanup step sweeps,
+    and layer 5 reads both (`engine/layer_bridge.py`). One handler covers one
+    target or several, since a single chosen slot is a list of one.
+    """
+    if node.duration.kind in ("until_end_of_turn", "this_turn"):
+        if not isinstance(node.subject, ast.TargetSpec) or not node.subject.targeted:
+            raise LoweringError(
+                "no handler recolours an object nobody targeted", node=node
+            )
+        payload: dict[str, object] = {"target_color": node.color}
+        if _names_several_targets(node.subject):
+            _describe_several_targets(payload, node.subject)
+        return (OracleInstruction("recolor_targets_until_eot", "", payload),)
+    if node.duration.kind is not None:
+        raise LoweringError(
+            f"no handler recolours for {node.duration.kind!r}", node=node
+        )
     if not isinstance(node.subject, ast.TargetSpec) or node.subject.quantifier != "target":
         raise LoweringError("no handler for recolouring a non-targeted object", node=node)
     # Deliberately *not* described for engine/targeting.py. The Lace cycle

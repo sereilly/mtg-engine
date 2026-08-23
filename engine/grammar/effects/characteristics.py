@@ -475,7 +475,12 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     word = str(token.text).lower() if token is not None else ""
     if word in COLOR_WORDS:
         stream.advance()
-        return ast.BecomeColor(subject, COLOR_WORDS[word])
+        # The duration is read rather than assumed. Without it the four words
+        # of "until end of turn" would be unconsumed text and the line would
+        # refuse — which is the *safe* failure, but it costs five cards; and
+        # skipping them instead would turn a turn-long colour change into the
+        # Lace cycle's indefinite one.
+        return ast.BecomeColor(subject, COLOR_WORDS[word], _parse_duration(stream))
     animated = _parse_become_creature(stream, subject)
     if animated is not None:
         return animated

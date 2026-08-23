@@ -834,6 +834,11 @@ def _from_targets_payload(targets) -> dict | None:
     count = targets.get("count")
     if isinstance(count, int) and count > 1:
         flags = {**flags, "max_targets": count}
+    elif targets.get("unbounded"):
+        # "One or more target creatures" names no maximum. `legality.py` turns
+        # this into a `max_targets` once it knows how many legal targets exist,
+        # which is the same route Drafna's Restoration's "any number of" takes.
+        flags = {**flags, "unbounded_targets": True}
     type_filter = filt.get("type_filter")
     if not type_filter:
         # A targeted object with no type restriction is any permanent.

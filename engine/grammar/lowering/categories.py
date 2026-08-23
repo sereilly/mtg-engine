@@ -132,6 +132,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # category: what differs is who it covers, not what kind of effect it is.
     "prevent_all_combat_damage_to_matching": "prevention",
     "recolor_target_from_text": "recolor",
+    # The same layer-5 colour change with a duration and several targets
+    # (Dwarven Song and its four siblings). Same category: what differs is how
+    # long it lasts and how many it names, not what it does.
+    "recolor_targets_until_eot": "recolor",
     # A printed text change (CR 612). Its own category rather than "recolor":
     # the Lace cycle makes an object a colour, while this replaces a *word*
     # wherever the object's text uses it, and one of the two modes does not
