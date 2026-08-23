@@ -410,19 +410,37 @@ def test_diamond_valley_gains_life_equal_to_sacrificed_toughness(all_cards, arn_
 # El-Hajjaj — gain life equal to damage dealt
 # ===========================================================================
 
-def test_el_hajjaj_gains_life_on_combat_damage_to_player(arn_by_name):
+def test_el_hajjaj_gains_life_on_damage_to_a_player(arn_by_name):
     hajjaj = arn_by_name["El-Hajjâj"]
     attacker = Permanent(card=hajjaj)
     p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
     p2 = PlayerState(name="P2", life=20)
     game = Game(players=[p1, p2])
 
-    game._fire_combat_damage_to_player_triggers(attacker, p2, 1)
+    game._deal_damage_to_player(p2, 1, source=attacker)
     assert game.stack
     game._settle()
 
     assert not game.stack
     assert p1.life == 21
+
+
+def test_el_hajjaj_gains_life_for_damage_dealt_to_a_creature(arn_by_name):
+    """"Whenever this creature deals damage" — the card says damage, not
+    combat damage to a player, and for four shipped sets it gained nothing for
+    a blocked attack. The announcement is the one damage seam now, so a
+    blocker's worth of damage is a life."""
+    hajjaj = arn_by_name["El-Hajjâj"]
+    attacker = Permanent(card=hajjaj)
+    blocker = Permanent(card=arn_by_name["Nafs Asp"])
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[blocker], life=20)
+    game = Game(players=[p1, p2])
+
+    game._mark_damage_on_permanent(blocker, 2, source=attacker, combat=True)
+    game._settle()
+
+    assert p1.life == 22
 
 
 # ===========================================================================
@@ -663,7 +681,7 @@ def test_nafs_asp_arms_obligation_on_damage(arn_by_name):
     p2 = PlayerState(name="P2", life=20)
     game = Game(players=[p1, p2])
 
-    game._fire_combat_damage_to_player_triggers(attacker, p2, 1)
+    game._deal_damage_to_player(p2, 1, source=attacker)
     game._settle()
 
     assert len(game.pending_draw_step_life_loss) == 1
@@ -679,11 +697,12 @@ def test_nafs_asp_loses_life_if_unpaid(arn_by_name):
     p2 = PlayerState(name="P2", life=20, library=[], mana_pool={})
     game = Game(players=[p1, p2])
 
-    game._fire_combat_damage_to_player_triggers(attacker, p2, 1)
+    game._deal_damage_to_player(p2, 1, source=attacker)
     game._settle()
+    assert p2.life == 19, "the point of damage itself"
     game.resolve_draw_step(1)
 
-    assert p2.life == 19
+    assert p2.life == 18, "and the point the unpaid obligation takes"
     assert game.pending_draw_step_life_loss == []
 
 
@@ -694,11 +713,11 @@ def test_nafs_asp_no_life_loss_if_paid(arn_by_name):
     p2 = PlayerState(name="P2", life=20, library=[], mana_pool={"C": 1})
     game = Game(players=[p1, p2])
 
-    game._fire_combat_damage_to_player_triggers(attacker, p2, 1)
+    game._deal_damage_to_player(p2, 1, source=attacker)
     game._settle()
     game.resolve_draw_step(1, pay_life_loss={"Nafs Asp": True})
 
-    assert p2.life == 20
+    assert p2.life == 19, "the damage, and nothing more — the obligation was paid"
     assert game.pending_draw_step_life_loss == []
 
 

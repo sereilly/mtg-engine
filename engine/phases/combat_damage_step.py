@@ -781,13 +781,6 @@ class CombatDamageStepMixin:
                     ),
                     asks=True,
                 )
-                # "…deals combat damage to a player **or planeswalker**"
-                # (Garruk's Harbinger). The walker took it as a permanent, so
-                # the player-damage fire site above never sees this event.
-                if damage > 0 and source_attacker is not None:
-                    self._fire_combat_damage_to_walker_triggers(
-                        source_attacker, walker, damage
-                    )
                 return
             defender = self.players[defending_idx]
 
@@ -833,13 +826,14 @@ class CombatDamageStepMixin:
                 # routing through _deal_damage_to_player, which would run the event
                 # a second time.
                 self._apply_mirror_damage(defender, outcome.dealt, source_attacker)
-                # Attacker "deals damage to a player/opponent" triggers (Hypnotic Specter).
+                # "…deals damage to a player/opponent" (Hypnotic Specter) is
+                # announced by `damage_events._announce`, from inside the
+                # `deal_damage` call above — the one seam every damage event
+                # passes through, which is why there is nothing to fire here.
                 if source_attacker is not None:
-                    self._fire_combat_damage_to_player_triggers(
-                        source_attacker, defender, outcome.dealt
-                    )
-                    # And the delayed ones (Subira), which belong to no
-                    # permanent and so cannot be found by the ability scan above.
+                    # The delayed ones (Subira) belong to no permanent, so no
+                    # battlefield scan can find them and they keep their own
+                    # site (CR 603.7).
                     self._fire_delayed_combat_damage_triggers(
                         source_attacker, defender, outcome.dealt
                     )

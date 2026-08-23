@@ -243,21 +243,6 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     return True, "resolved"
 
 
-@effect_handler("gain_life_equal_to_damage_dealt")
-def gain_life_equal_to_damage_dealt(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """El-Hajjaj: "Whenever this creature deals damage, you gain that much
-    life." The amount is threaded through trigger_context by
-    _fire_combat_damage_to_player_triggers (the trigger has no static payload
-    of its own — the life gained depends on what actually happened)."""
-    caster = context.caster
-    card = context.card
-    tctx = context.trigger_context or {}
-    amount = int(tctx.get("amount", 0))
-    if amount > 0:
-        game._gain_life(caster, amount, card.name)
-    return True, "resolved"
-
-
 @effect_handler("arm_draw_step_life_loss_unless_pay")
 def arm_draw_step_life_loss_unless_pay(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Nafs Asp: "that player loses 1 life at the beginning of their next draw

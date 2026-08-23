@@ -263,7 +263,7 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # each row names the moment rather than the effect, which is the honest
     # answer for a wrapper whose contents differ card by card.
     ("combat_your_turn", "may"): "triggered_combat",
-    ("creature_deals_combat_damage", "may"): "triggered_combat",
+    ("damage_dealt", "may"): "triggered_combat",
     ("dies", "may"): "triggered_death",
     ("enters_battlefield", "may"): "triggered_etb",
     ("draws_card", "may"): "triggered_draw",

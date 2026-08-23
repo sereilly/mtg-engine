@@ -52,26 +52,32 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "creature's toughness to the creature's controller.",
     ),
     "creature_dies": "whenever a creature dies",
+    # CR 120.4b's event, once. Every printed narrowing of it is a named group
+    # on one pattern, so each spelling is checked against every earlier pattern
+    # of every other kind — which is the whole reason a kind may hold several
+    # examples.
+    "damage_dealt": (
+        "whenever this creature deals damage",
+        "whenever this creature deals damage to a player",
+        "whenever this creature deals damage to an opponent",
+        "whenever this creature deals combat damage to a player",
+        "whenever this creature deals combat damage to a player or planeswalker",
+        "whenever enchanted creature deals damage to you",
+        "whenever a source you control deals noncombat damage to an opponent",
+        "whenever a creature you control with deathtouch deals damage to a planeswalker",
+    ),
     "creature_you_control_dies": (
         "whenever a creature you control dies",
         "whenever this creature or another creature you control dies",
     ),
     "creature_opponent_controls_dies": "whenever a creature an opponent controls dies",
-    "creature_deals_damage": "whenever this creature deals damage",
-    "creature_deals_combat_damage": "whenever this creature deals combat damage to a player",
-    "creature_deals_combat_damage_to_player_or_walker":
-        "whenever this creature deals combat damage to a player or planeswalker",
     "creature_blocks_or_blocked_by_nonwall": "whenever this creature blocks or becomes blocked by a non-wall creature",
-    "creature_deals_damage_to_opponent": "whenever this creature deals damage to an opponent",
     "attacks_unblocked": "whenever this creature attacks and isn't blocked",
     "creature_attacks": "whenever this creature attacks",
     # A narrowed spelling beside its bare one: the subject filter is what makes
     # the pair two different firings (CR 509.3c/509.3d), so both are checked
     # against every earlier pattern of every other kind.
     "matching_creature_attacks": "whenever a creature you control with deathtouch attacks",
-    "matching_creature_damages_planeswalker": (
-        "whenever a creature you control with deathtouch deals damage to a planeswalker"
-    ),
     "creature_blocks": (
         "whenever this creature blocks",
         "whenever this creature blocks a creature with flying",
@@ -132,9 +138,6 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "draws_second_card": "whenever you draw your second card each turn",
     "you_gain_life": "whenever you gain life",
     "you_sacrifice_permanent": "whenever you sacrifice a permanent",
-    "source_you_control_damages_opponent": (
-        "whenever a source you control deals noncombat damage to an opponent"
-    ),
     # Two rows, one kind: the event is the attack declaration and what differs
     # is what the card asks about it.
     "attackers_declared": (
@@ -145,7 +148,6 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever one or more +1/+1 counters are put on another non-hydra "
         "creature you control"
     ),
-    "deals_damage_to_player": "whenever this creature deals damage to a player",
     # The batched form: one trigger however many creatures dealt the damage,
     # fired once per player damaged — which is the difference from the
     # per-attacker condition, not a wording of it.
@@ -291,8 +293,14 @@ def test_attacks_or_blocks_compiles_to_specific_kind():
     assert "creature_attacks" not in kinds
 
 
-def test_hypnotic_specter_compiles_to_specific_kind():
+def test_hypnotic_specter_keeps_its_recipient_narrowing():
+    """One kind for the whole "deals damage" family, so what used to be checked
+    as a *kind* is checked as payload: the card says "to an opponent" and the
+    dispatcher must be told so."""
     cards = {c.name: c for c in load_cards(LEA_PATH)}
     program = compile_card_oracle(cards["Hypnotic Specter"])
-    kinds = [ta.condition.kind for ta in program.triggered_abilities]
-    assert kinds == ["creature_deals_damage_to_opponent"]
+    conditions = [ta.condition for ta in program.triggered_abilities]
+    assert [c.kind for c in conditions] == ["damage_dealt"]
+    assert conditions[0].payload == {
+        "damager_self": "this creature", "damage_recipient": "an opponent",
+    }

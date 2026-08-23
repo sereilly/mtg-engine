@@ -185,14 +185,23 @@ def collect(game: Game, event: Event) -> list[dict]:
             continue
         if predicate is not None and not predicate(game, permanent, trig, event):
             continue
-        events.append(
-            make_trigger_event(
-                controller_index,
-                permanent,
-                trig,
-                trigger_context=dict(event.payload) or None,
-            )
+        enqueued = make_trigger_event(
+            controller_index,
+            permanent,
+            trig,
+            trigger_context=dict(event.payload) or None,
         )
+        # The object the event was **about**, promoted from the payload onto the
+        # stack item. A trigger that acts on it ("destroy that planeswalker")
+        # reads it from there rather than from the trigger context, and it is
+        # carried by id because an index is not an identity (CR 400.7). Done
+        # here rather than at each announcement: the two fire sites that used to
+        # stamp it did so by hand, and a third would have had to remember.
+        for key in ("target_permanent_id", "target_player_index"):
+            bound = event.payload.get(key)
+            if bound is not None:
+                enqueued[key] = bound
+        events.append(enqueued)
     # An emblem's ability fires from the command zone (CR 114.4) — collected
     # beside the permanents', through the same event, so APNAP ordering and
     # the enqueue path treat both alike.
@@ -533,6 +542,114 @@ def _becomes_tapped_filter(
     return tapped_controller == observer
 
 
+# The printed recipient of a damage event, as `engine/oracle.py`'s table
+# captures it, mapped to the question the filter asks of the event. Absent
+# means the card named no recipient and every one qualifies.
+#
+# Each takes the recipient and the seat it belongs to — its own for a player,
+# its controller's for a permanent, which is the key Garruk's Harbinger's
+# walker half already read — plus the observing permanent's seat, because
+# "you" and "an opponent" are CR 109.5 questions about the trigger's own
+# controller.
+_DAMAGE_RECIPIENT_TESTS = {
+    "a player": lambda recipient, seat, observer: _is_player(recipient),
+    "an opponent": lambda recipient, seat, observer: (
+        _is_player(recipient) and seat != observer
+    ),
+    "you": lambda recipient, seat, observer: (
+        _is_player(recipient) and seat == observer
+    ),
+    "a planeswalker": lambda recipient, seat, observer: _is_walker(recipient),
+    "a player or planeswalker": lambda recipient, seat, observer: (
+        _is_player(recipient) or _is_walker(recipient)
+    ),
+}
+
+
+def _is_player(recipient) -> bool:
+    """Whether a damage event's recipient is a player rather than a permanent.
+
+    The import is deferred because this module keeps ``models`` under
+    ``TYPE_CHECKING`` — ``damage_kind`` in `engine/damage_events.py` asks the
+    same question the same way, and the two are the only readings of it.
+    """
+    from .models import PlayerState
+
+    return isinstance(recipient, PlayerState)
+
+
+def _is_walker(recipient) -> bool:
+    return not _is_player(recipient) and bool(
+        getattr(recipient, "has_type", None) and recipient.has_type("planeswalker")
+    )
+
+
+@event_filter("damage_dealt")
+def _damage_dealt_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """CR 120.4b's event, narrowed by what the card printed on either side of
+    the verb.
+
+    One dispatcher for what was five conditions and three fire sites. Both
+    halves are read off the trigger's own parsed condition — who dealt the
+    damage and who took it — so the "combat" in Jeskai Elder's line and the
+    "to you" in Backfire's are data rather than a choice of where to announce
+    from. The observer for "you"/"an opponent" is this permanent's own
+    controller (CR 109.5), never anything the event carries.
+    """
+    payload = trig.condition.payload
+    observer = game.controller_index_of(permanent)
+    combat = payload.get("damage_combat")
+    if combat == "combat" and not event.payload.get("combat"):
+        return False
+    if combat == "noncombat" and event.payload.get("combat"):
+        return False
+
+    damager = event.subject
+    if payload.get("damager_self"):
+        # "**This** creature deals damage" — by identity, because a look-alike
+        # on the same battlefield is a different permanent.
+        if damager is not permanent:
+            return False
+    elif payload.get("damager_attached"):
+        if permanent.metadata.get("attached_to") is not damager:
+            return False
+    elif payload.get("damager_controller") == "you":
+        # "A source you control" is a seat question, and deliberately not a
+        # permanent one: a spell is a source too (CR 109.5), and the seam
+        # derives the seat for both.
+        if event.payload.get("damager_seat") != observer:
+            return False
+    elif "damager_filter" in payload:
+        # A noun phrase describes *permanents*, and a damage source need not be
+        # one: for a spell it is the printed card (CR 109.5), which has no
+        # controller, no types the layers have computed and nothing the matcher
+        # can ask. So a card is simply not in the set the phrase names — the
+        # same answer the retired planeswalker fire site gave by refusing to
+        # announce at all, kept here where the phrase is instead of where the
+        # damage is.
+        if getattr(damager, "permanent_id", None) is None:
+            return False
+        if not trigger_subject_matches(
+            game, trig, "damager", damager, observer=observer, source=permanent,
+        ):
+            return False
+    else:
+        # No narrowing at all would fire every such trigger on the board for
+        # every point of damage in the game. The condition table cannot produce
+        # one; refusing here is the second lock rather than an unreachable
+        # branch's cost.
+        return False
+
+    recipient = event.payload.get("recipient")
+    test = _DAMAGE_RECIPIENT_TESTS.get(payload.get("damage_recipient"))
+    if test is None:
+        return True
+    seat = event.payload.get("defending_player_index")
+    return bool(test(recipient, seat, observer))
+
+
 @event_filter("counters_put_on_creature")
 def _counters_put_on_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
@@ -575,12 +692,6 @@ _SEAT_SCOPED_EVENTS = frozenset({
     # "whenever **you** draw a card" (Lorescale Coatl, Burlfist Oak) — announced
     # game-wide by the draw sweep, matching only the drawing seat's permanents.
     "draws_card",
-    # "a source **you** control deals noncombat damage to an opponent"
-    # (Chandra's Pyreling). The seat here is the *source's* controller, not the
-    # damaged player's — an opponent burning you leaves the Pyreling silent —
-    # which is the same "you" the three above carry and the reason this is a row
-    # rather than a fourth predicate.
-    "source_you_control_damages_opponent",
 })
 
 
@@ -643,7 +754,6 @@ def _attack_declaration_filter(
 # event, so the registration is a row rather than a predicate.
 _SUBJECT_LED_FILTER_KEYS: dict[str, str] = {
     "matching_creature_attacks": "attacker",
-    "matching_creature_damages_planeswalker": "damager",
     "matching_permanent_enters": "enterer",
 }
 

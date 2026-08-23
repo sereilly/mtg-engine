@@ -2497,3 +2497,23 @@ def test_the_tapped_this_way_count_needs_a_tap_in_front_of_it():
     )
 
     assert not result.usable
+
+
+def test_hooded_blightfang_ignores_a_walker_damaged_by_a_spell(set_pool):
+    """"A creature you control with deathtouch" describes permanents, and a
+    damage source need not be one — for a spell it is the printed card
+    (CR 109.5), with no controller and no computed types. It is not in the set
+    the phrase names, which is a question the filter answers rather than a
+    crash the announcement avoids by not happening."""
+    pool = set_pool("M21")
+    fang = _nosick(Permanent(card=pool["Hooded Blightfang"]))
+    walker = Permanent(card=pool["Basri Ket"], metadata={"loyalty_counters": 4})
+    p1 = PlayerState(name="P1", battlefield=[fang])
+    p2 = PlayerState(name="P2", battlefield=[walker])
+    game = Game(players=[p1, p2])
+
+    game._mark_damage_on_permanent(walker, 1, source=pool["Shock"])
+    game._settle()
+
+    assert game.is_on_battlefield(walker)
+    assert walker.metadata["loyalty_counters"] == 3

@@ -235,7 +235,69 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     dealt = max(0, event["amount"])
     if consumed or dealt <= 0:
         return DamageOutcome(consumed=consumed, dealt=0, result=0)
-    return DamageOutcome(consumed=False, dealt=dealt, result=_process_results(game, event, dealt))
+    result = _process_results(game, event, dealt)
+    _announce(game, event, dealt)
+    return DamageOutcome(consumed=False, dealt=dealt, result=result)
+
+
+def _announce(game, event: dict, dealt: int) -> None:
+    """CR 603.2: tell the game that damage was dealt.
+
+    **The one place a "deals damage" trigger is announced from**, and the
+    docstring at the top of this module has described it as such since before it
+    existed: "abilities that trigger on damage being dealt trigger on what comes
+    out of this half". Until it did, the announcement lived in
+    ``_fire_combat_damage_to_player_triggers`` — a fire site inside the combat
+    damage step's *player* loop — so El-Hajjâj ("whenever this creature deals
+    damage, you gain that much life") gained nothing for damage dealt to a
+    blocker, to a planeswalker, or by any ability at all, and Hypnotic Specter's
+    unqualified "deals damage to an opponent" was a combat-only trigger. That
+    gap was written down in the fire site's own docstring for as long as it
+    existed, which is what a fire site that is not a seam looks like.
+
+    ``dealt`` is CR 120.4b's number, not 120.4c's: Ali from Cairo caps the life
+    lost without capping the damage dealt, and a trigger reading "that much"
+    reads what was dealt.
+
+    The payload carries what the effects behind these triggers read, all of it
+    frozen here because none of it survives to resolution (CR 603.10): the
+    damaged player's seat, the damaged permanent's id, the damager and its
+    controller's seat.
+    """
+    from .events import emit
+
+    recipient = event["recipient"]
+    source = event.get("source")
+    payload: dict[str, object] = {
+        "subject": source,
+        "amount": dealt,
+        "combat": bool(event.get("combat")),
+        "recipient": recipient,
+        "damager_seat": event.get("source_seat"),
+        # "…deals that much damage to **that creature's controller**"
+        # (Backfire). The damager's controller, under the key the generic
+        # recipient resolver already reads.
+        "event_subject_controller": event.get("source_seat"),
+    }
+    if isinstance(recipient, PlayerState):
+        # The name every handler in this family already reads out of a trigger
+        # context — Nafs Asp's draw-step obligation, Hypnotic Specter's discard.
+        payload["defending_player_index"] = game.players.index(recipient)
+    else:
+        damaged_id = getattr(recipient, "permanent_id", None)
+        seat = game.controller_index_of(recipient)
+        if damaged_id is not None:
+            # The damaged permanent as a *target* of the trigger: "destroy that
+            # planeswalker" (Hooded Blightfang) resolves it through the ordinary
+            # destroy handler, which addresses a permanent by its controller and
+            # its id. By id, not by slot, because anything leaving in between
+            # renumbers every later index (CR 400.7).
+            payload["target_permanent_id"] = damaged_id
+            if seat is not None:
+                payload["target_player_index"] = seat
+        if seat is not None:
+            payload["defending_player_index"] = seat
+    emit(game, "damage_dealt", **payload)
 
 
 def _process_results(game, event: dict, dealt: int) -> int:

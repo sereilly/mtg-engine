@@ -59,7 +59,12 @@ _BLOCK_PAIR_EVENTS = frozenset({
 # Trigger events whose fire site stamps the object the event was about onto the
 # stack item, so an effect may say "that <noun>" and mean it.
 _EVENT_SUBJECT_DESTROY_EVENTS: frozenset[str] = frozenset({
-    "matching_creature_damages_planeswalker",   # Hooded Blightfang
+    # Hooded Blightfang: "… deals damage to a planeswalker, destroy **that**
+    # planeswalker". The damaged object is what `damage_events._announce`
+    # stamps onto the stack item, so "that <noun>" under this event names it.
+    # A damage event whose recipient was a player stamps nothing, and the
+    # destroy then resolves nothing rather than finding a permanent by index.
+    "damage_dealt",
 })
 
 

@@ -1670,3 +1670,38 @@ def test_gaeas_liege_activation_targets_chosen_land(all_cards):
     assert result.supported
     assert p2.battlefield[0].changed_land_types == ()
     assert p2.battlefield[1].changed_land_types == ("forest",)
+
+
+def test_hypnotic_specter_discards_for_noncombat_damage_too(all_cards):
+    """"Whenever this creature deals damage to an opponent" — the card does not
+    say combat damage, and for six shipped sets it was a combat-only trigger
+    because the only place it was announced from was the combat damage step's
+    player loop. Any damage the Specter deals, however it deals it."""
+    specter = Permanent(card=_get(all_cards, "Hypnotic Specter"))
+    p1 = PlayerState(name="P1", battlefield=[specter], life=20)
+    p2 = PlayerState(
+        name="P2", life=20, hand=[_mk_card("Doomed", "Creature — Bear")],
+    )
+    game = Game(players=[p1, p2])
+
+    game._deal_damage_to_player(p2, 1, source=specter)
+    game._settle()
+
+    assert p2.hand == [], "the discard the printed card asks for"
+
+
+def test_hypnotic_specter_leaves_its_own_controller_alone(all_cards):
+    """"To an **opponent**" is a seat comparison against the trigger's own
+    controller (CR 109.5), which is what a recipient narrowing has to be — the
+    Specter's controller taking damage from it is not an opponent."""
+    specter = Permanent(card=_get(all_cards, "Hypnotic Specter"))
+    p1 = PlayerState(
+        name="P1", battlefield=[specter], life=20,
+        hand=[_mk_card("Safe", "Creature — Bear")],
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game._deal_damage_to_player(p1, 1, source=specter)
+    game._settle()
+
+    assert len(p1.hand) == 1

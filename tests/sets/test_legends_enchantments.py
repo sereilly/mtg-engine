@@ -316,3 +316,104 @@ def test_spirit_shackle_survives_the_aura_leaving(set_pool):
 
     assert host.effective_toughness == 2
     assert host.metadata.get("-0/-2_counters") == 1
+
+
+# ---------------------------------------------------------------------------
+# Round 10 — the attached "deals damage" trigger
+# ---------------------------------------------------------------------------
+
+
+def _link_board(set_pool, aura_name: str, host_owner: int = 0):
+    """*aura_name* on a 3/3, with the Aura's controller as seat 0. ``host_owner``
+    says whose battlefield the enchanted creature sits on — Spirit Link goes on
+    your own creature, Backfire on theirs."""
+    host = Permanent(card=_creature("Host", 3, 3))
+    aura = Permanent(card=set_pool("LEG")[aura_name])
+    seats = [[aura], []]
+    seats[host_owner].append(host)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=seats[0], life=20),
+        PlayerState(name="P2", battlefield=seats[1], life=20),
+    ])
+    attach_aura(aura, host)
+    return game, host
+
+
+def test_spirit_link_gains_life_when_its_creature_hits_a_player(set_pool):
+    game, host = _link_board(set_pool, "Spirit Link")
+
+    game._deal_damage_to_player(game.players[1], 3, source=host)
+    game._settle()
+
+    assert (game.players[0].life, game.players[1].life) == (23, 17)
+
+
+def test_spirit_link_gains_life_for_damage_dealt_to_a_creature(set_pool):
+    """"Deals damage", not "deals combat damage to a player". A blocked
+    attacker deals its damage to the blocker, and the life is the same life."""
+    game, host = _link_board(set_pool, "Spirit Link")
+    blocker = Permanent(card=_creature("Blocker", 2, 5))
+    game.players[1].battlefield.append(blocker)
+
+    game._mark_damage_on_permanent(blocker, 3, source=host, combat=True)
+    game._settle()
+
+    assert game.players[0].life == 23
+
+
+def test_spirit_link_gains_for_the_damage_dealt_not_the_life_lost(set_pool):
+    """CR 120.4b: the trigger reads what was *dealt*. A shield that stops the
+    damage stops the life gain with it — there was no damage to read."""
+    game, host = _link_board(set_pool, "Spirit Link")
+
+    game._deal_damage_to_player(game.players[1], 0, source=host)
+    game._settle()
+
+    assert game.players[0].life == 20, "CR 120.8: no damage, no event, no trigger"
+
+
+def test_backfire_burns_the_controller_of_the_creature_that_hit_you(set_pool):
+    """"Whenever enchanted creature deals damage **to you**, this Aura deals
+    that much damage to **that creature's controller**." Two references, and
+    they are different players — the Aura goes on an opponent's creature."""
+    game, host = _link_board(set_pool, "Backfire", host_owner=1)
+
+    game._deal_damage_to_player(game.players[0], 4, source=host)
+    game._settle()
+
+    assert (game.players[0].life, game.players[1].life) == (16, 16)
+
+
+def test_backfire_ignores_damage_dealt_to_anyone_else(set_pool):
+    """"To you" is the Aura's controller, not any player. In a duel the two
+    readings agree; the third seat is what separates them."""
+    host = Permanent(card=_creature("Host", 4, 4))
+    aura = Permanent(card=set_pool("LEG")["Backfire"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[aura], life=20),
+        PlayerState(name="P2", battlefield=[host], life=20),
+        PlayerState(name="P3", life=20),
+    ])
+    attach_aura(aura, host)
+
+    game._deal_damage_to_player(game.players[2], 4, source=host)
+    game._settle()
+
+    assert [p.life for p in game.players] == [20, 20, 16]
+
+
+def test_backfire_ignores_a_creature_it_does_not_enchant(set_pool):
+    """The damager narrowing is an identity check on the Aura's own host."""
+    host = Permanent(card=_creature("Host", 4, 4))
+    other = Permanent(card=_creature("Host", 4, 4))
+    aura = Permanent(card=set_pool("LEG")["Backfire"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[aura], life=20),
+        PlayerState(name="P2", battlefield=[host, other], life=20),
+    ])
+    attach_aura(aura, host)
+
+    game._deal_damage_to_player(game.players[0], 4, source=other)
+    game._settle()
+
+    assert (game.players[0].life, game.players[1].life) == (16, 20)

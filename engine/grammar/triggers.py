@@ -73,20 +73,6 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("self_becomes_target",
      ("this", "creature", "becomes", "the", "target", "of", "a", "spell",
       "or", "ability")),
-    # Longest first: the union form's phrase has the bare one as a strict
-    # prefix, so matching the bare one first would leave "or planeswalker"
-    # unaccounted and fail the line.
-    ("creature_deals_combat_damage_to_player_or_walker",
-     ("this", "creature", "deals", "combat", "damage", "to", "a", "player", "or", "planeswalker")),
-    ("creature_deals_combat_damage", ("this", "creature", "deals", "combat", "damage", "to", "a", "player")),
-    # Narrowed to an opponent (Hypnotic Specter). Must precede the unnarrowed
-    # form below, which is a strict prefix of it: matching that first would name
-    # a condition the legacy table does not — the disagreement
-    # `test_every_executed_trigger_agrees_with_the_legacy_condition_table`
-    # exists to catch — and strand "to an opponent" besides.
-    ("creature_deals_damage_to_opponent",
-     ("this", "creature", "deals", "damage", "to", "an", "opponent")),
-    ("creature_deals_damage", ("this", "creature", "deals", "damage")),
     # The Basilisk cycle's event. Precedes "this creature blocks", which is a
     # strict prefix of it: matching that first would name a condition nothing
     # dispatches for these cards and strand the rest of the clause.
@@ -137,13 +123,6 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # the pool narrows it — a "…sacrifice a creature" entry would go above this
     # one, and does not collide with it.
     ("you_sacrifice_permanent", ("you", "sacrifice", "a", "permanent")),
-    # "Whenever a source you control deals noncombat damage to an opponent …"
-    # (Chandra's Pyreling). The amount is the event's, not the phrase's, so a
-    # "that much" in the effect reads it out of the trigger's captured context —
-    # which is what Chandra's Incinerator's second line wants.
-    ("source_you_control_damages_opponent",
-     ("a", "source", "you", "control", "deals", "noncombat", "damage",
-      "to", "an", "opponent")),
 )
 
 # Events whose subject is an object *filter* the trigger carries, keyed by the
@@ -166,8 +145,6 @@ _FILTERED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
 # so the phrase is read speculatively and these decide whether it was one.
 # Longest first, per the ordering rule the whenever table follows.
 _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
-    (("deals", "damage", "to", "a", "planeswalker"),
-     "matching_creature_damages_planeswalker"),
     (("attacks",), "matching_creature_attacks"),
     (("enters", "the", "battlefield"), "matching_permanent_enters"),
     (("enters",), "matching_permanent_enters"),
@@ -343,6 +320,82 @@ def _accept_ability_activated_tail(stream: TokenStream) -> bool:
         stream.reset(mark)
         return False
     return True
+
+
+# The printed recipients of a damage event, longest first: "a player or
+# planeswalker" has "a player" as a strict prefix, and matching the shorter one
+# would leave the union's second half stranded — the ordering rule this whole
+# file follows.
+_DAMAGE_RECIPIENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("a", "player", "or", "planeswalker"), "a player or planeswalker"),
+    (("a", "player"), "a player"),
+    (("an", "opponent"), "an opponent"),
+    (("a", "planeswalker"), "a planeswalker"),
+    (("you",), "you"),
+)
+
+_DAMAGER_NOUNS = ("creature", "artifact", "enchantment", "land", "permanent")
+
+
+def _parse_damage_dealt_event(
+    stream: TokenStream, word: str
+) -> ast.TriggerEvent | None:
+    """"Whenever <someone> deals [combat|noncombat] damage [to <someone>]" —
+    CR 120.4b's event, whoever dealt it and whoever took it.
+
+    One production for what was five phrase-table entries and two subject-led
+    ones, because they are one event asked with different narrowings. Both are
+    read here and carried on the node: the damager (the source itself, the
+    permanent this Aura enchants, any source a player controls, or a noun
+    phrase) and the recipient. `engine/oracle.py`'s table names the same groups,
+    and `engine/damage_events.py` announces the event once for all of them.
+
+    Tried before the phrase table, whose remaining entries would claim these
+    lines' prefixes, and before the subject-led table, which reads a noun phrase
+    speculatively and would take "a creature you control with deathtouch" for an
+    attack trigger's subject.
+    """
+    mark = stream.mark()
+    subject: ast.ObjectFilter | None = None
+    if stream.at_kind(SELF) or stream.at_word("this"):
+        stream.advance()
+        if not stream.at_kind(SELF):
+            stream.accept_word(*_DAMAGER_NOUNS)
+        subject = ast.ObjectFilter(is_source=True)
+    elif stream.accept_word("enchanted"):
+        if stream.peek_word() is None:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        subject = ast.ObjectFilter(is_enchanted=True)
+    elif stream.accept_phrase("a", "source", "you", "control"):
+        # "A source you control" is a *seat*, not a set of permanents: a spell
+        # is a source too, and no ObjectFilter can name one. The narrowing rides
+        # the controller field, which is what the dispatcher reads.
+        subject = ast.ObjectFilter(controller="you")
+    else:
+        subject = parse_subject_filter_at(stream)
+        if subject is None:
+            stream.reset(mark)
+            return None
+    if not stream.accept_word("deals"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("combat", "noncombat")
+    if not stream.accept_word("damage"):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("to"):
+        for phrase, _recipient in _DAMAGE_RECIPIENTS:
+            if stream.accept_phrase(*phrase):
+                break
+        else:
+            # A recipient this production cannot name would be consumed as
+            # nothing and the trigger would fire on every damage event the card
+            # narrows away. Refuse the line instead.
+            stream.reset(mark)
+            return None
+    return ast.TriggerEvent("damage_dealt", word, subject=subject)
 
 
 def _parse_named_subject_tap_event(
@@ -635,6 +688,9 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         named_tap = _parse_named_subject_tap_event(stream, "whenever")
         if named_tap is not None:
             return named_tap
+        damage = _parse_damage_dealt_event(stream, "whenever")
+        if damage is not None:
+            return damage
         for kind, phrase in _WHENEVER_EVENTS:
             if stream.accept_phrase(*phrase):
                 return ast.TriggerEvent(kind, "whenever")

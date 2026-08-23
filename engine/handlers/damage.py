@@ -104,7 +104,12 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # agree; three do not.
     described = (instruction.payload.get("targets") or {}).get("filter") or {}
     if described.get("controller") == "that_player":
-        seat = (context.trigger_context or {}).get("damaged_seat")
+        # One key for "who took the damage", not two: the noncombat
+        # announcement used to call it `damaged_seat` and the combat one
+        # `defending_player_index`, which is a second name for one thing and the
+        # reason a handler could only be written against one of them. There is
+        # one announcement now and one key.
+        seat = (context.trigger_context or {}).get("defending_player_index")
         if seat is None:
             game.log.append(f"{card.name}: no player for 'that player' to name")
             return True, "resolved"
@@ -132,6 +137,29 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
 
         game._deal_damage_to_player(
             caster, damage, source=source_permanent or card, then=_report, asks=True
+        )
+        return True, "resolved"
+    if instruction.payload.get("recipient") == "event_subject_controller":
+        # "…deals that much damage to **that creature's controller**"
+        # (Backfire). The controller of the object the trigger's event was
+        # about, frozen by the fire site (CR 603.10) — a board read cannot
+        # answer it, because the creature may have left and Control Magic makes
+        # controller and owner differ. No record means the words named nobody,
+        # and the damage does not happen rather than landing on a guess.
+        seat = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded controller, no damage dealt")
+            return True, "resolved"
+        victim = game.players[seat]
+
+        def _report_subject(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            if dealt:
+                game.log.append(f"{card.name} dealt {dealt} damage to {victim.name}")
+
+        game._deal_damage_to_player(
+            victim, damage, source=source_permanent or card,
+            then=_report_subject, asks=True,
         )
         return True, "resolved"
     if instruction.payload.get("recipient") == "target_player":

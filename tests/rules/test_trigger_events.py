@@ -513,3 +513,77 @@ def test_603_12_the_reflexive_ability_carries_its_own_effect(set_pool):
     inner = reflexive[0]
     assert inner.kind == "may"
     assert [step.kind for step in inner.payload["action"]] == ["tap_or_untap_target"]
+
+
+@pytest.mark.cr("120.4b", "603.2")
+def test_deals_damage_is_one_event_however_the_card_narrows_it():
+    """CR 120.4b happens once, and every "whenever <someone> deals damage"
+    trigger is that event asked with a different narrowing.
+
+    It used to be five conditions with three fire sites between them, and each
+    fired only where its own site sat: the unqualified reading was announced
+    from inside the combat damage step's *player* loop, so it saw nothing dealt
+    to a creature or by an ability. All five spellings compile to one condition
+    now, so a card cannot be told apart from its dispatcher by its wording.
+    """
+    watchers = {
+        "Any": "Whenever this creature deals damage, you gain 1 life.",
+        "Player": "Whenever this creature deals damage to a player, you gain 1 life.",
+        "Combat": (
+            "Whenever this creature deals combat damage to a player, "
+            "you gain 1 life."
+        ),
+    }
+    kinds = {
+        name: [
+            trig.condition.kind
+            for trig in compile_card_oracle(_card(name, text)).triggered_abilities
+        ]
+        for name, text in watchers.items()
+    }
+    assert kinds == {name: ["damage_dealt"] for name in watchers}
+
+
+@pytest.mark.cr("120.4b", "603.2")
+def test_a_combat_narrowing_is_payload_and_is_enforced():
+    """"Deals **combat** damage" and "deals damage" differ by one printed word,
+    and the difference is a payload key the one dispatcher reads — not which
+    fire site the card was wired into."""
+    any_damage = Permanent(card=_card(
+        "Any Watcher", "Whenever this creature deals damage, you gain 1 life."))
+    combat_only = Permanent(card=_card(
+        "Combat Watcher",
+        "Whenever this creature deals combat damage to a player, you gain 1 life."))
+    game, owner, opponent = _game(any_damage, combat_only)
+
+    game._deal_damage_to_player(opponent, 2, source=any_damage)
+    game._deal_damage_to_player(opponent, 2, source=combat_only)
+
+    assert [item.card.name for item in game.stack] == ["Any Watcher"], (
+        "a noncombat ping is damage, and it is not combat damage"
+    )
+
+
+@pytest.mark.cr("120.4b", "109.5")
+def test_a_source_you_control_is_a_seat_rather_than_a_permanent():
+    """"A source you control" (Chandra's Pyreling) narrows by CR 109.5's
+    controller, which is why it cannot be an object filter: a spell is a source
+    too, and no player controls a printed card. The seat `deal_damage` derives
+    is what answers."""
+    watcher = Permanent(card=_card(
+        "Seat Watcher",
+        "Whenever a source you control deals noncombat damage to an opponent, "
+        "you gain 1 life.",
+        type_line="Enchantment",
+    ))
+    mine = Permanent(card=_card("Mine", ""))
+    theirs = Permanent(card=_card("Theirs", ""))
+    owner = PlayerState(name="P1", battlefield=[watcher, mine], life=20)
+    opponent = PlayerState(name="P2", battlefield=[theirs], life=20)
+    game = Game(players=[owner, opponent])
+
+    game._deal_damage_to_player(opponent, 1, source=theirs)
+    assert game.stack == [], "an opponent's source is not a source you control"
+
+    game._deal_damage_to_player(opponent, 1, source=mine)
+    assert [item.card.name for item in game.stack] == ["Seat Watcher"]

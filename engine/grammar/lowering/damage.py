@@ -14,6 +14,7 @@ from .. import ast
 from ..errors import LoweringError
 from ...oracle_types import X_FROM_COUNT
 from ._common import (
+    _EVENT_SUBJECT_CONTROLLERS,
     _REST_OF_TURN,
     _describe_several_targets,
     _names_several_targets,
@@ -534,7 +535,15 @@ def _lower_damage(
         # "…to target player **or planeswalker**" (Chandra's Magmutt) is exactly
         # the clause that may name either, so it keeps the inference: there the
         # permanent index is the choice rather than a leftover.
-        if not recipient.or_planeswalker:
+        if recipient.kind == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
+            # "…deals that much damage to **that creature's controller**"
+            # (Backfire). "That creature" is the object the trigger's event was
+            # about, and nothing chose it — so the seat is the one the fire site
+            # froze (CR 603.10), not whatever the resolution context is
+            # carrying. The same reading `_lower_lose_life` takes of the same
+            # words, from the same table.
+            payload["recipient"] = "event_subject_controller"
+        elif not recipient.or_planeswalker:
             payload["recipient"] = "target_player"
     elif isinstance(recipient, ast.PlayerRef):
         raise LoweringError(f"unsupported damage recipient {recipient.kind!r}", node=node)

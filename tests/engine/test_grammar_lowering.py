@@ -342,16 +342,29 @@ def test_you_draw_and_target_player_draws_use_different_handlers():
     assert _instructions("Target player draws 2 cards.")[0][0] == "draw_target_cards"
 
 
-def test_back_reference_without_a_producer_is_refused():
+def test_a_damage_triggers_that_much_reads_the_events_own_number():
     """El-Hajjâj's "you gain that much life" reads the *trigger's* captured
-    event, not this resolution's scratchpad. Lowering it as a scratchpad read
-    would silently gain zero life, so the grammar refuses and the legacy
-    trigger handler keeps the card — `creature_deals_damage` is deliberately
-    not in `_EVENT_QUANTITIES` while its fire site records the amount under a
-    different key."""
+    event, not this resolution's scratchpad — reading either for the other
+    yields a silent zero.
+
+    This was a refusal for as long as "deals damage" had no seam: the amount
+    was recorded by whichever fire site the card happened to be announced from,
+    under whichever key that site chose, so claiming the line would have
+    retired a hook onto a handler reading the wrong name. One announcement, one
+    key, and the words resolve.
+    """
     result = compile_line(
         "Whenever this creature deals damage, you gain that much life."
     )
+    assert result.lowered
+    assert result.instructions[0].payload["amount_from_trigger"] == "amount"
+
+
+def test_a_back_reference_still_refuses_under_a_trigger_that_records_no_number():
+    """The rule the case above is an instance of, not an exception to: an event
+    with no quantity leaves "that much" naming nothing, and a silent zero is
+    what the refusal exists to prevent."""
+    result = compile_line("Whenever this creature attacks, you gain that much life.")
     assert result.parsed
     assert not result.lowered
     assert "no producer" in result.failure_reason

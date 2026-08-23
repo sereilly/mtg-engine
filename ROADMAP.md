@@ -168,10 +168,14 @@ Feline Sovereign in `auras.py` / `lord_buffs.py`) and still listed as
 refusing. A refusal recorded here is a claim about the code; re-verify it
 against `compile_line` before citing it.
 
-- **El-Hajjâj's "you gain that much life"** is deliberately *not* a row in
-  `_EVENT_QUANTITIES`: its fire site records the amount under a different key,
-  so claiming its line would retire a hook onto a handler reading the wrong
-  name.
+- ~~**El-Hajjâj's "you gain that much life"**~~ — *retired, LEG 10.* It was
+  recorded here as "its fire site records the amount under a different key",
+  which was a fact about a fire site and never about the rule. There is one
+  announcement for every damage event now, so there is one key, and the words
+  lower for El-Hajjâj, Spirit Link and Backfire alike. A refusal resting on
+  where an event happens to be announced from expires the moment the
+  announcement moves — which is the reason this list says to re-verify an
+  entry against `compile_line` before citing it.
 - **Hexproof stays colour-only**, because its targeting branch reads colour
   words alone.
 - **A durationless doubling** (a continuous effect the layers would have to own)
@@ -303,6 +307,16 @@ against `compile_line` before citing it.
     quantifier: a card naming *itself* mid-sentence parses to the same filter
     and means the opposite thing, and rewriting that would aim an Aura's effect
     at the permanent it enchants.
+21. **A comment recording a gap is not a fire site that fires.**
+    `_fire_combat_damage_to_player_triggers` said in its own docstring that
+    El-Hajjâj should also fire on damage dealt to a creature and that "that path
+    isn't wired up (a documented gap, not silent)" — and being documented is
+    what kept it there for four sets (LEG 10). The distinction the note draws is
+    real and the note is still not a dispatcher. When the gap is "this event has
+    more than one announcement", the fix is the seam every one of them already
+    passes through, and the tell is a *condition kind per fire site*: five kinds
+    naming one event is five places to be announced from and five to be
+    forgotten.
 
 ---
 
@@ -1013,3 +1027,87 @@ damage" from the combat-damage-to-a-player path alone, which its own docstring
 has recorded as a gap since El-Hajjâj was written. `damage_events.deal_damage`
 is the one place every damage event passes through, and that is where the
 announcement belongs.
+
+## LEG round 10: "deals damage" was five conditions and three fire sites
+
+**162 → 164 supported.** Spirit Link and Backfire, the other half of the
+attached-trigger family — and the same finding as round 9 one seam over.
+`damage_events.deal_damage` has been the single place a damage event happens
+since it was written, and its own opening docstring says so: "abilities that
+trigger on damage being dealt trigger on what comes out of this half". Nothing
+was announced from there. The triggers were fired from wherever each card
+happened to be played out.
+
+**Every printed narrowing is one row now.** The pool spells the same event nine
+ways —
+
+```
+whenever <this creature | enchanted creature | a source you control | <noun phrase>>
+         deals [combat|noncombat] damage
+         [to <a player | an opponent | you | a planeswalker | a player or planeswalker>]
+```
+
+— and that was five kinds in the condition table plus two more further down,
+each with a dispatcher of its own. One kind (`damage_dealt`), one announcement,
+one `@event_filter`, and both halves read off the trigger's own parsed
+condition.
+
+**Three cards changed behaviour, all of them towards what they print.**
+
+- **El-Hajjâj** ("whenever this creature deals damage, you gain that much
+  life") gained nothing for damage dealt to a blocker, to a planeswalker, or by
+  any ability — its only announcement was inside the combat damage step's
+  *player* loop. That gap was written down in the fire site's own docstring for
+  as long as the site existed, which is what a fire site that is not a seam
+  looks like: the comment was accurate, and being accurate did not make it fire.
+- **Hypnotic Specter** prints "deals damage to an opponent" and was combat-only
+  for six shipped sets, for the same reason.
+- **Garruk's Harbinger** needed *two* fire sites so that "a player or
+  planeswalker" would see both halves. It needs none: a planeswalker takes
+  damage through the same event a player does, and which of them was hit is a
+  question the filter asks.
+
+**A hook retired itself.** El-Hajjâj's "you gain that much life" was a
+name-keyed entry *and* a **deliberate refusal** recorded in this file: the words
+could not be lowered because "its fire site records the amount under a different
+key". That was true of a fire site and never of the rule. With one announcement
+there is one key, `_EVENT_QUANTITIES` gains a single row for the whole family,
+and the grammar reads the line — so the entry died and
+`test_card_lines.py` said so on the first run. Spirit Link's "that much life"
+and Backfire's "that much damage" arrive on the same row.
+
+**Two smaller things the collapse forced, both worth keeping.**
+
+*The bound object is promoted once, not stamped twice.* "Destroy that
+planeswalker" (Hooded Blightfang) needs the damaged permanent on the **stack
+item**, not in the trigger context, and the two fire sites that used to supply
+it wrote it out by hand. `collect` lifts `target_permanent_id` and
+`target_player_index` from any event's payload, so a third announcement cannot
+forget.
+
+*A noun phrase describes permanents, and a damage source need not be one.* For a
+spell the source is the printed card (CR 109.5) — no controller, no computed
+types, nothing the matcher can ask. The old planeswalker site avoided this by
+refusing to announce at all; the filter answers it instead, which is where the
+phrase is. Without the guard, a Shock aimed at a planeswalker with a Hooded
+Blightfang on the board crashed mid-damage-event.
+
+**And one name that was two.** The two announcements called the damaged player's
+seat `damaged_seat` and `defending_player_index`, which is why a handler could
+only be written against one of them. One announcement, one key.
+
+**What stayed where it was, with its reason.** Feline Sovereign's "whenever
+**one or more** … deal combat damage to a player" is one trigger however many
+creatures dealt it, so it is not a per-event announcement and keeps the combat
+step's batching. Subira's delayed trigger (CR 603.7) belongs to no permanent, so
+no battlefield scan can find it. And Chandra's Incinerator's per-turn tally
+stays on the noncombat player-damage path — it is the one site that knows both
+halves of what it counts — while the *announcement* beside it is gone.
+
+**Numbers.** LEG 162 → 164 of 310 (52.3% → 52.9%). Shipped pool 734/734, and
+this time the ratchets moved: ALL executes 48.0% → 48.1% and ARN 41.7% → 42.6%
+(El-Hajjâj's line is the grammar's now), while the ALL hook ceiling falls 11.4%
+→ 11.3% of supported cards and 12.4 → 12.3 entries per 100 — one hook retired,
+counted in both the sets that print the card. Suite 7,009 → 7,023 at ~41s;
+three fire sites and seven condition kinds deleted, one added, and the handler
+the retired hook was the only producer of deleted with it.

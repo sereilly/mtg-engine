@@ -14,6 +14,7 @@ from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _EVENT_SUBJECT_CONTROLLERS,
     _amount_payload,
     _back_reference_payload,
     count_spec,
@@ -345,14 +346,6 @@ def _lower_win_game(node: ast.WinGame) -> tuple[OracleInstruction, ...]:
             f"no handler makes {node.player.kind!r} win the game", node=node
         )
     return (OracleInstruction("player_wins_game", "", {}),)
-
-
-# Trigger events after which "that player" names the controller of the object
-# the event was about, frozen into the trigger's context by the fire site.
-_EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
-    "creature_opponent_controls_dies",   # Massacre Wurm — the dead creature's
-    "creature_becomes_blocked",          # Gloom Sower — the blocker's
-})
 
 
 def _lower_lose_life(

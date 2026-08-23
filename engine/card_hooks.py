@@ -270,10 +270,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'turn':
             _line('untap_attacker_and_prevent_combat_damage', 'spell_pattern'),
     },
-    'El-Hajjâj': {
-        'whenever this creature deals damage, you gain that much life':
-            _line('gain_life_equal_to_damage_dealt', 'triggered_gain_life'),
-    },
     'Erg Raiders': {
         "at the beginning of your end step, if this creature didn't attack this "
         "turn, it deals 2 damage to you unless it came under your control this turn":

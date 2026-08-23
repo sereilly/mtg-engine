@@ -347,16 +347,29 @@ def _amount_payload(amount: ast.Amount) -> int | str:
     raise LoweringError(f"unsupported quantity {type(amount).__name__}", node=amount)
 
 
+# Trigger events after which "that player" names the controller of the object
+# the event was about, frozen into the trigger's context by the fire site.
+#
+# Here rather than beside either reader: two effect families ask it — a life
+# loss (Massacre Wurm) and a damage event (Backfire) — and a fragment two
+# families need belongs in the shared module, which is the same rule the parse
+# side's `phrases.py` follows.
+_EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
+    "creature_opponent_controls_dies",   # Massacre Wurm — the dead creature's
+    "creature_becomes_blocked",          # Gloom Sower — the blocker's
+    # Backfire — the damager's. The subject of a damage event is whatever dealt
+    # it, so "that creature's controller" is the seat `deal_damage` derives for
+    # every event and freezes into the announcement.
+    "damage_dealt",
+})
+
+
 # What a bare "that much" names when the effect is a *triggered ability*: the
 # quantity the firing event carried, frozen into the trigger's context by the
 # fire site. Keyed by trigger-condition kind, and deliberately a table rather
 # than a rule — an event either carries a number or it does not, and a kind
 # absent here refuses the back-reference instead of reading a zero out of an
-# empty context. (El-Hajjâj's "whenever this creature deals damage, you gain
-# that much life" is still not here: its fire site records the amount under a
-# different key, so claiming its line would retire a hook onto a handler
-# reading the wrong name — a change to make deliberately rather than by adding
-# a row.)
+# empty context.
 _EVENT_QUANTITIES: dict[str, str] = {
     "you_gain_life": "life_gained",
     # "Whenever another creature you control enters, this creature deals damage
@@ -369,17 +382,20 @@ _EVENT_QUANTITIES: dict[str, str] = {
     # target opponent." (Brash Taunter.) The number is frozen by the fire site,
     # because by resolution the marked damage may have been added to or wiped.
     "creature_dealt_damage": "damage_dealt",
-    # "Whenever a source you control deals noncombat damage to an opponent,
-    # this creature deals **that much** damage to …" (Chandra's Incinerator).
-    # The fire site already carried the number — it is the damage *dealt*
-    # (CR 120.4b), not what the life total lost — and this is the row that lets
-    # an effect name it.
-    "source_you_control_damages_opponent": "amount",
-    # "…deals combat damage to a player or planeswalker, look at **that many**
-    # cards" (Garruk's Harbinger). Both fire sites record the amount — the
-    # player half and the planeswalker half — which is what makes the one row
-    # true for the whole condition.
-    "creature_deals_combat_damage_to_player_or_walker": "amount",
+    # **The whole "deals damage" family, in one row.** "You gain that much
+    # life" (Spirit Link, El-Hajjâj), "this creature deals that much damage to
+    # …" (Chandra's Incinerator, Backfire), "look at that many cards"
+    # (Garruk's Harbinger) — one event, one number, recorded once by
+    # `damage_events._announce`. It is the damage *dealt* (CR 120.4b), not what
+    # the life total lost: Ali from Cairo caps the second without capping the
+    # first.
+    #
+    # This row is what retires a *deliberate refusal*. El-Hajjâj's "you gain
+    # that much life" was recorded as one, on the grounds that "its fire site
+    # records the amount under a different key" — which was true of a fire
+    # site, not of the rule, and stopped being true the moment there was one
+    # seam to record it at.
+    "damage_dealt": "amount",
 }
 
 # The scratchpad keys that are *quantities*. `categories._PRODUCES` also records

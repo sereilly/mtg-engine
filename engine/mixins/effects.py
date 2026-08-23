@@ -49,37 +49,6 @@ class EffectsMixin:
                 )
                 break
 
-    def _fire_combat_damage_to_walker_triggers(
-        self, attacker: "Permanent", walker: "Permanent", amount: int
-    ) -> None:
-        """"Whenever this creature deals combat damage to a player **or
-        planeswalker**" — the planeswalker half (Garruk's Harbinger).
-
-        Its own site because a planeswalker takes combat damage as a
-        *permanent*: the loyalty-removal path never reaches the player-damage
-        one, so a trigger naming both halves would have fired on exactly one of
-        them. Only the union kind is scanned here — a card printed "to a player"
-        alone must not start firing when a walker is hit.
-        """
-        controller_index = self._controller_index_of(attacker)
-        walker_seat = self.controller_index_of(walker)
-        events = [
-            make_trigger_event(
-                controller_index, attacker, trig,
-                trigger_context={
-                    "defending_player_index": walker_seat,
-                    "damaged_walker_id": walker.permanent_id,
-                    "amount": amount,
-                },
-            )
-            for trig in matching_triggers(
-                attacker.effective_card,
-                condition_kinds={"creature_deals_combat_damage_to_player_or_walker"},
-            )
-        ]
-        if events:
-            self._enqueue_triggered_batch(events)
-
     def _fire_delayed_combat_damage_triggers(
         self, attacker: "Permanent", defending_player: "PlayerState", amount: int
     ) -> None:
@@ -126,51 +95,6 @@ class EffectsMixin:
             })
         if events:
             self._enqueue_triggered_batch(events)
-
-    def _fire_combat_damage_to_player_triggers(
-        self, attacker: Permanent, defending_player: PlayerState, amount: int = 0
-    ) -> None:
-        """Put an attacker's "whenever this creature deals (combat) damage to a
-        player/opponent" triggers (e.g. Hypnotic Specter, El-Hajjaj) onto the
-        stack. They resolve through the post-combat priority window (CR 603.3),
-        like attack/block triggers. The defending player and dealt amount are
-        captured in trigger_context.
-
-        El-Hajjaj's "whenever this creature deals damage" is bare (not
-        player-only), so CR-accurately it should also fire when this creature
-        deals combat damage to a blocking/blocked creature — that path isn't
-        wired up (a documented gap, not silent; the player-damage case below
-        covers the common unblocked scenario)."""
-        controller_index = self._controller_index_of(attacker)
-        defending_index = self.players.index(defending_player)
-        events = [
-            make_trigger_event(
-                controller_index, attacker, trig,
-                trigger_context={"defending_player_index": defending_index, "amount": amount},
-            )
-            for trig in matching_triggers(
-                attacker.effective_card,
-                condition_kinds={
-                    "creature_deals_damage",
-                    "creature_deals_damage_to_opponent",
-                    "deals_damage_to_player",
-                    "creature_deals_combat_damage",
-                    # The union form (Garruk's Harbinger). Fires here for the
-                    # player half; the planeswalker half has its own site in the
-                    # combat damage step, because the walker never reaches this
-                    # path — it takes damage as a permanent.
-                    "creature_deals_combat_damage_to_player_or_walker",
-                },
-                # No instruction-kind filter. It named three kinds — the shapes
-                # the cards in the pool happened to have — so a card written with
-                # any of these conditions and any other effect parsed cleanly and
-                # then fired **nowhere**. That is the dispatch-on-effect defect
-                # round 93 found in the end step, still live here: a trigger's
-                # condition is what says when it fires, and its effect is not a
-                # second condition.
-            )
-        ]
-        self._enqueue_triggered_batch(events)
 
     def _fire_batched_combat_damage_triggers(self, damagers_by_defender: dict) -> None:
         """"Whenever **one or more** <subject> deal combat damage to a player."
@@ -538,7 +462,6 @@ class EffectsMixin:
             if is_planeswalker:
                 loyalty = permanent.metadata.get("loyalty_counters", 0)
                 permanent.metadata["loyalty_counters"] = max(0, loyalty - outcome.result)
-                self._announce_planeswalker_damage(permanent, source)
             if permanent.is_creature or not is_planeswalker:
                 permanent.damage_marked += outcome.result
         # CR 702.15b. Combat is excluded because the combat damage step tallies
@@ -564,43 +487,6 @@ class EffectsMixin:
         if then is not None:
             then(outcome.dealt)
         return outcome.dealt
-
-    def _announce_planeswalker_damage(self, walker, source) -> None:
-        """"Whenever a creature you control with deathtouch deals damage to a
-        planeswalker …" (Hooded Blightfang).
-
-        One emit on the one path every damage-to-a-permanent caller runs
-        through, which is the same argument lifelink and deathtouch make two
-        lines below: the rule is about *damage*, not combat damage, so a ping
-        ability announces exactly as a blocker does. The *damager* is the
-        event's subject — that is what the trigger's noun phrase describes — and
-        the walker rides along as the payload, because "destroy that
-        planeswalker" needs it and it may be gone by the time the trigger
-        resolves.
-        """
-        if source is None or getattr(source, "has_keyword", None) is None:
-            # A spell or a bare card deals damage too; only a permanent can
-            # answer a subject filter about creatures.
-            return
-        # `collect` rather than `emit`, for the reason it is a separate function:
-        # each trigger's stack item is stamped with the walker's **id** before it
-        # goes on, so "destroy that planeswalker" resolves the object the event
-        # was about rather than whatever slid into its slot (CR 400.7 — an index
-        # is not an identity).
-        events = collect(
-            self,
-            Event(
-                kind="matching_creature_damages_planeswalker",
-                subject=source,
-                payload={"walker_id": walker.permanent_id},
-            ),
-        )
-        seat = self.controller_index_of(walker)
-        for event in events:
-            event["target_permanent_id"] = walker.permanent_id
-            if seat is not None:
-                event["target_player_index"] = seat
-        self._enqueue_triggered_batch(events)
 
     def _apply_lifelink(self, source, dealt: int) -> None:
         """CR 702.15b for damage dealt outside the combat damage step.
@@ -1145,7 +1031,7 @@ class EffectsMixin:
         if outcome.dealt > 0:
             target.life -= outcome.result
             self._on_player_dealt_damage(target, outcome.dealt, source)
-            self._announce_noncombat_damage_to_opponent(target, outcome.dealt, source)
+            self._record_noncombat_damage_to_opponent(target, outcome.dealt, source)
             self._apply_mirror_damage(target, outcome.dealt, source)
             # CR 702.15b. No combat guard here, unlike the creature seam: the
             # combat damage step deals to players directly rather than through
@@ -1157,43 +1043,30 @@ class EffectsMixin:
             then(outcome.dealt)
         return outcome.dealt
 
-    def _announce_noncombat_damage_to_opponent(
+    def _record_noncombat_damage_to_opponent(
         self, target: PlayerState, dealt: int, source
     ) -> None:
-        """CR 109.5's "a source you control", announced (Chandra's Pyreling).
+        """The running total Chandra's Incinerator's cost reduction reads.
 
         Every damage event this method runs is noncombat by construction — the
         combat damage step reaches players by its own path, because it applies
         prevention where the event is recorded — so "noncombat" is a property of
-        the fire site and not a flag anything has to remember to set.
+        the fire site and not a flag anything has to remember to set. Kept here
+        for that reason: this is the one site that knows the damage was
+        noncombat *and* whose source it was, and a tally kept anywhere else
+        would have to re-derive both.
 
-        The seat carried is the **source's** controller, and it is derived by
-        the same function the replacements read, so "you control" means one
-        thing across the event. A source with no controller at all (a turn-based
-        action) announces nothing: there is no "you" for the trigger's "you" to
-        be, and guessing the active player would fire it on an opponent's turn.
-
-        The amount rides along as ``amount`` so a "that much" in the effect has a
-        producer to name (round 33) — it is the damage *dealt* (CR 120.4b), not
-        what the life total lost, which is the same number every other reader of
-        this outcome takes.
+        The *announcement* that used to sit beside it is gone. "Whenever a
+        source you control deals noncombat damage to an opponent" is
+        `damage_dealt` narrowed on both axes now, announced with every other
+        damage event from `damage_events._announce` — and the seat this
+        function derived by hand is the one `deal_damage` fills in for every
+        event, from the same `damage_source_seat`.
         """
         seat = damage_source_seat(self, source)
         if seat is None or self.players[seat] is target:
             return
-        # The running total the cost reduction reads (Chandra's Incinerator).
-        # Recorded here rather than at each damage path for the same reason the
-        # announcement is: this is the one site that knows the damage was
-        # noncombat *and* whose source it was, and a tally kept anywhere else
-        # would have to re-derive both.
         self.players[seat].noncombat_damage_dealt_to_opponents_this_turn += dealt
-        emit(
-            self,
-            "source_you_control_damages_opponent",
-            seat=seat,
-            amount=dealt,
-            damaged_seat=self.players.index(target),
-        )
 
     def _apply_mirror_damage(self, target: PlayerState, damage: int, source) -> None:
         """Eye for an Eye: the damage still happens, and its source's controller

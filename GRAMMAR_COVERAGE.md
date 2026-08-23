@@ -19,12 +19,12 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | LEA | 290 | 388 | 80.4% | 79.4% | 43.0% | 153 |
 | LEB | 292 | 389 | 80.5% | 79.4% | 43.2% | 154 |
 | 2ED | 292 | 389 | 80.5% | 79.4% | 43.2% | 154 |
-| ARN | 78 | 108 | 67.6% | 63.9% | 41.7% | 36 |
+| ARN | 78 | 108 | 67.6% | 64.8% | 42.6% | 37 |
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
-| 3ED | 296 | 389 | 81.2% | 79.9% | 44.5% | 156 |
+| 3ED | 296 | 389 | 81.2% | 80.2% | 44.7% | 157 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| LEG *(measured)* | 310 | 431 | 52.9% | 47.3% | 23.7% | 93 |
-| **All (shipped)** | **1618** | **2286** | **81.8%** | **80.7%** | **48.0%** | **954** |
+| LEG *(measured)* | 310 | 431 | 53.4% | 47.8% | 24.1% | 95 |
+| **All (shipped)** | **1618** | **2286** | **81.8%** | **80.8%** | **48.1%** | **956** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -34,9 +34,9 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 253 | 138 | expected a subject |  |
+| 248 | 133 | expected a subject |  |
 | 116 | 52 | unrecognized effect verb |  |
-| 76 | 52 | unconsumed text |  |
+| 77 | 53 | unconsumed text |  |
 | 42 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
 | 30 | 30 | unrecognized activation cost |  |
 | 12 | 7 | expected 'the number of' in a where-clause |  |
@@ -46,8 +46,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 9 | 4 | expected a colour or a creature body after 'becomes' |  |
 | 9 | 5 | no handler for non-targeted tap/untap |  |
 | 8 | 4 | no lowering for RawEffect |  |
+| 6 | 3 | expected a quantity |  |
 | 6 | 6 | expected 'unless defending player controls' |  |
-| 5 | 2 | expected a quantity |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 2 | expected 'your' |  |
 | 4 | 2 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
@@ -56,13 +56,13 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 3 | 2 | expected a destination zone after 'return' |  |
 | 3 | 3 | no return handler honours this restriction |  |
 | 3 | 3 | expected 'the' |  |
-| 2 | 1 | bare back-reference with no producer in this effect and no quantity on its trigger |  |
 | 2 | 2 | expected something to destroy |  |
 | 2 | 1 | expected something to shield |  |
+| 2 | 2 | expected a damage recipient |  |
 
 ## Cards executing through the grammar
 
-954 cards, 1098 lines.
+956 cards, 1100 lines.
 
 - **Acid Rain**
   - `Destroy all Forests.`
@@ -145,6 +145,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
 - **Aven Gagglemaster**
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
+- **Backfire**
+  - `Whenever enchanted creature deals damage to you, this Aura deals that much damage to that creature's controller.`
 - **Bad Deal**
   - `You draw two cards and each opponent discards two cards. Each player loses 2 life.`
 - **Bad Moon**
@@ -514,6 +516,9 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Earthquake deals X damage to each creature without flying and each player.`
   - `Earthquake deals X damage to each creature without flying and each player.`
   - `Earthquake deals X damage to each creature without flying and each player.`
+- **El-Hajjâj**
+  - `Whenever this creature deals damage, you gain that much life.`
+  - `Whenever this creature deals damage, you gain that much life.`
 - **Elder Gargaroth**
   - `• Create a 3/3 green Beast creature token.`
   - `• You gain 3 life.`
@@ -1504,6 +1509,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Destroy target blue creature.`
 - **Spined Megalodon**
   - `Whenever this creature attacks, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
+- **Spirit Link**
+  - `Whenever enchanted creature deals damage, you gain that much life.`
 - **Spirit Shackle**
   - `Whenever enchanted creature becomes tapped, put a -0/-2 counter on it.`
 - **Spirit of Malevolence**

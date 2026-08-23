@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**302 / 611 tracked rules covered (49%)** — 1371 tests, 0 unannotated.
+**302 / 611 tracked rules covered (49%)** — 1374 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -204,7 +204,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d...
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [ ] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th...
-- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(6 tests)*
+- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(7 tests)*
 
 ### 110. Permanents
 
@@ -323,7 +323,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **120.1** Objects can deal damage to battles, creatures, planeswalkers, and players. This is generally detr...
 - [ ] **120.2** Any object can deal damage.
 - [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(4 tests, subrules acf)*
-- [x] **120.4** Damage is processed in a four-part sequence. *(6 tests, subrules bc)*
+- [x] **120.4** Damage is processed in a four-part sequence. *(9 tests, subrules bc)*
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
 - [x] **120.7** The source of damage is the object that dealt it. If an effect requires a player to choose a sour... *(1 tests)*
@@ -680,7 +680,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 603. Handling Triggered Abilities
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(1 tests)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(11 tests, subrules bd)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(13 tests, subrules bd)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(19 tests, subrules b)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(3 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(1 tests)*

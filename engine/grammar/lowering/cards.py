@@ -24,11 +24,7 @@ from ._common import (
 # the damage out of the trigger's captured context and nothing at all out of its
 # payload, so it is only a reading of the sentence while one of these fired —
 # under any other trigger the same words would name a player nobody recorded.
-_DAMAGED_PLAYER_EVENTS = frozenset({
-    "creature_deals_damage_to_opponent",
-    "deals_damage_to_player",
-    "creature_deals_combat_damage",
-})
+_DAMAGED_PLAYER_EVENTS = frozenset({"damage_dealt"})
 
 
 def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleInstruction, ...]:

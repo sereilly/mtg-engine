@@ -246,18 +246,40 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # that is a strict prefix of a later pattern's text would shadow it —
     # specific forms must precede their generic prefixes. Guarded by
     # tests/engine/test_trigger_tables.py.
-    # "…to a player **or planeswalker**" (Garruk's Harbinger). Its own kind
-    # rather than a widening of the row below, because the two fire in different
-    # places: damage to a player comes from the player-damage path, damage to a
-    # planeswalker from the loyalty-removal one, and a card naming only the
-    # first must not start firing on the second. Longest first, as the note
-    # above requires.
-    ("creature_deals_combat_damage_to_player_or_walker",
-     r"whenever this creature deals combat damage to a player or planeswalker"),
-    ("creature_deals_combat_damage",r"whenever this creature deals combat damage to a player"),
-    ("creature_deals_damage_to_opponent", r"whenever this creature deals damage to an opponent"),
-    ("deals_damage_to_player",      r"whenever .+ deals damage to a player"),
-    ("creature_deals_damage",       r"whenever this creature deals damage"),
+    # **CR 120.4b's event, once.** "Whenever <someone> deals [combat|noncombat]
+    # damage [to <someone>]" was five kinds here and two more further down, and
+    # every one of them named the same thing happening — which is how each ended
+    # up dispatched from wherever its card happened to be played out. The
+    # unqualified reading (El-Hajjâj, Spirit Link) was announced from inside the
+    # combat damage step's *player* loop, so it gained nothing for damage dealt
+    # to a blocker or by an ability; Hypnotic Specter's "deals damage to an
+    # opponent" was combat-only for the same reason; the two halves of Garruk's
+    # Harbinger's "a player or planeswalker" had two fire sites so that the card
+    # would see both.
+    #
+    # One row, one kind, one announcement (`damage_events._announce`), and every
+    # narrowing the pool prints is a named group the dispatcher reads:
+    #
+    # - the **damager** — "this creature", "enchanted creature", "a source you
+    #   control", or any noun phrase the noun parser reads (Hooded Blightfang's
+    #   "a creature you control with deathtouch");
+    # - whether the card said **combat** or **noncombat**;
+    # - the **recipient** — a player, an opponent, you, a planeswalker, or the
+    #   union Garruk's Harbinger prints.
+    #
+    # The comma bound on the subject group is load-bearing, as everywhere in
+    # this table: a trigger condition ends at one, so the group can never reach
+    # into the effect clause.
+    ("damage_dealt",
+     r"whenever (?:"
+     r"(?P<damager_self>this (?:creature|artifact|enchantment|land|permanent))"
+     r"|(?P<damager_attached>enchanted (?:creature|artifact|enchantment|land|permanent))"
+     r"|a source (?P<damager_controller>you) control"
+     r"|(?P<damager_subject>[^,]+?)"
+     r")"
+     r" deals(?: (?P<damage_combat>combat|noncombat))? damage"
+     r"(?: to (?P<damage_recipient>a player or planeswalker|a player"
+     r"|an opponent|a planeswalker|you))?(?=,|$)"),
     ("creature_blocks_or_blocked_by_nonwall", r"whenever this creature blocks or becomes blocked by a non-wall creature"),
     ("creature_attacks_or_blocks",  r"whenever this creature attacks or blocks"),
     # A trigger whose *subject* is a set of objects rather than the source:
@@ -269,13 +291,6 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # group is read by the noun parser (see `_resolve_subject_groups`), and the
     # comma bound is load-bearing: a trigger condition ends at one, so `[^,]+`
     # can never reach into the effect clause.
-    # The same subject over a damage event (Hooded Blightfang's second line).
-    # `deals_damage_to_player` above does not shadow it: "planeswalker" and
-    # "player" share four letters and diverge at the fifth, so the two recipients
-    # are disjoint literals rather than a prefix pair — which the shadowing
-    # guard checks rather than this comment asserting it.
-    ("matching_creature_damages_planeswalker",
-     r"whenever (?P<damager_subject>(?:a|another) [^,]+) deals damage to a planeswalker"),
     ("matching_creature_attacks",
      r"whenever (?P<attacker_subject>(?:a|another) [^,]+) attacks"),
     # Two spellings of one event: the *declaration* (CR 508.1), which is the
@@ -531,16 +546,6 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # brings it (the specific-before-generic rule), and "creature" is not a
     # prefix of "permanent", so neither shadows the other.
     ("you_sacrifice_permanent",     r"whenever you sacrifice a permanent"),
-    # "Whenever a source you control deals noncombat damage to an opponent …"
-    # (Chandra's Pyreling, Chandra's Incinerator). "A source you control" is the
-    # seat that controls the damage's source (CR 109.5), which a damage event
-    # could not answer until it started carrying one: what the damage paths hold
-    # for a spell is its printed card, and no player controls a printed card.
-    # Announced from `_deal_damage_to_player`, which is the noncombat seam —
-    # the combat damage step reaches players by its own path, so "noncombat" is
-    # a property of the fire site rather than a flag it has to remember.
-    ("source_you_control_damages_opponent",
-     r"whenever a source you control deals noncombat damage to an opponent"),
     # "Whenever you activate a loyalty ability of a Chandra planeswalker …"
     # (Keral Keep Disciples). "Chandra" is a planeswalker *subtype*
     # (data/vocabulary/planeswalker_types.json) and never a card name, so the
