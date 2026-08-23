@@ -1,0 +1,321 @@
+"""Lowering counters: putting, removing, and repeating per death (CR 122).
+
+A counter is a marker placed on an object (CR 122.1); the P/T it may carry is
+a consequence the layers compute, not the effect itself, which is why this is
+its own family on the lowering side — it split out of `characteristics.py`
+when the two together crossed the thousand-line cap. The per-death repetition
+compares its exact subject for equality rather than pattern-matching it, so a
+card with a *narrower* subject cannot silently take the same handler.
+"""
+
+from ...oracle_types import OracleInstruction
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+from .. import ast
+from ..errors import LoweringError
+from ..phrases import _COUNTER_KINDS
+from ._common import (
+    _amount_payload,
+    _describe_several_targets,
+    _describe_targets,
+    _is_source,
+    _is_target,
+    _names_several_targets,
+    _restrictions_beyond,
+)
+
+
+# The ObjectFilter fields the loyalty-counter picker reads. Only what the pool
+# actually prints ("a Liliana planeswalker you control"): a filter with no card
+# behind it is untested by construction, and `_restrictions_beyond` turns every
+# other field — present today or added to the AST later — into a refusal rather
+# than a silently wider effect.
+_LOYALTY_PICKER_HONOURED = frozenset({"card_types", "subtypes", "controller"})
+
+
+def _amount_value(amount) -> int:
+    """A fixed Amount as a plain int, for a payload that carries a number."""
+    return amount.value if isinstance(amount, ast.Fixed) else 0
+
+
+def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
+    # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) The source's
+    # own loyalty lives on the permanent (metadata["loyalty_counters"],
+    # CR 306.5c); a *chosen* permanent's is the same key reached through the
+    # picker below.
+    if node.counter == "loyalty":
+        if not isinstance(node.count, ast.Fixed) or node.up_to:
+            raise LoweringError("variable loyalty-counter counts have no handler", node=node)
+        if _is_source(node.subject):
+            return (
+                OracleInstruction("add_loyalty_counters", "", {"count": node.count.value}),
+            )
+        # "Put a loyalty counter on a Liliana planeswalker you control."
+        # (Liliana's Scrounger.) A noun phrase with no "target" in it: nothing
+        # was chosen when the ability went on the stack, so the controller picks
+        # at resolution out of what the phrase names then — the same split
+        # `_lower_sacrifice` makes between "sacrifice this creature" and
+        # "sacrifice a creature".
+        if (
+            isinstance(node.subject, ast.TargetSpec)
+            and not node.subject.targeted
+            and node.subject.quantifier not in ("all", "each")
+            and node.subject.count == 1
+        ):
+            filt = node.subject.filter
+            # Two gates, because they catch different halves of the same bug.
+            #
+            # `_restrictions_beyond` reads the **AST**, so a restriction
+            # `to_payload` does not emit at all cannot be dropped on the floor:
+            # "a planeswalker card **in your graveyard**" and "an **enchanted**
+            # planeswalker" both reduce to the same payload as the plain phrase,
+            # and without this they compile into a battlefield picker. The
+            # honoured set is only what the pool prints, per round 43's rule that
+            # a filter with no card behind it is untested by construction.
+            leftovers = _restrictions_beyond(filt, _LOYALTY_PICKER_HONOURED)
+            if leftovers:
+                raise LoweringError(
+                    f"the loyalty-counter picker does not honour {leftovers[0]!r}",
+                    node=node,
+                )
+            if not filt.card_types:
+                raise LoweringError(
+                    "a loyalty-counter picker with no card type would offer "
+                    "every permanent",
+                    node=node,
+                )
+            described = filt.to_payload()
+            # And the load-bearing gate CLAUDE.md names (round 34): a key
+            # `subject_matches` cannot test is one the picker would silently
+            # ignore, which would offer *every* planeswalker where the card names
+            # one subtype. Kept beside the first so widening the honoured set
+            # above can never outrun the matcher.
+            if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+                raise LoweringError(
+                    "the loyalty-counter picker cannot test this restriction",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "add_loyalty_counters_to_chosen", "",
+                    {"count": node.count.value, "filter": described},
+                ),
+            )
+        raise LoweringError(
+            "loyalty counters land on the ability's own source or on one "
+            "permanent its controller chooses",
+            node=node,
+        )
+    # A **named** counter on the source ("put a soul counter on this Equipment",
+    # Malefic Scythe). CR 122.1 counters with no rules meaning of their own:
+    # engine/named_counters.py holds them, and what they mean is whatever the
+    # card's other lines say about them. Only on the source, because that is the
+    # only permanent the placement can name without a picker.
+    if node.counter not in _COUNTER_KINDS and not node.up_to and _is_source(node.subject):
+        if not isinstance(node.count, ast.Fixed):
+            raise LoweringError("a named counter is placed a fixed number at a time", node=node)
+        return (
+            OracleInstruction(
+                "add_named_counter_to_self", "",
+                {"counter": node.counter, "count": node.count.value},
+            ),
+        )
+    # "Put up to X +1/+0 counters on this creature. This ability can't cause the
+    # total number of +1/+0 counters on this creature to be greater than N."
+    # (Clockwork Beast prints seven, Clockwork Avian four.) The cap is payload,
+    # which is the whole reason this is a production: the two cards differ by a
+    # number, and the number used to be baked into a card-name-keyed hook whose
+    # key spelled out "seven".
+    #
+    # The cap is **required**. Without it the ability would put counters on
+    # without limit, which is a card doing more than it prints — so a bare
+    # "put up to X +1/+0 counters" keeps refusing.
+    if node.counter == "+1/+0" and _is_source(node.subject) and node.cap is not None:
+        return (
+            OracleInstruction(
+                "add_power_counters_to_self", "",
+                {
+                    "amount": "x" if isinstance(node.count, ast.Var) else _amount_value(node.count),
+                    "cap": node.cap,
+                    "up_to": bool(node.up_to),
+                },
+            ),
+        )
+    if node.counter != "+1/+1" or node.up_to:
+        raise LoweringError(f"no handler for {node.counter} counters", node=node)
+    if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):
+        # "…put **that many** +1/+1 counters on this creature." (Tetravus.) The
+        # number is the one the step before it recorded, so it rides the payload
+        # as the same back-reference key the token maker's "that many" reads —
+        # one phrase, one meaning, wherever in a sentence it appears.
+        return (
+            OracleInstruction(
+                "add_counter_to_self", "",
+                {"power": 1, "toughness": 1, "count": "trigger_count"},
+            ),
+        )
+    if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+        raise LoweringError("variable counter counts have no handler", node=node)
+    if _is_source(node.subject):
+        return (
+            OracleInstruction("add_counter_to_self", "", {"power": 1, "toughness": 1}),
+        )
+    if _names_several_targets(node.subject):
+        # "Put a +1/+1 counter on each of up to two target creatures" (Basri's
+        # Aegis, Basri's Acolyte). Same instruction as the single-target form —
+        # the effect is identical and only the number of targets differs, which
+        # is payload — but described with `_describe_several_targets`, the
+        # opt-in that tells the handler to resolve a list and the picker to
+        # collect up to that many.
+        assert isinstance(node.subject, ast.TargetSpec)
+        several: dict[str, object] = {"power": 1, "toughness": 1}
+        _describe_several_targets(several, node.subject)
+        return (OracleInstruction("add_counter_to_target", "", several),)
+    if _is_target(node.subject):
+        # "Put a +1/+1 counter on target creature [you control]." The kind
+        # predates this lowering: Dwarven Weaponsmith's hook has always emitted
+        # it, so the grammar joins the same handler rather than minting a
+        # second name for the same effect.
+        assert isinstance(node.subject, ast.TargetSpec)
+        payload: dict[str, object] = {"power": 1, "toughness": 1}
+        # "…, then double the number of +1/+1 counters on that creature."
+        # (Invigorating Surge.) Payload on the same instruction, because the
+        # doubling is about the creature this one just chose — a second
+        # instruction would have to re-find it, and "that creature" names no
+        # target of its own. Emitted only when printed, so every payload
+        # written before it is byte-identical.
+        if node.then_double:
+            payload["then_double"] = True
+        _describe_targets(payload, node.subject)
+        return (OracleInstruction("add_counter_to_target", "", payload),)
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in (
+        "all",
+        "each",
+    ):
+        # "Put a +1/+1 counter on each creature you control." Only the
+        # own-side creature sweep has a handler; a wider scope refuses.
+        filt = node.subject.filter
+        if filt.card_types != ("creature",) or filt.controller != "you":
+            raise LoweringError("counters on a scope no handler sweeps", node=node)
+        return (
+            OracleInstruction(
+                "add_counter_to_each_you_control", "", {"power": 1, "toughness": 1}
+            ),
+        )
+    raise LoweringError("counters on a non-source subject", node=node)
+
+
+# Counter placements repeated once per creature that died this turn, keyed by
+# the counter's printed name — the only thing that differs between the two
+# cards written this way, and what decides which handler runs. Both handlers
+# read the death count from the trigger's own context rather than from the
+# payload, so the payloads here are the legacy rules' literals and nothing
+# more.
+_PER_DEATH_COUNTERS: dict[str, tuple[str, dict[str, object]]] = {
+    # Scavenging Ghoul — regeneration fuel, spent by its own activated ability.
+    "corpse": ("add_corpse_counters_for_each_creature_died", {}),
+    # Khabál Ghoul — P/T counters.
+    "+1/+1": ("add_plus1_counters_for_each_creature_died", {"power": 1, "toughness": 1}),
+}
+
+# The exact subject both handlers act on. Compared for equality rather than
+# probed field by field, so a filter field added to the AST later refuses by
+# default instead of being ignored by a lowering written before it existed.
+_PER_DEATH_SUBJECT = ast.TargetSpec(
+    "this", ast.ObjectFilter(card_types=("creature",), is_source=True)
+)
+
+# Both handlers count *every* creature that died, with no narrowing available
+# to them, so any filtered set has to refuse rather than over-count.
+_ANY_CREATURE_DIED = ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))
+
+
+def _lower_remove_counter(node: ast.RemoveCounter) -> tuple[OracleInstruction, ...]:
+    """``Remove a <kind> counter from this <permanent>`` (Armageddon Clock).
+
+    The counter's name is payload — it is the accumulating side's payload too
+    (``upkeep_put_counter_on_self``), so the pair is one template rather than a
+    card. What is *not* payload is the subject or the number:
+    ``remove_counter_from_self`` reads the ability's own source and decrements by
+    one, so anything else refuses rather than compiling onto a handler that
+    would quietly do that instead.
+    """
+    # "Remove two loyalty counters from each planeswalker." (Pestilent Haze's
+    # second mode.) A sweep, not a choice: every planeswalker on every
+    # battlefield loses that many, and CR 704.5i collects the ones that hit
+    # zero. Only the loyalty/planeswalker pairing has a handler — loyalty is
+    # the one counter kind whose storage the handler knows how to reach.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "each"
+        and node.counter == "loyalty"
+    ):
+        if node.subject.filter.card_types != ("planeswalker",):
+            raise LoweringError(
+                "the loyalty sweep removes from planeswalkers alone", node=node
+            )
+        amount = _amount_payload(node.count)
+        if not isinstance(amount, int) or amount <= 0:
+            raise LoweringError("the loyalty sweep takes a fixed count", node=node)
+        return (
+            OracleInstruction(
+                "remove_loyalty_from_each_planeswalker", "", {"amount": amount}
+            ),
+        )
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "the only counter-removal handler reads the ability's own source", node=node
+        )
+    if isinstance(node.count, ast.AnyNumber):
+        # "Remove **any number of** +1/+1 counters from this creature."
+        # (Tetravus.) Its own kind rather than a count on the one above: that
+        # handler decrements by a number it already knows, and this one has to
+        # ask its controller for the number first. What it removes is recorded,
+        # because the sentence after it ("create **that many** … tokens") reads
+        # it back.
+        return (
+            OracleInstruction(
+                "remove_any_number_of_counters_from_self", "", {"counter": node.counter}
+            ),
+        )
+    if _amount_payload(node.count) != 1:
+        raise LoweringError("no handler removes more than one counter at a time", node=node)
+    return (
+        OracleInstruction("remove_counter_from_self", "", {"counter": node.counter}),
+    )
+
+
+def _lower_for_each(node: ast.ForEach) -> tuple[OracleInstruction, ...]:
+    """"…put a <kind> counter on this creature for each creature that died this
+    turn." (Scavenging Ghoul, Khabál Ghoul.)
+
+    The legacy registry needed a whole-sentence substring rule per card, and the
+    +1/+1 one carries a comment saying it must out-rank the plain "put a +1/+1
+    counter on this creature" rule — which sits 96,500 order slots away, because
+    the two rules are unrelated except that one is a prefix of the other. Losing
+    that race would drop the per-death scaling and put down a single counter.
+    Here the "for each …" clause is a node, so the two shapes are simply
+    different ASTs and there is no race to lose.
+
+    Everything else refuses, because neither handler reads anything from its
+    payload: the subject, the multiplier and the counted set are all fixed in
+    the handler's own source, so a clause differing in any of them would be
+    executed as if it had not.
+    """
+    if node.iterator != _ANY_CREATURE_DIED:
+        raise LoweringError("no handler repeats an effect over this set", node=node)
+    placement = node.effect
+    if not isinstance(placement, ast.PutCounter):
+        raise LoweringError("no handler repeats this effect per death", node=node)
+    if placement.subject != _PER_DEATH_SUBJECT:
+        raise LoweringError(
+            "the per-death counter handlers only ever reach their own source", node=node
+        )
+    if placement.up_to or placement.count != ast.Fixed(1):
+        raise LoweringError("no handler places more than one counter per death", node=node)
+    found = _PER_DEATH_COUNTERS.get(placement.counter)
+    if found is None:
+        raise LoweringError(
+            f"no handler places {placement.counter!r} counters per death", node=node
+        )
+    kind, payload = found
+    return (OracleInstruction(kind, "", dict(payload)),)

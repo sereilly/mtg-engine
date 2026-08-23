@@ -80,7 +80,10 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # reached 959 of the 1,000 lines: the hidden-zone flows and mana production
 # each lower to far more than their parse halves read. If `effects/cards.py`
 # ever splits, reuse these names so the mirror re-forms instead of forking.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "mana"]
+# `counters` split out of `lowering/characteristics.py` at 975 lines, the day
+# before a set ingest: a counter (CR 122) is a marker on an object, not a
+# characteristic of it, and the two halves shared no imports.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "mana", "counters"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 

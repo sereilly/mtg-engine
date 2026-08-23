@@ -281,3 +281,49 @@ def test_gaeas_liege_dies_with_zero_forests(all_cards):
 
     assert not any(p.card.name == "Gaea's Liege" for p in p1.battlefield)
     assert any(c.name == "Gaea's Liege" for c in p1.graveyard)
+
+
+class TestLandCards:
+    def test_basic_lands_produce_correct_mana(self, all_cards):
+        land_mana = [
+            ("Plains", "W"),
+            ("Island", "U"),
+            ("Swamp", "B"),
+            ("Mountain", "R"),
+            ("Forest", "G"),
+        ]
+        for land_name, expected_color in land_mana:
+            land = _get(all_cards, land_name)
+            p1 = PlayerState(name="P1", battlefield=[Permanent(card=land)])
+            p2 = PlayerState(name="P2")
+            game = Game(players=[p1, p2])
+
+            ok = game.tap_land_for_mana(0, land_name)
+
+            assert ok, f"{land_name} should be tappable for mana"
+            assert p1.mana_pool[expected_color] == 1, f"{land_name} should produce {expected_color}"
+
+    def test_dual_lands_produce_either_color(self, all_cards):
+        # Each dual land should tap for one of its two colors
+        dual_pairs = [
+            ("Tundra", "W", "U"),
+            ("Underground Sea", "U", "B"),
+            ("Badlands", "B", "R"),
+            ("Taiga", "R", "G"),
+            ("Savannah", "G", "W"),
+            ("Scrubland", "W", "B"),
+            ("Bayou", "B", "G"),
+            ("Plateau", "R", "W"),
+            ("Tropical Island", "G", "U"),
+        ]
+        for land_name, color_a, color_b in dual_pairs:
+            land = _get(all_cards, land_name)
+            p1 = PlayerState(name="P1", battlefield=[Permanent(card=land)])
+            p2 = PlayerState(name="P2")
+            game = Game(players=[p1, p2])
+
+            ok = game.tap_land_for_mana(0, land_name)
+
+            assert ok, f"{land_name} should be tappable"
+            produced = sum(p1.mana_pool.get(c, 0) for c in (color_a, color_b))
+            assert produced >= 1, f"{land_name} should produce {color_a} or {color_b}"

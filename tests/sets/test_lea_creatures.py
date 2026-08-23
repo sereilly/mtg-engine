@@ -1588,3 +1588,65 @@ def test_rock_hydra_shield_stops_at_its_last_counter(all_cards):
         {"recipient": hydra, "amount": 2, "source": _get(all_cards, "Lightning Bolt"), "combat": False},
     )
     assert second.dealt == 2, "no counters left, nothing prevented"
+
+
+def test_two_headed_giant_enters_with_trample(all_cards):
+    giant = _get(all_cards, "Two-Headed Giant of Foriys")
+    p1 = PlayerState(name="P1", hand=[giant])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Two-Headed Giant of Foriys")
+
+    assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Two-Headed Giant of Foriys"
+    assert perm.effective_power == 4
+    assert perm.effective_toughness == 4
+    assert any(k.lower() == "trample" for k in giant.keywords)
+
+
+def test_gaeas_liege_pt_refreshes_when_attackers_declared(all_cards):
+    # Regression: declaring attackers must recompute dynamic P/T so the Liege
+    # switches from its controller's Forests to the defending player's Forests.
+    liege = _get(all_cards, "Gaea's Liege")
+    forest = _get(all_cards, "Forest")
+    liege_perm = Permanent(card=liege)
+    p1 = PlayerState(name="P1", battlefield=[liege_perm, Permanent(card=forest)])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=forest), Permanent(card=forest), Permanent(card=forest)],
+    )
+    game = Game(players=[p1, p2])
+    game._refresh_dynamic_creatures()
+    assert (liege_perm.effective_power, liege_perm.effective_toughness) == (1, 1)
+
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    liege_perm.tapped = False
+
+    ok, _ = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok
+    assert (liege_perm.effective_power, liege_perm.effective_toughness) == (3, 3)
+
+
+def test_gaeas_liege_activation_targets_chosen_land(all_cards):
+    # Regression: the player may pick which land becomes a Forest, not just the first.
+    liege = _get(all_cards, "Gaea's Liege")
+    plains = _get(all_cards, "Plains")
+    island = _get(all_cards, "Island")
+    forest = _get(all_cards, "Forest")
+    # Give P1 a Forest so Gaea's Liege is 1/1 and survives (otherwise it is 0/0,
+    # dies as an SBA, and the Forest-conversion it created would end with it).
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=liege), Permanent(card=forest)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains), Permanent(card=island)])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(
+        0, "Gaea's Liege", target_player_index=1, target_permanent_index=1
+    )
+
+    assert result.supported
+    assert p2.battlefield[0].changed_land_types == ()
+    assert p2.battlefield[1].changed_land_types == ("forest",)

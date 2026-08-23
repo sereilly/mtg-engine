@@ -1195,3 +1195,148 @@ def test_mana_vault_untapped_by_its_upkeep_trigger_skips_the_draw_step_damage(ca
     game.resolve_draw_step(0)
 
     assert p1.life == 20
+
+
+class TestArtifactCards:
+    def test_black_lotus_adds_three_mana(self, all_cards):
+        lotus = _get(all_cards, "Black Lotus")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=lotus)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Black Lotus", mana_color="U")
+
+        assert result.supported
+        assert p1.mana_pool["U"] == 3
+        assert not p1.battlefield  # lotus sacrificed itself
+
+    def test_mox_sapphire_taps_for_blue(self, all_cards):
+        mox = _get(all_cards, "Mox Sapphire")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Mox Sapphire", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["U"] == 1
+
+    def test_mox_emerald_taps_for_green(self, all_cards):
+        mox = _get(all_cards, "Mox Emerald")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Mox Emerald", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["G"] == 1
+
+    def test_mox_jet_taps_for_black(self, all_cards):
+        mox = _get(all_cards, "Mox Jet")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Mox Jet", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["B"] == 1
+
+    def test_mox_pearl_taps_for_white(self, all_cards):
+        mox = _get(all_cards, "Mox Pearl")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Mox Pearl", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["W"] == 1
+
+    def test_mox_ruby_taps_for_red(self, all_cards):
+        mox = _get(all_cards, "Mox Ruby")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Mox Ruby", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["R"] == 1
+
+    def test_sol_ring_taps_for_two_colorless(self, all_cards):
+        ring = _get(all_cards, "Sol Ring")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=ring)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Sol Ring", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["C"] == 2
+
+    def test_nevinyrral_disk_destroys_artifacts_creatures_enchantments(self, all_cards):
+        disk = _get(all_cards, "Nevinyrral's Disk")
+        bear = _grizzly(all_cards)
+        bad_moon = _get(all_cards, "Bad Moon")
+        plains = _plains(all_cards)
+
+        p1 = PlayerState(
+            name="P1",
+            battlefield=[
+                Permanent(card=disk, tapped=False),
+                Permanent(card=bear),
+                Permanent(card=bad_moon),
+                Permanent(card=plains),
+            ],
+        )
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Nevinyrral's Disk")
+
+        assert result.supported
+        types_remaining = {p.card.primary_type for p in p1.battlefield}
+        assert "creature" not in types_remaining
+        assert "enchantment" not in types_remaining
+        assert "artifact" not in types_remaining
+        assert "land" in types_remaining  # plains survives
+
+    def test_steal_artifact_moves_artifact_to_caster(self, all_cards):
+        steal = _get(all_cards, "Steal Artifact")
+        sol_ring = _get(all_cards, "Sol Ring")
+
+        p1 = PlayerState(name="P1", hand=[steal])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=sol_ring)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Steal Artifact", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert any(p.card.name == "Sol Ring" for p in p1.battlefield)
+        assert not any(p.card.name == "Sol Ring" for p in p2.battlefield)
+
+    def test_icy_manipulator_taps_any_permanent(self, all_cards):
+        icy = _get(all_cards, "Icy Manipulator")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=icy)])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Icy Manipulator", target_player_index=1)
+
+        assert result.supported
+        assert p2.battlefield[0].tapped is True
+
+    def test_rod_of_ruin_deals_1_damage(self, all_cards):
+        rod = _get(all_cards, "Rod of Ruin")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=rod)])
+        p2 = PlayerState(name="P2", life=20)
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Rod of Ruin", target_player_index=1)
+
+        assert result.supported
+        assert p2.life == 19

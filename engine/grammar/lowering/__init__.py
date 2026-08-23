@@ -7,7 +7,8 @@ template has one home on each side — prowess parses in
     _common          payload shapes and the fragments several families need
     categories       the kind -> category registry the gate reads
     damage           dealing it, and preventing it
-    characteristics  P/T, keywords, colour, printed text, counters
+    characteristics  P/T, keywords, colour, printed text
+    counters         putting and removing them, and the per-death repetition
     board            destruction, bouncing, tapping, control, exile
     cards            draw, discard, mill, scry
     library          search, reveal, look-at, exile linkage — the hidden zones
@@ -76,15 +77,17 @@ from .characteristics import (
     _KEYWORD_GRANTS,
     _lower_gain_keyword,
     _lower_lose_keyword,
+    _lower_become_color,
+    _lower_gain_type,
+    _lower_change_text,
+)
+from .counters import (
     _lower_put_counter,
     _PER_DEATH_COUNTERS,
     _PER_DEATH_SUBJECT,
     _ANY_CREATURE_DIED,
     _lower_remove_counter,
     _lower_for_each,
-    _lower_become_color,
-    _lower_gain_type,
-    _lower_change_text,
 )
 from .zones import (
     _lower_exile_until_leaves_or_untaps,

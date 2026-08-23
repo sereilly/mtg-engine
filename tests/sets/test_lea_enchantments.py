@@ -1830,3 +1830,177 @@ def test_animate_dead_creature_sacrificed_when_aura_leaves(all_cards):
     # sacrifices it." — the reanimated creature dies with the Aura.
     assert not any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
     assert any(c.name == "Grizzly Bears" for c in p2.graveyard)  # owner's graveyard
+
+
+def test_web_grants_toughness_bonus_and_reach(all_cards):
+    web = _get(all_cards, "Web")
+    bears = _get(all_cards, "Grizzly Bears")
+    flyer = _get(all_cards, "Air Elemental")
+    bears_perm = Permanent(card=bears)
+    p1 = PlayerState(name="P1", hand=[web], battlefield=[bears_perm])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=flyer)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Web", target_player_index=0, target_permanent_index=0)
+
+    assert result.supported
+    # "Enchanted creature gets +0/+2"
+    assert bears_perm.effective_power == 2
+    assert bears_perm.effective_toughness == 4
+    # "and has reach" — it can now block creatures with flying
+    assert game._has_keyword(bears_perm, "reach")
+    assert game._can_block_attacker(bears_perm, p2.battlefield[0]) is True
+
+
+def test_sirens_call_cannot_be_cast_during_your_own_turn(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    bear = _mk_card("Bear", "Creature - Bear")
+
+    p1 = PlayerState(name="P1", hand=[call])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])  # P1 is the active player by default
+
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+
+    assert result.supported is False
+    assert any(c.name == "Siren's Call" for c in p1.hand)
+
+
+def test_sirens_call_cannot_be_cast_after_attackers_declared(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    bear = _mk_card("Bear", "Creature - Bear")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[call])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)], library=[island])
+    game = Game(players=[p1, p2])
+
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # -> beginning_of_combat
+    game.advance_combat_phase()  # -> declare_attackers
+    ok, _ = game.declare_attackers(1, [0])
+    assert ok
+
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+
+    assert result.supported is False
+    assert any(c.name == "Siren's Call" for c in p1.hand)
+
+
+def test_sirens_call_marks_active_player_creatures(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    bear = _mk_card("Opposing Bear", "Creature - Bear")
+    wall = _mk_card("Test Wall", "Creature - Wall")
+    home_bear = _mk_card("Home Bear", "Creature - Bear")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[call], battlefield=[Permanent(card=home_bear)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear), Permanent(card=wall)], library=[island])
+    game = Game(players=[p1, p2])
+    game.start_turn(1)
+
+    # Entered the battlefield this turn: exempt from the delayed destruction
+    # ("didn't control continuously since the beginning of the turn").
+    fresh = Permanent(card=_mk_card("Fresh Bear", "Creature - Bear"))
+    fresh.metadata["summoning_sickness_turn"] = game.turn
+    p2.battlefield.append(fresh)
+
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+
+    assert result.supported
+    assert any(c.name == "Siren's Call" for c in p1.graveyard)
+
+    bear_perm, wall_perm = p2.battlefield[0], p2.battlefield[1]
+    assert bear_perm.metadata.get("must_attack_until_eot") is True
+    assert bear_perm.metadata.get("destroy_if_did_not_attack_eot") is True
+    # Walls are never destroyed by Siren's Call
+    assert wall_perm.metadata.get("destroy_if_did_not_attack_eot") is None
+    assert fresh.metadata.get("destroy_if_did_not_attack_eot") is None
+    # The caster's own creatures are unaffected
+    assert p1.battlefield[0].metadata.get("must_attack_until_eot") is None
+
+
+def test_sirens_call_forces_creatures_to_attack(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    bear = _mk_card("Reluctant Bear", "Creature - Bear")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[call])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)], library=[island])
+    game = Game(players=[p1, p2])
+
+    game.start_turn(1)
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+    assert result.supported
+
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # -> beginning_of_combat
+    game.advance_combat_phase()  # -> declare_attackers
+
+    ok, reason = game.declare_attackers(1, [])
+    assert not ok
+    assert "must attack" in reason
+
+    ok, _ = game.declare_attackers(1, [0])
+    assert ok
+
+
+def test_sirens_call_destroys_non_attackers_at_end_step(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    attacker = _mk_card("Eager Bear", "Creature - Bear")
+    slacker = _mk_card("Lazy Bear", "Creature - Bear")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[call])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=attacker), Permanent(card=slacker)],
+        library=[island],
+    )
+    game = Game(players=[p1, p2])
+
+    game.start_turn(1)
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+    assert result.supported
+
+    # A tapped creature can't attack, but it still didn't attack this turn,
+    # so it is destroyed at the beginning of the next end step.
+    p2.battlefield[1].tapped = True
+
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # -> beginning_of_combat
+    game.advance_combat_phase()  # -> declare_attackers
+    ok, _ = game.declare_attackers(1, [0])
+    assert ok
+
+    game.resolve_end_step(1)
+
+    names = [perm.card.name for perm in p2.battlefield]
+    assert "Eager Bear" in names
+    assert "Lazy Bear" not in names
+    assert any(c.name == "Lazy Bear" for c in p2.graveyard)
+
+
+def test_sirens_call_exempts_creature_stolen_this_turn(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    bear = Permanent(card=_mk_card("Traded Bear", "Creature - Bear"))
+    veteran = Permanent(card=_mk_card("Veteran Bear", "Creature - Bear"))
+    theft_source = Permanent(card=_mk_card("Theft Source", "Artifact"))
+    island = _get(all_cards, "Island")
+    p1 = PlayerState(name="P1", hand=[call], battlefield=[bear])
+    p2 = PlayerState(name="P2", battlefield=[theft_source, veteran], library=[island])
+    game = Game(players=[p1, p2])
+    game.start_turn(1)
+
+    # The active player steals P1's bear mid-turn: it is summoning-sick again
+    # (CR 302.6) and was not controlled continuously since the turn began.
+    assert game.take_control(bear, p2, source=theft_source) is True
+    assert bear.metadata.get("summoning_sickness_turn") == game.turn
+    assert game._is_summoning_sick(bear) is True
+
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+
+    assert result.supported
+    assert veteran.metadata.get("destroy_if_did_not_attack_eot") is True
+    assert bear.metadata.get("destroy_if_did_not_attack_eot") is None

@@ -206,7 +206,7 @@ ast/           damage characteristics board cards stack combat game
 ast/statements.py  the roof: Effect / Statement / AbilityNode unions
 phrases.py     word tables + fragment productions   |  lowering/_common.py
 effects/       damage characteristics board cards   |  lowering/  (those seven,
-               stack combat game                    |  + zones library mana)
+               stack combat game                    |  + zones library mana counters)
 statements.py  one whole sentence                   |  lowering/categories.py
 parser.py      one printed line (parse_line)        |  lower.py (dispatch)
 ```
