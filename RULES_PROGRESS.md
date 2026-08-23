@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**302 / 611 tracked rules covered (49%)** — 1358 tests, 0 unannotated.
+**302 / 611 tracked rules covered (49%)** — 1353 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -881,7 +881,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.12** Indestructible *(2 tests, subrules b)*
 - [x] **702.14** Landwalk *(7 tests, subrules abc)*
 - [x] **702.15** Lifelink *(6 tests, subrules b)*
-- [x] **702.16** Protection *(43 tests, subrules abcdefghjkmn)*
+- [x] **702.16** Protection *(40 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(3 tests, subrules a)*
 - [x] **702.19** Trample *(9 tests, subrules bf)*
@@ -907,7 +907,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(2 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(81 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(80 tests, subrules abcdefghijkmnpqrsy)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*

@@ -947,7 +947,7 @@ def test_an_ordinary_card_is_never_diverted(set_pool):
 # 903.10a / 704.6c — commander damage
 # ---------------------------------------------------------------------------
 
-@pytest.mark.cr("903.10a", "704.6c")
+@pytest.mark.cr("903.10a", "704.6c", "104.3j")
 def test_twenty_one_combat_damage_from_one_commander_loses_the_game(set_pool):
     """"A player who's been dealt 21 or more combat damage by the same commander
     over the course of the game loses the game. (This is a state-based action.)\""""

@@ -234,8 +234,32 @@ def _mark_citations(node: ast.expr) -> tuple[str, ...] | None:
     )
 
 
+_NEVER_RUNS = ("skip", "xfail")
+
+
+def _never_runs(decorator: ast.expr) -> bool:
+    """Whether *decorator* is an unconditional ``pytest.mark.skip`` / ``xfail``.
+
+    A test that cannot pass verifies nothing, so its ``cr`` marker must not
+    credit the rule: three ``...``-bodied stubs carried 702.16h/j/k for months
+    and an ``xfail`` that said "not implemented" sat on a rule the engine had
+    long since implemented and tested elsewhere. ``skipif`` is conditional — the
+    test runs when its condition is false — and is left alone.
+    """
+    node = decorator.func if isinstance(decorator, ast.Call) else decorator
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr in _NEVER_RUNS
+        and isinstance(node.value, ast.Attribute)
+        and node.value.attr == "mark"
+    )
+
+
 def collect_tests(tests_dir: Path) -> list[TestInfo]:
-    """AST-walk tests/rules and return every test with its cr citations."""
+    """AST-walk tests/rules and return every test with its cr citations.
+
+    A test decorated with an unconditional ``skip`` or ``xfail`` is left out
+    entirely — it neither credits a rule nor counts as unannotated."""
     tests: list[TestInfo] = []
     for path in sorted(tests_dir.glob("test_*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -255,6 +279,8 @@ def collect_tests(tests_dir: Path) -> list[TestInfo]:
                 if isinstance(stmt, ast.ClassDef) and stmt.name.startswith("Test"):
                     visit(stmt.body, f"{prefix}{stmt.name}::")
                 elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.name.startswith("test_"):
+                    if any(_never_runs(d) for d in stmt.decorator_list):
+                        continue
                     citations = list(module_marks)
                     for decorator in stmt.decorator_list:
                         citations.extend(_mark_citations(decorator) or ())

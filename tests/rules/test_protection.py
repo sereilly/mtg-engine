@@ -523,29 +523,6 @@ def test_702_16n_other_instance_affects_other_auras(all_cards):
 
 
 # ---------------------------------------------------------------------------
-# Variants not present in the Limited Edition Alpha card pool
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.skip(reason="No 'protection from everything' cards in LEA (702.16j)")
-@pytest.mark.cr("702.16j")
-def test_702_16j_protection_from_everything():
-    ...
-
-
-@pytest.mark.skip(reason="No 'protection from [a player]' cards in LEA (702.16k)")
-@pytest.mark.cr("702.16k")
-def test_702_16k_protection_from_player():
-    ...
-
-
-@pytest.mark.skip(reason="No 'protection from each [characteristic]' cards in LEA (702.16h/i)")
-@pytest.mark.cr("702.16h")
-def test_702_16h_protection_from_each_characteristic():
-    ...
-
-
-# ---------------------------------------------------------------------------
 # CR 702.16 — non-colour qualities: subtypes, multicolored, card types
 # ---------------------------------------------------------------------------
 

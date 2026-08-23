@@ -494,32 +494,6 @@ def test_104_5_game_over_after_player_leaves():
 
 
 # ---------------------------------------------------------------------------
-# Rule 104.3j – Commander damage: 21 or more combat damage by the same
-# commander over the course of the game causes that player to lose.
-# (State-based action, see rule 704 and 903.10.)
-# ---------------------------------------------------------------------------
-
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 104.3j not implemented: the engine does not track per-commander combat "
-        "damage dealt to each player. No commander_damage field exists on PlayerState."
-    ),
-)
-@pytest.mark.cr("104.3j")
-def test_104_3j_twenty_one_commander_damage_causes_loss():
-    """104.3j: A player dealt 21+ combat damage by the same commander over the game loses."""
-    p1 = PlayerState(name="P1")
-    p2 = PlayerState(name="P2")
-    assert hasattr(p2, "commander_damage")  # type: ignore[attr-defined]
-    # Simulate receiving 21 combat damage from a commander named "Rafiq of the Many"
-    p2.commander_damage["Rafiq of the Many"] = 21  # type: ignore[attr-defined]
-    game = Game(players=[p1, p2])
-    game.check_state_based_actions()
-    assert p2.lost
-
-
-# ---------------------------------------------------------------------------
 # Additional edge-case tests
 # ---------------------------------------------------------------------------
 

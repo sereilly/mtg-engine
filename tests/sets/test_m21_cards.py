@@ -28,15 +28,13 @@ from engine.oracle import compile_card_oracle
     [
         "Valorous Steed",         # ETB: 2/2 white Knight token with vigilance
         "Deathbloom Thallid",     # dies: 1/1 green Saproling token
-        "Falconer Adept",         # attacks: 1/1 white Bird token — still gated
+        "Falconer Adept",         # attacks: 1/1 white Bird token, tapped and attacking
         "Goblin Wizardry",        # two 1/1 red Wizard tokens with prowess
         "Sporeweb Weaver",        # dealt damage: gain 1 life + Saproling token
         "Speaker of the Heavens", # {T}: 4/4 white Angel token, conditional
     ],
 )
 def test_token_round_cards_compile_supported(set_pool, name):
-    if name == "Falconer Adept":
-        pytest.skip("still gated on the tapped-and-attacking rider")
     assert compile_card_oracle(set_pool("M21")[name]).supported
 
 

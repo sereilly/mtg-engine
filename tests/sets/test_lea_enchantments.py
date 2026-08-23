@@ -461,7 +461,7 @@ def test_gloom_tax_log_on_white_spell(all_cards):
     assert any("taxed by gloom" in line.lower() for line in game.log)
 
 
-def test_living_lands_animates_forests(all_cards):
+def test_living_lands_cast_from_hand_animates_forests(all_cards):
     living = _get(all_cards, "Living Lands")
     forest = _get(all_cards, "Forest")
     p1 = PlayerState(name="P1", hand=[living], battlefield=[Permanent(card=forest)])
