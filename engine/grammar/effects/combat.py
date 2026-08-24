@@ -36,6 +36,15 @@ def _parse_cant_attack_or_block(
     stream.expect_word("can't", "cannot")
 
     if stream.accept_word("attack"):
+        # "That creature can't attack during its controller's next turn."
+        # (Wall of Dust's block trigger.) A one-shot restriction with a stated
+        # window rather than a static ability — the window is the whole of the
+        # payload-free kind, and lowering holds the subject to the
+        # back-reference the trigger already bound.
+        if stream.accept_phrase("during", "its", "controller", "'s", "next", "turn"):
+            return ast.CombatRestriction(
+                subject, "cant_attack_during_controllers_next_turn", ()
+            )
         if not stream.accept_phrase("unless", "defending", "player", "controls"):
             raise stream.error("expected 'unless defending player controls'")
         stream.expect_word("a", "an")

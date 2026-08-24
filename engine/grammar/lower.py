@@ -418,7 +418,7 @@ def lower_statement(
         return (OracleInstruction("game_is_draw", "", {}),)
 
     if isinstance(statement, ast.CombatRestriction):
-        return _lower_combat_restriction(statement)
+        return _lower_combat_restriction(statement, dispatch_event)
 
     if isinstance(statement, ast.CantBe):
         return _lower_cant_be(statement)

@@ -2508,6 +2508,20 @@ def _noncreature_line_instructions(
         static = _line_instruction(line, card_name)
         if static is not None:
             instructions.append(static[0])
+            continue
+        # A combat restriction printed on a noncreature permanent ("Creatures
+        # without flying can't attack.", Moat; Arboria's whole card). The same
+        # table the creature path consults, asked through the same
+        # name-substituting reader, and emitting the same instruction — so the
+        # enforcement site's board scan in `can_attack` reads a Moat and an
+        # Evil Eye identically, and the gate and the dispatch stay one table.
+        restriction = combat_restriction_for(
+            _restriction_line(line, card_name), card_name
+        )
+        if restriction is not None:
+            instructions.append(
+                OracleInstruction(restriction.kind, "", restriction.payload)
+            )
     return instructions
 
 

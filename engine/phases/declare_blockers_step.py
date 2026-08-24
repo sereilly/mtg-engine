@@ -844,18 +844,29 @@ class DeclareBlockersStepMixin:
                 blocker.effective_card,
                 condition_kinds={"creature_blocks", "creature_attacks_or_blocks"},
             ):
+                # Each firing records which blocked creature(s) it is *about*
+                # (by stable id, CR 509.3f fixes the set at declaration), so an
+                # effect saying "that creature" (Wall of Dust) resolves the
+                # other half of the pair rather than the blocker the item's
+                # target indices carry. The unnarrowed once-per-blocker firing
+                # is about every attacker this blocker blocks; a narrowed
+                # firing is about the one attacker that admitted it.
                 if not trig.condition.payload.get("blocked_filter"):
-                    firings = 1
+                    firing_contexts: list[dict] = [{
+                        "blocked_permanent_ids": [
+                            attacker.permanent_id for _, attacker in blocked
+                        ],
+                    }]
                 else:
-                    firings = sum(
-                        1
+                    firing_contexts = [
+                        {"blocked_permanent_ids": [attacker.permanent_id]}
                         for _, attacker in blocked
                         if trigger_subject_matches(
                             self, trig, "blocked", attacker,
                             observer=controller_index, source=blocker,
                         )
-                    )
-                for _ in range(firings):
+                    ]
+                for firing_context in firing_contexts:
                     self._stack_push(
                         StackItem(
                             card=blocker.card,
@@ -870,6 +881,7 @@ class DeclareBlockersStepMixin:
                             ability_effect_kind=trig.effect_kind,
                             source_permanent=blocker,
                             ability_text=trig.source_line,
+                            trigger_context=firing_context,
                         )
                     )
                     self.log.append(f"{blocker.card.name} triggered on block (added to stack)")

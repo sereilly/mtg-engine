@@ -1798,6 +1798,15 @@ class GameHelpersMixin:
         # it is about to lose.
         permanent.permanent_id = next_permanent_id()
         self.players[controller_index].battlefield.append(permanent)
+        # "…put a nontoken permanent onto the battlefield" (Arboria, CR 506.3):
+        # the per-turn half of the last-own-turn record, folded per seat at the
+        # turn boundary (mixins/turn_management.begin_turn_bookkeeping). Here
+        # because this is the one entry path there is — a fire site per caller
+        # is the pattern that forgot `become_tapped` 41 times.
+        if not permanent.metadata.get("is_token"):
+            self.nontoken_permanents_entered_this_turn[controller_index] = (
+                self.nontoken_permanents_entered_this_turn.get(controller_index, 0) + 1
+            )
         # CR 613.1: the value layer 2 starts from. Recorded on entry and never
         # written again, so an ending control effect reverts to the seat that
         # put the permanent into play rather than to whichever seat held it

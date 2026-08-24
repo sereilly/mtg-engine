@@ -85,6 +85,44 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
+@effect_handler("cant_attack_during_controllers_next_turn")
+def cant_attack_during_controllers_next_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Wall of Dust: "Whenever this creature blocks a creature, that creature
+    can't attack during its controller's next turn."
+
+    "That creature" is the blocked attacker, resolved by the stable ids the
+    blocks fire site recorded on the trigger (CR 509.3f fixed the set at
+    declaration; an id that no longer resolves is a creature that left, and a
+    creature that returns is a new object the sentence never named — CR 400.7).
+    The stamp names the creature's controller *as the trigger resolves* and
+    that seat's next turn ordinal; ``can_attack`` refuses exactly while that
+    turn is the current one, and a later turn walks past the stamp with
+    nothing to sweep.
+    """
+    stamped = []
+    for permanent_id in (context.trigger_context or {}).get("blocked_permanent_ids") or ():
+        perm = game.permanent_by_id(permanent_id)
+        if perm is None:
+            continue
+        seat = game.controller_index_of(perm)
+        if seat is None:
+            continue
+        perm.metadata["cant_attack_on_seat_turn"] = {
+            "seat": seat,
+            "seat_turn": game.seat_turn_counts.get(seat, 0) + 1,
+        }
+        stamped.append((perm, seat))
+    if stamped:
+        for perm, seat in stamped:
+            game.log.append(
+                f"{perm.card.name} can't attack during "
+                f"{game.players[seat].name}'s next turn ({context.card.name})"
+            )
+    else:
+        game.log.append(f"{context.card.name} block trigger found no blocked creature")
+    return True, "resolved"
+
+
 @effect_handler("rampage_pump")
 def rampage_pump(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Rampage N (CR 702.23a): +N/+N until end of turn for each creature

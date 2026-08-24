@@ -254,6 +254,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_unblockable_to_self": "evasion",
     # Restrictions on declaring attackers/blockers (CR 506, 509).
     "cant_attack_without_land_type": "combat_restrictions",
+    # "That creature can't attack during its controller's next turn." (Wall of
+    # Dust's block trigger) — a one-shot stamp on the blocked creature, read
+    # back by `can_attack` for exactly one of that controller's turns.
+    "cant_attack_during_controllers_next_turn": "combat_restrictions",
     "cant_block_power_n_or_greater": "combat_restrictions",
     # The one-shot, turn-scoped blanket ("Creatures without flying can't block
     # this turn", Destructive Tampering's second mode).

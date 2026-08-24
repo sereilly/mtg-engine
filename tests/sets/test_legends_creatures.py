@@ -1027,3 +1027,166 @@ def test_the_wretched_unblocked_steals_nothing(set_pool):
     blocking, it resolves and takes nothing — and does not crash."""
     game, wretch, blockers = _wretched_combat(set_pool, 0)
     assert game.is_on_battlefield(wretch)
+
+
+# ---------------------------------------------------------------------------
+# "Can't attack" restrictions (round 12) — CR 506/508.1c, filter payloads and
+# per-turn history
+# ---------------------------------------------------------------------------
+
+
+def test_evil_eye_grounds_its_controllers_other_creatures_but_not_itself(set_pool):
+    """"Non-Eye creatures **you control** can't attack." The negated subtype is
+    a filter payload (`exclude_subtypes`), so the Eye itself — and any other
+    Eye — walks through its own restriction."""
+    pool = set_pool("LEG")
+    eye = Permanent(card=pool["Evil Eye of Orms-by-Gore"])
+    bear = Permanent(card=_vanilla("Grounded Bear", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[eye, bear])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    assert game.can_attack(eye, 1)
+    assert not game.can_attack(bear, 1)
+
+
+def test_evil_eye_restricts_its_controller_only(set_pool):
+    """"You control" is relative to the permanent carrying the restriction
+    (CR 109.5), so the opponent's creatures attack freely."""
+    bear = Permanent(card=_vanilla("Free Bear", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[bear])
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=set_pool("LEG")["Evil Eye of Orms-by-Gore"])]
+    )
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    assert game.can_attack(bear, 1)
+
+
+def test_evil_eye_is_blockable_only_by_walls(set_pool):
+    """The second line — "can't be blocked except by Walls" — was already read
+    by the round-7 whitelist; what round 12 bought is the first line, and with
+    it the card. Both halves must work on the same compiled program."""
+    eye = set_pool("LEG")["Evil Eye of Orms-by-Gore"]
+
+    assert _may_block(eye, Permanent(card=_wall("Some Wall")))
+    assert not _may_block(eye, Permanent(card=_vanilla("Ground Bear", 2, 2)))
+
+
+def test_giant_turtle_rests_for_exactly_one_of_its_controllers_turns(set_pool):
+    """"…can't attack if it attacked during your last turn." The record is the
+    per-attacker stamp declaration writes, compared by the controller's own
+    turn ordinal — so the Turtle attacks, sits out the controller's next turn,
+    and attacks again the turn after."""
+    turtle = Permanent(card=set_pool("LEG")["Giant Turtle"])
+    p1 = PlayerState(name="P1", battlefield=[turtle])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+
+    game.start_next_turn()   # P2's turn
+    game.start_next_turn()   # P1's next turn: it attacked during P1's last turn
+    assert not game.can_attack(turtle, 1)
+
+    game.start_next_turn()   # P2
+    game.start_next_turn()   # P1 again: last turn it rested
+    assert game.can_attack(turtle, 1)
+
+
+def test_giant_turtle_that_never_attacked_is_unrestricted(set_pool):
+    turtle = Permanent(card=set_pool("LEG")["Giant Turtle"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[turtle]), PlayerState(name="P2"),
+    ])
+    game.start_turn(0)
+
+    assert game.can_attack(turtle, 1)
+
+
+def test_a_returned_giant_turtle_is_a_new_object_with_no_attack_record(set_pool):
+    """CR 400.7: the record belongs to the permanent, and a Turtle that leaves
+    and returns is a new object — free to attack however hard the old one
+    fought."""
+    turtle = Permanent(card=set_pool("LEG")["Giant Turtle"])
+    p1 = PlayerState(name="P1", battlefield=[turtle])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+
+    # It leaves and returns: a new Permanent wearing the same card.
+    game.remove_from_battlefield(turtle)
+    returned = Permanent(card=set_pool("LEG")["Giant Turtle"])
+    game._put_permanent_onto_battlefield(0, returned, None)
+
+    game.start_next_turn()
+    game.start_next_turn()
+    from tests.helpers import _nosick
+    assert game.can_attack(_nosick(returned), 1)
+
+
+def test_wall_of_dust_holds_its_victim_home_for_one_turn(set_pool):
+    """"Whenever this creature blocks a creature, that creature can't attack
+    during its controller's next turn." — the blocked attacker is stamped when
+    the trigger resolves, refused on its controller's next turn, and free the
+    turn after. The Wall itself never attacks (Defender)."""
+    bear = Permanent(card=_vanilla("Charging Bear", 1, 1))
+    wall = Permanent(card=set_pool("LEG")["Wall of Dust"])
+    p1 = PlayerState(name="P1", battlefield=[bear])
+    p2 = PlayerState(name="P2", battlefield=[wall])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    game._settle()
+
+    game.start_next_turn()   # P2's turn
+    game.start_next_turn()   # P1's next turn — the stamped window
+    assert not game.can_attack(bear, 1)
+
+    game.start_next_turn()
+    game.start_next_turn()   # P1's turn after — the window has passed
+    assert game.can_attack(bear, 1)
+
+
+def test_wall_of_dust_restriction_does_not_leak_onto_a_bystander(set_pool):
+    """Only the blocked creature is stamped: an attacker the Wall did not
+    block attacks again next turn as usual."""
+    blocked = Permanent(card=_vanilla("Blocked Bear", 1, 1))
+    free = Permanent(card=_vanilla("Free Bear", 1, 1))
+    wall = Permanent(card=set_pool("LEG")["Wall of Dust"])
+    p1 = PlayerState(name="P1", battlefield=[blocked, free])
+    p2 = PlayerState(name="P2", battlefield=[wall])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(0, [0, 1])
+    assert ok, msg
+    game.advance_combat_phase()
+    ok, msg = game.declare_blockers(1, {0: 0})   # the Wall blocks only the first
+    assert ok, msg
+    game._settle()
+
+    game.start_next_turn()
+    game.start_next_turn()
+    assert not game.can_attack(blocked, 1)
+    assert game.can_attack(free, 1)

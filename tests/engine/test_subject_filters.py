@@ -59,6 +59,10 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     ("toughness", {"toughness": {"op": "ge", "value": 4}}, "Grizzly Bears"),
     ("with_plus1_counter", {"with_plus1_counter": True}, "Grizzly Bears"),
     ("with_keywords", {"with_keywords": ["flying"]}, "Grizzly Bears"),
+    # The negative twin (Moat's "creatures without flying"). Air Elemental
+    # prints the keyword, so a matcher that ignored the key — or one that read
+    # it as its positive sibling — would let the flyer through.
+    ("without_keywords", {"without_keywords": ["flying"]}, "Air Elemental"),
     ("named", {"named": "Hill Giant"}, "Grizzly Bears"),
     # CR 205.4a. Read off the type line, which for a supertype is the whole of
     # what there is — nothing in layers 4-6 computes one.
@@ -178,6 +182,20 @@ def test_a_keyword_narrowing_is_asked_of_layer_six(pool):
         "the printed card still has no defender — a matcher reading it would "
         "have answered no"
     )
+
+
+def test_a_without_keyword_narrowing_is_asked_of_layer_six_too(pool):
+    """The negative twin, and the same layer: a creature *granted* flying is a
+    creature with flying (CR 613.1f), so it escapes Moat's "creatures without
+    flying" the moment the grant lands — a matcher reading the printed keyword
+    list would have kept it grounded."""
+    perm = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2")])
+    described = {"type_filter": "creature", "without_keywords": ["flying"]}
+
+    assert subject_matches(game, perm, described)
+    grant_keyword(perm, "flying", until_eot=True)
+    assert not subject_matches(game, perm, described)
 
 
 def test_every_sacrifice_filter_in_the_pool_is_one_the_prompt_can_test():

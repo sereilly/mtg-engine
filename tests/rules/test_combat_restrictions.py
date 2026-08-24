@@ -371,3 +371,145 @@ def test_a_clone_of_a_creature_that_cant_block_cannot_block_either():
     ])
 
     assert not game._can_block_attacker(clone, attacker)
+
+
+# ---------------------------------------------------------------------------
+# Board-wide "can't attack" restrictions over a described set (CR 506.3),
+# and the per-turn history conditions beside them
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("506.3")
+def test_506_3_a_subject_filtered_attack_restriction_reads_its_words_as_payload():
+    """"Creatures without flying can't attack" (Moat) and "Non-Eye creatures
+    you control can't attack" (Evil Eye) are one kind whose subject filter is
+    payload — so a card printed with any other keyword or subtype is the same
+    restriction with a different word in it."""
+    restriction = combat_restriction_for("creatures without trample can't attack")
+    assert restriction is not None
+    assert restriction.kind == "creatures_cant_attack"
+    assert restriction.payload == {
+        "subject": {"type_filter": "creature", "without_keywords": ["trample"]},
+    }
+
+    restriction = combat_restriction_for("non-goblin creatures you control can't attack")
+    assert restriction is not None
+    assert restriction.kind == "creatures_cant_attack"
+    assert restriction.payload == {
+        "subject": {
+            "type_filter": "creature",
+            "exclude_subtypes": ["goblin"],
+            "controller": "you",
+        },
+    }
+
+
+@pytest.mark.cr("506.3")
+def test_506_3_an_untestable_subject_word_refuses_the_whole_line():
+    """A keyword the engine does not implement would make "without <keyword>"
+    true of every creature — the restriction over-applying, which is exactly as
+    silent as the widening this table refuses everywhere else. An unknown
+    subtype is the mirror: "non-<word>" would exclude nothing and ground the
+    card's own exempted creatures. Both refuse, loudly."""
+    assert combat_restriction_for("creatures without shroud can't attack") is None
+    assert combat_restriction_for(
+        "non-blorb creatures you control can't attack"
+    ) is None
+
+
+@pytest.mark.cr("506.3", "508.1c")
+def test_506_3_a_noncreature_permanent_carrying_the_restriction_enforces_it():
+    """The wording is a template, not Moat: an invented enchantment printing a
+    different keyword restricts exactly the set its words describe, from the
+    same compiled-program scan `can_attack` reads for a creature carrying it."""
+    fog_bank = CardDefinition(
+        name="Test Miasma", mana_cost="{2}", cmc=2.0, type_line="Enchantment",
+        oracle_text="Creatures without trample can't attack.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Test Miasma", "type_line": "Enchantment"},
+    )
+    program = compile_card_oracle(fog_bank)
+    assert program.supported
+    assert any(i.kind == "creatures_cant_attack" for i in program.instructions)
+
+    def bear(name: str, keywords=()) -> Permanent:
+        return Permanent(card=CardDefinition(
+            name=name, mana_cost="", cmc=0.0, type_line="Creature — Bear",
+            oracle_text="", colors=(), color_identity=(),
+            keywords=tuple(keywords), produced_mana=(),
+            raw={"name": name, "type_line": "Creature — Bear",
+                 "power": "2", "toughness": "2",
+                 "keywords": list(keywords)},
+        ))
+
+    grounded = bear("Soft Bear")
+    trampler = bear("Heavy Bear", ["Trample"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[grounded, trampler]),
+        PlayerState(name="P2", battlefield=[Permanent(card=fog_bank)]),
+    ])
+    game.start_turn(0)
+
+    assert not game.can_attack(grounded, 1)
+    assert game.can_attack(trampler, 1)
+
+
+@pytest.mark.cr("508.1c")
+def test_508_1c_the_last_turn_record_is_the_seats_own_ordinal_not_turn_parity():
+    """"…if it attacked during your last turn" (Giant Turtle) across a Time
+    Walk: the extra turn IS the controller's next turn, so the creature that
+    attacked rests through it — a global turn-parity read would have looked at
+    whose turn number was odd and let it through."""
+    turtle_card = CardDefinition(
+        name="Test Turtle", mana_cost="{1}{G}", cmc=2.0,
+        type_line="Creature — Turtle",
+        oracle_text="This creature can't attack if it attacked during your last turn.",
+        colors=("G",), color_identity=("G",), keywords=(), produced_mana=(),
+        raw={"name": "Test Turtle", "type_line": "Creature — Turtle",
+             "power": "2", "toughness": "4"},
+    )
+    turtle = Permanent(card=turtle_card)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[turtle]), PlayerState(name="P2"),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+
+    game.extra_turn_queue.append(0)   # Time Walk: P1 takes the next turn too
+    game.start_next_turn()
+    assert game.active_player_index == 0
+    assert not game.can_attack(turtle, 1), (
+        "the extra turn is the controller's next turn; it attacked during "
+        "their last one"
+    )
+
+    game.start_next_turn()   # P2's turn
+    game.start_next_turn()   # P1: last turn (the extra one) it rested
+    assert game.can_attack(turtle, 1)
+
+
+@pytest.mark.cr("506.3")
+def test_506_3_the_next_turn_restriction_refuses_a_trigger_that_binds_no_blocked_creature():
+    """"That creature can't attack during its controller's next turn" reads
+    the blocked ids the blocks fire site records — under any other trigger the
+    handler would find nothing and the card would compile clean while
+    restricting nobody, so the lowering refuses the line by name."""
+    from engine.grammar import compile_line
+
+    blocks = compile_line(
+        "Whenever this creature blocks a creature, that creature can't attack "
+        "during its controller's next turn.",
+        card_name="Probe Wall",
+    )
+    assert blocks.parsed and blocks.lowering_error is None
+
+    attacks = compile_line(
+        "Whenever this creature attacks, that creature can't attack during "
+        "its controller's next turn.",
+        card_name="Probe Wall",
+    )
+    assert not attacks.usable

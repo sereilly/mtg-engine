@@ -59,7 +59,11 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # object alone — ``Permanent.attacking`` is stamped at declaration and
     # cleared when the creature leaves combat.
     "attacking_only",
-    "with_keywords", "controller", "owner", "exclude_self",
+    # "creatures **without** flying" (Moat). The negative twin of
+    # ``with_keywords`` and a layer-6 question for the same reason: a creature
+    # *granted* flying is a creature with flying (CR 613.1f), so it escapes a
+    # without-flying restriction exactly as a printed flyer does.
+    "with_keywords", "without_keywords", "controller", "owner", "exclude_self",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -223,6 +227,11 @@ def subject_matches(
     # defender-narrowed filter exactly as a printed one does.
     for keyword in described.get("with_keywords") or ():
         if not game._has_keyword(obj, keyword):
+            return False
+    # "…**without** flying" — the same layer-6 question, negated: a creature
+    # granted flying stops matching, whatever its printed keyword list says.
+    for keyword in described.get("without_keywords") or ():
+        if game._has_keyword(obj, keyword):
             return False
     # "Another" (CR 109.5) excludes the ability's own source by identity — a
     # look-alike on the same battlefield is a different permanent.

@@ -417,3 +417,70 @@ def test_backfire_ignores_a_creature_it_does_not_enchant(set_pool):
     game._settle()
 
     assert (game.players[0].life, game.players[1].life) == (16, 20)
+
+
+# ---------------------------------------------------------------------------
+# "Creatures without flying can't attack." (round 12) — CR 506, a board-wide
+# restriction whose subject filter is payload
+# ---------------------------------------------------------------------------
+
+
+def test_moat_compiles_to_a_subject_filtered_attack_restriction(set_pool):
+    """The whole card is one restriction over a described set — the filter is
+    payload on the instruction, never part of the kind, so "creatures without
+    trample" would be the same row with a different word in it."""
+    program = compile_card_oracle(set_pool("LEG")["Moat"])
+
+    assert program.supported
+    kinds = {i.kind: i.payload for i in program.instructions}
+    assert kinds["creatures_cant_attack"] == {
+        "subject": {"type_filter": "creature", "without_keywords": ["flying"]},
+    }
+
+
+def test_moat_grounds_both_players_creatures_and_lets_flyers_through(set_pool):
+    """No "you control" in the sentence, so the Moat's own controller is
+    restricted exactly as the opponent is — and a flyer on either side sails
+    over it."""
+    from engine.card_loader import load_cards, manifest_set_path
+
+    lea = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+    bear = Permanent(card=_creature("Ground Bear"))
+    bird = Permanent(card=lea["Air Elemental"])
+    moat = Permanent(card=set_pool("LEG")["Moat"])
+    own_bear = Permanent(card=_creature("Own Bear"))
+
+    # The opponent's side of the Moat.
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bear, bird]),
+        PlayerState(name="P2", battlefield=[moat]),
+    ])
+    game.start_turn(0)
+    assert not game.can_attack(bear, 1)
+    assert game.can_attack(bird, 1)
+
+    # The Moat's own side.
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[Permanent(card=set_pool("LEG")["Moat"]), own_bear]),
+        PlayerState(name="P2"),
+    ])
+    game.start_turn(0)
+    assert not game.can_attack(own_bear, 1)
+
+
+def test_moat_asks_layer_six_so_a_granted_wing_escapes(set_pool):
+    """"Without flying" is a live layer-6 question at declaration (CR 613.1f):
+    a bear granted flying escapes the Moat while the grant lasts, and nothing
+    printed on it changed."""
+    from engine.keywords import grant_keyword
+
+    bear = Permanent(card=_creature("Hopeful Bear"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bear]),
+        PlayerState(name="P2", battlefield=[Permanent(card=set_pool("LEG")["Moat"])]),
+    ])
+    game.start_turn(0)
+
+    assert not game.can_attack(bear, 1)
+    grant_keyword(bear, "flying", until_eot=True)
+    assert game.can_attack(bear, 1)

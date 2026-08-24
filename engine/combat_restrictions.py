@@ -57,6 +57,9 @@ class CombatRestriction:
 #   cant_attack_without_controlled_count  phases/declare_attackers_step.can_attack
 #   cant_attack                     phases/declare_attackers_step.can_attack
 #   controlled_creatures_cant_attack  phases/declare_attackers_step.can_attack
+#   creatures_cant_attack           phases/declare_attackers_step.can_attack
+#   cant_attack_if_attacked_last_turn  phases/declare_attackers_step.can_attack
+#   cant_attack_unless_defender_acted  phases/declare_attackers_step.can_attack
 #   cant_block                      phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
 #   cant_be_blocked_by              phases/declare_blockers_step
@@ -103,6 +106,57 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"creatures you control can't attack$"
         ),
         "controlled_creatures_cant_attack",
+    ),
+    (
+        # "Creatures without flying can't attack." (Moat.) A restriction over a
+        # *described set* of creatures on any battlefield — the subject filter
+        # is payload, tested by `subject_matches` at declaration, so a creature
+        # that gains flying mid-game escapes it and one that loses flying is
+        # caught, with nothing re-derived. The keyword is validated below: an
+        # unimplemented word would make `_has_keyword` answer no for every
+        # creature, "without" would then match all of them, and the enchantment
+        # would silently forbid every attack — over-restriction, but exactly as
+        # silent as the widening this file refuses everywhere else.
+        re.compile(r"^creatures without (?P<without_keyword>[a-z]+) can't attack$"),
+        "creatures_cant_attack",
+    ),
+    (
+        # "Non-Eye creatures you control can't attack." (Evil Eye of
+        # Orms-by-Gore.) The same restriction narrowed the other way — a
+        # negated subtype plus a controller — and the same payload shape, so
+        # one enforcement site reads both. The subtype is validated below: a
+        # word the vocabulary has never heard of would exclude nothing, and the
+        # restriction would then ground the card's own Eyes — the printed
+        # exemption dropped, silently.
+        re.compile(
+            r"^non-(?P<excluded_subtype>[a-z' -]+) creatures you control can't attack$"
+        ),
+        "creatures_cant_attack",
+    ),
+    (
+        # "This creature can't attack if it attacked during your last turn."
+        # (Giant Turtle.) The condition reads the attack record
+        # `declare_attackers` stamps on every attacker (which seat's turn it
+        # attacked on, by that seat's own turn ordinal), so the answer belongs
+        # to the permanent — a Turtle that leaves and returns is a new object
+        # (CR 400.7) with no record, free to attack.
+        re.compile(r"^this creature can't attack if it attacked during your last turn$"),
+        "cant_attack_if_attacked_last_turn",
+    ),
+    (
+        # "Creatures can't attack a player unless that player cast a spell or
+        # put a nontoken permanent onto the battlefield during their last
+        # turn." (Arboria.) The whole sentence is the template; the per-seat
+        # last-own-turn record it reads is folded at each turn boundary
+        # (`Game.last_own_turn_activity`, mixins/turn_management). "A player"
+        # is the printed scope: an attack at a planeswalker is not an attack
+        # at a player and passes untouched.
+        re.compile(
+            r"^creatures can't attack a player unless that player cast a spell "
+            r"or put a nontoken permanent onto the battlefield during their "
+            r"last turn$"
+        ),
+        "cant_attack_unless_defender_acted",
     ),
     # "This **token** can't block" (the Pirate Pursued Whale makes). A token is
     # a creature and "this token" is the same self-reference "this creature" is
@@ -292,6 +346,29 @@ def combat_restriction_for(
             if filters is None:
                 return None
             payload["exceptions"] = filters
+        # "Creatures without <keyword> …" / "Non-<subtype> creatures you
+        # control …" — both build the one `subject` filter payload the
+        # enforcement site hands to `subject_matches`, and both validate their
+        # captured word here for the reasons written on their rows: an
+        # unvalidated word does not widen the restriction, it *over-applies*
+        # it, which is just as silent and wrong in the other direction.
+        without_keyword = payload.pop("without_keyword", None)
+        if without_keyword is not None:
+            if without_keyword not in IMPLEMENTED_KEYWORDS:
+                return None
+            payload["subject"] = {
+                "type_filter": "creature",
+                "without_keywords": [without_keyword],
+            }
+        excluded_subtype = payload.pop("excluded_subtype", None)
+        if excluded_subtype is not None:
+            if excluded_subtype not in CREATURE_TYPES:
+                return None
+            payload["subject"] = {
+                "type_filter": "creature",
+                "exclude_subtypes": [excluded_subtype],
+                "controller": "you",
+            }
         return CombatRestriction(kind, payload)
     return None
 

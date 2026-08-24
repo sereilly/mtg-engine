@@ -24,14 +24,56 @@ from ._common import (
 _UNBLOCKABLE_POWER_LIMIT = ast.Comparison("le", ast.Fixed(2))
 
 
-def _lower_combat_restriction(node: ast.CombatRestriction) -> tuple[OracleInstruction, ...]:
+#: Trigger events whose fire site stamps the *blocked* creatures onto the
+#: stack item (``blocked_permanent_ids``), so an effect may say "that creature"
+#: about the other half of the blocking pair and mean it. The block-pair
+#: destroy events (`_BLOCK_PAIR_EVENTS`, lowering/board.py) are a different
+#: binding — those push the paired creature as the item's *target* — which is
+#: why this is its own set rather than a reuse of that one.
+_BLOCKED_SUBJECT_EVENTS = frozenset({"creature_blocks"})
+
+
+def _lower_combat_restriction(
+    node: ast.CombatRestriction, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """``can't attack unless …`` / ``can't block creatures with power N …``.
 
     Lowers to the instruction kinds the combat steps already dispatch on, with
     the payloads ``engine/combat_restrictions.py`` produces for the legacy path
     — byte for byte, so the differential can hold the two to agreement rather
     than merely to "both did something".
+
+    *event* is the trigger kind when the restriction is a trigger's effect —
+    what "that creature" is allowed to refer back to.
     """
+    # "That creature can't attack during its controller's next turn." (Wall of
+    # Dust.) A one-shot stamp on the creature the trigger blocked, resolved by
+    # the handler from the ids the fire site recorded — so the subject must be
+    # the bare back-reference (anything more would be a narrowing nothing
+    # tests), and the event must be one whose fire site records those ids: on
+    # any other trigger the handler would find nothing and the card would
+    # compile clean while restricting nobody.
+    if node.kind == "cant_attack_during_controllers_next_turn":
+        subject = node.subject
+        if (
+            not isinstance(subject, ast.TargetSpec)
+            or subject.quantifier != "that"
+            or subject.filter != ast.ObjectFilter(card_types=("creature",))
+        ):
+            raise LoweringError(
+                "the next-turn attack restriction reads the creature its "
+                "trigger already named",
+                node=node,
+            )
+        if event not in _BLOCKED_SUBJECT_EVENTS:
+            raise LoweringError(
+                "only a blocks trigger records which creature 'that creature' "
+                "was",
+                node=node,
+            )
+        return (
+            OracleInstruction("cant_attack_during_controllers_next_turn", "", {}),
+        )
     # "Creatures without flying can't block this turn." (Destructive
     # Tampering's second mode) — a one-shot, turn-scoped blanket over the
     # subject, not a property of a permanent: the payload carries the filter

@@ -255,6 +255,28 @@ class Game(
     # per-seat one beside it is: a reader that wants one and gets the other is
     # wrong by however many tokens died, silently.
     nontoken_creatures_died_this_turn: int = 0
+    # How many turns each seat has *begun*, incremented by
+    # ``begin_turn_bookkeeping`` (both the headless flow and the web flow run
+    # through it exactly once per turn). The per-seat ordinal is what "your
+    # last turn" and "its controller's next turn" compare against: a global
+    # turn number cannot say whether a seat took a turn in between (extra
+    # turns break the alternation), where ordinal arithmetic can. Read by
+    # ``can_attack`` for Giant Turtle's record and Wall of Dust's stamp.
+    seat_turn_counts: dict[int, int] = field(default_factory=dict)
+    # Whether each seat cast a spell or put a nontoken permanent onto the
+    # battlefield during their most recent *own* turn (Arboria, CR 506.3).
+    # Folded once at each turn boundary from the two per-turn records below —
+    # a seat with no entry has not finished an own turn yet, which reads as
+    # "did neither", the answer Arboria's first turns want.
+    last_own_turn_activity: dict[int, bool] = field(default_factory=dict)
+    # Nontoken permanents that entered the battlefield under each seat this
+    # turn, recorded at the one entry path (`_put_permanent_onto_battlefield`)
+    # and reset each turn. The seat a permanent *enters under* stands in for
+    # "the player who put it there": a land drop, a resolving permanent spell
+    # and a reanimation all agree, and an effect that puts a card onto the
+    # battlefield under another player's control is the one reading this
+    # approximates.
+    nontoken_permanents_entered_this_turn: dict[int, int] = field(default_factory=dict)
     # "Rest of the game" delayed upkeep triggers left behind by a permanent that
     # has died (Cyclopean Tomb): each entry is {"controller_index", "lands"} where
     # ``lands`` are the still-mired Permanents whose mire counters must be removed

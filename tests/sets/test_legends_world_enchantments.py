@@ -168,3 +168,103 @@ def test_the_reveal_statics_compile_supported_and_not_hollow(set_pool):
         program = compile_card_oracle(set_pool("LEG")[name])
         assert program.supported, name
         assert any(i.kind == "derived_static_rule" for i in program.instructions), name
+
+
+# ---------------------------------------------------------------------------
+# Arboria (round 12) — CR 506.3/508.1c, an attack restriction reading per-seat
+# last-turn history
+# ---------------------------------------------------------------------------
+
+
+def _arboria_board(set_pool):
+    """A bear facing Arboria's controller. Returns (game, bear)."""
+    from engine.models import CardDefinition
+
+    bear = Permanent(card=CardDefinition(
+        name="Patient Bear", mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Patient Bear", "type_line": "Creature - Bear",
+             "power": "2", "toughness": "2"},
+    ))
+    p1 = PlayerState(name="P1", battlefield=[bear])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=set_pool("LEG")["Arboria"])])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    return game, bear
+
+
+def test_arboria_compiles_supported_with_a_real_instruction(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Arboria"])
+
+    assert program.supported
+    assert any(
+        i.kind == "cant_attack_unless_defender_acted" for i in program.instructions
+    )
+
+
+def test_arboria_protects_a_player_with_no_last_turn_at_all(set_pool):
+    """At the start of the game nobody has a last turn to have acted during,
+    which is the card working as printed: under Arboria the first attack waits
+    for the defender to have taken — and wasted — a turn."""
+    game, bear = _arboria_board(set_pool)
+
+    assert not game.can_attack(bear, 1)
+
+
+def test_arboria_opens_a_player_who_cast_a_spell_during_their_last_turn(set_pool, lea_by_name):
+    game, bear = _arboria_board(set_pool)
+
+    game.start_next_turn()   # P2's turn...
+    game.players[1].spells_cast_this_turn.append(lea_by_name["Lightning Bolt"])
+    game.start_next_turn()   # ...ends; the fold records the cast
+
+    assert game.can_attack(bear, 1)
+
+    game.start_next_turn()   # P2 takes a quiet turn
+    game.start_next_turn()
+
+    assert not game.can_attack(bear, 1), "the record is *their last turn*, not ever"
+
+
+def test_arboria_opens_a_player_who_put_a_nontoken_permanent_onto_the_battlefield(set_pool):
+    """The other half of the unless — a land drop is the everyday case, and it
+    goes through the one battlefield entry path the record hangs on."""
+    from engine.models import CardDefinition
+
+    game, bear = _arboria_board(set_pool)
+    land = Permanent(card=CardDefinition(
+        name="Quiet Meadow", mana_cost="", cmc=0.0, type_line="Land",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=("G",),
+        raw={"name": "Quiet Meadow", "type_line": "Land"},
+    ))
+
+    game.start_next_turn()   # P2's turn
+    game._put_permanent_onto_battlefield(1, land, None)
+    game.start_next_turn()
+
+    assert game.can_attack(bear, 1)
+
+
+def test_arboria_ignores_a_token_entering(set_pool):
+    """"…a **nontoken** permanent": a token entering keeps the door shut."""
+    from engine.tokens import make_token_card
+
+    game, bear = _arboria_board(set_pool)
+    token = Permanent(card=make_token_card("Wolf", 2, 2, "Creature — Wolf"))
+    token.metadata["is_token"] = True
+
+    game.start_next_turn()
+    game._put_permanent_onto_battlefield(1, token, None)
+    game.start_next_turn()
+
+    assert not game.can_attack(bear, 1)
+
+
+def test_arboria_does_not_shield_planeswalkers(set_pool):
+    """"Creatures can't attack **a player**" — an attack aimed at a
+    planeswalker (CR 508.1b) is not an attack at a player, so Arboria says
+    nothing about it."""
+    game, bear = _arboria_board(set_pool)
+
+    assert not game.can_attack(bear, 1)
+    assert game.can_attack(bear, 1, attacking_planeswalker=True)

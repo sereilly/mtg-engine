@@ -114,7 +114,14 @@ class DeclareAttackersStepMixin:
                 return False, "only creatures can attack"
             if attacker.tapped:
                 return False, f"{attacker.card.name} is tapped"
-            if not self.can_attack(attacker, per_attacker_defender[idx]):
+            if not self.can_attack(
+                attacker,
+                per_attacker_defender[idx],
+                # CR 508.5: this attacker attacks the planeswalker, and its
+                # defending player is derived — so a restriction scoped to
+                # attacking "a player" (Arboria) must know the difference.
+                attacking_planeswalker=idx in per_attacker_walker,
+            ):
                 return False, f"{attacker.card.name} cannot attack"
 
         # CR 702.22c: validate any declared attacking bands before committing.
@@ -148,6 +155,18 @@ class DeclareAttackersStepMixin:
                 self.become_tapped(attacker)
                 self._turn_face_up(attacker)
             attacker.metadata["attacked_this_turn"] = True
+            # The durable half of that record: which seat's turn it attacked
+            # on, by that seat's own turn ordinal. `attacked_this_turn` is
+            # swept at cleanup, and "it attacked during your last turn" (Giant
+            # Turtle) is a question asked one turn later — so this key is
+            # deliberately not in `_EOT_METADATA_KEYS`, and it dies with the
+            # permanent instead (CR 400.7: a Turtle that leaves and returns is
+            # a new object with no record). Overwritten on each attack; only
+            # the latest one can be "your last turn".
+            attacker.metadata["attacked_on_seat_turn"] = {
+                "seat": controller_index,
+                "seat_turn": self.seat_turn_counts.get(controller_index, 0),
+            }
 
         self._prune_combat_state()
         self.log.append(f"{controller.name} declared {len(unique_indices)} attacker(s)")
@@ -239,7 +258,21 @@ class DeclareAttackersStepMixin:
         if events:
             self._enqueue_triggered_batch(events)
 
-    def can_attack(self, attacker: Permanent, defending_player_index: int) -> bool:
+    def can_attack(
+        self,
+        attacker: Permanent,
+        defending_player_index: int,
+        *,
+        attacking_planeswalker: bool = False,
+    ) -> bool:
+        # *attacking_planeswalker* is CR 508.5's distinction: an attacker aimed
+        # at a planeswalker still has a defending player (that planeswalker's
+        # controller — passed as *defending_player_index*), but it is not
+        # attacking that **player**, so a restriction scoped to attacking a
+        # player (Arboria) does not reach it. Defaulted False because every
+        # other restriction in this function restricts *attacking*, whichever
+        # object is attacked.
+        #
         # "Can attack as though it had haste" (Instill Energy) lifts CR 302.6's
         # attack clause only — not its {T}-ability clause, which is why it is a
         # restriction here rather than a haste grant.
@@ -316,32 +349,98 @@ class DeclareAttackersStepMixin:
         ):
             return False
 
-        # "Except for creatures named Akron Legionnaire and artifact creatures,
-        # creatures you control can't attack." Printed on one permanent but
-        # reaching every creature its controller has, so it is asked of the
-        # whole board rather than of the attacker's own program — and asked at
-        # declaration, the read that matters, so the restriction begins and
-        # ends with the permanent carrying it. The exception union is tested by
-        # `subject_matches`, the one reader of a noun-phrase payload, so a
-        # member means here exactly what it means on a blocker whitelist.
-        # CR 508.1c keeps it cumulative: matching an exception answers only
-        # this restriction.
+        # The board-reaching restrictions, asked of every permanent's compiled
+        # program rather than of the attacker's own — a restriction printed on
+        # one permanent that reaches creatures it does not name. Asked at
+        # declaration, the read that matters, so each begins and ends with the
+        # permanent carrying it. CR 508.1c keeps every branch cumulative:
+        # passing one restriction answers only that one.
+        #
+        # - "Except for creatures named Akron Legionnaire and artifact
+        #   creatures, creatures you control can't attack." — scoped to the
+        #   carrier's controller, exempting an exception union.
+        # - "Creatures without flying can't attack." (Moat) / "Non-Eye
+        #   creatures you control can't attack." (Evil Eye of Orms-by-Gore) —
+        #   a described set, carried as one `subject` filter payload.
+        # - Arboria's "creatures can't attack a player unless that player cast
+        #   a spell or put a nontoken permanent onto the battlefield during
+        #   their last turn" — a fact about the *defending player*, read off
+        #   the per-seat record the turn boundary folds.
+        #
+        # Every noun phrase is tested by `subject_matches`, the one reader of
+        # a filter payload, so a member means here exactly what it means on a
+        # blocker whitelist.
         attacker_seat = self.controller_index_of(attacker)
         for source_seat, source_perm in self.permanents_with_controller():
-            if source_seat != attacker_seat:
-                continue
             for instr in compile_card_oracle(source_perm.effective_card).instructions:
-                if instr.kind != "controlled_creatures_cant_attack":
-                    continue
-                exceptions = instr.payload.get("exceptions") or ()
-                if not any(
-                    subject_matches(
-                        self, attacker, dict(member),
+                if instr.kind == "controlled_creatures_cant_attack":
+                    if source_seat != attacker_seat:
+                        continue
+                    exceptions = instr.payload.get("exceptions") or ()
+                    if not any(
+                        subject_matches(
+                            self, attacker, dict(member),
+                            observer=source_seat, source=source_perm,
+                        )
+                        for member in exceptions
+                    ):
+                        return False
+                elif instr.kind == "creatures_cant_attack":
+                    described = dict(instr.payload.get("subject") or {})
+                    # "You control" inside the subject is relative to the
+                    # permanent *carrying* the restriction (CR 109.5), which is
+                    # what scopes Evil Eye to its own controller's creatures
+                    # while Moat, with no controller key, reaches every seat's.
+                    if subject_matches(
+                        self, attacker, described,
                         observer=source_seat, source=source_perm,
-                    )
-                    for member in exceptions
-                ):
-                    return False
+                    ):
+                        return False
+                elif instr.kind == "cant_attack_unless_defender_acted":
+                    if attacking_planeswalker:
+                        # "…can't attack **a player**": a planeswalker is not
+                        # one (CR 508.5), so this restriction says nothing.
+                        continue
+                    if not self.last_own_turn_activity.get(
+                        defending_player_index, False
+                    ):
+                        return False
+
+        # "This creature can't attack if it attacked during your last turn."
+        # (Giant Turtle.) The record is the stamp `declare_attackers` writes on
+        # every attacker — which seat attacked with it, on that seat's own turn
+        # ordinal — and "your last turn" is ordinal arithmetic against the
+        # current controller: the stamp names *this* seat's previous turn
+        # exactly when its ordinal is one less than the seat's current one. A
+        # Turtle that attacked under a thief compares against the thief's
+        # seat, not yours, and attacks freely once home (the stamp's seat is
+        # part of the record, not just its turn).
+        if "cant_attack_if_attacked_last_turn" in instr_kinds:
+            stamp = attacker.metadata.get("attacked_on_seat_turn")
+            if (
+                isinstance(stamp, dict)
+                and stamp.get("seat") == attacker_seat
+                and stamp.get("seat_turn")
+                == self.seat_turn_counts.get(attacker_seat, 0) - 1
+            ):
+                return False
+
+        # "That creature can't attack during its controller's next turn."
+        # (Wall of Dust's block trigger.) The stamp names a seat and that
+        # seat's next turn ordinal, written when the trigger resolved; the
+        # restriction holds exactly while that turn is the current one, and a
+        # later turn walks past it with nothing to sweep. On the permanent
+        # rather than the game because the sentence restricts one creature,
+        # and a creature that leaves and returns is a new object with no
+        # stamp (CR 400.7).
+        stamp = attacker.metadata.get("cant_attack_on_seat_turn")
+        if (
+            isinstance(stamp, dict)
+            and stamp.get("seat") == self.active_player_index
+            and stamp.get("seat_turn")
+            == self.seat_turn_counts.get(self.active_player_index, 0)
+        ):
+            return False
 
         # Defender is asked of layer 6, not of the printed keyword list: a Clone
         # copying a Wall has the ability through layer 1 and a Primal Clay that

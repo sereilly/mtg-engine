@@ -205,6 +205,27 @@ class TurnManagementMixin:
         both the headless ``start_turn`` flow and the web layer's step-by-step
         turn flow. Missing these leaves stale "this turn" counters (e.g.
         Scavenging Ghoul's end-step trigger firing on last turn's deaths)."""
+        # The turn that is ending belonged to whoever is still recorded as
+        # active, and this boundary is the one moment its per-turn records are
+        # both complete and still readable — so the "during their last turn"
+        # facts Arboria asks about (CR 506.3) are folded here, before anything
+        # below resets them. Only the outgoing seat's own records fold: a spell
+        # another player cast during this turn was not cast during *their* own
+        # turn, and their fold happened when their own turn ended. No fold
+        # before the first turn of the game — there is no last turn to
+        # describe, and an absent entry reads as "did neither".
+        if self.seat_turn_counts:
+            prev_seat = self.active_player_index
+            if 0 <= prev_seat < len(self.players):
+                self.last_own_turn_activity[prev_seat] = bool(
+                    self.players[prev_seat].spells_cast_this_turn
+                ) or self.nontoken_permanents_entered_this_turn.get(prev_seat, 0) > 0
+        self.nontoken_permanents_entered_this_turn = {}
+        # The new turn's per-seat ordinal — what "your last turn" (Giant
+        # Turtle) and "its controller's next turn" (Wall of Dust) compare
+        # against. A skipped turn (Time Vault) still increments: the skip is
+        # decided after the turn has begun, and the ordinal records beginnings.
+        self.seat_turn_counts[player_index] = self.seat_turn_counts.get(player_index, 0) + 1
         self.active_player_index = player_index
         self.lands_played_this_turn[player_index] = 0
         self.creatures_died_this_turn = 0
