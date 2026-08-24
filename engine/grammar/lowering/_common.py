@@ -82,6 +82,13 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     "power": "power",
     "toughness": "toughness",
     "supertypes": "supertypes",
+    # The two source-relative narrowings ``to_payload`` *never* emits
+    # ("blocking or blocked by this creature", "that dealt damage to it this
+    # turn"). Listing them here is what makes ``_filter_payload`` refuse the
+    # phrase by name everywhere except the one lowering written for it, which
+    # strips the field and carries the relation as its own payload key.
+    "in_combat_with_source": "in_combat_with_source",
+    "dealt_damage_to_source_this_turn": "dealt_damage_to_source_this_turn",
 }
 
 

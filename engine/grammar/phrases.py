@@ -49,6 +49,14 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # the upkeep step is inside the turn), so they are different kinds and the
     # one nothing implements must not fall back to the one that is close.
     ("until_your_next_upkeep", ("until", "your", "next", "upkeep")),
+    # "Until the end of your next upkeep" (Halfdane). A step *later* than the
+    # entry above: "until your next upkeep" ends as that upkeep begins, this
+    # one ends as it ends — which is the whole trick of the card printing it,
+    # whose own upkeep trigger re-applies the effect before the old one runs
+    # out. Different moments, so different kinds, for the reason the comment
+    # above gives about turns and upkeeps.
+    ("until_end_of_your_next_upkeep",
+     ("until", "the", "end", "of", "your", "next", "upkeep")),
     ("this_turn", ("this", "turn")),
 )
 

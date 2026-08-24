@@ -336,3 +336,226 @@ def test_a_whitelist_is_not_a_blacklist(set_pool):
 
     assert not _may_block(riders, ordinary)
     assert _may_block(kithkin, Permanent(card=_vanilla("Ordinary", 1, 1)))
+
+
+# ---------------------------------------------------------------------------
+# Base power/toughness rewrites (CR 613.4b) — Sentinel, Wall of Tombstones,
+# Halfdane, Brine Hag: "change …'s base [power and] toughness to <value>"
+# ---------------------------------------------------------------------------
+
+
+def _noncreature_card(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Sorcery",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": "Sorcery"},
+    )
+
+
+def test_sentinel_reads_the_power_of_the_creature_it_blocks(set_pool):
+    """"{0}: Change this creature's base toughness to 1 plus the power of
+    target creature blocking or blocked by this creature." — and the reminder
+    text's "indefinitely" means the rewrite survives cleanup (CR 611.2a)."""
+    sentinel = Permanent(card=set_pool("LEG")["Sentinel"])
+    attacker = Permanent(card=_vanilla("Attacker", 4, 4))
+    game, _p1 = _blocked_by(attacker, [sentinel])
+
+    result = game.activate_permanent_ability(
+        1, "Sentinel", permanent_index=0, target_permanent_index=0
+    )
+
+    assert result.supported, result.details
+    assert sentinel.effective_toughness == 5  # 1 plus the attacker's power
+    game.resolve_cleanup_step(0)
+    assert sentinel.effective_toughness == 5, "the rewrite has no duration"
+
+
+def test_sentinel_cannot_be_activated_outside_combat(set_pool):
+    """CR 602.2b via 601.2c: no creature is blocking or blocked by Sentinel,
+    so the mandatory target cannot be filled and the ability is refused —
+    not aimed at a bystander the printed restriction excludes."""
+    sentinel = Permanent(card=set_pool("LEG")["Sentinel"])
+    bystander = Permanent(card=_vanilla("Bystander", 6, 6))
+    p1 = PlayerState(name="P1", battlefield=[bystander])
+    p2 = PlayerState(name="P2", battlefield=[sentinel])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        1, "Sentinel", permanent_index=0, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert result.details == "no valid target for Sentinel"
+    assert sentinel.effective_toughness == 1, "a refused activation changes nothing"
+
+
+def test_wall_of_tombstones_counts_the_graveyard_when_the_trigger_resolves(set_pool):
+    """"…change this creature's base toughness to 1 plus the number of
+    creature cards in your graveyard." The count is taken as the trigger
+    resolves (CR 608.2) and the rewrite then holds still — a card that dies
+    later grows the Wall at the *next* upkeep, not immediately."""
+    wall = Permanent(card=set_pool("LEG")["Wall of Tombstones"])
+    p1 = PlayerState(
+        name="P1", battlefield=[wall],
+        graveyard=[
+            _vanilla("Dead Bear", 2, 2),
+            _vanilla("Dead Bird", 1, 1),
+            _vanilla("Dead Ogre", 3, 3),
+            _noncreature_card("Dead Ritual"),
+        ],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert wall.effective_toughness == 4  # 1 plus three creature *cards*
+
+    p1.graveyard.append(_vanilla("Dead Wurm", 4, 4))
+    assert wall.effective_toughness == 4, "the count was fixed at resolution"
+
+    game.resolve_upkeep(0)
+    game._settle()
+    assert wall.effective_toughness == 5
+
+
+def test_halfdane_copies_the_stats_and_reverts_after_his_next_upkeep(set_pool):
+    """"…change Halfdane's base power and toughness to the power and toughness
+    of target creature other than Halfdane until the end of your next upkeep."
+
+    The timeline the duration prints: the copy holds through the turn cycle,
+    and when the next upkeep's trigger cannot re-apply (no legal target), the
+    old rewrite runs out as that upkeep ends — not at its start, and not a
+    turn later."""
+    halfdane = Permanent(card=set_pool("LEG")["Halfdane"])
+    brute = Permanent(card=_vanilla("Brute", 5, 5))
+    p1 = PlayerState(name="P1", battlefield=[halfdane],
+                     library=[_vanilla("Card A", 1, 1), _vanilla("Card B", 1, 1)])
+    p2 = PlayerState(name="P2", battlefield=[brute])
+    game = Game(players=[p1, p2])
+
+    game.turn = 1
+    game.resolve_upkeep(0)
+    assert (halfdane.effective_power, halfdane.effective_toughness) == (5, 5)
+    game.resolve_draw_step(0)
+    assert (halfdane.effective_power, halfdane.effective_toughness) == (5, 5), \
+        "the rewrite lasts past its own upkeep's end"
+
+    game.turn = 3
+    game.remove_from_battlefield(brute)
+    game.resolve_upkeep(0)  # no legal target: nothing re-applies (CR 603.3d)
+    assert (halfdane.effective_power, halfdane.effective_toughness) == (5, 5), \
+        "the old rewrite holds *through* the next upkeep"
+    game.resolve_draw_step(0)
+    assert (halfdane.effective_power, halfdane.effective_toughness) == (3, 3), \
+        "and ends as that upkeep ends"
+
+
+def test_halfdane_rereads_the_chosen_creature_each_upkeep(set_pool):
+    """Each upkeep's trigger takes a fresh reading (CR 608.2) and its own
+    rewrite outlives the old one's expiry, so the copy never flickers."""
+    from engine.pt import add_pt_counters
+
+    halfdane = Permanent(card=set_pool("LEG")["Halfdane"])
+    brute = Permanent(card=_vanilla("Brute", 5, 5))
+    p1 = PlayerState(name="P1", battlefield=[halfdane],
+                     library=[_vanilla("Card A", 1, 1), _vanilla("Card B", 1, 1)])
+    p2 = PlayerState(name="P2", battlefield=[brute])
+    game = Game(players=[p1, p2])
+
+    game.turn = 1
+    game.resolve_upkeep(0)
+    assert (halfdane.effective_power, halfdane.effective_toughness) == (5, 5)
+
+    add_pt_counters(brute, "+1/+1")
+
+    game.turn = 3
+    game.resolve_upkeep(0)
+    game.resolve_draw_step(0)
+    assert (halfdane.effective_power, halfdane.effective_toughness) == (6, 6), \
+        "this upkeep's reading survives this upkeep's end"
+
+
+def test_halfdane_is_never_offered_himself_and_honours_the_chosen_target(set_pool):
+    """"…other than Halfdane": the prompt's candidate list excludes him by
+    identity, and a human's pick through the trigger-target channel wins over
+    the deterministic first candidate."""
+    halfdane = Permanent(card=set_pool("LEG")["Halfdane"])
+    own = Permanent(card=_vanilla("Own Bear", 2, 2))
+    theirs = Permanent(card=_vanilla("Their Ogre", 4, 4))
+    p1 = PlayerState(name="P1", battlefield=[halfdane, own])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+
+    prompts = [t for t in game.get_upkeep_target_triggers(0) if t["card_name"] == "Halfdane"]
+    assert len(prompts) == 1
+    offered = {t["name"] for t in prompts[0]["valid_targets"]}
+    assert offered == {"Own Bear", "Their Ogre"}
+
+    game.resolve_upkeep(0, trigger_targets={"Halfdane": (1, 0)})
+    assert (halfdane.effective_power, halfdane.effective_toughness) == (4, 4)
+
+
+def test_brine_hag_turns_her_killer_into_an_0_2(set_pool):
+    """"When this creature dies, change the base power and toughness of all
+    creatures that dealt damage to it this turn to 0/2." The classic trade:
+    the 5/5 that kills her has 2 combat damage marked, so the rewrite hands
+    it to the next state-based check (CR 704.5g)."""
+    hag = Permanent(card=set_pool("LEG")["Brine Hag"])
+    brute = Permanent(card=_vanilla("Brute", 5, 5))
+    p1 = PlayerState(name="P1", battlefield=[brute])
+    p2 = PlayerState(name="P2", battlefield=[hag])
+    game = Game(players=[p1, p2])
+
+    game._mark_damage_on_permanent(brute, 2, source=hag, combat=True)
+    game._mark_damage_on_permanent(hag, 5, source=brute, combat=True)
+    game.check_state_based_actions()
+    game._settle()
+
+    assert not game.is_on_battlefield(hag)
+    assert not game.is_on_battlefield(brute), \
+        "0/2 with 2 damage marked does not survive the next state-based check"
+
+
+def test_brine_hag_records_noncombat_damage_and_both_look_alikes(set_pool):
+    """Two identical pingers each chip her outside combat: both are in the
+    damage record (deduped by identity, not by value — a look-alike is a
+    different permanent) and both are rewritten when she dies."""
+    hag = Permanent(card=set_pool("LEG")["Brine Hag"])
+    twin_a = Permanent(card=_vanilla("Twin", 3, 3))
+    twin_b = Permanent(card=_vanilla("Twin", 3, 3))
+    p1 = PlayerState(name="P1", battlefield=[twin_a, twin_b])
+    p2 = PlayerState(name="P2", battlefield=[hag])
+    game = Game(players=[p1, p2])
+
+    game._mark_damage_on_permanent(hag, 1, source=twin_a)
+    game._mark_damage_on_permanent(hag, 1, source=twin_b)
+    game.check_state_based_actions()
+    game._settle()
+
+    assert not game.is_on_battlefield(hag)
+    assert (twin_a.effective_power, twin_a.effective_toughness) == (0, 2)
+    assert (twin_b.effective_power, twin_b.effective_toughness) == (0, 2)
+
+
+def test_brine_hag_cannot_rewrite_a_damager_that_already_left(set_pool):
+    """CR 400.7: a permanent that left is a new object wherever it turns up
+    next — the record still names it, and the rewrite skips it by identity."""
+    hag = Permanent(card=set_pool("LEG")["Brine Hag"])
+    raider = Permanent(card=_vanilla("Raider", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[raider])
+    p2 = PlayerState(name="P2", battlefield=[hag])
+    game = Game(players=[p1, p2])
+
+    game._mark_damage_on_permanent(hag, 1, source=raider)
+    game.remove_from_battlefield(raider)
+    p1.graveyard.append(raider.card)
+    game._mark_damage_on_permanent(hag, 1, source=Permanent(card=_vanilla("Other", 1, 1)))
+    game.check_state_based_actions()
+    game._settle()
+
+    assert not game.is_on_battlefield(hag)
+    assert "absolute_power" not in raider.metadata, \
+        "a departed damager is out of the effect's reach"

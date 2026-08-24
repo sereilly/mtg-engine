@@ -317,6 +317,18 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             and "wall" not in perm.effective_card.type_line.lower()
         ]
 
+    def _base_pt_copy_candidates(self, source: Permanent) -> list[Permanent]:
+        """Legal targets for a "change …'s base power and toughness to the
+        power and toughness of target creature other than ~" upkeep trigger
+        (Halfdane): every creature on any battlefield except the source itself
+        — the exclusion is by identity, because a look-alike is a different
+        permanent (CR 400.7)."""
+        return [
+            perm
+            for _seat, perm in self.permanents_with_controller()
+            if perm.is_creature and perm is not source
+        ]
+
     def _upkeep_land_sacrifice_candidates(self, controller) -> list[Permanent]:
         """Legal choices for Serendib Djinn's upkeep "sacrifice a land": every
         land its controller controls (you choose which of your own permanents a
@@ -348,7 +360,10 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         target rather than answering yes/no, and can't decline.
         """
         # instruction kind -> (choice kind, target-noun the UI highlights,
-        # prompt builder, candidate lookup).
+        # prompt builder, candidate lookup). A lookup takes the trigger's
+        # controller and its source permanent — most read one or the other,
+        # and handing both over is what let the base-P/T copy exclude its own
+        # source without the table growing a second shape.
         targeted_kinds = {
             "grant_forestwalk_until_next_upkeep": (
                 "upkeep_grant_forestwalk",
@@ -357,13 +372,22 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     f"{name}: choose a non-Wall creature an opponent controls "
                     "to gain forestwalk until your next upkeep."
                 ),
-                self._forestwalk_grant_candidates,
+                lambda controller, source: self._forestwalk_grant_candidates(controller),
             ),
             "upkeep_sacrifice_land_conditional_damage": (
                 "upkeep_sacrifice_land",
                 "land",
                 lambda name: f"{name}: choose a land to sacrifice.",
-                self._upkeep_land_sacrifice_candidates,
+                lambda controller, source: self._upkeep_land_sacrifice_candidates(controller),
+            ),
+            "set_source_base_pt_from_target_until_next_upkeep": (
+                "upkeep_copy_base_pt",
+                "creature",
+                lambda name: (
+                    f"{name}: choose a creature whose power and toughness "
+                    f"{name} copies until the end of your next upkeep."
+                ),
+                lambda controller, source: self._base_pt_copy_candidates(source),
             ),
         }
         triggers: list[dict] = []
@@ -380,7 +404,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 if perm.card.name in seen:
                     continue
                 choice_kind, target_noun, build_prompt, find_candidates = entry
-                candidates = find_candidates(controller)
+                candidates = find_candidates(controller, perm)
                 if not candidates:
                     continue
                 seen.add(perm.card.name)

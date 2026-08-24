@@ -458,6 +458,144 @@ def _lower_set_base_pt(node: ast.SetBasePT) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("set_base_pt_target_until_eot", "", payload),)
 
 
+def _lower_change_base_pt(node: ast.ChangeBasePT) -> tuple[OracleInstruction, ...]:
+    """The CR 613.4b rewrite template, in Legends' four printings.
+
+    Each branch checks the whole of what it read — the subject, every filter
+    restriction, the value's shape and the duration — and refuses by name
+    otherwise, because a rewrite that quietly dropped a restriction would set
+    the wrong creature's base P/T forever.
+    """
+    # "…of all creatures that dealt damage to it this turn to 0/2" (Brine
+    # Hag): a sweep over the damage record the source carries, not a target.
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in ("all", "each"):
+        filt = node.subject.filter
+        if not filt.dealt_damage_to_source_this_turn:
+            raise LoweringError(
+                "a base-P/T rewrite over a set reads the damage record; "
+                "this set names something else", node=node,
+            )
+        leftover = _restrictions_beyond(
+            filt, frozenset({"card_types", "dealt_damage_to_source_this_turn"})
+        )
+        if leftover or filt.card_types != ("creature",):
+            raise LoweringError(
+                "the damage-record rewrite covers creatures alone", node=node
+            )
+        if node.duration.kind is not None:
+            raise LoweringError(
+                f"no damage-record rewrite expires at {node.duration.kind}", node=node
+            )
+        if not (isinstance(node.power, ast.Fixed) and isinstance(node.toughness, ast.Fixed)):
+            raise LoweringError(
+                "the damage-record rewrite takes a printed P/T pair", node=node
+            )
+        return (
+            OracleInstruction("set_base_pt_of_creatures_that_damaged_source", "", {
+                "power": node.power.value,
+                "toughness": node.toughness.value,
+            }),
+        )
+
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "a base-P/T rewrite changes its own source or the damage record",
+            node=node,
+        )
+
+    # "…to the power and toughness of target creature other than ~ until the
+    # end of your next upkeep" (Halfdane): both stats read off one chosen
+    # creature when the trigger resolves.
+    if node.from_pt_of is not None:
+        if node.duration.kind != "until_end_of_your_next_upkeep":
+            raise LoweringError(
+                "a copied base P/T is implemented for the end of the next "
+                f"upkeep, not {node.duration.kind or 'indefinitely'}", node=node,
+            )
+        spec = node.from_pt_of
+        if not (isinstance(spec, ast.TargetSpec) and spec.quantifier == "target"):
+            raise LoweringError("a copied base P/T needs a chosen creature", node=node)
+        filt = spec.filter
+        leftover = _restrictions_beyond(
+            filt, frozenset({"card_types", "other_than_source"})
+        )
+        if leftover or filt.card_types != ("creature",):
+            raise LoweringError(
+                "the copied-P/T handler reads a creature, optionally excluding "
+                "the source", node=node,
+            )
+        payload: dict[str, object] = {"exclude_self": filt.other_than_source}
+        _describe_targets(payload, spec)
+        return (
+            OracleInstruction(
+                "set_source_base_pt_from_target_until_next_upkeep", "", payload
+            ),
+        )
+
+    # The toughness-only computed forms (Sentinel, Wall of Tombstones).
+    if node.power is not None or node.toughness is None:
+        raise LoweringError(
+            "a computed base-P/T rewrite sets toughness alone", node=node
+        )
+    if node.duration.kind is not None:
+        raise LoweringError(
+            f"no computed base-toughness rewrite expires at {node.duration.kind}",
+            node=node,
+        )
+    bonus = 0
+    amount = node.toughness
+    if isinstance(amount, ast.Plus):
+        if not isinstance(amount.left, ast.Fixed):
+            raise LoweringError("the printed addend has to be a number", node=node)
+        bonus = amount.left.value
+        amount = amount.right
+
+    # "1 plus the power of target creature blocking or blocked by this
+    # creature" (Sentinel). The quantity carries the sentence's target; the
+    # in-combat relation rides the instruction as its own key, because no read
+    # of the chosen creature alone can answer it — engine/legality.py tests it
+    # at activation and the handler again at resolution.
+    if isinstance(amount, ast.PowerOfSubject):
+        spec = amount.subject
+        if spec.quantifier != "target":
+            raise LoweringError("the power read needs a chosen creature", node=node)
+        filt = spec.filter
+        leftover = _restrictions_beyond(
+            filt, frozenset({"card_types", "in_combat_with_source"})
+        )
+        if leftover or filt.card_types != ("creature",):
+            raise LoweringError(
+                "the target-power rewrite reads a creature, optionally in "
+                "combat with the source", node=node,
+            )
+        stripped = dataclasses.replace(spec, filter=dataclasses.replace(
+            filt, in_combat_with_source=False
+        ))
+        payload = {
+            "bonus": bonus,
+            "in_combat_with_source": filt.in_combat_with_source,
+        }
+        _describe_targets(payload, stripped)
+        return (
+            OracleInstruction("set_source_base_toughness_from_target_power", "", payload),
+        )
+
+    # "1 plus the number of creature cards in your graveyard" (Wall of
+    # Tombstones). `count_spec` is the shared reader, so the count means what
+    # it means everywhere else — and refuses the zones and narrowings the
+    # counter cannot take.
+    if isinstance(amount, ast.CountOf):
+        return (
+            OracleInstruction("set_source_base_toughness_from_count", "", {
+                "bonus": bonus,
+                "count": count_spec(amount.filter, node),
+            }),
+        )
+    raise LoweringError(
+        f"no base-toughness rewrite reads a {type(amount).__name__}", node=node
+    )
+
+
 _KEYWORD_GRANTS: dict[tuple[str, str], str] = {
     ("flying", "target"): "grant_target_flying_until_eot",
     ("flying", "self"): "grant_self_flying_until_eot",

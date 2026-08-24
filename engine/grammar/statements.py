@@ -36,6 +36,7 @@ from .effects import (
     _parse_becomes,
     _parse_cant_attack_or_block,
     _parse_cast_permission,
+    _parse_change_base_pt,
     _parse_change_text,
     _parse_colour_source_prevention,
     _parse_counter,
@@ -176,6 +177,12 @@ def _parse_subject_verb(
         if removal is not None:
             return removal
     if stream.at_word("change"):
+        # The base-P/T rewrite is tried first and refuses without consuming
+        # when the sentence is "change the text of …", so the two readings of
+        # the verb cannot shadow each other.
+        base_pt = _parse_change_base_pt(stream)
+        if base_pt is not None:
+            return base_pt
         return _parse_change_text(stream)
     if stream.at_word("gain"):
         control = _parse_gain_control(stream)

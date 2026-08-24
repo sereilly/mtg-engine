@@ -141,6 +141,7 @@ _FILTERABLE_ABILITY_KINDS = {
     "grant_flying_and_delayed_destruction",
     "grant_unblockable_to_low_power_target",
     "set_base_pt_target_until_eot",
+    "set_source_base_toughness_from_target_power",
     "steal_creature_while_tapped_and_weaker",
     "tap_target_permanent",
     "attach_source_to_target",
@@ -688,6 +689,20 @@ class LegalityMixin:
         if instruction.kind == "set_base_pt_target_until_eot" and instruction.payload.get("exclude_self"):
             # Sorceress Queen: "Target creature other than this creature."
             return source_permanent is None or perm is not source_permanent
+        if instruction.kind == "set_source_base_toughness_from_target_power":
+            # Sentinel: "target creature blocking or blocked by this creature"
+            # — the same in-combat relation the handler re-checks at resolution
+            # (CR 608.2b), asked here so the ability is refused with nothing
+            # paid when no such creature exists (CR 602.2b via 601.2c) and the
+            # picker offers exactly what the effect can read.
+            if not perm.is_creature:
+                return False
+            if instruction.payload.get("in_combat_with_source"):
+                return source_permanent is not None and any(
+                    perm is opponent
+                    for opponent in self.creatures_in_combat_with(source_permanent)
+                )
+            return True
         if instruction.kind == "steal_creature_while_tapped_and_weaker":
             # Old Man of the Sea: only creatures at or below its own power.
             if not perm.is_creature:

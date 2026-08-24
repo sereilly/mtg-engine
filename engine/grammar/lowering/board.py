@@ -100,6 +100,22 @@ def _lower_destroy(node: ast.Destroy, event: str | None = None) -> tuple[OracleI
             if node.no_regen:
                 described["bypass_regeneration"] = True
             return (OracleInstruction("destroy_all_matching", "", described),)
+        # "Destroy all creatures blocking or blocked by it." (Abu Ja'far.)
+        # The noun phrase parses now (Sentinel's target reads the same
+        # relation), but this sweep must not fall through to the generic
+        # creature sweep below — that path keys on card types alone, so the
+        # relation would be dropped and the trigger would wipe the board.
+        # Refused rather than lowered onto the hook's
+        # `destroy_creatures_in_combat_with_source`: taking the line over is
+        # an accept-probe review away (the deletion probe flags the implicit
+        # "all" exactly as it did for every other destroy sweep), and until
+        # that review the refusal hands the line back to
+        # `card_hooks.CARD_LINE_INSTRUCTIONS`, which implements it in full.
+        if filt.in_combat_with_source or filt.dealt_damage_to_source_this_turn:
+            raise LoweringError(
+                "a destroy sweep over a source relation stays with its card "
+                "hook until the probe review takes it", node=node,
+            )
         kind = _DESTROY_ALL_KINDS.get(tuple(sorted(filt.card_types)))
         if kind is None:
             raise LoweringError("no sweep handler for this destroy scope", node=node)

@@ -150,6 +150,36 @@ class BoardCount:
 
 
 @dataclass(frozen=True)
+class Plus:
+    """``1 plus the number of creature cards in your graveyard`` (Wall of
+    Tombstones), ``1 plus the power of target creature …`` (Sentinel) — a sum
+    of two printed quantities.
+
+    A node rather than arithmetic folded at parse time because the right-hand
+    side is usually not a number yet: a count or a characteristic read at
+    resolution. Every lowering written before it exists refuses it by default,
+    which is the union's standing guarantee for a new quantity.
+    """
+    left: "Amount"
+    right: "Amount"
+
+
+@dataclass(frozen=True)
+class PowerOfSubject:
+    """``the power of target creature blocking or blocked by this creature``
+    (Sentinel) — one named object's power, read at resolution.
+
+    Beside :class:`GreatestPowerAmong` and not inside it: that node aggregates
+    over a described *set*, this one reads a single referent — typically a
+    chosen target, which means the quantity itself is what carries the
+    sentence's target. A lowering that accepts it must therefore describe the
+    target it names, or refuse; dropping it would leave a picker with nothing
+    to enumerate.
+    """
+    subject: "TargetSpec"
+
+
+@dataclass(frozen=True)
 class CountersOnSource:
     """"the number of doom counters on it" (Armageddon Clock) — how many CR
     122.1 named counters the ability's own source is carrying.
@@ -163,7 +193,7 @@ class CountersOnSource:
     kind: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, AllOf, AnyNumber, BoardCount]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject]
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +325,19 @@ class ObjectFilter:
     # collapsed to a SELF token — so the question is "another copy of me",
     # whatever the copy is called.
     not_ability_targeted_by_same_name: bool = False
+    # "blocking or blocked by this creature" (Sentinel) — the object is in
+    # combat with the ability's own source (CR 509). Relative, like
+    # ``other_than_source``: no read of the object alone can answer it, so
+    # ``to_payload`` never emits it and ``permanent_matches_filter`` is never
+    # told about it — the one lowering that accepts it carries the relation as
+    # its own payload key and the handler that has the source tests it.
+    in_combat_with_source: bool = False
+    # "creatures that dealt damage to it this turn" (Brine Hag) — a *history*
+    # relative to the source, read off the damage record the victim carries
+    # (``damaged_by_sources_this_turn``). Same discipline as the field above:
+    # never emitted, so every lowering not written for it refuses the phrase
+    # instead of quietly widening to every creature.
+    dealt_damage_to_source_this_turn: bool = False
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.
@@ -482,6 +525,7 @@ class Duration:
     """How long a continuous effect lasts. ``None`` kind means permanent."""
     kind: str | None = None
     # until_end_of_turn | until_end_of_combat | this_turn | until_your_next_turn
+    # | until_your_next_upkeep | until_end_of_your_next_upkeep | while_source_tapped
 
 
 @dataclass(frozen=True)

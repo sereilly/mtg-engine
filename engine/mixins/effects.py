@@ -484,6 +484,13 @@ class EffectsMixin:
             and self._has_keyword(source, "deathtouch")
         ):
             permanent.metadata["received_deathtouch"] = True
+        # The dealt-damage record (Sengir Vampire, Brine Hag) lives on this
+        # same path and for the same reason as the two rules above: any damage
+        # a permanent deals belongs in it, not only the combat step's. Only a
+        # Permanent is recorded — a spell's source is the card as printed and
+        # is not a creature that could be found on a battlefield later.
+        if outcome.dealt > 0 and isinstance(source, Permanent):
+            self._record_damage_source(permanent, source)
         if then is not None:
             then(outcome.dealt)
         return outcome.dealt
@@ -601,12 +608,20 @@ class EffectsMixin:
         self._apply_opponent_damage_choice(pending, target_seat, best_index)
 
     def _record_damage_source(self, victim: Permanent, source: Permanent) -> None:
-        """Remember that *source* dealt damage to *victim* this turn, so that a
-        "whenever a creature dealt damage by this creature this turn dies" trigger
-        (e.g. Sengir Vampire) can recognize the kill. References are cleared at
-        cleanup. Sources are deduped by identity."""
+        """Remember that *source* dealt damage to *victim* this turn — the
+        record behind "a creature dealt damage by this creature this turn"
+        (Sengir Vampire) and "all creatures that dealt damage to it this turn"
+        (Brine Hag). References are cleared at cleanup.
+
+        Fed from ``_mark_damage_on_permanent`` — the one path every
+        creature-damage event runs through, combat or not — for the reason
+        deathtouch and lifelink live there: recorded only at the combat step,
+        a Prodigal Sorcerer ping was damage the record never saw. Deduped by
+        identity, not equality: ``in`` compares ``Permanent`` by value, so a
+        second copy of the same creature damaging the same victim was silently
+        merged with the first (the look-alike bug class)."""
         sources = victim.metadata.setdefault("damaged_by_sources_this_turn", [])
-        if source not in sources:
+        if not any(entry is source for entry in sources):
             sources.append(source)
 
     def _player_controls_text(self, player: PlayerState, phrase: str) -> bool:

@@ -56,6 +56,32 @@ class SetBasePT:
 
 
 @dataclass(frozen=True)
+class ChangeBasePT:
+    """``Change <subject>'s base [power and] toughness to <value> [duration].``
+
+    CR 613.4b: a resolving ability that *sets* base power and/or toughness —
+    layer 7b, so later 7c modifications still apply on top. Legends prints the
+    template four ways (Sentinel, Wall of Tombstones, Halfdane, Brine Hag) and
+    "(This effect lasts indefinitely.)" is reminder text for the absent
+    duration, which for a rewrite means CR 611.2a's "permanently".
+
+    Distinct from :class:`SetBasePT` ("has base power …"): that is the shape
+    whose value is a printed number and whose lowering demands an end-of-turn
+    duration; this one's value is usually computed at resolution — a count, a
+    chosen creature's power, or both stats of one chosen creature
+    (*from_pt_of*, Halfdane) — and its duration is usually absent. Folding the
+    two together would make each form's refusals the other's.
+    """
+    subject: Recipient
+    power: Amount | None = None
+    toughness: Amount | None = None
+    # "to the power and toughness of target creature other than ~" (Halfdane):
+    # both stats are read off one chosen creature when the ability resolves.
+    from_pt_of: Recipient | None = None
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class GainKeyword:
     subject: Recipient
     keywords: tuple[str, ...]
