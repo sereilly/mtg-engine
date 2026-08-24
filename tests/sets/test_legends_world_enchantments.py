@@ -109,3 +109,62 @@ def test_the_three_taxes_are_all_world_enchantments_or_not(set_pool):
     assert "World" in pool["Nether Void"].type_line
     assert "World" in pool["In the Eye of Chaos"].type_line
     assert "World" not in pool["Presence of the Master"].type_line
+
+
+# ---------------------------------------------------------------------------
+# Playing with hidden zones revealed (round 11) — CR 701.20a, CR 401.5
+# ---------------------------------------------------------------------------
+
+
+def test_revelation_reveals_every_hand_while_it_stands(set_pool):
+    """"Players play with their hands revealed." — every hand, to every seat,
+    and *derived*: the predicate reads the battlefield, so the effect ends the
+    moment the enchantment leaves, with no flag to clear."""
+    from engine.revealed_hands import hand_revealed_to
+
+    revelation = Permanent(card=set_pool("LEG")["Revelation"])
+    p1 = PlayerState(name="P1", battlefield=[revelation])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    assert hand_revealed_to(game, owner_seat=1, viewer_seat=0)
+    assert hand_revealed_to(game, owner_seat=0, viewer_seat=1), (
+        "the reveal is symmetric — the controller's own hand is shown too"
+    )
+
+    game.remove_from_battlefield(revelation)
+    assert not hand_revealed_to(game, 1, 0)
+    assert not hand_revealed_to(game, 0, 1)
+
+
+def test_field_of_dreams_reveals_every_library_top(set_pool):
+    """"Players play with the top card of their libraries revealed." — the
+    players-scoped form of the question engine/library_top.py already answers
+    for Conspicuous Snoop's own-scoped one, from whichever battlefield the
+    world enchantment stands on."""
+    from engine.library_top import top_is_public, top_is_visible
+
+    field = Permanent(card=set_pool("LEG")["Field of Dreams"])
+    p1 = PlayerState(name="P1")
+    p2 = PlayerState(name="P2", battlefield=[field])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    assert top_is_public(game, 0), "the *other* player's top card too"
+    assert top_is_public(game, 1)
+    assert top_is_visible(game, 0), "public implies visible to the owner (CR 401.5)"
+
+    game.remove_from_battlefield(field)
+    assert not top_is_public(game, 0)
+    assert not top_is_public(game, 1)
+
+
+def test_the_reveal_statics_compile_supported_and_not_hollow(set_pool):
+    """Both cards' whole text is the one static line; support has to come from
+    the derived claim, and the claim has to name the module that does the
+    work."""
+    for name in ("Revelation", "Field of Dreams"):
+        program = compile_card_oracle(set_pool("LEG")[name])
+        assert program.supported, name
+        assert any(i.kind == "derived_static_rule" for i in program.instructions), name

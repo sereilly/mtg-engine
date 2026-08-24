@@ -2640,6 +2640,7 @@ def _derived_static_claims(
     from .land_play_allowance import land_play_allowance_for
     from .prevention import prevention_claims_line
     from .replacements import replacement_claims_line
+    from .revealed_hands import revealed_hands_line
     from .untap_restrictions import untap_restriction_for
 
     claims: list[str] = []
@@ -2681,6 +2682,14 @@ def _derived_static_claims(
         claims.append("evasion_negation")
     if draw_step_bonus_for(oracle_text) is not None:
         claims.append("draw_step_modifiers")
+    # "Players play with their hands revealed." (Revelation.) The per-seat
+    # state payload derives who may see whose hand from the permanent's own
+    # text (engine/revealed_hands.py), so there is no instruction — and on an
+    # enchantment whose whole text is the sentence, no instruction would mean
+    # the card reports unsupported however well the reveal works. The
+    # library-top twin (Field of Dreams) is the `library_top` claim below.
+    if any(revealed_hands_line(line) for line in oracle_text.splitlines()):
+        claims.append("revealed_hands")
     # The *name-keyed* half of the same CR 504 story (Island Sanctuary's
     # skip-your-draw-for-protection), registered in card_hooks and carried out by
     # phases/draw_step.py, phases/declare_attackers_step.py and

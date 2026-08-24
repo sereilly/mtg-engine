@@ -16,7 +16,9 @@ import re
 from engine import Game
 from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
+from engine.library_top import top_is_public
 from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
+from engine.revealed_hands import hand_revealed_to
 from engine.targeting import usable_activated_abilities
 from engine.text_changes import changed_words
 
@@ -682,9 +684,15 @@ def _hand_revealed_to_viewer(game: Game, viewer_seat: int | None, seat: int) -> 
     """Whether an in-progress effect reveals *seat*'s hand to *viewer_seat*:
     a pending hand reveal (Glasses of Urza) whose viewer is this seat, or a
     pending Word of Command whose caster is this seat. While one is active the
-    target's hand serializes face-up for that viewer only."""
+    target's hand serializes face-up for that viewer only.
+
+    A *standing* effect can reveal it too — "Players play with their hands
+    revealed." (Revelation, CR 701.20a) — derived from the battlefield by
+    ``engine/revealed_zones.py``, so it starts and stops with the permanent."""
     if viewer_seat is None:
         return False
+    if hand_revealed_to(game, seat, viewer_seat):
+        return True
     reveal = game.pending_hand_reveal
     if (
         reveal is not None
@@ -768,6 +776,18 @@ def _serialize_player(
         "has_last_drawn_card": player.last_card_drawn_this_turn() is not None,
         "deck": {"count": len(player.library)},
         "library_count": len(player.library),
+        # A revealed top card of the library — "Players play with the top card
+        # of their libraries revealed." (Field of Dreams, CR 401.5) or this
+        # player's own "Play with the top card of your library revealed."
+        # (Conspicuous Snoop). Revealed is revealed to everyone (CR 701.20a),
+        # the owner included — playing this way shows them a card they could
+        # not otherwise see — so the card face rides the payload for every
+        # viewer while a source stands, and is absent otherwise.
+        "library_top": (
+            _serialize_card(player.library[0])
+            if player.library and top_is_public(game, seat)
+            else None
+        ),
         # The viewer's own graveyard/exile carry the same target specs a hand
         # card does, because a cast permission (engine/cast_permissions.py) can
         # make one castable — and the cast prompts read the spec off the card.

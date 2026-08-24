@@ -511,3 +511,66 @@ def test_400_3_stolen_creature_bounces_to_owners_hand():
 
     assert all(card.name != "Stolen Bear" for card in p1.hand)
     assert any(card.name == "Stolen Bear" for card in p2.hand)
+
+
+# ---------------------------------------------------------------------------
+# 400.2 / 401.5 / 701.20a — playing with a hidden zone revealed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("701.20a", "400.2")
+def test_701_20a_hands_revealed_shows_every_hand_to_every_player():
+    """"Players play with their hands revealed." — revealing shows the card to
+    *all* players (CR 701.20a), while the hand stays a hidden zone by
+    classification (CR 400.2: "even if all the cards in one such zone happen
+    to be revealed"). The predicate is derived from the battlefield, so the
+    effect starts and stops with its source and no stored flag can go stale."""
+    from engine.revealed_hands import hand_revealed_to
+
+    source = Permanent(card=_mk_card(
+        "Open Books", "Enchantment", "Players play with their hands revealed."
+    ))
+    p1 = PlayerState(name="P1", battlefield=[source])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    for owner in (0, 1):
+        for viewer in (0, 1):
+            assert hand_revealed_to(game, owner, viewer)
+
+    game.remove_from_battlefield(source)
+    assert not hand_revealed_to(game, 0, 1)
+    assert not hand_revealed_to(game, 1, 0)
+
+
+@pytest.mark.cr("401.5", "701.20a")
+def test_401_5_players_scoped_top_reveal_covers_every_library():
+    """"Players play with the top card of their libraries revealed." reveals
+    *everyone's* top card from whichever battlefield the source stands on —
+    unlike the own-scoped "Play with the top card of your library revealed.",
+    which CR 401.5 also covers and which reaches its controller alone."""
+    from engine.library_top import top_is_public
+
+    everyone = Permanent(card=_mk_card(
+        "Open Skies", "Enchantment",
+        "Players play with the top card of their libraries revealed.",
+    ))
+    p1 = PlayerState(name="P1")
+    p2 = PlayerState(name="P2", battlefield=[everyone])
+    game = Game(players=[p1, p2])
+
+    assert top_is_public(game, 0)
+    assert top_is_public(game, 1)
+
+    game.remove_from_battlefield(everyone)
+    assert not top_is_public(game, 0)
+    assert not top_is_public(game, 1)
+
+    own_only = Permanent(card=_mk_card(
+        "Peeker", "Enchantment", "Play with the top card of your library revealed."
+    ))
+    p1.battlefield.append(own_only)
+    assert top_is_public(game, 0)
+    assert not top_is_public(game, 1), (
+        "the own-scoped wording must not widen to the other player's library"
+    )

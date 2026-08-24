@@ -28,6 +28,11 @@ from __future__ import annotations
 import re
 
 REVEALED_TEXT = "play with the top card of your library revealed"
+#: The same reveal scoped to *every* player — "Players play with the top card
+#: of their libraries revealed." (Field of Dreams.) One question, two printed
+#: scopes: Conspicuous Snoop's form reveals its own controller's top card, this
+#: form reveals everyone's from wherever the source stands (CR 401.5).
+PLAYERS_REVEALED_TEXT = "players play with the top card of their libraries revealed"
 LOOK_ANY_TIME_TEXT = "you may look at the top card of your library any time"
 
 #: "You may cast <filter> spells from the top of your library" — the filter is
@@ -56,7 +61,7 @@ def library_top_line(line: str) -> bool:
     matched as itself rather than split: splitting would claim half a line.
     """
     text = line.strip().lower().rstrip(".")
-    if text in (REVEALED_TEXT, LOOK_ANY_TIME_TEXT, _PLAY_LANDS_FROM_TOP):
+    if text in (REVEALED_TEXT, PLAYERS_REVEALED_TEXT, LOOK_ANY_TIME_TEXT, _PLAY_LANDS_FROM_TOP):
         return True
     if text == f"{LOOK_ANY_TIME_TEXT}, and {_PLAY_LANDS_FROM_TOP}":
         return True
@@ -66,10 +71,21 @@ def library_top_line(line: str) -> bool:
 
 
 def top_is_public(game, player_index: int) -> bool:
-    """Whether *player_index*'s top card is revealed to everyone (CR 400.2)."""
-    return any(
+    """Whether *player_index*'s top card is revealed to everyone (CR 400.2).
+
+    Two printed scopes answer it: the player's own "Play with the top card of
+    your library revealed." (Conspicuous Snoop — read off that player's
+    battlefield alone), and "Players play with the top card of their libraries
+    revealed." (Field of Dreams — anyone's battlefield reveals everyone's).
+    """
+    if any(
         REVEALED_TEXT in " ".join(_lines(perm.effective_card))
         for perm in game.controlled_by(player_index)
+    ):
+        return True
+    return any(
+        PLAYERS_REVEALED_TEXT in _lines(perm.effective_card)
+        for perm in game.all_permanents()
     )
 
 
@@ -181,6 +197,7 @@ def _filter_for(phrase: str) -> dict | None:
 
 __all__ = [
     "LOOK_ANY_TIME_TEXT",
+    "PLAYERS_REVEALED_TEXT",
     "REVEALED_TEXT",
     "granted_top_abilities",
     "library_top_line",

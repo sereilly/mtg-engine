@@ -36,6 +36,7 @@ from ..extra_triggers import extra_trigger_line
 from ..land_play_allowance import land_play_line
 from ..prevention import prevention_claims_line
 from ..replacements import replacement_claims_line
+from ..revealed_hands import revealed_hands_line
 from ..targeting import enchant_line_subject
 from ..untap_restrictions import self_untap_line, untap_restriction_for
 
@@ -146,6 +147,16 @@ def registry_for_line(line: str) -> str | None:
     # produce and the line would otherwise read as unclaimed.
     if extra_trigger_line(line):
         return "extra_triggers"
+
+    # engine/revealed_hands.py — "Players play with their hands revealed."
+    # (Revelation, CR 701.20a). The effect is who may *see* a hidden zone, so
+    # the consumer is the web layer's per-seat serialization asking the
+    # derived predicate — there is no instruction to lower, and the claim asks
+    # the implementing module's own matcher. The library-top twin is
+    # engine/library_top.py's, claimed the way Conspicuous Snoop's line
+    # already is rather than here.
+    if revealed_hands_line(line):
+        return "revealed_hands"
 
     # engine/replacements.py — CR 614 interceptors. The phrase table lives there
     # rather than here, because the support gate reads it too: what the engine
