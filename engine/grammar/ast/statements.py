@@ -109,6 +109,7 @@ from .stack import (
 from .combat import (
     CantBe,
     CombatRestriction,
+    RemoveFromCombat,
 )
 from .game import (
     CreateEmblem,
@@ -145,6 +146,7 @@ Effect = Union[
     RevealHandAndChoose,
     Shuffle, ExtraTurn, EndTheTurn, ChooseNumber, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
     SacrificeUnlessPay, DamageUnlessPay, Fight, LookAtHand, CantBe, CombatRestriction,
+    RemoveFromCombat,
     ChangeText, GainControl, RawEffect,
 ]
 # `CombatRestriction` was absent from this union for as long as it existed: it

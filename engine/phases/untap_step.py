@@ -12,6 +12,7 @@ aggregates and enforces them, so new restriction cards never touch it.
 from ..auras import aura_restriction_active
 from ..handlers._common import permanent_effective_colors
 from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
+from ..control import LINKED_CONTROL_CONDITIONS
 from ..untap_restrictions import (
     SELF_DOESNT_UNTAP_PHRASE,
     SELF_MAY_KEEP_TAPPED_PHRASE,
@@ -138,7 +139,8 @@ class UntapStepMixin:
             # keep-tapped decision itself, but what the *prompt offers* has to be
             # the same set the support gate admits.
             and any(
-                self_untap_line(line) == "may_keep_tapped"
+                self_untap_line(line, permanent.effective_card.name)
+                == "may_keep_tapped"
                 for line in (permanent.effective_card.oracle_text or "").splitlines()
             )
         ]
@@ -257,8 +259,14 @@ class UntapStepMixin:
                         continue
                 elif (
                     permanent.metadata.get("stolen_while_tapped_and_weaker")
-                    and self.permanents_controlled_via(permanent)
-                ):
+                    # Willow Satyr / Rubinia Soulsinger: a monitored linked
+                    # steal whose conditions include staying tapped
+                    # (engine/control.LINKED_CONTROL_CONDITIONS) — untapping
+                    # would end the control effect, so AI/headless play keeps
+                    # the permanent tapped while a steal is live.
+                    or "source_remains_tapped"
+                    in (permanent.metadata.get(LINKED_CONTROL_CONDITIONS) or ())
+                ) and self.permanents_controlled_via(permanent):
                     continue
 
             if permanent.card.primary_type == "creature":

@@ -261,6 +261,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     blocking: bool | None = None
     blocked: bool | None = None
     attacking_or_blocking = False
+    blocking_source = False
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
     toughness: ast.Comparison | None = None
@@ -600,6 +601,32 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         if stream.accept_phrase("they", "control"):
             controller = "that_player"
             continue
+        # "creatures **blocking this creature**" (The Wretched) — the set of
+        # blockers declared against the ability's own source (CR 509.1a). Only
+        # a self-reference is admitted after "blocking": "blocking that
+        # creature" would name an object this filter has no way to carry, so
+        # the words stay unconsumed and the line fails loudly instead.
+        # "blocking **or**…" is not this branch: "blocking or blocked by this
+        # creature" (Sentinel) is the two-sided in-combat relation read further
+        # down, and this alternative testing first would probe, fail on "or"
+        # and break the whole postmodifier scan before that one is asked —
+        # the round-11 merge found exactly that.
+        if stream.at_word("blocking") and stream.peek_word(1) != "or":
+            probe = stream.mark()
+            stream.advance()
+            token = stream.peek()
+            if token is not None and token.kind == "self":
+                stream.advance()
+                blocking_source = True
+                continue
+            if stream.accept_word("this"):
+                noun = stream.peek_word()
+                if noun is not None and _singular(noun) in _SELF_NOUNS:
+                    stream.advance()
+                    blocking_source = True
+                    continue
+            stream.reset(probe)
+            break
         if stream.at_word("other"):
             probe = stream.mark()
             stream.advance()
@@ -845,6 +872,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         attacking=attacking,
         blocking=blocking,
         attacking_or_blocking=attacking_or_blocking,
+        blocking_source=blocking_source,
         blocked=blocked,
         power=power,
         toughness=toughness,

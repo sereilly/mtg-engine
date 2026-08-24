@@ -914,6 +914,36 @@ def test_aladdin_artifact_reverts_when_aladdin_leaves(all_cards, arn_by_name):
     assert stolen not in p1.battlefield
 
 
+def test_aladdin_artifact_reverts_when_aladdin_is_stolen(all_cards, arn_by_name):
+    """"…for as long as **you control** this creature" is a condition, not
+    just a leave event (CR 611.2b): a layer-2 effect taking Aladdin himself —
+    no zone change anywhere — ends his steal. This used to hold only for
+    leaving the battlefield, because only the ON_LEAVE hook ended it; the
+    monitored-duration sweep now reads the same condition the card prints."""
+    from engine.control import change_control
+
+    aladdin = arn_by_name["Aladdin"]
+    lotus = _get(all_cards, "Black Lotus")
+    stolen = Permanent(card=lotus)
+    aladdin_perm = Permanent(card=aladdin)
+    thief = Permanent(card=_get(all_cards, "Grizzly Bears"))
+    p1 = PlayerState(name="P1", battlefield=[aladdin_perm])
+    p2 = PlayerState(name="P2", battlefield=[stolen, thief])
+    game = Game(players=[p1, p2])
+
+    game.activate_permanent_ability(0, "Aladdin", target_player_index=1, target_permanent_index=0)
+    assert game.controller_index_of(stolen) == 0
+
+    change_control(aladdin_perm, 1, source=thief)
+    game._sync_control()
+    game.check_state_based_actions()
+
+    assert game.controller_index_of(aladdin_perm) == 1
+    assert game.controller_index_of(stolen) == 1, (
+        "seat 0 no longer controls Aladdin, so the linked steal ended"
+    )
+
+
 # ===========================================================================
 # Ghazbân Ogre — control passes to whoever has the most life
 # ===========================================================================

@@ -393,6 +393,12 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         if not (perm.attacking or perm.blocking_attacker_index is not None):
             return False
 
+    # "target **attacking** creature" (Disharmony). The narrower half of the
+    # union above, asked of the same field so a target restriction and the
+    # picker cannot disagree about what "attacking" means.
+    if payload.get("attacking_only") and not perm.attacking:
+        return False
+
     # Pyramids: "target Aura attached to a land" — only Auras whose enchanted
     # permanent is currently a land qualify.
     if payload.get("attached_to_land"):

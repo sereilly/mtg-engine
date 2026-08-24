@@ -51,6 +51,27 @@ CONTROL_EFFECTS = "control_effects"
 # The controller before any layer-2 effect applies.
 BASE_CONTROLLER = "base_controller_index"
 
+# A linked "for as long as …" duration (CR 611.2b), recorded on the *source*
+# permanent as the tuple of conditions its control changes live under:
+#
+#   "you_control_source"      — the seat the change gave control to must still
+#                               control the source (Aladdin's clause, printed
+#                               by Willow Satyr, Rubinia Soulsinger and The
+#                               Wretched; CR 611.2b's Master Thief example).
+#   "source_remains_tapped"   — the source must still be tapped (the "…and
+#                               this creature remains tapped" half).
+#
+# The steal handlers stamp it through ``take_control(extra_meta=…)`` and the
+# state-based sweep in ``mixins/game_ending.py`` reads it from the *stolen*
+# side — each contribution whose source carries conditions is re-checked, and
+# the moment one is false the contribution is dropped and whatever remains
+# decides. Reading from the stolen side is what covers a source that has left
+# the battlefield: it is no longer in ``all_permanents()``, but the
+# contribution it recorded still is. Conditions are data rather than
+# instruction kinds so a card with a new combination is a new tuple, not a
+# new sweep.
+LINKED_CONTROL_CONDITIONS = "linked_control_conditions"
+
 
 def set_base_controller(permanent: "Permanent", seat: int) -> None:
     """Record the seat a permanent enters the battlefield under (CR 613.1)."""
@@ -140,7 +161,8 @@ def has_control_change(permanent: "Permanent") -> bool:
 
 
 __all__ = [
-    "BASE_CONTROLLER", "CONTROL_EFFECTS", "base_controller", "change_control",
+    "BASE_CONTROLLER", "CONTROL_EFFECTS", "LINKED_CONTROL_CONDITIONS",
+    "base_controller", "change_control",
     "control_changes", "end_control_change", "end_until_eot_control_changes",
     "has_control_change",
     "set_base_controller",

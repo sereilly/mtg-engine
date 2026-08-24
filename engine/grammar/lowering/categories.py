@@ -158,6 +158,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # A control change whose duration is linked to its source (CR 611.3).
     "steal_target_permanent_linked_to_self": "control",
     "gain_control_until_eot": "control",
+    # The monitored linked durations (CR 611.2b): "for as long as you control
+    # this creature and this creature remains tapped" (Willow Satyr, Rubinia
+    # Soulsinger) and The Wretched's end-of-combat blocker steal. The
+    # conditions are payload; the state-based sweep ends them.
+    "steal_target_linked_to_source": "control",
+    "steal_blockers_of_source": "control",
     "sacrifice_self": "zones",
     # The controller-chosen sacrifice (Dire Fleet Warmonger's optional cost).
     "sacrifice_matching_permanent": "zones",
@@ -252,6 +258,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The one-shot, turn-scoped blanket ("Creatures without flying can't block
     # this turn", Destructive Tampering's second mode).
     "cant_block_until_eot": "combat_restrictions",
+    # "…and remove it from combat" (Disharmony, CR 506.4c). A one-shot combat
+    # action rather than a restriction, filed with the family whose steps
+    # dispatch it.
+    "remove_from_combat": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     "counter_stack_ability": "counterspells",
     # Double Vision. Its own category name would be a family of one; copying a
@@ -349,6 +359,12 @@ _PRODUCES: dict[str, str] = {
     # — by then a target may have left, and CR 611.2c fixed the set when the
     # effect began.
     "tap_target_permanent": "tapped_permanents",
+    # "Untap target attacking creature and remove **it** from combat. Gain
+    # control of **that creature** until end of turn." (Disharmony.) The untap
+    # records what it resolved — affected, not merely flipped: a vigilance
+    # attacker that was never tapped is still "it" (CR 611.2c fixes the set
+    # when the effect begins) — and both later sentences read the record.
+    "untap_target_permanent": "untapped_permanents",
     # "…reveal the top card of your library. **If it's** a creature or land
     # card, draw a card." (Track Down.) The reveal records what it showed and
     # the conditional after it reads that record — not the library, which the

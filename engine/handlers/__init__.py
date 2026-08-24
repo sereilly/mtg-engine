@@ -15,6 +15,7 @@ from . import (  # noqa: E402,F401
     base_pt,
     board_misc,
     combat,
+    control_changes,
     control_flow,
     damage,
     destruction,

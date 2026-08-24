@@ -52,11 +52,13 @@ def _normalized(line: str) -> str:
     return line.strip().lower().rstrip(".")
 
 
-def registry_for_line(line: str) -> str | None:
+def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     """The registry implementing *line* in full, or ``None``.
 
     The return value is the registry's module name, used only to label the AST
     node — dispatch never reads it, because there is nothing to dispatch.
+    *card_name* reaches the one matcher whose patterns are anchored on a
+    self-reference a card may spell as its own name (``self_untap_line``).
     """
     normalized = _normalized(line)
 
@@ -81,7 +83,7 @@ def registry_for_line(line: str) -> str | None:
     # phases/untap_step.py's per-permanent text scan. `self_untap_line` is the
     # whole-line form of that scan and is built from the same two phrase
     # constants the scan tests, so the claim cannot outlive the enforcement.
-    if self_untap_line(line) is not None:
+    if self_untap_line(line, card_name) is not None:
         return "untap_restrictions"
 
     # engine/targeting.py + engine/mixins/stack/casting.py — an Aura's

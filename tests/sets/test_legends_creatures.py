@@ -806,3 +806,224 @@ def test_brine_hag_cannot_rewrite_a_damager_that_already_left(set_pool):
     assert not game.is_on_battlefield(hag)
     assert "absolute_power" not in raider.metadata, \
         "a departed damager is out of the effect's reach"
+
+
+# ---------------------------------------------------------------------------
+# Linked-duration control changes (round 11) — CR 611.2b
+# ---------------------------------------------------------------------------
+
+
+def _legend(name: str, power: int = 2, toughness: int = 2) -> CardDefinition:
+    tl = "Legendary Creature - Test"
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=tl,
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": tl,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def test_willow_satyr_steals_only_while_it_stays_tapped(set_pool):
+    """"…for as long as you control this creature and this creature remains
+    tapped." The steal holds while both conditions do, and the state-based
+    sweep ends it the moment the Satyr untaps (CR 611.2b) — nothing waits for
+    a turn boundary."""
+    satyr = Permanent(card=set_pool("LEG")["Willow Satyr"])
+    legend = Permanent(card=_legend("Legend Bear"))
+    p1 = PlayerState(name="P1", battlefield=[satyr])
+    p2 = PlayerState(name="P2", battlefield=[legend])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Willow Satyr", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+
+    assert result.supported
+    assert satyr.tapped, "the {T} cost was paid"
+    assert game.controller_index_of(legend) == 0
+
+    game.become_untapped(satyr)
+    game.check_state_based_actions()
+    assert game.controller_index_of(legend) == 1, (
+        "untapping the Satyr breaks the linked condition and control reverts"
+    )
+
+
+def test_willow_satyr_offers_only_legendary_creatures(set_pool):
+    """"target **legendary** creature" — the supertype rides the payload, and
+    the picker offers exactly what the resolution will accept (the round-48
+    guard's rule)."""
+    satyr = Permanent(card=set_pool("LEG")["Willow Satyr"])
+    legend = Permanent(card=_legend("Legend Bear"))
+    plain = Permanent(card=_vanilla("Plain Bear", 2, 2))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[satyr]),
+        PlayerState(name="P2", battlefield=[legend, plain]),
+    ])
+    game.start_turn(0)
+
+    spec = game.activation_target_spec(0, game.battlefield_index_of(satyr), 0)
+    offered = {t["name"] for t in spec["valid_targets"]}
+
+    assert offered == {"Legend Bear"}
+
+
+def test_willow_satyr_untapped_in_response_never_starts_the_steal(set_pool):
+    """CR 611.2b: a "for as long as" duration already over when the effect
+    would first apply means the effect never starts — it does not steal for
+    an instant and bounce back. Untapping the Satyr while its ability is on
+    the stack is the rule's own scenario."""
+    satyr = Permanent(card=set_pool("LEG")["Willow Satyr"])
+    legend = Permanent(card=_legend("Legend Bear"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[satyr]),
+        PlayerState(name="P2", battlefield=[legend]),
+    ])
+    game.start_turn(0)
+
+    queued = game.queue_permanent_ability(
+        0, "Willow Satyr", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert queued.supported and queued.details == "queued"
+    game.become_untapped(satyr)   # in response, while the ability is stacked
+    game._settle()
+
+    assert game.controller_index_of(legend) == 1
+    assert not any(
+        "gains control" in line for line in game.log
+    ), "the control change never began"
+
+
+def test_rubinia_soulsinger_compiles_with_both_her_lines(set_pool):
+    """Rubinia spells her own name where Willow Satyr says "this creature" —
+    both mean the source (CR 201.4c), so she compiles to the same steal, and
+    her optional-untap line is claimed by the untap-restriction registry
+    rather than left refusing the card."""
+    program = compile_card_oracle(set_pool("LEG")["Rubinia Soulsinger"])
+    assert program.supported, program.reason
+    ability = program.activated_abilities[0]
+    assert ability.instruction.kind == "steal_target_linked_to_source"
+    assert ability.instruction.payload["link_conditions"] == [
+        "you_control_source", "source_remains_tapped",
+    ]
+
+
+def test_rubinia_dying_returns_the_stolen_creature(set_pool):
+    """"…for as long as you control Rubinia Soulsinger" — a source that has
+    left the battlefield satisfies no condition, and the sweep reads the
+    contribution from the stolen side, so the steal ends even though its
+    source is gone (CR 611.2b)."""
+    rubinia = Permanent(card=set_pool("LEG")["Rubinia Soulsinger"])
+    bear = Permanent(card=_vanilla("Stolen Bear", 2, 2))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[rubinia]),
+        PlayerState(name="P2", battlefield=[bear]),
+    ])
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Rubinia Soulsinger", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+    assert result.supported
+    assert game.controller_index_of(bear) == 0
+
+    game.remove_from_battlefield(rubinia)
+    game.check_state_based_actions()
+    assert game.controller_index_of(bear) == 1
+
+
+def test_rubinia_may_stay_tapped_at_her_untap_step(set_pool):
+    """"You may choose not to untap Rubinia Soulsinger during your untap
+    step." The prompt offers her by name, and headless play keeps her tapped
+    while her steal is live — untapping would end the control change."""
+    rubinia = Permanent(card=set_pool("LEG")["Rubinia Soulsinger"])
+    bear = Permanent(card=_vanilla("Stolen Bear", 2, 2))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[rubinia]),
+        PlayerState(name="P2", battlefield=[bear]),
+    ])
+    game.start_turn(0)
+    game.activate_permanent_ability(
+        0, "Rubinia Soulsinger", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+    assert game.controller_index_of(bear) == 0
+
+    offered = game.get_optional_untap_permanents(0)
+    assert [entry["name"] for entry in offered] == ["Rubinia Soulsinger"]
+
+    game.resolve_untap_step(0)
+    game.check_state_based_actions()
+    assert rubinia.tapped, "headless play keeps her tapped while the steal lives"
+    assert game.controller_index_of(bear) == 0
+
+    game.resolve_untap_step(0, keep_tapped_indices=[])
+    game.check_state_based_actions()
+    assert not rubinia.tapped, "an explicit choice to untap is honoured"
+    assert game.controller_index_of(bear) == 1
+
+
+def _wretched_combat(set_pool, blocker_count: int):
+    """The Wretched attacks and *blocker_count* creatures block it; run the
+    combat through end of combat and return the game and the blockers."""
+    wretch = Permanent(card=set_pool("LEG")["The Wretched"])
+    blockers = [
+        Permanent(card=_vanilla(f"Blocker {i}", 1, 9)) for i in range(blocker_count)
+    ]
+    p1 = PlayerState(name="P1", battlefield=[wretch])
+    p2 = PlayerState(name="P2", battlefield=list(blockers))
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()   # declare_blockers
+    ok, msg = game.declare_blockers(1, {i: 0 for i in range(blocker_count)})
+    assert ok, msg
+    game.advance_combat_phase()   # combat_damage (multiblock waits for a split)
+    if not game.combat_damage_resolved:
+        ok, msg = game.resolve_combat_damage(0)
+        assert ok, msg
+    game.advance_combat_phase()   # end_of_combat fires the trigger
+    game.advance_combat_phase()   # postcombat main
+    return game, wretch, blockers
+
+
+def test_the_wretched_takes_every_creature_blocking_it(set_pool):
+    """"At end of combat, gain control of **all** creatures blocking this
+    creature" — the set was fixed when the trigger fired (CR 611.2c), so both
+    blockers change sides even though the combat record is cleared before the
+    trigger resolves."""
+    game, wretch, blockers = _wretched_combat(set_pool, 2)
+
+    assert game.is_on_battlefield(wretch)
+    assert [game.controller_index_of(b) for b in blockers] == [0, 0]
+
+
+def test_the_wretched_leaving_returns_its_blockers(set_pool):
+    """"…for as long as you control this creature": one condition, several
+    stolen permanents — every contribution The Wretched recorded ends
+    together when it leaves (CR 611.2b)."""
+    game, wretch, blockers = _wretched_combat(set_pool, 2)
+    assert [game.controller_index_of(b) for b in blockers] == [0, 0]
+
+    game.remove_from_battlefield(wretch)
+    game.check_state_based_actions()
+    assert [game.controller_index_of(b) for b in blockers] == [1, 1]
+
+
+def test_the_wretched_unblocked_steals_nothing(set_pool):
+    """The trigger still fires at end of combat (CR 511.1); with nothing
+    blocking, it resolves and takes nothing — and does not crash."""
+    game, wretch, blockers = _wretched_combat(set_pool, 0)
+    assert game.is_on_battlefield(wretch)

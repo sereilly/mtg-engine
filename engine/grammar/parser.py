@@ -100,7 +100,9 @@ def _is_keyword_line(stream: TokenStream) -> tuple[ast.KeywordInstance, ...] | N
     return tuple(keywords) if keywords else None
 
 
-def _parse_registry_line(stream: TokenStream, line: str) -> ast.RegistryLine | None:
+def _parse_registry_line(
+    stream: TokenStream, line: str, card_name: str | None = None
+) -> ast.RegistryLine | None:
     """A line implemented by a text-keyed sidecar registry rather than by any
     instruction — ``engine/grammar/registries.py`` names the implementing code
     for each shape it admits.
@@ -118,7 +120,7 @@ def _parse_registry_line(stream: TokenStream, line: str) -> ast.RegistryLine | N
     real lowering, its registry entry has to go — otherwise this would shadow
     it silently.
     """
-    registry = registry_for_line(line)
+    registry = registry_for_line(line, card_name)
     if registry is None:
         return None
     stream.advance(len(stream) - stream.pos)
@@ -535,7 +537,7 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
     # Lines a text-keyed registry runs off the raw oracle text. Checked against
     # the *original* line, not the lexed tokens: that is the string the
     # registries themselves match on.
-    registry_line = _parse_registry_line(stream, line)
+    registry_line = _parse_registry_line(stream, line, card_name)
     if registry_line is not None:
         return registry_line
     stream.reset(0)

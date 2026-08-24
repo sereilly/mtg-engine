@@ -89,6 +89,14 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # strips the field and carries the relation as its own payload key.
     "in_combat_with_source": "in_combat_with_source",
     "dealt_damage_to_source_this_turn": "dealt_damage_to_source_this_turn",
+    # "blocking this creature" (The Wretched) — the third source-relative
+    # narrowing, landed the same round as the two above by a sibling branch
+    # that guarded it only through the dataclass-wide payload gates. Its one
+    # admitting lowering (`steal_blockers_of_source`) reads the fields
+    # directly and never builds a payload from the filter, so listing it here
+    # costs that path nothing and buys the same refuse-by-name everywhere
+    # else.
+    "blocking_source": "blocking_source",
 }
 
 
@@ -415,6 +423,15 @@ _EVENT_QUANTITIES: dict[str, str] = {
     # seam to record it at.
     "damage_dealt": "amount",
 }
+
+# The scratchpad key the untap records and two later sentences read ("remove
+# **it** from combat", "gain control of **that creature**" — Disharmony). One
+# name in one place, shared by the ``board`` and ``combat`` lowering families,
+# because a fragment two families need lives here rather than in either of
+# them — and because ``categories._PRODUCES`` writes the same string, so a
+# second spelling would make the producer gate vacuous while the handler read
+# an empty record.
+_UNTAPPED_PERMANENTS = "untapped_permanents"
 
 # The scratchpad keys that are *quantities*. `categories._PRODUCES` also records
 # things no amount can read — a controller's seat, a list of exiled cards — so

@@ -170,6 +170,7 @@ from .combat import (
     _UNBLOCKABLE_POWER_LIMIT,
     _lower_combat_restriction,
     _lower_cant_be,
+    _lower_remove_from_combat,
 )
 from .game import (
     _lower_create_emblem,
@@ -309,6 +310,7 @@ __all__ = [
     "_UNBLOCKABLE_POWER_LIMIT",
     "_lower_combat_restriction",
     "_lower_cant_be",
+    "_lower_remove_from_combat",
     "_lower_gain_life",
     "_title",
     "_lower_create_emblem",

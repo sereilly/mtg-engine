@@ -187,6 +187,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     ),
     "combat_your_turn": "at the beginning of combat on your turn",
     "combat": "at the beginning of combat",
+    # CR 511.1 — the end of combat step (The Wretched).
+    "end_of_combat": (
+        "at end of combat, gain control of all creatures blocking this "
+        "creature for as long as you control this creature"
+    ),
 }
 
 _TABLES = [

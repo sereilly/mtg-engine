@@ -18,20 +18,45 @@ from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, SUBTYPE_INDEX, match_longe
 from ..phrases import _parse_mana_payment, _parse_zone
 
 
+def _accept_self_reference(stream: TokenStream) -> bool:
+    """Consume one reference to the ability's own source, or leave the cursor.
+
+    Two printed spellings: "this <noun>" (Willow Satyr, The Wretched), and the
+    card naming itself — which the lexer has already collapsed to one SELF
+    token (Rubinia Soulsinger's "you control Rubinia Soulsinger"). The noun
+    after "this" names the source's own type and adds nothing a payload would
+    carry, but it still has to be consumed for the line to be accounted for in
+    full.
+    """
+    token = stream.peek()
+    if token is not None and token.kind == "self":
+        stream.advance()
+        return True
+    mark = stream.mark()
+    if stream.accept_word("this") and stream.peek_word() is not None:
+        stream.advance()
+        return True
+    stream.reset(mark)
+    return False
+
+
 def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:
-    """``Gain control of <subject> for as long as you control this <permanent>.``
+    """``Gain control of <subject> <duration>.``
 
     Returns None — cursor untouched — unless the line really opens "gain
     control": "gains flying", "you gain 3 life" and "gains control of this
     creature" (Ghazbán Ogre, whose subject comes first) all begin with the same
     verb and are read elsewhere.
 
-    The duration clause is *required*, and only the one shape a handler
-    implements is admitted. An untimed "gain control of target creature" is a
-    permanent control change; a differently-timed one (Old Man of the Sea's two
-    conditions) reverts on things nothing here watches. Both would be this
-    production's sentence with the ending changed, so both have to fail rather
-    than borrow the linked duration.
+    The duration clause is *required*, and only the shapes a handler implements
+    are admitted: "until end of turn", "for as long as you control this
+    <noun>" (Aladdin, The Wretched), and that clause with "…and this <noun>
+    remains tapped" behind it (Willow Satyr, Rubinia Soulsinger). An untimed
+    "gain control of target creature" is a permanent control change; a
+    differently-conditioned one (Old Man of the Sea's power comparison)
+    reverts on things nothing here watches. Each would be this production's
+    sentence with the ending changed, so each has to fail rather than borrow
+    a linked duration it does not print.
     """
     mark = stream.mark()
     stream.expect_word("gain")
@@ -41,7 +66,10 @@ def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:
     if not stream.accept_word("of"):
         stream.reset(mark)
         return None
-    subject = parse_recipient(stream)
+    # "that creature" (Disharmony) — the object a previous sentence already
+    # chose, read by the same back-reference the destroy production uses so
+    # the two cannot drift apart about what the phrase names.
+    subject = _parse_that_object(stream) or parse_recipient(stream)
     if subject is None:
         raise stream.error("expected what to gain control of")
     # "…until end of turn" (Traitorous Greed). A lifetime of its own rather than
@@ -50,16 +78,25 @@ def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:
     # CR 611.2c ends it at cleanup instead.
     if stream.accept_phrase("until", "end", "of", "turn"):
         return ast.GainControl(subject, "until_end_of_turn")
-    if not stream.accept_phrase("for", "as", "long", "as", "you", "control", "this"):
+    if not stream.accept_phrase("for", "as", "long", "as", "you", "control"):
         raise stream.error(
             "no handler for a control change without a duration the engine ends"
         )
-    # The noun after "this" names the source's own type and adds nothing the
-    # payload carries, but it still has to be consumed for the line to be
-    # accounted for in full.
-    if stream.peek_word() is None:
+    if not _accept_self_reference(stream):
         raise stream.error("expected the permanent the control change is linked to")
-    stream.advance()
+    # "…and this creature remains tapped" — the second condition of the linked
+    # duration (CR 611.2b). Only the self-referential spelling is admitted:
+    # a condition about any other object would be one the sweep has no record
+    # to check, so the words stay unconsumed and the line fails loudly.
+    if stream.accept_word("and"):
+        if not _accept_self_reference(stream) or not stream.accept_phrase(
+            "remains", "tapped"
+        ):
+            raise stream.error(
+                "the only compound linked duration is "
+                "'…and this permanent remains tapped'"
+            )
+        return ast.GainControl(subject, "while_you_control_source_tapped")
     return ast.GainControl(subject, "while_you_control_source")
 
 

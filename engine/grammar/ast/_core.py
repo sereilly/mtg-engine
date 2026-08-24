@@ -338,6 +338,14 @@ class ObjectFilter:
     # never emitted, so every lowering not written for it refuses the phrase
     # instead of quietly widening to every creature.
     dealt_damage_to_source_this_turn: bool = False
+    # "all creatures **blocking this creature**" (The Wretched). The set of
+    # creatures currently declared as blockers of the ability's own source
+    # (CR 509.1a). *Relative* like ``created_with_source``: no read of the
+    # blocker alone can answer it, so it emits no payload key and never
+    # reaches ``permanent_matches_filter`` — the one lowering that admits it
+    # resolves the set from the fire-time combat record instead, and any
+    # other lowering that meets it refuses by name.
+    blocking_source: bool = False
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.

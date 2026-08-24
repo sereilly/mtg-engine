@@ -63,6 +63,10 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # CR 205.4a. Read off the type line, which for a supertype is the whole of
     # what there is — nothing in layers 4-6 computes one.
     ("supertypes", {"supertypes": ["legendary"]}, "Grizzly Bears"),
+    # CR 508.1a: attacking is a state of the permanent itself, stamped at
+    # declaration — a bear standing outside combat is not attacking, and a
+    # matcher that ignored the key would untap it anyway (Disharmony).
+    ("attacking_only", {"attacking_only": True}, "Grizzly Bears"),
 )
 
 

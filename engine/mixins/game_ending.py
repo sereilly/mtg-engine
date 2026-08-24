@@ -3,6 +3,11 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from ..control import (
+    LINKED_CONTROL_CONDITIONS,
+    control_changes,
+    end_control_change,
+)
 from ..equipment import is_equipment, unattach_illegal_equipment
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
@@ -249,6 +254,52 @@ class GameEndingMixin:
                 if not perm.tapped or stolen.effective_power > perm.effective_power:
                     self.end_control_changes_from(perm)
                     perm.metadata.pop("stolen_while_tapped_and_weaker", None)
+                    changed = True
+
+            # Monitored linked-duration control changes (CR 611.2b): "for as
+            # long as you control this creature [and this creature remains
+            # tapped]" (Willow Satyr, Rubinia Soulsinger, The Wretched). The
+            # conditions ride the *source's* record
+            # (engine/control.LINKED_CONTROL_CONDITIONS) and are re-checked
+            # here from the **stolen** side — each contribution names its
+            # source, so a source that has left the battlefield is still
+            # seen, which the source-side scan above cannot do. The moment a
+            # condition is false the contribution is dropped and whatever
+            # remains decides (engine/control.py).
+            for held in list(self.all_permanents()):
+                for entry in control_changes(held):
+                    source = entry["source"]
+                    if not isinstance(source, Permanent):
+                        continue
+                    conditions = source.metadata.get(LINKED_CONTROL_CONDITIONS)
+                    if not conditions:
+                        continue
+                    broken = (
+                        "you_control_source" in conditions
+                        # The seat the change gave control to must still
+                        # control the source; a source off the battlefield
+                        # has no controller, so leaving breaks it too.
+                        and self.controller_index_of(source)
+                        != entry["controller_index"]
+                    ) or (
+                        "source_remains_tapped" in conditions
+                        and (
+                            not self.is_on_battlefield(source)
+                            or not source.tapped
+                        )
+                    )
+                    if not broken:
+                        continue
+                    end_control_change(held, source=source)
+                    self._sync_control()
+                    now = self.controller_index_of(held)
+                    if now is not None:
+                        self.log.append(
+                            f"{held.card.name} returns to "
+                            f"{self.players[now].name}'s control "
+                            f"({source.card.name}'s linked control "
+                            "effect ended)"
+                        )
                     changed = True
 
             # Sandals of Abdallah: the artifact whose islandwalk target died

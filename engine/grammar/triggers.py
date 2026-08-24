@@ -194,6 +194,11 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # The narrowed form precedes its own prefix, per the rule above.
     ("combat_your_turn", ("the", "beginning", "of", "combat", "on", "your", "turn")),
     ("combat", ("the", "beginning", "of", "combat")),
+    # "At end of combat, …" (The Wretched) — CR 511.1. Read here as well as in
+    # engine/oracle.py's table, because both front ends see the whole line and
+    # a condition only one of them reads leaves the other refusing the effect
+    # behind it.
+    ("end_of_combat", ("end", "of", "combat")),
 )
 
 
