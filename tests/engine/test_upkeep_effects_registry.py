@@ -39,7 +39,10 @@ def _pool_trigger_pairs() -> dict[tuple[str, str], list[str]]:
 #
 # An entry that outlives its set is exactly the stale exemption this file warns
 # about, so keep the list short and delete on landing.
-PENDING_A_SET: dict[tuple[str, str], str] = {}
+PENDING_A_SET: dict[tuple[str, str], str] = {
+    ("upkeep_self", "set_source_base_pt_from_target_until_next_upkeep"):
+        "Halfdane (LEG, still under `measured`) — delete on promotion",
+}
 
 
 def test_every_registered_upkeep_effect_is_reachable_from_the_pool():

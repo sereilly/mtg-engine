@@ -586,6 +586,50 @@ class UpkeepEffectsMixin:
                 f"{permanent.card.name} grants {target_perm.card.name} forestwalk until {controller.name}'s next upkeep"
             )
 
+    @upkeep_effect("upkeep_self", "set_source_base_pt_from_target_until_next_upkeep")
+    def _on__upkeep_self__set_source_base_pt_from_target_until_next_upkeep(self, ctx: UpkeepContext) -> None:
+        """Halfdane: "…change Halfdane's base power and toughness to the power
+        and toughness of target creature other than Halfdane until the end of
+        your next upkeep."
+
+        The stats are read as the trigger resolves (CR 608.2) — the copy does
+        not track the chosen creature afterwards — and written through the one
+        P/T seam as a persistent layer-7b base (a CR 613.4b setting effect).
+        The duration is the ``BASE_PT_REVERT_KEY`` stamp ``engine/pt.py``
+        documents: written *after* the base (a persistent write clears any
+        stale stamp), it names this seat and this turn, and the draw step —
+        the moment this upkeep has just ended — reverts a permanent whose
+        stamp names an earlier turn. A re-resolving trigger overwrites the
+        stamp each upkeep, which is how the effect outlives itself exactly one
+        upkeep at a time; a trigger with no legal target leaves the old stamp
+        standing, and the rewrite ends where the card says it does.
+        """
+        from ..pt import BASE_PT_REVERT_KEY, set_base_pt
+
+        controller = ctx.controller
+        permanent = ctx.permanent
+        target_perm = self._resolve_upkeep_trigger_target(
+            permanent.card.name,
+            ctx.trigger_targets,
+            self._base_pt_copy_candidates(permanent),
+        )
+        if target_perm is None:
+            # CR 603.3d: no legal target, so the ability is removed rather
+            # than resolved — nothing is written and nothing is re-stamped.
+            return
+        power = target_perm.effective_power
+        toughness = target_perm.effective_toughness
+        set_base_pt(permanent, power, toughness)
+        permanent.metadata[BASE_PT_REVERT_KEY] = {
+            "seat": ctx.player_index,
+            "turn": self.turn,
+        }
+        self.log.append(
+            f"{permanent.card.name}: base power and toughness become "
+            f"{power}/{toughness} ({target_perm.card.name}'s) until the end of "
+            f"{controller.name}'s next upkeep"
+        )
+
     @upkeep_effect("upkeep_self", "upkeep_most_life_gains_control")
     def _on__upkeep_self__upkeep_most_life_gains_control(self, ctx: UpkeepContext) -> None:
         controller = ctx.controller

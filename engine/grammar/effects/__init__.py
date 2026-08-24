@@ -45,6 +45,7 @@ from .characteristics import (
     _parse_put_counter,
     _parse_remove_counter,
     _TEXT_CHANGE_MODES,
+    _parse_change_base_pt,
     _parse_change_text,
     _parse_becomes,
 )
@@ -118,6 +119,7 @@ __all__ = [
     "_parse_put_counter",
     "_parse_remove_counter",
     "_TEXT_CHANGE_MODES",
+    "_parse_change_base_pt",
     "_parse_change_text",
     "_parse_becomes",
     "_parse_gain_control",

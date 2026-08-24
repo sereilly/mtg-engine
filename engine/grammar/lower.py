@@ -126,6 +126,7 @@ from .lowering import (
     _lower_look_top_pick,
     _lower_search_and_exile,
     _lower_search_library,
+    _lower_change_base_pt,
     _lower_set_base_pt,
     _lower_doesnt_untap_next_step,
     _lower_delayed_self_action,
@@ -183,6 +184,8 @@ def lower_statement(
         return _lower_pump(statement)
     if isinstance(statement, ast.SetBasePT):
         return _lower_set_base_pt(statement)
+    if isinstance(statement, ast.ChangeBasePT):
+        return _lower_change_base_pt(statement)
     if isinstance(statement, ast.GainKeyword):
         return _lower_gain_keyword(statement)
     if isinstance(statement, ast.LoseKeyword):

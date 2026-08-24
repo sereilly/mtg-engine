@@ -619,9 +619,8 @@ class CombatDamageStepMixin:
                 lifelink_gain[controller_index] = lifelink_gain.get(controller_index, 0) + amount
 
         def _dealt_to_creature(victim, source, lifelink_seat: int):
-            """What follows one creature being dealt combat damage: record the
-            source, fire its "dealt damage" triggers, and tally the dealer's
-            lifelink. (Deathtouch is stamped by _mark_damage_on_permanent
+            """What follows one creature being dealt combat damage: fire its
+            "dealt damage" triggers and tally the dealer's lifelink. (Deathtouch is stamped by _mark_damage_on_permanent
             itself — CR 702.2b is about damage, not combat damage.)
 
             Handed to `_mark_damage_on_permanent` as its `then` rather than run
@@ -632,8 +631,9 @@ class CombatDamageStepMixin:
             def dealt(amount: int) -> None:
                 if amount <= 0:
                     return
-                if source is not None:
-                    self._record_damage_source(victim, source)
+                # The damage-source record is written by
+                # ``_mark_damage_on_permanent`` itself now — one seam for
+                # combat and non-combat damage alike.
                 self._fire_dealt_damage_triggers(victim, amount)
                 add_lifelink(lifelink_seat, lifelink_life_gained(source, amount))
 

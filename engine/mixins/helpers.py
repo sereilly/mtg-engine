@@ -1706,7 +1706,9 @@ class GameHelpersMixin:
                     and trig.instruction.kind == "add_counter_to_self"
                 ):
                     damagers = dead_permanent.metadata.get("damaged_by_sources_this_turn", [])
-                    if observer in damagers:
+                    # By identity: ``in`` compares Permanent by value, and a
+                    # look-alike of the killer is not the killer (CR 400.7).
+                    if any(entry is observer for entry in damagers):
                         events.append(make_trigger_event(controller_index, observer, trig))
                     continue
                 if trig.condition.kind != "creature_dies" or trig.instruction is None:

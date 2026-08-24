@@ -21,6 +21,7 @@ from ..card_hooks import DRAW_STEP_MODIFIERS
 from ..draw_step_modifiers import draw_step_bonus_for
 from ..game_types import OracleExecutionContext
 from ..handlers.control_flow import evaluate_condition
+from ..pt import BASE_PT_REVERT_KEY, clear_base_pt
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 #: The two draw-step conditions and the only difference between them, the same
@@ -114,6 +115,27 @@ class DrawStepMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
+
+        # "…until the end of your next upkeep" (Halfdane): a base-P/T rewrite
+        # stamped to revert when this seat's upkeep ends — which is now, the
+        # moment the draw step begins. Before the skip checks below, because a
+        # skipped *draw* (CR 103.8a, Island Sanctuary) is still a step whose
+        # upkeep has ended. A stamp written during THIS turn's upkeep is the
+        # trigger re-applying itself and survives to the next one; an older
+        # stamp is an effect whose time is up, and clearing the base restores
+        # the printed values underneath (engine/pt.py documents the key).
+        for perm in self.all_permanents():
+            stamp = perm.metadata.get(BASE_PT_REVERT_KEY)
+            if (
+                isinstance(stamp, dict)
+                and stamp.get("seat") == player_index
+                and stamp.get("turn") != self.turn
+            ):
+                clear_base_pt(perm)
+                self.log.append(
+                    f"{perm.card.name}'s base power and toughness revert "
+                    f"({player.name}'s upkeep has ended)"
+                )
 
         # Nafs Asp: obligations armed against this player resolve now, before
         # the draw itself — "before that draw step" (a human is prompted via

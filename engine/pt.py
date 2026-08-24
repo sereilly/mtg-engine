@@ -42,6 +42,18 @@ if TYPE_CHECKING:
     from .models import Permanent
 
 
+#: The scheduled revert of a persistent base-P/T write ("until the end of your
+#: next upkeep", Halfdane): ``{"seat": <whose upkeep>, "turn": <game.turn when
+#: written>}``. The draw step — the moment the upkeep has just ended — clears
+#: the base override of a permanent whose stamp names that seat and an
+#: *earlier* turn; a stamp written this very upkeep survives to the next one,
+#: which is how the re-applying trigger keeps its own effect alive. Named here
+#: because this module owns the channel vocabulary: any later persistent write
+#: supersedes the scheduled revert (last-write-wins is this engine's 7b
+#: timestamp order), so :func:`set_base_pt` is what removes the stamp.
+BASE_PT_REVERT_KEY = "base_pt_reverts_after_upkeep"
+
+
 def set_base_pt(
     perm: Permanent, power: int | None, toughness: int | None, *, until_eot: bool = False
 ) -> None:
@@ -55,6 +67,12 @@ def set_base_pt(
         perm.metadata[f"absolute_power{suffix}"] = int(power)
     if toughness is not None:
         perm.metadata[f"absolute_toughness{suffix}"] = int(toughness)
+    if not until_eot:
+        # A newer persistent write supersedes a scheduled revert: reverting
+        # would clear the metadata key the newer effect just wrote, taking the
+        # newer effect with it. The caller that wants a revert re-stamps after
+        # writing (engine/handlers/base_pt.py).
+        perm.metadata.pop(BASE_PT_REVERT_KEY, None)
 
 
 def clear_base_pt(perm: Permanent, *, until_eot: bool = False) -> None:
@@ -65,6 +83,7 @@ def clear_base_pt(perm: Permanent, *, until_eot: bool = False) -> None:
     else:
         perm.metadata.pop("absolute_power", None)
         perm.metadata.pop("absolute_toughness", None)
+        perm.metadata.pop(BASE_PT_REVERT_KEY, None)
 
 
 def add_pt_modifier(perm: Permanent, power: int = 0, toughness: int = 0, *, until_eot: bool = False) -> None:

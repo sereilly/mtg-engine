@@ -152,6 +152,13 @@ def accept_source_reference(stream: TokenStream) -> bool:
     """
     if stream.accept_word("it"):
         return True
+    # The card naming itself ("blocked by Sentinel") — the lexer has already
+    # collapsed the name to one SELF token, so this spelling and "this
+    # creature" are the same reference here as everywhere else.
+    token = stream.peek()
+    if token is not None and token.kind == SELF:
+        stream.advance()
+        return True
     mark = stream.mark()
     if stream.accept_word("this"):
         noun = stream.peek_word()
@@ -536,6 +543,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
 
     not_ability_targeted_by_same_name = False
     created_with_source = False
+    in_combat_with_source = False
+    dealt_damage_to_source_this_turn = False
 
     # --- postmodifiers ---------------------------------------------------
     while True:
@@ -599,6 +608,16 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             if stream.accept_phrase("than", "this"):
                 noun = stream.peek_word()
                 if noun is not None and _singular(noun) in _SELF_NOUNS:
+                    stream.advance()
+                    other_than_source = True
+                    continue
+            elif stream.accept_word("than"):
+                # "other than Halfdane" — the card excluding itself by name,
+                # which the lexer already collapsed to one SELF token. The same
+                # restriction as "other than this creature", so it sets the
+                # same field rather than minting a second one.
+                token = stream.peek()
+                if token is not None and token.kind == SELF:
                     stream.advance()
                     other_than_source = True
                     continue
@@ -701,6 +720,35 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                     stream.advance()
                     not_ability_targeted_by_same_name = True
                     continue
+            # "…**that dealt damage to it this turn**" (Brine Hag). A history
+            # relative to the ability's source, answered from the damage record
+            # the victim carries rather than from the object's characteristics
+            # — so it is a flag the one lowering written for it reads, and every
+            # other one refuses (see ``ObjectFilter``). "This turn" is required:
+            # without it the sentence says something the record cannot answer.
+            elif stream.accept_phrase("dealt", "damage", "to"):
+                if accept_source_reference(stream) and stream.accept_phrase(
+                    "this", "turn"
+                ):
+                    dealt_damage_to_source_this_turn = True
+                    continue
+            stream.reset(probe)
+            break
+        if stream.at_word("blocking") and stream.peek_word(1) == "or":
+            # "…**blocking or blocked by this creature**" (Sentinel, and the
+            # noun-phrase half of Abu Ja'far's sentence). The object is in
+            # combat with the ability's own source (CR 509) — a relation, not a
+            # characteristic, so the field is never emitted as a payload key;
+            # the lowering written for it carries the relation itself and every
+            # other one refuses the phrase. Both words are required: bare
+            # "blocking" is the state adjective the premodifier run already
+            # reads, and "blocked by" without an "or" would be a different
+            # (one-sided) relation this does not implement.
+            probe = stream.mark()
+            stream.advance()
+            if stream.accept_phrase("or", "blocked", "by") and accept_source_reference(stream):
+                in_combat_with_source = True
+                continue
             stream.reset(probe)
             break
         if stream.at_word("created"):
@@ -813,6 +861,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         is_source=is_source,
         is_enchanted=is_enchanted,
         attached_to=attached_to,
+        in_combat_with_source=in_combat_with_source,
+        dealt_damage_to_source_this_turn=dealt_damage_to_source_this_turn,
     )
 
 

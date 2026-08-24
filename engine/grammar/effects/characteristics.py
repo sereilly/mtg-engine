@@ -431,6 +431,107 @@ _TEXT_CHANGE_MODES: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
+def _parse_change_base_pt(stream: TokenStream) -> ast.ChangeBasePT | None:
+    """``Change <subject>'s base [power and] toughness to <value> [duration].``
+
+    CR 613.4b, the Legends rewrite template — Sentinel, Wall of Tombstones,
+    Halfdane, Brine Hag. Returns None without consuming when the sentence is
+    not this shape, so "Change the text of …" keeps falling through to
+    :func:`_parse_change_text`.
+
+    Two printed subject positions, one node: the possessive ("change this
+    creature's base toughness…", "change Halfdane's base power and toughness…"
+    — the lexer has already collapsed the self-name to SELF plus its
+    possessive marker) and the of-phrase ("change the base power and toughness
+    of all creatures that dealt damage to it this turn…").
+
+    Three printed value shapes: a P/T pair ("to 0/2"), a quantity with an
+    addend ("to 1 plus the number of …", "to 1 plus the power of target …"),
+    and both stats of one chosen creature ("to the power and toughness of
+    target creature…"). Each is recorded whole — an addend or a referent
+    consumed and dropped would be the dropped-rider class this grammar exists
+    to refuse.
+    """
+    mark = stream.mark()
+    stream.expect_word("change")
+    both = False
+    from_pt_of: ast.Recipient | None = None
+    if stream.at_word("the"):
+        stream.advance()
+        if not stream.accept_word("base"):
+            # "Change the text of …" — not this production's sentence.
+            stream.reset(mark)
+            return None
+        stream.expect_word("power")
+        stream.expect_word("and")
+        stream.expect_word("toughness")
+        stream.expect_word("of")
+        both = True
+        subject = parse_recipient(stream)
+    else:
+        subject = parse_recipient(stream)
+        if subject is None or not stream.accept_word("'s"):
+            stream.reset(mark)
+            return None
+        if not stream.accept_word("base"):
+            stream.reset(mark)
+            return None
+        if stream.accept_phrase("power", "and", "toughness"):
+            both = True
+        elif not stream.accept_word("toughness"):
+            raise stream.error("expected 'power and toughness' or 'toughness'")
+    if subject is None:
+        raise stream.error("expected whose base power/toughness to change")
+    stream.expect_word("to")
+
+    power: ast.Amount | None = None
+    toughness: ast.Amount | None = None
+    token = stream.peek()
+    if token is not None and token.kind == PT:
+        pt_power, power_negative, pt_toughness, toughness_negative = expect_pt(stream)
+        if power_negative or toughness_negative:
+            raise stream.error("a base P/T is a value, not a modification")
+        if both:
+            power, toughness = pt_power, pt_toughness
+        else:
+            raise stream.error("a toughness-only change takes one number")
+    elif stream.accept_phrase("the", "power", "and", "toughness", "of"):
+        # Halfdane: both stats read off one chosen creature at resolution.
+        if not both:
+            raise stream.error("both stats must be named to copy both stats")
+        from_pt_of = parse_recipient(stream)
+        if from_pt_of is None:
+            raise stream.error("expected whose power and toughness to copy")
+    else:
+        amount: ast.Amount = parse_amount(stream)
+        if stream.accept_word("plus"):
+            addend_mark = stream.mark()
+            if stream.accept_phrase("the", "power", "of"):
+                # "1 plus the power of target creature …" (Sentinel). The
+                # quantity itself carries the sentence's target.
+                referent = parse_recipient(stream)
+                if not isinstance(referent, ast.TargetSpec):
+                    raise stream.error("expected whose power to add")
+                amount = ast.Plus(amount, ast.PowerOfSubject(referent))
+            elif stream.accept_phrase("the", "number", "of"):
+                # "1 plus the number of creature cards in your graveyard"
+                # (Wall of Tombstones).
+                amount = ast.Plus(amount, ast.CountOf(parse_object_filter(stream)))
+            else:
+                stream.reset(addend_mark)
+                raise stream.error("expected a count or a power after 'plus'")
+        if both:
+            raise stream.error(
+                "one quantity cannot set both base power and base toughness"
+            )
+        toughness = amount
+
+    duration = _parse_duration(stream)
+    return ast.ChangeBasePT(
+        subject, power, toughness, from_pt_of=from_pt_of, duration=duration
+    )
+
+
 def _parse_change_text(stream: TokenStream) -> ast.ChangeText:
     """``Change the text of <subject> by replacing all instances of one <what>
     with another.`` (Magical Hack, Sleight of Mind.)

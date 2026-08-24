@@ -110,6 +110,20 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
             normalized[index].isalnum() or normalized[index] == "'"
         )
 
+    def _ends_a_word(index: int) -> bool:
+        """Whether a span ending at *index* sits on a word boundary.
+
+        A possessive tail is a boundary too: "Halfdane's base power" is the
+        card naming itself in possessive position, and reading the apostrophe
+        as part of the word left the name an unknown WORD token no production
+        could read. The tail must be exactly "'s" at a real boundary, so a
+        name that merely *contains* one ("Urza's Mine" naming itself) still
+        matches whole rather than splitting at its own apostrophe.
+        """
+        if not _is_word_char(index):
+            return True
+        return normalized[index:index + 2] == "'s" and not _is_word_char(index + 2)
+
     spans: list[tuple[int, int]] = []
     for needle in needles:
         start = normalized.find(needle)
@@ -122,7 +136,7 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
             # inside the full name) is skipped for the same reason.
             if (
                 not _is_word_char(start - 1)
-                and not _is_word_char(end)
+                and _ends_a_word(end)
                 and not any(s <= start < e for s, e in spans)
             ):
                 spans.append((start, end))
@@ -150,6 +164,12 @@ def tokenize(line: str, *, card_name: str | None = None) -> LexResult:
             if match.start() == span_start:
                 tokens.append(GToken(SELF, normalized[span_start:span_end], span_start, span_end))
                 skip_until = span_end
+                # A possessive self-reference ("Halfdane's") keeps its marker,
+                # exactly as the WORD branch below keeps "player's" as the noun
+                # plus "'s" — dropping it would break full-token accounting.
+                if normalized[span_end:span_end + 2] == "'s":
+                    tokens.append(GToken(WORD, "'s", span_end, span_end + 2))
+                    skip_until = span_end + 2
                 break
         if match.start() < skip_until:
             continue
