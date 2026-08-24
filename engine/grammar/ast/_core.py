@@ -295,6 +295,14 @@ class ObjectFilter:
     # collapsed to a SELF token — so the question is "another copy of me",
     # whatever the copy is called.
     not_ability_targeted_by_same_name: bool = False
+    # "all creatures **blocking this creature**" (The Wretched). The set of
+    # creatures currently declared as blockers of the ability's own source
+    # (CR 509.1a). *Relative* like ``created_with_source``: no read of the
+    # blocker alone can answer it, so it emits no payload key and never
+    # reaches ``permanent_matches_filter`` — the one lowering that admits it
+    # resolves the set from the fire-time combat record instead, and any
+    # other lowering that meets it refuses by name.
+    blocking_source: bool = False
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.

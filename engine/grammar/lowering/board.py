@@ -26,6 +26,7 @@ from ._common import (
     _names_several_targets,
     _restrictions_beyond,
     _targets_only,
+    _UNTAPPED_PERMANENTS,
     is_mana_value_x,
 )
 
@@ -487,29 +488,67 @@ def _lower_sacrifice_unless_pay(node: ast.SacrificeUnlessPay) -> tuple[OracleIns
 _LINKED_STEAL_FILTER = ast.ObjectFilter(card_types=("artifact",))
 
 
-def _lower_gain_control(node: ast.GainControl) -> tuple[OracleInstruction, ...]:
-    """``Gain control of target artifact for as long as you control this
-    creature.`` (Aladdin, CR 611.3.)
+def _lower_gain_control(
+    node: ast.GainControl, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """``Gain control of <subject> <duration>.``
+
+    Four shapes, and which one a card is depends on its duration and subject:
+
+    * "…until end of turn" on a chosen target (Traitorous Greed) — an ordinary
+      targeted instruction carrying its noun phrase.
+    * "…until end of turn" on "**that creature**" (Disharmony) — the object a
+      previous step of this same effect chose, read out of the resolution
+      scratchpad; a producer must have run, the same discipline
+      ``_lower_doesnt_untap_next_step`` applies.
+    * "…for as long as you control this creature" — Aladdin's linked steal
+      when targeted, The Wretched's blocker sweep when the subject is "all
+      creatures blocking this creature".
+    * "…and this creature remains tapped" (Willow Satyr, Rubinia Soulsinger) —
+      the two-condition linked duration; the conditions ride the payload and
+      the state-based sweep re-checks them (CR 611.2b,
+      ``engine/control.LINKED_CONTROL_CONDITIONS``).
 
     ``steal_target_permanent_linked_to_self`` takes no payload at all: it looks
     for an artifact in its own source code and ends the control change from
-    ``ON_LEAVE_BATTLEFIELD``. So the filter is compared for **equality** against
-    the one shape it implements rather than probed field by field — a
-    restriction the AST grows later then refuses here instead of being silently
-    ignored by a lowering written before it existed.
-
-    No ``targets`` description is emitted: ``engine/targeting.py`` already
-    answers "artifact" for this kind, and the payload has to stay byte-identical
+    ``ON_LEAVE_BATTLEFIELD``. So Aladdin's filter is compared for **equality**
+    against the one shape that handler implements rather than probed field by
+    field — a restriction the AST grows later then refuses here instead of
+    being silently ignored by a lowering written before it existed. No
+    ``targets`` description is emitted for it: ``engine/targeting.py`` already
+    answers "artifact" for the kind, and the payload has to stay byte-identical
     to what the rule it replaces produced.
     """
     subject = node.subject
-    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "target":
+    if not isinstance(subject, ast.TargetSpec):
         raise LoweringError("the linked-control handler needs a named target", node=node)
-    # "…until end of turn" (Traitorous Greed) is a lifetime, not a link, so it is
-    # an ordinary targeted instruction carrying its noun phrase — where the
-    # linked form below is compared for equality against the one board shape its
-    # payload-free handler implements.
     if node.duration == "until_end_of_turn":
+        if subject.quantifier == "that":
+            # "Gain control of **that creature** until end of turn."
+            # (Disharmony.) The bound object, not a second choice — and bound
+            # by id when the earlier step resolved, so a restated narrowing
+            # would have nothing to narrow.
+            if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+                raise LoweringError(
+                    "a bound object carries no narrowing the record could honour",
+                    node=node,
+                )
+            if _UNTAPPED_PERMANENTS not in produced:
+                raise LoweringError(
+                    f"back-reference to {_UNTAPPED_PERMANENTS!r} with no "
+                    "producer in this effect",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "gain_control_until_eot", "",
+                    {"permanents_from": _UNTAPPED_PERMANENTS},
+                ),
+            )
+        if subject.quantifier != "target":
+            raise LoweringError(
+                "the linked-control handler needs a named target", node=node
+            )
         described = _filter_payload(subject.filter)
         if object_only_filter(described) is None:
             raise LoweringError(
@@ -517,6 +556,46 @@ def _lower_gain_control(node: ast.GainControl) -> tuple[OracleInstruction, ...]:
             )
         _describe_targets(described, subject)
         return (OracleInstruction("gain_control_until_eot", "", described),)
+    if node.duration == "while_you_control_source_tapped":
+        # Willow Satyr / Rubinia Soulsinger. The filter must be one the
+        # resolution can test (Willow's "legendary" is the supertypes key),
+        # and the conditions are payload data so the sweep stays one reader.
+        if subject.quantifier != "target":
+            raise LoweringError(
+                "the linked-control handler needs a named target", node=node
+            )
+        described = _filter_payload(subject.filter)
+        if object_only_filter(described) is None:
+            raise LoweringError(
+                "the control change cannot test this restriction", node=node
+            )
+        _describe_targets(described, subject)
+        described["link_conditions"] = [
+            "you_control_source", "source_remains_tapped",
+        ]
+        return (OracleInstruction("steal_target_linked_to_source", "", described),)
+    # while_you_control_source
+    if (
+        subject.quantifier == "all"
+        and subject.filter.blocking_source
+        and not _restrictions_beyond(
+            subject.filter, frozenset({"card_types", "blocking_source"})
+        )
+        and subject.filter.card_types == ("creature",)
+    ):
+        # "Gain control of all creatures blocking this creature…"
+        # (The Wretched.) The set was fixed when the trigger fired
+        # (CR 611.2c): the end-of-combat dispatcher captures the blockers by
+        # id into the trigger context, because by resolution the combat
+        # record has been cleared.
+        return (
+            OracleInstruction(
+                "steal_blockers_of_source", "",
+                {"link_conditions": ["you_control_source"]},
+            ),
+        )
+    if subject.quantifier != "target":
+        raise LoweringError("the linked-control handler needs a named target", node=node)
     if subject.filter != _LINKED_STEAL_FILTER:
         raise LoweringError(
             "the only linked-control handler gains control of an artifact", node=node

@@ -64,6 +64,7 @@ from .lowering import (
     _lower_become_color,
     _lower_gain_type,
     _lower_cant_be,
+    _lower_remove_from_combat,
     _lower_change_text,
     _lower_combat_restriction,
     _lower_counter_ability,
@@ -251,7 +252,9 @@ def lower_statement(
         return _lower_change_text(statement)
 
     if isinstance(statement, ast.GainControl):
-        return _lower_gain_control(statement)
+        # `produced` carries the earlier steps' records: Disharmony's
+        # "gain control of that creature" reads what its untap chose.
+        return _lower_gain_control(statement, produced)
 
     if isinstance(statement, ast.PreventDamage):
         return _lower_prevent_damage(statement)
@@ -413,6 +416,9 @@ def lower_statement(
 
     if isinstance(statement, ast.CantBe):
         return _lower_cant_be(statement)
+
+    if isinstance(statement, ast.RemoveFromCombat):
+        return _lower_remove_from_combat(statement, produced)
 
     if isinstance(statement, ast.WhereX):
         return _lower_where_x(statement, produced, event)

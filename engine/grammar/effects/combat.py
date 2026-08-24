@@ -8,6 +8,7 @@ at all.
 """
 
 from .. import ast
+from ..references import parse_recipient
 from ..stream import TokenStream
 from ..phrases import _parse_duration
 
@@ -104,3 +105,22 @@ def _parse_cant_be(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     stream.advance()
     duration = _parse_duration(stream)
     return ast.CantBe(subject, word, duration)
+
+
+def _parse_remove_from_combat(stream: TokenStream) -> ast.RemoveFromCombat | None:
+    """``remove <subject> from combat`` (Disharmony; CR 506.4c).
+
+    Returns None — cursor untouched — when the words after "remove" are not
+    this sentence, so the counter-removal production keeps every other
+    "remove …" line. The subject is an ordinary recipient here; *lowering*
+    holds it to the back-reference shape the pool prints, so a freestanding
+    "remove target creature … from combat" (False Orders) refuses there by
+    name rather than being half-read.
+    """
+    mark = stream.mark()
+    stream.expect_word("remove")
+    subject = parse_recipient(stream)
+    if subject is None or not stream.accept_phrase("from", "combat"):
+        stream.reset(mark)
+        return None
+    return ast.RemoveFromCombat(subject)

@@ -858,3 +858,108 @@ def test_integration_multiple_effects_stack_in_layer_7c():
     # Total: 2 (base) + 4 (counter+pump) + 1 (static) = 7/7
     assert perm.effective_power == 7
     assert perm.effective_toughness == 7
+
+
+# ---------------------------------------------------------------------------
+# Rule 611.2b — "for as long as …" durations that the engine watches
+# ---------------------------------------------------------------------------
+#
+# The machinery under the Legends linked steals (Willow Satyr, Rubinia
+# Soulsinger, The Wretched): a control change recorded with
+# ``engine/control.LINKED_CONTROL_CONDITIONS`` on its source is re-checked by
+# the state-based sweep, and the moment a condition is false the contribution
+# is dropped and whatever remains decides. These tests drive the seam
+# directly, with no card text, so the per-card tests in ``tests/sets`` can
+# stay about the cards.
+
+
+def _linked_steal_board():
+    """Seat 0's *source* creature has stolen seat 1's *stolen* creature under
+    the two-condition linked duration."""
+    from engine.control import LINKED_CONTROL_CONDITIONS
+
+    source = Permanent(card=_mk_card("Linked Source", "Creature - Test"), tapped=True)
+    stolen = Permanent(card=_mk_card("Stolen Bear", "Creature - Test"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[source]),
+        PlayerState(name="P2", battlefield=[stolen]),
+    ])
+    assert game.take_control(
+        stolen, game.players[0], source=source,
+        extra_meta={
+            LINKED_CONTROL_CONDITIONS: (
+                "you_control_source", "source_remains_tapped",
+            ),
+        },
+    )
+    assert game.controller_index_of(stolen) == 0
+    return game, source, stolen
+
+
+@pytest.mark.cr("611.2b")
+def test_611_2b_linked_control_ends_when_the_source_untaps():
+    """"…and this creature remains tapped": the sweep ends the change the
+    moment the condition is false — no turn boundary is involved."""
+    game, source, stolen = _linked_steal_board()
+
+    source.tapped = False
+    game.check_state_based_actions()
+
+    assert game.controller_index_of(stolen) == 1
+
+
+@pytest.mark.cr("611.2b")
+def test_611_2b_linked_control_ends_when_the_source_changes_controller():
+    """"…for as long as **you** control this creature": "you" is the seat the
+    change gave control to, read off the contribution itself — so a stolen
+    *source* (its controller changed by a later layer-2 effect, no zone
+    change anywhere) ends its own steal."""
+    from engine.control import change_control
+
+    game, source, stolen = _linked_steal_board()
+    thief = Permanent(card=_mk_card("Thief", "Creature - Test"))
+    game.players[1].battlefield.append(thief)
+
+    change_control(source, 1, source=thief)
+    game._sync_control()
+    game.check_state_based_actions()
+
+    assert game.controller_index_of(stolen) == 1, (
+        "seat 0 no longer controls the source, so the linked steal ended"
+    )
+
+
+@pytest.mark.cr("611.2b")
+def test_611_2b_linked_control_ends_when_the_source_leaves():
+    """The sweep reads contributions from the *stolen* side, which is what
+    covers a source that is no longer on any battlefield (CR 702.26f states
+    the same principle for phasing: a "for as long as" duration that can no
+    longer see its object ends)."""
+    game, source, stolen = _linked_steal_board()
+
+    game.remove_from_battlefield(source)
+    game.check_state_based_actions()
+
+    assert game.controller_index_of(stolen) == 1
+
+
+@pytest.mark.cr("611.2b", "613.7")
+def test_611_2b_ending_the_linked_change_leaves_a_later_one_applying():
+    """Ending is the absence of a contribution, not an undo: with a second,
+    unlinked control effect recorded after the linked one, breaking the link
+    leaves the newer effect deciding (CR 613.7 timestamp order) — the stolen
+    creature does not bounce through its owner on the way."""
+    from engine.control import change_control
+
+    game, source, stolen = _linked_steal_board()
+    enchant = Permanent(card=_mk_card("Later Steal", "Enchantment - Aura"))
+    game.players[0].battlefield.append(enchant)
+    change_control(stolen, 0, source=enchant)
+    game._sync_control()
+
+    source.tapped = False
+    game.check_state_based_actions()
+
+    assert game.controller_index_of(stolen) == 0, (
+        "the unlinked contribution still applies after the linked one ended"
+    )

@@ -68,6 +68,7 @@ from .effects import (
     _parse_fight,
     _parse_put_counter,
     _parse_remove_counter,
+    _parse_remove_from_combat,
     _parse_return,
     _parse_reveal_top,
     _parse_sacrifice,
@@ -175,6 +176,12 @@ def _parse_subject_verb(
         removal = _parse_remove_counter(stream)
         if removal is not None:
             return removal
+        # "…and remove it from combat" (Disharmony). Tried after the counter
+        # removal, and non-consuming on refusal, so every other "remove …"
+        # sentence keeps the refusal it has today.
+        combat_removal = _parse_remove_from_combat(stream)
+        if combat_removal is not None:
+            return combat_removal
     if stream.at_word("change"):
         return _parse_change_text(stream)
     if stream.at_word("gain"):

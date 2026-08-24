@@ -195,16 +195,41 @@ _SELF_UNTAP_LINE_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
 )
 
 
-def self_untap_line(line: str) -> str | None:
+def _collapse_self_name(line: str, card_name: str | None) -> str:
+    """*line* with the card's own whole-word name spellings replaced by
+    "this permanent".
+
+    Pre-modern templating names the source: Rubinia Soulsinger prints "You may
+    choose not to untap **Rubinia Soulsinger** during your untap step" where
+    Old Man of the Sea prints "this creature". The grammar's lexer collapses
+    the same references to one SELF token; this is that rule for a registry
+    that matches on raw text. The forms are the full name and — for a
+    legendary name with a comma — the short name before it (CR 201.4c), the
+    same two ``engine/oracle.py``'s ``_self_name_forms`` reads; a copy here
+    rather than an import because oracle.py imports this module.
+    """
+    if not card_name:
+        return line
+    full = card_name.strip().lower()
+    forms = [full]
+    if "," in full:
+        forms.append(full.split(",", 1)[0].strip())
+    for form in forms:
+        if form:
+            line = re.sub(rf"\b{re.escape(form)}\b", "this permanent", line)
+    return line
+
+
+def self_untap_line(line: str, card_name: str | None = None) -> str | None:
     """Name the per-source untap restriction *line* states in full, or None.
 
     The whole-line form of the two substring probes in
-    ``phases/untap_step.py``. Its only caller is
-    ``engine/grammar/registries.py``, which needs to know whether a line's
-    behaviour is already carried out from the card's raw text — nothing
-    dispatches on the returned name.
+    ``phases/untap_step.py``, consulted by ``engine/grammar/registries.py``
+    and the creature static-line gate — nothing dispatches on the returned
+    name. *card_name* lets a line that names its own card (Rubinia
+    Soulsinger) match the "this <noun>"-anchored patterns.
     """
-    normalized = line.strip().lower().rstrip(".")
+    normalized = _collapse_self_name(line.strip().lower(), card_name).rstrip(".")
     for pattern, name in _SELF_UNTAP_LINE_PATTERNS:
         if pattern.match(normalized):
             return name

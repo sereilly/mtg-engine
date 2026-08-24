@@ -88,6 +88,7 @@ from .combat import (
     _parse_cant_attack_or_block,
     _CANT_BE_ACTIONS,
     _parse_cant_be,
+    _parse_remove_from_combat,
 )
 from .game import (
     _parse_wins,
@@ -153,6 +154,7 @@ __all__ = [
     "_parse_activation_restriction",
     "_BASIC_LAND_WORDS",
     "_parse_cant_attack_or_block",
+    "_parse_remove_from_combat",
     "_CANT_BE_ACTIONS",
     "_parse_cant_be",
     "_parse_wins",

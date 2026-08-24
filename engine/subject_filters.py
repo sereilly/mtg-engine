@@ -54,6 +54,11 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",
     "nontoken", "named", "supertypes",
+    # "target **attacking** creature" (Disharmony's untap). CR 508.1a makes
+    # attacking a state of the permanent itself, so it is answerable from the
+    # object alone — ``Permanent.attacking`` is stamped at declaration and
+    # cleared when the creature leaves combat.
+    "attacking_only",
     "with_keywords", "controller", "owner", "exclude_self",
 })
 

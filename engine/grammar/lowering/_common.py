@@ -398,6 +398,15 @@ _EVENT_QUANTITIES: dict[str, str] = {
     "damage_dealt": "amount",
 }
 
+# The scratchpad key the untap records and two later sentences read ("remove
+# **it** from combat", "gain control of **that creature**" — Disharmony). One
+# name in one place, shared by the ``board`` and ``combat`` lowering families,
+# because a fragment two families need lives here rather than in either of
+# them — and because ``categories._PRODUCES`` writes the same string, so a
+# second spelling would make the producer gate vacuous while the handler read
+# an empty record.
+_UNTAPPED_PERMANENTS = "untapped_permanents"
+
 # The scratchpad keys that are *quantities*. `categories._PRODUCES` also records
 # things no amount can read — a controller's seat, a list of exiled cards — so
 # a bare back-reference resolves against this narrower set. A producer added

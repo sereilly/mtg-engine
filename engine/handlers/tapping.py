@@ -91,6 +91,13 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
             f"Untapped {len(chosen)} permanent(s)" if chosen
             else "No valid permanents to untap"
         )
+        # What it records is what a later sentence means by "it"/"that
+        # creature" — every permanent this instruction affected, already
+        # untapped or not (CR 611.2c fixes the set when the effect begins).
+        # By id, never by object or slot (idiom #11, CR 400.7).
+        context.results["untapped_permanents"] = tuple(
+            perm.permanent_id for perm in chosen
+        )
         return True, "resolved"
 
     narrowed = any(
@@ -108,6 +115,14 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
         game.log.append(
             f"Untapped {perm.card.name}" if perm is not None
             else "No valid permanent to untap"
+        )
+        # The record Disharmony's later sentences read ("remove it from
+        # combat", "gain control of that creature"): the permanent this
+        # instruction resolved, whether or not it was tapped — a vigilance
+        # attacker is still "it" (CR 611.2c fixes the set when the effect
+        # begins). By id, never by object or slot (idiom #11, CR 400.7).
+        context.results["untapped_permanents"] = (
+            (perm.permanent_id,) if perm is not None else ()
         )
         return True, "resolved"
     target = context.target

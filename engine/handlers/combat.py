@@ -12,6 +12,7 @@ from ..rampage import rampage_bonus
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
+    from ..models import Permanent
     from ..oracle import OracleInstruction
 
 
@@ -140,6 +141,59 @@ def randomize_blockers(game: Game, instruction: OracleInstruction, context: Orac
     # random pile (resolve_camouflage_blocking) rather than chosen this combat.
     game.camouflage_active_turn = game.turn
     game.log.append(f"{card.name} set up random pile blocking this turn")
+    return True, "resolved"
+
+
+def _take_permanent_out_of_combat(game: Game, perm: Permanent) -> bool:
+    """Remove *perm* from combat, whichever role it holds (CR 506.4c).
+
+    Combat state is index-keyed (see the control-seam notes), so the slot is
+    derived once through the seam (``battlefield_index_of``) and every map
+    that carries it is pruned together — an attacker's entry, its
+    planeswalker assignment, its band, and any blocker's record of blocking
+    it. A blocker goes through ``_remove_blocker_from_combat``, which already
+    unblocks attackers this creature was the only blocker of.
+    """
+    idx = game.battlefield_index_of(perm)
+    if idx is None:
+        return False
+    seat = game.controller_index_of(perm)
+    if seat == game.active_player_index and idx in game.combat_attackers:
+        game.combat_attackers.pop(idx, None)
+        game.combat_attacked_planeswalkers.pop(idx, None)
+        game.combat_bands = [band for band in game.combat_bands if idx not in band]
+        for blocker_map in game.combat_blockers.values():
+            for blocked in blocker_map.values():
+                if idx in blocked:
+                    blocked.remove(idx)
+        # CR 506.4c: it stops being an attacking creature — the per-permanent
+        # state has to agree with the pruned maps, or a filter asking
+        # "attacking" between now and end of combat gets a different answer
+        # than the damage step does.
+        perm.attacking = False
+        perm.defending_player_index = None
+        perm.blocked = False
+        game.log.append(f"{perm.card.name} was removed from combat")
+        return True
+    if idx in game.combat_blockers.get(seat, {}):
+        game._remove_blocker_from_combat(seat, idx)
+        game.log.append(f"{perm.card.name} was removed from combat")
+        return True
+    return False
+
+
+@effect_handler("remove_from_combat")
+def remove_from_combat(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Disharmony: "Untap target attacking creature and **remove it from
+    combat**." Reads the permanents the previous step of this resolution
+    recorded (CR 611.2c fixed the set when the effect began) — nothing is
+    chosen here, and an empty record is a legal outcome, not an error."""
+    key = instruction.payload.get("permanents_from")
+    for permanent_id in context.results.get(key) or ():
+        perm = game.permanent_by_id(permanent_id)
+        if perm is None:
+            continue
+        _take_permanent_out_of_combat(game, perm)
     return True, "resolved"
 
 

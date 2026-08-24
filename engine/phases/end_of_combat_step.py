@@ -10,6 +10,7 @@ combat" is still known, then clears until-end-of-combat effects and combat state
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..shields import END_OF_COMBAT, clear_shields
+from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 
 class EndOfCombatStepMixin:
@@ -43,11 +44,46 @@ class EndOfCombatStepMixin:
         self._on_step_or_phase_end(phase, step)
 
     def _fire_end_of_combat_triggers(self) -> None:
-        """Resolve "at end of combat" triggered abilities (Rule 603.2, 508).
+        """Fire "at end of combat" triggered abilities (CR 511.1, 603.2).
 
-        Currently covers Clockwork Beast: "At end of combat, if this creature
-        attacked or blocked this combat, remove a +1/+0 counter from it."
+        Two dispatches. Compiled ``end_of_combat`` triggers (The Wretched) go
+        onto the stack through the standard batch, with what the trigger's
+        effect needs captured now — the blockers of the firing attacker, by
+        id — because ``end_combat`` clears the combat record before the
+        priority window that resolves them. Clockwork Beast's line compiles
+        as a static line instead (its intervening-if has no production), so
+        it keeps the direct text probe below.
         """
+        events = []
+        for controller_index, permanent, trig in iter_triggered_abilities(
+            self, condition_kinds={"end_of_combat"}
+        ):
+            trigger_context = {}
+            if trig.instruction is not None and trig.instruction.kind == "steal_blockers_of_source":
+                # "all creatures blocking this creature" — CR 611.2c fixes the
+                # set when the effect begins, and this is the last moment the
+                # combat record can answer it.
+                blocker_ids = []
+                attacker_idx = self.battlefield_index_of(permanent)
+                if (
+                    attacker_idx is not None
+                    and controller_index == self.active_player_index
+                    and attacker_idx in self.combat_attackers
+                ):
+                    defending_idx = self.combat_attackers.get(attacker_idx)
+                    for blocker_idx in self._combat_blockers_for_attacker(attacker_idx):
+                        blocker = self.permanent_at(defending_idx, blocker_idx)
+                        if blocker is not None:
+                            blocker_ids.append(blocker.permanent_id)
+                trigger_context = {"blocker_ids": tuple(blocker_ids)}
+            events.append(
+                make_trigger_event(
+                    controller_index, permanent, trig,
+                    trigger_context=trigger_context,
+                )
+            )
+        self._enqueue_triggered_batch(events)
+
         clockwork_line = (
             "at end of combat, if this creature attacked or blocked this combat, "
             "remove a +1/+0 counter from it"

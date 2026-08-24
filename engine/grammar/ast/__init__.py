@@ -165,6 +165,7 @@ from .stack import (
 from .combat import (
     CantBe,
     CombatRestriction,
+    RemoveFromCombat,
 )
 from .game import (
     CreateEmblem,
@@ -325,6 +326,7 @@ __all__ = [
     # combat
     "CantBe",
     "CombatRestriction",
+    "RemoveFromCombat",
     # game
     "CreateEmblem",
     "GainLife",

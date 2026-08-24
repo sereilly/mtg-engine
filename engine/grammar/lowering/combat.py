@@ -14,6 +14,7 @@ from ._common import (
     _is_target,
     _restrictions_beyond,
     _targets_only,
+    _UNTAPPED_PERMANENTS,
 )
 
 
@@ -137,3 +138,39 @@ def _lower_cant_be(node: ast.CantBe) -> tuple[OracleInstruction, ...]:
         return (OracleInstruction("grant_unblockable_to_low_power_target", "", {}),)
 
     raise LoweringError(f"no handler for a {node.action!r} restriction", node=node)
+
+
+def _lower_remove_from_combat(
+    node: ast.RemoveFromCombat, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """"Untap target attacking creature **and remove it from combat**."
+    (Disharmony, CR 506.4c.)
+
+    Two refusals, each a way the sentence could otherwise mean more than it
+    says — the discipline ``_lower_doesnt_untap_next_step`` states:
+
+    * The subject must be the pronoun "it": the pool prints this sentence only
+      as the tail of a conjunction whose head chose the object. A chosen
+      target here would be a second, independent choice the card never
+      offered (False Orders makes one, and stays a name-keyed hook).
+    * A producer must have recorded which permanent that was. The handler
+      reads ids out of the resolution scratchpad, and with nothing recorded
+      it would remove nothing while the card compiled clean.
+    """
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "it":
+        raise LoweringError(
+            "remove-from-combat acts on the object the sentence already chose",
+            node=node,
+        )
+    if _UNTAPPED_PERMANENTS not in produced:
+        raise LoweringError(
+            f"back-reference to {_UNTAPPED_PERMANENTS!r} with no producer in "
+            "this effect",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "remove_from_combat", "", {"permanents_from": _UNTAPPED_PERMANENTS}
+        ),
+    )

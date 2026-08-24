@@ -142,3 +142,65 @@ def test_great_defender_gives_nothing_to_a_free_creature(set_pool):
     game._settle()
 
     assert ornithopter.effective_toughness == 2
+
+
+# ---------------------------------------------------------------------------
+# Disharmony (round 11) — untap, remove from combat, steal until end of turn
+# ---------------------------------------------------------------------------
+
+
+def _attacker_board(set_pool):
+    """P1 attacks with one creature; P2 holds Disharmony."""
+    attacker = Permanent(card=_creature("Raging Bull"))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", hand=[set_pool("LEG")["Disharmony"]])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    return game, attacker
+
+
+def test_disharmony_untaps_steals_and_removes_the_attacker(set_pool):
+    """All three sentences of the spell, in a real combat: the attacker is
+    untapped, leaves combat (CR 506.4c — the maps and the permanent state
+    agree), and fights for the caster until end of turn."""
+    game, attacker = _attacker_board(set_pool)
+    assert attacker.tapped and attacker.attacking
+
+    result = game.cast_from_hand(
+        1, "Disharmony", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported
+    assert not attacker.tapped
+    assert not attacker.attacking
+    assert not game.combat_attackers, "removed from combat, not merely unblocked"
+    assert game.controller_index_of(attacker) == 1
+
+    game.resolve_cleanup_step(1)
+    assert game.controller_index_of(attacker) == 0, (
+        "until end of turn — cleanup ends it (CR 611.2a)"
+    )
+
+
+def test_disharmony_is_castable_only_before_blockers(set_pool):
+    """"Cast this spell only during combat before blockers are declared." —
+    a restriction is only done when something enforces it; a main-phase cast
+    must refuse with the spell still in hand."""
+    disharmony = set_pool("LEG")["Disharmony"]
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=_creature("Idle Bull"))])
+    p2 = PlayerState(name="P2", hand=[disharmony])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    result = game.cast_from_hand(
+        1, "Disharmony", target_player_index=0, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert disharmony in game.players[1].hand

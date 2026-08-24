@@ -634,6 +634,12 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # combat (Adherent of Hope); must precede its own prefix below.
     ("combat_your_turn",    r"at the beginning of combat on your turn"),
     ("combat",              r"at the beginning of combat"),
+    # "At end of combat, …" (The Wretched) — CR 511.1, the end of combat step.
+    # Clockwork Beast's line opens the same way and stays a static line: its
+    # effect clause compiles no instruction, so the classifier's static
+    # fallback (step 2 of _parse_creature_program) keeps it where
+    # phases/end_of_combat_step.py's text probe reads it.
+    ("end_of_combat",       r"at end of combat"),
 )
 
 # "if" conditions that can appear mid-effect
@@ -2216,7 +2222,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # noun, so the artifact printings were admitted by an unrelated route.
     from .untap_restrictions import self_untap_line
 
-    return self_untap_line(normalized) is not None
+    return self_untap_line(normalized, card_name) is not None
 
 
 # ---------------------------------------------------------------------------

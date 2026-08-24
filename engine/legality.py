@@ -142,6 +142,7 @@ _FILTERABLE_ABILITY_KINDS = {
     "grant_unblockable_to_low_power_target",
     "set_base_pt_target_until_eot",
     "steal_creature_while_tapped_and_weaker",
+    "steal_target_linked_to_source",
     "tap_target_permanent",
     "attach_source_to_target",
 }
@@ -693,6 +694,12 @@ class LegalityMixin:
             if not perm.is_creature:
                 return False
             return source_permanent is None or perm.effective_power <= source_permanent.effective_power
+        if instruction.kind == "steal_target_linked_to_source":
+            # Willow Satyr's "target legendary creature" / Rubinia Soulsinger's
+            # "target creature" — the same payload filter the handler tests at
+            # resolution, asked here so the picker offers exactly what the
+            # resolution will accept.
+            return permanent_matches_filter(perm, instruction.payload)
         if instruction.kind == "grant_regeneration_to_target_creature":
             # Elephant Graveyard's "target Elephant" — the same subtype filter
             # _grant_regeneration_shield enforces at resolution. Death Ward's

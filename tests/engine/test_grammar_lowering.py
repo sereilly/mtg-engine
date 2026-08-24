@@ -583,11 +583,16 @@ def test_a_sacrifice_narrowing_the_prompt_can_test_rides_the_filter():
 
 
 def test_a_sacrifice_narrowing_the_prompt_cannot_test_still_refuses():
-    """"An attacking creature" is a restriction no filter payload the prompt
+    """"A blocking creature" is a restriction no filter payload the prompt
     reads can express, so the line refuses rather than sacrificing any creature
     at all. That is the whole reason the payload is gated on a key set instead
-    of being handed over whole."""
-    result = compile_line("Sacrifice an attacking creature.", card_name="Test")
+    of being handed over whole.
+
+    The example used to be "an attacking creature"; that key joined
+    ``TESTABLE_SUBJECT_FILTER_KEYS`` (with the matcher behind it) for
+    Disharmony's untap, so the guard keeps its point with the narrowing that
+    is still outside the set."""
+    result = compile_line("Sacrifice a blocking creature.", card_name="Test")
     assert result.parsed and not result.lowered
 
 

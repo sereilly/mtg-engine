@@ -61,3 +61,19 @@ class CombatRestriction:
     subject: Recipient
     kind: str
     payload: tuple[tuple[str, object], ...] = ()
+
+
+@dataclass(frozen=True)
+class RemoveFromCombat:
+    """``Remove <subject> from combat.`` (Disharmony; CR 506.4c.)
+
+    A one-shot combat action, not a restriction: the creature stays on the
+    battlefield and simply stops being an attacker or blocker. The subject is
+    a back-reference ("remove **it** from combat") — the pool prints the
+    sentence only as the tail of a conjunction whose head chose the object,
+    and lowering holds it to that shape so a freestanding "remove target
+    creature from combat" (False Orders' longer paragraph) keeps failing
+    loudly instead of borrowing a producer nothing ran.
+    """
+
+    subject: Recipient
