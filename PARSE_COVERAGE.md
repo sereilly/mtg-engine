@@ -63,14 +63,14 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 606 |
+| parse rule | 608 |
+| trigger table | 233 |
 | activation cost | 233 |
-| trigger table | 231 |
 | keyword table | 139 |
 | static-line table | 137 |
 | card_hooks bespoke (name-keyed) | 127 |
 | aura enchant noun (oracle_instructions attach) | 57 |
-| aura static (oracle_instructions/permanent_state) | 35 |
+| aura static (oracle_instructions/permanent_state) | 33 |
 | loyalty cost | 33 |
 | activation_restrictions.py | 21 |
 | mixin text scan | 16 |

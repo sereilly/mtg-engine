@@ -1202,3 +1202,48 @@ shipped pool).
 **Numbers.** LEG 179 → 184 of 310 (57.7% → 59.4%); LEG parse 56.8% → 57.1%.
 Suite 7,085 → 7,105, full run green with every `--check`. No hooks added —
 the one LEG hook remains Rohgahh's.
+
+## LEG round 13: an Aura's enter-tap was a substring, and X was always zero
+
+*(2026-08-24.)* Sequential worktree round two: Reset, Venarian Gold, Cocoon,
+Arena of the Ancients — enter-taps, counter-conditioned untap restrictions,
+and upkeep counter removal, all four landed.
+
+**The census said one handler; the work was three kinds and two seams.** The
+"no handler for non-targeted tap/untap" bucket split into an
+enchanted-creature tap (source-relative, twin of the existing untap) and a
+described-set sweep pair, both resolving through `subject_matches` under the
+double gate. Behind them sat two gaps no census line named: an ETB trigger's
+X had always resolved to zero (the fire site never threaded the cast's
+value), and "put X sleep counters on **it**" parsed the pronoun as the
+*Aura*, so a generic lowering would have put the counters on the wrong
+object. The fused recognizer pairs the tap with its counters and the fire
+site now carries `cast_x_value`.
+
+**Two shipped-pool defects, one deleted and one disarmed.** Paralyze and
+Capture Sphere's enter-taps were a substring pair in `_apply_aura_effect`
+that also matched Venarian Gold — it would have tapped the creature and
+silently dropped the sleep counters. The pair is deleted; both cards'
+enter-taps are real triggers now. And `sacrifice_self` executed with no
+handler at all — "supported pattern without state mutation", one card away
+from firing in the wild.
+
+**Where a spelling lands is a fact about scope, not about words.** The two
+Aura untap conditions ("if it has a sleep counter" / "if this Aura has a
+pupa counter") do not join `untap_restrictions.py` — that is the board-wide
+table, where Arena's plural-possessive legendary row belongs — they are aura
+derivations beside Paralyze's unconditional form, answered live at the untap
+step. Cocoon's hatch reads `last_attached_to` (CR 603.10) so the +1/+1
+counter and the permanent flying land after the same resolution sacrificed
+the Aura, and "Enchant creature you control" is enforced at the cast gate,
+the picker, the AI and a new CR 704.5m sweep.
+
+**Flagged for a future round, deliberately not taken here:** the `_TEMPLATES`
+ETB wildcard in `engine/auras.py` still claims every "when this aura enters"
+line for the substring chain's remaining users (Animate Dead, Earthbind);
+removing it flips an unknown set of cards and wants its own differential.
+
+**Numbers.** LEG 184 → 188 of 310 (59.4% → 60.6%); LEG parse 57.1% → 58.5%,
+executes 27.1% → 28.5%. Shipped by-catch: ALL lowers 80.8% → 81.1%, executes
+48.1% → 48.3% — the sweeps and the enchanted-tap claim shipped sentences.
+Suite 7,105 → 7,134, full run green with every `--check`; zero hooks added.

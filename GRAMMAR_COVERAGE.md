@@ -16,15 +16,15 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 80.4% | 79.4% | 43.0% | 153 |
-| LEB | 292 | 389 | 80.5% | 79.4% | 43.2% | 154 |
-| 2ED | 292 | 389 | 80.5% | 79.4% | 43.2% | 154 |
+| LEA | 290 | 388 | 80.4% | 79.6% | 43.3% | 154 |
+| LEB | 292 | 389 | 80.5% | 79.7% | 43.4% | 155 |
+| 2ED | 292 | 389 | 80.5% | 79.7% | 43.4% | 155 |
 | ARN | 78 | 108 | 69.4% | 64.8% | 42.6% | 37 |
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
-| 3ED | 296 | 389 | 81.5% | 80.2% | 44.7% | 157 |
-| M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| LEG *(measured)* | 310 | 431 | 57.1% | 51.3% | 27.1% | 108 |
-| **All (shipped)** | **1618** | **2286** | **82.0%** | **80.8%** | **48.1%** | **956** |
+| 3ED | 296 | 389 | 81.5% | 80.5% | 45.0% | 158 |
+| M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
+| LEG *(measured)* | 310 | 431 | 58.5% | 53.8% | 28.5% | 112 |
+| **All (shipped)** | **1618** | **2286** | **82.0%** | **81.1%** | **48.3%** | **961** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -34,7 +34,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 232 | 124 | expected a subject |  |
+| 230 | 122 | expected a subject |  |
 | 125 | 55 | unrecognized effect verb |  |
 | 74 | 50 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -44,8 +44,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 10 | 7 | expected 'a' |  |
 | 10 | 6 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 9 | 4 | expected a colour or a creature body after 'becomes' |  |
-| 9 | 5 | no handler for non-targeted tap/untap |  |
-| 8 | 4 | no lowering for RawEffect |  |
+| 6 | 3 | no lowering for RawEffect |  |
 | 6 | 3 | expected a quantity |  |
 | 5 | 5 | expected 'unless defending player controls' |  |
 | 4 | 1 | expected 'that' |  |
@@ -59,10 +58,11 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 2 | 2 | expected something to destroy |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 2 | expected a damage recipient |  |
+| 2 | 2 | expected what to remove a counter from as a cost |  |
 
 ## Cards executing through the grammar
 
-956 cards, 1100 lines.
+961 cards, 1105 lines.
 
 - **Acid Rain**
   - `Destroy all Forests.`
@@ -112,6 +112,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{W}: Arcades Sabboth gets +0/+1 until end of turn.`
 - **Archfiend's Vessel**
   - `When this creature enters, if it entered from your graveyard or you cast it from your graveyard, exile it. If you do, create a 5/5 black Demon creature token with flying.`
+- **Arena of the Ancients**
+  - `When this artifact enters, tap all legendary creatures.`
 - **Argivian Archaeologist**
   - `{W}{W}, {T}: Return target artifact card from your graveyard to your hand.`
 - **Argivian Blacksmith**
@@ -258,6 +260,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{X}, {T}: Untap X target lands.`
 - **Canopy Stalker**
   - `When this creature dies, you gain 1 life for each creature that died this turn.`
+- **Capture Sphere**
+  - `When this Aura enters, tap enchanted creature.`
 - **Carrion Ants**
   - `{1}: This creature gets +1/+1 until end of turn.`
 - **Carrion Grub**
@@ -342,6 +346,9 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
+- **Cocoon**
+  - `When this Aura enters, tap enchanted creature and put three pupa counters on this Aura.`
+  - `At the beginning of your upkeep, remove a pupa counter from this Aura. If you can't, sacrifice it, put a +1/+1 counter on enchanted creature, and that creature gains flying.`
 - **Colossus of Sardia**
   - `{9}: Untap this creature. Activate only during your upkeep.`
 - **Conclave Mentor**
@@ -1133,6 +1140,11 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `At the beginning of your upkeep, sacrifice Palladia-Mors unless you pay {R}{G}{W}.`
 - **Palladium Myr**
   - `{T}: Add {C}{C}.`
+- **Paralyze**
+  - `When this Aura enters, tap enchanted creature.`
+  - `When this Aura enters, tap enchanted creature.`
+  - `When this Aura enters, tap enchanted creature.`
+  - `When this Aura enters, tap enchanted creature.`
 - **Pavel Maliki**
   - `{B}{R}: Pavel Maliki gets +1/+0 until end of turn.`
 - **Peer into the Abyss**
@@ -1289,6 +1301,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `• Target player gains 1 life.`
 - **Remove Soul**
   - `Counter target creature spell.`
+- **Reset**
+  - `Untap all lands you control.`
 - **Resurrection**
   - `Return target creature card from your graveyard to the battlefield.`
   - `Return target creature card from your graveyard to the battlefield.`
@@ -1769,6 +1783,9 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `When this creature enters, create a 2/2 white Knight creature token with vigilance.`
 - **Vampire Bats**
   - `{B}: This creature gets +1/+0 until end of turn. Activate no more than twice each turn.`
+- **Venarian Gold**
+  - `When this Aura enters, tap enchanted creature and put X sleep counters on it.`
+  - `At the beginning of the upkeep of enchanted creature's controller, remove a sleep counter from that creature.`
 - **Verduran Enchantress**
   - `Whenever you cast an enchantment spell, you may draw a card.`
   - `Whenever you cast an enchantment spell, you may draw a card.`
