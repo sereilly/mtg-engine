@@ -316,6 +316,33 @@ class DeclareAttackersStepMixin:
         ):
             return False
 
+        # "Except for creatures named Akron Legionnaire and artifact creatures,
+        # creatures you control can't attack." Printed on one permanent but
+        # reaching every creature its controller has, so it is asked of the
+        # whole board rather than of the attacker's own program — and asked at
+        # declaration, the read that matters, so the restriction begins and
+        # ends with the permanent carrying it. The exception union is tested by
+        # `subject_matches`, the one reader of a noun-phrase payload, so a
+        # member means here exactly what it means on a blocker whitelist.
+        # CR 508.1c keeps it cumulative: matching an exception answers only
+        # this restriction.
+        attacker_seat = self.controller_index_of(attacker)
+        for source_seat, source_perm in self.permanents_with_controller():
+            if source_seat != attacker_seat:
+                continue
+            for instr in compile_card_oracle(source_perm.effective_card).instructions:
+                if instr.kind != "controlled_creatures_cant_attack":
+                    continue
+                exceptions = instr.payload.get("exceptions") or ()
+                if not any(
+                    subject_matches(
+                        self, attacker, dict(member),
+                        observer=source_seat, source=source_perm,
+                    )
+                    for member in exceptions
+                ):
+                    return False
+
         # Defender is asked of layer 6, not of the printed keyword list: a Clone
         # copying a Wall has the ability through layer 1 and a Primal Clay that
         # entered on its 1/6 Wall body has it through a layer-6 grant, and

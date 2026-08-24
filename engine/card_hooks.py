@@ -526,6 +526,20 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "turn, instead put a card you own from outside the game into your hand":
             _line("arm_outside_game_draw_replacement", "activated_draw"),
     },
+    'Rohgahh of Kher Keep': {
+        # The consequence names the card's own kobold tribe and hands the whole
+        # pile to an opponent — no second card, real or plausibly printable,
+        # shares the shape. The *name* it taps is payload, read through the same
+        # subject filter every "named" phrase resolves by.
+        "at the beginning of your upkeep, you may pay {r}{r}{r}. if you don't, "
+        'tap rohgahh and all creatures named kobolds of kher keep, then an '
+        'opponent gains control of them':
+            _line(
+                'upkeep_pay_or_cede_named_creatures', 'upkeep_effect',
+                mana={"W": 0, "U": 0, "B": 0, "R": 3, "G": 0, "C": 0, "generic": 0},
+                named='Kobolds of Kher Keep',
+            ),
+    },
     'Rukh Egg': {
         'when this creature dies, create a 4/4 red bird creature token with '
         'flying at the beginning of the next end step':

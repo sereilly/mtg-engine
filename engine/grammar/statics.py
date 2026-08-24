@@ -14,12 +14,15 @@ Sits between `lowering/` and `lower` in the layer order.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ..lord_buffs import (LORD_BUFF_KIND, LordBuff, LordBuffFilter,
                           QUALIFIER_FIELDS, grantable_keywords, lord_buff_payload)
 from ..oracle_types import OracleInstruction
+from ..subject_filters import OBJECT_ONLY_FILTER_KEYS
 from . import ast
 from .errors import LoweringError
-from .lowering import _is_source, _lower_pump, _signed
+from .lowering import _is_source, _lower_condition, _lower_pump, _signed
 
 
 def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
@@ -48,6 +51,7 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         other_than_source=filt.other_than_source,
         qualifier=qualifier,
         with_plus1_counter=filt.with_plus1_counter,
+        named=filt.named,
     )
 
 
@@ -60,6 +64,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "controller": lord.controller,
         "other_than_source": lord.other_than_source,
         "with_plus1_counter": lord.with_plus1_counter,
+        "named": lord.named,
     }
     if lord.qualifier is not None:
         field_name, value = QUALIFIER_FIELDS[lord.qualifier]
@@ -122,6 +127,55 @@ def _lower_lord_effects(
     return LordBuff(lord_filter, power, toughness, tuple(keywords))
 
 
+def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNode) -> dict:
+    """The payload form of an "as long as" clause on a lord buff, or a refusal.
+
+    Lowered by the one condition lowering (so "an opponent controls a nontoken
+    red permanent" is the same payload here as on an intervening-if) and then
+    held to what ``conditional_static_holds`` actually evaluates for a
+    continuous buff: a ``controls`` presence test, yours or one opponent's,
+    over a filter ``subject_matches`` can answer. Everything outside that
+    refuses — a threshold or a relative key the consumer cannot test would make
+    the buff apply on a different board than the card prints, silently.
+    """
+    payload = _lower_condition(condition)
+    if payload.get("kind") != "controls":
+        raise LoweringError(
+            "conditional_static_holds evaluates no such condition on a "
+            "continuous buff",
+            node=node,
+        )
+    who = payload.get("who")
+    if who not in ("you", "opponent", "target_opponent"):
+        raise LoweringError(
+            f"conditional_static_holds answers 'controls' for you or an "
+            f"opponent, not {who!r}",
+            node=node,
+        )
+    if "count" in payload or payload.get("shared_name"):
+        # The consumer asks presence (`any` over one battlefield), so a
+        # threshold or a same-name relation would be dropped, and a dropped
+        # bound is a condition weaker than printed.
+        raise LoweringError(
+            "conditional_static_holds tests presence, not a count",
+            node=node,
+        )
+    described = payload.get("filter") or {}
+    extra = set(described) - OBJECT_ONLY_FILTER_KEYS
+    if extra:
+        raise LoweringError(
+            "subject_matches cannot test a buff condition's "
+            + ", ".join(sorted(extra)),
+            node=node,
+        )
+    if who == "target_opponent":
+        # "**An** opponent controls…" parses as the player reference spells it;
+        # the stored payload says what the evaluator answers — any one living
+        # opponent — so the two front ends cannot drift apart on the word.
+        payload = {**payload, "who": "opponent"}
+    return payload
+
+
 def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstruction, ...]:
     """A continuous buff to a set of creatures, derived by ``engine/lord_buffs.py``.
 
@@ -139,21 +193,52 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
 
     What still refuses, and why the reason names code:
 
-    - **A condition** ("as long as you control a Forest") belongs to
-      ``engine/static_bonuses.py``, which derives the bonus from the text.
+    - **A condition on a self bonus** ("This creature gets +1/+2 as long as
+      you control a Forest") belongs to ``engine/static_bonuses.py``, which
+      derives the bonus from the text. A condition on the *anthem* shape lowers
+      here — see the conditional branch below — and refuses whenever
+      ``conditional_static_holds`` could not evaluate it.
     - **A restriction the table does not carry.** The filter is rebuilt from
       what ``LordBuffFilter`` holds and compared for **equality** against the
       one the parser produced, so anything lost in that round trip refuses. A
       field added to ``ObjectFilter`` later is refused by default rather than
       ignored by a check that predates it.
     """
-    if node.condition is not None:
-        raise LoweringError(
-            "a conditional static bonus is derived by engine/static_bonuses.py",
-            node=node,
-        )
     effect = node.effect
     effects = effect.effects if isinstance(effect, ast.Conjunction) else (effect,)
+    if node.condition is not None:
+        # A condition on the *anthem* shape — "Creatures named Ivory Guardians
+        # get +1/+1 as long as an opponent controls a nontoken red permanent"
+        # (Ivory Guardians) — is a lord buff that holds exactly while the
+        # condition does: the recompute asks ``conditional_static_holds`` before
+        # applying it, the same evaluator every ``conditional_static`` payload
+        # gets, so the words cannot mean one thing on a self bonus and another
+        # on an anthem. A condition that evaluator does not answer refuses in
+        # :func:`_lower_anthem_condition` — attached unread it would be a buff
+        # that never (or always) applies, which is the dropped-rider bug wearing
+        # a condition.
+        #
+        # A conditional bonus on any *other* subject — "This creature gets +0/+3
+        # as long as it's untapped" — still belongs to engine/static_bonuses.py,
+        # whose derivation the compiler consults after this refusal.
+        subject = getattr(effects[0], "subject", None) if effects else None
+        if not (
+            isinstance(subject, ast.TargetSpec)
+            and subject.quantifier in ("all", "each")
+        ):
+            raise LoweringError(
+                "a conditional static bonus is derived by engine/static_bonuses.py",
+                node=node,
+            )
+        buff = _lower_lord_effects(node, effects)
+        condition = _lower_anthem_condition(node.condition, node)
+        return (
+            OracleInstruction(
+                LORD_BUFF_KIND,
+                "",
+                lord_buff_payload(dataclasses.replace(buff, condition=condition)),
+            ),
+        )
     # A static ability on the *source itself* whose size is computed (Carrion
     # Grub's "gets +X/+0, where X is the greatest power among creature cards in
     # your graveyard"). Not a lord buff — it buffs nobody else — and not a

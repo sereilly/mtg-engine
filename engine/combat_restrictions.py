@@ -56,6 +56,7 @@ class CombatRestriction:
 #   cant_attack_without_land_type   phases/declare_attackers_step.can_attack
 #   cant_attack_without_controlled_count  phases/declare_attackers_step.can_attack
 #   cant_attack                     phases/declare_attackers_step.can_attack
+#   controlled_creatures_cant_attack  phases/declare_attackers_step.can_attack
 #   cant_block                      phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
 #   cant_be_blocked_by              phases/declare_blockers_step
@@ -85,6 +86,24 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "cant_attack_without_controlled_count",
     ),
     (re.compile(r"^this creature can't attack$"), "cant_attack"),
+    (
+        # "Except for creatures named Akron Legionnaire and artifact creatures,
+        # creatures you control can't attack." A restriction printed on one
+        # permanent that reaches every creature its controller has, so it is
+        # enforced by a board scan in `can_attack` rather than read off the
+        # attacker's own program. The exception list is payload — a union of
+        # noun-phrase filters, exactly the shape the "except by" blocker
+        # whitelist carries — because a card printed with any other exceptions
+        # is the same restriction. Parsed by `_blocker_union`, and a phrase it
+        # cannot read refuses the line: an unreadable *exception* would make
+        # the restriction reach creatures the card exempts, which for a
+        # restriction is the direction that silently forbids a legal attack.
+        re.compile(
+            r"^except for (?P<attack_exceptions>.+), "
+            r"creatures you control can't attack$"
+        ),
+        "controlled_creatures_cant_attack",
+    ),
     # "This **token** can't block" (the Pirate Pursued Whale makes). A token is
     # a creature and "this token" is the same self-reference "this creature" is
     # — the word differs only because the card printing it is a token. Both
@@ -194,11 +213,20 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
-def combat_restriction_for(normalized_line: str) -> CombatRestriction | None:
+def combat_restriction_for(
+    normalized_line: str, card_name: str | None = None
+) -> CombatRestriction | None:
     """The combat restriction *normalized_line* imposes, or None.
 
     Takes an already-normalized line (``oracle.normalize_creature_line``), which
-    is what the compiler holds at the point it needs this.
+    is what the compiler holds at the point it needs this — usually with the
+    card's self-references collapsed to "this creature"
+    (``oracle._restriction_line``). *card_name* is what that collapse erased:
+    "creatures named **this creature**" (Akron Legionnaire's exception names
+    the card itself) is resolved back to the printed name here, because the
+    filter matches by *name*, never by identity — a second Akron Legionnaire
+    and a token wearing the name are both excepted. A caller with no name to
+    give gets a refusal for that phrase, never a filter that matches nothing.
     """
     for pattern, kind in _PATTERNS:
         match = pattern.match(normalized_line)
@@ -253,6 +281,17 @@ def combat_restriction_for(normalized_line: str) -> CombatRestriction | None:
             if filters is None:
                 return None
             payload["allowed_blockers"] = filters
+        # "Except for <union>, creatures you control can't attack." The union
+        # is parsed here for the reason "except by" is: the regex ends in `.+`,
+        # and admitting the match while a member went unread would be an
+        # exception nothing honours — a creature the card exempts refused its
+        # attack, silently.
+        exceptions = payload.pop("attack_exceptions", None)
+        if exceptions is not None:
+            filters = _blocker_union(exceptions, card_name)
+            if filters is None:
+                return None
+            payload["exceptions"] = filters
         return CombatRestriction(kind, payload)
     return None
 
@@ -262,27 +301,50 @@ def combat_restriction_for(normalized_line: str) -> CombatRestriction | None:
 #: "creatures with flying" and "artifact creatures" are two words doing two
 #: different jobs and splitting them would need the noun parser this file
 #: deliberately does not have.
-def _blocker_union(phrase: str) -> list[dict] | None:
-    """The filters a "can't be blocked except by <phrase>" line allows, or None.
+def _blocker_union(phrase: str, card_name: str | None = None) -> list[dict] | None:
+    """The filters a noun-phrase union names, or None.
+
+    Two rows carry one: the blocker whitelist ("can't be blocked except by
+    Walls and/or creatures with flying") and the attack-exception list
+    ("Except for creatures named Akron Legionnaire and artifact creatures,
+    …"). One parser, because the members are the same printed vocabulary and
+    a phrase readable in one union and not the other would be a fork nobody
+    could find.
 
     None means "this file does not read that phrase", which keeps the card
     unsupported with the clause named. Returning a partial union instead would
-    be an evasion ability that lets through more than the card allows.
+    be an evasion ability that lets through more than the card allows — or an
+    exception list that exempts fewer creatures than the card prints.
     """
     filters: list[dict] = []
     for part in re.split(r"\s*(?:and/or|and|or)\s+", phrase.strip()):
         part = part.strip()
         if not part:
             continue
-        described = _blocker_noun(part)
+        described = _blocker_noun(part, card_name)
         if described is None:
             return None
         filters.append(described)
     return filters or None
 
 
-def _blocker_noun(part: str) -> dict | None:
+def _blocker_noun(part: str, card_name: str | None = None) -> dict | None:
     """One member of the union, as a subject-filter payload."""
+    named = re.fullmatch(r"creatures named (.+)", part)
+    if named is not None:
+        # "creatures named Kobolds of Kher Keep" — the name is data, matched
+        # through `name_key` by the subject matcher, so there is nothing to
+        # validate it against: a token's name (Wolves of the Hunt) is a name no
+        # card file lists. "this creature" is what `_restriction_line` collapsed
+        # the card's own name to; only the caller knows what it was, and a
+        # caller that cannot say refuses the phrase rather than carrying a
+        # filter that matches nothing.
+        name = named.group(1).strip()
+        if name == "this creature":
+            if not card_name:
+                return None
+            name = card_name
+        return {"type_filter": "creature", "named": name}
     keyword = re.fullmatch(r"creatures with ([a-z ]+)", part)
     if keyword is not None:
         # The word has to be a keyword the engine implements, checked here for

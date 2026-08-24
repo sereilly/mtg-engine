@@ -36,13 +36,22 @@ import pytest
 
 import engine.oracle as oracle
 from engine.card_hooks import CARD_LINE_INSTRUCTIONS
-from engine.card_loader import load_catalog
+from engine.card_loader import load_cards, manifest_set_paths
 from engine.grammar import compile_line
 
 
 @pytest.fixture(scope="module")
 def catalog_by_name():
-    return {card.name: card for card in load_catalog()}
+    # Both manifest roles: a hook lands during a measured set's backlog rounds
+    # (Rohgahh of Kher Keep's upkeep line arrived while Legends was measured),
+    # and against the shipped pool alone this guard would report the card
+    # unknown instead of verifying its key and its instruction. Implementation
+    # instruments read the wide pool; ``load_catalog`` — what a player can
+    # deck — deliberately stays narrower.
+    return {
+        card.name: card
+        for card in load_cards(manifest_set_paths(include_measured=True))
+    }
 
 
 def _entries():

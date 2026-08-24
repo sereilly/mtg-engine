@@ -336,3 +336,193 @@ def test_a_whitelist_is_not_a_blacklist(set_pool):
 
     assert not _may_block(riders, ordinary)
     assert _may_block(kithkin, Permanent(card=_vanilla("Ordinary", 1, 1)))
+
+
+# ---------------------------------------------------------------------------
+# The "named <card name>" filter (round 11) — Rohgahh, Ivory Guardians, Akron
+# ---------------------------------------------------------------------------
+
+
+def _red_bear(name: str, *, token: bool = False) -> Permanent:
+    card = CardDefinition(
+        name=name, mana_cost="{R}{R}", cmc=2.0, type_line="Creature - Bear",
+        oracle_text="", colors=("R",), color_identity=("R",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": "2", "toughness": "2"},
+    )
+    return Permanent(card=card, metadata={"is_token": True} if token else {})
+
+
+def _artifact_soldier(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="{3}", cmc=3.0,
+        type_line="Artifact Creature - Soldier",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Artifact Creature - Soldier",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _statics_game(*battlefields) -> tuple[Game, list[PlayerState]]:
+    players = [
+        PlayerState(name=f"P{i + 1}", battlefield=list(perms))
+        for i, perms in enumerate(battlefields)
+    ]
+    game = Game(players=players)
+    game._recompute_continuous_effects()
+    return game, players
+
+
+def test_rohgahh_buffs_only_kobolds_of_kher_keep_you_control(set_pool):
+    """"Creatures you control named Kobolds of Kher Keep get +2/+2." The name
+    is a filter key, so the 0/1 Kobolds reads 2/3 while an opponent's copy and
+    the lord's own differently-named self are untouched."""
+    pool = set_pool("LEG")
+    rohgahh = Permanent(card=pool["Rohgahh of Kher Keep"])
+    mine = Permanent(card=pool["Kobolds of Kher Keep"])
+    bystander = Permanent(card=_vanilla("Bystander", 2, 2))
+    theirs = Permanent(card=pool["Kobolds of Kher Keep"])
+    _statics_game([rohgahh, mine, bystander], [theirs])
+
+    assert (mine.effective_power, mine.effective_toughness) == (2, 3)
+    assert (bystander.effective_power, bystander.effective_toughness) == (2, 2)
+    # "you control" scopes the anthem to the lord's controller.
+    assert (theirs.effective_power, theirs.effective_toughness) == (0, 1)
+    # Rohgahh is a Kobold, but "named" asks the name, not the tribe.
+    assert (rohgahh.effective_power, rohgahh.effective_toughness) == (5, 5)
+
+
+def test_the_name_filter_matches_by_name_never_by_identity(set_pool):
+    """A token wearing the name — a different CardDefinition object entirely —
+    is buffed exactly as the real card is (CR 201.2a: same name means names in
+    common, nothing else)."""
+    pool = set_pool("LEG")
+    rohgahh = Permanent(card=pool["Rohgahh of Kher Keep"])
+    twin = CardDefinition(
+        name="Kobolds of Kher Keep", mana_cost="", cmc=0.0,
+        type_line="Creature - Kobold", oracle_text="", colors=("R",),
+        color_identity=("R",), keywords=(), produced_mana=(),
+        raw={"name": "Kobolds of Kher Keep",
+             "type_line": "Creature - Kobold", "power": "0", "toughness": "1"},
+    )
+    token = Permanent(card=twin, metadata={"is_token": True})
+    _statics_game([rohgahh, token])
+
+    assert (token.effective_power, token.effective_toughness) == (2, 3)
+
+
+def test_ivory_guardians_buff_holds_only_while_an_opponent_has_a_nontoken_red_permanent(set_pool):
+    """"Creatures named Ivory Guardians get +1/+1 as long as an opponent
+    controls a nontoken red permanent." No "other": each copy's anthem buffs
+    itself *and* its twin, and the two anthems stack — so a pair reads 5/5
+    while the condition holds, exactly as two Crusades would. The condition is
+    re-derived on recompute, so both bonuses leave with the red permanent."""
+    pool = set_pool("LEG")
+    first = Permanent(card=pool["Ivory Guardians"])
+    second = Permanent(card=pool["Ivory Guardians"])
+    red = _red_bear("Crimson Bear")
+    game, players = _statics_game([first, second], [red])
+
+    assert (first.effective_power, first.effective_toughness) == (5, 5)
+    assert (second.effective_power, second.effective_toughness) == (5, 5)
+
+    players[1].battlefield.remove(red)
+    game._recompute_continuous_effects()
+    assert (first.effective_power, first.effective_toughness) == (3, 3)
+    assert (second.effective_power, second.effective_toughness) == (3, 3)
+
+    # A lone Guardian still buffs itself: no "other" in the sentence.
+    alone = Permanent(card=pool["Ivory Guardians"])
+    _statics_game([alone], [_red_bear("Lone Bear")])
+    assert (alone.effective_power, alone.effective_toughness) == (4, 4)
+
+
+def test_ivory_guardians_condition_refuses_a_token_and_your_own_red_permanent(set_pool):
+    """The two words that narrow the condition, one at a time: a red *token*
+    does not satisfy "nontoken", and your own red permanent does not satisfy
+    "an opponent controls"."""
+    pool = set_pool("LEG")
+    guardians = Permanent(card=pool["Ivory Guardians"])
+    _statics_game([guardians], [_red_bear("Ember Token", token=True)])
+    assert (guardians.effective_power, guardians.effective_toughness) == (3, 3)
+
+    guardians = Permanent(card=pool["Ivory Guardians"])
+    _statics_game([guardians, _red_bear("Own Bear")], [])
+    assert (guardians.effective_power, guardians.effective_toughness) == (3, 3)
+
+
+def test_akron_legionnaire_grounds_all_but_akrons_and_artifact_creatures(set_pool):
+    """"Except for creatures named Akron Legionnaire and artifact creatures,
+    creatures you control can't attack." The exception union is tested member
+    by member: the Legionnaire itself, a second bearer of the name, and an
+    artifact creature may attack; an ordinary creature may not."""
+    pool = set_pool("LEG")
+    akron = Permanent(card=pool["Akron Legionnaire"])
+    second_akron = Permanent(card=pool["Akron Legionnaire"])
+    golem = Permanent(card=_artifact_soldier("Clay Soldier"))
+    bear = Permanent(card=_vanilla("Ground Bear", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[akron, second_akron, golem, bear])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    assert game.can_attack(akron, 1)
+    assert game.can_attack(second_akron, 1)
+    assert game.can_attack(golem, 1)
+    assert not game.can_attack(bear, 1)
+
+
+def test_akron_legionnaire_restricts_its_controller_only(set_pool):
+    """"Creatures **you control**": the restriction reaches the Legionnaire's
+    controller's creatures and nobody else's."""
+    pool = set_pool("LEG")
+    bear = Permanent(card=_vanilla("Free Bear", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[bear])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=pool["Akron Legionnaire"])])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    assert game.can_attack(bear, 1)
+
+
+def test_rohgahh_upkeep_unpaid_taps_the_pile_and_an_opponent_takes_it(set_pool):
+    """The decline consequence, whole: tap Rohgahh and every creature named
+    Kobolds of Kher Keep — the opponent's included — then the opponent gains
+    control of all of them. The change has no duration and no revert."""
+    pool = set_pool("LEG")
+    rohgahh = Permanent(card=pool["Rohgahh of Kher Keep"])
+    mine = Permanent(card=pool["Kobolds of Kher Keep"])
+    theirs = Permanent(card=pool["Kobolds of Kher Keep"])
+    bystander = Permanent(card=_vanilla("Bystander", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[rohgahh, mine, bystander])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert rohgahh.tapped and mine.tapped and theirs.tapped
+    assert not bystander.tapped
+    for perm in (rohgahh, mine, theirs):
+        assert game.controller_index_of(perm) == 1
+    assert game.controller_index_of(bystander) == 0
+
+
+def test_rohgahh_upkeep_paid_keeps_the_kobolds_home(set_pool):
+    pool = set_pool("LEG")
+    rohgahh = Permanent(card=pool["Rohgahh of Kher Keep"])
+    mine = Permanent(card=pool["Kobolds of Kher Keep"])
+    p1 = PlayerState(
+        name="P1", battlefield=[rohgahh, mine],
+        mana_pool={"W": 0, "U": 0, "B": 0, "R": 3, "G": 0, "C": 0},
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert not rohgahh.tapped and not mine.tapped
+    assert game.controller_index_of(rohgahh) == 0
+    assert game.controller_index_of(mine) == 0
+    assert p1.mana_pool["R"] == 0

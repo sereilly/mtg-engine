@@ -43,6 +43,7 @@ from ..lord_buffs import (
     lord_buff_from_payload,
 )
 from ..handlers._common import evaluate_count, resolve_amount
+from ..search_filters import name_key
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..pt import clear_base_pt, set_base_pt
@@ -998,6 +999,18 @@ class PermanentStateMixin:
             target_perm.metadata.get("plus_counters", 0)
         ) <= 0:
             return False
+        # "Creatures named Kobolds of Kher Keep" (Rohgahh of Kher Keep). By
+        # *name*, never identity — a second copy and a token wearing the name
+        # both match, and the buffing lord matches itself when it shares it
+        # (Ivory Guardians prints no "other"). ``effective_card``, so a copy
+        # answers with the name it copied (CR 707.2); ``name_key`` on both
+        # sides, so the parser's lowercase rendering equals Oracle's spelling
+        # — the same comparison ``permanent_matches_filter`` makes for the
+        # payload key this field mirrors.
+        if filt.named and name_key(
+            target_perm.effective_card.name
+        ) != name_key(str(filt.named)):
+            return False
         return True
 
     def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:
@@ -1051,12 +1064,21 @@ class PermanentStateMixin:
         # into metadata would be one nothing clears — and reading it off the
         # lord means it ends when the lord leaves with nothing having to remove
         # it.
-        for _seat, lord in self.permanents_with_controller():
+        for lord_seat, lord in self.permanents_with_controller():
             for instr in compile_card_oracle(lord.effective_card).instructions:
                 if instr.kind != LORD_BUFF_KIND:
                     continue
                 buff = lord_buff_from_payload(instr.payload)
                 if not buff.protection_from:
+                    continue
+                # A conditional lord grants nothing while its condition fails.
+                # Asked here as well as at the P/T recompute, because this
+                # reader derives from the compiled program directly — a buff
+                # read past its own condition would grant protection on a board
+                # the card says it does not.
+                if buff.condition and not self._lord_buff_condition(
+                    lord_seat, lord, buff.condition
+                ):
                     continue
                 if not self._lord_buff_matches(permanent, lord, buff):
                     continue
@@ -1262,7 +1284,7 @@ class PermanentStateMixin:
                     continue
                 buff = lord_buff_from_payload(instr.payload)
                 if buff.condition and not self._lord_buff_condition(
-                    source_perm, buff.condition
+                    ctrl_seat, source_perm, buff.condition
                 ):
                     continue
                 if buff.filter.controller == "you":
@@ -1319,5 +1341,15 @@ class PermanentStateMixin:
         "chosen_color_permanent": "_chosen_color_permanent_condition",
     }
 
-    def _lord_buff_condition(self, source_perm: Permanent, condition: str) -> bool:
+    def _lord_buff_condition(
+        self, seat: int, source_perm: Permanent, condition: str | dict
+    ) -> bool:
+        # A dict is a lowered condition payload from the grammar's statics
+        # production ("as long as an opponent controls a nontoken red
+        # permanent", Ivory Guardians), answered by the same evaluator every
+        # ``conditional_static`` payload gets — the lowering refused anything
+        # that evaluator does not test. A string is a key into the legacy
+        # table above (Jihad, whose stored choices no payload can express).
+        if isinstance(condition, dict):
+            return conditional_static_holds(self, seat, source_perm, condition)
         return getattr(self, self._LORD_BUFF_CONDITIONS[condition])(source_perm)

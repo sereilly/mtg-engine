@@ -8,16 +8,23 @@ source order. These pin the properties the registry replaced that with.
 
 import pytest
 
-from engine.card_loader import load_catalog
+from engine.card_loader import load_cards, manifest_set_paths
 from engine.oracle import compile_card_oracle
 from engine.phases.upkeep_effects import UPKEEP_EFFECTS, upkeep_effect
 
 
 def _pool_trigger_pairs() -> dict[tuple[str, str], list[str]]:
     """Every (trigger condition, instruction kind) pair the compiler produces
-    for the whole manifest pool, with the cards that produce it."""
+    for the whole manifest pool, with the cards that produce it.
+
+    Both manifest roles, because this instrument is about *implementation*: a
+    measured set's backlog rounds land handlers card by card (Rohgahh of Kher
+    Keep's pay-or-cede pair arrived while Legends was measured), and a guard
+    reading the shipped pool alone would call each of those dead on arrival.
+    ``load_catalog`` — what a player can deck — deliberately stays narrower.
+    """
     pairs: dict[tuple[str, str], list[str]] = {}
-    for card in load_catalog():
+    for card in load_cards(manifest_set_paths(include_measured=True)):
         for trig in compile_card_oracle(card).triggered_abilities:
             if trig.instruction is None:
                 continue

@@ -222,11 +222,14 @@ def test_the_acknowledgement_list_has_no_dead_entries():
         # reported supported and did nothing. All four of these are the shape
         # engine/lord_buffs.py refuses: an unmodelled effect, an unimplemented
         # keyword, an activated ability at a cost nothing charges, and an
-        # unmodelled "as long as".
+        # "as long as" whose condition parses but carries a threshold the
+        # evaluator does not test (`conditional_static_holds` asks presence,
+        # not a count — the plain "as long as you control a Mountain" is a
+        # supported conditional anthem now, so it can no longer stand here).
         "Other Goblins glimmer uncontrollably.",
         "Other Goblins get +1/+1 and have shadow.",
         'Other Zombies have "{5}: Regenerate this permanent."',
-        "Other Goblins get +1/+1 as long as you control a Mountain.",
+        "Other Goblins get +1/+1 as long as you control two or more Mountains.",
     ],
 )
 def test_an_unimplemented_rider_is_reported_unsupported(text):

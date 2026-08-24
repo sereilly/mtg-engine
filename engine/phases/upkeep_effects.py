@@ -467,6 +467,74 @@ class UpkeepEffectsMixin:
             self.become_tapped(permanent)
             self._force_sacrifice_first_land(controller, permanent)
 
+    @upkeep_effect("upkeep_self", "upkeep_pay_or_cede_named_creatures")
+    def _on__upkeep_self__upkeep_pay_or_cede_named_creatures(self, ctx: UpkeepContext) -> None:
+        """Rohgahh of Kher Keep: "you may pay {R}{R}{R}. If you don't, tap
+        Rohgahh and all creatures named Kobolds of Kher Keep, then an opponent
+        gains control of them."
+
+        "Them" is Rohgahh *and* the Kobolds — the master defects with his
+        creatures. The named set is every creature wearing the name, any
+        controller's, matched by ``subject_matches`` so "named" means here
+        exactly what it means on the lord line one sentence down. The control
+        change is a CR 613 layer-2 contribution keyed on the Rohgahh permanent
+        with no revert condition: the card prints no duration, so nothing ends
+        it — not even Rohgahh leaving the battlefield.
+
+        "An opponent" is the ability controller's choice on resolution; with
+        one living opponent there is nothing to choose, and in a larger game
+        this takes the first living opponent in seat order after the
+        controller (the same simplification Demonic Hordes' opponent-chosen
+        sacrifice takes, and honest to name: a multiplayer seat *choice* wants
+        the pending-choice queue).
+        """
+        from ..subject_filters import subject_matches
+
+        controller = ctx.controller
+        human_choices = ctx.human_choices
+        permanent = ctx.permanent
+        trig = ctx.trig
+        mana = trig.instruction.payload.get("mana", {})
+        if human_choices is not None and permanent.card.name in human_choices:
+            paid = human_choices[permanent.card.name]
+        else:
+            paid = all(
+                controller.mana_pool.get(sym, 0) >= count
+                for sym, count in mana.items()
+                if sym != "generic"
+            )
+        if paid:
+            for sym, count in mana.items():
+                if sym != "generic":
+                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+            self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
+            return
+        named = str(trig.instruction.payload.get("named") or "")
+        described = {"type_filter": "creature", "named": named}
+        ceded = [permanent] + [
+            perm
+            for _seat, perm in self.permanents_with_controller()
+            if perm is not permanent and subject_matches(self, perm, described)
+        ]
+        seat = ctx.player_index
+        living = [
+            index
+            for offset in range(1, len(self.players))
+            for index in [(seat + offset) % len(self.players)]
+            if not self.players[index].lost
+        ]
+        for perm in ceded:
+            self.become_tapped(perm)
+        if not living:
+            return
+        new_seat = living[0]
+        for perm in ceded:
+            self.take_control(perm, new_seat, source=permanent)
+        self.log.append(
+            f"{self.players[new_seat].name} gains control of "
+            f"{', '.join(perm.card.name for perm in ceded)}"
+        )
+
     @upkeep_effect("upkeep_self", "upkeep_sacrifice_land_conditional_damage")
     def _on__upkeep_self__upkeep_sacrifice_land_conditional_damage(self, ctx: UpkeepContext) -> None:
         controller = ctx.controller
