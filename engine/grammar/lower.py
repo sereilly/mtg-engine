@@ -101,6 +101,7 @@ from .lowering import (
     _lower_prevent_damage,
     _lower_become_creature,
     _lower_pump,
+    _lower_player_gets_counters,
     _lower_put_counter,
     _lower_phase_out,
     _lower_put_on_library_bottom,
@@ -188,6 +189,8 @@ def lower_statement(
         return _lower_lose_keyword(statement)
     if isinstance(statement, ast.PutCounter):
         return _lower_put_counter(statement)
+    if isinstance(statement, ast.PlayerGetsCounters):
+        return _lower_player_gets_counters(statement, event)
     if isinstance(statement, ast.DoublePower):
         return _lower_double_power(statement)
     if isinstance(statement, ast.RemoveCounter):

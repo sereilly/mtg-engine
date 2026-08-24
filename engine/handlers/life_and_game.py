@@ -26,6 +26,28 @@ def player_loses_game(game: Game, instruction: OracleInstruction, context: Oracl
     return True, "resolved"
 
 
+@effect_handler("player_gets_poison_counters")
+def player_gets_poison_counters(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…that player gets a poison counter." (Pit Scorpion, Serpent Generator's
+    tokens.) The player is the one the damage trigger recorded
+    (``defending_player_index``, frozen by ``damage_events._announce``), and the
+    counter lands on ``PlayerState.poison_counters`` — the field the CR 704.5c /
+    122.1f state-based sweep in ``mixins/game_ending.py`` already reads, so ten
+    or more loses the game with no code here."""
+    amount = max(0, int(instruction.payload.get("amount", 1)))
+    idx = (context.trigger_context or {}).get("defending_player_index")
+    if amount <= 0 or idx is None or not (0 <= idx < len(game.players)):
+        return True, "resolved"
+    player = game.players[idx]
+    player.poison_counters += amount
+    noun = "poison counter" if amount == 1 else "poison counters"
+    game.log.append(
+        f"{context.card.name}: {player.name} gets {amount} {noun} "
+        f"({player.poison_counters} total)"
+    )
+    return True, "resolved"
+
+
 # Rule 104.2b: effect that states caster wins the game
 @effect_handler("opponents_lose_half_life")
 def opponents_lose_half_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:

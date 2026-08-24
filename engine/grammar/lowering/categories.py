@@ -89,6 +89,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # legacy rules for as long as those rules exist.
     "add_corpse_counters_for_each_creature_died": "counters",
     "add_plus1_counters_for_each_creature_died": "counters",
+    # A counter on a *player* (CR 122.1f poison) — the store is a seat field
+    # rather than permanent metadata, but what the sentence does is place a
+    # counter, which is what the category is about.
+    "player_gets_poison_counters": "counters",
     "remove_counter_from_self": "counters",
     "remove_any_number_of_counters_from_self": "counters",
     "exile_any_number_of_own_tokens": "zones",

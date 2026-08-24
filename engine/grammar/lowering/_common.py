@@ -347,6 +347,17 @@ def _amount_payload(amount: ast.Amount) -> int | str:
     raise LoweringError(f"unsupported quantity {type(amount).__name__}", node=amount)
 
 
+# Trigger events that hand a *damaged player* to the effect after them: "that
+# player" names the player the trigger recorded taking the damage
+# (``defending_player_index`` in the trigger's context), and nothing in the
+# instruction's own payload. Under any other trigger the same words would name
+# a player nobody recorded. Here rather than beside one reader because two
+# effect families ask it — a discard (Hypnotic Specter) and a player counter
+# (Pit Scorpion) — and a fragment two families need belongs in the shared
+# module.
+_DAMAGED_PLAYER_EVENTS: frozenset[str] = frozenset({"damage_dealt"})
+
+
 # Trigger events after which "that player" names the controller of the object
 # the event was about, frozen into the trigger's context by the fire site.
 #

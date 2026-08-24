@@ -499,7 +499,23 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
         #
         # Tried last, after the emblem shape above: both carry quoted text, and
         # the difference is which production claims the words around it.
-        token_line = _parse_quoted_token_line(TokenStream(lexed.tokens[start:], line))
+        #
+        # The quoted token may also be the effect of an *activated* ability
+        # ("{4}, {T}: Create a … token. It has "…"", Serpent Generator). The
+        # quote guard routes the whole line here before the ordinary colon
+        # split below can see it, so the cost prefix is read the same way —
+        # but only a colon left of the first quote is an activation colon; one
+        # inside the quotes belongs to the granted ability's own text.
+        body = lexed.tokens[start:]
+        first_quote = next(i for i, token in enumerate(body) if token.kind == QUOTE)
+        colon = _split_on_colon(body[:first_quote])
+        if colon is not None:
+            costs = _parse_costs(TokenStream(body[:colon], line))
+            effect = _parse_quoted_token_line(TokenStream(body[colon + 1:], line))
+            if effect is not None and not isinstance(effect, ast.TriggeredAbilityNode):
+                return ast.ActivatedAbilityNode(costs, effect)
+            raise GrammarError("granted ability in quotes", line=line)
+        token_line = _parse_quoted_token_line(TokenStream(body, line))
         if token_line is not None:
             # Already a whole ability line when a trigger prefix was read;
             # otherwise a bare effect that still needs wrapping.

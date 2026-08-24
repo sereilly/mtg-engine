@@ -20,6 +20,7 @@ from ._core import (
     Amount,
     Duration,
     Fixed,
+    PlayerRef,
     Recipient,
 )
 
@@ -112,6 +113,25 @@ class DoublePower:
 class RemoveCounter:
     subject: Recipient
     counter: str = "+1/+1"
+    count: Amount = field(default_factory=lambda: Fixed(1))
+
+
+@dataclass(frozen=True)
+class PlayerGetsCounters:
+    """``<player> gets [a|N] <kind> counter(s).`` (CR 122.1 counters on a
+    *player* — Pit Scorpion's poison.)
+
+    Its own node rather than a :class:`PutCounter` whose subject is a player,
+    because the two sentences answer to different machinery end to end: a
+    permanent's counters live on the object and die with it (CR 122.2), a
+    player's ride the seat for the whole game, and the only rules meaning any
+    player counter in this pool has is CR 122.1f's ten-poison loss. The kind is
+    carried as printed — which kinds have a store is the lowering's question,
+    so "gets an energy counter" fails by name there rather than failing to
+    parse.
+    """
+    player: PlayerRef
+    counter: str
     count: Amount = field(default_factory=lambda: Fixed(1))
 
 

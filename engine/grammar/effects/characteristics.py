@@ -25,6 +25,19 @@ from ..phrases import (is_pt_counter, _parse_duration, _parse_for_each,
 def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     """``<subject> gets +N/+N [duration][, where X is the number of …]``."""
     stream.expect_word("gets", "get")
+    # "That player gets a poison counter." (Pit Scorpion.) A counter on a
+    # *player* (CR 122.1) shares its verb with the P/T pump, and the subject
+    # settles which sentence this is: a player has no power or toughness for a
+    # P/T reading to change. The kind is read as printed and judged at
+    # lowering, so "gets an energy counter" fails naming the missing store
+    # rather than failing to parse.
+    if isinstance(subject, ast.PlayerRef):
+        count = parse_amount(stream)
+        token = _expect_counter_kind(stream, " for a player to get")
+        if token.kind == PT:
+            raise stream.error("a player cannot get a power/toughness counter")
+        stream.expect_word("counter", "counters")
+        return ast.PlayerGetsCounters(subject, token.text, count)
     power, power_negative, toughness, toughness_negative = expect_pt(stream)
     duration = _parse_duration(stream)
 

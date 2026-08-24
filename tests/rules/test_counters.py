@@ -213,3 +213,75 @@ def test_122_6_counters_given_as_it_enters_count_as_put_on():
     on_battlefield = p1.battlefield[0]
     assert on_battlefield.metadata["plus_counters"] == 2
     assert (on_battlefield.effective_power, on_battlefield.effective_toughness) == (3, 3)
+
+
+# ---------------------------------------------------------------------------
+# 122.1f — poison counters on a *player*
+# ---------------------------------------------------------------------------
+
+
+def _poison_stinger(name: str = "Stinger", count_word: str = "a poison counter") -> CardDefinition:
+    """An invented creature printing the poison template — the behaviour is the
+    template's, not any one card's (Pit Scorpion, Marsh Viper, Serpent
+    Generator's tokens all print it)."""
+    text = f"Whenever this creature deals damage to a player, that player gets {count_word}."
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature — Scorpion",
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Scorpion",
+             "power": "1", "toughness": "1"},
+    )
+
+
+@pytest.mark.cr("122.1", "122.1f")
+def test_122_1f_a_poison_counter_is_placed_on_the_player_not_an_object():
+    """CR 122.1: a counter is a marker placed on an object **or player**. The
+    poison store is the seat's (``PlayerState.poison_counters``); nothing lands
+    on the creature that dealt the damage."""
+    stinger = Permanent(card=_poison_stinger())
+    game, p1, p2 = _duel(stinger)
+    game.start_turn(0)
+
+    game._deal_damage_to_player(p2, 1, source=stinger)
+    game._settle()
+
+    assert p2.poison_counters == 1
+    assert p1.poison_counters == 0
+    assert counters_on(stinger, "poison") == 0
+
+
+@pytest.mark.cr("122.1f")
+def test_122_1f_the_printed_count_is_read_not_assumed():
+    """"…gets **two** poison counters." (Marsh Viper's wording.) The number is
+    payload of the same template, so one event awards two."""
+    viper = Permanent(card=_poison_stinger("Viper", "two poison counters"))
+    game, _, p2 = _duel(viper)
+    game.start_turn(0)
+
+    game._deal_damage_to_player(p2, 1, source=viper)
+    game._settle()
+
+    assert p2.poison_counters == 2
+
+
+@pytest.mark.cr("122.1f", "704.5c")
+def test_122_1f_ten_poison_counters_lose_the_game_through_the_pipeline():
+    """The whole road: damage dealt → trigger → counter → the CR 704.5c
+    state-based action. Nine leave the player poisoned but alive; the tenth
+    loses the game with no card naming the loss."""
+    stinger = Permanent(card=_poison_stinger())
+    game, _, p2 = _duel(stinger)
+    game.start_turn(0)
+
+    for _ in range(9):
+        game._deal_damage_to_player(p2, 1, source=stinger)
+        game._settle()
+    assert p2.poison_counters == 9
+    assert not p2.lost
+
+    game._deal_damage_to_player(p2, 1, source=stinger)
+    game._settle()
+
+    assert p2.poison_counters == 10
+    assert p2.lost

@@ -336,3 +336,60 @@ def test_a_whitelist_is_not_a_blacklist(set_pool):
 
     assert not _may_block(riders, ordinary)
     assert _may_block(kithkin, Permanent(card=_vanilla("Ordinary", 1, 1)))
+
+
+# ---------------------------------------------------------------------------
+# Poison (round 11) — CR 122.1f, the counter on a *player*
+# ---------------------------------------------------------------------------
+
+
+def test_pit_scorpion_poisons_the_player_it_damages(set_pool):
+    """"Whenever this creature deals damage to a player, that player gets a
+    poison counter." The counter lands on the damaged player — read out of the
+    trigger's own context, not on whoever controls the scorpion."""
+    scorpion = Permanent(card=set_pool("LEG")["Pit Scorpion"])
+    p1 = PlayerState(name="P1", battlefield=[scorpion])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    game._deal_damage_to_player(p2, 1, source=scorpion)
+    game._settle()
+
+    assert p2.poison_counters == 1
+    assert p1.poison_counters == 0
+    assert p2.life == 19, "the counter is in addition to the damage, not instead"
+
+
+def test_pit_scorpion_damage_to_a_creature_gives_no_poison(set_pool):
+    """The condition's narrowing: "…deals damage **to a player**". Damage the
+    scorpion deals to a blocker announces the same event with a permanent as
+    its recipient, and the trigger must not fire."""
+    scorpion = Permanent(card=set_pool("LEG")["Pit Scorpion"])
+    bear = Permanent(card=_vanilla("Bear", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[scorpion])
+    p2 = PlayerState(name="P2", battlefield=[bear])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    game._mark_damage_on_permanent(bear, 1, source=scorpion)
+    game._settle()
+
+    assert p1.poison_counters == 0
+    assert p2.poison_counters == 0
+
+
+def test_a_lookalike_scorpion_gives_no_poison_for_the_real_ones_damage(set_pool):
+    """"**This** creature deals damage" is identity, not name: a second copy on
+    the same battlefield must not piggyback on the first one's ping."""
+    scorpion = Permanent(card=set_pool("LEG")["Pit Scorpion"])
+    lookalike = Permanent(card=set_pool("LEG")["Pit Scorpion"])
+    p1 = PlayerState(name="P1", battlefield=[scorpion, lookalike])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+
+    game._deal_damage_to_player(p2, 1, source=scorpion)
+    game._settle()
+
+    assert p2.poison_counters == 1, "one damage event, one counter — not one per copy"

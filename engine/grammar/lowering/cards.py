@@ -10,6 +10,7 @@ from ...oracle_types import X_FROM_COUNT, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _DAMAGED_PLAYER_EVENTS,
     chargeable_card_filter,
     _amount_payload,
     halved_count_spec,
@@ -17,14 +18,6 @@ from ._common import (
     _is_you,
     count_spec,
 )
-
-
-# Trigger events that hand a damaged player to the effect after them. The
-# handler for "that player discards a card at random" reads which player took
-# the damage out of the trigger's captured context and nothing at all out of its
-# payload, so it is only a reading of the sentence while one of these fired —
-# under any other trigger the same words would name a player nobody recorded.
-_DAMAGED_PLAYER_EVENTS = frozenset({"damage_dealt"})
 
 
 def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleInstruction, ...]:

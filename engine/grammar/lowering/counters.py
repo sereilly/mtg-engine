@@ -14,6 +14,7 @@ from .. import ast
 from ..errors import LoweringError
 from ..phrases import is_pt_counter
 from ._common import (
+    _DAMAGED_PLAYER_EVENTS,
     _amount_payload,
     _describe_several_targets,
     _describe_targets,
@@ -247,6 +248,42 @@ _PER_DEATH_SUBJECT = ast.TargetSpec(
 # Both handlers count *every* creature that died, with no narrowing available
 # to them, so any filtered set has to refuse rather than over-count.
 _ANY_CREATURE_DIED = ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))
+
+
+def _lower_player_gets_counters(
+    node: ast.PlayerGetsCounters, event: str | None
+) -> tuple[OracleInstruction, ...]:
+    """``That player gets a poison counter.`` (Pit Scorpion, and the ability
+    Serpent Generator's tokens carry.)
+
+    Poison is the one player counter with a store behind it
+    (``PlayerState.poison_counters``, read by the CR 704.5c / 122.1f sweep in
+    ``mixins/game_ending.py``), so any other kind refuses by name rather than
+    compiling onto a field nobody sweeps. "That player" is a reading of the
+    trigger that fired — the damaged player's seat, frozen into the trigger's
+    context by ``damage_events._announce`` — so under any other event the words
+    name a player nobody recorded, and the sentence refuses the same way the
+    on-damage discard does.
+    """
+    if node.counter != "poison":
+        raise LoweringError(
+            f"no store tracks {node.counter!r} counters on a player", node=node
+        )
+    amount = _amount_payload(node.count)
+    if not isinstance(amount, int) or amount <= 0:
+        raise LoweringError("a player-counter count is a fixed number", node=node)
+    if node.player.kind != "that_player" or event not in _DAMAGED_PLAYER_EVENTS:
+        raise LoweringError(
+            "the poison handler reads the damaged player out of a damage "
+            "trigger's context; no other player reference has one",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "player_gets_poison_counters", "",
+            {"amount": amount, "player": "damaged_player"},
+        ),
+    )
 
 
 def _lower_remove_counter(node: ast.RemoveCounter) -> tuple[OracleInstruction, ...]:

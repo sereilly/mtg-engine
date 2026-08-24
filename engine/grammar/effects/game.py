@@ -299,8 +299,15 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     # reads one item at a time instead of calling either tail parser on the
     # whole run: `_parse_token_keywords` consumes the "and" itself and would
     # then demand a keyword where a quote stands.
+    #
+    # "…token. **It has** "Whenever this creature deals damage to a player,
+    # that player gets a poison counter."" (Serpent Generator) — the same
+    # sentence in the singular a one-token effect prints.
     mark_tail = stream.mark()
-    if stream.accept_punct(".") and stream.accept_phrase("they", "each", "have"):
+    if stream.accept_punct(".") and (
+        stream.accept_phrase("they", "each", "have")
+        or stream.accept_phrase("it", "has")
+    ):
         while True:
             if stream.at_kind(QUOTE):
                 granted_lines += _parse_token_quoted_lines_one(stream)

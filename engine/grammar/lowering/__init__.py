@@ -39,6 +39,7 @@ from ._common import (
     _targets_payload,
     _amount_payload,
     _is_source,
+    _DAMAGED_PLAYER_EVENTS,
     _EVENT_SUBJECT_CONTROLLERS,
     _is_enchanted,
     _is_target,
@@ -83,6 +84,7 @@ from .characteristics import (
     _lower_change_text,
 )
 from .counters import (
+    _lower_player_gets_counters,
     _lower_put_counter,
     _PER_DEATH_COUNTERS,
     _PER_DEATH_SUBJECT,
@@ -125,7 +127,6 @@ from .board import (
     _lower_sacrifice_expansion_permanents,
 )
 from .cards import (
-    _DAMAGED_PLAYER_EVENTS,
     _lower_discard,
     _fused_discard_then_draw,
     _fused_draw_then_discard,
@@ -229,6 +230,7 @@ __all__ = [
     "_KEYWORD_GRANTS",
     "_lower_gain_keyword",
     "_lower_lose_keyword",
+    "_lower_player_gets_counters",
     "_lower_put_counter",
     "_PER_DEATH_COUNTERS",
     "_PER_DEATH_SUBJECT",
