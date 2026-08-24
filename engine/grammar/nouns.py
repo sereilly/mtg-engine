@@ -826,7 +826,14 @@ __all__ = [
 # swallow "and/or a card named Igneous Cur" into the first name and report
 # Alpine Houndmaster as a card that finds one card — so the scan stops, and the
 # production then refuses the line at "put".
-_NAME_STOPS = ("reveal", "put", "then", "and", "or", "in")
+#
+# The verbs are stops because a *subject* can carry a name too: "Creatures you
+# control named Kobolds of Kher Keep get +2/+2" (Rohgahh of Kher Keep) ends the
+# name where the sentence's verb begins, and without the stop the scan swallowed
+# "get +2/+2" and the statement parser found no verb at all. No card in the pool
+# has any of these words in its name (checked against every set file), so the
+# stop can only end a scan the verb was never part of.
+_NAME_STOPS = ("reveal", "put", "then", "and", "or", "in", "get", "gets", "has", "have")
 
 
 def parse_card_name(stream: TokenStream) -> str:

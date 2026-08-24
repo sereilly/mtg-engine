@@ -1980,7 +1980,14 @@ _DOESNT_UNTAP_LINE = "this creature doesn't untap during your untap step"
 #: compiler was written, and opening that gate to every production at once is a
 #: change with its own blast radius. What is here is what the CR 613 refresh in
 #: engine/mixins/permanent_state.py dispatches on.
-_GRAMMAR_STATIC_CREATURE_KINDS = frozenset({"dynamic_pt_bonus"})
+#:
+#: ``lord_buff`` joined for the anthem shapes only the grammar can read — a
+#: "named <card name>" restriction (Rohgahh of Kher Keep) and an "as long as"
+#: condition lowered to a payload (Ivory Guardians); the text-side derivation
+#: table still reads every line the grammar refuses (Jihad's stored-choice
+#: condition). Both producers emit through ``lord_buff_payload``, and the
+#: pool-wide differential run when the gate widened found zero payload drift.
+_GRAMMAR_STATIC_CREATURE_KINDS = frozenset({"dynamic_pt_bonus", "lord_buff"})
 
 
 def _grammar_static_creature_instruction(
@@ -2050,7 +2057,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # supported, with the restriction silently absent. Deriving the gate from
     # the dispatch table means an unrecognized rider is now reported unsupported
     # (loud) instead.
-    if combat_restriction_for(_restriction_line(line, card_name)) is not None:
+    if combat_restriction_for(_restriction_line(line, card_name), card_name) is not None:
         return True
     # A lord's continuous buff to other creatures. The gate used to admit the
     # bare prefix "other ", which is a template in disguise: "Other Goblins
@@ -2343,7 +2350,7 @@ def _parse_creature_program(
                 )
             elif (
                 restriction := combat_restriction_for(
-                    _restriction_line(line, card_name)
+                    _restriction_line(line, card_name), card_name
                 )
             ) is not None:
                 # Combat restrictions are templates, derived rather than listed

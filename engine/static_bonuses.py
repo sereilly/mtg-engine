@@ -316,16 +316,30 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
         # intervening-if and another on a continuous ability.
         from .subject_filters import subject_matches
 
-        if condition.get("who", "you") != "you":
-            # No card in the pool prints an opponent-side "as long as", and a
-            # payload this cannot evaluate must not be silently answered False
-            # from inside a matcher loop that looks like it tried.
-            return False
         described = condition.get("filter") or {}
-        return any(
-            subject_matches(game, perm, described, observer=seat, source=source)
-            for perm in game.controlled_by(seat)
-        )
+        who = condition.get("who", "you")
+        if who == "you":
+            return any(
+                subject_matches(game, perm, described, observer=seat, source=source)
+                for perm in game.controlled_by(seat)
+            )
+        if who == "opponent":
+            # "…as long as **an opponent** controls a nontoken red permanent"
+            # (Ivory Guardians). Any one living opponent, not all of them — the
+            # same reading ``graveyard_size`` gives the article above, so a
+            # three-seat game answers what the card says. No observer: the
+            # iteration already scopes by controller, and the lowering refused
+            # any relative key an observer would be for.
+            return any(
+                subject_matches(game, perm, described, source=source)
+                for index, player in enumerate(game.players)
+                if index != seat and not player.lost
+                for perm in game.controlled_by(player)
+            )
+        # A payload this cannot evaluate must not be silently answered False
+        # from inside a matcher loop that looks like it tried — but an unknown
+        # seat word can only arrive from a payload no gate admitted.
+        return False
     return False
 
 

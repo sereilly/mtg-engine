@@ -74,6 +74,9 @@ _UPKEEP_PAY_KINDS = {
     "upkeep_pay_or_sacrifice_self",
     "upkeep_pay_or_deal_damage_to_controller",
     "upkeep_pay_or_tap_and_sacrifice_opponent_land",
+    # Rohgahh of Kher Keep: pay {R}{R}{R} or tap Rohgahh and every creature
+    # named Kobolds of Kher Keep, then an opponent gains control of them all.
+    "upkeep_pay_or_cede_named_creatures",
     # Optional pays with no decline consequence — pay to untap (Mana Vault /
     # Basalt Monolith untap themselves; Paralyze untaps the enchanted creature)
     # or pay for life (Farmstead's granted enchant-land upkeep ability).

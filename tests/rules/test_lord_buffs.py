@@ -344,6 +344,34 @@ def test_a_conditional_anthem_applies_only_while_its_condition_holds(cards, arn_
     assert (knight.effective_power, knight.effective_toughness) == (2, 2)
 
 
+@pytest.mark.cr("611.3a", "201.2a")
+def test_a_named_anthem_reaches_every_bearer_of_the_name_and_nothing_else():
+    """"Creatures you control named <card name> get +N/+N" (Rohgahh of Kher
+    Keep prints it; this lord is invented). CR 201.2a makes the question "do
+    the names match?", nothing else — so a second CardDefinition wearing the
+    name (a token, a copy) is buffed exactly as the real card is, while a
+    creature of the right tribe under the wrong name is untouched, the lord's
+    own different name included."""
+    marshal = Permanent(card=_card(
+        "Warren Marshal", "Creature — Kobold",
+        "Creatures you control named Kobold Warren-Runner get +3/+3.",
+        colors=("R",), power="1", toughness="1",
+    ))
+    runner = Permanent(card=KOBOLD)
+    twin = Permanent(
+        card=_card("Kobold Warren-Runner", "Creature — Kobold", "",
+                   colors=("R",), power="1", toughness="1"),
+        metadata={"is_token": True},
+    )
+    ox = Permanent(card=_card("Wandering Ox", "Creature — Ox", "", colors=("G",)))
+    _game([marshal, runner, twin, ox])
+
+    assert (runner.effective_power, runner.effective_toughness) == (4, 4)
+    assert (twin.effective_power, twin.effective_toughness) == (4, 4)
+    assert (ox.effective_power, ox.effective_toughness) == (2, 2)
+    assert (marshal.effective_power, marshal.effective_toughness) == (1, 1)
+
+
 # ---------------------------------------------------------------------------
 # A granted activated ability
 # ---------------------------------------------------------------------------

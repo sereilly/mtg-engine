@@ -133,6 +133,13 @@ class LordBuffFilter:
     # the same distinction ``permanent_matches_filter`` makes, and for the same
     # reason: a Giant Growth writes power_bonus and places no counter.
     with_plus1_counter: bool = False
+    # "Creatures you control **named Kobolds of Kher Keep**" (Rohgahh of Kher
+    # Keep), "Creatures **named Ivory Guardians**". A restriction on what the
+    # buffed creature is *called*, compared through ``search_filters.name_key``
+    # against ``Permanent.effective_card.name`` — the name a copy has copied
+    # (CR 707.2) and a text change has changed, never the printed face. By name,
+    # not identity: a second copy and a token wearing the name both match.
+    named: str | None = None
 
 
 @dataclass(frozen=True)
@@ -151,8 +158,13 @@ class LordBuff:
     # A quoted activated ability the lord grants (Zombie Master), as a key into
     # GRANTED_ACTIVATED_ABILITIES.
     granted_ability: str | None = None
-    # A key into CONDITIONS: the buff applies only while it holds.
-    condition: str | None = None
+    # When the buff applies only while a condition holds: a key into CONDITIONS
+    # (Jihad, whose stored choices no payload can express), or a lowered
+    # condition payload dict from the grammar’s statics production ("as long as
+    # an opponent controls a nontoken red permanent", Ivory Guardians) —
+    # evaluated by ``static_bonuses.conditional_static_holds``, the same
+    # evaluator every ``conditional_static`` payload gets.
+    condition: str | dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -392,6 +404,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["while"] = buff.filter.qualifier
     if buff.filter.with_plus1_counter:
         payload["with_plus1_counter"] = True
+    if buff.filter.named:
+        payload["named"] = buff.filter.named
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
     if buff.protection_from:
@@ -413,6 +427,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             other_than_source=bool(payload.get("other")),
             qualifier=payload.get("while"),
             with_plus1_counter=bool(payload.get("with_plus1_counter")),
+            named=payload.get("named"),
         ),
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),
