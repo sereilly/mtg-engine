@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**302 / 611 tracked rules covered (49%)** — 1374 tests, 0 unannotated.
+**305 / 611 tracked rules covered (49%)** — 1388 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [121. Drawing a Card](#121-drawing-a-card) | 3/9 | 33% |
 | [122. Counters](#122-counters) | 4/9 | 44% |
 | [200. General](#200-general) | 0/3 | 0% |
-| [201. Name](#201-name) | 0/6 | 0% |
+| [201. Name](#201-name) | 1/6 | 16% |
 | [202. Mana Cost and Color](#202-mana-cost-and-color) | 0/4 | 0% |
 | [205. Type Line](#205-type-line) | 0/4 | 0% |
 | [207. Text Box](#207-text-box) | 0/5 | 0% |
@@ -47,7 +47,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [306. Planeswalkers](#306-planeswalkers) | 9/9 | 100% |
 | [307. Sorceries](#307-sorceries) | 1/5 | 20% |
 | [400. General](#400-general) | 5/12 | 41% |
-| [401. Library](#401-library) | 1/7 | 14% |
+| [401. Library](#401-library) | 2/7 | 28% |
 | [402. Hand](#402-hand) | 2/3 | 66% |
 | [403. Battlefield](#403-battlefield) | 3/5 | 60% |
 | [404. Graveyard](#404-graveyard) | 1/3 | 33% |
@@ -87,7 +87,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/15 | 13% |
-| [701. Keyword Actions](#701-keyword-actions) | 10/19 | 52% |
+| [701. Keyword Actions](#701-keyword-actions) | 11/19 | 57% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 26/26 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 5/8 | 62% |
@@ -345,7 +345,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 122. Counters
 
-- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(6 tests, subrules a)*
+- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(10 tests, subrules af)*
 - [x] **122.2** Counters on an object are not retained if that object moves from one zone to another. The counter... *(1 tests)*
 - [x] **122.3** If a permanent has both a +1/+1 counter and a -1/-1 counter on it, N +1/+1 and N -1/-1 counters a... *(2 tests)*
 - [ ] **122.4** If a permanent with an ability that says it can’t have more than N counters of a certain kind on ...
@@ -364,7 +364,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 201. Name
 
 - [ ] **201.1** The name of a card is printed on its upper left corner.
-- [ ] **201.2** A card’s name is always considered to be the English version of its name, regardless of printed l...
+- [x] **201.2** A card’s name is always considered to be the English version of its name, regardless of printed l... *(1 tests, subrules a)*
 - [ ] **201.3** Some cards with different English names are treated as though they had the same English name. Pai...
 - [ ] **201.4** If an effect instructs a player to choose a card name, the player must choose the name of a card ...
 - [ ] **201.5** Text that refers to the object it’s on by name means just that particular object and not any othe...
@@ -478,7 +478,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 400. General
 
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
-- [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(1 tests)*
+- [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(2 tests)*
 - [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(6 tests)*
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
@@ -496,7 +496,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **401.2** Each library must be kept in a single face-down pile. Players can’t look at or change the order o... *(1 tests)*
 - [ ] **401.3** Any player may count the number of cards remaining in any player’s library at any time.
 - [ ] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own...
-- [ ] **401.5** Some effects tell a player to play with the top card of their library revealed, or say that a pla...
+- [x] **401.5** Some effects tell a player to play with the top card of their library revealed, or say that a pla... *(1 tests)*
 - [ ] **401.6** If an effect causes a player to play with the top card of their library revealed, and that partic...
 - [ ] **401.7** If an effect causes a player to put a card into a library “Nth from the top,” and that library ha...
 
@@ -754,8 +754,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 611. Continuous Effects
 
 - [ ] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ...
-- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(11 tests, subrules abc)*
-- [x] **611.3** A continuous effect may be generated by the static ability of an object. *(36 tests, subrules abc)*
+- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(17 tests, subrules abc)*
+- [x] **611.3** A continuous effect may be generated by the static ability of an object. *(37 tests, subrules abc)*
 
 ### 612. Text-Changing Effects
 
@@ -775,10 +775,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(61 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(13 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
-- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(59 tests, subrules abcd)*
+- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(64 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [ ] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each...
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(14 tests, subrules be)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(16 tests, subrules be)*
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(6 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(4 tests)*
 - [ ] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p...
@@ -858,7 +858,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.17** Mill *(5 tests, subrules a)*
 - [ ] **701.18** Play
 - [x] **701.19** Regenerate *(16 tests, subrules ac)*
-- [ ] **701.20** Reveal
+- [x] **701.20** Reveal *(2 tests, subrules a)*
 - [x] **701.21** Sacrifice *(6 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(2 tests, subrules a)*
@@ -907,7 +907,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(3 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(80 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(81 tests, subrules abcdefghijkmnpqrsy)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*

@@ -19,12 +19,12 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | LEA | 290 | 388 | 80.4% | 79.4% | 43.0% | 153 |
 | LEB | 292 | 389 | 80.5% | 79.4% | 43.2% | 154 |
 | 2ED | 292 | 389 | 80.5% | 79.4% | 43.2% | 154 |
-| ARN | 78 | 108 | 67.6% | 64.8% | 42.6% | 37 |
+| ARN | 78 | 108 | 69.4% | 64.8% | 42.6% | 37 |
 | ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
-| 3ED | 296 | 389 | 81.2% | 80.2% | 44.7% | 157 |
+| 3ED | 296 | 389 | 81.5% | 80.2% | 44.7% | 157 |
 | M21 | 285 | 503 | 87.3% | 86.3% | 60.6% | 236 |
-| LEG *(measured)* | 310 | 431 | 53.4% | 47.8% | 24.1% | 95 |
-| **All (shipped)** | **1618** | **2286** | **81.8%** | **80.8%** | **48.1%** | **956** |
+| LEG *(measured)* | 310 | 431 | 56.8% | 51.0% | 26.9% | 107 |
+| **All (shipped)** | **1618** | **2286** | **82.0%** | **80.8%** | **48.1%** | **956** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -34,15 +34,15 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 248 | 133 | expected a subject |  |
-| 116 | 52 | unrecognized effect verb |  |
-| 77 | 53 | unconsumed text |  |
-| 42 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
-| 30 | 30 | unrecognized activation cost |  |
+| 232 | 124 | expected a subject |  |
+| 125 | 55 | unrecognized effect verb |  |
+| 74 | 50 | unconsumed text |  |
+| 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
+| 34 | 34 | unrecognized activation cost |  |
 | 12 | 7 | expected 'the number of' in a where-clause |  |
 | 12 | 7 | expected a keyword ability |  |
-| 11 | 7 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 10 | 7 | expected 'a' |  |
+| 10 | 6 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 9 | 4 | expected a colour or a creature body after 'becomes' |  |
 | 9 | 5 | no handler for non-targeted tap/untap |  |
 | 8 | 4 | no lowering for RawEffect |  |
@@ -55,7 +55,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 3 | 2 | expected a permanent to put counters on |  |
 | 3 | 2 | expected a destination zone after 'return' |  |
 | 3 | 3 | no return handler honours this restriction |  |
-| 3 | 3 | expected 'the' |  |
+| 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | expected something to destroy |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 2 | expected a damage recipient |  |
@@ -242,6 +242,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Brass Man**
   - `At the beginning of your upkeep, you may pay {1}. If you do, untap this creature.`
   - `At the beginning of your upkeep, you may pay {1}. If you do, untap this creature.`
+- **Brine Hag**
+  - `When this creature dies, change the base power and toughness of all creatures that dealt damage to it this turn to 0/2. (This effect lasts indefinitely.)`
 - **Bronze Tablet**
   - `{4}, {T}: Exile this artifact and target nontoken permanent an opponent owns. That player may pay 10 life. If they do, put this card into its owner's graveyard. Otherwise, that player owns this card and you own the other exiled card.`
 - **Burlfist Oak**
@@ -468,6 +470,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Destroy target artifact or enchantment.`
   - `Destroy target artifact or enchantment.`
   - `Destroy target artifact or enchantment.`
+- **Disharmony**
+  - `Untap target attacking creature and remove it from combat. Gain control of that creature until end of turn.`
 - **Disintegrate**
   - `Disintegrate deals X damage to any target. If it's a creature, it can't be regenerated this turn, and if it would die this turn, exile it instead.`
   - `Disintegrate deals X damage to any target. If it's a creature, it can't be regenerated this turn, and if it would die this turn, exile it instead.`
@@ -697,6 +701,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `At the beginning of your end step, if you gained 3 or more life this turn, create a 2/2 white Griffin creature token with flying.`
 - **Grim Tutor**
   - `Search your library for a card, put that card into your hand, then shuffle. You lose 3 life.`
+- **Halfdane**
+  - `At the beginning of your upkeep, change Halfdane's base power and toughness to the power and toughness of target creature other than Halfdane until the end of your next upkeep.`
 - **Hammerheim**
   - `{T}: Add {R}.`
 - **Hasran Ogress**
@@ -817,6 +823,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
+- **Ivory Guardians**
+  - `Creatures named Ivory Guardians get +1/+1 as long as an opponent controls a nontoken red permanent.`
 - **Jacques le Vert**
   - `Green creatures you control get +0/+2.`
 - **Jalum Tome**
@@ -1161,6 +1169,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `This creature can't attack unless defending player controls an Island.`
   - `{T}: This creature deals 1 damage to any target.`
   - `When you control no Islands, sacrifice this creature.`
+- **Pit Scorpion**
+  - `Whenever this creature deals damage to a player, that player gets a poison counter. (A player with ten or more poison counters loses the game.)`
 - **Pitchburn Devils**
   - `When this creature dies, it deals 3 damage to any target.`
 - **Pixie Queen**
@@ -1328,6 +1338,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{3}, {T}: This artifact deals 1 damage to any target.`
   - `{3}, {T}: This artifact deals 1 damage to any target.`
   - `{3}, {T}: This artifact deals 1 damage to any target.`
+- **Rohgahh of Kher Keep**
+  - `Creatures you control named Kobolds of Kher Keep get +2/+2.`
 - **Rookie Mistake**
   - `Until end of turn, target creature gets +0/+2 and another target creature gets -2/-0.`
 - **Rousing Read**
@@ -1337,6 +1349,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Destroy target tapped creature.`
   - `{T}: Destroy target tapped creature.`
   - `{T}: Destroy target tapped creature.`
+- **Rubinia Soulsinger**
+  - `{T}: Gain control of target creature for as long as you control Rubinia Soulsinger and Rubinia Soulsinger remains tapped.`
 - **Rugged Highlands**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {R} or {G}.`
@@ -1417,11 +1431,15 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
   - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
   - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
+- **Sentinel**
+  - `{0}: Change this creature's base toughness to 1 plus the power of target creature blocking or blocked by this creature. (This effect lasts indefinitely.)`
 - **Serendib Djinn**
   - `When you control no lands, sacrifice this creature.`
 - **Serendib Efreet**
   - `At the beginning of your upkeep, this creature deals 1 damage to you.`
   - `At the beginning of your upkeep, this creature deals 1 damage to you.`
+- **Serpent Generator**
+  - `{4}, {T}: Create a 1/1 colorless Snake artifact creature token. It has "Whenever this creature deals damage to a player, that player gets a poison counter." (A player with ten or more poison counters loses the game.)`
 - **Setessan Training**
   - `When this Aura enters, draw a card.`
 - **Shacklegeist**
@@ -1621,6 +1639,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
+- **The Wretched**
+  - `At end of combat, gain control of all creatures blocking this creature for as long as you control this creature.`
 - **Thicket Basilisk**
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
@@ -1791,6 +1811,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{1}: This creature gets +1/+0 until end of turn.`
 - **Wall of Runes**
   - `When this creature enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
+- **Wall of Tombstones**
+  - `At the beginning of your upkeep, change this creature's base toughness to 1 plus the number of creature cards in your graveyard. (This effect lasts indefinitely.)`
 - **Wall of Water**
   - `{U}: This creature gets +1/+0 until end of turn.`
   - `{U}: This creature gets +1/+0 until end of turn.`
@@ -1823,6 +1845,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+- **Willow Satyr**
+  - `{T}: Gain control of target legendary creature for as long as you control this creature and this creature remains tapped.`
 - **Wind-Scarred Crag**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {R} or {W}.`

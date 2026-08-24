@@ -1111,3 +1111,53 @@ this time the ratchets moved: ALL executes 48.0% → 48.1% and ARN 41.7% → 42.
 counted in both the sets that print the card. Suite 7,009 → 7,023 at ~41s;
 three fire sites and seven condition kinds deleted, one added, and the handler
 the retired hook was the only producer of deleted with it.
+
+## LEG round 11: four families in four worktrees, merged one at a time
+
+*(2026-08-23.)* The first round executed in the playbook's worktree shape —
+re-opened this same day after re-testing the stale "repo refuses worktrees"
+note — and the first to land four one-family branches in one round:
+base-P/T rewrites (Sentinel, Wall of Tombstones, Halfdane, Brine Hag), linked
+control changes (Willow Satyr, Rubinia Soulsinger, The Wretched, Disharmony),
+the "named <card name>" filter (Ivory Guardians, Rohgahh of Kher Keep, Akron
+Legionnaire), and poison counters plus standing reveals (Pit Scorpion, Serpent
+Generator, Revelation, Field of Dreams). Fifteen cards, every one through the
+grammar except one recorded hook (below).
+
+**The parallel shape works, with two amendments the round itself wrote.** All
+four agents launched at once and all four died on a shared session limit —
+"two that finish beat four that die" holds even with a large budget, because
+the budget is shared with the main loop. Restarted sequentially, every agent
+resumed from its own partial worktree and finished. And integration is where
+parallel grammar edits collide: both the P/T and control branches extended the
+noun postmodifier scan at the word "blocking", each green alone, and the
+merge ordered them so the one-word branch probed, failed on "or" and broke
+the scan before the two-word branch was asked — Sentinel stopped compiling
+with both branches' suites passing. The per-card test caught it at merge,
+which is the serial-integration rule doing its job; the fix is a one-line
+lookahead and a comment naming the collision.
+
+**Four supported cards were silently doing less, and one was doing more.**
+The census questions keep paying: Conspicuous Snoop's `top_is_public` was
+computed, tested and read by nobody — his revealed top card never reached the
+client until the reveal work needed the same seam. Sengir Vampire's kill
+record was combat-fed and value-matched, so a ping kill earned no counter and
+a look-alike deduped wrongly — fixed, a verified card CR-corrected. Aladdin's
+"for as long as you control" ended only through the leave hook, so stealing
+Aladdin left the artifact stolen forever — the linked-condition sweep now
+ends it. And the conditional-lord reader granted protection without asking
+the condition — latent (no conditional lord grants protection today), fixed.
+
+**The first LEG hook, with its reason.** Rohgahh's pay-or-cede upkeep line —
+tap a named tribe and cede it to an opponent — is `CARD_LINE_INSTRUCTIONS` +
+an upkeep handler: no second card, real or plausibly printable, shares the
+shape. LEG's 0.0% streak ends at one hook in 179 supported (0.6%); the
+ceilings are untouched because a measured set never ratchets.
+
+**Numbers.** LEG 164 → 179 of 310 (52.9% → 57.7%); `--refusals` drops from
+176 refused lines over 146 cards to 131 cards. LEG parse 53.4% → 56.8%. The
+shipped ratchets moved up as by-catch: ALL parses 81.8% → 82.0% (ARN 67.6% →
+69.4% — Aladdin's family; 3ED 81.2% → 81.5%). Suite 7,023 → 7,085. Merge
+order info → named → pt → control, full suite and every `--check` green
+between merges; one union-merge rule held throughout (every branch's test
+block was a pure insertion at the same anchor).
