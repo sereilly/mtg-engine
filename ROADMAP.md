@@ -1161,3 +1161,44 @@ shipped ratchets moved up as by-catch: ALL parses 81.8% → 82.0% (ARN 67.6% →
 order info → named → pt → control, full suite and every `--check` green
 between merges; one union-merge rule held throughout (every branch's test
 block was a pure insertion at the same anchor).
+
+## LEG round 12: "can't attack" is one table with history behind it
+
+*(2026-08-24.)* The first sequential worktree round: one branch from current
+HEAD, one agent, a fast-forward merge — no cross-branch conflicts by
+construction, which is the shape's dividend when nothing else is in flight.
+Five cards, all landed: Moat, Evil Eye of Orms-by-Gore, Giant Turtle, Wall of
+Dust, and Arboria — the stretch card came home rather than being deferred.
+
+**A restriction's subject is payload, and its history is a record.** Moat and
+Evil Eye are one `creatures_cant_attack` row whose filter carries
+`without_keywords` (a layer-6 ask — a bear granted flying escapes the Moat)
+and a negated subtype; the noncreature static path now consults the same
+table the creature path always had, so an enchantment's restriction is gated
+and dispatched by one table. The other three hang on per-turn history rather
+than on the board: an `attacked_on_seat_turn` stamp against per-seat turn
+ordinals (Giant Turtle — the stamp dies with the object, CR 400.7, so a
+returned Turtle attacks freely), the same ordinal stamped onto a blocked
+creature by Wall of Dust's trigger, and `last_own_turn_activity` folded at
+the turn boundary for Arboria, which also taught `can_attack` that a
+planeswalker attack is not an attack on a player (CR 508.5).
+
+**The census misreads a table-claimed line, and now says so.** Evil Eye's
+"can't be blocked except by Walls" showed as *refused: unconsumed text* — but
+the round-7 whitelist row had read it perfectly all along. `--refusals`
+probes lines through the grammar only, and a text-keyed table's claim is
+invisible to that probe, so a card unsupported for one line shows every
+table-claimed sibling as refused too. The report now carries the caveat in
+its header; the deeper fix (a per-line claim seam the gate and the report
+both read) is noted for whenever a second misread bites.
+
+**Recorded approximations, named in the code:** a skipped turn still
+increments its seat's ordinal (Giant Turtle wakes a turn early through Time
+Walk-class effects; Arboria reads a skipped turn as quiet), and Arboria
+credits an entered permanent to the seat it enters under. Wall of Dust's
+trigger label is promotion debt (`TRIGGERED_LABELS` is guard-held to the
+shipped pool).
+
+**Numbers.** LEG 179 → 184 of 310 (57.7% → 59.4%); LEG parse 56.8% → 57.1%.
+Suite 7,085 → 7,105, full run green with every `--check`. No hooks added —
+the one LEG hook remains Rohgahh's.

@@ -117,6 +117,10 @@ def print_refusals(findings) -> None:
     )
     print(f"Unsupported cards: {len(findings)}; refused lines: {refused_total}")
     print("(the plain census quotes only the first refused line per card)")
+    print("(a 'refused' line can still be claimed by a text-keyed rule table —")
+    print(" the grammar is the only probe here, and the tables read raw text;")
+    print(" LEG round 12 hit this on Evil Eye's round-7 whitelist line, so")
+    print(" check the headline reason before scheduling a 'refused' line)")
     print()
 
     reason_lines: Counter = Counter()
