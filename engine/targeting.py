@@ -52,7 +52,12 @@ from .subject_filters import filter_head_noun
 # permanent on the battlefield. The negative lookahead is load-bearing: without
 # it Animate Dead derives "creature" and the UI would offer battlefield
 # creatures for a reanimation spell.
-_ENCHANT_SUBJECTS = ("creature", "land", "artifact", "enchantment", "wall")
+# "creature you control" first: the alternation is first-match, and the plain
+# "creature" would consume its prefix and leave " you control" to fail the
+# whole-line anchor — which is a claim withdrawn, not a claim narrowed.
+_ENCHANT_SUBJECTS = (
+    "creature you control", "creature", "land", "artifact", "enchantment", "wall",
+)
 _ENCHANT_LINE = re.compile(
     rf"^enchant ({'|'.join(_ENCHANT_SUBJECTS)})\b(?! card)",
     re.MULTILINE,
@@ -105,6 +110,11 @@ def enchant_line_subject(line: str) -> str | None:
 # `enchant_enchantment`.
 _ENCHANT_SUBJECT_TO_SPEC: dict[str, dict] = {
     "creature": {"kind": "creature"},
+    # "Enchant creature you control" (Cocoon, CR 303.4a's [quality]). The
+    # picker applies `own_only` itself — a seat test, not a permanent test —
+    # and the cast gate and the CR 704.5m sweep enforce the same half through
+    # `enchant_noun_own_only`.
+    "creature you control": {"kind": "creature", "own_only": True},
     "wall": {"kind": "creature", "enchant_wall": True},
     "land": {"kind": "land"},
     "artifact": {"kind": "artifact"},

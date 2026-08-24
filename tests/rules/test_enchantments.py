@@ -779,3 +779,91 @@ def test_303_7a_two_roles_from_same_player_only_newest_survives():
     assert role_perms[0].card.name == "Monster Role"
     # The older Role (Warrior Role) should have gone to its owner's graveyard
     assert any(c.name == "Warrior Role" for c in p1.graveyard)
+
+
+# ---------------------------------------------------------------------------
+# Rule 303.4a's [quality] — "Enchant creature you control" — and the
+# state-based half that keeps it true (303.4c / 704.5m).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("303.4a", "601.2c")
+def test_303_4a_enchant_creature_you_control_refuses_an_opponents_creature():
+    """The clause's seat half is a cast-legality question: an opponent's
+    creature is an illegal choice, and 601.2c makes the spell uncastable at
+    it rather than castable-and-ineffective."""
+    aura = _mk_card(
+        "Own Bond", "Enchantment — Aura",
+        "Enchant creature you control\nEnchanted creature gets +2/+1.",
+    )
+    theirs = _mk_creature("Theirs")
+    p1 = PlayerState(name="P1", hand=[aura])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=theirs)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Own Bond", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported is False
+    assert "you control" in result.details
+    assert not p1.battlefield, "the Aura never entered"
+
+
+@pytest.mark.cr("303.4a")
+def test_303_4a_enchant_creature_you_control_attaches_to_your_own():
+    aura = _mk_card(
+        "Own Bond", "Enchantment — Aura",
+        "Enchant creature you control\nEnchanted creature gets +2/+1.",
+    )
+    mine = Permanent(card=_mk_creature("Mine"))
+    p1 = PlayerState(name="P1", hand=[aura], battlefield=[mine])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    result = game.cast_from_hand(0, "Own Bond", target_player_index=0, target_permanent_index=0)
+
+    assert result.supported, result.details
+    aura_perm = next(p for p in p1.battlefield if p.card.name == "Own Bond")
+    assert aura_perm.metadata.get("attached_to") is mine
+
+
+@pytest.mark.cr("303.4c", "704.5m")
+def test_303_4c_aura_dies_when_its_host_stops_being_you_control():
+    """An opponent gaining control of the creature makes the attachment
+    illegal (303.4c: "as defined by its enchant ability and other applicable
+    effects"), and the 704.5m sweep puts the Aura into its owner's
+    graveyard — the same legality the cast gate read, asked again as state."""
+    aura_card = _mk_card(
+        "Own Bond", "Enchantment — Aura",
+        "Enchant creature you control\nEnchanted creature gets +2/+1.",
+    )
+    mine = Permanent(card=_mk_creature("Mine"))
+    p1 = PlayerState(name="P1", hand=[aura_card], battlefield=[mine])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.cast_from_hand(0, "Own Bond", target_player_index=0, target_permanent_index=0)
+    aura_perm = next(p for p in p1.battlefield if p.card.name == "Own Bond")
+
+    game.take_control(mine, 1, source=None)
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(aura_perm)
+    assert any(c.name == "Own Bond" for c in p1.graveyard)
+
+
+@pytest.mark.cr("303.4c", "704.5m")
+def test_303_4c_a_plain_enchant_creature_aura_survives_a_control_change():
+    """The seat half belongs to the clause that prints it: a bare "Enchant
+    creature" Aura stays attached however control moves, so the sweep must
+    read the clause rather than treat every Aura as own-side."""
+    aura_card = _mk_card(
+        "Any Bond", "Enchantment — Aura",
+        "Enchant creature\nEnchanted creature gets +2/+1.",
+    )
+    mine = Permanent(card=_mk_creature("Mine"))
+    p1 = PlayerState(name="P1", hand=[aura_card], battlefield=[mine])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.cast_from_hand(0, "Any Bond", target_player_index=0, target_permanent_index=0)
+    aura_perm = next(p for p in p1.battlefield if p.card.name == "Any Bond")
+
+    game.take_control(mine, 1, source=None)
+    game.check_state_based_actions()
+
+    assert game.is_on_battlefield(aura_perm)
+    assert aura_perm.metadata.get("attached_to") is mine

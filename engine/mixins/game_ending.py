@@ -12,6 +12,7 @@ from ..equipment import is_equipment, unattach_illegal_equipment
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..trigger_utils import matching_triggers
+from .stack import aura_enchant_noun, enchant_noun_own_only
 from ..tokens import is_token_card
 
 _COUNTER_CAP_RE = re.compile(r"can't have more than (\d+) (\w+) counters")
@@ -486,6 +487,36 @@ class GameEndingMixin:
                     on_destroy=_on_destroy_5m,
                 ):
                     changed = True
+
+            # CR 704.5m's other half: an Aura is also illegally attached when
+            # its host stops satisfying the enchant clause. Enforced for the
+            # clause's *seat* half ("Enchant creature **you control**", Cocoon)
+            # — an opponent gaining control of the creature makes the
+            # attachment illegal, and the Aura is put into its owner's
+            # graveyard. Read through the same `enchant_noun_own_only` the
+            # cast gate and the picker read, so the three cannot drift.
+            for player in self.players:
+                departing_own = []
+                for perm in list(self.controlled_by(player)):
+                    if "Aura" not in perm.card.type_line:
+                        continue
+                    attached_to = perm.metadata.get("attached_to")
+                    if attached_to is None or not self.is_on_battlefield(attached_to):
+                        continue
+                    noun = aura_enchant_noun(perm.effective_card)
+                    if noun is None or not enchant_noun_own_only(noun):
+                        continue
+                    aura_seat = self.controller_index_of(perm)
+                    if aura_seat is None or self.controller_index_of(attached_to) == aura_seat:
+                        continue
+                    self._permanent_to_graveyard(player, perm)
+                    self.log.append(
+                        f"{perm.card.name} put into graveyard (704.5m: enchanted "
+                        "permanent is no longer controlled by its controller)"
+                    )
+                    changed = True
+                    departing_own.append(perm)
+                self.remove_all_from_battlefield(departing_own)
 
             # An Aura attached to a permanent that "can't be enchanted by other
             # Auras" (Consecrate Land) is illegally attached and is put into its

@@ -195,7 +195,13 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         )
 
     if kind == "it_happened":
-        return bool(context.results.get(payload.get("key")))
+        happened = bool(context.results.get(payload.get("key")))
+        # "If you **can't**" (Cocoon) is the same record read the other way. An
+        # absent record is "it did not happen", which is also the honest answer
+        # when the recording step itself could not run — an Aura that left
+        # before its upkeep trigger resolved removed nothing (CR 608.2b), so
+        # the can't-branch is exactly what should run.
+        return not happened if payload.get("negated") else happened
 
     if kind == "coin_flip":
         # CR 705.2. The flip recorded its result; asking again would flip a

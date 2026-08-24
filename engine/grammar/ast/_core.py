@@ -828,6 +828,25 @@ class EnteredFrom:
 
 
 @dataclass(frozen=True)
+class CouldNot:
+    """"…**If you can't**, …" after a mandatory action.
+
+    "Remove a pupa counter from this Aura. If you can't, sacrifice it, put a
+    +1/+1 counter on enchanted creature, and that creature gains flying."
+    (Cocoon.) The mirror of :class:`ItHappened`: the action before it was not
+    optional, so there is no decision to branch on — the branch runs exactly
+    when that action *could not be performed*, which for a counter removal is
+    a counter not being there to remove (CR 701.44a: removing a counter that
+    is not on the object is impossible).
+
+    Carries no field for the reason ItHappened carries none: which step it
+    refers to is always the one immediately before, and the lowering pairs
+    them where that is known rather than naming a producer here that could
+    drift from ``_PRODUCES``.
+    """
+
+
+@dataclass(frozen=True)
 class ItHappened:
     """"…**If you do**, …" after an action that was not optional.
 

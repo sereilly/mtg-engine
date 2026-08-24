@@ -204,3 +204,88 @@ def test_disharmony_is_castable_only_before_blockers(set_pool):
 
     assert not result.supported
     assert disharmony in game.players[1].hand
+
+
+# ---------------------------------------------------------------------------
+# Reset (round 13) — a cast window after the opponent's upkeep, and an untap
+# over a described set. CR 601.3, CR 502.
+# ---------------------------------------------------------------------------
+
+
+def _land(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Basic Land — Island",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=("U",),
+        raw={"name": name, "type_line": "Basic Land — Island"},
+    )
+
+
+def test_reset_compiles_to_the_untap_sweep(set_pool):
+    """"Untap all lands you control." — untargeted, so it is a sweep over a
+    described set, and the description is payload the matcher can test."""
+    program = compile_card_oracle(set_pool("LEG")["Reset"])
+    assert program.supported, program.reason
+    kinds = [i.kind for i in program.instructions if i.kind != "spell_pattern"]
+    assert kinds == ["untap_all_matching"]
+    payload = next(i for i in program.instructions if i.kind == "untap_all_matching").payload
+    assert payload == {"type_filter": "land", "controller": "you"}
+
+
+def _reset_game(set_pool):
+    mine = [Permanent(card=_land("Island A"), tapped=True),
+            Permanent(card=_land("Island B"), tapped=True)]
+    bear = Permanent(card=_creature("Bear"))
+    bear.tapped = True
+    theirs = Permanent(card=_land("Their Island"), tapped=True)
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Reset"]],
+                     battlefield=mine + [bear])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, mine, bear, theirs
+
+
+def test_reset_refuses_to_cast_on_your_own_turn(set_pool):
+    """"Cast this spell only during an opponent's turn after their upkeep
+    step." — your own turn is never in the window (CR 601.3: an effect
+    prohibits the cast)."""
+    game, mine, _, _ = _reset_game(set_pool)
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+    game.current_step = None
+
+    result = game.cast_from_hand(0, "Reset")
+    assert result.supported is False
+    assert "opponent's turn" in result.details
+    assert all(land.tapped for land in mine)
+
+
+def test_reset_refuses_during_the_opponents_upkeep_itself(set_pool):
+    """"**After** their upkeep step" excludes the upkeep — the window opens at
+    their draw step, not during the step the card names."""
+    game, _, _, _ = _reset_game(set_pool)
+    game.active_player_index = 1
+    game.current_turn_phase = "beginning"
+    game.current_step = "upkeep"
+
+    result = game.cast_from_hand(0, "Reset")
+    assert result.supported is False
+    assert "after their upkeep step" in result.details
+
+
+def test_reset_untaps_exactly_the_lands_its_caster_controls(set_pool):
+    """In the window, the sweep untaps all the caster's lands — not the
+    opponent's land and not the caster's tapped creature: "all lands you
+    control" is the whole description, and every word of it is enforced."""
+    game, mine, bear, theirs = _reset_game(set_pool)
+    game.active_player_index = 1
+    game.current_turn_phase = "beginning"
+    game.current_step = "draw"
+
+    result = game.cast_from_hand(0, "Reset")
+    assert result.supported, result.details
+    game._settle()
+
+    assert all(not land.tapped for land in mine), "caster's lands untapped"
+    assert bear.tapped, "a creature is not a land"
+    assert theirs.tapped, "an opponent's land is not 'you control'"

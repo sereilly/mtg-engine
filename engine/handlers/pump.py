@@ -6,6 +6,7 @@ from ..models import Permanent
 from ..pt import set_base_pt
 from ._common import (
     apply_temp_pt_boost,
+    attached_host,
     permanent_matches_filter,
     resolve_amount,
     resolve_target_permanent,
@@ -535,6 +536,28 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
     return True, "resolved"
 
 
+@effect_handler("grant_keyword_to_attached")
+def grant_keyword_to_attached(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…and that creature gains flying." (Cocoon's hatch, bound to the
+    enchanted creature.)
+
+    A one-shot grant with no printed duration: CR 611.2c makes it last as long
+    as the creature, so it is recorded on the *creature* through the layer-6
+    write API — never derived from the Aura, which this same resolution has
+    just sacrificed. ``attached_host`` supplies the last-known host for
+    exactly that reason (CR 603.10).
+    """
+    host = attached_host(game, context.source_permanent)
+    if host is None:
+        game.log.append(f"{context.card.name}: nothing is enchanted to grant to")
+        return True, "resolved"
+    keyword = str(instruction.payload.get("keyword", ""))
+    grant_keyword(host, keyword)
+    game._refresh_dynamic_creatures()
+    game.log.append(f"{context.card.name}: {host.card.name} gains {keyword}")
+    return True, "resolved"
+
+
 @effect_handler("add_pt_counters_to_attached")
 def add_pt_counters_to_attached(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Whenever enchanted creature becomes tapped, put a -0/-2 counter on it."
@@ -549,8 +572,7 @@ def add_pt_counters_to_attached(game: Game, instruction: OracleInstruction, cont
     is a counter no sweep can find, which is what Unstable Mutation's upkeep
     pass did under a comment promising that 704.5q applied to it.
     """
-    source = context.source_permanent
-    attached = source.metadata.get("attached_to") if source is not None else None
+    attached = attached_host(game, context.source_permanent)
     if attached is None:
         return True, "resolved"
     kind = str(instruction.payload.get("counter", ""))

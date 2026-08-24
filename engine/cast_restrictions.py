@@ -66,6 +66,20 @@ def _opponents_turn_before_attackers(game: "Game", caster_index: int) -> bool:
     return game.current_turn_phase in ("beginning", "precombat_main")
 
 
+def _opponents_turn_after_upkeep(game: "Game", caster_index: int) -> bool:
+    # Reset: legal only during an opponent's turn, and only once that player's
+    # upkeep step has ended — "after their upkeep step" excludes the upkeep
+    # itself, so the window opens at their draw step. A skipped upkeep still
+    # opens it: what is tested is that the turn has moved past the beginning
+    # phase's untap/upkeep steps, not that an upkeep happened.
+    if game.active_player_index == caster_index:
+        return False
+    return not (
+        game.current_turn_phase == "beginning"
+        and game.current_step in ("untap", "upkeep")
+    )
+
+
 CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
     CastRestriction(
         "cast this spell only during your declare attackers step",
@@ -91,6 +105,11 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "cast this spell only during an opponent's turn, before attackers are declared",
         _opponents_turn_before_attackers,
         "can only be cast during an opponent's turn, before attackers are declared",
+    ),
+    CastRestriction(
+        "cast this spell only during an opponent's turn after their upkeep step",
+        _opponents_turn_after_upkeep,
+        "can only be cast during an opponent's turn after their upkeep step",
     ),
 )
 

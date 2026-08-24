@@ -188,6 +188,10 @@ TRIGGERED_LABELS: dict[str, str] = {
     "delayed_destroy_blocked_or_blocker": "triggered_delayed_destroy",
     "opponent_discards_random_card_on_damage": "triggered_discard",
     "sacrifice_self": "triggered_sacrifice",
+    # "When this Aura enters, tap enchanted creature." (Paralyze, Venarian
+    # Gold, Cocoon) — the enter-tap that used to be a substring branch in
+    # `_apply_aura_effect` and is a compiled trigger now.
+    "tap_enchanted_creature": "triggered_tap",
     "self_damage_unless_pay": "triggered_damage",
     "target_gains_life": "spell_pattern",
     "upkeep_chosen_player_hand_overflow_damage": "upkeep_effect",

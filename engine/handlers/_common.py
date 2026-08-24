@@ -19,6 +19,24 @@ from ..models import Permanent, PlayerState
 from ..search_filters import name_key
 
 
+def attached_host(game: "Game", source: "Permanent | None") -> "Permanent | None":
+    """The permanent *source* is attached to — or, when *source* has already
+    left mid-resolution, the one it was last attached to (CR 603.10 last-known
+    information) — provided that host is still on the battlefield.
+
+    Cocoon is why the fallback exists: "…sacrifice it, put a +1/+1 counter on
+    enchanted creature, and that creature gains flying" removes the Aura in
+    the very resolution whose later steps name the enchanted creature, and
+    ``detach_aura`` has already cleared the live record by then.
+    """
+    if source is None:
+        return None
+    host = source.metadata.get("attached_to") or source.metadata.get("last_attached_to")
+    if host is None or not game.is_on_battlefield(host):
+        return None
+    return host
+
+
 def resolve_amount(raw: object, x_value: int | None) -> int:
     """Numeric value of a parsed amount payload; ``"x"`` resolves to the cast's
     X (never negative)."""

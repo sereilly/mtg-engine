@@ -340,6 +340,36 @@ class UpkeepEffectsMixin:
             ),
         )
 
+    @upkeep_effect("upkeep_enchanted_controller", "remove_counter_from_attached")
+    def _on__upkeep_enchanted_controller__remove_counter_from_attached(self, ctx: UpkeepContext) -> None:
+        """"At the beginning of the upkeep of enchanted creature's controller,
+        remove a sleep counter from that creature." (Venarian Gold.)
+
+        Nothing interactive: one counter of the named kind comes off the
+        enchanted creature, and when the last one goes the untap restriction
+        the counter conditions simply stops answering
+        (auras.aura_restriction_active reads the count at ask time) — so the
+        creature untaps again on its controller's next untap step with nothing
+        to clear.
+        """
+        from ..named_counters import counters_key, counters_on
+
+        permanent = ctx.permanent
+        attached = permanent.metadata.get("attached_to")
+        if attached is None:
+            return
+        if self.controller_index_of(attached) != ctx.player_index:
+            return
+        counter = str(ctx.trig.instruction.payload.get("counter", ""))
+        current = counters_on(attached, counter)
+        if current <= 0:
+            return
+        attached.metadata[counters_key(counter)] = current - 1
+        self.log.append(
+            f"{permanent.card.name}: removed a {counter} counter from "
+            f"{attached.card.name} ({current - 1} left)"
+        )
+
     @upkeep_effect("upkeep_chosen", "upkeep_chosen_player_hand_overflow_damage")
     def _on__upkeep_chosen__upkeep_chosen_player_hand_overflow_damage(self, ctx: UpkeepContext) -> None:
         _enqueue_upkeep_damage = ctx.enqueue_damage

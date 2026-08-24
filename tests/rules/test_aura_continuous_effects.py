@@ -500,3 +500,59 @@ def test_611_3_the_added_subtype_ends_with_the_aura():
 
     assert not beast.has_type("knight")
     assert beast.has_type("bear")
+
+
+def _invented_aura(name: str, oracle_text: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Enchantment — Aura",
+        oracle_text=oracle_text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": "Enchantment — Aura"},
+    )
+
+
+@pytest.mark.cr("502.3", "122.1")
+def test_502_3_counter_conditioned_untap_reads_the_counter_on_the_creature(catalog):
+    """Venarian Gold's template, proven on an invented card: the restriction
+    is active exactly while the named counter sits on the enchanted creature,
+    and the counter's kind is payload."""
+    from engine.auras import attach_aura, aura_restriction_active
+
+    aura = Permanent(card=_invented_aura(
+        "Test Slumber",
+        "Enchant creature\n"
+        "Enchanted creature doesn't untap during its controller's untap step "
+        "if it has a torpor counter on it.",
+    ))
+    bear = Permanent(card=catalog["Grizzly Bears"], tapped=True)
+    attach_aura(aura, bear)
+
+    assert aura_restriction_active(bear, "doesnt_untap") is False
+    bear.metadata["torpor_counters"] = 1
+    assert aura_restriction_active(bear, "doesnt_untap") is True
+    bear.metadata["torpor_counters"] = 0
+    assert aura_restriction_active(bear, "doesnt_untap") is False
+
+
+@pytest.mark.cr("502.3", "122.1")
+def test_502_3_counter_conditioned_untap_reads_the_counter_on_the_aura(catalog):
+    """Cocoon's spelling: one word apart ("if **this Aura** has"), and the
+    condition reads the Aura's own counters rather than the creature's."""
+    from engine.auras import attach_aura, aura_restriction_active
+
+    aura = Permanent(card=_invented_aura(
+        "Test Chrysalis",
+        "Enchant creature you control\n"
+        "Enchanted creature doesn't untap during your untap step "
+        "if this Aura has a shell counter on it.",
+    ))
+    bear = Permanent(card=catalog["Grizzly Bears"], tapped=True)
+    attach_aura(aura, bear)
+
+    assert aura_restriction_active(bear, "doesnt_untap") is False
+    aura.metadata["shell_counters"] = 2
+    assert aura_restriction_active(bear, "doesnt_untap") is True
+    bear.metadata["shell_counters"] = 1
+    aura.metadata["shell_counters"] = 0
+    assert aura_restriction_active(bear, "doesnt_untap") is False, (
+        "the creature's counters are not the Aura's"
+    )

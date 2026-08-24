@@ -606,7 +606,10 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         mark = stream.mark()
         joined = False
         if stream.accept_punct(","):
-            if stream.accept_word("then"):
+            # ", then" and the Oxford ", and" (Cocoon's "sacrifice it, put a
+            # +1/+1 counter on enchanted creature, **and** that creature gains
+            # flying") both continue the list; a bare comma already does.
+            if stream.accept_word("then") or stream.accept_word("and"):
                 joined = True
         elif stream.accept_word("and"):
             joined = True

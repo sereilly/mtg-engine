@@ -395,7 +395,65 @@ def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     attached = attached_trigger_claim(normalized_line, card_name)
     if attached is not None:
         return attached
+    compiled_trigger = aura_compiled_trigger_claim(normalized_line, card_name)
+    if compiled_trigger is not None:
+        return compiled_trigger
     return aura_continuous_claim(normalized_line)
+
+
+def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> str | None:
+    """Name the dispatcher behind a grammar-compiled attached trigger, or None.
+
+    The grammar can read a triggered ability off an Aura or Equipment and lower
+    it in full, and the support gate must then ask the question round 140's
+    lesson demands: not "does it compile?" but "what *fires* it?". A trigger a
+    declaration table produces and nothing announces is a card that reports
+    supported and does nothing. So the claim is asked of the dispatch
+    registries themselves rather than of a copied list of their keys:
+
+    * the permanent's own enters trigger, fired inline after the attach by
+      ``stack/resolution._apply_self_enters_battlefield_triggers``;
+    * a registered pay-or-consequence pair, ``phases/upkeep_effects.py``'s
+      ``UPKEEP_EFFECTS`` keyed by (condition, instruction kind);
+    * an ordinary upkeep trigger (CR 603.3) — a seat-unambiguous condition
+      whose instruction is a real handler, enqueued by the upkeep step.
+
+    Anything else — however cleanly it lowers — stays unclaimed, and the card
+    stays visibly unsupported instead of entering play with a silent line.
+
+    The single-vs-``sequence`` wrapping mirrors ``oracle._grammar_line_result``,
+    which is the code that builds the trigger this claim speaks for.
+    """
+    from .grammar import ast as grammar_ast
+    from .grammar import compile_line
+
+    compiled = compile_line(normalized_line, card_name=card_name or None)
+    if compiled.parse_error is not None or compiled.lowering_error is not None:
+        return None
+    if not isinstance(compiled.node, grammar_ast.TriggeredAbilityNode):
+        return None
+    if not compiled.instructions:
+        return None
+    kind = (
+        compiled.instructions[0].kind
+        if len(compiled.instructions) == 1
+        else "sequence"
+    )
+    cond = compiled.node.event.kind
+    if cond == "enters_battlefield":
+        return (
+            "the Aura's own enters trigger — "
+            "stack/resolution._apply_self_enters_battlefield_triggers"
+        )
+    from .phases.upkeep_effects import UPKEEP_EFFECTS
+
+    if (cond, kind) in UPKEEP_EFFECTS:
+        return f"registered upkeep pair ({cond}, {kind}) — phases/upkeep_effects.py"
+    from .handlers import EFFECT_HANDLERS
+
+    if cond in ("upkeep_self", "upkeep_each") and kind in EFFECT_HANDLERS:
+        return "ordinary upkeep trigger (CR 603.3) — phases/upkeep_step.py"
+    return None
 
 
 def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> list[str]:
@@ -586,6 +644,13 @@ def detach_aura(aura, target) -> None:
     # pass — which is a sweep that never reaches its fixpoint.
     if aura.metadata.get("attached_to") is target:
         aura.metadata.pop("attached_to", None)
+        # CR 603.10 last-known information. A triggered ability of the Aura
+        # that resolves after the Aura has left — or a later step of the same
+        # resolution that removed it, Cocoon's "sacrifice it, put a +1/+1
+        # counter on **enchanted creature**" — still knows which creature that
+        # was. `handlers/_common.attached_host` reads this back, and only
+        # while the host itself is still on the battlefield.
+        aura.metadata["last_attached_to"] = target
 
 
 # Reminder text. `oracle.normalize_creature_line` strips it, but importing the
@@ -734,6 +799,54 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         "activated_abilities_shut_off",
     ),
 )
+
+# A "doesn't untap" restriction that holds only while a counter is present —
+# the Legends sleep/pupa pair. The counter's kind and which object holds it are
+# the parameters (payload, exactly as every text-keyed table treats them):
+# Venarian Gold reads the counter off the **enchanted creature**, Cocoon off
+# the **Aura itself**. Both rows are read by `aura_restriction_active`, so the
+# untap step needs no new question — a conditional row whose condition holds is
+# simply "doesnt_untap" being active this step.
+#
+# Cocoon prints "during **your** untap step" where Venarian Gold prints
+# "during **its controller's**". The rows deliberately answer both with the
+# creature's controller's step — the one the untap step is asking about —
+# because Cocoon's "Enchant creature you control" makes the two the same seat
+# whenever the attachment is legal: an opponent gaining control of the creature
+# makes the attachment illegal, and the state-based sweep puts the Aura into
+# the graveyard before any untap step arrives (CR 704.5m/n).
+_COUNTER_UNTAP_CONDITIONS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(
+            rf"^{_ATTACHED} {_NOUN} doesn't untap during its controller's "
+            r"untap step if it has an? (?P<kind>[a-z]+) counter on it$"
+        ),
+        "attached",
+    ),
+    (
+        re.compile(
+            rf"^{_ATTACHED} {_NOUN} doesn't untap during your untap step "
+            r"if this aura has an? (?P<kind>[a-z]+) counter on it$"
+        ),
+        "aura",
+    ),
+)
+
+
+def aura_counter_untap_condition(line: str) -> tuple[str, str] | None:
+    """``(counter kind, holder)`` for a counter-conditioned untap line, or None.
+
+    *holder* names which object the condition reads: ``"attached"`` (Venarian
+    Gold's sleep counter on the creature) or ``"aura"`` (Cocoon's pupa counter
+    on the Aura itself).
+    """
+    normalized = _line_text(line)
+    for pattern, holder in _COUNTER_UNTAP_CONDITIONS:
+        match = pattern.match(normalized)
+        if match is not None:
+            return match.group("kind"), holder
+    return None
+
 
 _PROTECTION_GRANT = re.compile(
     rf"^{_ATTACHED} {_NOUN} has protection from (?P<color>{_COLORS})\b"
@@ -896,10 +1009,26 @@ def aura_restriction_active(permanent, name: str) -> bool:
     stops being attached, so it stops being asked. Nothing is stamped and
     nothing has to be cleaned up.
     """
-    return any(
-        name in aura_restrictions(aura.effective_card.oracle_text)
-        for aura in auras_attached_to(permanent)
-    )
+    from .named_counters import counters_on
+
+    for aura in auras_attached_to(permanent):
+        text = aura.effective_card.oracle_text
+        if name in aura_restrictions(text):
+            return True
+        if name != "doesnt_untap":
+            continue
+        # The counter-conditioned rows: the restriction is active exactly while
+        # the counter is present, read at ask time — so when the last counter
+        # leaves, nothing has to be cleared for the creature to untap again.
+        for raw_line in (text or "").splitlines():
+            found = aura_counter_untap_condition(raw_line)
+            if found is None:
+                continue
+            kind, holder = found
+            holder_obj = permanent if holder == "attached" else aura
+            if counters_on(holder_obj, kind) > 0:
+                return True
+    return False
 
 
 # Animate Artifact: "As long as enchanted artifact isn't a creature, it's an
@@ -1099,6 +1228,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "keyword grant (layer 6) — auras.aura_keyword_grants"
     if aura_restrictions(normalized):
         return "combat/untap restriction — auras.aura_restriction_active"
+    if aura_counter_untap_condition(normalized) is not None:
+        return "counter-conditioned untap restriction — auras.aura_restriction_active"
     if aura_combat_restriction(normalized) is not None:
         return "attached combat restriction — auras.attached_combat_restrictions"
     if aura_ability_target_immunity(normalized) is not None:

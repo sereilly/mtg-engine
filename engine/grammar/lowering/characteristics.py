@@ -625,6 +625,36 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
             modes.append({"label": alternative.keywords[0], "instruction": lowered[0]})
         return (OracleInstruction("choose_one", "", {"modes": tuple(modes)}),)
     if node.duration.kind is None:
+        # "…and that creature gains flying." (Cocoon's hatch, bound to the
+        # enchanted creature by the rider that read it.) A one-shot grant with
+        # no stated duration lasts as long as the object (CR 611.2c's last
+        # bullet: no duration and no source dependence means it holds until
+        # the object leaves) — recorded on the *creature* through the layer-6
+        # write API, which is what lets it outlive the Aura that granted it.
+        if _is_enchanted(node.subject):
+            leftover = _restrictions_beyond(
+                node.subject.filter, frozenset({"card_types", "is_enchanted"})
+            )
+            if leftover:
+                raise LoweringError(
+                    "the enchanted keyword grant cannot narrow by: "
+                    + ", ".join(leftover),
+                    node=node,
+                )
+            if len(node.keywords) != 1:
+                raise LoweringError(
+                    "the enchanted keyword grant takes one keyword", node=node
+                )
+            keyword = node.keywords[0]
+            if keyword not in IMPLEMENTED_KEYWORDS:
+                raise LoweringError(
+                    f"granting {keyword!r} needs the keyword implemented", node=node
+                )
+            return (
+                OracleInstruction(
+                    "grant_keyword_to_attached", "", {"keyword": keyword}
+                ),
+            )
         reason = _durationless_reason(node.subject)
         if reason.startswith("continuous pump"):
             reason = "continuous keyword grant needs the CR 613 layers engine"

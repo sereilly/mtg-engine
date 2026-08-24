@@ -85,6 +85,7 @@ from .characteristics import (
     _lower_change_text,
 )
 from .counters import (
+    _fused_tap_enchanted_then_counters,
     _lower_player_gets_counters,
     _lower_put_counter,
     _PER_DEATH_COUNTERS,
@@ -234,6 +235,7 @@ __all__ = [
     "_lower_gain_keyword",
     "_lower_lose_keyword",
     "_lower_player_gets_counters",
+    "_fused_tap_enchanted_then_counters",
     "_lower_put_counter",
     "_PER_DEATH_COUNTERS",
     "_PER_DEATH_SUBJECT",

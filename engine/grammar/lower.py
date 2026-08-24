@@ -76,6 +76,7 @@ from .lowering import (
     _lower_damage_conjunction,
     _lower_damage_unless_pay,
     _fused_conditional_counter,
+    _fused_tap_enchanted_then_counters,
     _fused_prepare_then_interact,
     _fused_tap_any_number_then_pump,
     _fused_two_target_pump,
@@ -198,7 +199,7 @@ def lower_statement(
     if isinstance(statement, ast.DoublePower):
         return _lower_double_power(statement)
     if isinstance(statement, ast.RemoveCounter):
-        return _lower_remove_counter(statement)
+        return _lower_remove_counter(statement, dispatch_event)
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
@@ -448,6 +449,7 @@ def lower_statement(
             _fused_two_target_pump,
             _fused_conditional_counter,
             _fused_tap_any_number_then_pump,
+            _fused_tap_enchanted_then_counters,
         ):
             fused = fuse(statement.steps)
             if fused is not None:
@@ -688,24 +690,31 @@ def _lower_steps(
         # is made here rather than in a field on the node, where it would be a
         # second copy of ``_PRODUCES`` free to disagree with the first.
         if isinstance(step, ast.Conditional) and isinstance(
-            step.condition, ast.ItHappened
+            step.condition, (ast.ItHappened, ast.CouldNot)
         ):
+            could_not = isinstance(step.condition, ast.CouldNot)
             if last_produced is None:
                 raise LoweringError(
-                    "\"if you do\" after a step that records nothing has no "
+                    ("\"if you can't\"" if could_not else '"if you do"')
+                    + " after a step that records nothing has no "
                     "condition to test",
                     node=step,
                 )
             branch = lower_statement(
                 step.then, produced, event=event, whole_effect=False
             )
+            condition: dict[str, object] = {
+                "kind": "it_happened", "key": last_produced,
+            }
+            # "If you **can't**" runs the branch exactly when the record says
+            # the step did not happen — one condition kind, negated, so the
+            # two riders cannot drift apart in what they read.
+            if could_not:
+                condition["negated"] = True
             instructions += (
                 OracleInstruction(
                     "if_then", "",
-                    {
-                        "condition": {"kind": "it_happened", "key": last_produced},
-                        "then": branch,
-                    },
+                    {"condition": condition, "then": branch},
                 ),
             )
             last_produced = None

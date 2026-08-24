@@ -11,7 +11,7 @@ owner.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import object_only_filter
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -283,6 +283,12 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
             return (OracleInstruction("untap_enchanted_creature", "", {}),)
     elif _is_source(spec):
         return (OracleInstruction("tap_self", "", {}),)
+    elif _is_enchanted(spec):
+        # "When this Aura enters, tap enchanted creature." (Paralyze, Venarian
+        # Gold, Cocoon.) The tap twin of the enchanted untap above, for the
+        # same reason: the subject is the source's own attachment, so no
+        # target exists to route through the targeted tap.
+        return (OracleInstruction("tap_enchanted_creature", "", {}),)
 
     # "Untap up to four lands." (Rewind.) No "target" is printed: nothing is
     # chosen as the spell is cast — the controller picks the lands as it
@@ -302,6 +308,33 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
                 {"amount": spec.count, "filter": {"type_filter": "land"}},
             ),
         )
+    # "Untap all lands you control." (Reset.) "Tap all legendary creatures."
+    # (Arena of the Ancients.) A sweep over a described set: untargeted, so
+    # nothing is chosen and every matching permanent is affected. Two gates,
+    # the pairing round 68 established: `_restrictions_beyond` reads the AST so
+    # a narrowing `to_payload` never emits cannot vanish silently, and the key
+    # check holds the payload to what `subject_matches` demonstrates — a key
+    # outside that set is one the handler would quietly ignore, which would
+    # tap or untap a strictly larger set than the card prints. The honoured
+    # fields are only what the pool prints (round 43's rule): a bare type, a
+    # supertype (Arena of the Ancients' "legendary") and a controller
+    # ("you control", Reset).
+    if spec.quantifier in ("all", "each") and not spec.targeted:
+        leftovers = _restrictions_beyond(
+            spec.filter, frozenset({"card_types", "supertypes", "controller"})
+        )
+        if leftovers:
+            raise LoweringError(
+                "the tap/untap sweep cannot narrow by: " + ", ".join(leftovers),
+                node=node,
+            )
+        described = _filter_payload(spec.filter)
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the tap/untap sweep cannot test this restriction", node=node
+            )
+        kind = "tap_all_matching" if isinstance(node, ast.Tap) else "untap_all_matching"
+        return (OracleInstruction(kind, "", described),)
     if _names_several_targets(spec):
         # "Tap up to two target creatures." (Frost Breath.) The same instruction
         # as the one-target tap — the effect per permanent is identical — with

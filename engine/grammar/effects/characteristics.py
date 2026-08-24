@@ -414,6 +414,24 @@ def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:
         stream.reset(mark)
         return None
     stream.expect_word("from")
+    # "…remove a sleep counter from **that creature**." (Venarian Gold.) The
+    # bound-object phrase, read locally exactly as the destroy production reads
+    # its own "destroy that creature": "that <noun>" names an object something
+    # earlier in the line already bound — here the trigger head — so it must
+    # not become a choice, and teaching the shared noun parser the phrase
+    # would hand it to every line that prints those words. The lowering is
+    # what checks a binder actually exists.
+    bound = stream.mark()
+    if stream.accept_word("that"):
+        noun = stream.peek_word()
+        if noun is not None and noun in CARD_TYPES:
+            stream.advance()
+            return ast.RemoveCounter(
+                ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,))),
+                counter,
+                count,
+            )
+        stream.reset(bound)
     subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected what to remove a counter from")

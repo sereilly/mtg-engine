@@ -421,6 +421,86 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     return True
 
 
+def _bind_that_creature_after_enchanted(branch: ast.Statement) -> ast.Statement:
+    """*branch* with a "that creature" keyword grant bound to the enchanted
+    creature an earlier step of the same branch names.
+
+    "…put a +1/+1 counter on **enchanted creature**, and **that creature**
+    gains flying." (Cocoon.) "That creature" restates the step before it, and
+    the noun parser must not learn the phrase — every sentence printing those
+    words would then lower through a filter naming a creature nobody bound. The
+    pairing is made here, where the antecedent is a fact: only a bare "that
+    creature" is rewritten, and only when an enchanted-creature step precedes
+    it in the same branch.
+    """
+    def bind(
+        statement: ast.Statement, enchanted: ast.TargetSpec | None
+    ) -> tuple[ast.Statement, ast.TargetSpec | None]:
+        # Sequences nest right-leaning ("A, B, and C" parses as (A, (B, C))),
+        # so the walk recurses instead of reading one level of steps.
+        if isinstance(statement, ast.Sequence):
+            rebuilt = []
+            for step in statement.steps:
+                step, enchanted = bind(step, enchanted)
+                rebuilt.append(step)
+            return ast.Sequence(tuple(rebuilt)), enchanted
+        if (
+            isinstance(statement, ast.GainKeyword)
+            and isinstance(statement.subject, ast.TargetSpec)
+            and statement.subject.quantifier == "that"
+            and statement.subject.filter == ast.ObjectFilter(card_types=("creature",))
+            and enchanted is not None
+        ):
+            return replace(statement, subject=enchanted), enchanted
+        subject = getattr(statement, "subject", None)
+        if isinstance(subject, ast.TargetSpec) and subject.filter.is_enchanted:
+            enchanted = subject
+        return statement, enchanted
+
+    bound, _ = bind(branch, None)
+    return bound
+
+
+def _attach_if_you_cant(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """Fold "If you can't, …" into the preceding mandatory action.
+
+    "At the beginning of your upkeep, remove a pupa counter from this Aura. If
+    you can't, sacrifice it, put a +1/+1 counter on enchanted creature, and
+    that creature gains flying." (Cocoon.) The mirror of the un-optional
+    "If you do" (``ItHappened``): the action before it was mandatory, so there
+    is no decision to branch on — the branch asks whether the action *could be
+    performed*, which for a counter removal is whether a counter was there to
+    remove. Paired with the step in front of it here, where "the step before
+    it" is a fact; the lowering (``_lower_steps``) is what checks that the
+    step records an answer to read, exactly as it does for "if you do".
+
+    Only a ``RemoveCounter`` is folded onto: it is the producing step the pool
+    prints this rider after, and a wider fold would pair the words with steps
+    whose "can't" nobody records.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.RemoveCounter):
+        return False
+    mark = stream.mark()
+    if not (
+        stream.accept_word("if")
+        and stream.accept_word("you")
+        and stream.accept_word("can't")
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    try:
+        branch = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    steps.append(
+        ast.Conditional(ast.CouldNot(), _bind_that_creature_after_enchanted(branch))
+    )
+    return True
+
+
 def _attach_when_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """Fold "When you do, …" into the preceding ``May`` as its reflexive branch.
 

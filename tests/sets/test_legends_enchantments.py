@@ -484,3 +484,182 @@ def test_moat_asks_layer_six_so_a_granted_wing_escapes(set_pool):
     assert not game.can_attack(bear, 1)
     grant_keyword(bear, "flying", until_eot=True)
     assert game.can_attack(bear, 1)
+
+
+# ---------------------------------------------------------------------------
+# Venarian Gold and Cocoon (round 13) — enter-taps with counters, and untap
+# restrictions conditioned on the counters. CR 502.3, CR 122.1.
+# ---------------------------------------------------------------------------
+
+
+def test_venarian_gold_taps_and_puts_x_sleep_counters(set_pool):
+    """"When this Aura enters, tap enchanted creature and put X sleep counters
+    on it." — X is the cast's {X}, and "it" is the creature the tap named, not
+    the Aura the pronoun parser would guess."""
+    victim = Permanent(card=_creature("Victim"))
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Venarian Gold"]])
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(
+        0, "Venarian Gold", target_player_index=1, target_permanent_index=0,
+        x_value=3,
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert victim.tapped
+    assert victim.metadata.get("sleep_counters") == 3
+    aura = next(p for p in game.controlled_by(0) if p.card.name == "Venarian Gold")
+    assert aura.metadata.get("attached_to") is victim
+    assert not aura.metadata.get("sleep_counters"), "the counters go on the creature"
+
+
+def _gilded(set_pool, counters: int):
+    """Venarian Gold attached to an opponent's creature carrying *counters*
+    sleep counters."""
+    victim = Permanent(card=_creature("Victim"), tapped=True)
+    aura = Permanent(card=set_pool("LEG")["Venarian Gold"])
+    p1 = PlayerState(name="P1", battlefield=[aura])
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    attach_aura(aura, victim)
+    if counters:
+        victim.metadata["sleep_counters"] = counters
+    return game, aura, victim
+
+
+def test_venarian_gold_holds_the_creature_while_a_sleep_counter_remains(set_pool):
+    game, _, victim = _gilded(set_pool, counters=2)
+
+    game.resolve_untap_step(1)
+    assert victim.tapped, "a sleep counter keeps it down (CR 502.3)"
+
+
+def test_venarian_gold_upkeep_removes_a_sleep_counter_from_the_creature(set_pool):
+    """"At the beginning of the upkeep of enchanted creature's controller,
+    remove a sleep counter from that creature." — the enchanted creature's
+    controller's upkeep, and the counter comes off the *creature*."""
+    game, _, victim = _gilded(set_pool, counters=2)
+
+    game.resolve_upkeep(1)
+    game._settle()
+    assert victim.metadata.get("sleep_counters") == 1
+
+    game.resolve_upkeep(0)
+    game._settle()
+    assert victim.metadata.get("sleep_counters") == 1, (
+        "the Aura's controller's own upkeep is not the trigger"
+    )
+
+
+def test_venarian_gold_releases_the_creature_when_the_counters_run_out(set_pool):
+    game, _, victim = _gilded(set_pool, counters=1)
+
+    game.resolve_upkeep(1)
+    game._settle()
+    assert victim.metadata.get("sleep_counters") == 0
+
+    game.resolve_untap_step(1)
+    assert not victim.tapped, "no counter, no restriction"
+
+
+def test_cocoon_refuses_an_opponents_creature(set_pool):
+    """"Enchant creature you control" (CR 303.4a): an opponent's creature is
+    an illegal choice, and CR 601.2c makes the spell uncastable at it."""
+    theirs = Permanent(card=_creature("Theirs"))
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Cocoon"]])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(0, "Cocoon", target_player_index=1, target_permanent_index=0)
+    assert result.supported is False
+    assert "you control" in result.details
+
+
+def _cocooned(set_pool, counters: int | None = None):
+    """Cocoon cast on its caster's own creature; *counters* overrides the pupa
+    count it entered with."""
+    mine = Permanent(card=_creature("Mine"))
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Cocoon"]], battlefield=[mine])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    result = game.cast_from_hand(0, "Cocoon", target_player_index=0, target_permanent_index=0)
+    assert result.supported, result.details
+    game._settle()
+    aura = next(p for p in game.controlled_by(0) if p.card.name == "Cocoon")
+    if counters is not None:
+        aura.metadata["pupa_counters"] = counters
+    return game, aura, mine
+
+
+def test_cocoon_taps_its_host_and_carries_three_pupa_counters_itself(set_pool):
+    """"…tap enchanted creature and put three pupa counters on **this Aura**."
+    — the counters are the Aura's, one word apart from Venarian Gold's."""
+    game, aura, mine = _cocooned(set_pool)
+
+    assert mine.tapped
+    assert aura.metadata.get("pupa_counters") == 3
+    assert not mine.metadata.get("pupa_counters"), "the counters go on the Aura"
+
+
+def test_cocoon_holds_its_host_while_it_has_a_pupa_counter(set_pool):
+    game, aura, mine = _cocooned(set_pool)
+    mine.tapped = True
+
+    game.resolve_untap_step(0)
+    assert mine.tapped
+
+    game.resolve_upkeep(0)
+    game._settle()
+    assert aura.metadata.get("pupa_counters") == 2, "the upkeep removes one"
+
+
+def test_cocoon_hatches_when_it_cannot_remove_a_counter(set_pool):
+    """"If you can't, sacrifice it, put a +1/+1 counter on enchanted creature,
+    and that creature gains flying." — the whole chain, and the flying is a
+    grant recorded on the creature (CR 611.2c), so it survives the Aura it
+    came from (CR 701.21a's sacrifice)."""
+    game, aura, mine = _cocooned(set_pool, counters=0)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert not game.is_on_battlefield(aura), "the Aura sacrificed itself"
+    assert any(c.name == "Cocoon" for c in game.players[0].graveyard)
+    assert mine.metadata.get("plus_counters") == 1
+    assert game._has_keyword(mine, "flying")
+    assert game.is_on_battlefield(mine), "the creature stays"
+
+    game.resolve_untap_step(0)
+    assert not mine.tapped, "nothing holds it any more"
+    assert game._has_keyword(mine, "flying"), "the grant outlives the Aura"
+
+
+def test_cocoon_does_not_hatch_while_it_can_still_pay(set_pool):
+    """"If you can't" is a reading of the removal's record, not a second
+    removal: with counters left, nothing hatches."""
+    game, aura, mine = _cocooned(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.is_on_battlefield(aura)
+    assert not mine.metadata.get("plus_counters")
+    assert not game._has_keyword(mine, "flying")
+
+
+def test_cocoon_dies_when_its_host_changes_sides(set_pool):
+    """CR 704.5m via CR 303.4c: "Enchant creature you control" makes the
+    attachment illegal the moment an opponent controls the creature, and the
+    sweep puts the Aura into its owner's graveyard."""
+    game, aura, mine = _cocooned(set_pool)
+
+    game.take_control(mine, 1, source=None)
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(aura)
+    assert any(c.name == "Cocoon" for c in game.players[0].graveyard)

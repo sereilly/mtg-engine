@@ -171,6 +171,82 @@ def untap_enchanted_creature(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+@effect_handler("tap_enchanted_creature")
+def tap_enchanted_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When this Aura enters, tap enchanted creature." (Paralyze, Venarian
+    Gold, Cocoon.) The tap twin of ``untap_enchanted_creature``, and a handler
+    of its own for the same reason: the subject is known from the source's own
+    attachment, so no target is chosen and the targeted tap would ask for one.
+
+    ``_turn_face_up`` for the reason ``tap_target_permanent`` calls it: a
+    face-down creature (Illusionary Mask) turns face up when it becomes
+    tapped, and this is a way it becomes tapped.
+    """
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    attached_to = source_permanent.metadata.get("attached_to")
+    if attached_to is not None and game.is_on_battlefield(attached_to):
+        game.become_tapped(attached_to)
+        game._turn_face_up(attached_to)
+        game.log.append(f"{context.card.name} tapped {attached_to.card.name}")
+    return True, "resolved"
+
+
+def _tap_or_untap_all_matching(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+    *, make_tapped: bool,
+) -> tuple[bool, str]:
+    """"Untap all lands you control." (Reset.) "Tap all legendary creatures."
+    (Arena of the Ancients.)
+
+    A sweep over a described set, not a choice: nothing is targeted and nobody
+    picks, so every permanent the phrase names is affected (CR 611.2c fixes
+    the set when the effect begins). The set resolves through
+    ``subject_matches`` — one answer for what a printed noun phrase means —
+    with the resolving controller as the observer, because "you control" is
+    that seat's "you" (CR 109.5). The lowering admits only payloads that
+    matcher tests in full, so nothing here can quietly reach a wider set than
+    the card prints.
+    """
+    from ..subject_filters import subject_matches
+
+    observer = game.players.index(context.caster) if context.caster in game.players else None
+    matched = [
+        perm for perm in game.all_permanents()
+        if subject_matches(
+            game, perm, instruction.payload,
+            observer=observer, source=context.source_permanent,
+        )
+    ]
+    changed = []
+    for perm in matched:
+        if make_tapped:
+            if game.become_tapped(perm):
+                game._turn_face_up(perm)
+                changed.append(perm)
+        elif game.become_untapped(perm):
+            changed.append(perm)
+    verb = "tapped" if make_tapped else "untapped"
+    if changed:
+        game.log.append(
+            f"{context.card.name} {verb} " + ", ".join(p.card.name for p in changed)
+        )
+    else:
+        game.log.append(f"{context.card.name}: nothing to tap or untap")
+    return True, "resolved"
+
+
+@effect_handler("tap_all_matching")
+def tap_all_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    return _tap_or_untap_all_matching(game, instruction, context, make_tapped=True)
+
+
+@effect_handler("untap_all_matching")
+def untap_all_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    return _tap_or_untap_all_matching(game, instruction, context, make_tapped=False)
+
+
 @effect_handler("tap_target_permanent")
 def tap_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     targets_desc = instruction.payload.get("targets") or {}

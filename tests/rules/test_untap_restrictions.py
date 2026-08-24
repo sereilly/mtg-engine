@@ -128,3 +128,26 @@ def test_502_3_unrelated_untap_text_imposes_no_restriction():
         "",
     ):
         assert _restriction(text) is None, text
+
+
+@pytest.mark.cr("502.3")
+def test_502_3_supertype_gated_untap_block():
+    """"Legendary creatures don't untap during their controllers' untap
+    steps." (Arena of the Ancients) — the supertype is payload, so the card
+    needs no registration; and the plural-possessive spelling is the one the
+    card prints."""
+    r = _restriction(
+        "Legendary creatures don't untap during their controllers' untap steps."
+    )
+
+    assert r is not None
+    assert (r.scope, r.supertype) == ("creature_supertype", "legendary")
+
+
+@pytest.mark.cr("502.3")
+def test_502_3_supertype_block_is_not_claimed_for_unimplemented_supertypes():
+    """A word the enforcement has no card behind stays unclaimed — a wording
+    outside the table must refuse, never silently widen (the round-43 rule)."""
+    assert _restriction(
+        "Snow creatures don't untap during their controllers' untap steps."
+    ) is None

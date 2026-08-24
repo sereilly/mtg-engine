@@ -107,6 +107,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Pestilent Haze's second mode: loyalty stripped from every walker at once.
     "remove_loyalty_from_each_planeswalker": "counters",
     "add_pt_counters_to_attached": "counters",
+    # Its named-counter twin ("…put X sleep counters on it", Venarian Gold).
+    "add_named_counter_to_attached": "counters",
+    # Its removal ("remove a sleep counter from that creature", Venarian
+    # Gold), fired by the upkeep registry.
+    "remove_counter_from_attached": "counters",
     "draw_then_discard_self": "zones",
     "discard_then_draw_that_many": "zones",
     "target_gains_life": "life",
@@ -139,6 +144,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "tap_any_number_then_pump_self": "tapping",
     "untap_self": "tapping",
     "untap_enchanted_creature": "tapping",
+    # The enchanted untap's tap twin (Paralyze's enter-tap), and the
+    # non-targeted sweep pair over a described set ("Untap all lands you
+    # control", Reset; "tap all legendary creatures", Arena of the Ancients).
+    "tap_enchanted_creature": "tapping",
+    "tap_all_matching": "tapping",
+    "untap_all_matching": "tapping",
     "grant_prevention_shield": "prevention",
     "prevent_all_combat_damage": "prevention",
     # The same blanket, narrowed to a printed noun phrase (Pack Leader). Same
@@ -230,6 +241,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "name_and_strip": "zones",
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
+    # A durationless keyword grant to the enchanted creature (Cocoon's hatch):
+    # recorded on the creature through the layer-6 write API, so it survives
+    # the Aura (CR 611.2c).
+    "grant_keyword_to_attached": "pump",
     "add_loyalty_counters": "counters",
     # The same counter on a permanent the controller chooses at resolution
     # (Liliana's Scrounger). Same category, so GRAMMAR_CATEGORIES is unchanged:
@@ -357,6 +372,10 @@ _PRODUCES: dict[str, str] = {
     # reads (Scavenging Ooze) — the same key, because the question the
     # back-reference asks is the same one: what did this effect just exile?
     "exile_target_graveyard_card": "exiled_cards",
+    # "Remove a pupa counter from this Aura. **If you can't**, …" (Cocoon).
+    # The removal records whether a counter was there to remove, and the
+    # if-you-can't branch reads the record back, negated.
+    "remove_counter_from_self": "removed_counter",
     # "Tap up to two target creatures. **Those creatures** don't untap…"
     # (Frost Breath.) The tap records which permanents it affected, by id, and
     # the sentence after it reads that record rather than re-resolving the slots

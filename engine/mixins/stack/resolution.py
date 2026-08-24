@@ -717,6 +717,11 @@ class StackResolutionMixin:
                 target_permanent_index=target_permanent_index,
                 target_permanent_id=target_permanent_id,
                 source_permanent=permanent,
+                # The cast's X, stamped on the permanent by `_stack_push`.
+                # "When this Aura enters, … put X sleep counters on it"
+                # (Venarian Gold) reads it, and without it every amount in an
+                # ETB trigger resolved "x" to zero.
+                x_value=permanent.metadata.get("cast_x_value"),
             )
             # CR 603.4: an intervening-if gates the trigger. This inline path
             # is both fire and resolution for an ETB trigger, so the one read

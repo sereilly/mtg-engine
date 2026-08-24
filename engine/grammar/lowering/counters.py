@@ -250,6 +250,56 @@ _PER_DEATH_SUBJECT = ast.TargetSpec(
 _ANY_CREATURE_DIED = ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))
 
 
+def _fused_tap_enchanted_then_counters(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"Tap enchanted creature and put X sleep counters on it." (Venarian Gold.)
+
+    Fused because of the pronoun. The noun parser reads a bare "it" as the
+    ability's own source, which in this sentence is the *Aura* — so lowered
+    step by step the counters would land on the Aura while the card puts them
+    on the creature it tapped. The antecedent is the step in front of it, and
+    this is the one place that knows what that step was (the same discipline
+    ``_lower_steps`` states for "if you do"), so the pairing is made here:
+    after a tap of the enchanted creature, "it" is that creature.
+
+    Only the pronoun spelling is claimed. "…put three pupa counters on **this
+    Aura**" (Cocoon) names the source outright and lowers step by step to the
+    self placement, exactly as printed. Anything the attached placement cannot
+    honour — an "up to", a doubling rider, a cap, a count that is not a number
+    or X — returns to the generic path, whose refusals name what is missing.
+    """
+    if len(steps) != 2:
+        return None
+    tap, put = steps
+    if not isinstance(tap, ast.Tap) or not _is_enchanted(tap.subject):
+        return None
+    if not isinstance(put, ast.PutCounter):
+        return None
+    subject = put.subject
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and subject.filter.is_source
+    ):
+        return None
+    if is_pt_counter(put.counter) or put.up_to or put.then_double or put.cap is not None:
+        return None
+    if isinstance(put.count, ast.Fixed):
+        count: object = put.count.value
+    elif isinstance(put.count, ast.Var):
+        count = "x"
+    else:
+        return None
+    return (
+        OracleInstruction("tap_enchanted_creature", "", {}),
+        OracleInstruction(
+            "add_named_counter_to_attached", "",
+            {"counter": put.counter, "count": count},
+        ),
+    )
+
+
 def _lower_player_gets_counters(
     node: ast.PlayerGetsCounters, event: str | None
 ) -> tuple[OracleInstruction, ...]:
@@ -286,7 +336,9 @@ def _lower_player_gets_counters(
     )
 
 
-def _lower_remove_counter(node: ast.RemoveCounter) -> tuple[OracleInstruction, ...]:
+def _lower_remove_counter(
+    node: ast.RemoveCounter, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """``Remove a <kind> counter from this <permanent>`` (Armageddon Clock).
 
     The counter's name is payload — it is the accumulating side's payload too
@@ -316,6 +368,39 @@ def _lower_remove_counter(node: ast.RemoveCounter) -> tuple[OracleInstruction, .
         return (
             OracleInstruction(
                 "remove_loyalty_from_each_planeswalker", "", {"amount": amount}
+            ),
+        )
+    # "…remove a sleep counter from **that creature**." (Venarian Gold.) "That
+    # creature" restates an object something earlier bound, and the only
+    # trigger head that binds one is `upkeep_enchanted_controller` — its
+    # sentence is *about* the enchanted creature, which is what the handler
+    # reads off the source's own attachment. Under any other event the words
+    # name a creature nobody recorded, so the line keeps refusing; and the
+    # dispatch registry keys on the ability's whole instruction, so a nested
+    # occurrence (event is None here) refuses the same way.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and event == "upkeep_enchanted_controller"
+    ):
+        if node.subject.filter != ast.ObjectFilter(card_types=("creature",)):
+            raise LoweringError(
+                "the attached counter removal reads the enchanted creature alone",
+                node=node,
+            )
+        if is_pt_counter(node.counter):
+            raise LoweringError(
+                "a P/T counter removal needs the counter seam, which this "
+                "handler does not reach",
+                node=node,
+            )
+        if _amount_payload(node.count) != 1:
+            raise LoweringError(
+                "no handler removes more than one counter at a time", node=node
+            )
+        return (
+            OracleInstruction(
+                "remove_counter_from_attached", "", {"counter": node.counter}
             ),
         )
     if not _is_source(node.subject):

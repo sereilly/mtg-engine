@@ -70,7 +70,22 @@ def aura_enchant_noun(card: CardDefinition) -> str | None:
     return None
 
 
+def enchant_noun_own_only(noun: str) -> bool:
+    """Whether the enchant clause restricts the host to the Aura's own
+    controller's permanents ("Enchant creature **you control**", Cocoon).
+
+    The seat half of the clause, separated from the type half because the type
+    is a question about the permanent alone while this one needs two seats —
+    asked by the cast gate (CR 601.2c), by the AI's target picker, and by the
+    CR 704.5m sweep that puts the Aura into the graveyard when its host
+    changes sides.
+    """
+    return noun.endswith(" you control")
+
+
 def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
+    if enchant_noun_own_only(noun):
+        noun = noun[: -len(" you control")].strip()
     matcher = _ENCHANT_TARGET_MATCHERS.get(noun)
     if matcher is None:
         return True  # unknown enchant type — treat any permanent as legal
@@ -926,6 +941,15 @@ class SpellCastingMixin:
                         chosen, enchant_noun
                     ):
                         return False, f"no valid target for {card.name}"
+                    # "Enchant creature **you control**" (Cocoon): the seat
+                    # half of the clause, CR 601.2c — an illegal choice makes
+                    # the spell uncastable, not merely ineffective.
+                    if enchant_noun_own_only(enchant_noun) and not self.controls(
+                        caster_index, chosen
+                    ):
+                        return False, (
+                            f"{card.name} can only enchant a permanent you control"
+                        )
                     # "You can't choose an untapped creature as this spell's
                     # target as you cast it." (Enthralling Hold.) CR 601.2c: an
                     # illegal choice makes the spell uncastable, not merely

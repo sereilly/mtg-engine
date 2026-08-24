@@ -37,6 +37,8 @@ class UntapRestriction:
                   source permanent itself is untapped (Winter Orb)
     color      -- with scope="creature_color", the mana symbol of the creatures
                   that don't untap (Magnetic Mountain)
+    supertype  -- with scope="creature_supertype", the printed supertype of the
+                  creatures that don't untap (Arena of the Ancients)
     """
 
     scope: str
@@ -44,6 +46,7 @@ class UntapRestriction:
     min_power: int | None = None
     only_while_source_untapped: bool = False
     color: str | None = None
+    supertype: str | None = None
 
 
 # "As long as this artifact is untapped, ..." (Winter Orb) — a self-state
@@ -77,6 +80,12 @@ def _color_block(match: re.Match) -> UntapRestriction:
     )
 
 
+def _supertype_block(match: re.Match) -> UntapRestriction:
+    return UntapRestriction(
+        scope="creature_supertype", supertype=match.group("supertype")
+    )
+
+
 # Ordered: the first pattern whose regex matches the (qualifier-stripped) line
 # wins, so more specific wordings precede more general ones.
 UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRestriction]], ...] = (
@@ -102,6 +111,17 @@ UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRe
         ),
         _color_block,
     ),
+    (
+        # "Legendary creatures don't untap during their controllers' untap
+        # steps." (Arena of the Ancients.) The supertype is the parameter,
+        # held to the one word a card actually prints — a wider alternation
+        # with no card behind it is untested by construction.
+        re.compile(
+            r"^(?P<supertype>legendary) creatures don't untap "
+            r"during their controllers' untap steps$"
+        ),
+        _supertype_block,
+    ),
 )
 
 
@@ -121,6 +141,7 @@ def _restriction_from_line(line: str) -> UntapRestriction | None:
                     min_power=restriction.min_power,
                     only_while_source_untapped=True,
                     color=restriction.color,
+                    supertype=restriction.supertype,
                 )
             return restriction
     return None

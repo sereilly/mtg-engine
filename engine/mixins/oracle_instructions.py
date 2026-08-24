@@ -482,11 +482,15 @@ class OracleInstructionsMixin:
                     self.log.append(f"{aura_permanent.card.name} dealt 2 damage to {target_creature.card.name} and stripped flying")
                 ran_entry_text = True
 
-            # Paralyze: tap enchanted creature on enter and mark it as prevented from untapping
-            if "tap enchanted creature" in text and "doesn't untap during its controller's untap step" in text:
-                self.become_tapped(target_creature)
-                self._turn_face_up(target_creature)
-                self.log.append(f"{aura_permanent.card.name} tapped {target_creature.card.name} and prevents it from untapping")
+            # Paralyze's enter-tap is no longer performed here. The line
+            # "When this Aura enters, tap enchanted creature" compiles to a
+            # real trigger now (`tap_enchanted_creature`), fired by
+            # `_apply_self_enters_battlefield_triggers` after the attach — and
+            # the substring pair this branch tested also matched Venarian
+            # Gold, whose sleep counters it would have quietly dropped. The
+            # untap restriction half was never this branch's to enforce: the
+            # untap step derives it from the attached Aura's own text
+            # (auras.aura_restriction_active).
 
             # Control effect: a CR 613 layer-2 contribution from this Aura
             # (e.g. Control Magic). Recorded, not performed — the Aura leaving

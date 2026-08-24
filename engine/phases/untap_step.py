@@ -11,6 +11,7 @@ aggregates and enforces them, so new restriction cards never touch it.
 
 from ..auras import aura_restriction_active
 from ..handlers._common import permanent_effective_colors
+from ..layer_bridge import printed_supertypes
 from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
 from ..control import LINKED_CONTROL_CONDITIONS
 from ..untap_restrictions import (
@@ -41,6 +42,7 @@ class UntapStepMixin:
         limits: dict[str, int] = {}
         min_power_block: int | None = None
         blocked_colors: set[str] = set()
+        blocked_supertypes: set[str] = set()
         for perm in self.all_permanents():
             # effective_card, so a CR 613 layer-3 text change (Sleight of Mind
             # rewriting the colour word) is applied before the restriction is
@@ -67,11 +69,14 @@ class UntapStepMixin:
                     )
             elif restriction.scope == "creature_color" and restriction.color:
                 blocked_colors.add(restriction.color)
+            elif restriction.scope == "creature_supertype" and restriction.supertype:
+                blocked_supertypes.add(restriction.supertype)
         return {
             "skip_all_source": skip_all_source,
             "limits": limits,
             "min_power_block": min_power_block,
             "blocked_colors": blocked_colors,
+            "blocked_supertypes": blocked_supertypes,
         }
 
     def get_untap_land_selection_options(self, player_index: int) -> dict[str, object] | None:
@@ -187,6 +192,7 @@ class UntapStepMixin:
         limits: dict[str, int] = dict(constraints["limits"])
         min_power_block = constraints["min_power_block"]
         blocked_colors = constraints["blocked_colors"]
+        blocked_supertypes = constraints["blocked_supertypes"]
 
         # The controller chooses which of the constrained permanents to untap
         # (CR 502 with a "can't untap more than N" restriction): Winter Orb
@@ -276,6 +282,15 @@ class UntapStepMixin:
                 # Magnetic Mountain: creatures of a blocked color stay tapped
                 # (a separate upkeep effect may untap them anyway, for a cost).
                 if blocked_colors and permanent_effective_colors(permanent) & blocked_colors:
+                    continue
+                # Arena of the Ancients: creatures of a blocked supertype stay
+                # tapped. Read off the effective type line — the same read
+                # `permanent_matches_filter` makes for a "legendary" phrase —
+                # so a CR 613 text/type change is applied before the word is.
+                if blocked_supertypes and (
+                    blocked_supertypes
+                    & printed_supertypes(permanent.effective_card.type_line)
+                ):
                     continue
                 if aura_restriction_active(permanent, "doesnt_untap"):
                     continue

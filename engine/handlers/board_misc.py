@@ -622,6 +622,37 @@ def add_named_counter_to_self(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("add_named_counter_to_attached")
+def add_named_counter_to_attached(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…tap enchanted creature and put X sleep counters on **it**." (Venarian
+    Gold.)
+
+    The named-counter twin of ``add_pt_counters_to_attached``: the recipient is
+    the permanent this Aura enchants — no target was chosen — and the counter's
+    word is payload. The count may be "x", resolved against the cast's X the
+    way every amount path resolves it; Venarian Gold's {X} is stamped on the
+    Aura at cast and threaded to its enters trigger by the fire site.
+    """
+    from ..named_counters import add_counters
+    from ._common import attached_host
+
+    attached = attached_host(game, context.source_permanent)
+    if attached is None:
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", ""))
+    count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
+    if count <= 0:
+        game.log.append(f"{context.card.name}: no {counter} counters to place")
+        return True, "resolved"
+    total = add_counters(attached, counter, count)
+    game.log.append(
+        f"{context.card.name}: {attached.card.name} gets "
+        + (f"a {counter} counter" if count == 1 else f"{count} {counter} counters")
+        + f" ({total} total)"
+    )
+    return True, "resolved"
+
+
 @effect_handler("remove_counter_from_self")
 def remove_counter_from_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Armageddon Clock: "Remove a doom counter from this artifact."
@@ -637,13 +668,43 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
     key = f"{counter}_counters"
     current = int(permanent.metadata.get(key, 0))
     if current <= 0:
+        # The record "if you can't" reads (Cocoon): removing from zero is a
+        # no-op, and it is also the removal *not happening*.
+        context.results["removed_counter"] = False
         game.log.append(f"{permanent.card.name} has no {counter} counter to remove")
         return True, "resolved"
+    context.results["removed_counter"] = True
     permanent.metadata[key] = current - 1
     game.log.append(
         f"Removed a {counter} counter from {permanent.card.name} "
         f"({permanent.metadata[key]} left)"
     )
+    return True, "resolved"
+
+
+@effect_handler("sacrifice_self")
+def sacrifice_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…sacrifice it." where "it" is the ability's own source (Cocoon's
+    hatch).
+
+    Through ``Game.sacrifice_permanent`` — CR 701.21a's one transition — so the
+    owner lookup, token cessation, would-die replacements, Aura teardown and
+    death counts all happen. A source already gone is nothing to sacrifice
+    (CR 608.2b does as much as possible), not a failure: the rest of the
+    resolution still runs.
+
+    This kind used to have **no handler at all**: every card compiling it was
+    a "when you control no Islands/lands" state trigger the CR 603.8 sweep in
+    ``mixins/game_ending.py`` performs itself, and the generic dispatch
+    reported "resolved without state mutation". That sweep still owns those
+    triggers — it never executes instructions, so nothing fires twice.
+    """
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{context.card.name}: nothing left to sacrifice")
+        return True, "resolved"
+    if game.sacrifice_permanent(source) is not None:
+        game.log.append(f"{context.card.name} was sacrificed")
     return True, "resolved"
 
 
