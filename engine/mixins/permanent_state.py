@@ -1178,6 +1178,23 @@ class PermanentStateMixin:
         """
         if self._has_keyword(target, "shroud"):
             return False
+        # "…can't be the target of Aura spells" (Bartel Runeaxe, Tetsuo
+        # Umezawa), "…can't be the target of spells" (Anti-Magic Aura). Asked
+        # only when the chooser is a *spell*, which `ability_source is None`
+        # says: these clauses narrow shroud to spells, and Artifact Ward's
+        # sibling below narrows it to abilities. A card may print either
+        # without the other (CR 115.6), so neither may answer for both.
+        if ability_source is None and source_card is not None:
+            from ..target_immunity import (
+                spell_is_in_class,
+                spell_target_immunity_classes,
+            )
+
+            if any(
+                spell_is_in_class(source_card, spell_class)
+                for spell_class in spell_target_immunity_classes(target)
+            ):
+                return False
         if ability_source is not None:
             from ..auras import ability_target_immunity_classes
             from ..prevention import source_has_type

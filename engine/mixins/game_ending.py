@@ -13,6 +13,7 @@ from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..trigger_utils import matching_triggers
 from .stack import aura_enchant_noun, enchant_noun_own_only
+from ..target_immunity import cannot_be_enchanted
 from ..tokens import is_token_card
 
 _COUNTER_CAP_RE = re.compile(r"can't have more than (\d+) (\w+) counters")
@@ -487,6 +488,31 @@ class GameEndingMixin:
                     on_destroy=_on_destroy_5m,
                 ):
                     changed = True
+
+            # CR 303.4c's "and **other applicable effects**": an Aura on a
+            # permanent that can't be enchanted by other Auras (Anti-Magic
+            # Aura) is enchanting an illegal object, and 704.5m bins it. The
+            # source's own Aura is exempt by the printed word "other", which is
+            # why the predicate takes the Aura asking — without that Anti-Magic
+            # Aura would make itself illegal and be swept the turn it landed.
+            for player in self.players:
+                departing_immune = []
+                for perm in list(self.controlled_by(player)):
+                    if "Aura" not in perm.card.type_line:
+                        continue
+                    host = perm.metadata.get("attached_to")
+                    if host is None or not self.is_on_battlefield(host):
+                        continue
+                    if not cannot_be_enchanted(host, by_aura=perm):
+                        continue
+                    self._permanent_to_graveyard(player, perm)
+                    self.log.append(
+                        f"{perm.card.name} put into graveyard (704.5m: "
+                        f"{host.card.name} can't be enchanted by other Auras)"
+                    )
+                    changed = True
+                    departing_immune.append(perm)
+                self.remove_all_from_battlefield(departing_immune)
 
             # CR 704.5m's other half: an Aura is also illegally attached when
             # its host stops satisfying the enchant clause. Enforced for the

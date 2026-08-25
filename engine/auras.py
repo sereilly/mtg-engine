@@ -1218,6 +1218,7 @@ def aura_continuous_claim(line: str) -> str | None:
         attached_combat_shield_direction as _attached_combat_shield_direction,
         attached_prevent_all_from_source_type as _attached_prevent_all_from_source_type,
     )
+    from .target_immunity import immunity_claims_line
 
     normalized = _line_text(line)
     if _STATIC_PT_LINE.match(normalized):
@@ -1234,6 +1235,13 @@ def aura_continuous_claim(line: str) -> str | None:
         return "attached combat restriction — auras.attached_combat_restrictions"
     if aura_ability_target_immunity(normalized) is not None:
         return "ability-target immunity — auras.ability_target_immunity_classes"
+    # "Enchanted creature can't be the target of spells and can't be enchanted
+    # by other Auras." (Anti-Magic Aura.) Both clauses, or neither: the reader
+    # claims a line only when it implements every restriction the line conjoins,
+    # so a card pairing one of these with a sentence nothing reads stays
+    # unsupported instead of losing half its text.
+    if immunity_claims_line(normalized):
+        return "target/enchant immunity — target_immunity"
     if _attached_prevent_all_from_source_type(normalized) is not None:
         return "prevention from a source class — prevention._source_type_shielded_by"
     if _attached_combat_shield_direction(normalized) is not None:

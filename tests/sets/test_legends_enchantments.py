@@ -731,3 +731,63 @@ def test_spiritual_sanctuary_asks_about_that_player_not_about_anybody(set_pool):
 
     assert p2.life == 20, "the opponent controls no Plains"
     assert p1.life == 20, "and the controller's Plains is not their upkeep"
+
+
+# ---------------------------------------------------------------------------
+# Round 18 — Anti-Magic Aura: two clauses, two rules
+# ---------------------------------------------------------------------------
+
+
+def _anti_magic(set_pool):
+    """Anti-Magic Aura attached to a Grizzly Bears on seat 0."""
+    from engine.auras import attach_aura
+
+    bear = Permanent(card=set_pool("LEA")["Grizzly Bears"])
+    aura = Permanent(card=set_pool("LEG")["Anti-Magic Aura"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bear, aura], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    attach_aura(aura, bear)
+    game._sync_control()
+    return game, bear, aura
+
+
+def test_anti_magic_aura_stops_every_spell_targeting_the_creature(set_pool):
+    """"…can't be the target of **spells**" is unnarrowed, so Giant Growth is
+    stopped as surely as an Aura is — the class is payload, and this card's
+    class is every spell."""
+    game, bear, _aura = _anti_magic(set_pool)
+
+    assert not game._can_be_targeted(bear, set_pool("LEA")["Holy Strength"], caster_index=1)
+    assert not game._can_be_targeted(bear, set_pool("LEA")["Giant Growth"], caster_index=1)
+
+
+def test_anti_magic_aura_survives_its_own_clause(set_pool):
+    """"…by **other** Auras". Read without the word, the Aura makes its own
+    attachment illegal and CR 704.5m bins it the moment it lands."""
+    game, _bear, aura = _anti_magic(set_pool)
+
+    game.check_state_based_actions()
+
+    assert game.is_on_battlefield(aura)
+
+
+def test_anti_magic_aura_bins_another_aura_on_the_same_creature(set_pool):
+    """CR 303.4c: an Aura enchanting an illegal object "as defined by its
+    enchant ability **and other applicable effects**" is put into its owner's
+    graveyard (CR 704.5m). This clause is such an effect, so the other Aura is
+    illegally attached — the half a targeting-only reading would have missed,
+    since Holy Strength was already attached and never targeted anything."""
+    from engine.auras import attach_aura
+
+    game, bear, aura = _anti_magic(set_pool)
+    holy = Permanent(card=set_pool("LEA")["Holy Strength"])
+    game.players[0].battlefield.append(holy)
+    game._sync_control()
+    attach_aura(holy, bear)
+
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(holy)
+    assert game.is_on_battlefield(aura), "and the source is still exempt"

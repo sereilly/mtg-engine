@@ -1391,3 +1391,58 @@ def test_ayesha_tanaka_counters_when_its_controller_cannot_pay(set_pool):
     _game, _p1, p2 = _ayesha_board(set_pool, {})
 
     assert p2.life == 20
+
+
+# ---------------------------------------------------------------------------
+# Round 18 — a narrowed shroud: "can't be the target of Aura spells"
+# ---------------------------------------------------------------------------
+
+
+def _bartel(set_pool, lea_by_name=None):
+    """Bartel Runeaxe on seat 0, an opponent holding spells on seat 1."""
+    bartel = Permanent(card=set_pool("LEG")["Bartel Runeaxe"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bartel], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    return game, bartel
+
+
+def test_bartel_runeaxe_cannot_be_targeted_by_an_aura_spell(set_pool):
+    """CR 115.6 through the one predicate every chooser reaches.
+
+    The line names the card, not "this creature" — pre-modern templating — so
+    the runtime reader has to collapse the self-reference the same way the
+    support gate does. It did not at first, and the card compiled supported
+    while protecting nobody.
+    """
+    game, bartel = _bartel(set_pool)
+    holy_strength = set_pool("LEA")["Holy Strength"]
+
+    assert not game._can_be_targeted(bartel, holy_strength, caster_index=1)
+
+
+def test_bartel_runeaxe_is_an_ordinary_target_for_anything_else(set_pool):
+    """A *narrowed* shroud, not shroud. Giant Growth is not an Aura spell, and
+    a restriction read as plain shroud would stop it too."""
+    game, bartel = _bartel(set_pool)
+    giant_growth = set_pool("LEA")["Giant Growth"]
+
+    assert game._can_be_targeted(bartel, giant_growth, caster_index=1)
+
+
+def test_bartel_runeaxe_refuses_an_aura_at_the_cast_gate(set_pool):
+    """The predicate is what the cast path asks, so the spell is refused with
+    nothing paid rather than resolving onto an illegal target."""
+    bartel = Permanent(card=set_pool("LEG")["Bartel Runeaxe"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bartel], life=20),
+        PlayerState(name="P2", hand=[set_pool("LEA")["Holy Strength"]], life=20),
+    ])
+    game.start_turn(1)
+
+    result = game.cast_from_hand(
+        1, "Holy Strength", target_player_index=0, target_permanent_index=0
+    )
+
+    assert not result.supported

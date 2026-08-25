@@ -50,6 +50,7 @@ from .auras import unclaimed_aura_lines
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .cast_costs import cast_cost_claims_line
 from .combat_restrictions import combat_restriction_for
+from .target_immunity import immunity_claims_line
 from .effect_labels import activated_label, triggered_label
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .rampage import rampage_amount, rampage_triggers
@@ -2102,6 +2103,13 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # (loud) instead.
     if combat_restriction_for(_restriction_line(line, card_name), card_name) is not None:
         return True
+    # "<this creature> can't be the target of Aura spells" (Bartel Runeaxe,
+    # Tetsuo Umezawa). Asked of the same reader `_can_be_targeted` consults, so
+    # a wording the table cannot read is reported unsupported rather than
+    # admitted with the protection absent — the direction every gate in this
+    # function exists to prevent.
+    if immunity_claims_line(_restriction_line(line, card_name)):
+        return True
     # A lord's continuous buff to other creatures. The gate used to admit the
     # bare prefix "other ", which is a template in disguise: "Other Goblins
     # glimmer uncontrollably." compiled as supported and did nothing. It asks
@@ -2705,6 +2713,8 @@ def _derived_static_claims(
     from .prevention import prevention_claims_line
     from .replacements import replacement_claims_line
     from .revealed_hands import revealed_hands_line
+    from .target_immunity import CLAIM as TARGET_IMMUNITY_CLAIM
+    from .target_immunity import immunity_claims_line
     from .untap_restrictions import untap_restriction_for
 
     claims: list[str] = []
@@ -2746,6 +2756,13 @@ def _derived_static_claims(
         claims.append("evasion_negation")
     if draw_step_bonus_for(oracle_text) is not None:
         claims.append("draw_step_modifiers")
+    # "<permanent> can't be the target of Aura spells" (Bartel Runeaxe, Tetsuo
+    # Umezawa). `_can_be_targeted` reads the permanent's own text at the moment
+    # a target is chosen, so there is no instruction — and on a creature whose
+    # only non-keyword line is this sentence, no instruction would mean the card
+    # reports unsupported however well the protection works.
+    if any(immunity_claims_line(line) for line in oracle_text.splitlines()):
+        claims.append(TARGET_IMMUNITY_CLAIM)
     # "Players play with their hands revealed." (Revelation.) The per-seat
     # state payload derives who may see whose hand from the permanent's own
     # text (engine/revealed_hands.py), so there is no instruction — and on an
