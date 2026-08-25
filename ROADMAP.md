@@ -1543,3 +1543,44 @@ lowers 55.5% → 55.7%, executes flat at 30.2% — both cards are enforced by
 derivation rather than by an instruction, which is what "executes" counts.
 Shipped pool unchanged at 734/734. Suite 7,163 → 7,169, full run green with
 every `--check`; no hooks added.
+
+## LEG round 19: a printed "or" is a union, and the pair was spelled in
+
+*(2026-08-25.)* Tetsuo Umezawa, and the fused key that was keeping it out.
+
+**The parser knew one pair.** "Target attacking **or** blocking creature" — the
+four Legends pingers — was read by a branch that checked for exactly those two
+words and set a boolean called `attacking_or_blocking`. Tetsuo prints "target
+**tapped or blocking** creature": the same sentence with one word changed, and
+it refused with "expected something to destroy" for a template the engine
+implements. Round 15's colour union and round 14's threshold are the same
+finding in the same place; by now the tell is a payload key whose *name* spells
+out its own parameters.
+
+`any_states` carries the printed words, and one `state_holds` table says what
+each one asks of a permanent — shared with the singular narrowings beside it, so
+a target restriction and a conditional buff cannot come to disagree about what
+"blocking" means. Four consumers moved over: the payload, the matcher, the cast
+gate and the picker.
+
+**The picker had to carry it by value.** `_narrowing_flags` forwards its keys as
+bare `True`, which is right for `attacking_only` and wrong the moment the key
+has words in it — the first run flattened `["tapped","blocking"]` to `True` and
+`legality.py` tried to iterate a boolean. Worth stating because the failure was
+loud: a flag that quietly stayed True would have offered every creature as a
+target and looked fine.
+
+**Invented words in the test on purpose.** The parametrized table includes
+"untapped or attacking" and a three-way union no card prints. A test naming only
+the two real printings passes against the version that matched those two
+literally — which is the false-negative shape `engine/land_animation.py`
+documents, and the reason this round exists at all.
+
+**Numbers.** LEG 196 → 197 of 310 (63.2% → 63.5%); LEG parse 60.1% → 60.3%,
+lowers 55.7% → 55.9%, executes 30.2% → 30.4%. Shipped pool unchanged at 734/734.
+Suite 7,169 → 7,177, full run green with every `--check`; no hooks added.
+
+**Where the flags stand.** Wall of Shadows still needs a spell to be asked what
+it *can* target, which nothing models. Round 17's CR 605.3b item is untouched:
+the non-interactive payment default spends only floating mana, and closing that
+changes every seeded AI simulation.

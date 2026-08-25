@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 88.3% | 88.3% | 60.8% | 66 |
 | 3ED | 296 | 389 | 81.7% | 80.7% | 45.2% | 159 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 60.1% | 55.7% | 30.2% | 118 |
+| LEG *(measured)* | 310 | 431 | 60.3% | 55.9% | 30.4% | 119 |
 | **All (shipped)** | **1618** | **2286** | **82.1%** | **81.1%** | **48.4%** | **963** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -55,10 +55,10 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 3 | 3 | no return handler honours this restriction |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
-| 2 | 2 | expected something to destroy |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 2 | expected a damage recipient |  |
 | 2 | 2 | expected what to remove a counter from as a cost |  |
+| 2 | 2 | expected 'counter or counters' |  |
 
 ## Cards executing through the grammar
 
@@ -1657,6 +1657,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Tetravus**
   - `At the beginning of your upkeep, you may remove any number of +1/+1 counters from this creature. If you do, create that many 1/1 colorless Tetravite artifact creature tokens. They each have flying and "This token can't be enchanted."`
   - `At the beginning of your upkeep, you may exile any number of tokens created with this creature. If you do, put that many +1/+1 counters on this creature.`
+- **Tetsuo Umezawa**
+  - `{U}{B}{B}{R}, {T}: Destroy target tapped or blocking creature.`
 - **The Abyss**
   - `At the beginning of each player's upkeep, destroy target nonartifact creature that player controls of their choice. It can't be regenerated.`
 - **The Brute**

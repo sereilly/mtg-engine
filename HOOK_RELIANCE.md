@@ -27,7 +27,7 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 | ATQ | 85 | 85 (100.0%) | 5 (5.9%) | 120 | 5 (4.2%) | 5 | 5.9 |
 | 3ED | 296 | 296 (100.0%) | 45 (15.2%) | 389 | 43 (11.1%) | 48 | 16.2 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| LEG *(measured)* | 310 | 196 (63.2%) | 1 (0.5%) | 265 | 1 (0.4%) | 1 | 0.5 |
+| LEG *(measured)* | 310 | 197 (63.5%) | 1 (0.5%) | 267 | 1 (0.4%) | 1 | 0.5 |
 | **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **82 (11.2%)** | **1119** | **78 (7.0%)** | **89** | **12.1** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
