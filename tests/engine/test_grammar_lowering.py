@@ -4008,3 +4008,44 @@ def test_a_block_trigger_binds_that_creature_only_when_it_names_one(line, binds)
     assert result.lowered is binds, result.lowering_error
     if binds:
         assert result.instructions[0].kind == "delayed_destroy_blocked_or_blocker"
+
+
+# ---------------------------------------------------------------------------
+# A printed "or" between state adjectives is a union of any of them
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "phrase,expected",
+    [
+        # The pair the four Legends pingers print, and the one the parser used
+        # to spell out.
+        ("attacking or blocking", ["attacking", "blocking"]),
+        ("blocking or attacking", ["blocking", "attacking"]),
+        # Tetsuo Umezawa's, which matched nothing while the pair was hardcoded.
+        ("tapped or blocking", ["tapped", "blocking"]),
+        # Invented, and deliberately: a test naming only the two real printings
+        # passes against the version that matched those two literally, which is
+        # the false-negative shape `engine/land_animation.py` documents.
+        ("untapped or attacking", ["untapped", "attacking"]),
+        ("tapped or attacking or blocked", ["tapped", "attacking", "blocked"]),
+    ],
+)
+def test_a_state_union_carries_the_words_it_printed(phrase, expected):
+    compiled = compile_line(f"Destroy target {phrase} creature.", card_name="Test")
+
+    assert compiled.lowered, compiled.failure_reason
+    [instruction] = compiled.instructions
+    assert instruction.payload["any_states"] == expected
+
+
+def test_a_lone_state_adjective_is_not_a_union():
+    """"Target tapped creature" narrows by one field, which the matcher tests
+    on its own — routing it through the union would be a second answer to the
+    same question."""
+    compiled = compile_line("Destroy target tapped creature.", card_name="Test")
+
+    assert compiled.lowered, compiled.failure_reason
+    [instruction] = compiled.instructions
+    assert instruction.payload.get("tapped_only") is True
+    assert "any_states" not in instruction.payload

@@ -207,7 +207,7 @@ def test_the_pingers_compile_with_the_union_filter(name, set_pool):
     assert program.supported, program.reason
     ability = program.activated_abilities[0]
     filt = (ability.instruction.payload.get("targets") or {}).get("filter") or {}
-    assert filt.get("attacking_or_blocking") is True
+    assert filt.get("any_states") == ["attacking", "blocking"]
     assert "attacking_only" not in filt and "blocking_only" not in filt
 
 
@@ -1446,3 +1446,49 @@ def test_bartel_runeaxe_refuses_an_aura_at_the_cast_gate(set_pool):
     )
 
     assert not result.supported
+
+
+# ---------------------------------------------------------------------------
+# Round 19 — a state union is any pair, not the pair the pingers printed
+# ---------------------------------------------------------------------------
+
+
+def _tetsuo_board(set_pool, *, tapped: bool):
+    """Tetsuo on seat 0 with its cost floating, a Grizzly Bears on seat 1."""
+    tetsuo = Permanent(card=set_pool("LEG")["Tetsuo Umezawa"])
+    victim = Permanent(card=set_pool("LEA")["Grizzly Bears"])
+    victim.tapped = tapped
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[tetsuo], life=20),
+        PlayerState(name="P2", battlefield=[victim], life=20),
+    ])
+    game.start_turn(0)
+    game.players[0].mana_pool.update({"U": 1, "B": 2, "R": 1})
+    return game
+
+
+def test_tetsuo_umezawa_destroys_a_tapped_creature(set_pool):
+    """"Target **tapped or blocking** creature" — the half the pinger cycle's
+    hardcoded pair could not express."""
+    game = _tetsuo_board(set_pool, tapped=True)
+
+    result = game.activate_permanent_ability(
+        0, "Tetsuo Umezawa", target_player_index=1, target_permanent_index=0
+    )
+
+    assert result.supported, result.details
+    assert not any(p.card.name == "Grizzly Bears" for p in game.players[1].battlefield)
+
+
+def test_tetsuo_umezawa_refuses_a_creature_in_neither_state(set_pool):
+    """A union narrows; it does not widen. CR 602.2b refuses the activation
+    outright when no legal target exists, so an untapped creature that is not
+    blocking costs Tetsuo nothing rather than being destroyed anyway."""
+    game = _tetsuo_board(set_pool, tapped=False)
+
+    result = game.activate_permanent_ability(
+        0, "Tetsuo Umezawa", target_player_index=1, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert any(p.card.name == "Grizzly Bears" for p in game.players[1].battlefield)

@@ -162,9 +162,15 @@ def _narrowing_flags(source: dict) -> dict:
     from the same compiled payload; only the vocabulary differs.
     """
     flags: dict = {}
-    for key in ("attacking_only", "flying_only", "attacking_or_blocking"):
+    for key in ("attacking_only", "flying_only"):
         if source.get(key):
             flags[key] = True
+    # Carried by value, not flattened to a flag: "attacking or blocking" and
+    # "tapped or blocking" are the same key with different words in it, and a
+    # bare True would tell the picker a union applies without saying which one.
+    any_states = source.get("any_states")
+    if any_states:
+        flags["any_states"] = list(any_states)
     if source.get("subtype_filter") == "wall":
         # The picker's name for a Wall subtype filter (Ali Baba, Dwarven
         # Demolition Team). Kept as a flag rather than left to the instruction

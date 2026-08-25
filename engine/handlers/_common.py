@@ -384,6 +384,30 @@ def graveyard_card_matches(spec: dict, card) -> bool:
     return card.primary_type == "creature"
 
 
+#: What each printed state adjective asks of a permanent. One table, because
+#: the union above and the singular narrowings below it are the same words —
+#: two readers would be two answers to "is this creature blocking?".
+_STATE_TESTS = {
+    "tapped": lambda perm: bool(perm.tapped),
+    "untapped": lambda perm: not perm.tapped,
+    "attacking": lambda perm: bool(perm.attacking),
+    "blocking": lambda perm: perm.blocking_attacker_index is not None,
+    "blocked": lambda perm: bool(perm.blocked),
+    "unblocked": lambda perm: not perm.blocked,
+}
+
+
+def state_holds(perm: Permanent, word: str) -> bool:
+    """Whether the printed state adjective *word* is true of *perm*.
+
+    An unknown word answers False rather than True: a union nobody can test
+    must narrow to nothing rather than admit everything, which for a *target*
+    restriction is the direction that offers an illegal choice.
+    """
+    test = _STATE_TESTS.get(word)
+    return bool(test and test(perm))
+
+
 def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     """Whether *perm* satisfies a target-filter payload (the key vocabulary
     produced by ``engine.grammar.ast.ObjectFilter.to_payload``:
@@ -402,15 +426,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     exclude_colors = payload.get("exclude_colors") or []
     exclude_types = payload.get("exclude_types") or []
 
-    # "target **attacking or blocking** creature" (the four Legends pingers).
-    # Answerable purely: "attacking" is a field and CR 509.1a makes "blocking"
-    # one too — a creature is blocking once it has been *declared* as a blocker,
-    # which is exactly what `blocking_attacker_index` records. The same test
+    # "target **attacking or blocking** creature" (the four Legends pingers),
+    # "**tapped or blocking**" (Tetsuo Umezawa). Answerable purely: "attacking"
+    # is a field and CR 509.1a makes "blocking" one too — a creature is blocking
+    # once it has been *declared* as a blocker, which is exactly what
+    # `blocking_attacker_index` records. `state_holds` is the same test
     # `layer_bridge._QUALIFIER_HOLDS` uses, so a conditional buff and a target
-    # restriction cannot disagree about what "blocking" means.
-    if payload.get("attacking_or_blocking"):
-        if not (perm.attacking or perm.blocking_attacker_index is not None):
-            return False
+    # restriction cannot disagree about what a state word means.
+    any_states = payload.get("any_states")
+    if any_states and not any(state_holds(perm, word) for word in any_states):
+        return False
 
     # "target **attacking** creature" (Disharmony). The narrower half of the
     # union above, asked of the same field so a target restriction and the

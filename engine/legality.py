@@ -35,7 +35,8 @@ describe it.
 
 import re
 
-from .handlers._common import graveyard_card_matches, permanent_matches_filter
+from .handlers._common import (graveyard_card_matches, permanent_matches_filter,
+                               state_holds)
 from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle, expand_ability_lines
 from .static_bonuses import conditional_static_holds
@@ -794,8 +795,9 @@ class LegalityMixin:
             # the activation outright when no legal target exists — a pinger
             # with nothing in combat to shoot must cost nothing rather than
             # resolve at whatever the picker happened to offer.
-            if spec.get("attacking_or_blocking") and not (
-                perm.attacking or perm.blocking_attacker_index is not None
+            any_states = spec.get("any_states")
+            if any_states and not any(
+                state_holds(perm, word) for word in any_states
             ):
                 return False
             # Island of Wak-Wak: only flying creatures are legal choices.

@@ -264,7 +264,11 @@ class ObjectFilter:
     # Its own field rather than both booleans set at once: every matcher ANDs
     # the payload keys, so `attacking=True, blocking=True` would describe a
     # creature that is somehow doing both — a set that is always empty.
-    attacking_or_blocking: bool = False
+    #: A union of printed state adjectives — "attacking or blocking",
+    #: "tapped or blocking". The words as printed, because what each one
+    #: *means* is one answer the matcher owns; a pair spelled into a
+    #: boolean here made every other pair a non-match.
+    any_states: tuple[str, ...] = ()
     power: Comparison | None = None
     toughness: Comparison | None = None
     mana_value: Comparison | None = None
@@ -434,8 +438,8 @@ class ObjectFilter:
             payload["attacking_only"] = True
         if self.blocking:
             payload["blocking_only"] = True
-        if self.attacking_or_blocking:
-            payload["attacking_or_blocking"] = True
+        if self.any_states:
+            payload["any_states"] = list(self.any_states)
         if self.other_than_source:
             payload["exclude_self"] = True
         if self.not_ability_targeted_by_same_name:

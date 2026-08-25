@@ -289,7 +289,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     attacking: bool | None = None
     blocking: bool | None = None
     blocked: bool | None = None
-    attacking_or_blocking = False
+    any_states: tuple[str, ...] = ()
     blocking_source = False
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
@@ -412,16 +412,30 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 stream.advance()
             continue
 
-        # "attacking **or** blocking creature" — a union of two state
+        # "attacking **or** blocking creature" (the four Legends pingers),
+        # "**tapped or blocking** creature" (Tetsuo Umezawa) — a union of state
         # adjectives, read before either of them is taken on its own. Consuming
         # "attacking" first and leaving "or blocking" would end the noun phrase
-        # mid-sentence, which is how the four Legends pingers refused.
-        if word in ("attacking", "blocking") and stream.peek_word(1) == "or":
-            other = "blocking" if word == "attacking" else "attacking"
-            if stream.peek_word(2) == other:
-                stream.advance(3)
-                attacking_or_blocking = True
-                continue
+        # mid-sentence, which is how the pingers refused.
+        #
+        # Any pair, not the one the pingers happened to print. Spelling that
+        # pair in made every other union a non-match: Tetsuo's line refused with
+        # "expected something to destroy" for a template the engine implements —
+        # the same false-negative the land type in `combat_restrictions.py` and
+        # the colour union above this one document.
+        if (
+            word in _STATE_ADJECTIVES
+            and stream.peek_word(1) == "or"
+            and stream.peek_word(2) in _STATE_ADJECTIVES
+        ):
+            states = [word]
+            stream.advance()
+            while stream.at_word("or") and stream.peek_word(1) in _STATE_ADJECTIVES:
+                stream.advance()
+                states.append(str(stream.peek_word()))
+                stream.advance()
+            any_states = tuple(states)
+            continue
 
         if word in _STATE_ADJECTIVES:
             attribute, value = _STATE_ADJECTIVES[word]
@@ -913,7 +927,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         tapped=tapped,
         attacking=attacking,
         blocking=blocking,
-        attacking_or_blocking=attacking_or_blocking,
+        any_states=any_states,
         blocking_source=blocking_source,
         blocked=blocked,
         power=power,
