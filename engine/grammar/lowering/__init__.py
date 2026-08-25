@@ -79,6 +79,7 @@ from .characteristics import (
     _fused_tap_any_number_then_pump,
     _fused_two_target_pump,
     _lower_double_power,
+    _lower_switch_pt,
     _lower_become_creature,
     _lower_pump,
     _lower_change_base_pt,
@@ -176,6 +177,7 @@ from .combat import (
     _UNBLOCKABLE_POWER_LIMIT,
     _lower_combat_restriction,
     _lower_cant_be,
+    _lower_attack_as_though,
     _lower_remove_from_combat,
 )
 from .game import (
@@ -293,6 +295,7 @@ __all__ = [
     "_TAPPED_LAND_MANA_RECIPIENTS",
     "_lower_add_mana_for_tapped_land",
     "_lower_double_power",
+    "_lower_switch_pt",
     "_fused_prepare_then_interact",
     "_lower_fight",
     "_lower_exile_graveyard",
@@ -320,6 +323,7 @@ __all__ = [
     "_UNBLOCKABLE_POWER_LIMIT",
     "_lower_combat_restriction",
     "_lower_cant_be",
+    "_lower_attack_as_though",
     "_lower_remove_from_combat",
     "_lower_gain_life",
     "_title",

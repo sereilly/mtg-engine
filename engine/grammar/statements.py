@@ -27,6 +27,7 @@ from .vocabulary import CARD_TYPES
 from .stream import TokenStream
 from .conditions import _parse_condition
 from .phrases import (
+    _parse_can_attack_as_though,
     _parse_duration,
     _parse_mana_payment,
     parse_where_x_definition,
@@ -66,6 +67,7 @@ from .effects import (
     _parse_player_adds_mana,
     _parse_prevent,
     _parse_double,
+    _parse_switch_pt,
     _parse_fight,
     _parse_put_counter,
     _parse_remove_counter,
@@ -173,6 +175,8 @@ def _parse_subject_verb(
         return _parse_put_counter(stream)
     if stream.at_word("double"):
         return _parse_double(stream)
+    if stream.at_word("switch"):
+        return _parse_switch_pt(stream)
     if stream.at_word("remove"):
         removal = _parse_remove_counter(stream)
         if removal is not None:
@@ -416,6 +420,14 @@ def _parse_subject_verb(
                 else:
                     stream.reset(mark2)
             return ast.PhaseOut(source_spec, cant_phase_in_until_your_next_turn=blocked)
+        # "<subject> can attack [this turn] as though it didn't have defender"
+        # (CR 609.4). Tried before nothing else claims the word — "can" opens no
+        # other production — and non-consuming on refusal, so a sentence this
+        # cannot finish keeps the refusal it has today.
+        if token.text == "can":
+            permission = _parse_can_attack_as_though(stream, source_spec)
+            if permission is not None:
+                return permission
         if token.text in ("can't", "cannot"):
             return _parse_cant_attack_or_block(stream, source_spec)
         # "Those creatures **don't untap** during their controller's next untap

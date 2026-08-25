@@ -238,7 +238,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "exile_creature_gain_life_equal_to_power": {"kind": "creature"},
     "bounce_target_creature": {"kind": "creature"},
     "phase_out_target_creature_until_source_leaves": {"kind": "creature"},
-    "destroy_artifact_controller_gains_mana_value": {"kind": "artifact"},
     "reanimate_creature": {"kind": "graveyard_creature", "own_graveyard_only": True},
     # "target card from a graveyard" — any card, any seat's graveyard, so no
     # own_graveyard_only. The picker is the reanimation one because the

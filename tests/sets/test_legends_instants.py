@@ -351,3 +351,118 @@ def test_rust_leaves_an_ability_from_a_creature_alone(set_pool):
     game.resolve_stack()
 
     assert p2.life == 19, "the creature's ability is not Rust's business"
+
+
+# ---------------------------------------------------------------------------
+# Power/toughness and characteristic effects (round 20)
+# ---------------------------------------------------------------------------
+
+
+def _sized(name: str, power: int, toughness: int) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _artifact(name: str, mana_cost: str, cmc: float) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost=mana_cost, cmc=cmc, type_line="Artifact",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Artifact"},
+    )
+
+
+def test_transmutation_compiles_to_the_switch_the_layer_already_applies(set_pool):
+    """Layer 7d has been live since the P/T channels were written; what was
+    missing was an instruction that sets it."""
+    program = compile_card_oracle(set_pool("LEG")["Transmutation"])
+    assert program.supported, program.reason
+    assert [i.kind for i in program.instructions] == ["switch_target_pt_until_eot"]
+
+
+def test_transmutation_swaps_the_printed_stats(set_pool):
+    spell = set_pool("LEG")["Transmutation"]
+    bear = Permanent(card=_sized("Bear", 4, 1))
+    p1 = PlayerState(name="P1", hand=[spell], battlefield=[bear])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    result = game.cast_from_hand(
+        0, "Transmutation", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported
+    assert (bear.effective_power, bear.effective_toughness) == (1, 4)
+
+
+def test_transmutation_switches_after_a_pump_rather_than_before_it(set_pool):
+    """CR 613.4d: 7d acts on the values as they stand after 7c. A switch
+    written as a mirrored pump would fix the numbers when it resolved and be
+    wrong the moment anything else touched them."""
+    spell = set_pool("LEG")["Transmutation"]
+    bear = Permanent(card=_sized("Bear", 4, 1))
+    p1 = PlayerState(name="P1", hand=[spell], battlefield=[bear])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.cast_from_hand(0, "Transmutation", target_player_index=0, target_permanent_index=0)
+    game._settle()
+    assert (bear.effective_power, bear.effective_toughness) == (1, 4)
+
+    from engine.pt import add_pt_counters
+
+    add_pt_counters(bear, "+1/+1")
+    assert (bear.effective_power, bear.effective_toughness) == (2, 5)
+
+
+def test_the_switch_wears_off_at_cleanup(set_pool):
+    spell = set_pool("LEG")["Transmutation"]
+    bear = Permanent(card=_sized("Bear", 4, 1))
+    p1 = PlayerState(name="P1", hand=[spell], battlefield=[bear])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.cast_from_hand(0, "Transmutation", target_player_index=0, target_permanent_index=0)
+    game._settle()
+    assert (bear.effective_power, bear.effective_toughness) == (1, 4)
+
+    game.resolve_cleanup_step(0)
+    assert (bear.effective_power, bear.effective_toughness) == (4, 1)
+
+
+def test_divine_offering_destroys_the_artifact_and_pays_its_mana_value(set_pool):
+    """"You gain life equal to **its** mana value" — the destroyed object's,
+    read from the record the destruction left rather than from a battlefield
+    the permanent has already left."""
+    spell = set_pool("LEG")["Divine Offering"]
+    relic = Permanent(card=_artifact("Relic", "{4}", 4.0))
+    p1 = PlayerState(name="P1", hand=[spell], life=20)
+    p2 = PlayerState(name="P2", battlefield=[relic])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(
+        0, "Divine Offering", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported
+    assert p2.battlefield == []
+    assert p1.life == 24
+
+
+def test_divine_offering_gains_nothing_for_a_zero_cost_artifact(set_pool):
+    """A Mox is a real target and a real four-less life gain — the number is
+    the artifact's, not a default."""
+    spell = set_pool("LEG")["Divine Offering"]
+    mox = Permanent(card=_artifact("Mox", "{0}", 0.0))
+    p1 = PlayerState(name="P1", hand=[spell], life=20)
+    p2 = PlayerState(name="P2", battlefield=[mox])
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Divine Offering", target_player_index=1, target_permanent_index=0)
+    game._settle()
+
+    assert p2.battlefield == []
+    assert p1.life == 20

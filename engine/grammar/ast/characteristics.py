@@ -246,3 +246,22 @@ class GainType:
     card_types: tuple[str, ...]
     duration: Duration = field(default_factory=Duration)
     pt_from_mana_value: bool = False
+
+
+@dataclass(frozen=True)
+class SwitchPT:
+    """``Switch <subject>'s power and toughness [duration].`` (Transmutation.)
+
+    CR 613.4d layer 7d, which the engine already applies — the switch is
+    recorded as a flag through the characteristic group so two switches cancel
+    and the swap acts on the values as they stand after 7c. What was missing
+    was any way for a printed line to say it.
+
+    Its own node rather than a :class:`Pump` with mirrored amounts: a pump's
+    deltas are fixed when the effect is created, and a switch is not a delta at
+    all — it reads both stats at every recompute, so a creature switched to 4/1
+    and then given a +1/+1 counter is 5/2 rather than 4/1 plus a stale
+    correction.
+    """
+    subject: Recipient
+    duration: Duration = field(default_factory=Duration)

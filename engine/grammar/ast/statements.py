@@ -47,6 +47,7 @@ from .characteristics import (
     LoseKeyword,
     Pump,
     DoublePower,
+    SwitchPT,
     PlayerGetsCounters,
     PutCounter,
     RemoveCounter,
@@ -108,6 +109,7 @@ from .stack import (
 )
 from .combat import (
     CantBe,
+    AttackAsThough,
     CombatRestriction,
     RemoveFromCombat,
 )
@@ -129,7 +131,7 @@ from .game import (
 
 Effect = Union[
     DealDamage, Pump, SetBasePT, ChangeBasePT, GainKeyword, GainType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
-    DoublePower,
+    DoublePower, SwitchPT,
     GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, Exile,
     ExileUntilLeavesOrUntaps, Tap, Untap,
@@ -145,7 +147,7 @@ Effect = Union[
     ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
     RevealHandAndChoose,
     Shuffle, ExtraTurn, EndTheTurn, ChooseNumber, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
-    SacrificeUnlessPay, DamageUnlessPay, Fight, LookAtHand, CantBe, CombatRestriction,
+    SacrificeUnlessPay, DamageUnlessPay, Fight, LookAtHand, CantBe, AttackAsThough, CombatRestriction,
     RemoveFromCombat,
     ChangeText, GainControl, RawEffect,
 ]

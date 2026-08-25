@@ -18,8 +18,8 @@ from ..references import parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX, match_longest)
 
-from ..phrases import (is_pt_counter, _parse_duration, _parse_for_each,
-                       _parse_keywords, parse_where_x_definition)
+from ..phrases import (is_pt_counter, _parse_can_attack_as_though, _parse_duration,
+                       _parse_for_each, _parse_keywords, parse_where_x_definition)
 
 
 def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -73,6 +73,19 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     # uses. Accepting only "gains" would leave the lordly form ("Other Goblins
     # get +1/+1 and have mountainwalk") stranding "have mountainwalk", which
     # fails full consumption and takes the whole line down.
+    # "…gets +4/-4 until end of turn **and can attack this turn as though it
+    # didn't have defender**" (Wall of Wonder). Read here rather than left to
+    # the sentence loop, which joins a tail with no printed subject only when
+    # the carried one is a *player*: a creature carried into "gains"/"wins"
+    # would read a sentence nobody printed, so the loop refuses it and the
+    # clause would be unconsumed text that takes the whole line down.
+    mark_permission = stream.mark()
+    if stream.accept_word("and"):
+        permission = _parse_can_attack_as_though(stream, subject)
+        if permission is not None:
+            return ast.Conjunction((pump, permission))
+    stream.reset(mark_permission)
+
     mark = stream.mark()
     if stream.accept_word("and") and stream.at_word("gains", "gain", "has", "have"):
         stream.advance()
@@ -379,6 +392,27 @@ def _parse_double(stream: TokenStream) -> ast.DoublePower:
     if subject is None:
         raise stream.error("expected something whose power to double")
     return ast.DoublePower(subject, _parse_duration(stream))
+
+
+def _parse_switch_pt(stream: TokenStream) -> ast.SwitchPT:
+    """``Switch <subject>'s power and toughness [duration].`` (Transmutation.)
+
+    The two nouns are checked rather than skipped, and the order is the printed
+    one: "switch" opens other sentences in the wider card pool (switching a
+    creature's *colour* words, switching life totals), and a production that
+    consumed the possessive and shrugged at whatever followed would claim them
+    and do the wrong thing. What it cannot read it refuses, and the line keeps
+    the refusal it has today.
+    """
+    stream.expect_word("switch")
+    subject = parse_recipient(stream)
+    if subject is None:
+        raise stream.error("expected something whose power and toughness to switch")
+    stream.expect_word("'s")
+    stream.expect_word("power")
+    stream.expect_word("and")
+    stream.expect_word("toughness")
+    return ast.SwitchPT(subject, _parse_duration(stream))
 
 
 def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:

@@ -87,6 +87,18 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "add_counter_to_self": "pump",
     "add_counter_to_target": "pump",
     "double_target_power_until_eot": "pump",
+    # CR 613.4d layer 7d. "pump" because the switch is the same
+    # question the pump category answers — what this permanent's
+    # power and toughness are — and a category of its own would be a
+    # switch that could gate half of layer 7 off without the rest.
+    "switch_target_pt_until_eot": "pump",
+    "switch_self_pt_until_eot": "pump",
+    # "…can attack this turn as though it didn't have defender" (Wall of
+    # Wonder). CR 609.4 — a permission, not a characteristic change, but it is
+    # printed as the tail of the same sentence as the pump and a category of
+    # its own would let one half of one sentence be gated off without the
+    # other.
+    "attack_as_though_no_defender_until_eot": "pump",
     "add_counter_to_each_you_control": "pump",
     # Counter placements sized by a board count. Their own category rather than
     # "pump": a corpse counter never touches power or toughness (it is
@@ -403,6 +415,12 @@ _PRODUCES: dict[str, str] = {
     # because by the time the life gain runs the permanent is gone — reading it
     # off the battlefield would find nothing and gain nothing.
     "bounce_target_creature": "returned_mana_value",
+    # "Destroy target artifact. You gain life equal to **its** mana value."
+    # (Divine Offering.) The destruction records the mana value of the
+    # permanent it was aimed at — read *before* the destroy, so a regenerated
+    # or indestructible artifact still supplies the number the second sentence
+    # asks for: the words name the object, not the outcome.
+    "destroy_target_permanent": "its_mana_value",
 }
 
 

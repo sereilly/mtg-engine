@@ -105,6 +105,7 @@ from .characteristics import (
     GainKeyword,
     LoseKeyword,
     DoublePower,
+    SwitchPT,
     PlayerGetsCounters,
     PutCounter,
     RemoveCounter,
@@ -169,6 +170,7 @@ from .stack import (
 )
 from .combat import (
     CantBe,
+    AttackAsThough,
     CombatRestriction,
     RemoveFromCombat,
 )
@@ -278,6 +280,7 @@ __all__ = [
     "GainKeyword",
     "LoseKeyword",
     "DoublePower",
+    "SwitchPT",
     "PlayerGetsCounters",
     "PutCounter",
     "RemoveCounter",
@@ -335,6 +338,7 @@ __all__ = [
     "ModalNode",
     # combat
     "CantBe",
+    "AttackAsThough",
     "CombatRestriction",
     "RemoveFromCombat",
     # game

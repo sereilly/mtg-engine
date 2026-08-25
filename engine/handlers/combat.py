@@ -11,6 +11,7 @@ from ._common import (
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword
+from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
 from ..pt import add_pt_modifier
 from ..rampage import rampage_bonus
 
@@ -449,4 +450,28 @@ def cant_block_until_eot(game: Game, instruction: OracleInstruction, context: Or
         "source_name": context.card.name,
     })
     game.log.append(f"{context.card.name}: the named creatures can't block this turn")
+    return True, "resolved"
+
+
+@effect_handler("attack_as_though_no_defender_until_eot")
+def attack_as_though_no_defender_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"…can attack this turn as though it didn't have defender."
+    (Wall of Wonder.)
+
+    CR 609.4: the permission is stamped on the permanent rather than the
+    keyword being removed, so the creature still *has* defender for everything
+    that asks — what "creatures with defender" counts, what a defender-narrowed
+    filter matches, what layer 6 reports to the web payload. The key is swept
+    by the cleanup step (``_EOT_METADATA_KEYS``), which is the whole of "this
+    turn".
+    """
+    source = context.source_permanent
+    if source is None:
+        return False, "ability not implemented"
+    source.metadata[ATTACK_AS_THOUGH_NO_DEFENDER] = True
+    game.log.append(
+        f"{source.card.name} can attack this turn as though it didn't have defender"
+    )
     return True, "resolved"

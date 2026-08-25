@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
+
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
     # Riddleform's self-animation: the record *is* the effect, so sweeping it
@@ -17,6 +19,11 @@ _EOT_METADATA_KEYS = (
     "absolute_toughness_until_eot",
     # Layer 7d power/toughness switch (613.4d)
     "pt_switched",
+    # CR 609.4 combat permission: "…can attack this turn as though it didn't
+    # have defender" (Wall of Wonder). Named through
+    # `engine/combat_permissions.py` so the write, the read and this sweep
+    # cannot spell the channel three ways.
+    ATTACK_AS_THOUGH_NO_DEFENDER,
     # Disintegrate-style riders that last only "this turn"
     "cant_be_regenerated_this_turn",
     "exile_if_dies_this_turn",
