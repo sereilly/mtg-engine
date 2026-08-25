@@ -112,7 +112,8 @@ class EndOfCombatStepMixin:
     def _resolve_end_of_combat_destruction(self) -> None:
         """Destroy creatures marked by a "destroy at end of combat" trigger.
 
-        Used by Cockatrice / Thicket Basilisk (see _fire_block_triggers). Honors
+        Used by Cockatrice / Thicket Basilisk, whose joined block condition is
+        fired by the two dispatchers in declare_blockers_step.py. Honors
         regeneration shields like any other destruction.
         """
         def _on_regenerate(permanent: Permanent) -> None:

@@ -9,8 +9,10 @@ from ..oracle_types import OracleInstruction
 from ..pt import set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import make_token_card
-from ._common import (permanent_matches_filter, resolve_amount,
-                      resolve_target_permanent, resolve_target_permanents)
+from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
+                      block_pair_permanents, permanent_matches_filter,
+                      resolve_amount, resolve_target_permanent,
+                      resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -242,6 +244,23 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     if context.stack_target is not None and symbol:
         context.stack_target.choices["new_color"] = symbol
         game.log.append(f"{context.stack_target.card.name} (on the stack) became {symbol}")
+        return True, "resolved"
+    # "…that creature becomes green" on a block trigger (Aisling Leprechaun):
+    # nobody targeted it, the firing bound it, and which half fired decides how
+    # it is found — `block_pair_permanents` is the one reader of that.
+    if instruction.payload.get(SUBJECT_FROM_TRIGGER) == BLOCK_PAIR_SUBJECT:
+        # The permanent is already in hand, so the indefinite colour channel is
+        # written directly — `_apply_color_override` beside it takes a *player*
+        # and picks a permanent off their battlefield, which is the wrong
+        # question once the trigger has named one. Same channel, same layer 5
+        # read (`engine/layer_bridge.py`), and no duration: Aisling Leprechaun's
+        # reminder text says the effect lasts indefinitely.
+        recoloured = block_pair_permanents(game, context) if symbol else []
+        for perm in recoloured:
+            perm.metadata["color_override"] = symbol
+            game.log.append(f"{perm.card.name} became {symbol} ({context.card.name})")
+        if not recoloured:
+            game.log.append(f"{context.card.name}: no creature to recolour")
         return True, "resolved"
     target = context.target
     perm_idx = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None

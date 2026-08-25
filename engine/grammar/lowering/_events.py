@@ -178,3 +178,27 @@ def _back_reference_payload(
         "on its trigger",
         node=amount,
     )
+
+
+# Trigger events that bind a *blocking pair*, so "that creature" names the other
+# half of it — "destroy that creature at end of combat" (Thicket Basilisk),
+# "that creature becomes green" (Aisling Leprechaun). The sentence only means
+# what it says while one of these fired, so anywhere else the pronoun refuses.
+#
+# **Which** half fired decides how the handler finds the creature, and the two
+# fire sites answer differently: the becomes-blocked half makes it the stack
+# item's target, the blocks half puts it in `blocked_permanent_ids` and targets
+# the blocker itself. `handlers/_common.block_pair_permanents` is the one reader
+# of both, so an effect added here does not have to rediscover the difference.
+_BLOCK_PAIR_EVENTS = frozenset({
+    "creature_blocks_or_blocked_by",           # Thicket Basilisk, Cockatrice,
+                                               # Abomination, Aisling Leprechaun
+    "creature_becomes_blocked",                # Battering Ram
+    # `creature_blocks` is deliberately absent. CR 509.3c/509.3d: the bare
+    # wording fires **once** for the blocker however many attackers it blocks,
+    # so "that creature" names no one creature — and the narrowed spelling
+    # ("blocks **a creature**", Infernal Medusa) is the same kind, which this
+    # table cannot tell apart because it is keyed on the event alone. Admitting
+    # the kind would lower the bare form too, and the fire site records every
+    # blocked attacker's id, so the sentence would destroy all of them.
+})

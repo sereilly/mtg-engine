@@ -13,10 +13,12 @@ what is missing instead of producing an effect that never ends.
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
+                             OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS
+from ._events import _BLOCK_PAIR_EVENTS
 from ._common import (
     _amount_payload,
     _describe_several_targets,
@@ -798,7 +800,9 @@ def _lower_lose_keyword(node: ast.LoseKeyword) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("remove_target_keyword_until_eot", "", payload),)
 
 
-def _lower_become_color(node: ast.BecomeColor) -> tuple[OracleInstruction, ...]:
+def _lower_become_color(
+    node: ast.BecomeColor, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """The Lace cycle, and the five Legends colour spells beside it.
 
     Two instructions, told apart by the *duration* rather than by the number of
@@ -821,6 +825,25 @@ def _lower_become_color(node: ast.BecomeColor) -> tuple[OracleInstruction, ...]:
             f"no handler recolours for {node.duration.kind!r}", node=node
         )
     if not isinstance(node.subject, ast.TargetSpec) or node.subject.quantifier != "target":
+        # "…**that creature** becomes green" (Aisling Leprechaun). Nobody chose
+        # it, so there is no target — but a block trigger *bound* it, and under
+        # one of those events the pronoun names exactly one creature. The
+        # binding travels as payload rather than as a second instruction kind:
+        # which object an effect acts on is not a different effect.
+        if (
+            event in _BLOCK_PAIR_EVENTS
+            and isinstance(node.subject, ast.TargetSpec)
+            and node.subject.quantifier == "that"
+        ):
+            return (
+                OracleInstruction(
+                    "recolor_target_from_text", "",
+                    {
+                        "target_color": node.color,
+                        SUBJECT_FROM_TRIGGER: BLOCK_PAIR_SUBJECT,
+                    },
+                ),
+            )
         raise LoweringError("no handler for recolouring a non-targeted object", node=node)
     # Deliberately *not* described for engine/targeting.py. The Lace cycle
     # targets "spell or permanent" — a union of a stack object and a

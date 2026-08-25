@@ -71,7 +71,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature or another creature you control dies",
     ),
     "creature_opponent_controls_dies": "whenever a creature an opponent controls dies",
-    "creature_blocks_or_blocked_by_nonwall": "whenever this creature blocks or becomes blocked by a non-wall creature",
+    "creature_blocks_or_blocked_by": "whenever this creature blocks or becomes blocked by a non-wall creature",
     "attacks_unblocked": "whenever this creature attacks and isn't blocked",
     "creature_attacks": "whenever this creature attacks",
     # A narrowed spelling beside its bare one: the subject filter is what makes

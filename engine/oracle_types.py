@@ -18,6 +18,20 @@ from typing import Any
 # string agreed in two places is exactly the second copy that drifts.
 X_FROM_COUNT = "x_from_count"
 
+# The payload key an effect carries when the object it acts on was **bound by
+# the firing trigger** rather than chosen as a target — "…that creature becomes
+# green" under a block trigger (Aisling Leprechaun). Here for the same reason as
+# the key above: the grammar writes it and a handler reads it.
+#
+# A key rather than a second instruction kind, because which object an effect
+# acts on is not a different effect — fusing the binding into the kind is what
+# gave `creature_blocks_or_blocked_by_nonwall` its name and its bespoke fire
+# site.
+SUBJECT_FROM_TRIGGER = "subject_from_trigger"
+
+# Its one value so far: the other half of the blocking pair the trigger fired on.
+BLOCK_PAIR_SUBJECT = "block_pair"
+
 _COLOR_WORD_TO_SYMBOL: dict[str, str] = {
     "white": "W",
     "blue": "U",

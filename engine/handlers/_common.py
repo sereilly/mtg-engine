@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
 from ..layer_bridge import printed_shape, printed_supertypes
+from ..oracle_types import BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER
 from ..models import Permanent, PlayerState
 from ..search_filters import name_key
 
@@ -477,6 +478,12 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     colors = permanent_effective_colors(perm)
     if color_filter and color_filter not in colors:
         return False
+    # "a green or white creature": any one of them is enough, and a gold
+    # green-and-white creature answers both — CR 105.2b, a colour is a property
+    # an object has rather than a category it is sorted into.
+    any_colors = payload.get("any_colors")
+    if any_colors and not any(color in colors for color in any_colors):
+        return False
     if exclude_colors and any(c in colors for c in exclude_colors):
         return False
     if exclude_types and any(perm.has_type(t) for t in exclude_types):
@@ -605,6 +612,33 @@ def pick_target_permanent(
         if found is not None:
             return found
     return None
+
+
+def block_pair_permanents(game, context) -> list:
+    """The creature(s) a block trigger's "that creature" names.
+
+    One reader for both halves, because the two fire sites bind it differently
+    and the difference is not the effect's business. On the *becomes blocked*
+    half the blocker is the stack item's target. On the *blocks* half the target
+    is the blocking creature itself — the fire site needs it there so a
+    self-affecting trigger (Ydwen Efreet) can find itself — and the creatures the
+    firing is about ride ``blocked_permanent_ids``, by stable id because a
+    removal renumbers every later slot (CR 400.7).
+
+    Reading the target on the blocks half is the bug this function exists to
+    stop: the card would name *itself*, destroying or recolouring the blocker
+    instead of what it blocked, and the trigger would still look as though it
+    resolved.
+    """
+    blocked_ids = (context.trigger_context or {}).get("blocked_permanent_ids") or ()
+    if blocked_ids:
+        return [
+            perm
+            for perm in (game.permanent_by_id(pid) for pid in blocked_ids)
+            if perm is not None
+        ]
+    victim = resolve_target_permanent(game, context, fallback_players=())
+    return [victim] if victim is not None else []
 
 
 def resolve_target_permanent(

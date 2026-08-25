@@ -280,7 +280,22 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r" deals(?: (?P<damage_combat>combat|noncombat))? damage"
      r"(?: to (?P<damage_recipient>a player or planeswalker|a player"
      r"|an opponent|a planeswalker|you))?(?=,|$)"),
-    ("creature_blocks_or_blocked_by_nonwall", r"whenever this creature blocks or becomes blocked by a non-wall creature"),
+    # "…blocks **or becomes blocked by** a non-Wall creature" (Thicket Basilisk,
+    # Cockatrice), "…by a green or white creature" (Abomination), "…by a
+    # creature" (Aisling Leprechaun). One printed sentence joining the two
+    # events either half of it already names, and the noun phrase distributes
+    # over **both** verbs — the Basilisk destroys no Wall whichever side of the
+    # block it was on. So the phrase is delimited once and lands under both
+    # halves' filter keys (`_PAIR_SUBJECT_GROUP_SUFFIX`), and the two general
+    # dispatchers in phases/declare_blockers_step.py read it exactly as they
+    # read a card that prints the halves separately (Infernal Medusa does).
+    #
+    # The kind used to spell the narrowing — `..._blocked_by_nonwall` — and had
+    # a bespoke fire site to match, which is why Abomination's identical
+    # sentence with one word changed compiled unsupported. Same lesson as the
+    # land type in combat_restrictions.py and the threshold in round 14.
+    ("creature_blocks_or_blocked_by",
+     r"whenever this creature blocks or becomes blocked by (?P<block_pair_subject>(?:a|another) [^,]+)"),
     ("creature_attacks_or_blocks",  r"whenever this creature attacks or blocks"),
     # A trigger whose *subject* is a set of objects rather than the source:
     # "whenever a creature you control with deathtouch attacks" (Hooded
@@ -989,6 +1004,20 @@ _COUNT_GROUP_SUFFIX = "_count"
 # plural spelling of the suffix is how a pattern says which reading it means.
 _PLURAL_SUBJECT_GROUP_SUFFIX = "_subjects"
 
+# The same noun phrase where one printed clause narrows **both** halves of a
+# blocking pair: "blocks or becomes blocked by a non-Wall creature". English
+# distributes the phrase over both verbs, and the engine already has a filter
+# key per half — so the group resolves into both rather than into a third key
+# nothing reads, and the two general dispatchers need no notion of a joined
+# condition at all.
+_PAIR_SUBJECT_GROUP_SUFFIX = "_pair_subject"
+
+# Which filter keys a `_pair_subject` group fans out to, in the order the two
+# halves are printed. Named here rather than spelled at the fan-out below,
+# because these are the keys the dispatchers read and a fourth spelling of them
+# is how the two sides come apart.
+_PAIR_SUBJECT_FILTER_KEYS = ("blocked_filter", "blocker_filter")
+
 
 def _match_trigger_patterns(
     text: str,
@@ -1040,6 +1069,14 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
             return None
         resolved[key] = count
     for key, phrase in payload.items():
+        if key.endswith(_PAIR_SUBJECT_GROUP_SUFFIX):
+            described = subject_filter_payload(str(phrase))
+            if described is None or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+                return None
+            del resolved[key]
+            for filter_key in _PAIR_SUBJECT_FILTER_KEYS:
+                resolved[filter_key] = described
+            continue
         plural = key.endswith(_PLURAL_SUBJECT_GROUP_SUFFIX)
         if not plural and not key.endswith(_SUBJECT_GROUP_SUFFIX):
             continue

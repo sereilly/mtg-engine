@@ -253,7 +253,7 @@ def lower_statement(
         return _lower_become_creature(statement)
 
     if isinstance(statement, ast.BecomeColor):
-        return _lower_become_color(statement)
+        return _lower_become_color(statement, event)
 
     if isinstance(statement, ast.ChangeText):
         return _lower_change_text(statement)

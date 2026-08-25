@@ -254,7 +254,10 @@ class DeclareBlockersStepMixin:
         self.combat_blockers_locked = self._pending_block_declarer() is None
         self.log.append(f"{defender.name} declared {len(assignments)} blocker(s)")
         # 509.1i / 509.2a: abilities that trigger on blockers being declared fire now.
-        self._fire_block_triggers(controller_index)
+        # Two dispatchers, one per half of the block. A card printing the halves
+        # joined ("blocks **or** becomes blocked by …") is fired by both, which
+        # is what let the third, Cockatrice-specific fire site here be deleted:
+        # it did the same work with the "non-Wall" test written out by hand.
         self._fire_creature_blocks_triggers(controller_index, assignments)
         self._fire_becomes_blocked_triggers(controller_index, assignments)
         self._apply_flanking(controller_index)
@@ -727,99 +730,6 @@ class DeclareBlockersStepMixin:
         # CR 702.22h: band block propagation is recomputed from combat_blockers.
         self._apply_band_block_propagation()
 
-    def _fire_block_triggers(self, controller_index: int) -> None:
-        """Put abilities that trigger on blockers being declared onto the stack.
-
-        Rule 509.1i / 509.2a: these triggered abilities are placed on the stack
-        before the active player gets priority (they don't resolve immediately).
-        Covers Cockatrice / Thicket Basilisk: "Whenever this creature blocks or
-        becomes blocked by a non-Wall creature, destroy that creature at end of
-        combat." Per 509.3a the trigger fires once for the creature that blocks
-        (targeting the attacker it blocks) and per 509.3c/509.3d once for the
-        attacker that becomes blocked (one per creature blocking it). A Wall
-        partner is excluded by the "non-Wall" clause, checked now (509.3f).
-        """
-        if controller_index < 0 or controller_index >= len(self.players):
-            return
-        if self.active_player_index < 0 or self.active_player_index >= len(self.players):
-            return
-        from ..game_types import StackItem
-
-        defender = self.players[controller_index]
-        attacker_controller = self.players[self.active_player_index]
-
-        def block_destroy_instruction(perm: Permanent):
-            trig = next(matching_triggers(
-                perm.effective_card,
-                condition_kinds={"creature_blocks_or_blocked_by_nonwall"},
-                instruction_kinds={"delayed_destroy_blocked_or_blocker"},
-            ), None)
-            return (trig.instruction, trig.source_line) if trig is not None else (None, None)
-
-        def queue_trigger(
-            source: Permanent,
-            source_controller_index: int,
-            victim: Permanent,
-            victim_player_index: int,
-            victim_index: int,
-        ) -> None:
-            if victim.has_type("wall"):
-                return
-            instruction, source_line = block_destroy_instruction(source)
-            if instruction is None:
-                return
-            self._stack_push(
-                StackItem(
-                    card=source.card,
-                    caster_index=source_controller_index,
-                    target_player_index=victim_player_index,
-                    target_permanent_index=victim_index,
-                    x_value=None,
-                    ability_instruction=instruction,
-                    ability_effect_kind="triggered_delayed_destroy",
-                    source_permanent=source,
-                    ability_text=source_line,
-                )
-            )
-            self.log.append(
-                f"{source.card.name} block trigger added to stack (targeting {victim.card.name})"
-            )
-
-        # A blocker that blocks an attacker (509.3a "Whenever this creature blocks").
-        # A creature blocking several attackers fires once per attacker it blocks.
-        # Scoped to this defender's own declared blocks (nested by defender, CR 802).
-        # Slots resolve through the shared reader, so this pass and the two below
-        # it turn combat's index maps into permanents in one place.
-        for _, blocker, blocked in self._resolved_block_pairs(
-            controller_index, self.combat_blockers.get(controller_index, {})
-        ):
-            for attacker_idx, attacker in blocked:
-                queue_trigger(
-                    blocker,
-                    controller_index,
-                    attacker,
-                    self.active_player_index,
-                    attacker_idx,
-                )
-
-        # An attacker that becomes blocked (509.3c/509.3d "becomes blocked"), scoped
-        # to attackers aimed at this defender (CR 802.4a).
-        for attacker_idx, defending_idx in self.combat_attackers.items():
-            if defending_idx != controller_index:
-                continue
-            if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
-                continue
-            attacker = attacker_controller.battlefield[attacker_idx]
-            for blocker_idx in self._combat_blockers_for_attacker(attacker_idx):
-                if 0 <= blocker_idx < len(defender.battlefield):
-                    queue_trigger(
-                        attacker,
-                        self.active_player_index,
-                        defender.battlefield[blocker_idx],
-                        controller_index,
-                        blocker_idx,
-                    )
-
     def _fire_creature_blocks_triggers(self, controller_index: int, assignments: dict[int, list[int]]) -> None:
         """Put each blocker's own "whenever this creature blocks" triggers on
         the stack (e.g. Ydwen Efreet's coin flip) — once per blocking
@@ -842,7 +752,14 @@ class DeclareBlockersStepMixin:
             # union — the attack half fires in declare_attackers_step.
             for trig in matching_triggers(
                 blocker.effective_card,
-                condition_kinds={"creature_blocks", "creature_attacks_or_blocks"},
+                condition_kinds={
+                    "creature_blocks",
+                    "creature_attacks_or_blocks",
+                    # The joined sentence's *blocks* half. Its noun phrase lands
+                    # under `blocked_filter` like a card that prints this half on
+                    # its own, so nothing below has to know it was joined.
+                    "creature_blocks_or_blocked_by",
+                },
             ):
                 # Each firing records which blocked creature(s) it is *about*
                 # (by stable id, CR 509.3f fixes the set at declaration), so an
@@ -948,7 +865,12 @@ class DeclareBlockersStepMixin:
         for attacker_idx, (attacker, blockers) in blockers_of.items():
             seat = self.active_player_index
             for trig in matching_triggers(
-                attacker.effective_card, condition_kinds={"creature_becomes_blocked"}
+                attacker.effective_card,
+                condition_kinds={
+                    "creature_becomes_blocked",
+                    # …and its *becomes blocked by* half, under `blocker_filter`.
+                    "creature_blocks_or_blocked_by",
+                },
             ):
                 if not trig.condition.payload.get("blocker_filter"):
                     matched = blockers[:1]

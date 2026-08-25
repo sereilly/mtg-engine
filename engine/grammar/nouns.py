@@ -366,8 +366,17 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             continue
 
         if word in COLOR_WORDS:
+            # "a **green or white** creature" (Abomination) — a union of colour
+            # adjectives, read as one the way "attacking or blocking" below is.
+            # Taking "green" alone would end the noun phrase at "or", leaving
+            # "or white creature" unconsumed and refusing the whole line, which
+            # is exactly how Abomination refused.
             colors.append(COLOR_WORDS[word])
             stream.advance()
+            while stream.at_word("or") and stream.peek_word(1) in COLOR_WORDS:
+                stream.advance()
+                colors.append(COLOR_WORDS[str(stream.peek_word())])
+                stream.advance()
             continue
 
         # "attacking **or** blocking creature" — a union of two state

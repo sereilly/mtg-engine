@@ -50,6 +50,11 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # the "creature" alternative, exactly as with the subtype row above.
     ("type_filter_all", {"type_filter_all": ["artifact", "creature"]}, "Grizzly Bears"),
     ("color_filter", {"color_filter": "W"}, "Grizzly Bears"),
+    # "a green **or** white creature" (Abomination). Grizzly Bears is neither
+    # blue nor white, so a matcher ignoring the key would admit it — and the
+    # positive half, that *either* colour is enough, is demonstrated below,
+    # because a matcher reading the list as AND also passes this row.
+    ("any_colors", {"any_colors": ["W", "U"]}, "Grizzly Bears"),
     ("exclude_colors", {"exclude_colors": ["G"]}, "Grizzly Bears"),
     ("exclude_types", {"exclude_types": ["creature"]}, "Grizzly Bears"),
     ("exclude_subtypes", {"exclude_subtypes": ["bear"]}, "Grizzly Bears"),
@@ -279,6 +284,23 @@ def test_a_conjunction_of_subtypes_matches_a_permanent_carrying_both(pool):
     assert subject_matches(game, tower, {"subtype_filter_all": ["urza's", "tower"]})
     # The whole point: the Mine is an Urza's, and it is not a Tower.
     assert not subject_matches(game, mine, {"subtype_filter_all": ["urza's", "tower"]})
+
+
+def test_any_colors_admits_an_object_answering_either_colour(pool):
+    """The positive half of the row above, and the half that says "or".
+
+    Grizzly Bears is mono-green, so a matcher that read ``any_colors`` as a
+    conjunction — the way ``subtype_filter_all`` beside it legitimately is —
+    would reject it here while still passing the rejection row, which names no
+    colour the Bears have. Abomination destroys a green creature and a white
+    one; requiring both would make it destroy neither.
+    """
+    bears = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[PlayerState(name="P1", battlefield=[bears]), PlayerState(name="P2")])
+
+    assert subject_matches(game, bears, {"any_colors": ["G", "W"]})
+    assert subject_matches(game, bears, {"any_colors": ["G"]})
+    assert not subject_matches(game, bears, {"any_colors": ["W"]})
 
 
 def test_no_key_is_promised_without_a_matcher_behind_it():

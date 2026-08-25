@@ -3,7 +3,12 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ._common import flip_coin, resolve_own_combatant, resolve_target_permanent
+from ._common import (
+    block_pair_permanents,
+    flip_coin,
+    resolve_own_combatant,
+    resolve_target_permanent,
+)
 from .registry import effect_handler
 from ..keywords import grant_keyword
 from ..pt import add_pt_modifier
@@ -64,24 +69,29 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
 
     The trigger was put on the stack when blockers were declared; on resolution
     it marks the creature it blocked / that blocked it for destruction at end of
-    combat. The victim is identified by the stack item's target indices, captured
-    at declaration time (509.3f).
+    combat.
+
+    Which half fired decides how the victim is named, and
+    ``block_pair_permanents`` is the one place that difference is written down.
     """
     # "destroy that **Wall**" (Battering Ram). The trigger's own condition
     # already required one, so this re-states rather than narrows — and it is
     # tested anyway, because a payload key nothing reads is a printed word that
     # could be deleted with no change to what the card does.
     subtype = instruction.payload.get("subtype_filter")
-    victim = resolve_target_permanent(
-        game, context,
-        predicate=lambda p: not subtype or p.has_type(str(subtype)),
-        fallback_players=(),
-    )
-    if victim is None:
+    victims = [
+        perm
+        for perm in block_pair_permanents(game, context)
+        if not subtype or perm.has_type(str(subtype))
+    ]
+    if not victims:
         game.log.append(f"{context.card.name} block trigger had no valid target")
         return True, "no target"
-    victim.metadata["destroy_at_end_of_combat"] = True
-    game.log.append(f"{context.card.name} will destroy {victim.card.name} at end of combat")
+    for victim in victims:
+        victim.metadata["destroy_at_end_of_combat"] = True
+        game.log.append(
+            f"{context.card.name} will destroy {victim.card.name} at end of combat"
+        )
     return True, "resolved"
 
 

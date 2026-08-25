@@ -29,6 +29,7 @@ from ._common import (
     is_mana_value_x,
 )
 from ._events import (
+    _BLOCK_PAIR_EVENTS,
     _UNTAPPED_PERMANENTS,
 )
 
@@ -47,16 +48,6 @@ _DESTROY_ALL_KINDS: dict[tuple[str, ...], str] = {
 }
 
 _BASIC_LAND_TYPES = frozenset({"plains", "island", "swamp", "mountain", "forest"})
-
-
-# Trigger events that bind a *blocking pair*, so "destroy that creature at end
-# of combat" names the other half of it. Both fire sites push the blocker as the
-# trigger's target, which is what the handler resolves — so the sentence only
-# means what it says while one of these fired.
-_BLOCK_PAIR_EVENTS = frozenset({
-    "creature_blocks_or_blocked_by_nonwall",   # Thicket Basilisk, Cockatrice
-    "creature_becomes_blocked",                # Battering Ram
-})
 
 
 # Trigger events whose fire site stamps the object the event was about onto the

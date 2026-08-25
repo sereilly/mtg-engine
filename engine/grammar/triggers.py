@@ -73,11 +73,6 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("self_becomes_target",
      ("this", "creature", "becomes", "the", "target", "of", "a", "spell",
       "or", "ability")),
-    # The Basilisk cycle's event. Precedes "this creature blocks", which is a
-    # strict prefix of it: matching that first would name a condition nothing
-    # dispatches for these cards and strand the rest of the clause.
-    ("creature_blocks_or_blocked_by_nonwall",
-     ("this", "creature", "blocks", "or", "becomes", "blocked", "by", "a", "non-wall", "creature")),
     ("creature_attacks_or_blocks", ("this", "creature", "attacks", "or", "blocks")),
     # "attacks and isn't blocked" (Merchant Ship) — before the bare "attacks"
     # it is a prefix of, so the longer condition matches first.
@@ -131,6 +126,13 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 # noun parser on both sides of the pipeline, and held equal by
 # `test_a_narrowed_trigger_reads_the_same_subject_on_both_sides`.
 _FILTERED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    # The Basilisk cycle's event, and Abomination's and Aisling Leprechaun's:
+    # one printed sentence joining the two halves of a block, whose noun phrase
+    # narrows **both** of them. First, because "this creature blocks" below is a
+    # strict prefix — matching that would read "or becomes blocked by …" as the
+    # blocked creature's noun phrase.
+    (("this", "creature", "blocks", "or", "becomes", "blocked", "by"),
+     "creature_blocks_or_blocked_by"),
     (("this", "creature", "blocks"), "creature_blocks"),
     (("this", "creature", "becomes", "blocked", "by"), "creature_becomes_blocked"),
     # "Whenever you activate a loyalty ability of **a Chandra planeswalker**"

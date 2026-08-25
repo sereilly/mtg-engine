@@ -1190,3 +1190,111 @@ def test_wall_of_dust_restriction_does_not_leak_onto_a_bystander(set_pool):
     game.start_next_turn()
     assert not game.can_attack(blocked, 1)
     assert game.can_attack(free, 1)
+
+
+# ---------------------------------------------------------------------------
+# Round 15 — "blocks or becomes blocked by <subject>", both halves
+# ---------------------------------------------------------------------------
+
+
+def _to_declare_blockers(game: Game) -> None:
+    """Advance a freshly built game to declare_blockers with seat 0 attacking."""
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    assert game.current_step == "declare_blockers"
+
+
+def _blocking(set_pool, own_name: str, foe: CardDefinition):
+    """*own_name* blocking on seat 1, *foe* attacking from seat 0."""
+    mine = Permanent(card=set_pool("LEG")[own_name])
+    theirs = Permanent(card=foe)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[theirs]),
+        PlayerState(name="P2", battlefield=[mine]),
+    ])
+    _to_declare_blockers(game)
+    return game, mine, theirs
+
+
+def _attacking(set_pool, own_name: str, foe: CardDefinition):
+    """*own_name* attacking from seat 0, *foe* blocking on seat 1."""
+    mine = Permanent(card=set_pool("LEG")[own_name])
+    theirs = Permanent(card=foe)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    _to_declare_blockers(game)
+    return game, mine, theirs
+
+
+def _test_creature(name: str, colors: tuple[str, ...]) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=colors, color_identity=colors, keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def test_abomination_destroys_a_white_attacker_it_blocks(set_pool):
+    """The *blocks* half. "That creature" is the attacker, which the fire site
+    names by id rather than by the stack item's target — the target there is
+    Abomination itself, so a handler reading it would destroy the blocker."""
+    game, _abom, attacker = _blocking(
+        set_pool, "Abomination", _test_creature("Pale Knight", ("W",))
+    )
+
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.advance_combat_phase()
+
+    assert attacker.metadata.get("destroy_at_end_of_combat") is True
+
+
+def test_abomination_destroys_a_green_blocker_when_it_attacks(set_pool):
+    """The *becomes blocked by* half, and the "or" in the colour phrase: green
+    is the other alternative, so a matcher requiring both colours destroys
+    nothing."""
+    game, _abom, blocker = _attacking(
+        set_pool, "Abomination", _test_creature("Wild Thing", ("G",))
+    )
+
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.advance_combat_phase()
+
+    assert blocker.metadata.get("destroy_at_end_of_combat") is True
+
+
+def test_abomination_spares_a_blue_attacker(set_pool):
+    """The narrowing is what the round bought: the same sentence with a
+    different colour word. Blue is neither alternative, and a dispatcher that
+    ignored the filter would destroy it."""
+    game, _abom, attacker = _blocking(
+        set_pool, "Abomination", _test_creature("Cold Fish", ("U",))
+    )
+
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.advance_combat_phase()
+
+    assert attacker.metadata.get("destroy_at_end_of_combat") is not True
+
+
+def test_aisling_leprechaun_recolours_what_it_blocks(set_pool):
+    """A block-pair binding driving something other than a destroy — which is
+    the reason the fire site fires whatever instruction the trigger carries
+    rather than only the delayed destroy it used to look for."""
+    game, _aisling, attacker = _blocking(
+        set_pool, "Aisling Leprechaun", _test_creature("Grey Ogre", ("R",))
+    )
+
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.advance_combat_phase()
+
+    assert "G" in attacker.effective_colors
+    assert attacker.metadata.get("destroy_at_end_of_combat") is not True

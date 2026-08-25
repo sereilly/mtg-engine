@@ -397,8 +397,19 @@ class ObjectFilter:
         # of the two.
         elif self.tapped is False:
             payload["untapped_only"] = True
-        if self.colors:
+        if len(self.colors) == 1:
             payload["color_filter"] = self.colors[0]
+        elif self.colors:
+            # "a green **or** white creature" — an object answering *any* of
+            # them, which is what the printed "or" says. Its own key rather than
+            # a list-valued `color_filter`, because that key means "has this
+            # colour" to every matcher already reading it and a second type
+            # under one name is how two readers come to disagree.
+            #
+            # This branch used to be `colors[0]`, silently dropping the rest:
+            # no noun phrase could produce two colours, so nothing exercised it
+            # — a dropped rider waiting for the parser to grow the union above.
+            payload["any_colors"] = list(self.colors)
         if self.excluded_colors:
             payload["exclude_colors"] = list(self.excluded_colors)
         if self.excluded_types:
