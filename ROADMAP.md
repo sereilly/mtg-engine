@@ -1383,3 +1383,52 @@ lowers 54.3% → 54.8%, executes 29.0% → 29.5%. Shipped pool unchanged at 734/
 and its coverage flat — this round bought a measured set's cards and deleted
 shipped code rather than adding any. Suite 7,145 → 7,151, full run green with
 every `--check`; no hooks added, none removed.
+
+## LEG round 16: the narrowing was the whole difference, and the gate could not see it
+
+*(2026-08-25.)* No new card is supported by this round. It closes the gap
+round 15 flagged, and the flag understated it: the gate was wrong in **both**
+directions at once.
+
+**One kind, two spellings, opposite meanings.** CR 509.3c/509.3d: "whenever
+this creature becomes blocked" fires *once* however many creatures block it,
+while "…becomes blocked **by a creature**" fires once for each creature the
+phrase admits. Same trigger kind — the narrowing is the entire difference — and
+it decides whether a following "that creature" names one object or several.
+`_BLOCK_PAIR_EVENTS` was keyed on the kind alone, so it had to give both
+spellings one answer, and either answer is wrong for the other:
+
+* `creature_becomes_blocked` was in the set, so the **bare** form compiled.
+  "Whenever this creature becomes blocked, destroy that creature at end of
+  combat" was admitted, and the fire site hands an unnarrowed firing
+  `blockers[:1]` — an arbitrary one of several. Not a crash and not a missing
+  ability: a card that looks as though it resolved.
+* `creature_blocks` was out of it, so the **narrowed** form refused. That is
+  Infernal Medusa, which prints the two halves as separate sentences: it was
+  reported supported with its first line lowering to nothing.
+
+`binds_block_pair(event, event_subject)` replaces the set membership, and both
+readers of it — the delayed destroy and round 15's recolour — ask it instead.
+
+**Threading the narrowing is the actual work.** `event` has travelled down the
+lowering chain since Gloom Sower, alongside `whole_effect`; `event_subject` now
+travels with it, for the reason the docstring already gave for `event` — it is
+simply true of every nested statement. Six helpers (`_lower_may`,
+`_lower_steps`, the three where-clause lowerings, `_lower_one_of`) carry it
+through, and it passes the same `whole_effect` gate the kind does: a nested
+occurrence is not the ability's whole instruction, so a registry keyed on it
+must see neither half.
+
+**What it cost and what it bought.** No card moved from unsupported to
+supported — LEG stays at 192 of 310 — because Medusa was already counted.
+What moved is the honest measure: LEG hollow lines 19 → 18, LEG lowers 54.8% →
+55.0% and executes 29.5% → 29.7%. A round whose whole yield is a supported card
+starting to do what it prints, plus a shape that can no longer be printed and
+silently mis-resolved. The parametrized table in `test_grammar_lowering.py`
+holds all five spellings, because a gate that reads the kind alone passes any
+test written about only one side of it.
+
+**Numbers.** LEG 192 of 310 unchanged (61.9%); LEG lowers 54.8% → 55.0%,
+executes 29.5% → 29.7%, hollow lines 19 → 18. Shipped pool unchanged at 734/734
+and its coverage flat. Suite 7,151 → 7,158, full run green with every
+`--check`; no hooks added or removed.
