@@ -221,7 +221,21 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # affects the chosen target (CR 115.10b). Default to target for legacy
     # instructions that predate the recipient payload.
     recipient = instruction.payload.get("recipient", "target")
-    gainer = context.caster if recipient == "caster" else context.target
+    if recipient == "event_subject_player":
+        # "…**they** gain 1 life" under "at the beginning of each player's
+        # upkeep" (Spiritual Sanctuary): the seat the firing event named,
+        # frozen by the fire site (CR 603.10). The trigger has no target, so
+        # `context.target` is whatever a targetless resolution defaults to —
+        # which handed the life to the opponent on the controller's own upkeep,
+        # and to the right seat everywhere else, making it look correct in
+        # exactly the half of the cases a two-player test covers first.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded player, no life gained")
+            return True, "resolved"
+        gainer = game.players[seat]
+    else:
+        gainer = context.caster if recipient == "caster" else context.target
     # "You gain life equal to the damage dealt" — the amount is whatever the
     # preceding damage instruction in this same resolution actually dealt, which
     # it recorded in the context scratchpad. This is what lets damage-then-gain

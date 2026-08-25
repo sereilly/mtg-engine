@@ -19,11 +19,13 @@ from ._common import (
     chargeable_card_filter,
     _filter_payload,
     _amount_payload,
-    _back_reference_payload,
     _describe_targets,
     _restrictions_beyond,
     _targets_only,
     count_spec,
+)
+from ._events import (
+    _back_reference_payload,
 )
 
 

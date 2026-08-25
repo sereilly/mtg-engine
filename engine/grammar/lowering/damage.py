@@ -14,7 +14,6 @@ from .. import ast
 from ..errors import LoweringError
 from ...oracle_types import X_FROM_COUNT
 from ._common import (
-    _EVENT_SUBJECT_CONTROLLERS,
     _REST_OF_TURN,
     _describe_several_targets,
     _names_several_targets,
@@ -24,11 +23,14 @@ from ._common import (
     _filter_payload,
     _restrictions_beyond,
     _full_mana_payload,
-    _back_reference_payload,
     _is_source,
     _is_target,
     _is_you,
     _targets_payload,
+)
+from ._events import (
+    _EVENT_SUBJECT_CONTROLLERS,
+    _back_reference_payload,
 )
 
 
@@ -86,15 +88,32 @@ _SWAMPS_THEY_CONTROL = ast.ObjectFilter(subtypes=("swamp",), controller="that_pl
 # implicit in the handler, so it is written down here rather than left to be
 # rediscovered — and it is the reason an unnamed X may never lower to this kind.
 _BOARD_COUNT_DAMAGE: dict[str, tuple[str, dict[str, object]]] = {
-    # The threshold and the direction are payload on the legacy side, so the
-    # grammar carries them too — the differential compares payloads, and a
-    # bare {} here would report a disagreement rather than a match.
-    "cards_in_hand_minus_four": (
+    # The direction is payload on the legacy side, so the grammar carries it
+    # too — the differential compares payloads, and a bare {} here would report
+    # a disagreement rather than a match. The *threshold* is no longer written
+    # here: it comes off ``BoardCount.base``, because Black Vise's 4 and The
+    # Rack's 3 are one arithmetic with one number changed.
+    "cards_in_hand_over_base": (
         "upkeep_chosen_player_hand_overflow_damage",
-        {"base": 4, "direction": "overflow"},
+        {"direction": "overflow"},
+    ),
+    # The mirror, and the branch the handler has computed since Black Vise
+    # landed while nothing in the grammar could reach it (The Rack got there
+    # through a card hook instead).
+    "base_over_cards_in_hand": (
+        "upkeep_chosen_player_hand_overflow_damage",
+        {"direction": "deficit"},
     ),
     "untapped_lands_at_turn_start": ("deal_damage", {"amount": "x"}),
 }
+
+# Board counts whose handler needs the constant the phrase captured. Named
+# rather than inferred from ``base is not None``: a count that grew an optional
+# constant would otherwise start silently forwarding it to a handler that reads
+# no such key.
+_BOARD_COUNTS_WITH_BASE = frozenset(
+    {"cards_in_hand_over_base", "base_over_cards_in_hand"}
+)
 
 
 def _damaged_player_is(recipients: tuple[ast.Recipient, ...], kind: str) -> bool:
@@ -165,7 +184,16 @@ def _lower_board_count_damage(node: ast.DealDamage) -> tuple[OracleInstruction, 
     if node.riders != ast.DamageRiders():
         raise LoweringError("no counted-damage handler carries damage riders", node=node)
     kind, payload = found
-    return (OracleInstruction(kind, "", dict(payload)),)
+    payload = dict(payload)
+    if node.amount.name in _BOARD_COUNTS_WITH_BASE:
+        if node.amount.base is None:
+            raise LoweringError(
+                f"the {node.amount.name!r} count needs the constant it "
+                "subtracts against",
+                node=node,
+            )
+        payload["base"] = node.amount.base
+    return (OracleInstruction(kind, "", payload),)
 
 
 def _lower_damage_unless_pay(

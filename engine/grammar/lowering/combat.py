@@ -14,6 +14,8 @@ from ._common import (
     _is_target,
     _restrictions_beyond,
     _targets_only,
+)
+from ._events import (
     _UNTAPPED_PERMANENTS,
 )
 

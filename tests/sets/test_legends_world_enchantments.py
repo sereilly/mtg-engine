@@ -268,3 +268,54 @@ def test_arboria_does_not_shield_planeswalkers(set_pool):
 
     assert not game.can_attack(bear, 1)
     assert game.can_attack(bear, 1, attacking_planeswalker=True)
+
+
+# ---------------------------------------------------------------------------
+# Round 14 — Storm World: the hand shortfall, on every seat's own upkeep
+# ---------------------------------------------------------------------------
+
+
+def _storm_world(set_pool, lea_by_name, hand_sizes: tuple[int, int]):
+    """Storm World on seat 0, with each seat holding *hand_sizes* cards."""
+    forest = lea_by_name["Forest"]
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=set_pool("LEG")["Storm World"])],
+        hand=[forest] * hand_sizes[0],
+        life=20,
+    )
+    p2 = PlayerState(name="P2", hand=[forest] * hand_sizes[1], life=20)
+    return Game(players=[p1, p2]), p1, p2
+
+
+@pytest.mark.parametrize(
+    "held,expected",
+    [(0, 16), (1, 17), (3, 19), (4, 20), (6, 20)],
+    ids=["empty", "one", "three", "exactly-four", "over-four"],
+)
+def test_storm_world_deals_the_shortfall_below_four(
+    set_pool, lea_by_name, held, expected
+):
+    """"X is 4 minus the number of cards in their hand" — and it floors at
+    zero rather than healing, which is what the two cases at and above four
+    are here to pin."""
+    game, _p1, p2 = _storm_world(set_pool, lea_by_name, (0, held))
+
+    game.resolve_upkeep(1)
+    game.resolve_stack()
+
+    assert p2.life == expected
+
+
+def test_storm_world_hits_its_own_controller_too(set_pool, lea_by_name):
+    """"Each player's upkeep" includes the controller's. Storm World is
+    symmetric, so a version that read the source's controller as the victim
+    would look right on the opponent's upkeep and never fire on its own.
+    """
+    game, p1, p2 = _storm_world(set_pool, lea_by_name, (1, 4))
+
+    game.resolve_upkeep(0)
+    game.resolve_stack()
+
+    assert p1.life == 17
+    assert p2.life == 20, "only the seat whose upkeep it is"

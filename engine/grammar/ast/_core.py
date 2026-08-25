@@ -145,8 +145,18 @@ class BoardCount:
     Vise's "the number of cards in their hand minus 4" as an ordinary filtered
     count would drop the "minus 4" — the dropped-rider bug class — and the card
     would deal four damage too much while still reporting as supported.
+
+    *base* is the constant such a count subtracts against, and it is **payload
+    rather than part of the name** for the reason the land type in
+    ``combat_restrictions.py`` is: "3 minus the number of cards in their hand"
+    (The Rack) and "the number of cards in their hand minus 4" (Black Vise) are
+    one arithmetic with one number changed. Spelling the 4 into the phrase made
+    every other threshold a non-match — the false-negative failure — and The
+    Rack was a name-keyed card hook purely because its number was 3. A count
+    whose meaning needs no constant leaves it None.
     """
     name: str
+    base: int | None = None
 
 
 @dataclass(frozen=True)

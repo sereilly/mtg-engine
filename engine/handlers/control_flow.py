@@ -90,6 +90,16 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         players = [context.caster] if who == "you" else list(game.players)
         if who in ("each_opponent", "target_opponent", "opponent"):
             players = [p for p in game.players if p is not context.caster]
+        if who == "event_subject_player":
+            # The seat the firing event named, frozen by the fire site — "if
+            # **that player** controls a Plains" under "at the beginning of each
+            # player's upkeep" (Spiritual Sanctuary). Without this the clause
+            # fell through to the every-player list above and asked whether
+            # *anybody* controlled one, which is a different card.
+            seat = (context.trigger_context or {}).get("event_subject_player")
+            if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+                return False
+            players = [game.players[seat]]
         filters = payload.get("filter") or {}
         # "another creature…" (Turret Ogre): the asking ability's own source
         # never satisfies its own condition. Outside the matcher's vocabulary

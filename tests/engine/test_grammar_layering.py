@@ -149,7 +149,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "categories"), ()),
+        ("lowering", ("_common", "_events", "categories"), ()),
         ("ast", ("_core",), ("statements",)),
     ],
     ids=["effects", "lowering", "ast"],
@@ -159,9 +159,13 @@ def test_families_import_only_their_package_shared_module(package, shared, roof)
 
     `effects/` has no shared module of its own — its shared fragments are one
     level up in `phrases`, which is why its tuple is empty. `lowering/` keeps
-    `_common` and `categories` beside the families because both are lowering
-    concerns with no reader outside the package. `ast/` keeps `_core`, the
-    vocabulary its nodes are built from.
+    `_common`, `_events` and `categories` beside the families because all three
+    are lowering concerns with no reader outside the package. `_events` split
+    out of `_common` when it crossed the size guard below, and is shared for the
+    same reason `_common` is rather than by taxonomy: six families read a table
+    keyed by trigger-condition kind, and a fragment several families need is not
+    one family's property. `ast/` keeps `_core`, the vocabulary its nodes are
+    built from.
 
     `roof` names the modules that sit *above* the families rather than below
     them; they are exempted here and checked by their own test. Only `ast/` has

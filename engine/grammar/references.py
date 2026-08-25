@@ -45,6 +45,14 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         return ast.PlayerRef("target_opponent")
     if stream.accept_phrase("that", "player"):
         return ast.PlayerRef("that_player")
+    # "…**they** gain 1 life" (Spiritual Sanctuary). The pronoun back-refers to
+    # the player the sentence has already named, which is exactly what
+    # `that_player` means to every consumer downstream — so it is an alias, not
+    # a fourth referent. `nouns.py` set the precedent the other way round when
+    # it read "they control" as a `that_player` narrowing; the two spellings
+    # disagreeing about the same word is the fork this repo closes elsewhere.
+    if stream.accept_word("they"):
+        return ast.PlayerRef("that_player")
     if stream.accept_phrase("its", "controller"):
         return ast.PlayerRef("controller")
     if stream.accept_phrase("their", "controller"):

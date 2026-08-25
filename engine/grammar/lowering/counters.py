@@ -14,7 +14,6 @@ from .. import ast
 from ..errors import LoweringError
 from ..phrases import is_pt_counter
 from ._common import (
-    _DAMAGED_PLAYER_EVENTS,
     _amount_payload,
     _describe_several_targets,
     _describe_targets,
@@ -23,6 +22,9 @@ from ._common import (
     _is_target,
     _names_several_targets,
     _restrictions_beyond,
+)
+from ._events import (
+    _DAMAGED_PLAYER_EVENTS,
 )
 
 

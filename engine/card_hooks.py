@@ -585,13 +585,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "beginning of the next end step":
             _line("grant_flying_and_delayed_destruction", "activated_keyword"),
     },
-    'The Rack': {
-        "at the beginning of the chosen player's upkeep, this artifact deals x "
-        'damage to that player, where x is 3 minus the number of cards in their '
-        'hand':
-            _line('upkeep_chosen_player_hand_overflow_damage', 'upkeep_effect',
-                base=3, direction='deficit'),
-    },
     'Timetwister': {
         'each player shuffles their hand and graveyard into their library, then '
         'draws seven cards':

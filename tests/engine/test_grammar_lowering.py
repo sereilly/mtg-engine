@@ -3899,3 +3899,69 @@ def test_up_to_one_without_target_is_not_a_cast_time_target():
         "an 'up to one' that prints no 'target' must refuse rather than be "
         "read as targeted"
     )
+
+
+# ---------------------------------------------------------------------------
+# The hand-shortfall count: the threshold is data, not part of the phrase
+# ---------------------------------------------------------------------------
+
+
+_HAND_COUNT = (
+    "this artifact deals x damage to that player, where x is {clause}"
+)
+
+
+@pytest.mark.parametrize(
+    "clause,direction,base",
+    [
+        # Black Vise's printed order, and the only one the phrase table used to
+        # hold — with the 4 spelled into it.
+        ("the number of cards in their hand minus 4", "overflow", 4),
+        ("the number of cards in their hand minus 7", "overflow", 7),
+        # The Rack's, and Storm World's. This direction had a working handler
+        # branch and no way for the grammar to reach it, so The Rack was a
+        # name-keyed card hook purely because its number was 3.
+        ("3 minus the number of cards in their hand", "deficit", 3),
+        ("4 minus the number of cards in their hand", "deficit", 4),
+        ("9 minus the number of cards in their hand", "deficit", 9),
+    ],
+)
+def test_the_hand_shortfall_threshold_is_payload(clause, direction, base):
+    """One arithmetic, two printed orders, any threshold.
+
+    Written with numbers no real card prints on purpose: a test that named only
+    4 and 3 would pass against the version that matched the literal token "4",
+    which is the shape that made every other threshold compile *unsupported* —
+    the false-negative failure `engine/land_animation.py` documents, in a second
+    place.
+    """
+    compiled = compile_line(_HAND_COUNT.format(clause=clause))
+
+    assert compiled.lowered, compiled.failure_reason
+    [instruction] = compiled.instructions
+    assert instruction.kind == "upkeep_chosen_player_hand_overflow_damage"
+    assert instruction.payload["direction"] == direction
+    assert instruction.payload["base"] == base
+
+
+def test_a_bare_hand_count_is_not_the_shortfall():
+    """No threshold, no shortfall.
+
+    The bare count is a real and different quantity — an ordinary zone count,
+    which the general evaluator already answers — so the risk here is not that
+    it refuses but that the *threshold* rows above swallow it and hand the
+    shortfall handler no base to subtract against. It must come out the other
+    door.
+    """
+    compiled = compile_line(
+        "this artifact deals x damage to that player, where x is the number of "
+        "cards in their hand"
+    )
+
+    assert compiled.lowered, compiled.failure_reason
+    [instruction] = compiled.instructions
+    assert instruction.kind == "deal_damage"
+    assert instruction.payload["x_from_count"] == {
+        "zone": "hand", "owner": "owner", "filter": {},
+    }
+    assert "base" not in instruction.payload

@@ -21,7 +21,7 @@ from dataclasses import replace
 from ..pt import pt_counter_deltas
 from . import ast
 from .errors import GrammarError
-from .lexer import (MANA, PUNCT, tokenize)
+from .lexer import (MANA, NUMBER, PUNCT, tokenize)
 from .nouns import parse_object_filter
 from .references import parse_target_spec
 from .stream import TokenStream
@@ -81,10 +81,30 @@ def is_pt_counter(kind: str) -> bool:
 # job is to say which count was written. A phrase not listed here fails to
 # match, the line fails full-token consumption, and the card falls back rather
 # than compiling onto a handler that counts something else.
+#
+# A ``NUMBER_SLOT`` in a phrase matches any printed number and captures it as
+# the count's ``base``. The constant is the one part of these phrases that is
+# *data*: Black Vise prints "minus 4" and The Rack "3 minus", one arithmetic
+# with one number changed, and spelling the 4 in made every other threshold a
+# non-match. That is why The Rack was a name-keyed hook — not because its
+# sentence was bespoke, but because its number was 3.
+NUMBER_SLOT = "<n>"
+
 _BOARD_COUNTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    # Black Vise: the excess of a hand over the threshold.
     (
-        "cards_in_hand_minus_four",
-        ("the", "number", "of", "cards", "in", "their", "hand", "minus", "4"),
+        "cards_in_hand_over_base",
+        ("the", "number", "of", "cards", "in", "their", "hand", "minus",
+         NUMBER_SLOT),
+    ),
+    # The Rack, Storm World: the shortfall of a hand below it. The mirror of
+    # the row above and the same handler, which has computed both directions
+    # since Black Vise landed — this phrase is what finally reaches the
+    # deficit branch from the grammar rather than from a card hook.
+    (
+        "base_over_cards_in_hand",
+        (NUMBER_SLOT, "minus", "the", "number", "of", "cards", "in", "their",
+         "hand"),
     ),
     (
         "untapped_lands_at_turn_start",
@@ -220,21 +240,33 @@ def _parse_duration(stream: TokenStream) -> ast.Duration:
     return ast.Duration()
 
 
-def _accept_literal(stream: TokenStream, *phrase: str) -> bool:
+def _accept_literal(stream: TokenStream, *phrase: str) -> tuple[bool, int | None]:
     """Consume consecutive tokens by their text, all-or-nothing.
 
     ``TokenStream.accept_phrase`` requires every token to be a *word*, which
     "…hand minus 4" is not — the 4 lexes as a number. Punctuation is still
     refused, so a phrase can never silently span a sentence boundary.
+
+    A :data:`NUMBER_SLOT` element matches any number token and is returned
+    beside the match, so the phrase says *where* the constant goes and the
+    caller keeps the constant itself as data.
     """
     if len(stream.tokens) - stream.pos < len(phrase):
-        return False
+        return False, None
+    captured: int | None = None
     for offset, text in enumerate(phrase):
         token = stream.tokens[stream.pos + offset]
-        if token.kind == PUNCT or token.text != text:
-            return False
+        if token.kind == PUNCT:
+            return False, None
+        if text is NUMBER_SLOT:
+            if token.kind != NUMBER:
+                return False, None
+            captured = int(token.text)
+            continue
+        if token.text != text:
+            return False, None
     stream.advance(len(phrase))
-    return True
+    return True, captured
 
 
 def _parse_where_x_is(stream: TokenStream) -> ast.BoardCount | None:
@@ -253,8 +285,9 @@ def _parse_where_x_is(stream: TokenStream) -> ast.BoardCount | None:
         stream.reset(mark)
         return None
     for name, phrase in _BOARD_COUNTS:
-        if _accept_literal(stream, *phrase):
-            return ast.BoardCount(name)
+        matched, base = _accept_literal(stream, *phrase)
+        if matched:
+            return ast.BoardCount(name, base)
     stream.reset(mark)
     return None
 

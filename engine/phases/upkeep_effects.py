@@ -370,6 +370,7 @@ class UpkeepEffectsMixin:
             f"{attached.card.name} ({current - 1} left)"
         )
 
+    @upkeep_effect("upkeep_each", "upkeep_chosen_player_hand_overflow_damage")
     @upkeep_effect("upkeep_chosen", "upkeep_chosen_player_hand_overflow_damage")
     def _on__upkeep_chosen__upkeep_chosen_player_hand_overflow_damage(self, ctx: UpkeepContext) -> None:
         _enqueue_upkeep_damage = ctx.enqueue_damage
@@ -377,9 +378,17 @@ class UpkeepEffectsMixin:
         permanent = ctx.permanent
         player_index = ctx.player_index
         trig = ctx.trig
-        chosen = permanent.metadata.get("chosen_player_index")
-        if chosen != player_index:
-            return
+        # Two conditions, one arithmetic. Black Vise and The Rack name a player
+        # as they enter and fire on that seat's upkeep; Storm World names none
+        # and fires on every seat's. The chosen-player gate therefore belongs
+        # to the *condition*, not to the effect — asking for
+        # `chosen_player_index` under `upkeep_each` would read a key Storm
+        # World never sets, compare it against a real seat and silently deal
+        # nothing at all.
+        if ctx.cond == "upkeep_chosen":
+            chosen = permanent.metadata.get("chosen_player_index")
+            if chosen != player_index:
+                return
         victim = self.players[player_index]
         # Black Vise counts the excess over the threshold, The Rack the
         # shortfall below it. Both floor at zero: neither card heals.

@@ -595,6 +595,17 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                             "instruction": trig.instruction,
                             "effect_kind": triggered_label(kind, cond),
                             "ability_text": trig.source_line or None,
+                            # Whose upkeep this firing is, frozen now (CR
+                            # 603.10). "At the beginning of each player's
+                            # upkeep, … that player …" is one ability with a
+                            # different seat each time it fires, and by the
+                            # time the stack resolves it the only seat still
+                            # readable off the board is the source's
+                            # controller — which is the wrong one on every
+                            # upkeep but their own.
+                            "trigger_context": {
+                                "event_subject_player": player_index,
+                            },
                         })
                         # `continue`, not `break`. CR 603.3 puts **every**
                         # ability that triggered on the stack, and this loop

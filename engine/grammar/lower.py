@@ -793,7 +793,9 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
             # CR 603.4: the condition is checked when the trigger would fire and
             # again on resolution. The legacy compiler dropped these outright,
             # so conditional triggers always fired.
-            condition = _lower_condition(node.intervening_if)
+            condition = _lower_condition(
+                node.intervening_if, event=node.event.kind
+            )
             instructions = tuple(
                 OracleInstruction(
                     instruction.kind, instruction.value,

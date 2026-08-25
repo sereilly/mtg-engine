@@ -14,14 +14,18 @@ from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
-    _EVENT_SUBJECT_CONTROLLERS,
     _amount_payload,
-    _back_reference_payload,
     count_spec,
     halved_count_spec,
     _describe_targets,
     _filter_payload,
     _restrictions_beyond,
+)
+from ._events import (
+    _EVENT_SUBJECT_CONTROLLERS,
+    _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_PLAYER,
+    _back_reference_payload,
 )
 
 
@@ -36,6 +40,13 @@ def _lower_gain_life(
     event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     recipient = "caster" if node.player.kind == "you" else "target"
+    # "…**they** gain 1 life" under "at the beginning of each player's upkeep"
+    # (Spiritual Sanctuary). The seat varies per firing, so it is frozen by the
+    # fire site and named here; left as the ordinary "target" the gain went to
+    # whoever a targetless resolution defaults to, which on the controller's own
+    # upkeep was the opponent — the card healing the wrong player.
+    if node.player.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+        recipient = EVENT_SUBJECT_PLAYER
     # "When this creature dies, you gain life equal to **its** power."
     # (Conclave Mentor.) "It" is the source, which is in a graveyard by the
     # time this resolves — so the amount is last-known information (CR 603.10)

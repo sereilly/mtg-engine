@@ -663,3 +663,71 @@ def test_cocoon_dies_when_its_host_changes_sides(set_pool):
 
     assert not game.is_on_battlefield(aura)
     assert any(c.name == "Cocoon" for c in game.players[0].graveyard)
+
+
+# ---------------------------------------------------------------------------
+# Round 14 — "at the beginning of each player's upkeep, … that player …"
+# ---------------------------------------------------------------------------
+
+
+def _sanctuary(set_pool, mine: str, theirs: str):
+    """Spiritual Sanctuary on seat 0, with one land each."""
+    pool = set_pool("LEG")
+    lands = set_pool("LEA")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[
+            Permanent(card=pool["Spiritual Sanctuary"]),
+            Permanent(card=lands[mine]),
+        ],
+        life=20,
+    )
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=lands[theirs])], life=20)
+    return Game(players=[p1, p2]), p1, p2
+
+
+def test_spiritual_sanctuary_pays_the_player_whose_upkeep_it_is(set_pool):
+    """Each seat's own upkeep, each seat's own Plains, each seat's own life.
+
+    The two halves are asserted separately on purpose: the seat that *gains*
+    and the seat the condition *asks about* were two different bugs, and each
+    one looks correct while the other is being read.
+    """
+    game, p1, p2 = _sanctuary(set_pool, mine="Plains", theirs="Forest")
+
+    game.resolve_upkeep(0)
+    game.resolve_stack()
+
+    assert p1.life == 21, "the controller's own upkeep pays the controller"
+    assert p2.life == 20, "and nobody else"
+
+
+def test_spiritual_sanctuary_pays_an_opponent_on_their_upkeep(set_pool):
+    """"Each player's upkeep" is not "your upkeep" — the enchantment's
+    controller gets nothing out of an opponent's Plains."""
+    game, p1, p2 = _sanctuary(set_pool, mine="Forest", theirs="Plains")
+
+    game.resolve_upkeep(1)
+    game.resolve_stack()
+
+    assert p2.life == 21
+    assert p1.life == 20
+
+
+def test_spiritual_sanctuary_asks_about_that_player_not_about_anybody(set_pool):
+    """CR 603.4's intervening-if, and the reason this test exists.
+
+    "That player" lowered to a subject `evaluate_condition` had no branch for,
+    so it fell through to a scan of *every* player: the enchantment asked "does
+    anybody control a Plains", found its controller's, and paid life on an
+    upkeep whose player controlled none. A two-player board where only the
+    controller has the Plains is the one arrangement that tells the two
+    readings apart.
+    """
+    game, p1, p2 = _sanctuary(set_pool, mine="Plains", theirs="Forest")
+
+    game.resolve_upkeep(1)
+    game.resolve_stack()
+
+    assert p2.life == 20, "the opponent controls no Plains"
+    assert p1.life == 20, "and the controller's Plains is not their upkeep"

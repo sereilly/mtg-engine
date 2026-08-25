@@ -11,10 +11,13 @@ rest-of-turn duration by damage and combat. A fragment several families need is
 not one family's property, and leaving it in one is what couples the rest to it.
 
 `GRAMMAR_ONLY_PAYLOAD_KEYS` is here too, since it describes payloads rather
-than any one effect. So is `_back_reference_payload`, for the same reason the
-two above are: "that much" is a fragment life, damage and cards all read, and
-what it points at is one question with one answer — a family deciding it alone
-would be a family deciding it differently.
+than any one effect.
+
+What a *trigger's* back-reference names — "that much", "that player", the tables
+keyed by condition kind — was here for the same reason and is now `_events`
+beside this file, which crossed the thousand-line guard. The split is by
+question: this module is the shape a payload takes, that one is what the firing
+event froze.
 """
 
 import dataclasses
@@ -22,6 +25,7 @@ import dataclasses
 from ...oracle_types import X_FROM_COUNT, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
 
 def _filter_payload(filt: ast.ObjectFilter) -> dict[str, object]:
@@ -362,133 +366,6 @@ def _amount_payload(amount: ast.Amount) -> int | str:
     raise LoweringError(f"unsupported quantity {type(amount).__name__}", node=amount)
 
 
-# Trigger events that hand a *damaged player* to the effect after them: "that
-# player" names the player the trigger recorded taking the damage
-# (``defending_player_index`` in the trigger's context), and nothing in the
-# instruction's own payload. Under any other trigger the same words would name
-# a player nobody recorded. Here rather than beside one reader because two
-# effect families ask it — a discard (Hypnotic Specter) and a player counter
-# (Pit Scorpion) — and a fragment two families need belongs in the shared
-# module.
-_DAMAGED_PLAYER_EVENTS: frozenset[str] = frozenset({"damage_dealt"})
-
-
-# Trigger events after which "that player" names the controller of the object
-# the event was about, frozen into the trigger's context by the fire site.
-#
-# Here rather than beside either reader: two effect families ask it — a life
-# loss (Massacre Wurm) and a damage event (Backfire) — and a fragment two
-# families need belongs in the shared module, which is the same rule the parse
-# side's `phrases.py` follows.
-_EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
-    "creature_opponent_controls_dies",   # Massacre Wurm — the dead creature's
-    "creature_becomes_blocked",          # Gloom Sower — the blocker's
-    # Backfire — the damager's. The subject of a damage event is whatever dealt
-    # it, so "that creature's controller" is the seat `deal_damage` derives for
-    # every event and freezes into the announcement.
-    "damage_dealt",
-})
-
-
-# What a bare "that much" names when the effect is a *triggered ability*: the
-# quantity the firing event carried, frozen into the trigger's context by the
-# fire site. Keyed by trigger-condition kind, and deliberately a table rather
-# than a rule — an event either carries a number or it does not, and a kind
-# absent here refuses the back-reference instead of reading a zero out of an
-# empty context.
-_EVENT_QUANTITIES: dict[str, str] = {
-    "you_gain_life": "life_gained",
-    # "Whenever another creature you control enters, this creature deals damage
-    # equal to **that creature's** power…" (Terror of the Peaks). The entering
-    # creature's power, frozen by the fire site — by the time the trigger
-    # resolves the creature may have been pumped or destroyed, and CR 608.2's
-    # number is the one the event had.
-    "matching_permanent_enters": "entering_power",
-    # "Whenever this creature **is dealt damage**, it deals that much damage to
-    # target opponent." (Brash Taunter.) The number is frozen by the fire site,
-    # because by resolution the marked damage may have been added to or wiped.
-    "creature_dealt_damage": "damage_dealt",
-    # **The whole "deals damage" family, in one row.** "You gain that much
-    # life" (Spirit Link, El-Hajjâj), "this creature deals that much damage to
-    # …" (Chandra's Incinerator, Backfire), "look at that many cards"
-    # (Garruk's Harbinger) — one event, one number, recorded once by
-    # `damage_events._announce`. It is the damage *dealt* (CR 120.4b), not what
-    # the life total lost: Ali from Cairo caps the second without capping the
-    # first.
-    #
-    # This row is what retires a *deliberate refusal*. El-Hajjâj's "you gain
-    # that much life" was recorded as one, on the grounds that "its fire site
-    # records the amount under a different key" — which was true of a fire
-    # site, not of the rule, and stopped being true the moment there was one
-    # seam to record it at.
-    "damage_dealt": "amount",
-}
-
-# The scratchpad key the untap records and two later sentences read ("remove
-# **it** from combat", "gain control of **that creature**" — Disharmony). One
-# name in one place, shared by the ``board`` and ``combat`` lowering families,
-# because a fragment two families need lives here rather than in either of
-# them — and because ``categories._PRODUCES`` writes the same string, so a
-# second spelling would make the producer gate vacuous while the handler read
-# an empty record.
-_UNTAPPED_PERMANENTS = "untapped_permanents"
-
-# The scratchpad keys that are *quantities*. `categories._PRODUCES` also records
-# things no amount can read — a controller's seat, a list of exiled cards — so
-# a bare back-reference resolves against this narrower set. A producer added
-# there and not here fails safe: the bare reading refuses rather than reading a
-# number out of something that is not one.
-_PRODUCED_QUANTITIES: frozenset[str] = frozenset({"damage_dealt"})
-
-
-def _back_reference_payload(
-    amount: ast.ThatMuch,
-    produced: frozenset[str],
-    event: str | None,
-) -> dict[str, object]:
-    """Where a handler should read *amount* from, as payload keys.
-
-    ``amount_from`` is a key in this resolution's scratchpad (an earlier step of
-    the same effect recorded it); ``amount_from_trigger`` is a key in the firing
-    event's captured context. Which one applies is decided here, once, rather
-    than by each effect family guessing — reading a trigger's number out of the
-    scratchpad silently yields zero, which is the failure this refuses on
-    behalf of every caller.
-    """
-    if amount.source == "event_subject_power":
-        # "That creature's power" names the *event's* object, so the only place
-        # it can be read is the firing event's captured context — and only under
-        # an event whose fire site records one. Under any other trigger the words
-        # name a creature nobody recorded, and the amount would silently be zero.
-        key = _EVENT_QUANTITIES.get(event or "")
-        if key is None:
-            raise LoweringError(
-                "\"that creature's power\" needs a trigger whose event records "
-                "one",
-                node=amount,
-            )
-        return {"amount_from_trigger": key}
-    if amount.source is not None:
-        # The words named the producer ("equal to the damage dealt"), so a step
-        # of this same effect has to have recorded it.
-        if amount.source in produced:
-            return {"amount_from": amount.source}
-        raise LoweringError(
-            f"back-reference to {amount.source!r} with no producer in this effect",
-            node=amount,
-        )
-    key = _EVENT_QUANTITIES.get(event or "")
-    if key is not None:
-        return {"amount_from_trigger": key}
-    within = tuple(sorted(produced & _PRODUCED_QUANTITIES))
-    if len(within) == 1:
-        return {"amount_from": within[0]}
-    raise LoweringError(
-        "bare back-reference with no producer in this effect and no quantity "
-        "on its trigger",
-        node=amount,
-    )
-
 
 def _is_source(subject: ast.Recipient) -> bool:
     return isinstance(subject, ast.TargetSpec) and subject.filter.is_source
@@ -686,12 +563,20 @@ def count_spec(filt: "ast.ObjectFilter", node, *, aggregate: str = "count") -> d
 
 
 def _lower_condition(
-    condition: ast.Condition, produced: frozenset[str] = frozenset()
+    condition: ast.Condition,
+    produced: frozenset[str] = frozenset(),
+    event: str | None = None,
 ) -> dict[str, object]:
     """*produced* names the scratchpad values earlier steps of this same effect
     recorded. It defaults to empty, which is what refuses a coin-flip condition
     on an intervening-if (CR 603.4): that condition is checked when the trigger
-    would fire, where no flip of this resolution can have happened yet."""
+    would fire, where no flip of this resolution can have happened yet.
+
+    *event* is the firing trigger's condition kind, threaded for the same reason
+    the effect lowerings take it: "that player" is only a resolvable referent
+    when the event named a player, and which events do is
+    :data:`_EVENT_SUBJECT_PLAYERS` rather than a rule.
+    """
     if isinstance(condition, ast.CoinFlipResult):
         # A back-reference names its producer or refuses (round 33). Without a
         # flip earlier in the same effect there is nothing to read, and
@@ -785,12 +670,29 @@ def _lower_condition(
         # kinds costs nothing extra here or in the evaluator.
         return {
             "kind": "all_of",
-            "conditions": [_lower_condition(part, produced) for part in condition.conditions],
+            "conditions": [
+                _lower_condition(part, produced, event)
+                for part in condition.conditions
+            ],
         }
     if isinstance(condition, ast.Controls):
+        who = condition.who.kind
+        # "…**if that player** controls a Plains" (Spiritual Sanctuary). Left as
+        # "that_player" this reached `evaluate_condition`'s fallback, which
+        # scans *every* player — so the card asked "does anybody control a
+        # Plains", answered yes off the opponent's board and gave the life away
+        # on a condition its own controller had met. Silent in both directions
+        # and impossible to see from the card, which is why the referent is
+        # resolved here, where the event is known, rather than guessed there.
+        if who == "that_player":
+            if event not in _EVENT_SUBJECT_PLAYERS:
+                raise LoweringError(
+                    "'that player' names no seat under this trigger", node=condition
+                )
+            who = EVENT_SUBJECT_PLAYER
         payload = {
             "kind": "controls",
-            "who": condition.who.kind,
+            "who": who,
             "filter": condition.filter.to_payload(),
         }
         if condition.comparison is not None and isinstance(condition.comparison.value, ast.Fixed):

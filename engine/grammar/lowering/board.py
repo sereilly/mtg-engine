@@ -26,8 +26,10 @@ from ._common import (
     _names_several_targets,
     _restrictions_beyond,
     _targets_only,
-    _UNTAPPED_PERMANENTS,
     is_mana_value_x,
+)
+from ._events import (
+    _UNTAPPED_PERMANENTS,
 )
 
 

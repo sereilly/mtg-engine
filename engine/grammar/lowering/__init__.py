@@ -27,6 +27,12 @@ cannot do.
 """
 
 from .categories import INSTRUCTION_CATEGORIES, _PRODUCES, categories_of
+from ._events import (
+    _DAMAGED_PLAYER_EVENTS,
+    _EVENT_SUBJECT_CONTROLLERS,
+    _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_PLAYER,
+)
 from ._common import (
     _lower_condition,
     _filter_payload,
@@ -39,8 +45,6 @@ from ._common import (
     _targets_payload,
     _amount_payload,
     _is_source,
-    _DAMAGED_PLAYER_EVENTS,
-    _EVENT_SUBJECT_CONTROLLERS,
     _is_enchanted,
     _is_target,
     _is_you,
@@ -206,6 +210,8 @@ __all__ = [
     "_amount_payload",
     "_is_source",
     "_EVENT_SUBJECT_CONTROLLERS",
+    "_EVENT_SUBJECT_PLAYERS",
+    "EVENT_SUBJECT_PLAYER",
     "_is_enchanted",
     "_is_target",
     "_is_you",
