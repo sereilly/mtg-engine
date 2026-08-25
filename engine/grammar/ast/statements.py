@@ -70,6 +70,7 @@ from .board import (
     Regenerate,
     ReturnToZone,
     Sacrifice,
+    DestroyUnlessPay,
     SacrificeUnlessPay,
     Tap,
     TapOrUntap,
@@ -147,7 +148,8 @@ Effect = Union[
     ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
     RevealHandAndChoose,
     Shuffle, ExtraTurn, EndTheTurn, ChooseNumber, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
-    SacrificeUnlessPay, DamageUnlessPay, Fight, LookAtHand, CantBe, AttackAsThough, CombatRestriction,
+    SacrificeUnlessPay, DestroyUnlessPay, DamageUnlessPay, Fight, LookAtHand,
+    CantBe, AttackAsThough, CombatRestriction,
     RemoveFromCombat,
     ChangeText, GainControl, RawEffect,
 ]

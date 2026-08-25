@@ -859,6 +859,30 @@ def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("remove_self_keyword")
+def remove_self_keyword(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When this creature blocks, it loses defender." (Elder Land Wurm.)
+
+    The durationless mirror of ``remove_target_keyword_until_eot``: one layer-6
+    removal on the ability's own source, with no expiry stamped on it, so the
+    cleanup sweep leaves it alone and the word stays gone. Losing defender
+    mid-combat is exactly why the removal has to be a real layer-6 record
+    rather than a printed-keyword edit — the creature is already blocking, and
+    every later read of "can it attack" asks the layers.
+    """
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    for keyword in keywords:
+        remove_keyword(source_permanent, keyword)
+    game._recompute_continuous_effects()
+    game.log.append(
+        f"{source_permanent.card.name} loses {' and '.join(keywords)}"
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_self_keyword_until_eot")
 def grant_self_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"This creature gains <keyword(s)> until end of turn." (Fetid Imp.)"""

@@ -71,6 +71,12 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
 #: (non-registry) upkeep path admits — see `_ORDINARY_UPKEEP_SEATS`.
 _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     "upkeep_each",                       # Spiritual Sanctuary, Storm World
+    # "Whenever an opponent draws a card, this enchantment deals 1 damage to
+    # **that player**" (Underworld Dreams). CR 121.2 makes a draw a per-card
+    # event about one seat, and which seat varies per firing — an opponent in a
+    # three-player game is not "the opponent" — so it is frozen by the draw
+    # sweep that announces it rather than re-derived at resolution.
+    "draws_card",
 })
 
 #: The payload spelling both a recipient and a condition subject use for that

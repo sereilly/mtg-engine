@@ -589,6 +589,52 @@ def _attach_unpaid_penalty(statement: ast.Statement, penalty: str) -> ast.Statem
     raise GrammarError("an unpaid-cost penalty with no cost to decline")
 
 
+def _attach_destroyed_this_way(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """Fold "If this creature is destroyed this way, it deals N damage to you."
+    into the destroy-unless-pay before it (Cosmic Horror).
+
+    A rider rather than a step, and for the reason the whole family exists: on
+    its own the sentence names nothing. "Destroyed **this way**" is a question
+    about what the previous sentence did — a regenerated or indestructible
+    creature was not destroyed and takes no damage (CR 701.7c) — and the only
+    thing that can answer it is whatever performed the destruction.
+
+    Attaches only to a node that can carry it. A card printing this after
+    something else is saying something the grammar cannot place, and consuming
+    the sentence anyway is the dropped-rider bug the full-consumption invariant
+    exists to prevent — so the near-miss rewinds and the line fails loudly.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.DestroyUnlessPay):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "this"):
+        stream.reset(mark)
+        return False
+    # The noun repeats the subject's own type and carries nothing.
+    if stream.peek_word() is None:
+        stream.reset(mark)
+        return False
+    stream.advance()
+    if not stream.accept_phrase("is", "destroyed", "this", "way"):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase("it", "deals"):
+        stream.reset(mark)
+        return False
+    # `parse_amount`, not the number-word table: the damage is printed as a
+    # digit ("7"), which is a number *token* and not a word.
+    amount = parse_amount(stream)
+    if not isinstance(amount, ast.Fixed) or not stream.accept_phrase(
+        "damage", "to", "you"
+    ):
+        stream.reset(mark)
+        return False
+    steps[-1] = dataclasses.replace(last, damage_if_destroyed=amount.value)
+    return True
+
+
 def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.Statement:
     """Fold damage riders into the most recent DealDamage of *statement*."""
     if isinstance(statement, ast.DealDamage):

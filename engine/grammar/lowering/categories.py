@@ -81,6 +81,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_target_keyword_until_eot": "pump",
     # The negative twin ("It loses indestructible until end of turn", Soul Sear).
     "remove_target_keyword_until_eot": "pump",
+    # The durationless half of the same effect, on the ability's own source
+    # (Elder Land Wurm). Same family: what changes is how long the removal
+    # lasts, not what kind of effect it is.
+    "remove_self_keyword": "pump",
     "grant_self_keyword_until_eot": "pump",
     "grant_banding_to_target": "pump",
     "add_named_counter_to_self": "pump",
@@ -192,6 +196,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_matching_permanent": "zones",
     "upkeep_pay_or_sacrifice_enchantment": "upkeep",
     "upkeep_pay_or_sacrifice_self": "upkeep",
+    # The destroy twin (Cosmic Horror). Same family: it is the upkeep's
+    # pay-or-consequence prompt, and what the consequence is does not change
+    # which registry dispatches it.
+    "upkeep_pay_or_destroy_self": "upkeep",
     "upkeep_pay_to_untap_self": "upkeep",
     "discard_target_cards": "zones",
     # The controller's own chosen discard (Jeskai Elder's if-you-do branch).

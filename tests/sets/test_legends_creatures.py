@@ -1614,3 +1614,255 @@ def test_psionic_entitys_self_damage_does_not_land_on_its_own_target(set_pool):
     assert victim.damage_marked == 2
     assert not any(p.card.name == "Psionic Entity" for p in game.players[0].battlefield)
     assert game.players[1].life == 20
+
+# ---------------------------------------------------------------------------
+# Round 20: a keyword taken away for good, by a trigger
+# ---------------------------------------------------------------------------
+
+
+def test_elder_land_wurm_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Elder Land Wurm"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    # "**When** this creature blocks" is the event the "whenever" spelling
+    # names; the printed word is not a difference the fire site can act on.
+    assert trigger.condition.kind == "creature_blocks"
+    assert trigger.instruction.kind == "remove_self_keyword"
+    assert trigger.instruction.payload["keywords"] == ("defender",)
+
+
+def test_elder_land_wurm_loses_defender_when_it_blocks(set_pool):
+    wurm = Permanent(card=set_pool("LEG")["Elder Land Wurm"])
+    attacker = Permanent(card=_vanilla("Bear", 2, 2))
+
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[wurm])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()   # declare_blockers
+
+    assert game._has_keyword(wurm, "defender")
+
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    game._settle()
+
+    # A layer-6 removal with no expiry stamped on it: the word is gone, and
+    # trample — printed on the same card and untouched — is still there.
+    assert not game._has_keyword(wurm, "defender")
+    assert game._has_keyword(wurm, "trample")
+
+
+def test_elder_land_wurm_can_attack_after_it_has_blocked(set_pool):
+    """The point of the card: the loss outlives the turn it happened on, so a
+    cleanup sweep that dropped it would leave the Wurm unable to attack ever."""
+    wurm = Permanent(card=set_pool("LEG")["Elder Land Wurm"])
+    attacker = Permanent(card=_vanilla("Bear", 2, 2))
+
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[wurm])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    game._settle()
+
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, msg = game.declare_attackers(1, [0])
+    assert ok, msg
+
+
+# ---------------------------------------------------------------------------
+# Round 20: an "unless" whose alternative is not mana
+# ---------------------------------------------------------------------------
+
+
+def _swamp() -> CardDefinition:
+    """A Swamp built here rather than taken from a pool: Legends printed no
+    basic lands, and a per-set test reads its own set's cards."""
+    return CardDefinition(
+        name="Swamp", mana_cost="", cmc=0.0, type_line="Basic Land - Swamp",
+        oracle_text="", colors=(), color_identity=("B",), keywords=(),
+        produced_mana=("B",),
+        raw={"name": "Swamp", "type_line": "Basic Land - Swamp"},
+    )
+
+
+def _mold_demon_board(set_pool, swamps: int, *, interactive: bool = False):
+    """Mold Demon entering under a player who controls *swamps* Swamps.
+
+    *interactive* is what decides whether the Swamps are *chosen*: a
+    non-interactive seat takes the forced sacrifice's default the moment it is
+    armed, so the prompt is only visible when a person owns the seat.
+    """
+    pool = set_pool("LEG")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=_swamp()) for _ in range(swamps)],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    if interactive:
+        game.interactive_seats = {0}
+    demon = Permanent(card=pool["Mold Demon"])
+    game._put_permanent_onto_battlefield(0, demon, None)
+    game._settle()
+    return game, p1, demon
+
+
+def _names(player) -> list[str]:
+    return [perm.card.name for perm in player.battlefield]
+
+
+def test_mold_demon_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Mold Demon"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "enters_battlefield"
+    # An "unless" is an offer with a penalty, which is what `may` already says
+    # — never a second fused kind, and never a cost the payer cannot express.
+    assert trigger.instruction.kind == "may"
+    (action,) = trigger.instruction.payload["action"]
+    assert action.kind == "sacrifice_matching_permanent"
+    # The printed number is payload on the one prompt.
+    assert action.payload == {"filter": {"subtype_filter": "swamp"}, "count": 2}
+    (otherwise,) = trigger.instruction.payload["otherwise"]
+    assert otherwise.kind == "sacrifice_self"
+
+
+def test_mold_demon_paying_the_alternative_sacrifices_two_swamps(set_pool):
+    game, p1, demon = _mold_demon_board(set_pool, swamps=3)
+
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert _names(p1) == ["Swamp", "Mold Demon"]
+    assert [card.name for card in p1.graveyard] == ["Swamp", "Swamp"]
+    assert game.is_on_battlefield(demon)
+
+
+def test_mold_demon_asks_an_interactive_seat_which_two_swamps(set_pool):
+    """The cost is two permanents its controller chooses (CR 701.21a), so a
+    person owning the seat gets the standing prompt, sized by the printed
+    number rather than by the one the lowering used to pass."""
+    game, p1, demon = _mold_demon_board(set_pool, swamps=3, interactive=True)
+
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    state = game.pending_sacrifice_state()
+    assert state is not None
+    assert state["count"] == 2
+    assert len(state["valid_indices"]) == 3
+
+    game.confirm_sacrifice(0, state["valid_indices"][:2])
+    game._settle()
+
+    assert _names(p1) == ["Swamp", "Mold Demon"]
+    assert game.is_on_battlefield(demon)
+
+
+def test_mold_demon_declining_sacrifices_itself(set_pool):
+    game, p1, demon = _mold_demon_board(set_pool, swamps=3)
+
+    game.confirm_optional_pay(0, accept=False)
+    game._settle()
+
+    assert not game.is_on_battlefield(demon)
+    assert [card.name for card in p1.graveyard] == ["Mold Demon"]
+    assert _names(p1) == ["Swamp", "Swamp", "Swamp"]
+
+
+def test_mold_demon_with_one_swamp_is_never_offered_the_choice(set_pool):
+    """Two is the printed number, so one Swamp cannot pay it. The offer is not
+    made at all — accepting it would have run the cost half-paid and skipped
+    the penalty the card prints for not paying."""
+    game, p1, demon = _mold_demon_board(set_pool, swamps=1)
+
+    assert not game.pending_choices
+    assert not game.is_on_battlefield(demon)
+    assert _names(p1) == ["Swamp"]
+
+
+# ---------------------------------------------------------------------------
+# Round 20: pay or be destroyed, and the rider that asks whether you were
+# ---------------------------------------------------------------------------
+
+
+_BLACK_MANA = {"W": 0, "U": 0, "B": 3, "R": 0, "G": 0, "C": 3}
+
+
+def _cosmic_horror(set_pool, mana=None):
+    horror = Permanent(card=set_pool("LEG")["Cosmic Horror"])
+    p1 = PlayerState(
+        name="P1", battlefield=[horror],
+        mana_pool=dict(mana) if mana else {},
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    return game, p1, horror
+
+
+def test_cosmic_horror_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Cosmic Horror"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "upkeep_self"
+    assert trigger.instruction.kind == "upkeep_pay_or_destroy_self"
+    payload = trigger.instruction.payload
+    assert payload["mana"]["B"] == 3 and payload["mana"]["generic"] == 3
+    # The rider is folded onto the same node, because it is a question about
+    # what that node did.
+    assert payload["damage_if_destroyed"] == 7
+
+
+def test_cosmic_horror_paid_survives_and_spends_the_mana(set_pool):
+    game, p1, horror = _cosmic_horror(set_pool, _BLACK_MANA)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.is_on_battlefield(horror)
+    assert p1.life == 20
+    assert p1.mana_pool["B"] == 0
+
+
+def test_cosmic_horror_unpaid_is_destroyed_and_deals_seven(set_pool):
+    game, p1, horror = _cosmic_horror(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert not game.is_on_battlefield(horror)
+    assert [card.name for card in p1.graveyard] == ["Cosmic Horror"]
+    assert p1.life == 13
+
+
+@pytest.mark.parametrize("shield", [1])
+def test_cosmic_horror_regenerated_takes_no_damage(set_pool, shield):
+    """"If this creature is **destroyed this way**" — a creature that
+    regenerated was not destroyed (CR 701.7c), so the rider does not happen.
+    Nothing but the destroy itself can answer that, which is why the number
+    rides the same instruction rather than being a second step."""
+    game, p1, horror = _cosmic_horror(set_pool)
+    horror.regeneration_shield = shield
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.is_on_battlefield(horror)
+    assert horror.tapped
+    assert p1.life == 20

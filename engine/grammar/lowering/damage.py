@@ -30,6 +30,8 @@ from ._common import (
 )
 from ._events import (
     _EVENT_SUBJECT_CONTROLLERS,
+    _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
 )
 
@@ -595,7 +597,17 @@ def _lower_damage(
         # "…to target player **or planeswalker**" (Chandra's Magmutt) is exactly
         # the clause that may name either, so it keeps the inference: there the
         # permanent index is the choice rather than a leftover.
-        if recipient.kind == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
+        if recipient.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+            # "…deals 1 damage to **that player**" under a trigger whose
+            # subject *is* a seat (Underworld Dreams' draw). Nothing chose it
+            # and no object stands between the event and the player, so the
+            # seat is the one the fire site froze — the same reading
+            # `_lower_gain_life` takes of the same words from the same table.
+            # Checked before the controller table below because the two answer
+            # different questions off the same phrase; they name disjoint
+            # events, so the order is documentation rather than precedence.
+            payload["recipient"] = EVENT_SUBJECT_PLAYER
+        elif recipient.kind == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
             # "…deals that much damage to **that creature's controller**"
             # (Backfire). "That creature" is the object the trigger's event was
             # about, and nothing chose it — so the seat is the one the fire site

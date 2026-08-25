@@ -736,7 +736,12 @@ class GameEndingMixin:
                 continue
             self.draws_announced_this_turn[seat] = drawn
             for _ in range(drawn - announced):
-                emit(self, "draws_card", seat=seat)
+                # The drawing seat travels twice, under two names and for two
+                # readers: `seat` is what the event filter narrows on ("you" or
+                # "an opponent"), and `event_subject_player` is what a "that
+                # player" in the effect resolves to (CR 603.10 — the trigger
+                # freezes it, because by resolution the turn may have moved on).
+                emit(self, "draws_card", seat=seat, event_subject_player=seat)
 
         # "When there are four or more page counters on this artifact, …"
         # (Mazemind Tome.) CR 603.8's *state* trigger: it fires whenever the

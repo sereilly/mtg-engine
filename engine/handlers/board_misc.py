@@ -853,9 +853,10 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         payers = [game.players.index(context.target)]
     else:
         return False, f"unsupported sacrifice payer {who!r}"
+    count = int(instruction.payload.get("count", 1))
     for seat in payers:
         game.arm_forced_sacrifice(
-            seat, 1,
+            seat, count,
             filter=dict(instruction.payload.get("filter") or {}),
             exclude=exclude,
             reason=context.card.name,

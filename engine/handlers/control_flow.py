@@ -360,9 +360,13 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
 
     if instruction.kind == "sacrifice_matching_permanent":
         exclude = source if instruction.payload.get("exclude_self") else None
-        return bool(game._sacrifice_candidate_indices(
+        # The printed count, not merely "at least one": "unless you sacrifice
+        # **two** Swamps" (Mold Demon) is an offer a player with one Swamp
+        # cannot take, and accepting it would run the cost half-paid and skip
+        # the penalty the card prints for not paying it.
+        return len(game._sacrifice_candidate_indices(
             player, dict(instruction.payload.get("filter") or {}), exclude
-        ))
+        )) >= int(instruction.payload.get("count", 1))
     if instruction.kind == "discard_controller_cards":
         described = dict(instruction.payload.get("filter") or {})
         return any(_card_matches_filter(card, described) for card in player.hand)

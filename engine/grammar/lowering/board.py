@@ -536,6 +536,35 @@ def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("grant_regeneration_to_target_creature", "", payload),)
 
 
+def _lower_destroy_unless_pay(
+    node: ast.DestroyUnlessPay, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """"At the beginning of your upkeep, destroy this creature unless you pay
+    {3}{B}{B}{B}. If this creature is destroyed this way, it deals 7 damage to
+    you." (Cosmic Horror.)
+
+    Fused, like the sacrifice twin above and for the same reason: the upkeep
+    dispatcher is keyed on (trigger condition, instruction kind) pairs whose
+    handlers run the whole pay-or-consequence prompt. The event is threaded
+    down here rather than inferred, exactly as `_lower_damage_unless_pay` does
+    it — the handler takes its seat and its mana from the upkeep context, so
+    under any other trigger there is nothing to dispatch to and the line must
+    refuse rather than compile into a card that does nothing.
+    """
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "the pay-or-destroy prompt destroys the ability's own source", node=node
+        )
+    if event != "upkeep_self":
+        raise LoweringError(
+            f"no handler pairs {event!r} with a pay-or-destroy prompt", node=node
+        )
+    payload: dict[str, object] = {"mana": _full_mana_payload(node.cost)}
+    if node.damage_if_destroyed is not None:
+        payload["damage_if_destroyed"] = node.damage_if_destroyed
+    return (OracleInstruction("upkeep_pay_or_destroy_self", "", payload),)
+
+
 def _lower_sacrifice_unless_pay(node: ast.SacrificeUnlessPay) -> tuple[OracleInstruction, ...]:
     """"Sacrifice this <permanent> unless you pay <cost>."
 
@@ -707,10 +736,12 @@ def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
 
     - a self-referential or enchanted subject ("sacrifice **this** creature",
       Sea Serpent), which is a different instruction entirely and is read below;
-    - a phrase with no card type at all, which no card in the pool prints as a
-      sacrifice and which would let the prompt eat a land.
+    - a phrase naming neither a card type nor a subtype, which would let the
+      prompt eat anything on the board. A *subtype* alone is a real set and
+      names it exactly — "two Swamps" (Mold Demon) is the whole cost, and it
+      says nothing about card types because on that card it does not need to.
     """
-    if filt.is_source or filt.is_enchanted or not filt.card_types:
+    if filt.is_source or filt.is_enchanted or not (filt.card_types or filt.subtypes):
         return None
     return object_only_filter(filt.to_payload(), carried_separately=_SACRIFICE_CARRIED)
 
@@ -740,7 +771,6 @@ def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
         node.player.kind in _SACRIFICE_PAYERS
         and isinstance(node.subject, ast.TargetSpec)
         and not node.subject.targeted
-        and node.subject.count == 1
         and not _is_source(node.subject)
     ):
         described = _forced_sacrifice_filter(node.subject.filter)
@@ -749,6 +779,12 @@ def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
                 "the sacrifice prompt cannot test this restriction", node=node
             )
         payload: dict[str, object] = {"filter": described}
+        if node.subject.count != 1:
+            # "Sacrifice **two** Swamps" (Mold Demon). How many is payload on
+            # the one prompt, never a second kind: the forced-sacrifice queue
+            # has taken a count since it was written, and it was the lowering
+            # that only ever passed one.
+            payload["count"] = node.subject.count
         if node.subject.filter.other_than_source:
             payload["exclude_self"] = True
         if node.player.kind != "you":

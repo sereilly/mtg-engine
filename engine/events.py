@@ -689,9 +689,6 @@ _SEAT_SCOPED_EVENTS = frozenset({
     "you_gain_life",
     "draws_second_card",
     "you_sacrifice_permanent",
-    # "whenever **you** draw a card" (Lorescale Coatl, Burlfist Oak) — announced
-    # game-wide by the draw sweep, matching only the drawing seat's permanents.
-    "draws_card",
 })
 
 
@@ -703,6 +700,31 @@ def _seat_scoped_filter(
     permanent" — only the acting seat's own permanents."""
     seat = event.payload.get("seat")
     return seat is not None and game.controller_index_of(permanent) == seat
+
+
+@event_filter("draws_card")
+def _draws_card_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever **you** draw a card" (Lorescale Coatl) beside "whenever **an
+    opponent** draws a card" (Underworld Dreams).
+
+    One announcement, made game-wide by the draw sweep, and the printed seat is
+    the trigger's own narrowing rather than a second event — so this reads the
+    condition payload instead of belonging to `_SEAT_SCOPED_EVENTS`, whose whole
+    narrowing is the word "you". "You" is the permanent's controller (CR 109.5)
+    either way; "an opponent" is any *other* seat, which is what makes the
+    unnarrowed reading wrong in a three-player game rather than merely inverted.
+    """
+    seat = event.payload.get("seat")
+    if seat is None:
+        return False
+    observer = game.controller_index_of(permanent)
+    if observer is None:
+        return False
+    if trig.condition.payload.get("drawer") == "an opponent":
+        return seat != observer
+    return seat == observer
 
 
 # ---------------------------------------------------------------------------

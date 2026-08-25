@@ -185,6 +185,30 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             caster, damage, source=source_permanent or card, then=_report, asks=True
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "event_subject_player":
+        # "…deals 1 damage to **that player**" where the trigger's subject *is*
+        # a seat (Underworld Dreams, under "whenever an opponent draws a
+        # card"). The seat the fire site froze (CR 603.10) — the trigger has no
+        # target, so `context.target` is whatever a targetless resolution
+        # defaults to, which in a three-player game is not the seat that drew.
+        # No record means the words named nobody and no damage is dealt, the
+        # same rule the controller branch below follows.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded player, no damage dealt")
+            return True, "resolved"
+        drawer = game.players[seat]
+
+        def _report_player(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            if dealt:
+                game.log.append(f"{card.name} dealt {dealt} damage to {drawer.name}")
+
+        game._deal_damage_to_player(
+            drawer, damage, source=source_permanent or card,
+            then=_report_player, asks=True,
+        )
+        return True, "resolved"
     if instruction.payload.get("recipient") == "event_subject_controller":
         # "…deals that much damage to **that creature's controller**"
         # (Backfire). The controller of the object the trigger's event was

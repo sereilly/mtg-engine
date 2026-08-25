@@ -800,7 +800,9 @@ def _lower_switch_pt(node: ast.SwitchPT) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("switch_target_pt_until_eot", "", payload),)
 
 
-def _lower_lose_keyword(node: ast.LoseKeyword) -> tuple[OracleInstruction, ...]:
+def _lower_lose_keyword(
+    node: ast.LoseKeyword, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """"It loses indestructible until end of turn." (Soul Sear, bound to the
     damage sentence's target by the pronoun rider.)
 
@@ -809,19 +811,47 @@ def _lower_lose_keyword(node: ast.LoseKeyword) -> tuple[OracleInstruction, ...]:
     fights. Gated on IMPLEMENTED_KEYWORDS exactly like the grant — removing a
     word whose behaviour is not built would report a removal of nothing.
     """
-    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
-        raise LoweringError(
-            "a durationless keyword loss is a static ability, which needs the "
-            "CR 613 layers engine",
-            node=node,
-        )
-    if not _is_target(node.subject):
-        raise LoweringError("no handler removes a keyword from this subject", node=node)
     for keyword in node.keywords:
         if keyword not in IMPLEMENTED_KEYWORDS:
             raise LoweringError(
                 f"removing {keyword!r} needs the keyword implemented", node=node
             )
+    if node.duration.kind is None:
+        # "When this creature blocks, **it loses defender**." (Elder Land
+        # Wurm.) Durationless and still not a static ability: it is the one-shot
+        # effect of a *triggered* ability, so it happens once and the word is
+        # gone for good rather than being a continuous effect the layer system
+        # re-derives. `remove_keyword` without the until-end-of-turn flag writes
+        # exactly that record into layer 6 — the cleanup sweep drops only the
+        # flagged ones — so nothing new is needed under it.
+        #
+        # Admitted only as a trigger's own effect, which is what keeps the
+        # printed *static* line ("Creatures you control lose flying") refusing:
+        # that one is a continuous effect over a set the layer system has to
+        # re-derive every recompute, and executing it once would take the word
+        # away from whatever happened to be on the board at the time.
+        if event is None:
+            raise LoweringError(
+                "a durationless keyword loss outside a trigger is a static "
+                "ability, which needs the CR 613 layers engine",
+                node=node,
+            )
+        if not _is_source(node.subject):
+            raise LoweringError(
+                "the durationless removal reaches the ability's own source",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "remove_self_keyword", "", {"keywords": tuple(node.keywords)}
+            ),
+        )
+    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
+        raise LoweringError(
+            f"no handler removes a keyword for {node.duration.kind!r}", node=node
+        )
+    if not _is_target(node.subject):
+        raise LoweringError("no handler removes a keyword from this subject", node=node)
     payload: dict[str, object] = {"keywords": tuple(node.keywords)}
     assert isinstance(node.subject, ast.TargetSpec)
     _describe_targets(payload, node.subject)
