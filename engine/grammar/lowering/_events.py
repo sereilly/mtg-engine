@@ -194,11 +194,30 @@ _BLOCK_PAIR_EVENTS = frozenset({
     "creature_blocks_or_blocked_by",           # Thicket Basilisk, Cockatrice,
                                                # Abomination, Aisling Leprechaun
     "creature_becomes_blocked",                # Battering Ram
-    # `creature_blocks` is deliberately absent. CR 509.3c/509.3d: the bare
-    # wording fires **once** for the blocker however many attackers it blocks,
-    # so "that creature" names no one creature — and the narrowed spelling
-    # ("blocks **a creature**", Infernal Medusa) is the same kind, which this
-    # table cannot tell apart because it is keyed on the event alone. Admitting
-    # the kind would lower the bare form too, and the fire site records every
-    # blocked attacker's id, so the sentence would destroy all of them.
+    "creature_blocks",                         # Infernal Medusa
 })
+
+
+def binds_block_pair(event: str | None, event_subject: object | None) -> bool:
+    """Whether "that creature" under *event* names exactly one creature.
+
+    **The kind alone cannot answer**, and reading it as though it could was
+    wrong in both directions at once. CR 509.3c/509.3d: "whenever this creature
+    becomes blocked" fires *once* however many creatures block it, while
+    "…becomes blocked **by a creature**" fires once for each one the phrase
+    admits — the narrowing is the whole difference, and the two spellings are
+    the same kind.
+
+    So a bare firing has several creatures and no way to say which "that
+    creature" is (the fire site takes ``blockers[:1]``, an arbitrary one), and a
+    narrowed firing has exactly the one that admitted it. Keyed on the kind
+    alone, this table admitted the bare becomes-blocked form — a sentence that
+    would destroy whichever blocker happened to be first — and refused the
+    narrowed *blocks* form, which is why Infernal Medusa was supported with its
+    first line lowering to nothing.
+
+    `creature_blocks_or_blocked_by` carries a subject by construction: both
+    front ends require the noun phrase to end the condition, so the joined
+    sentence cannot reach here bare.
+    """
+    return event in _BLOCK_PAIR_EVENTS and event_subject is not None

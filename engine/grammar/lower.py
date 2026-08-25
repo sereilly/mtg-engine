@@ -151,12 +151,20 @@ def lower_statement(
     produced: frozenset[str] = frozenset(),
     *,
     event: str | None = None,
+    event_subject: object | None = None,
     whole_effect: bool = True,
 ) -> tuple[OracleInstruction, ...]:
     """Lower one statement into the instructions that perform it, in order.
 
     *produced* names the scratchpad values earlier steps of the same effect
     already recorded; a back-reference without a producer is refused.
+
+    *event_subject* is that trigger's printed narrowing — the noun phrase in
+    "…becomes blocked **by a creature**" — and travels with *event* because it
+    is the same fact about the same trigger. Two spellings share a kind and
+    differ only here, and the difference decides whether "that creature" names
+    one object or several (CR 509.3c/509.3d), so a reader given the kind alone
+    has to guess and was wrong in both directions.
 
     *event* is the trigger kind when this statement is (part of) a triggered
     ability's effect, and None everywhere else. It is threaded into nested
@@ -176,6 +184,10 @@ def lower_statement(
     rather than emitting a kind nothing will reach.
     """
     dispatch_event = event if whole_effect else None
+    # The narrowing follows the kind through the same gate: a nested
+    # occurrence is not the ability's whole instruction, so a registry
+    # keyed on it must see neither half.
+    dispatch_subject = event_subject if whole_effect else None
     if isinstance(statement, ast.DealDamage):
         return _lower_damage(statement, event, produced)
     if isinstance(statement, ast.Fight):
@@ -205,7 +217,7 @@ def lower_statement(
     if isinstance(statement, ast.LoseLife):
         return _lower_lose_life(statement, event, produced)
     if isinstance(statement, ast.Destroy):
-        return _lower_destroy(statement, dispatch_event)
+        return _lower_destroy(statement, dispatch_event, dispatch_subject)
     if isinstance(statement, ast.DoesntUntapNextStep):
         # `produced` is the whole gate: this sentence acts on what an earlier
         # step of the same effect recorded, so it refuses when nothing did.
@@ -253,7 +265,7 @@ def lower_statement(
         return _lower_become_creature(statement)
 
     if isinstance(statement, ast.BecomeColor):
-        return _lower_become_color(statement, event)
+        return _lower_become_color(statement, dispatch_event, dispatch_subject)
 
     if isinstance(statement, ast.ChangeText):
         return _lower_change_text(statement)
@@ -428,7 +440,7 @@ def lower_statement(
         return _lower_remove_from_combat(statement, produced)
 
     if isinstance(statement, ast.WhereX):
-        return _lower_where_x(statement, produced, event)
+        return _lower_where_x(statement, produced, event, event_subject)
 
     if isinstance(statement, ast.ForEach):
         return _lower_for_each(statement)
@@ -458,9 +470,9 @@ def lower_statement(
         return _lower_steps(statement.steps, produced, event)
 
     if isinstance(statement, ast.Conditional):
-        then = lower_statement(statement.then, produced, event=event, whole_effect=False)
+        then = lower_statement(statement.then, produced, event=event, event_subject=event_subject, whole_effect=False)
         otherwise = (
-            lower_statement(statement.otherwise, produced, event=event, whole_effect=False)
+            lower_statement(statement.otherwise, produced, event=event, event_subject=event_subject, whole_effect=False)
             if statement.otherwise else ()
         )
         return (
@@ -475,10 +487,10 @@ def lower_statement(
         )
 
     if isinstance(statement, ast.OneOf):
-        return _lower_one_of(statement, produced, event)
+        return _lower_one_of(statement, produced, event, event_subject)
 
     if isinstance(statement, ast.May):
-        return _lower_may(statement, produced, event)
+        return _lower_may(statement, produced, event, event_subject)
 
     if isinstance(statement, ast.RawEffect) and statement.text == "grant_team_assign_unblocked_until_eot":
         # Garruk, Savage Herald's −7 — the one quoted team grant with a
@@ -490,6 +502,7 @@ def lower_statement(
 
 def _lower_where_x(
     node: ast.WhereX, produced: frozenset[str], event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…, where X is the number of <filter>" over a whole sentence.
 
@@ -501,13 +514,13 @@ def _lower_where_x(
     lets one clause serve every effect family instead of one.
     """
     if isinstance(node.definition, ast.CountOfDeaths):
-        return _lower_where_x_deaths(node, produced, event)
+        return _lower_where_x_deaths(node, produced, event, event_subject)
     if isinstance(node.definition, ast.ManaValueOfSubject):
-        return _lower_where_x_mana_value(node, produced, event)
+        return _lower_where_x_mana_value(node, produced, event, event_subject)
     if not isinstance(node.definition, ast.CountOf):
         raise LoweringError("only a count can define X in a where-clause", node=node)
     spec = count_spec(node.definition.filter, node)
-    inner = lower_statement(node.statement, produced, event=event, whole_effect=False)
+    inner = lower_statement(node.statement, produced, event=event, event_subject=event_subject, whole_effect=False)
     if not _mentions_x(inner):
         # The clause defined an X the sentence never used, which means one of
         # them was misread. Refusing keeps that loud instead of executing the
@@ -518,6 +531,7 @@ def _lower_where_x(
 
 def _lower_where_x_mana_value(
     node: ast.WhereX, produced: frozenset[str], event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…, where X is **its** mana value." (Great Defender, Subdue, Kry Shield.)
 
@@ -527,7 +541,7 @@ def _lower_where_x_mana_value(
     named — the resolution reads it off the chosen target, which is the one
     object a resolution can name without a second choice.
     """
-    inner = lower_statement(node.statement, produced, event=event, whole_effect=False)
+    inner = lower_statement(node.statement, produced, event=event, event_subject=event_subject, whole_effect=False)
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
     # "Its" is whatever object the sentence already named, and the sentence
@@ -546,6 +560,7 @@ def _lower_where_x_mana_value(
 
 def _lower_where_x_deaths(
     node: ast.WhereX, produced: frozenset[str], event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…where X is the number of creatures that died under your control this
     turn." (Liliana's Standard Bearer.)
@@ -562,7 +577,7 @@ def _lower_where_x_deaths(
         raise LoweringError(
             "the death tracker counts creatures and cannot be narrowed", node=node
         )
-    inner = lower_statement(node.statement, produced, event=event, whole_effect=False)
+    inner = lower_statement(node.statement, produced, event=event, event_subject=event_subject, whole_effect=False)
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
     return _stamp_x_from_count(inner, {"history": "creatures_died_under_your_control"})
@@ -570,6 +585,7 @@ def _lower_where_x_deaths(
 
 def _lower_one_of(
     node: ast.OneOf, produced: frozenset[str], event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"A **or** B" — one action, two ways to take it, lowered onto the modal
     handler the printed "Choose one —" already uses.
@@ -585,7 +601,7 @@ def _lower_one_of(
     """
     modes = []
     for index, option in enumerate(node.options):
-        lowered = lower_statement(option, produced, event=event, whole_effect=False)
+        lowered = lower_statement(option, produced, event=event, event_subject=event_subject, whole_effect=False)
         if len(lowered) != 1:
             raise LoweringError(
                 "an alternative that is not a single instruction has no mode to "
@@ -599,6 +615,7 @@ def _lower_one_of(
 
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"You may pay {N}. If you do, …" and "You may <action>".
 
@@ -622,7 +639,7 @@ def _lower_may(
     a spell's whole line once the trigger prefix is gone. It stops being a trap
     when the prompt moves to the general pending-choice queue (roadmap phase 4).
     """
-    action = lower_statement(node.action, produced, event=event, whole_effect=False) if node.action else ()
+    action = lower_statement(node.action, produced, event=event, event_subject=event_subject, whole_effect=False) if node.action else ()
     # "If you do" is the rest of *this* resolution, so it can read what the
     # action just recorded: Niambi's "return another target creature you
     # control…, if you do, you gain life equal to that creature's mana value"
@@ -642,10 +659,10 @@ def _lower_may(
         key for instruction in action
         if (key := _PRODUCES.get(instruction.kind)) is not None
     }
-    then = lower_statement(node.then, after_action, event=event, whole_effect=False) if node.then else ()
-    otherwise = lower_statement(node.otherwise, produced, event=event, whole_effect=False) if node.otherwise else ()
+    then = lower_statement(node.then, after_action, event=event, event_subject=event_subject, whole_effect=False) if node.then else ()
+    otherwise = lower_statement(node.otherwise, produced, event=event, event_subject=event_subject, whole_effect=False) if node.otherwise else ()
     reflexive = (
-        lower_statement(node.reflexive, produced, event=event, whole_effect=False)
+        lower_statement(node.reflexive, produced, event=event, event_subject=event_subject, whole_effect=False)
         if node.reflexive else ()
     )
 
@@ -679,6 +696,7 @@ def _lower_steps(
     steps: tuple[ast.Statement, ...],
     produced: frozenset[str],
     event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """Lower consecutive steps, threading what each one records forward."""
     instructions: tuple[OracleInstruction, ...] = ()
@@ -701,7 +719,7 @@ def _lower_steps(
                     node=step,
                 )
             branch = lower_statement(
-                step.then, produced, event=event, whole_effect=False
+                step.then, produced, event=event, event_subject=event_subject, whole_effect=False
             )
             condition: dict[str, object] = {
                 "kind": "it_happened", "key": last_produced,
@@ -719,7 +737,7 @@ def _lower_steps(
             )
             last_produced = None
             continue
-        lowered = lower_statement(step, produced, event=event, whole_effect=False)
+        lowered = lower_statement(step, produced, event=event, event_subject=event_subject, whole_effect=False)
         last_produced = None
         for instruction in lowered:
             result = _PRODUCES.get(instruction.kind)
@@ -731,7 +749,10 @@ def _lower_steps(
 
 
 def _lower_line_statement(
-    statement: ast.Statement, *, event: str | None = None
+    statement: ast.Statement,
+    *,
+    event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """Lower the statement that is a line's *whole* effect.
 
@@ -743,7 +764,7 @@ def _lower_line_statement(
     """
     if isinstance(statement, ast.ModalNode):
         return _lower_modal_head(statement)
-    return lower_statement(statement, event=event)
+    return lower_statement(statement, event=event, event_subject=event_subject)
 
 
 def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
@@ -776,7 +797,10 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
         fused = _fused_upkeep_pay_to_untap(node)
         if fused is not None:
             return fused
-        instructions = _lower_line_statement(node.statement, event=node.event.kind)
+        instructions = _lower_line_statement(
+            node.statement, event=node.event.kind,
+            event_subject=node.event.subject,
+        )
         # This used to refuse every decomposed upkeep trigger — a
         # `may(pay, untap_self)` where the registry in
         # engine/phases/upkeep_effects.py wanted a fused

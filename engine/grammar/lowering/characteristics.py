@@ -18,7 +18,7 @@ from ...oracle_types import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
 from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS
-from ._events import _BLOCK_PAIR_EVENTS
+from ._events import binds_block_pair
 from ._common import (
     _amount_payload,
     _describe_several_targets,
@@ -801,7 +801,9 @@ def _lower_lose_keyword(node: ast.LoseKeyword) -> tuple[OracleInstruction, ...]:
 
 
 def _lower_become_color(
-    node: ast.BecomeColor, event: str | None = None
+    node: ast.BecomeColor,
+    event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """The Lace cycle, and the five Legends colour spells beside it.
 
@@ -831,7 +833,7 @@ def _lower_become_color(
         # binding travels as payload rather than as a second instruction kind:
         # which object an effect acts on is not a different effect.
         if (
-            event in _BLOCK_PAIR_EVENTS
+            binds_block_pair(event, event_subject)
             and isinstance(node.subject, ast.TargetSpec)
             and node.subject.quantifier == "that"
         ):

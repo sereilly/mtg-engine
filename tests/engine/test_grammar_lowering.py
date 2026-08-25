@@ -3965,3 +3965,46 @@ def test_a_bare_hand_count_is_not_the_shortfall():
         "zone": "hand", "owner": "owner", "filter": {},
     }
     assert "base" not in instruction.payload
+
+
+# ---------------------------------------------------------------------------
+# A block trigger binds "that creature" only when it names one
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "line,binds",
+    [
+        # Narrowed: CR 509.3d fires once for each creature the phrase admits, so
+        # the firing is about exactly one and "that creature" is that one.
+        ("Whenever this creature blocks a creature, destroy that creature at "
+         "end of combat.", True),
+        ("Whenever this creature becomes blocked by a Wall, destroy that Wall "
+         "at end of combat.", True),
+        ("Whenever this creature blocks or becomes blocked by a non-Wall "
+         "creature, destroy that creature at end of combat.", True),
+        # Bare: CR 509.3c fires **once** however many creatures are involved,
+        # so the pronoun names no one of them. The fire site would hand the
+        # handler an arbitrary pick — `blockers[:1]` — which is worse than a
+        # refusal because the card would look as though it resolved.
+        ("Whenever this creature blocks, destroy that creature at end of "
+         "combat.", False),
+        ("Whenever this creature becomes blocked, destroy that creature at end "
+         "of combat.", False),
+    ],
+)
+def test_a_block_trigger_binds_that_creature_only_when_it_names_one(line, binds):
+    """The narrowing, not the kind, is what decides.
+
+    Both spellings of each pair are the *same* trigger kind, so a gate reading
+    the kind alone has to pick one answer for both — and picking either is wrong
+    for the other half of the table. It had picked "bind" for becomes-blocked
+    (admitting the bare form) and "refuse" for blocks (costing Infernal Medusa
+    its first line), which is one bug in each direction at once.
+    """
+    result = compile_line(line, card_name="Test")
+
+    assert result.parsed, result.parse_error
+    assert result.lowered is binds, result.lowering_error
+    if binds:
+        assert result.instructions[0].kind == "delayed_destroy_blocked_or_blocker"

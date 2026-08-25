@@ -28,6 +28,8 @@ cannot do.
 
 from .categories import INSTRUCTION_CATEGORIES, _PRODUCES, categories_of
 from ._events import (
+    _BLOCK_PAIR_EVENTS,
+    binds_block_pair,
     _DAMAGED_PLAYER_EVENTS,
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
@@ -116,7 +118,6 @@ from .board import (
     _lower_put_on_library_bottom,
     _DESTROY_ALL_KINDS,
     _BASIC_LAND_TYPES,
-    _BLOCK_PAIR_EVENTS,
     _lower_destroy,
     _lower_delayed_destroy,
     _lower_doesnt_untap_next_step,
@@ -254,6 +255,7 @@ __all__ = [
     "_DESTROY_ALL_KINDS",
     "_BASIC_LAND_TYPES",
     "_BLOCK_PAIR_EVENTS",
+    "binds_block_pair",
     "_lower_destroy",
     "_lower_delayed_destroy",
     "_lower_doesnt_untap_next_step",

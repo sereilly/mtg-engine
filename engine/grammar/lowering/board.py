@@ -29,7 +29,7 @@ from ._common import (
     is_mana_value_x,
 )
 from ._events import (
-    _BLOCK_PAIR_EVENTS,
+    binds_block_pair,
     _UNTAPPED_PERMANENTS,
 )
 
@@ -62,9 +62,13 @@ _EVENT_SUBJECT_DESTROY_EVENTS: frozenset[str] = frozenset({
 })
 
 
-def _lower_destroy(node: ast.Destroy, event: str | None = None) -> tuple[OracleInstruction, ...]:
+def _lower_destroy(
+    node: ast.Destroy,
+    event: str | None = None,
+    event_subject: object | None = None,
+) -> tuple[OracleInstruction, ...]:
     if node.delay:
-        return _lower_delayed_destroy(node, event)
+        return _lower_delayed_destroy(node, event, event_subject)
     if not isinstance(node.subject, ast.TargetSpec):
         raise LoweringError("destroy needs an object target", node=node)
     spec = node.subject
@@ -179,7 +183,9 @@ def _lower_destroy(node: ast.Destroy, event: str | None = None) -> tuple[OracleI
 
 
 def _lower_delayed_destroy(
-    node: ast.Destroy, event: str | None
+    node: ast.Destroy,
+    event: str | None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…destroy that creature at end of combat." (Thicket Basilisk, Cockatrice.)
 
@@ -189,10 +195,10 @@ def _lower_delayed_destroy(
     nobody recorded, and the handler would destroy nothing while the card
     reported as supported.
     """
-    if event not in _BLOCK_PAIR_EVENTS:
+    if not binds_block_pair(event, event_subject):
         raise LoweringError(
             "a delayed destroy at end of combat only has a handler on a "
-            "blocks-or-blocked trigger",
+            "blocks-or-blocked trigger that names one creature",
             node=node,
         )
     spec = node.subject

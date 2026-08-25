@@ -1298,3 +1298,40 @@ def test_aisling_leprechaun_recolours_what_it_blocks(set_pool):
 
     assert "G" in attacker.effective_colors
     assert attacker.metadata.get("destroy_at_end_of_combat") is not True
+
+
+# ---------------------------------------------------------------------------
+# Round 16 — the narrowing decides whether "that creature" names one creature
+# ---------------------------------------------------------------------------
+
+
+def test_infernal_medusa_destroys_what_it_blocks(set_pool):
+    """Its *first* line, which lowered to nothing until round 16.
+
+    Medusa prints the two halves as separate sentences, and the blocks half is
+    narrowed ("blocks **a creature**"). The gate keyed on the trigger kind alone
+    could not see that, so the card was reported supported with half its text
+    inert — a card doing less than it prints, which `--hollow-lines` had been
+    reporting all along.
+    """
+    game, _medusa, attacker = _blocking(
+        set_pool, "Infernal Medusa", _test_creature("Hill Giant", ("R",))
+    )
+
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.advance_combat_phase()
+
+    assert attacker.metadata.get("destroy_at_end_of_combat") is True
+
+
+def test_infernal_medusa_still_destroys_a_blocker_that_is_no_wall(set_pool):
+    """Its second line, unchanged — asserted beside the first so a regression
+    that swapped the two halves' bindings cannot pass on one of them."""
+    game, _medusa, blocker = _attacking(
+        set_pool, "Infernal Medusa", _test_creature("Hill Giant", ("R",))
+    )
+
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.advance_combat_phase()
+
+    assert blocker.metadata.get("destroy_at_end_of_combat") is True
