@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 88.3% | 88.3% | 60.8% | 66 |
 | 3ED | 296 | 389 | 81.7% | 80.7% | 45.2% | 159 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 59.4% | 55.0% | 29.7% | 116 |
+| LEG *(measured)* | 310 | 431 | 59.9% | 55.5% | 30.2% | 118 |
 | **All (shipped)** | **1618** | **2286** | **82.1%** | **81.1%** | **48.4%** | **963** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -36,7 +36,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ---: | ---: | --- | --- |
 | 227 | 119 | expected a subject |  |
 | 125 | 55 | unrecognized effect verb |  |
-| 74 | 50 | unconsumed text |  |
+| 72 | 48 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 12 | 7 | expected a keyword ability |  |
@@ -151,6 +151,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
 - **Aven Gagglemaster**
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
+- **Ayesha Tanaka**
+  - `{T}: Counter target activated ability from an artifact source unless that ability's controller pays {W}. (Mana abilities can't be targeted.)`
 - **Backfire**
   - `Whenever enchanted creature deals damage to you, this Aura deals that much damage to that creature's controller.`
 - **Bad Deal**
@@ -1375,6 +1377,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Add {R} or {G}.`
 - **Run Afoul**
   - `Target opponent sacrifices a creature of their choice with flying.`
+- **Rust**
+  - `Counter target activated ability from an artifact source. (Mana abilities can't be targeted.)`
 - **Sabertooth Mauler**
   - `At the beginning of your end step, if a creature died this turn, put a +1/+1 counter on this creature and untap it.`
 - **Sacrifice**

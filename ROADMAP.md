@@ -1432,3 +1432,56 @@ test written about only one side of it.
 executes 29.5% → 29.7%, hollow lines 19 → 18. Shipped pool unchanged at 734/734
 and its coverage flat. Suite 7,151 → 7,158, full run green with every
 `--check`; no hooks added or removed.
+
+## LEG round 17: an ability is an object, and a cost is a symbol dict
+
+*(2026-08-25.)* Rust and Ayesha Tanaka. Both print "Counter target activated
+ability from an artifact source", and the machinery for the verb was already
+there — `counter target activated ability` has compiled since Sublime
+Epiphany. What was missing was everything the *narrowing* needed.
+
+**An ability on the stack has one adjective, and it is not its own.** An
+ability has no card and no type line (CR 113.7a), so "from an artifact source"
+describes the permanent it came from. `ability_source_types` sits beside
+`ability_kinds` on the filter and the handler tests it through `card_has_type`
+— the reader that knows a card has *every* type its line names, so an artifact
+creature's ability is caught by both spellings rather than by whichever
+`primary_type` happens to return.
+
+**The cost was the last bare number in the engine.** `engine/mana_payment.py`
+says a cost is a symbol dict everywhere; the `mana_payment` prompt held an
+`int`, which is why the counter lowering refused anything but generic with "no
+counter flow offers this cost" and Ayesha's `{W}` had no way to arrive. The
+prompt now carries a symbol dict and answers through `plan_payment`, the same
+matcher casting uses.
+
+The case that proves it is the one that looks redundant: **{R} in the pool must
+not pay {W}**. One red mana is one mana, so the old count-based check would have
+let the ability through and the white pip would have meant nothing — a card
+working more often than it says, in the direction nothing crashes. The
+empty-pool case passes against both representations, so it proves nothing on its
+own.
+
+**Two things the round found rather than built.** The `CounterAbility` docstring
+asserted that an ability takes no "unless its controller pays" flow, "which is
+offered to a spell's controller while the *spell* waits" — Ayesha Tanaka
+disproves it, and what waits is a stack object either way. And the arming site
+needs a `_new=True` marker for the headless path to drain the prompt; without it
+the prompt armed, nobody answered, and the ability it was meant to gate resolved
+anyway — the counter silently never happening, which is exactly what the first
+run of the behavioural probe showed and no compile-time check could have.
+
+`_parse_unless_pays` is now one reader for both clauses, since it is one clause:
+the cost is offered to the countered *object's* controller while that object
+waits (CR 118.3c).
+
+**Flagged, not taken.** The non-interactive default spends only floating mana.
+CR 605.3b would let a player tap lands to answer during resolution, and an
+interactive seat already can — the prompt lists `tap` and `activate` among the
+actions that answer it. Closing that for the auto path changes what every seeded
+AI simulation does, so it is its own round with its own differential rather than
+a rider on this one.
+
+**Numbers.** LEG 192 → 194 of 310 (61.9% → 62.6%); LEG parse 59.4% → 59.9%,
+lowers 55.0% → 55.5%, executes 29.7% → 30.2%. Shipped pool unchanged at 734/734.
+Suite 7,158 → 7,163, full run green with every `--check`; no hooks added.
