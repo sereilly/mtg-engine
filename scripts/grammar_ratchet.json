@@ -6,14 +6,14 @@
       "parsed_pct": 80.5
     },
     "3ED": {
-      "executed_pct": 45.2,
-      "lowered_pct": 80.7,
-      "parsed_pct": 81.7
+      "executed_pct": 45.5,
+      "lowered_pct": 81.0,
+      "parsed_pct": 82.0
     },
     "ALL": {
-      "executed_pct": 48.4,
-      "lowered_pct": 81.1,
-      "parsed_pct": 82.1
+      "executed_pct": 48.5,
+      "lowered_pct": 81.2,
+      "parsed_pct": 82.2
     },
     "ARN": {
       "executed_pct": 42.6,
@@ -21,9 +21,9 @@
       "parsed_pct": 69.4
     },
     "ATQ": {
-      "executed_pct": 60.8,
-      "lowered_pct": 88.3,
-      "parsed_pct": 88.3
+      "executed_pct": 61.7,
+      "lowered_pct": 89.2,
+      "parsed_pct": 89.2
     },
     "LEA": {
       "executed_pct": 43.3,

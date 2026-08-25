@@ -68,7 +68,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | activation cost | 233 |
 | keyword table | 139 |
 | static-line table | 137 |
-| card_hooks bespoke (name-keyed) | 126 |
+| card_hooks bespoke (name-keyed) | 124 |
 | aura enchant noun (oracle_instructions attach) | 57 |
 | aura static (oracle_instructions/permanent_state) | 33 |
 | loyalty cost | 33 |

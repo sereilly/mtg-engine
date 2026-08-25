@@ -20,11 +20,11 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | LEB | 292 | 389 | 80.5% | 79.7% | 43.4% | 155 |
 | 2ED | 292 | 389 | 80.5% | 79.7% | 43.4% | 155 |
 | ARN | 78 | 108 | 69.4% | 64.8% | 42.6% | 37 |
-| ATQ | 85 | 120 | 88.3% | 88.3% | 60.8% | 66 |
-| 3ED | 296 | 389 | 81.7% | 80.7% | 45.2% | 159 |
+| ATQ | 85 | 120 | 89.2% | 89.2% | 61.7% | 67 |
+| 3ED | 296 | 389 | 82.0% | 81.0% | 45.5% | 160 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 60.3% | 55.9% | 30.4% | 119 |
-| **All (shipped)** | **1618** | **2286** | **82.1%** | **81.1%** | **48.4%** | **963** |
+| LEG *(measured)* | 310 | 431 | 62.9% | 58.5% | 32.9% | 130 |
+| **All (shipped)** | **1618** | **2286** | **82.2%** | **81.2%** | **48.5%** | **965** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -34,16 +34,16 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 227 | 119 | expected a subject |  |
+| 224 | 116 | expected a subject |  |
 | 125 | 55 | unrecognized effect verb |  |
-| 72 | 48 | unconsumed text |  |
+| 68 | 44 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
-| 12 | 7 | expected a keyword ability |  |
 | 10 | 7 | expected 'a' |  |
 | 10 | 6 | a conditional static bonus is derived by engine/static_bonuses.py |  |
-| 9 | 5 | expected 'the number of' in a where-clause |  |
 | 9 | 4 | expected a colour or a creature body after 'becomes' |  |
+| 9 | 5 | expected a keyword ability |  |
+| 8 | 4 | expected 'the number of' in a where-clause |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 6 | 3 | expected a quantity |  |
 | 5 | 5 | expected 'unless defending player controls' |  |
@@ -56,13 +56,13 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected something to shield |  |
-| 2 | 2 | expected a damage recipient |  |
 | 2 | 2 | expected what to remove a counter from as a cost |  |
 | 2 | 2 | expected 'counter or counters' |  |
+| 1 | 1 | a destroy sweep over a source relation stays with its card hook until the probe review takes it |  |
 
 ## Cards executing through the grammar
 
-963 cards, 1107 lines.
+965 cards, 1109 lines.
 
 - **Abomination**
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
@@ -381,6 +381,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
 - **Coral Helm**
   - `{3}, Discard a card at random: Target creature gets +2/+2 until end of turn.`
+- **Cosmic Horror**
+  - `At the beginning of your upkeep, destroy this creature unless you pay {3}{B}{B}{B}. If this creature is destroyed this way, it deals 7 damage to you.`
 - **Counterspell**
   - `Counter target spell.`
   - `Counter target spell.`
@@ -391,6 +393,9 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Draw a card.`
 - **Crimson Manticore**
   - `{R}, {T}: This creature deals 1 damage to target attacking or blocking creature.`
+- **Crumble**
+  - `Destroy target artifact. It can't be regenerated. That artifact's controller gains life equal to its mana value.`
+  - `Destroy target artifact. It can't be regenerated. That artifact's controller gains life equal to its mana value.`
 - **Crusade**
   - `White creatures get +1/+1.`
   - `White creatures get +1/+1.`
@@ -500,6 +505,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{3}, {T}: Target player discards a card. Activate only during your turn.`
 - **Divine Intervention**
   - `At the beginning of your upkeep, remove an intervention counter from this enchantment.`
+- **Divine Offering**
+  - `Destroy target artifact. You gain life equal to its mana value.`
 - **Double Vision**
   - `Whenever you cast your first instant or sorcery spell each turn, copy that spell. You may choose new targets for the copy.`
 - **Drafna's Restoration**
@@ -540,6 +547,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `• Create a 3/3 green Beast creature token.`
   - `• You gain 3 life.`
   - `• Draw a card.`
+- **Elder Land Wurm**
+  - `When this creature blocks, it loses defender.`
 - **Elephant Graveyard**
   - `{T}: Add {C}.`
   - `{T}: Regenerate target Elephant.`
@@ -741,6 +750,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `All creatures get -1/-0 until end of turn.`
 - **Hell's Caretaker**
   - `{T}, Sacrifice a creature: Return target creature card from your graveyard to the battlefield. Activate only during your upkeep.`
+- **Hellfire**
+  - `Destroy all nonblack creatures. Hellfire deals X plus 3 damage to you, where X is the number of creatures that died this way.`
 - **Hellkite Punisher**
   - `{R}: This creature gets +1/+0 until end of turn.`
 - **Helm of Chatzuk**
@@ -861,6 +872,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Jolrael, Mwonvuli Recluse**
   - `Whenever you draw your second card each turn, create a 2/2 green Cat creature token.`
   - `{4}{G}{G}: Until end of turn, creatures you control have base power and toughness X/X, where X is the number of cards in your hand.`
+- **Jovial Evil**
+  - `Jovial Evil deals X damage to target opponent, where X is twice the number of white creatures that player controls.`
 - **Jump**
   - `Target creature gains flying until end of turn.`
   - `Target creature gains flying until end of turn.`
@@ -1066,6 +1079,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Target Assembly-Worker creature gets +1/+1 until end of turn.`
 - **Mishra's Workshop**
   - `{T}: Add {C}{C}{C}. Spend this mana only to cast artifact spells.`
+- **Mold Demon**
+  - `When this creature enters, sacrifice it unless you sacrifice two Swamps.`
 - **Mox Emerald**
   - `{T}: Add {G}.`
   - `{T}: Add {G}.`
@@ -1232,6 +1247,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Psionic Blast deals 4 damage to any target and 2 damage to you.`
   - `Psionic Blast deals 4 damage to any target and 2 damage to you.`
   - `Psionic Blast deals 4 damage to any target and 2 damage to you.`
+- **Psionic Entity**
+  - `{T}: This creature deals 2 damage to any target and 3 damage to itself.`
 - **Psychic Purge**
   - `Psychic Purge deals 1 damage to any target.`
 - **Psychic Venom**
@@ -1612,6 +1629,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Exile target creature. Its controller gains life equal to its power.`
 - **Sylvan Paradise**
   - `One or more target creatures become green until end of turn.`
+- **Syphon Soul**
+  - `Syphon Soul deals 2 damage to each other player. You gain life equal to the damage dealt this way.`
 - **Tablet of Epityr**
   - `Whenever an artifact you control is put into a graveyard from the battlefield, you may pay {1}. If you do, you gain 1 life.`
 - **Tavern Swindler**
@@ -1733,6 +1752,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Destroy all enchantments.`
 - **Transmogrify**
   - `Exile target creature. That creature's controller reveals cards from the top of their library until they reveal a creature card. That player puts that card onto the battlefield, then shuffles the rest into their library.`
+- **Transmutation**
+  - `Switch target creature's power and toughness until end of turn.`
 - **Transmute Artifact**
   - `Sacrifice an artifact. If you do, search your library for an artifact card. If that card's mana value is less than or equal to the sacrificed artifact's mana value, put it onto the battlefield. If it's greater, you may pay {X}, where X is the difference. If you do, put it onto the battlefield. If you don't, put it into its owner's graveyard. Then shuffle.`
 - **Triassic Egg**
@@ -1761,6 +1782,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `When this creature enters, if you control another creature with power 4 or greater, this creature deals 2 damage to each opponent.`
 - **Twinblade Assassins**
   - `At the beginning of your end step, if a creature died this turn, draw a card.`
+- **Underworld Dreams**
+  - `Whenever an opponent draws a card, this enchantment deals 1 damage to that player.`
 - **Unleash Fury**
   - `Double the power of target creature until end of turn.`
 - **Unsubstantiate**
@@ -1855,6 +1878,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{U}: This creature gets +1/+0 until end of turn.`
   - `{U}: This creature gets +1/+0 until end of turn.`
   - `{U}: This creature gets +1/+0 until end of turn.`
+- **Wall of Wonder**
+  - `{2}{U}{U}: This creature gets +4/-4 until end of turn and can attack this turn as though it didn't have defender.`
 - **Wanderlust**
   - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.`

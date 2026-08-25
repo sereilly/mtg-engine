@@ -1584,3 +1584,80 @@ Suite 7,169 → 7,177, full run green with every `--check`; no hooks added.
 it *can* target, which nothing models. Round 17's CR 605.3b item is untouched:
 the non-interactive payment default spends only floating mana, and closing that
 changes every seeded AI simulation.
+
+## LEG round 20: three worktrees at once, and two shipped cards that were lying
+
+*(2026-08-25.)* The first genuinely parallel round: three agents in three
+`git worktree` checkouts, one card group each, merged one branch at a time with
+the full suite and every `--check` between merges. **Eleven cards**, the largest
+round this set has had — and the two most valuable findings were not cards.
+
+**The groups were chosen to touch different grammar families**, which is what
+made the merges tractable: damage arithmetic, power/toughness and
+characteristics, triggered abilities. Three conflicts total, and every one of
+them was `tests/sets/test_legends_creatures.py`, exactly where SET_PLAYBOOK.md
+says to expect them. Both engine conflicts (`ast/statements.py`'s union,
+`lowering/characteristics.py`) were *additive* — each side had added something
+the other could not have known about — so both sides survived. The test-file
+conflict interleaved badly enough that hand-stitching was the wrong tool; the
+three merge stages settle it exactly (theirs was a pure append over the base,
+so the result is ours plus their new section).
+
+### Cards
+**Damage:** Psionic Entity, Syphon Soul, Jovial Evil, Hellfire.
+**P/T:** Transmutation, Divine Offering, Wall of Wonder.
+**Triggers:** Underworld Dreams, Mold Demon, Cosmic Horror, Elder Land Wurm.
+
+Blood Lust was correctly declined: four pieces, none of them a P/T effect.
+
+### Two shipped cards that reported supported and did the wrong thing
+**Cleanse** — "Destroy all black creatures" compiled onto `destroy_all_creatures`,
+whose payload is empty and whose scope is its own kind. The colour was dropped
+and the card **wiped the entire board**, in a set the tracker calls 100%
+supported. Hellfire's "nonblack" was heading into the same hole, which is the
+only reason it surfaced. Narrowed sweeps now route to the filtered handler.
+
+**Crumble's fused kind retired.** `destroy_artifact_controller_gains_mana_value`
+existed only because "results carries values, not objects", and its own
+docstring predicted its removal. The moment a general record of the destroyed
+permanent's mana value existed, the grammar read Crumble's whole line and
+`test_card_lines` failed — which is precisely what the grammar-before-hooks
+ordering is built to do. One hook fewer, one positional read fewer.
+
+### Three more "the narrowing was dropped" findings
+* `_SEAT_SCOPED_EVENTS` narrows a `draws_card` trigger by the single word "you",
+  so Underworld Dreams' "an **opponent** draws" would have fired on the wrong
+  half of the table. The seat is payload now, and "that player" is frozen at the
+  emit site — verified on a **three-player** board, because a targetless
+  resolution's default seat is right with two players and wrong with three.
+* `categories._PRODUCES` calls `deal_damage` a producer of `damage_dealt`, but
+  the `each_opponent` / `each_player` loops never wrote the key. Syphon Soul's
+  "life equal to the damage dealt this way" would have read zero.
+* A durationless keyword loss was refused wholesale as "a static ability" —
+  true of a printed static line, false of a trigger's one-shot effect
+  (Elder Land Wurm).
+
+### Numbers
+LEG 197 → **208** of 310 (63.5% → 67.1%); LEG parse 60.3% → 62.9%, lowers 55.9%
+→ 58.5%, executes 30.4% → 32.9%. Shipped by-catch from the two fixes above: ATQ
+88.3% → 89.2%, 3ED 81.7% → 82.0%, ALL 82.1% → 82.2% parsed and 48.4% → 48.5%
+executed. Hook reliance **falls** again: 82 → 81 of 734 cards, 89 → 88 entries.
+Suite 7,177 → **7,217**. Shipped pool unchanged at 734/734, every `--check`
+green.
+
+### Promotion debt, recorded deliberately
+`engine/effect_labels.py` carries **no** entries for this round's new kinds
+(`remove_self_keyword`, `upkeep_pay_or_destroy_self`). `TRIGGERED_LABELS` is
+guard-held to the *shipped* pool (`test_effect_labels.py` reads
+`load_catalog()`), so an entry for a LEG-only kind fails while LEG is
+`measured`. Same precedent as ATQ and M21, and the same as round 12's Wall of
+Dust: the labels belong in the promotion commit.
+
+### On running it this way
+Three agents finished where an earlier attempt at four returned nothing. The
+briefs mattered more than the count: each named the files the *other* agents
+would touch, forbade `--accept` and tracker regeneration (three-way collisions
+that buy nothing), and demanded a card be verified **in a game** rather than at
+the compiler. That last rule is what produced Cleanse, the `_PRODUCES` gap and
+the three-player seat check — none of which a compile-time gate would have said
+a word about.
