@@ -191,12 +191,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'cards':
             _line('discard_hand_ante_then_draw_seven', 'spell_pattern'),
     },
-    'Crumble': {
-        "destroy target artifact. it can't be regenerated. that artifact's "
-        'controller gains life equal to its mana value':
-            _line('destroy_artifact_controller_gains_mana_value', 'spell_pattern',
-                bypass_regeneration=True),
-    },
     'Cyclone': {
         'at the beginning of your upkeep, put a wind counter on this '
         'enchantment, then sacrifice this enchantment unless you pay {g} for '

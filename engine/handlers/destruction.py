@@ -260,6 +260,14 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
             seat = game.controller_index_of(victim)
             if seat is not None:
                 context.results["last_target_controller_index"] = seat
+            # "You gain life equal to **its** mana value." (Divine Offering.)
+            # Recorded here, before the destruction, for two reasons: the
+            # permanent is gone by the time the next step runs (CR 608.2h), and
+            # the words name the object rather than the outcome — a regenerated
+            # or indestructible artifact still has a mana value to gain.
+            # Through `effective_card` so a copy effect's cost is the one read
+            # (CR 707.2), which is the same reading Crumble's fused kind takes.
+            context.results["its_mana_value"] = int(victim.effective_card.cmc or 0)
     destroyed = game._destroy_target_permanent(
         target,
         type_filter=instruction.payload.get("type_filter"),
@@ -305,59 +313,6 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
             game.remove_from_battlefield(source_permanent)
             game._permanent_to_graveyard(player, source_permanent)
     game.log.append("Chaos Orb was destroyed after flip")
-    return True, "resolved"
-
-
-@effect_handler("destroy_artifact_controller_gains_mana_value")
-def destroy_artifact_controller_gains_mana_value(
-    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
-) -> tuple[bool, str]:
-    """Crumble: destroy target artifact, its controller gains life equal to its
-    mana value.
-
-    One handler rather than a `sequence` of destroy-then-gain, and the reason is
-    worth stating: the second clause is about *the object the first clause
-    destroyed* — its controller, its mana value — and by the time a second step
-    ran, that permanent is in a graveyard. Passing it between steps needs the
-    execution context to carry the affected object, which it does not yet do
-    (``results`` carries values, not objects). When it does, this becomes two
-    steps and this kind goes away.
-    """
-    target = context.target
-    index = context.target_permanent_index
-    artifact = None
-    if isinstance(index, int) and 0 <= index < len(target.battlefield):
-        candidate = target.battlefield[index]
-        if candidate.has_type("artifact"):
-            artifact = candidate
-    if artifact is None:
-        artifact = next((p for p in game.controlled_by(target) if p.has_type("artifact")), None)
-    if artifact is None:
-        game.log.append(f"{context.card.name} did nothing: no artifact to destroy")
-        return True, "resolved"
-
-    # Read before destroying: afterwards the permanent is gone and its
-    # controller is no longer answerable from the battlefield (CR 603.10).
-    controller_index = game.controller_index_of(artifact)
-    life = int(artifact.effective_card.cmc)
-    name = artifact.card.name
-
-    game._destroy_target_permanent(
-        target,
-        type_filter="artifact",
-        # By identity. ``list.index`` compares by value, so two equally-stated
-        # Moxen (both untapped, both played this turn) would resolve to the same
-        # slot and Crumble would destroy the first of them rather than the one
-        # it targeted. ``battlefield_index_of`` is the seam's identity search.
-        target_permanent_index=game.battlefield_index_of(artifact),
-        bypass_regeneration=bool(instruction.payload.get("bypass_regeneration")),
-    )
-    if controller_index is not None:
-        game.players[controller_index].life += life
-        game.log.append(
-            f"{context.card.name} destroyed {name}; "
-            f"{game.players[controller_index].name} gained {life} life"
-        )
     return True, "resolved"
 
 

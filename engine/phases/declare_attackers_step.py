@@ -10,6 +10,7 @@ pass. Also holds the attack-legality query (``can_attack``),
 """
 
 from ..auras import aura_restriction_active
+from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
 from ..subject_filters import subject_matches
 from ..events import emit
 from ..models import Permanent, PlayerState
@@ -487,6 +488,11 @@ class DeclareAttackersStepMixin:
         static the declare blockers step asks at block time.
         """
         if aura_restriction_active(attacker, "ignores_defender"):
+            return True
+        # The third source: a resolving ability that granted the permission for
+        # this turn (Wall of Wonder). A flag rather than a keyword removal for
+        # the reason above, and swept by the cleanup step.
+        if attacker.metadata.get(ATTACK_AS_THOUGH_NO_DEFENDER):
             return True
         seat = self.controller_index_of(attacker)
         if seat is None:

@@ -175,6 +175,18 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     if stream.accept_phrase("its", "power"):
         return ast.ThatMuch("its_power")
 
+    # "equal to **its** mana value" (Divine Offering: "Destroy target artifact.
+    # You gain life equal to its mana value."). "It" is the object the
+    # *preceding step of this same effect* acted on, which by the time the gain
+    # runs is in a graveyard — so the step records the number and this reads the
+    # record. Named for the words rather than for one producer, because the
+    # question is the same whichever verb the sentence in front of it printed;
+    # the producer gate in ``_back_reference_payload`` is what makes the words
+    # legal, so a card whose first sentence records nothing refuses by name
+    # instead of gaining zero life.
+    if stream.accept_phrase("its", "mana", "value"):
+        return ast.ThatMuch("its_mana_value")
+
     # "equal to **that creature's** power" (Terror of the Peaks) — the power of
     # the creature the *trigger's event* was about, not of the ability's source.
     # A different referent from "its power" above and so a different key: read

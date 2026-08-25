@@ -240,6 +240,41 @@ def _parse_duration(stream: TokenStream) -> ast.Duration:
     return ast.Duration()
 
 
+def _parse_can_attack_as_though(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.AttackAsThough | None":
+    """``can attack [duration] as though it didn't have <keyword>`` — the
+    permission clause, without its subject.
+
+    Here rather than with either effect family because two of them read it: the
+    pump conjunction prints it as the tail of one sentence ("This creature gets
+    +4/-4 until end of turn **and can attack this turn as though it didn't have
+    defender**", Wall of Wonder) and the subject-verb table reads it as a
+    sentence of its own. A fragment two families need is not an effect.
+
+    Non-consuming on refusal, so every other "can …" sentence keeps the reading
+    it has today — "can't be blocked" and the Auras' durationless printing among
+    them.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("can"):
+        return None
+    if not stream.accept_word("attack"):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if not stream.accept_phrase("as", "though", "it", "didn't", "have"):
+        stream.reset(mark)
+        return None
+    matched = match_longest(stream.words_from(), 0, KEYWORD_INDEX)
+    if matched is None:
+        stream.reset(mark)
+        return None
+    keyword, consumed = matched
+    stream.advance(consumed)
+    return ast.AttackAsThough(subject, keyword, duration)
+
+
 def _accept_literal(stream: TokenStream, *phrase: str) -> tuple[bool, int | None]:
     """Consume consecutive tokens by their text, all-or-nothing.
 

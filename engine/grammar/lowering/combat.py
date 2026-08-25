@@ -218,3 +218,33 @@ def _lower_remove_from_combat(
             "remove_from_combat", "", {"permanents_from": _UNTAPPED_PERMANENTS}
         ),
     )
+
+
+def _lower_attack_as_though(node: ast.AttackAsThough) -> tuple[OracleInstruction, ...]:
+    """"…can attack this turn as though it didn't have defender."
+    (Wall of Wonder.)
+
+    Refuses on two axes, both by name. The **ignored ability** must be one the
+    declare-attackers step actually asks about: defender is the only keyword
+    that stops an attack by itself, so a permission naming any other word would
+    be a clause the engine consumed and nothing acted on. The **duration** must
+    be this turn's, because the permission is recorded on the permanent and
+    swept by the cleanup step — a durationless printing is the Aura's static
+    ability (``engine/auras.py``), which is derived while it is attached rather
+    than stamped.
+    """
+    if node.ignored_keyword != "defender":
+        raise LoweringError(
+            f"no attack permission ignores {node.ignored_keyword!r}", node=node
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a durationless attack permission is a static ability, which the "
+            "Aura derivation owns rather than an instruction",
+            node=node,
+        )
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "no handler grants an attack permission to this subject", node=node
+        )
+    return (OracleInstruction("attack_as_though_no_defender_until_eot", "", {}),)

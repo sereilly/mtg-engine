@@ -23,6 +23,7 @@ from . import (  # noqa: E402,F401
     mana,
     prevention,
     pump,
+    pt_switch,
     regeneration,
     stack,
     tapping,

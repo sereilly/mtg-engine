@@ -35,6 +35,7 @@ from .damage import (
 )
 from .characteristics import (
     _parse_double,
+    _parse_switch_pt,
     _parse_gets,
     _parse_gains,
     _parse_loses,
@@ -145,6 +146,7 @@ __all__ = [
     "_parse_exile_top_of_library",
     "_parse_player_adds_mana",
     "_parse_double",
+    "_parse_switch_pt",
     "_parse_fight",
     "_parse_look_at_hand",
     "_parse_reveal_top",

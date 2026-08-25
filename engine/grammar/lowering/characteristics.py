@@ -772,6 +772,34 @@ def _lower_double_power(node: ast.DoublePower) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("double_target_power_until_eot", "", payload),)
 
 
+def _lower_switch_pt(node: ast.SwitchPT) -> tuple[OracleInstruction, ...]:
+    """``Switch target creature's power and toughness until end of turn.``
+    (Transmutation.)
+
+    The duration is required and required to be this one for the reason the
+    power doubling's is: the 7d flag is swept by the cleanup step
+    (``_EOT_METADATA_KEYS``), so a durationless switch would silently end with
+    the turn anyway — a card printed without the clause needs the layer system
+    to hold the effect, not this instruction.
+    """
+    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
+        raise LoweringError(
+            "a durationless power/toughness switch is a continuous effect, "
+            "which needs the CR 613 layers engine",
+            node=node,
+        )
+    payload: dict[str, object] = {}
+    if _is_source(node.subject):
+        return (OracleInstruction("switch_self_pt_until_eot", "", payload),)
+    if not _is_target(node.subject):
+        raise LoweringError(
+            "no handler switches the power and toughness of this subject", node=node
+        )
+    assert isinstance(node.subject, ast.TargetSpec)
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("switch_target_pt_until_eot", "", payload),)
+
+
 def _lower_lose_keyword(node: ast.LoseKeyword) -> tuple[OracleInstruction, ...]:
     """"It loses indestructible until end of turn." (Soul Sear, bound to the
     damage sentence's target by the pronoun rider.)

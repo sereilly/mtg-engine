@@ -1492,3 +1492,77 @@ def test_tetsuo_umezawa_refuses_a_creature_in_neither_state(set_pool):
 
     assert not result.supported
     assert any(p.card.name == "Grizzly Bears" for p in game.players[1].battlefield)
+
+
+# ---------------------------------------------------------------------------
+# Wall of Wonder (round 20) — CR 609.4, an "as though" attack permission
+# ---------------------------------------------------------------------------
+
+
+def _wall_of_wonder_game(set_pool) -> tuple[Game, Permanent]:
+    wall = Permanent(card=set_pool("LEG")["Wall of Wonder"])
+    p1 = PlayerState(name="P1", battlefield=[wall])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    return game, wall
+
+
+def test_wall_of_wonder_compiles_both_halves_of_its_one_sentence(set_pool):
+    """The pump and the permission are one printed sentence joined by "and".
+    A production that read the pump and shrugged at the rest would have left
+    a Wall that pumps and still cannot attack."""
+    program = compile_card_oracle(set_pool("LEG")["Wall of Wonder"])
+    assert program.supported, program.reason
+    instruction = program.activated_abilities[0].instruction
+    assert instruction.kind == "sequence"
+    assert [step.kind for step in instruction.payload["steps"]] == [
+        "pump_self", "attack_as_though_no_defender_until_eot"
+    ]
+
+
+def test_wall_of_wonder_pumps_itself_and_may_then_attack(set_pool):
+    game, wall = _wall_of_wonder_game(set_pool)
+    assert (wall.effective_power, wall.effective_toughness) == (1, 5)
+
+    result = game.activate_permanent_ability(0, "Wall of Wonder", permanent_index=0)
+    game._settle()
+
+    assert result.supported
+    assert (wall.effective_power, wall.effective_toughness) == (5, 1)
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+
+
+def test_the_permission_does_not_take_defender_away(set_pool):
+    """CR 609.4: the effect applies only to the stated effect. Removing the
+    keyword instead would change what "creatures with defender" counts and
+    what layer 6 reports, none of which the card says."""
+    game, wall = _wall_of_wonder_game(set_pool)
+    game.activate_permanent_ability(0, "Wall of Wonder", permanent_index=0)
+    game._settle()
+
+    assert game._has_keyword(wall, "defender")
+
+
+def test_an_unactivated_wall_of_wonder_still_cannot_attack(set_pool):
+    game, _wall = _wall_of_wonder_game(set_pool)
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    ok, _msg = game.declare_attackers(0, [0])
+    assert not ok
+
+
+def test_the_attack_permission_wears_off_at_cleanup(set_pool):
+    """"…this turn" is the cleanup sweep and nothing else — a permission that
+    survived it would be a Wall that could attack for the rest of the game."""
+    game, wall = _wall_of_wonder_game(set_pool)
+    game.activate_permanent_ability(0, "Wall of Wonder", permanent_index=0)
+    game._settle()
+
+    game.resolve_cleanup_step(0)
+    assert (wall.effective_power, wall.effective_toughness) == (1, 5)
+    assert not game._ignores_defender(wall)

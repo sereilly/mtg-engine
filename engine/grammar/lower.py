@@ -64,6 +64,7 @@ from .lowering import (
     _lower_become_color,
     _lower_gain_type,
     _lower_cant_be,
+    _lower_attack_as_though,
     _lower_remove_from_combat,
     _lower_change_text,
     _lower_combat_restriction,
@@ -92,6 +93,7 @@ from .lowering import (
     _lower_lose_keyword,
     _lower_gain_life,
     _lower_double_power,
+    _lower_switch_pt,
     _lower_exile_graveyard,
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
@@ -210,6 +212,8 @@ def lower_statement(
         return _lower_player_gets_counters(statement, event)
     if isinstance(statement, ast.DoublePower):
         return _lower_double_power(statement)
+    if isinstance(statement, ast.SwitchPT):
+        return _lower_switch_pt(statement)
     if isinstance(statement, ast.RemoveCounter):
         return _lower_remove_counter(statement, dispatch_event)
     if isinstance(statement, ast.GainLife):
@@ -433,6 +437,8 @@ def lower_statement(
     if isinstance(statement, ast.CombatRestriction):
         return _lower_combat_restriction(statement, dispatch_event)
 
+    if isinstance(statement, ast.AttackAsThough):
+        return _lower_attack_as_though(statement)
     if isinstance(statement, ast.CantBe):
         return _lower_cant_be(statement)
 
