@@ -572,7 +572,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # card prints and must refuse rather than compile unnarrowed.
     ("you_activate_loyalty_ability",
      r"whenever you activate a loyalty ability of (?P<walker_subject>an? [^,]+)"),
-    ("draws_card",                  r"whenever you draw a card"),
+    # CR 121.2's per-card event, with the drawing seat as the one narrowing
+    # any card prints on it. Both spellings are one kind: "you" and "an
+    # opponent" name the same event asked of a different seat, and the seat is
+    # what the event filter reads — so a printed "an opponent" is payload, in
+    # exactly the position `targeting_controller` occupies above. Underworld
+    # Dreams is the second spelling; Lorescale Coatl and Burlfist Oak the
+    # first, whose absent group is how a pattern says "you".
+    ("draws_card",
+     r"whenever (?:you draw|(?P<drawer>an opponent) draws) a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
     # turn, announced by the draw sweep in check_state_based_actions off the
     # cards_drawn_this_turn record every draw path already feeds.
@@ -594,6 +602,13 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # "whenever", the same argument the `you_gain_life` note below makes.
     ("permanent_becomes_tapped",
      r"when(?:ever)? enchanted (?P<tapped_attached>[a-z]+) becomes tapped"),
+    # "**When** this creature blocks, it loses defender." (Elder Land Wurm.)
+    # The same event the "whenever" table names, one printed word apart — here
+    # for the reason `attached_creature_dies` is in both tables: which trigger
+    # word a card printed is not a difference the dispatcher can act on, and a
+    # table holding only one of them leaves the other's cards refusing a
+    # condition the engine already fires.
+    ("creature_blocks",             r"when this creature blocks"),
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is

@@ -791,3 +791,79 @@ def test_anti_magic_aura_bins_another_aura_on_the_same_creature(set_pool):
 
     assert not game.is_on_battlefield(holy)
     assert game.is_on_battlefield(aura), "and the source is still exempt"
+
+
+# --- Round 20: an opponent's draw is the same event, asked of another seat ---
+
+
+def _dreams_board(set_pool, *, seats: int = 2):
+    """Underworld Dreams on P1's battlefield, every other seat holding a
+    library to draw from."""
+    dreams = Permanent(card=set_pool("LEG")["Underworld Dreams"])
+    filler = _creature("Filler")
+    players = [PlayerState(name="P1", battlefield=[dreams], library=[filler] * 5)]
+    for index in range(1, seats):
+        players.append(
+            PlayerState(name=f"P{index + 1}", library=[filler] * 5)
+        )
+    return Game(players=players), players
+
+
+def test_underworld_dreams_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Underworld Dreams"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    # One condition kind for both printed seats: which seat drew is the event's,
+    # and the printed "an opponent" is the trigger's own narrowing.
+    assert trigger.condition.kind == "draws_card"
+    assert trigger.condition.payload == {"drawer": "an opponent"}
+    assert trigger.instruction.kind == "deal_damage"
+    # "That player" is the seat the fire site froze, not a chosen target.
+    assert trigger.instruction.payload["recipient"] == "event_subject_player"
+
+
+def test_underworld_dreams_damages_the_opponent_who_drew(set_pool):
+    game, (p1, p2) = _dreams_board(set_pool)
+
+    game._draw_with_replacements(p2, 1)
+    game._settle()
+
+    assert p2.life == 19
+    assert p1.life == 20
+
+
+def test_underworld_dreams_is_silent_on_its_own_controllers_draw(set_pool):
+    """"An opponent" is not "a player": the controller drawing is the event
+    happening to the wrong seat, and the trigger must not fire at all."""
+    game, (p1, p2) = _dreams_board(set_pool)
+
+    game._draw_with_replacements(p1, 1)
+    game._settle()
+
+    assert p1.life == 20
+    assert p2.life == 20
+
+
+def test_underworld_dreams_fires_once_per_card_drawn(set_pool):
+    """CR 121.2: drawing three cards is three draws, so three damage."""
+    game, (_p1, p2) = _dreams_board(set_pool)
+
+    game._draw_with_replacements(p2, 3)
+    game._settle()
+
+    assert p2.life == 17
+
+
+def test_underworld_dreams_damages_the_seat_that_drew_not_the_first_opponent(set_pool):
+    """The seat is frozen by the fire site rather than re-derived. With two
+    opponents, "that player" and "an opponent" are different answers — which is
+    what a targetless resolution's default would have got wrong."""
+    game, (p1, p2, p3) = _dreams_board(set_pool, seats=3)
+
+    game._draw_with_replacements(p3, 1)
+    game._settle()
+
+    assert p3.life == 19
+    assert p2.life == 20
+    assert p1.life == 20

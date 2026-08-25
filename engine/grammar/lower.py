@@ -203,7 +203,7 @@ def lower_statement(
     if isinstance(statement, ast.GainKeyword):
         return _lower_gain_keyword(statement)
     if isinstance(statement, ast.LoseKeyword):
-        return _lower_lose_keyword(statement)
+        return _lower_lose_keyword(statement, dispatch_event)
     if isinstance(statement, ast.PutCounter):
         return _lower_put_counter(statement)
     if isinstance(statement, ast.PlayerGetsCounters):

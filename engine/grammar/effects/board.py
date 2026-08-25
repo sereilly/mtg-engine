@@ -15,7 +15,9 @@ from .. import ast
 from ..references import parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, SUBTYPE_INDEX, match_longest)
-from ..phrases import _parse_mana_payment, _parse_zone
+from ..phrases import (
+    _accept_number, _parse_mana_payment, _parse_zone, parse_subject_filter_at,
+)
 
 
 def _accept_self_reference(stream: TokenStream) -> bool:
@@ -353,7 +355,45 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     if stream.accept_phrase("unless", "you", "pay"):
         return ast.SacrificeUnlessPay(subject, _parse_mana_payment(stream))
     stream.reset(mark)
+    # "… unless you **sacrifice two Swamps**" (Mold Demon) — the same
+    # alternative with a cost mana cannot express. Not a second fused node: an
+    # "unless" is an offer with a penalty, which is exactly what `May` already
+    # says, and saying it that way means the offer, the penalty and the "you
+    # cannot afford it" case all come from machinery that already works. The
+    # mana spelling above stays fused only because two upkeep handlers
+    # implement it whole.
+    if stream.accept_phrase("unless", "you", "sacrifice"):
+        alternative = _parse_counted_sacrifice(stream, player)
+        return ast.May(
+            actor=player,
+            action=alternative,
+            otherwise=ast.Sacrifice(player, subject),
+        )
+    stream.reset(mark)
     return ast.Sacrifice(player, subject)
+
+
+def _parse_counted_sacrifice(
+    stream: TokenStream, player: ast.PlayerRef
+) -> ast.Statement:
+    """"two Swamps" / "an Island" — what an "unless you sacrifice" asks for.
+
+    The printed number is read here rather than by ``parse_recipient``, which
+    has no reading for a bare count in front of an untargeted plural: the
+    counted position is the one the noun parser wants told about
+    (``plural=True``), exactly as a counted trigger subject is. One number and
+    one noun phrase, so "an Island" and "two Swamps" are one production with
+    the count as data.
+    """
+    count = _accept_number(stream)
+    if count is None:
+        raise stream.error("expected how many to sacrifice")
+    described = parse_subject_filter_at(stream, plural=count != 1)
+    if described is None:
+        raise stream.error("expected what to sacrifice")
+    return ast.Sacrifice(
+        player, ast.TargetSpec("a", described, count=count)
+    )
 
 
 def _parse_sacrifice_expansion_permanents(stream: TokenStream) -> ast.Statement | None:

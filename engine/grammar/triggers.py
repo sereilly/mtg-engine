@@ -108,6 +108,12 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # article, so no prefix collision with the bare draw event above.
     ("draws_second_card", ("you", "draw", "your", "second", "card", "each", "turn")),
     ("draws_card", ("you", "draw", "a", "card")),
+    # The same event asked of another seat (Underworld Dreams). One kind, as in
+    # engine/oracle.py's table: which seat drew is the event's, and the
+    # condition payload the regex there captures is what the event filter
+    # narrows on. Both spellings are listed here because both are printed, and
+    # a line only one front end reads is a card refused by the other.
+    ("draws_card", ("an", "opponent", "draws", "a", "card")),
     # "Whenever you gain life …" (Vito). No amount in the phrase: how much was
     # gained is the event's, and a "that much" in the effect reads it out of the
     # trigger's captured context rather than out of these words.
@@ -826,6 +832,12 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             if stream.accept_word("leaves"):
                 stream.accept_phrase("the", "battlefield")
                 return ast.TriggerEvent("leaves_battlefield", "when")
+            # "**When** this creature blocks" (Elder Land Wurm) — the event the
+            # "whenever" table already names, printed with the one-shot word.
+            # One production either way: the declare-blockers fire site reads
+            # the kind, not the word.
+            if stream.accept_word("blocks"):
+                return ast.TriggerEvent("creature_blocks", "when")
         stream.reset(mark)
         return None
     return None

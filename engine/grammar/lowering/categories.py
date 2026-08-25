@@ -81,6 +81,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_target_keyword_until_eot": "pump",
     # The negative twin ("It loses indestructible until end of turn", Soul Sear).
     "remove_target_keyword_until_eot": "pump",
+    # The durationless half of the same effect, on the ability's own source
+    # (Elder Land Wurm). Same family: what changes is how long the removal
+    # lasts, not what kind of effect it is.
+    "remove_self_keyword": "pump",
     "grant_self_keyword_until_eot": "pump",
     "grant_banding_to_target": "pump",
     "add_named_counter_to_self": "pump",

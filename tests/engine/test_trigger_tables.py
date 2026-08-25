@@ -78,9 +78,14 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # the pair two different firings (CR 509.3c/509.3d), so both are checked
     # against every earlier pattern of every other kind.
     "matching_creature_attacks": "whenever a creature you control with deathtouch attacks",
+    # Three spellings, one kind: the bare event, the narrowed one whose subject
+    # filter makes it fire per blocked attacker, and the one-shot trigger word
+    # Elder Land Wurm prints — which is a row in the "when" table and needs an
+    # example that table would be asked about.
     "creature_blocks": (
         "whenever this creature blocks",
         "whenever this creature blocks a creature with flying",
+        "when this creature blocks, it loses defender.",
     ),
     "creature_becomes_blocked": (
         "whenever this creature becomes blocked",
@@ -131,7 +136,13 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever a creature you control with power 4 or greater enters"
     ),
     "one_or_more_attack": "whenever one or more creatures you control attack",
-    "draws_card": "whenever you draw a card",
+    # Both printed seats, because one pattern names both and the narrowing is
+    # payload: an example per spelling is what the shadowing guard needs to see
+    # each of them checked against every earlier pattern.
+    "draws_card": (
+        "whenever you draw a card",
+        "whenever an opponent draws a card",
+    ),
     "you_activate_loyalty_ability": (
         "whenever you activate a loyalty ability of a chandra planeswalker"
     ),
