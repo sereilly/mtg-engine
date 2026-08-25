@@ -134,6 +134,7 @@ from .board import (
     PutOnLibraryBottom,
     PutOnLibraryTop,
     PutOntoBattlefield,
+    DestroyUnlessPay,
     SacrificeUnlessPay,
 )
 from .cards import (
@@ -303,6 +304,7 @@ __all__ = [
     "PutOnLibraryBottom",
     "PutOnLibraryTop",
     "PutOntoBattlefield",
+    "DestroyUnlessPay",
     "SacrificeUnlessPay",
     # cards
     "Draw",

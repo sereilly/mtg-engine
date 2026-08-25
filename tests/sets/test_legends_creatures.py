@@ -1674,3 +1674,74 @@ def test_mold_demon_with_one_swamp_is_never_offered_the_choice(set_pool):
     assert not game.pending_choices
     assert not game.is_on_battlefield(demon)
     assert _names(p1) == ["Swamp"]
+
+
+# ---------------------------------------------------------------------------
+# Round 20: pay or be destroyed, and the rider that asks whether you were
+# ---------------------------------------------------------------------------
+
+
+_BLACK_MANA = {"W": 0, "U": 0, "B": 3, "R": 0, "G": 0, "C": 3}
+
+
+def _cosmic_horror(set_pool, mana=None):
+    horror = Permanent(card=set_pool("LEG")["Cosmic Horror"])
+    p1 = PlayerState(
+        name="P1", battlefield=[horror],
+        mana_pool=dict(mana) if mana else {},
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    return game, p1, horror
+
+
+def test_cosmic_horror_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Cosmic Horror"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "upkeep_self"
+    assert trigger.instruction.kind == "upkeep_pay_or_destroy_self"
+    payload = trigger.instruction.payload
+    assert payload["mana"]["B"] == 3 and payload["mana"]["generic"] == 3
+    # The rider is folded onto the same node, because it is a question about
+    # what that node did.
+    assert payload["damage_if_destroyed"] == 7
+
+
+def test_cosmic_horror_paid_survives_and_spends_the_mana(set_pool):
+    game, p1, horror = _cosmic_horror(set_pool, _BLACK_MANA)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.is_on_battlefield(horror)
+    assert p1.life == 20
+    assert p1.mana_pool["B"] == 0
+
+
+def test_cosmic_horror_unpaid_is_destroyed_and_deals_seven(set_pool):
+    game, p1, horror = _cosmic_horror(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert not game.is_on_battlefield(horror)
+    assert [card.name for card in p1.graveyard] == ["Cosmic Horror"]
+    assert p1.life == 13
+
+
+@pytest.mark.parametrize("shield", [1])
+def test_cosmic_horror_regenerated_takes_no_damage(set_pool, shield):
+    """"If this creature is **destroyed this way**" — a creature that
+    regenerated was not destroyed (CR 701.7c), so the rider does not happen.
+    Nothing but the destroy itself can answer that, which is why the number
+    rides the same instruction rather than being a second step."""
+    game, p1, horror = _cosmic_horror(set_pool)
+    horror.regeneration_shield = shield
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.is_on_battlefield(horror)
+    assert horror.tapped
+    assert p1.life == 20

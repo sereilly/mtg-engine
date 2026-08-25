@@ -800,6 +800,65 @@ class UpkeepEffectsMixin:
             self.sacrifice_permanent(permanent)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
 
+    @upkeep_effect("upkeep_self", "upkeep_pay_or_destroy_self")
+    def _on__upkeep_self__upkeep_pay_or_destroy_self(self, ctx: UpkeepContext) -> None:
+        """Cosmic Horror: "destroy this creature unless you pay {3}{B}{B}{B}.
+        If this creature is destroyed this way, it deals 7 damage to you."
+
+        The sacrifice twin above with two differences, both of them the card's:
+
+        * it **destroys**, so regeneration and indestructible answer it
+          (CR 701.7c) — which is why it goes through
+          ``_destroy_target_permanent`` rather than removing the permanent by
+          hand, and why the rider can be answered at all;
+        * "destroyed **this way**" is that call's own answer. A creature that
+          regenerated was not destroyed and takes no damage, and nothing but
+          the destroy itself knows which happened.
+        """
+        controller = ctx.controller
+        human_choices = ctx.human_choices
+        permanent = ctx.permanent
+        trig = ctx.trig
+        mana = trig.instruction.payload.get("mana", {})
+        # `can_pay_upkeep_mana` / `_spend_upkeep_mana`: the pair every other
+        # upkeep cost in this file uses, and never a hand-rolled pool read —
+        # they know that generic mana can come from floating mana *or* from
+        # tapping a land during upkeep.
+        if human_choices is not None and permanent.card.name in human_choices:
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
+                controller, mana
+            )
+        else:
+            paid = self.can_pay_upkeep_mana(controller, mana)
+        if paid:
+            self._spend_upkeep_mana(controller, mana)
+            self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
+            return
+        index = next(
+            (i for i, perm in enumerate(controller.battlefield) if perm is permanent),
+            None,
+        )
+        if index is None:
+            return
+        destroyed = self._destroy_target_permanent(
+            controller, target_permanent_index=index
+        )
+        if destroyed is None:
+            # Regenerated, indestructible or replaced: not destroyed, so the
+            # rider does not happen.
+            self.log.append(f"{permanent.card.name} was not destroyed on upkeep")
+            return
+        self.log.append(f"{controller.name} let {permanent.card.name} be destroyed")
+        damage = int(trig.instruction.payload.get("damage_if_destroyed", 0))
+        if damage:
+            ctx.enqueue_damage(
+                permanent,
+                self.players.index(controller),
+                self.players.index(controller),
+                damage,
+                trig.source_line,
+            )
+
     # ("upkeep_self", "target_gains_life") was Living Artifact's entry — "you
     # may remove a vitality counter from this Aura. If you do, you gain 1 life",
     # read as one fused kind because the decomposed reading had nowhere to run.

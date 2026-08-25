@@ -117,6 +117,7 @@ from .lowering import (
     _lower_sacrifice,
     _lower_sacrifice_expansion_permanents,
     _lower_shuffle_graveyard_into_library,
+    _lower_destroy_unless_pay,
     _lower_sacrifice_unless_pay,
     _lower_cast_from_exiled_with,
     _lower_cast_permission,
@@ -260,6 +261,8 @@ def lower_statement(
 
     if isinstance(statement, ast.SacrificeUnlessPay):
         return _lower_sacrifice_unless_pay(statement)
+    if isinstance(statement, ast.DestroyUnlessPay):
+        return _lower_destroy_unless_pay(statement, dispatch_event)
 
     if isinstance(statement, ast.BecomeCreature):
         return _lower_become_creature(statement)

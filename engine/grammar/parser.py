@@ -44,7 +44,7 @@ from .errors import GrammarError
 from .lexer import (BULLET, PUNCT, QUOTE, tokenize)
 from .costs import _parse_costs
 from .registries import registry_for_line
-from .riders import (_RIDER_FOLDED, _attach_if_you_cant, _attach_if_you_do, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
+from .riders import (_RIDER_FOLDED, _attach_destroyed_this_way, _attach_if_you_cant, _attach_if_you_do, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
 from .triggers import _parse_trigger_event, rebind_pronoun_to_event_subject
@@ -275,6 +275,12 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # "This ability can't cause the total number of +1/+0 counters on
             # this creature to be greater than N." (the Clockwork cycle.) A
             # bound on the sentence before it, not a step.
+            # "If this creature is destroyed this way, it deals 7 damage to
+            # you." (Cosmic Horror.) A consequence of what the sentence before
+            # it did, not a step.
+            if _attach_destroyed_this_way(stream, steps):
+                stream.accept_punct(".")
+                continue
             if _attach_counter_cap(stream, steps):
                 stream.accept_punct(".")
                 continue

@@ -513,6 +513,35 @@ def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("grant_regeneration_to_target_creature", "", payload),)
 
 
+def _lower_destroy_unless_pay(
+    node: ast.DestroyUnlessPay, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """"At the beginning of your upkeep, destroy this creature unless you pay
+    {3}{B}{B}{B}. If this creature is destroyed this way, it deals 7 damage to
+    you." (Cosmic Horror.)
+
+    Fused, like the sacrifice twin above and for the same reason: the upkeep
+    dispatcher is keyed on (trigger condition, instruction kind) pairs whose
+    handlers run the whole pay-or-consequence prompt. The event is threaded
+    down here rather than inferred, exactly as `_lower_damage_unless_pay` does
+    it — the handler takes its seat and its mana from the upkeep context, so
+    under any other trigger there is nothing to dispatch to and the line must
+    refuse rather than compile into a card that does nothing.
+    """
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "the pay-or-destroy prompt destroys the ability's own source", node=node
+        )
+    if event != "upkeep_self":
+        raise LoweringError(
+            f"no handler pairs {event!r} with a pay-or-destroy prompt", node=node
+        )
+    payload: dict[str, object] = {"mana": _full_mana_payload(node.cost)}
+    if node.damage_if_destroyed is not None:
+        payload["damage_if_destroyed"] = node.damage_if_destroyed
+    return (OracleInstruction("upkeep_pay_or_destroy_self", "", payload),)
+
+
 def _lower_sacrifice_unless_pay(node: ast.SacrificeUnlessPay) -> tuple[OracleInstruction, ...]:
     """"Sacrifice this <permanent> unless you pay <cost>."
 

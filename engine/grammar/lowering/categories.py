@@ -184,6 +184,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_matching_permanent": "zones",
     "upkeep_pay_or_sacrifice_enchantment": "upkeep",
     "upkeep_pay_or_sacrifice_self": "upkeep",
+    # The destroy twin (Cosmic Horror). Same family: it is the upkeep's
+    # pay-or-consequence prompt, and what the consequence is does not change
+    # which registry dispatches it.
+    "upkeep_pay_or_destroy_self": "upkeep",
     "upkeep_pay_to_untap_self": "upkeep",
     "discard_target_cards": "zones",
     # The controller's own chosen discard (Jeskai Elder's if-you-do branch).

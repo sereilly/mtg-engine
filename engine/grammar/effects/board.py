@@ -182,6 +182,15 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     # loudly instead of being destroyed a step early.
     delay = "end_of_combat" if stream.accept_phrase("at", "end", "of", "combat") else ""
 
+    # "… unless you pay {3}{B}{B}{B}" (Cosmic Horror) — the destroy twin of the
+    # sacrifice tail below, and read here for the same reason: the cost is the
+    # alternative to the destruction, not a second sentence, so a line that
+    # left it unconsumed would be destroyed unconditionally.
+    mark = stream.mark()
+    if stream.accept_phrase("unless", "you", "pay"):
+        return ast.DestroyUnlessPay(subject, _parse_mana_payment(stream))
+    stream.reset(mark)
+
     no_regen = False
     mark = stream.mark()
     stream.accept_punct(".", ",")

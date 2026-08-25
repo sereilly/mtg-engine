@@ -239,6 +239,27 @@ class SacrificeUnlessPay:
 
 
 @dataclass(frozen=True)
+class DestroyUnlessPay:
+    """"Destroy this creature unless you pay {3}{B}{B}{B}. If this creature is
+    destroyed this way, it deals 7 damage to you." (Cosmic Horror.)
+
+    The destroy twin of :class:`SacrificeUnlessPay`, and a separate node rather
+    than a flag on it because the two are different events: a sacrifice is not
+    a destruction (CR 701.16b), so regeneration and indestructible answer the
+    one and not the other — which is exactly what the printed rider is asking
+    about.
+
+    ``damage_if_destroyed`` is that rider, folded in by ``riders.py`` from the
+    sentence after it. None means the card printed none; the number is data on
+    the same node because the consequence is *conditional on the destroy having
+    happened*, and only whatever performs the destroy knows whether it did.
+    """
+    subject: Recipient
+    cost: ManaCost
+    damage_if_destroyed: int | None = None
+
+
+@dataclass(frozen=True)
 class SacrificeExpansionPermanents:
     """``Each nontoken permanent with a name originally printed in the <Set>
     expansion is sacrificed by its controller.`` (Golgothian Sylex.)
