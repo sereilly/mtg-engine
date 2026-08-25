@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 88.3% | 88.3% | 60.8% | 66 |
 | 3ED | 296 | 389 | 81.7% | 80.7% | 45.2% | 159 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 59.9% | 55.5% | 30.2% | 118 |
+| LEG *(measured)* | 310 | 431 | 60.1% | 55.7% | 30.2% | 118 |
 | **All (shipped)** | **1618** | **2286** | **82.1%** | **81.1%** | **48.4%** | **963** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -50,10 +50,10 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 4 | 1 | expected 'that' |  |
 | 4 | 2 | expected 'your' |  |
 | 4 | 2 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
-| 4 | 4 | unrecognized "can't be" restriction |  |
 | 3 | 2 | expected a permanent to put counters on |  |
 | 3 | 2 | expected a destination zone after 'return' |  |
 | 3 | 3 | no return handler honours this restriction |  |
+| 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | expected something to destroy |  |
 | 2 | 1 | expected something to shield |  |

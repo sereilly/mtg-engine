@@ -1485,3 +1485,61 @@ a rider on this one.
 **Numbers.** LEG 192 → 194 of 310 (61.9% → 62.6%); LEG parse 59.4% → 59.9%,
 lowers 55.0% → 55.5%, executes 29.7% → 30.2%. Shipped pool unchanged at 734/734.
 Suite 7,158 → 7,163, full run green with every `--check`; no hooks added.
+
+## LEG round 18: a narrowed shroud, and two clauses that had to stay two
+
+*(2026-08-25.)* Bartel Runeaxe and Anti-Magic Aura. Both print "can't be the
+target of …", and the class of spell is payload — Bartel names Aura spells,
+Anti-Magic Aura names every spell, and the difference is one printed word.
+
+**Not shroud with a filter bolted on.** Shroud (CR 702.18) stops every spell
+*and* every ability; these stop one class of spell. `auras.py` already had the
+sibling for the other half — Artifact Ward's "can't be the target of abilities
+from artifact sources" — and CR 115.6 lets a card print either without the
+other, so neither may answer for both. `engine/target_immunity.py` is the new
+table, read by `Game._can_be_targeted`, which is the one predicate the cast
+gate, the picker and the AI all reach.
+
+**It is the mirror of a file that already existed, and I nearly lost that file
+to find out.** `engine/target_restrictions.py` is what a *spell* prints about
+its own targeting ("You can't choose an untapped creature as this spell's
+target"); this is what a *permanent* prints about being aimed at. I wrote the
+new module straight over it before checking the name was free, and only an
+`ImportError` from `casting.py` — which imports `forbidden_target` — surfaced
+it. Restored from git, renamed, and the two modules now open by naming each
+other, because the pair is genuinely confusable.
+
+**The two clauses on Anti-Magic Aura had to stay two rules.** "…can't be the
+target of spells **and** can't be enchanted by other Auras" is one line, and the
+second half prints no subject of its own. An Aura *spell* targets, so the first
+clause already stops one being cast — but CR 303.4c makes an Aura already
+attached illegal "as defined by its enchant ability **and other applicable
+effects**", and 704.5m bins it. Only the second clause reaches that, and only a
+sweep enforces it: Holy Strength on the creature was never targeted by anything.
+So the reader splits the conjunction, carries the subject forward, and claims a
+line only when it implements *every* clause — a card pairing one of these with a
+sentence nothing reads stays unsupported rather than losing half its text.
+
+The printed word "other" is load-bearing in the same place: without it
+Anti-Magic Aura makes its own attachment illegal and the sweep bins it the turn
+it lands, which is why the predicate takes the Aura asking.
+
+**A gate and a runtime reader can normalize differently.** Bartel's line names
+the card rather than saying "this creature", and the support gate collapses that
+through `oracle._restriction_line` while the first runtime reader did not — so
+the card compiled supported and protected nobody. Both go through the one
+collapser now. The probe caught it; nothing else could have.
+
+**Flagged, not taken.** Tetsuo Umezawa prints the same protection and is still
+unsupported: its ability says "destroy target **tapped or blocking** creature",
+and the noun parser's state-adjective union is hardcoded to the
+attacking-or-blocking pair (a fused `attacking_or_blocking` payload key). That
+is round 15's colour lesson again — a printed *or* is a union — and wants the
+same treatment across four consumers. Wall of Shadows needs a spell to be asked
+what it *can* target, which nothing models.
+
+**Numbers.** LEG 194 → 196 of 310 (62.6% → 63.2%); LEG parse 59.9% → 60.1%,
+lowers 55.5% → 55.7%, executes flat at 30.2% — both cards are enforced by
+derivation rather than by an instruction, which is what "executes" counts.
+Shipped pool unchanged at 734/734. Suite 7,163 → 7,169, full run green with
+every `--check`; no hooks added.
