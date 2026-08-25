@@ -20,11 +20,11 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | LEB | 292 | 389 | 80.5% | 79.7% | 43.4% | 155 |
 | 2ED | 292 | 389 | 80.5% | 79.7% | 43.4% | 155 |
 | ARN | 78 | 108 | 69.4% | 64.8% | 42.6% | 37 |
-| ATQ | 85 | 120 | 87.5% | 87.5% | 60.0% | 65 |
-| 3ED | 296 | 389 | 81.5% | 80.5% | 45.0% | 158 |
+| ATQ | 85 | 120 | 88.3% | 88.3% | 60.8% | 66 |
+| 3ED | 296 | 389 | 81.7% | 80.7% | 45.2% | 159 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 58.5% | 53.8% | 28.5% | 112 |
-| **All (shipped)** | **1618** | **2286** | **82.0%** | **81.1%** | **48.3%** | **961** |
+| LEG *(measured)* | 310 | 431 | 58.9% | 54.3% | 29.0% | 114 |
+| **All (shipped)** | **1618** | **2286** | **82.1%** | **81.1%** | **48.4%** | **963** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -34,15 +34,15 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 230 | 122 | expected a subject |  |
+| 229 | 121 | expected a subject |  |
 | 125 | 55 | unrecognized effect verb |  |
 | 74 | 50 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
-| 12 | 7 | expected 'the number of' in a where-clause |  |
 | 12 | 7 | expected a keyword ability |  |
 | 10 | 7 | expected 'a' |  |
 | 10 | 6 | a conditional static bonus is derived by engine/static_bonuses.py |  |
+| 9 | 5 | expected 'the number of' in a where-clause |  |
 | 9 | 4 | expected a colour or a creature body after 'becomes' |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 6 | 3 | expected a quantity |  |
@@ -62,7 +62,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 ## Cards executing through the grammar
 
-961 cards, 1105 lines.
+963 cards, 1107 lines.
 
 - **Acid Rain**
   - `Destroy all Forests.`
@@ -1547,6 +1547,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever enchanted creature becomes tapped, put a -0/-2 counter on it.`
 - **Spirit of Malevolence**
   - `When this creature dies, each opponent loses 1 life and you gain 1 life.`
+- **Spiritual Sanctuary**
+  - `At the beginning of each player's upkeep, if that player controls a Plains, they gain 1 life.`
 - **Sporeweb Weaver**
   - `Whenever this creature is dealt damage, you gain 1 life and create a 1/1 green Saproling creature token.`
 - **Staff of Zegon**
@@ -1563,6 +1565,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Destroy target land.`
 - **Storm Caller**
   - `When this creature enters, it deals 2 damage to each opponent.`
+- **Storm World**
+  - `At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is 4 minus the number of cards in their hand.`
 - **Stormwing Entity**
   - `When this creature enters, scry 2.`
 - **Stream of Life**
@@ -1653,6 +1657,9 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
+- **The Rack**
+  - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is 3 minus the number of cards in their hand.`
+  - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is 3 minus the number of cards in their hand.`
 - **The Wretched**
   - `At end of combat, gain control of all creatures blocking this creature for as long as you control this creature.`
 - **Thicket Basilisk**

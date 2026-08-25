@@ -1247,3 +1247,74 @@ removing it flips an unknown set of cards and wants its own differential.
 executes 27.1% → 28.5%. Shipped by-catch: ALL lowers 80.8% → 81.1%, executes
 48.1% → 48.3% — the sweeps and the enchanted-tap claim shipped sentences.
 Suite 7,105 → 7,134, full run green with every `--check`; zero hooks added.
+
+## LEG round 14: a threshold that was a number in a phrase, and a pronoun with no referent
+
+*(2026-08-25.)* Two cards — Spiritual Sanctuary and Storm World — chosen
+because neither gap was about the card. Both print "at the beginning of each
+player's upkeep, … that player …", and what stopped them was shared with a
+card that already ships.
+
+**The Rack was a card hook because its number was 3.** Black Vise's "the
+number of cards in their hand minus 4" was a `_BOARD_COUNTS` phrase with the
+`4` spelled into the token list, so the threshold was part of the *match*
+rather than data. The Rack prints the same arithmetic in the mirror order with
+a different number, matched nothing, and had been carried by a name-keyed
+entry in `card_hooks.py` — which is `land_animation.py`'s false-negative
+failure in a second place, and exactly the entry bar that file states: a
+second card shared the shape. The phrase now carries a `NUMBER_SLOT` that
+captures the constant into `BoardCount.base`, both printed orders are rows,
+and the hook is **deleted**. The deficit branch behind it had been live in
+`upkeep_effects.py` since Black Vise landed with nothing in the grammar able
+to reach it.
+
+**"That player" was resolvable in the recipient and silently wrong in the
+condition.** Spiritual Sanctuary compiled the moment "they" became a player
+pronoun (`nouns.py` had read "they control" as `that_player` since Antiquities;
+`references.py` had never heard the bare word). It then did the wrong thing
+twice, and each half looked right while the other was being read. The gain
+went through `context.target`, which on the controller's *own* upkeep is the
+opponent — right on every other seat's upkeep, so a two-player test that
+starts with the opponent's passes. And `who: "that_player"` reached
+`evaluate_condition`'s fallback, which scans **every** player: the card asked
+"does anybody control a Plains", found its controller's, and paid life on an
+upkeep whose player controlled none.
+
+Both halves are one seam now. `_EVENT_SUBJECT_PLAYERS` is the table of trigger
+conditions whose subject *is* a player — a sibling of
+`_EVENT_SUBJECT_CONTROLLERS` rather than more entries in it, because that one
+answers "the controller of the object the event was about" and no upkeep fire
+site stamps its key. The ordinary (non-registry) upkeep path freezes the seat
+(CR 603.10) and both readers take it from there. A "that player" under a
+trigger *not* in the table now refuses the line instead of resolving against
+whatever is nearest, which is what the round was really buying: only Spiritual
+Sanctuary produced that condition in the whole pool, so the fallback was a
+loaded gun with nothing yet pointed at it.
+
+**The size guard fired, and the cut was already drawn.** `lowering/_common.py`
+crossed 1,000 lines on this round's comments. `_events.py` splits out the
+tables keyed by **trigger-condition kind** — what the firing event froze, for a
+back-reference the sentence cannot resolve on its own — leaving `_common` as
+what it says it is, the shape a payload takes. Six families read something
+there, so it is named beside `_common` in the layering guard's `shared` tuple
+rather than being a family.
+
+**Flagged, not taken.** Storm Seeker ("deals damage to target player equal to
+the number of cards in that player's hand") gets past the self-reference and
+dies on "unconsumed text": an `equal to <count>` tail after a damage clause is
+a different production from the `where X is` trailer, and wants its own round.
+
+**Numbers.** LEG 188 → 190 of 310 (60.6% → 61.3%); LEG parse 58.5% → 58.9%,
+lowers 53.8% → 54.3%, executes 28.5% → 29.0%. Shipped by-catch is the hook
+deletion showing up as grammar credit: ATQ 87.5% → 88.3% parsed *and* lowered,
+3ED 81.5% → 81.7%, ALL 82.0% → 82.1% parsed and 48.3% → 48.4% executed. Hook
+reliance **falls**: 83 → 82 of 734 supported cards (11.3% → 11.2%), 90 → 89
+entries, 12.3 → 12.1 per 100 — a ceiling lowered rather than raised. Suite
+7,134 → 7,145, full run green with every `--check`.
+
+**A note on the ratchet diff.** `scripts/grammar_ratchet.json` moved more than
+this round earned: its floors were behind the committed
+`GRAMMAR_COVERAGE.md` at HEAD (ARN parse read 67.6 against the tracker's 69.4),
+so round 13's gains were re-accepted alongside these. Regenerating the tracker
+and accepting the ratchet are two steps, and only the first is in CI's
+freshness check — worth doing both at a round's end.
