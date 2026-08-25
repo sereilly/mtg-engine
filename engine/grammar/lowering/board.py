@@ -114,6 +114,29 @@ def _lower_destroy(
                 "a destroy sweep over a source relation stays with its card "
                 "hook until the probe review takes it", node=node,
             )
+        # "Destroy all **black** creatures." (Cleanse.) / "Destroy all
+        # **nonblack** creatures." (Hellfire.) The type-keyed sweeps below take
+        # an empty payload and read their scope off their own kind, so every
+        # other word of the noun phrase is a key nothing would carry — and a
+        # dropped colour here is not a card that does less, it is a card that
+        # destroys the whole board. Routed to the filtered sweep instead, which
+        # is the same handler "Destroy all Equipment attached to that creature"
+        # already uses; refused when the narrowing is one the matcher cannot
+        # test, for the reason `object_only_filter` exists.
+        described = _filter_payload(filt)
+        narrowing = {
+            key: value for key, value in described.items()
+            if key not in ("type_filter", "type_filter_all")
+        }
+        if narrowing:
+            if object_only_filter(described) is None:
+                raise LoweringError("no sweep handler for this narrowing", node=node)
+            narrowed_payload = dict(described)
+            if node.no_regen:
+                narrowed_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_all_matching", "", narrowed_payload),
+            )
         kind = _DESTROY_ALL_KINDS.get(tuple(sorted(filt.card_types)))
         if kind is None:
             raise LoweringError("no sweep handler for this destroy scope", node=node)

@@ -72,6 +72,34 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         damage = max(0, source_permanent.effective_power) if source_permanent else 0
     else:
         damage = resolve_amount(instruction.payload.get("amount", 0), x_value)
+    # "…deals **X plus 3** damage to you" (Hellfire). The printed constant, kept
+    # off the amount so the where-clause in front of it still says what X is.
+    # Added after every branch above rather than inside one, because the sum is
+    # a property of the printed quantity and not of where its left half came
+    # from.
+    damage = max(0, damage + int(instruction.payload.get("amount_bonus", 0) or 0))
+    def _record_and_log(dealt: int, face) -> None:
+        """What a multi-seat damage loop does with each seat's result.
+
+        The *sum* is recorded, because a sweep's back-reference is about the
+        whole effect: "You gain life equal to the damage dealt this way"
+        (Syphon Soul) means every point of it, and in a free-for-all that is
+        three events rather than one. Recorded at all because the category
+        table names `deal_damage` a producer of `damage_dealt` — the loops
+        never wrote the key, so the second half of that sentence read a zero
+        and Syphon Soul would have gained no life while reporting itself
+        resolved.
+
+        Nothing is logged for zero: CR 120.8 makes a source that would deal 0
+        damage deal none at all, so a line about it is a line about an event
+        that did not happen.
+        """
+        context.results["damage_dealt"] = (
+            int(context.results.get("damage_dealt", 0) or 0) + max(0, int(dealt))
+        )
+        if dealt:
+            game.log.append(f"{card.name} dealt {dealt} damage to {face.name}")
+
     target_perm_idx = context.target_permanent_index
     # "…deals 6 damage to each of **up to two** target creatures and/or
     # planeswalkers." (Volcanic Salvo.) The several-targets description says a
@@ -130,6 +158,24 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # same "recipient" key target_gains_life has always used. Without it, "deal
     # damage and also damage yourself" would need its own fused instruction kind
     # (which is exactly what deal_damage_and_self_damage was).
+    if instruction.payload.get("recipient") == "source":
+        # "…and 3 damage to itself" (Psionic Entity). The ability's own source,
+        # named by the clause rather than inferred from the absence of a target
+        # index — the second half of a two-clause damage sentence resolves with
+        # the first half's target still in the context, so an inference would
+        # deal this damage to whatever the player pointed at.
+        #
+        # A source that has already left the battlefield takes nothing (CR
+        # 608.2b's spirit: the object the effect names is gone), and says so
+        # rather than falling through to a face.
+        if source_permanent is None or not game.is_on_battlefield(source_permanent):
+            game.log.append(f"{card.name}: its source is gone, no damage to itself")
+            return True, "resolved"
+        game._mark_damage_on_permanent(
+            source_permanent, damage, source=source_permanent, asks=True,
+            then=_damage_reporter(game, card, source_permanent),
+        )
+        return True, "resolved"
     if instruction.payload.get("recipient") == "caster":
         def _report(dealt: int) -> None:
             context.results["damage_dealt"] = dealt
@@ -195,9 +241,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             face = game.players[player_index]
             game._deal_damage_to_player(
                 face, damage, source=source_permanent or card, asks=True,
-                then=lambda dealt, face=face: dealt and game.log.append(
-                    f"{card.name} dealt {dealt} damage to {face.name}"
-                ),
+                then=lambda dealt, face=face: _record_and_log(dealt, face),
             )
 
         run_resumable(
@@ -214,9 +258,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             face = game.players[opponent_index]
             game._deal_damage_to_player(
                 face, damage, source=source_permanent or card, asks=True,
-                then=lambda dealt, face=face: dealt and game.log.append(
-                    f"{card.name} dealt {dealt} damage to {face.name}"
-                ),
+                then=lambda dealt, face=face: _record_and_log(dealt, face),
             )
 
         run_resumable(game, game.opponents_of(game.players.index(caster)), _hit_opponent)

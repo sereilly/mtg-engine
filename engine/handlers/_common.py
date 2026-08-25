@@ -63,6 +63,15 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
     # rather than a count of a set, so it is answered here, where the context
     # knows which object the sentence named. `evaluate_count` is owner-scoped
     # and could not: a mana value belongs to a permanent, not to a player.
+    # "…where X is the number of creatures that **died this way**" (Hellfire).
+    # The count is one earlier step's result rather than anything on a board, so
+    # it is read out of the resolution scratchpad — the same place "you gain
+    # that much life" reads. `evaluate_count` could not answer it: it scans a
+    # zone for a set that, by the time this is asked, is precisely the set that
+    # is no longer there.
+    back_reference = spec.get("back_reference")
+    if back_reference is not None:
+        return max(0, int(context.results.get(back_reference, 0) or 0))
     named = spec.get("object_mana_value")
     if named == "triggering_spell":
         # The spell the trigger's condition bound, carried on the event by the
@@ -84,13 +93,19 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
     return evaluate_count(game, owner, spec, exclude=context.source_permanent)
 
 
-def _halve(total: int, spec: dict) -> int:
-    """*total*, halved and rounded if the spec says to.
+def _scaled(total: int, spec: dict) -> int:
+    """*total*, multiplied and halved as the spec says.
 
     "Round up **each time**" (Peer into the Abyss) is per calculation rather than
     once over the sentence, which is why the rounding is a property of each
-    computed spec instead of the card.
+    computed spec instead of the card — and the multiplier ("twice the number of
+    white creatures that player controls", Jovial Evil) rides the same spec for
+    the same reason. One place applies both, so every aggregate below scales
+    without knowing it can: a factor honoured at one of the six return sites and
+    forgotten at the other five is the dropped-rider bug with an arithmetic face.
     """
+    multiplier = int(spec.get("multiplier", 1) or 1)
+    total = total * multiplier
     rounding = spec.get("half")
     if rounding is None:
         return total
@@ -132,7 +147,7 @@ def evaluate_count(
     # name with no computation never reaches here.
     board_count = spec.get("board_count")
     if board_count is not None:
-        return _halve(int(owner.life) if board_count == "their_life" else 0, spec)
+        return _scaled(int(owner.life) if board_count == "their_life" else 0, spec)
     filt = dict(spec.get("filter") or {})
     aggregate = spec.get("aggregate", "count")
     zone = spec.get("zone", "battlefield")
@@ -150,7 +165,7 @@ def evaluate_count(
             if perm is not skip and permanent_matches_filter(perm, filt)
         ]
         if aggregate == "greatest_power":
-            return _halve(max((perm.effective_power for perm in matched), default=0), spec)
+            return _scaled(max((perm.effective_power for perm in matched), default=0), spec)
         if aggregate == "distinct_colors":
             # "for each color among permanents you control" (Chromatic Orrery).
             # Through the layer-aware accessor, because a permanent's colour is
@@ -160,8 +175,8 @@ def evaluate_count(
             seen: set[str] = set()
             for perm in matched:
                 seen.update(permanent_effective_colors(perm))
-            return _halve(len(seen), spec)
-        return _halve(len(matched), spec)
+            return _scaled(len(seen), spec)
+        return _scaled(len(matched), spec)
     cards = getattr(owner, zone, None)
     if cards is None:
         return 0
@@ -172,10 +187,10 @@ def evaluate_count(
         # creature card with a characteristic-defining power has none here
         # either, which is CR 604.3's own answer: its P/T is 0 in every zone but
         # the battlefield.
-        return _halve(
+        return _scaled(
             max((_printed_power(card) for card in matched_cards), default=0), spec
         )
-    return _halve(len(matched_cards), spec)
+    return _scaled(len(matched_cards), spec)
 
 
 def _printed_power(card) -> int:

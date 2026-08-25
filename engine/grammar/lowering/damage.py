@@ -478,6 +478,10 @@ def _lower_damage(
     # number is the firing event's, not this effect's, so it arrives as a
     # trigger-context key rather than as an amount — the same two channels
     # `_back_reference_payload` decides between everywhere else.
+    # "…deals **X plus 3** damage" (Hellfire): the printed constant beside the
+    # quantity. Zero for every other shape, and declared here rather than in the
+    # branch that can carry one so the payload below never reads it unset.
+    bonus = 0
     if isinstance(node.amount, ast.ThatMuch):
         back_reference = _back_reference_payload(node.amount, produced, event)
         amount: int | str = 0
@@ -490,14 +494,27 @@ def _lower_damage(
         amount = 0
     else:
         back_reference = {}
-        amount = _amount_payload(node.amount)
+        printed = node.amount
+        # "…deals **X plus 3** damage to you" (Hellfire). The constant rides its
+        # own key rather than being folded into the where-clause's count: the
+        # clause says what X *is*, and adding the 3 there would make the card's
+        # own X mean a number it never printed — visible the moment a second
+        # sentence reads that X. `deal_damage` adds the two at resolution.
+        if isinstance(printed, ast.Plus):
+            if not isinstance(printed.right, ast.Fixed):
+                raise LoweringError(
+                    "the printed addend on damage has to be a number", node=node
+                )
+            bonus = printed.right.value
+            printed = printed.left
+        amount = _amount_payload(printed)
 
     sweep = _sweep_kind(node.recipients)
     if sweep is not None:
         # The sweep handlers take a plain number. A back-reference reaching one
         # would be dropped here and dealt as zero — visible nowhere, since the
         # card would still report supported — so it refuses instead.
-        if back_reference:
+        if back_reference or bonus:
             raise LoweringError(
                 "a board sweep cannot carry a computed damage amount", node=node
             )
@@ -510,6 +527,8 @@ def _lower_damage(
     payload: dict[str, object] = (
         dict(back_reference) if back_reference else {"amount": amount}
     )
+    if bonus:
+        payload["amount_bonus"] = bonus
     if node.riders.no_regen:
         payload["no_regen"] = True
     if node.riders.exile_if_dies:
@@ -532,6 +551,19 @@ def _lower_damage(
     # already reads its "recipient" key.
     if _is_you(recipient):
         payload["recipient"] = "caster"
+    elif (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier == "this"
+        and _is_source(recipient)
+    ):
+        # "…and 3 damage to itself" (Psionic Entity). Recorded as a recipient
+        # rather than left to the fall-through, for exactly the reason Detonate
+        # gave the clause about a player one: this instruction is the second
+        # step of a sentence whose first step targeted something, so the
+        # resolution context is still carrying that target's permanent index —
+        # and a bare `{"amount": 3}` reaches the same handler branch Lightning
+        # Bolt does and deals the self-damage to the *other* creature, silently.
+        payload["recipient"] = "source"
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind == "each_player":
         # "…deals damage … to each player" (Armageddon Clock). Its own recipient
         # rather than a fall-through: the kind used to be listed among the ones

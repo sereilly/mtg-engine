@@ -163,6 +163,14 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
         return ast.CountOf(filt)
 
     if stream.accept_phrase("damage", "dealt"):
+        # "…equal to the damage dealt **this way**" (Syphon Soul). "This way"
+        # says the number is the one *this effect* produced rather than any
+        # damage dealt elsewhere in the turn — which is exactly what the
+        # back-reference already means: `_back_reference_payload` resolves it
+        # against the steps of this same effect and refuses when no step
+        # produced one. So the words are consumed, not dropped: the reading
+        # they ask for is the only reading available.
+        stream.accept_phrase("this", "way")
         return ast.ThatMuch("damage_dealt")
 
     # "equal to its power" — a characteristic of the object the *preceding*

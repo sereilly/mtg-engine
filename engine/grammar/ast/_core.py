@@ -54,6 +54,25 @@ class CountOfDeaths:
 
 
 @dataclass(frozen=True)
+class CountOfDeathsThisWay:
+    """"the number of creatures that died **this way**" (Hellfire) — how many
+    objects the *preceding step of this same effect* destroyed.
+
+    A third reading of "the number of creatures" and its own node beside
+    :class:`CountOf` and :class:`CountOfDeaths` for the reason those two are
+    each other's: this one counts neither the board nor the turn's history but
+    one earlier step's result. Read as the plain filter it would count the
+    survivors — on Hellfire, exactly the creatures that did *not* die — and read
+    as the turn history it would fold in every unrelated death since untap.
+
+    The set is therefore a back-reference, and lowering refuses it unless a step
+    of the same effect actually recorded one: with no producer "this way" names
+    nothing, and a zero is a number the card never printed.
+    """
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class ColorsAmong:
     """"for each color among permanents you control" — how many *colours* the
     named objects have between them (Chromatic Orrery).
@@ -175,6 +194,26 @@ class Plus:
 
 
 @dataclass(frozen=True)
+class Times:
+    """``twice the number of white creatures that player controls`` (Jovial
+    Evil) — a printed quantity multiplied by a printed factor.
+
+    The mirror of :class:`Half`, and a node for the same reason :class:`Plus`
+    is one: the thing being scaled is usually not a number yet, so the
+    arithmetic cannot be folded at parse time. *factor* is payload — "twice"
+    and "three times" are one shape with one number changed, and spelling the 2
+    into the phrase would make every other multiple a non-match, which is the
+    false-negative the ``BoardCount`` docstring above records.
+
+    Every lowering written before it exists refuses it by default, which is the
+    union's standing guarantee for a new quantity: a scaled count read as a
+    plain one would deal half the damage the card prints.
+    """
+    factor: int
+    of: "Amount"
+
+
+@dataclass(frozen=True)
 class PowerOfSubject:
     """``the power of target creature blocking or blocked by this creature``
     (Sentinel) — one named object's power, read at resolution.
@@ -203,7 +242,7 @@ class CountersOnSource:
     kind: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject]
 
 
 # ---------------------------------------------------------------------------

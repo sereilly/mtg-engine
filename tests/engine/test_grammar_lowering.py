@@ -1798,7 +1798,15 @@ def test_a_where_x_count_on_another_players_permanents_refuses_the_line():
     owner. ``permanent_matches_filter`` does not test a controller, so admitting
     it would hand the key over to be silently ignored and count the wrong
     player's Mountains. Either way the card falls back visibly; only now it
-    explains itself."""
+    explains itself.
+
+    Round 20 moved the restriction to the axis a counter *can* read — whose
+    zone it scans — for the one sentence that names the player unambiguously:
+    "…to **target** opponent, where X is … that player controls" (Jovial Evil).
+    This line is the control on that. Its "that player" is the upkeep player,
+    chosen by nobody, and both spellings lower to the same ``recipient`` key —
+    so the admission is gated on the *picker's* description, which only a real
+    target has, and this line keeps refusing."""
     result = compile_line(
         "At the beginning of each player's upkeep, this enchantment deals X damage to "
         "that player, where X is the number of Mountains they control.",
@@ -1806,7 +1814,9 @@ def test_a_where_x_count_on_another_players_permanents_refuses_the_line():
     )
 
     assert not result.usable
-    assert result.lowering_error == "a count cannot be narrowed to the that_player's permanents"
+    assert result.lowering_error == (
+        "'that player' in a count with no player target to name"
+    )
 
 
 def test_karma_counts_swamps_through_the_dedicated_handler():
