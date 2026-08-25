@@ -79,6 +79,12 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
         amount: ast.Amount = ast.Fixed(0)
     else:
         amount = parse_amount(stream)
+        # "…deals **X plus 3** damage to you" (Hellfire). A printed sum, read
+        # here rather than folded to a number because the left half is usually
+        # not one yet — the same reason `effects/characteristics.py` reads
+        # "1 plus the number of …" into an `ast.Plus` instead of adding it up.
+        if stream.accept_word("plus"):
+            amount = ast.Plus(amount, parse_amount(stream))
     stream.expect_word("damage")
 
     if stream.accept_word("divided"):

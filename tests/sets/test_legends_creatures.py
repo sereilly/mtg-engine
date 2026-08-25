@@ -1492,3 +1492,52 @@ def test_tetsuo_umezawa_refuses_a_creature_in_neither_state(set_pool):
 
     assert not result.supported
     assert any(p.card.name == "Grizzly Bears" for p in game.players[1].battlefield)
+
+
+# ---------------------------------------------------------------------------
+# Psionic Entity (round 20) — "and 3 damage to **itself**"
+# ---------------------------------------------------------------------------
+
+
+def _psionic_board(set_pool, victims: list[Permanent]):
+    from tests.helpers import _nosick
+
+    entity = _nosick(Permanent(card=set_pool("LEG")["Psionic Entity"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[entity], life=20),
+        PlayerState(name="P2", battlefield=list(victims), life=20),
+    ])
+    game.start_turn(0)
+    return game, entity
+
+
+def test_psionic_entity_damages_the_face_and_kills_itself(set_pool):
+    """Both clauses run: 2 to the chosen target, 3 to the Entity — which is a
+    2/2, so the self-damage is lethal (CR 704.5g)."""
+    game, entity = _psionic_board(set_pool, [])
+
+    result = game.activate_permanent_ability(0, "Psionic Entity", target_player_index=1)
+
+    assert result.supported, result.details
+    assert game.players[1].life == 18
+    assert not any(p.card.name == "Psionic Entity" for p in game.players[0].battlefield)
+
+
+def test_psionic_entitys_self_damage_does_not_land_on_its_own_target(set_pool):
+    """The Detonate bug class: the second clause resolves with the first
+    clause's target still in the resolution context, so a self-damage with no
+    named recipient would be dealt to the chosen creature — 5 damage to one
+    creature and none to the Entity."""
+    victim = Permanent(card=set_pool("LEA")["Hill Giant"])   # 3/3, survives 2
+    game, entity = _psionic_board(set_pool, [victim])
+
+    result = game.activate_permanent_ability(
+        0, "Psionic Entity", target_player_index=1, target_permanent_index=0
+    )
+
+    assert result.supported, result.details
+    # The Bears took exactly 2 and lived; the Entity took its own 3 and died.
+    assert any(p.card.name == "Hill Giant" for p in game.players[1].battlefield)
+    assert victim.damage_marked == 2
+    assert not any(p.card.name == "Psionic Entity" for p in game.players[0].battlefield)
+    assert game.players[1].life == 20

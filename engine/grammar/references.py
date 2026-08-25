@@ -39,6 +39,16 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         return ast.PlayerRef("each_player")
     if stream.accept_phrase("each", "opponent"):
         return ast.PlayerRef("each_opponent")
+    # "…deals 2 damage to **each other player**" (Syphon Soul). CR 102.2/102.3:
+    # a player's opponents are every player not on their team, and this engine
+    # has no teams (the team rules are `EXCLUDED` in `rules_progress.py`
+    # because the mechanic does not exist here) — so "each other player" and
+    # "each opponent" name the same seats, in a duel and in a free-for-all
+    # alike. An alias rather than a fourth referent, the way "they" is an alias
+    # for "that player" below: a second kind would be a second answer that
+    # every recipient table, picker and handler would then have to learn.
+    if stream.accept_phrase("each", "other", "player"):
+        return ast.PlayerRef("each_opponent")
     if stream.accept_phrase("target", "player"):
         return ast.PlayerRef("target_player")
     if stream.accept_phrase("target", "opponent"):
@@ -269,6 +279,21 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     if stream.at_word("it"):
         stream.advance()
         return ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
+    # "…and 3 damage to **itself**" (Psionic Entity). The same referent the
+    # SELF token below names — the object the ability is on — reached by the
+    # reflexive pronoun instead of by the printed name. One node for both, so a
+    # card that spells its own name and a card that says "itself" mean the same
+    # thing to every consumer; a second quantifier would be a second answer to
+    # "which object is this sentence about?".
+    #
+    # Not folded into the bare "it" above: that pronoun back-refers to whatever
+    # object the sentence already named and `parser.py` rebinds it against the
+    # trigger's event subject, while "itself" is reflexive and can only be the
+    # source (CR 109.2 — a self-reference in an ability names the object it is
+    # on).
+    if stream.at_word("itself"):
+        stream.advance()
+        return ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
     # The card naming itself mid-sentence ("put a loyalty counter on Garruk") —
     # the lexer already collapsed the name to one SELF token.
     token = stream.peek()

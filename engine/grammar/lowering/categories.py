@@ -348,6 +348,16 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
 # `lower.py`) read it to thread what each step records forward.
 _PRODUCES: dict[str, str] = {
     "deal_damage": "damage_dealt",
+    # "Destroy all nonblack creatures. … where X is the number of creatures
+    # that **died this way**." (Hellfire.) A sweep records how many permanents
+    # it actually destroyed, which is the only place a later clause can read
+    # that set from — by then the board no longer holds it.
+    "destroy_all_creatures": "destroyed_this_way",
+    "destroy_all_artifacts": "destroyed_this_way",
+    "destroy_all_enchantments": "destroyed_this_way",
+    "destroy_all_lands": "destroyed_this_way",
+    "destroy_all_artifacts_creatures_enchantments": "destroyed_this_way",
+    "destroy_all_matching": "destroyed_this_way",
     # CR 705.2: only the player who flipped wins or loses that flip, and both
     # "if you win" and "if you lose" read the one result — so the flip records
     # it and the conditionals after it read the record, rather than each

@@ -116,10 +116,16 @@ def _sweep_by_type(
             for name in types
         )
 
+    destroyed = 0
     for player in game.players:
-        game._destroy_swept_permanents(
+        destroyed += len(game._destroy_swept_permanents(
             player, _matches, allow_regeneration=regeneration_allowed
-        )
+        ))
+    # "…where X is the number of creatures that **died this way**" (Hellfire).
+    # What actually died, not what the sweep aimed at: a regenerated or
+    # indestructible permanent is still there, and CR 701.15a is explicit that
+    # a replaced destruction is not a death.
+    context.results["destroyed_this_way"] = destroyed
     game.log.append(f"All {', '.join(types)}s were destroyed")
     return True, "resolved"
 
@@ -203,17 +209,22 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         and (host is None or perm.metadata.get("attached_to") is host)
     ]
     if not matched:
+        context.results["destroyed_this_way"] = 0
         game.log.append(f"{context.card.name}: nothing to destroy")
         return True, "resolved"
+    destroyed = 0
     for perm in matched:
         seat = game.controller_index_of(perm)
         if seat is None:
             continue
-        game._destroy_swept_permanents(
+        destroyed += len(game._destroy_swept_permanents(
             game.players[seat],
             lambda candidate, target=perm: candidate is target,
             allow_regeneration=not instruction.payload.get("bypass_regeneration"),
-        )
+        ))
+    # See `_sweep_by_type`: the record is what died, which is what a later
+    # "that died this way" counts.
+    context.results["destroyed_this_way"] = destroyed
     game.log.append(
         f"{context.card.name} destroyed " + ", ".join(p.card.name for p in matched)
     )

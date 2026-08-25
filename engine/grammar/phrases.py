@@ -486,6 +486,52 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
     # no filter — read first because it does not open with "the".
     if stream.accept_phrase("its", "mana", "value"):
         return ast.ManaValueOfSubject()
+    # "…where X is **twice** the number of white creatures that player
+    # controls" (Jovial Evil). A multiplier in front of whatever definition
+    # follows, read here so it scales every one of them rather than only the
+    # count: "twice the greatest power among …" would mean the same thing and
+    # needs no second production. The factor is payload — see ``ast.Times``.
+    factor = _accept_multiplier(stream)
+    if factor is not None:
+        scaled = parse_where_x_definition_body(stream)
+        return ast.Times(factor, scaled)
+    return parse_where_x_definition_body(stream)
+
+
+#: What a printed multiplier word is worth. A table rather than a literal for
+#: the reason every other printed number in this file is payload: "twice" and
+#: "three times" are one shape, and a card printing the other one must not need
+#: a second production.
+_MULTIPLIER_WORDS: dict[str, int] = {"twice": 2}
+
+
+def _accept_multiplier(stream: TokenStream) -> int | None:
+    """``twice`` / ``three times`` in front of a quantity, or None.
+
+    Two spellings because English has two: a single word for 2 and an
+    ``<n> times`` phrase for everything above it. Both produce a factor, so
+    nothing downstream can tell which one the card printed.
+    """
+    word = stream.peek_word()
+    if word in _MULTIPLIER_WORDS:
+        stream.advance()
+        return _MULTIPLIER_WORDS[word]
+    mark = stream.mark()
+    if word in NUMBER_WORDS and stream.peek_word(1) == "times":
+        stream.advance(2)
+        return NUMBER_WORDS[word]
+    stream.reset(mark)
+    return None
+
+
+def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
+    """The definition itself, once any multiplier in front of it is consumed.
+
+    Split from :func:`parse_where_x_definition` so the multiplier scales every
+    alternative below rather than being wired into one of them; refuses, never
+    returns None, because by here "where X is" has been read and the clause owes
+    a definition.
+    """
     stream.accept_word("the")
     # Three aggregates over one noun phrase, and the words are what tell them
     # apart: "the number of" counts the objects, "the greatest power among"
@@ -495,6 +541,12 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
     if not stream.accept_phrase("number", "of"):
         raise stream.error("expected 'the number of' in a where-clause")
     filt = parse_object_filter(stream)
+    # "…the number of creatures **that died this way**" (Hellfire). Neither the
+    # board nor the turn's history: the objects one earlier step of this same
+    # effect destroyed. Read before the turn-history spelling below because the
+    # two share their first two words and differ only in what follows them.
+    if stream.accept_phrase("that", "died", "this", "way"):
+        return ast.CountOfDeathsThisWay(filt)
     # "…the number of creatures **that died under your control this turn**"
     # (Liliana's Standard Bearer). A history, and the opposite set from the one
     # the bare filter names: these are exactly the creatures the battlefield no

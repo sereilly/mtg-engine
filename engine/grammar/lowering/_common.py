@@ -523,7 +523,9 @@ def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
     return spec
 
 
-def count_spec(filt: "ast.ObjectFilter", node, *, aggregate: str = "count") -> dict:
+def count_spec(
+    filt: "ast.ObjectFilter", node, *, aggregate: str = "count", multiplier: int = 1
+) -> dict:
     """What ``count_from_payload`` needs to take this count at resolution.
 
     One reader for both callers — the where-clause that *defines* an X and the
@@ -559,6 +561,14 @@ def count_spec(filt: "ast.ObjectFilter", node, *, aggregate: str = "count") -> d
     # existed is byte-identical.
     if aggregate != "count":
         spec["aggregate"] = aggregate
+    # "**Twice** the number of white creatures that player controls" (Jovial
+    # Evil). Carried on the spec rather than folded into whatever reads it,
+    # because the same spec is read by the resolution-time evaluator and by the
+    # continuous recompute — a factor applied in one of them would make the
+    # same printed count mean two numbers. Omitted at 1, for the reason the
+    # aggregate is: an untouched spec stays byte-identical.
+    if multiplier != 1:
+        spec["multiplier"] = multiplier
     return spec
 
 
