@@ -1318,3 +1318,68 @@ this round earned: its floors were behind the committed
 so round 13's gains were re-accepted alongside these. Regenerating the tracker
 and accepting the ratchet are two steps, and only the first is in CI's
 freshness check — worth doing both at a round's end.
+
+## LEG round 15: a kind that spelled its own narrowing, and the fire site it needed
+
+*(2026-08-25.)* Abomination and Aisling Leprechaun, and the round is mostly a
+deletion: one fused instruction kind, one bespoke ~90-line fire site, and a
+positional-read allowance.
+
+**`creature_blocks_or_blocked_by_nonwall` had the narrowing in its name.** The
+Basilisk cycle prints "Whenever this creature blocks or becomes blocked by a
+non-Wall creature, destroy that creature at end of combat", and the engine met
+it with a kind naming *non-Wall* and a fire site in
+`declare_blockers_step.py` that tested `victim.has_type("wall")` by hand.
+Abomination prints the identical sentence with "a green or white creature" and
+matched nothing; Aisling Leprechaun's says "a creature" and matched nothing.
+Same lesson as the land type in `combat_restrictions.py`, the P/T in
+`land_animation.py` and round 14's threshold, and by now the tell is the kind
+name itself.
+
+The condition is `creature_blocks_or_blocked_by`, and its noun phrase is
+delimited once by a new `_pair_subject` group that fans out into **both**
+halves' existing filter keys. That is the whole trick: English distributes the
+phrase over both verbs, the engine already had `blocked_filter` and
+`blocker_filter`, and the two general dispatchers already read them — Infernal
+Medusa prints the two halves as separate sentences and has always gone through
+them. So the joined sentence needed no new dispatcher at all, only its kind
+added to the two that exist, and `_fire_block_triggers` deleted. Positional
+battlefield reads in that module fall 18 → 16.
+
+**The delayed destroy was reading the wrong binding, and would have taken the
+recolour with it.** The two fire sites bind "that creature" differently: the
+becomes-blocked half makes it the stack item's target, the blocks half targets
+the *blocking creature itself* (Ydwen Efreet needs to find itself there) and
+puts the blocked attackers in `blocked_permanent_ids`. The old fire site hid
+this by pushing the victim as the target on both. `block_pair_permanents` is
+now the one reader of the difference, and both handlers go through it —
+otherwise Abomination destroys itself on the half where it blocks.
+
+**Aisling Leprechaun needed the fire site to stop being a destroy site.** Its
+effect is a recolour, so the binding travels as payload
+(`subject_from_trigger: "block_pair"`, beside `x_from_count` in
+`oracle_types.py`) rather than as a second instruction kind — which object an
+effect acts on is not a different effect, and fusing that in is what gave the
+old kind its name.
+
+**A dropped rider found on the way.** `ObjectFilter.to_payload` wrote
+`payload["color_filter"] = self.colors[0]` — every colour after the first
+silently discarded. Nothing exercised it because no noun phrase could produce
+two, so it sat waiting for exactly the parser change this round made. Colour
+disjunctions now read as a union (`any_colors`, demonstrated in
+`test_subject_filters.py` in both directions, because a matcher reading the
+list as AND passes the rejection row).
+
+**Flagged, not taken.** Infernal Medusa is *supported* with a hollow half: its
+"Whenever this creature blocks a creature" line lowers to nothing, because
+`_BLOCK_PAIR_EVENTS` is keyed on the event kind alone and cannot tell the
+narrowed spelling from the bare one — and the bare one binds no single creature
+(CR 509.3c/509.3d), so admitting the kind would destroy every attacker it
+blocked. Fixing it means threading the condition's *narrowing* into lowering,
+not just its kind. `--hollow-lines` already reports it; LEG carries 19.
+
+**Numbers.** LEG 190 → 192 of 310 (61.3% → 61.9%); LEG parse 58.9% → 59.4%,
+lowers 54.3% → 54.8%, executes 29.0% → 29.5%. Shipped pool unchanged at 734/734
+and its coverage flat — this round bought a measured set's cards and deleted
+shipped code rather than adding any. Suite 7,145 → 7,151, full run green with
+every `--check`; no hooks added, none removed.

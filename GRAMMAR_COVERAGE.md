@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 88.3% | 88.3% | 60.8% | 66 |
 | 3ED | 296 | 389 | 81.7% | 80.7% | 45.2% | 159 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 58.9% | 54.3% | 29.0% | 114 |
+| LEG *(measured)* | 310 | 431 | 59.4% | 54.8% | 29.5% | 116 |
 | **All (shipped)** | **1618** | **2286** | **82.1%** | **81.1%** | **48.4%** | **963** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,7 +34,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 229 | 121 | expected a subject |  |
+| 227 | 119 | expected a subject |  |
 | 125 | 55 | unrecognized effect verb |  |
 | 74 | 50 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -64,6 +64,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 963 cards, 1107 lines.
 
+- **Abomination**
+  - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
 - **Acid Rain**
   - `Destroy all Forests.`
 - **Active Volcano**
@@ -72,6 +74,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
 - **Adun Oakenshield**
   - `{B}{R}{G}, {T}: Return target creature card from your graveyard to your hand.`
+- **Aisling Leprechaun**
+  - `Whenever this creature blocks or becomes blocked by a creature, that creature becomes green. (This effect lasts indefinitely.)`
 - **Alabaster Potion**
   - `• Target player gains X life.`
   - `• Prevent the next X damage that would be dealt to any target this turn.`
