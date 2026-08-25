@@ -277,6 +277,13 @@ class ObjectFilter:
     # target activated ability" and "counter target triggered ability" are
     # different cards and the difference is exactly this tuple.
     ability_kinds: tuple[str, ...] = ()
+    # "…activated ability **from an artifact source**" (Rust, Ayesha Tanaka).
+    # A narrowing on the *permanent the ability came from*, which is the only
+    # thing about an ability on the stack there is to narrow by — it has no card
+    # and no type line of its own (CR 113.7a). Beside `ability_kinds` because it
+    # is the same object's other adjective, and a tuple because "an artifact or
+    # enchantment source" is the same sentence with one more word.
+    ability_source_types: tuple[str, ...] = ()
     # Whose zone, when *zone* names one ("from **your** graveyard"). "Return
     # target creature card from your graveyard" and "…from a graveyard" are
     # different cards, and the handlers only ever look in the caster's own

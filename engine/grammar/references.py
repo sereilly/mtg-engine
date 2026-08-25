@@ -71,8 +71,15 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         probe = stream.mark()
         stream.advance()
         noun = stream.peek_word()
+        # "…that **ability's** controller" (Ayesha Tanaka). An ability on the
+        # stack is an object with a controller (CR 113.7a) but no card, so the
+        # word is not in `_GENERIC_NOUNS` — that set is what a *noun phrase* may
+        # head, and admitting it there would let "an ability" be parsed as a set
+        # of objects the matcher cannot test.
         if noun is not None and (
-            _singular(noun) in CARD_TYPES or _singular(noun) in _GENERIC_NOUNS
+            _singular(noun) in CARD_TYPES
+            or _singular(noun) in _GENERIC_NOUNS
+            or _singular(noun) == "ability"
         ):
             stream.advance()
             if stream.accept_word("'s") and stream.accept_word("controller"):

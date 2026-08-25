@@ -31,7 +31,8 @@ from ...models import CardDefinition, Permanent
 from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
 from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer, run_resumable
-from ...mana_payment import plan_payment, untapped_mana_lands
+from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
+                            untapped_mana_lands)
 from ...search_filters import search_matches
 from ...subject_filters import subject_matches
 
@@ -1574,32 +1575,65 @@ class PendingChoicesMixin:
         if choice is not None:
             self._default_mana_payment(choice)
 
+    @staticmethod
+    def _mana_payment_cost(data: dict) -> dict[str, int]:
+        """The cost a pending payment owes, as a symbol dict.
+
+        A cost is a symbol dict everywhere in this engine (`engine/mana_payment.py`)
+        and this prompt was the last place holding a bare number, which is why
+        Ayesha Tanaka's "{W}" had no flow to arrive through. `amount` is still
+        written beside it for the wire, so the client keeps rendering a total.
+        """
+        cost = data.get("cost")
+        if isinstance(cost, dict) and cost:
+            return {k: int(v) for k, v in cost.items()}
+        return generic_cost(int(data.get("amount", 0)))
+
     def _default_mana_payment(self, choice: PendingChoice) -> None:
         controller = self.players[choice.player_index]
-        available = sum(controller.mana_pool.get(s, 0) for s in controller.mana_pool)
-        self._resolve_mana_payment(choice, available >= int(choice.data["amount"]))
+        cost = self._mana_payment_cost(choice.data)
+        # `lands=()` on purpose: this is the *non-interactive* default, and it
+        # spends only what is already floating. CR 605.3b would let a player
+        # tap lands to answer during resolution, and an interactive seat can —
+        # the prompt lists "tap" and "activate" among the actions that answer
+        # it. Closing that gap for the auto path is a change to what every
+        # seeded AI simulation does, so it is not smuggled in here.
+        self._resolve_mana_payment(
+            choice, plan_payment(controller.mana_pool, (), cost) is not None
+        )
 
     def _resolve_mana_payment(self, choice: PendingChoice, pay: bool) -> bool:
         controller = self.players[choice.player_index]
         data = choice.data
-        amount = int(data["amount"])
+        cost = self._mana_payment_cost(data)
         target = data.get("stack_item")
         counter_card = data.get("counter_card")
-        available = sum(controller.mana_pool.get(s, 0) for s in controller.mana_pool)
-        if pay and available >= amount:
-            remaining = amount
-            for sym in list(controller.mana_pool):
-                while remaining > 0 and controller.mana_pool.get(sym, 0) > 0:
-                    controller.mana_pool[sym] -= 1
-                    remaining -= 1
+        # Which symbols come out, not just how many: paying {W} by draining a
+        # red pip is what a bare count could not tell apart, and it is the
+        # difference between Ayesha Tanaka's ability working and working for
+        # everyone.
+        plan = plan_payment(controller.mana_pool, (), cost) if pay else None
+        if plan is not None:
+            for symbol, spent in plan.from_pool.items():
+                controller.mana_pool[symbol] = controller.mana_pool.get(symbol, 0) - spent
             name = target.card.name if target is not None else "the spell"
-            self.log.append(f"{controller.name} paid {{{amount}}}; {name} is not countered")
+            self.log.append(
+                f"{controller.name} paid {mana_cost_label(cost)}; {name} is not countered"
+            )
         else:
             # Declined or unable to pay: the spell is countered and Power Sink's rider
             # (tap all the controller's lands, drain their mana) applies.
             if target is not None and target in self.stack:
                 self.stack.remove(target)
-                if target.is_copy:
+                if data.get("countered_object") == "ability":
+                    # An ability on the stack has no card (CR 113.7a): removing
+                    # it from the stack is the whole of CR 701.5a for it, and
+                    # binning `target.card` would put the *source permanent's*
+                    # card in a graveyard it never left.
+                    self.log.append(
+                        f"{data['card_name']} countered {target.card.name}'s ability"
+                    )
+                elif target.is_copy:
                     # 704.5e: a countered copy of a spell ceases to exist.
                     self.log.append(f"{data['card_name']} countered {target.card.name} (copy), which ceases to exist")
                 else:

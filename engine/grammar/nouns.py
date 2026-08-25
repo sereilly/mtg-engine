@@ -239,6 +239,35 @@ def _accept_ability_noun(stream: TokenStream) -> tuple[str, ...]:
     return ()
 
 
+def _accept_ability_source(stream: TokenStream) -> tuple[str, ...]:
+    """``from an <card type> source`` after an ability noun, or () if absent.
+
+    The one adjective an ability on the stack can carry: it has no card and no
+    type line (CR 113.7a), so "artifact" here describes the *permanent the
+    ability came from*, not the ability. Consumed here rather than by the
+    adjective loop below for the same reason the ability noun returns early —
+    that loop asks questions of a card.
+
+    A word that is not a card type leaves the cursor where it was, so the line
+    fails full-token consumption and the card falls back, rather than the
+    narrowing being dropped and the counter reaching every ability.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("from"):
+        stream.reset(mark)
+        return ()
+    stream.accept_word("a", "an")
+    word = stream.peek_word()
+    if word is None or _singular(word) not in CARD_TYPES:
+        stream.reset(mark)
+        return ()
+    stream.advance()
+    if not stream.accept_word("source"):
+        stream.reset(mark)
+        return ()
+    return (_singular(word),)
+
+
 def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast.ObjectFilter:
     """Parse the noun phrase describing a set of objects.
 
@@ -289,7 +318,11 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     # further down collects would be a question with no object to ask it of.
     ability_kinds = _accept_ability_noun(stream)
     if ability_kinds:
-        return ast.ObjectFilter(zone="stack", ability_kinds=ability_kinds)
+        return ast.ObjectFilter(
+            zone="stack",
+            ability_kinds=ability_kinds,
+            ability_source_types=_accept_ability_source(stream),
+        )
 
     # --- self / enchanted references ------------------------------------
     if stream.at_word("this"):

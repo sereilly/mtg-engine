@@ -226,12 +226,27 @@ def _lower_counter_ability(
     """
     if node.subject.quantifier != "target":
         raise LoweringError("an ability is countered by targeting it", node=node)
-    return (
-        OracleInstruction(
-            "counter_stack_ability", "",
-            {"ability_kinds": tuple(node.subject.filter.ability_kinds)},
-        ),
-    )
+    payload: dict[str, object] = {
+        "ability_kinds": tuple(node.subject.filter.ability_kinds),
+    }
+    # "…from an artifact source" (Rust, Ayesha Tanaka). Payload for the reason
+    # the kinds above are: the handler tests it, because a counter that reached
+    # an ability from a creature when the card says artifact is countering
+    # something its controller could not have chosen.
+    if node.subject.filter.ability_source_types:
+        payload["source_card_types"] = list(node.subject.filter.ability_source_types)
+    # "…unless that ability's controller pays {W}" (Ayesha Tanaka). Carried as a
+    # symbol dict, which is what a cost is everywhere in this engine — the
+    # spell counter's `unless_pays_amount` beside it is a bare number and the
+    # reason a coloured cost had no flow to arrive through until now.
+    if node.unless_pays is not None:
+        cost = dict(node.unless_pays.pips)
+        if "X" in cost:
+            raise LoweringError(
+                "no ability counter sizes its payment from an X", node=node
+            )
+        payload["unless_pays_cost"] = cost
+    return (OracleInstruction("counter_stack_ability", "", payload),)
 
 
 def _lower_modal_head(node: ast.ModalNode) -> tuple[OracleInstruction, ...]:

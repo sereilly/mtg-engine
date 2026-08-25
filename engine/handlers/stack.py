@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
 from ..game_types import StackItem
+from ..mana_payment import total_pips
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -160,6 +161,41 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
         game.log.append(
             f"{card.name}: {chosen.card.name} is not "
             f"{' or '.join(wanted) if wanted else 'an'} ability, cannot counter"
+        )
+        return True, "resolved"
+    # "…from an **artifact** source" (Rust). The ability has no card of its own
+    # (CR 113.7a), so the type is asked of the permanent it came from — through
+    # `card_has_type`, the one reader of "does this card have this type", because
+    # `primary_type` picks one type off a list and would miss an artifact
+    # creature's activated ability.
+    source_types = tuple(instruction.payload.get("source_card_types") or ())
+    if source_types:
+        source = chosen.source_permanent
+        if source is None or not _spell_is_one_of(source.effective_card, source_types):
+            game.log.append(
+                f"{card.name}: that ability is not from "
+                f"{' or '.join(source_types)} source, cannot counter"
+            )
+            return True, "resolved"
+    # "…unless that ability's controller pays {W}" (Ayesha Tanaka). The ability
+    # waits on the stack while its controller decides, exactly as a spell does
+    # under Power Sink — what waits is a stack object, and an ability is one
+    # (CR 113.7a). `countered_object` is how the resolver knows not to bin a
+    # card: this object has none, and `chosen.card` is the *source permanent's*
+    # card, which never left the battlefield.
+    cost = instruction.payload.get("unless_pays_cost")
+    if cost:
+        game.arm_pending_choice(
+            "mana_payment", chosen.caster_index,
+            cost=dict(cost), amount=total_pips(cost),
+            card_name=card.name, counter_card=card,
+            stack_item=chosen, countered_object="ability",
+            # The marker the headless/AI path keys on to resolve this
+            # deterministically the moment the resolution that armed it ends
+            # (mixins/stack/resolution.py). Without it the prompt arms, nobody
+            # answers it, and the object it was supposed to gate resolves
+            # anyway — which is the counter silently never happening.
+            _new=True,
         )
         return True, "resolved"
     game.stack.remove(chosen)

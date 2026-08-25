@@ -289,3 +289,65 @@ def test_reset_untaps_exactly_the_lands_its_caster_controls(set_pool):
     assert all(not land.tapped for land in mine), "caster's lands untapped"
     assert bear.tapped, "a creature is not a land"
     assert theirs.tapped, "an opponent's land is not 'you control'"
+
+
+# ---------------------------------------------------------------------------
+# Round 17 — countering an ability, narrowed by the source it came from
+# ---------------------------------------------------------------------------
+
+
+_PINGER = "{T}: This artifact deals 1 damage to any target."
+_CREATURE_PINGER = "{T}: This creature deals 1 damage to any target."
+
+
+def _source(name: str, *, artifact: bool) -> CardDefinition:
+    type_line = "Artifact" if artifact else "Creature - Test"
+    raw = {"name": name, "type_line": type_line}
+    if not artifact:
+        raw |= {"power": "2", "toughness": "2"}
+    return CardDefinition(
+        name=name, mana_cost="{2}", cmc=2.0, type_line=type_line,
+        oracle_text=_PINGER if artifact else _CREATURE_PINGER,
+        colors=(), color_identity=(), keywords=(), produced_mana=(), raw=raw,
+    )
+
+
+def _ability_on_the_stack(set_pool, source: CardDefinition, spell: str):
+    """*source*'s ping aimed at seat 1, waiting on the stack with *spell* in hand.
+
+    `queue_permanent_ability` rather than `activate_permanent_ability`: the
+    latter settles, which drains the stack and leaves nothing to counter — the
+    ability would have resolved before any answer to it could be cast.
+    """
+    src = Permanent(card=source)
+    p1 = PlayerState(name="P1", battlefield=[src], life=20)
+    p2 = PlayerState(name="P2", hand=[set_pool("LEG")[spell]], life=20)
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    assert game.queue_permanent_ability(0, source.name, target_player_index=1).supported
+    assert len(game.stack) == 1, "the ability must be waiting, not resolved"
+    return game, p1, p2
+
+
+def test_rust_counters_an_activated_ability_from_an_artifact(set_pool):
+    """CR 113.7a: an ability on the stack is an object, and CR 701.5a removes
+    it. Nothing else happens — there is no card to bin."""
+    game, _p1, p2 = _ability_on_the_stack(set_pool, _source("Test Pinger", artifact=True), "Rust")
+
+    assert game.cast_from_hand(1, "Rust", target_stack_index=0).supported
+    game.resolve_stack()
+
+    assert p2.life == 20, "the ping never happened"
+
+
+def test_rust_leaves_an_ability_from_a_creature_alone(set_pool):
+    """The narrowing is the round's point. "From an artifact source" describes
+    the *permanent the ability came from* — the ability has no card of its own
+    — and a counter that ignored the phrase would reach every activated ability
+    in the game."""
+    game, _p1, p2 = _ability_on_the_stack(set_pool, _source("Test Beast", artifact=False), "Rust")
+
+    assert game.cast_from_hand(1, "Rust", target_stack_index=0).supported
+    game.resolve_stack()
+
+    assert p2.life == 19, "the creature's ability is not Rust's business"

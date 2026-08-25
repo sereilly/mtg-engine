@@ -14,6 +14,32 @@ from ..phrases import _parse_mana_payment
 from ..vocabulary import NUMBER_WORDS
 
 
+def _parse_unless_pays(stream: TokenStream) -> "ast.ManaCost | None":
+    """``unless <the object's controller> pays <cost>``, or None if absent.
+
+    One reader for a spell's clause and an ability's, because it is the same
+    clause: the cost is offered to the *countered object's* controller while
+    that object waits on the stack (CR 118.3c). Only that player has a payment
+    flow, so a third party named here refuses the line rather than being
+    silently read as the controller.
+    """
+    if not stream.accept_word("unless"):
+        return None
+    payer = parse_player_ref(stream)
+    if payer is None:
+        raise stream.error("expected who pays after 'unless'")
+    if payer.kind not in ("controller", "that_player"):
+        # "that player" is admitted beside "its controller" because in a
+        # trigger they name the same person by construction: the condition is
+        # "whenever **a player** casts a spell", so the player it bound is the
+        # spell's controller. What is refused is a *third* party.
+        raise stream.error(
+            "only the countered object's controller can pay to avoid a counter"
+        )
+    stream.expect_word("pays", "pay")
+    return _parse_mana_payment(stream, allow_variable=True)
+
+
 def _parse_counter(stream: TokenStream) -> ast.Statement:
     """``counter <spell> [unless <player> pays <cost>]``.
 
@@ -30,7 +56,12 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # but a spell's card goes to a graveyard and an ability has no card to
         # send anywhere, so one handler cannot do both without asking which it
         # has — and asking is the branch this avoids.
-        return ast.CounterAbility(subject)
+        #
+        # The "unless" clause is read here rather than shared with the spell
+        # branch below because the spell branch's own trailers ("instead",
+        # "that spell") are about a *spell* that an earlier sentence named, and
+        # none of them can follow an ability.
+        return ast.CounterAbility(subject, unless_pays=_parse_unless_pays(stream))
     replaces_prior = False
     if subject is None:
         # "counter **that spell**" (Lofty Denial's second sentence) — the spell
@@ -56,22 +87,8 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         else:
             raise stream.error("expected a spell to counter")
 
-    if stream.accept_word("unless"):
-        payer = parse_player_ref(stream)
-        if payer is None:
-            raise stream.error("expected who pays after 'unless'")
-        if payer.kind not in ("controller", "that_player"):
-            # Only the countered spell's own controller has a payment flow.
-            # Anyone else paying is a different effect, so refuse instead of
-            # dropping the distinction.
-            #
-            # "that player" is admitted beside "its controller" because in a
-            # trigger they name the same person by construction: the condition
-            # is "whenever **a player** casts a spell", so the player it bound
-            # is the spell's controller. What is refused is a *third* party.
-            raise stream.error("only the spell's controller can pay to avoid a counter")
-        stream.expect_word("pays", "pay")
-        payment = _parse_mana_payment(stream, allow_variable=True)
+    payment = _parse_unless_pays(stream)
+    if payment is not None:
         # "…pays {4} **instead**". Required on the bound form and refused on the
         # chosen one: "counter target spell unless its controller pays {4}
         # instead" replaces an amount no sentence before it named.

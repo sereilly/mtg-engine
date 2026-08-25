@@ -1335,3 +1335,59 @@ def test_infernal_medusa_still_destroys_a_blocker_that_is_no_wall(set_pool):
     game.advance_combat_phase()
 
     assert blocker.metadata.get("destroy_at_end_of_combat") is True
+
+
+# ---------------------------------------------------------------------------
+# Round 17 — Ayesha Tanaka: an ability waits while its controller is asked
+# ---------------------------------------------------------------------------
+
+
+def _ayesha_board(set_pool, pool: dict):
+    """An artifact's ping on the stack from seat 0, Ayesha on seat 1."""
+    source = CardDefinition(
+        name="Test Pinger", mana_cost="{2}", cmc=2.0, type_line="Artifact",
+        oracle_text="{T}: This artifact deals 1 damage to any target.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Test Pinger", "type_line": "Artifact"},
+    )
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=source)], life=20)
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=set_pool("LEG")["Ayesha Tanaka"])], life=20
+    )
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    assert game.queue_permanent_ability(0, "Test Pinger", target_player_index=1).supported
+    p1.mana_pool.update(pool)
+    assert game.queue_permanent_ability(1, "Ayesha Tanaka", target_stack_index=0).supported
+    game.resolve_stack()
+    game._settle()
+    return game, p1, p2
+
+
+def test_ayesha_tanaka_lets_the_ability_through_when_its_controller_pays(set_pool):
+    """{W} in the pool answers {W}: the ability is not countered, and the white
+    mana is gone."""
+    _game, p1, p2 = _ayesha_board(set_pool, {"W": 1})
+
+    assert p2.life == 19, "the ping resolved"
+    assert p1.mana_pool.get("W", 0) == 0, "the payment came out of the pool"
+
+
+def test_ayesha_tanaka_counters_when_the_pool_is_the_wrong_colour(set_pool):
+    """The reason the cost is a symbol dict rather than a number.
+
+    One red mana is one mana, so a payment flow that only knew *how many* would
+    have let {R} pay {W} — the ability would survive and the white pip would
+    have meant nothing. It is the only case that tells the two representations
+    apart, which is why it is here and not just the empty-pool one below.
+    """
+    _game, p1, p2 = _ayesha_board(set_pool, {"R": 1})
+
+    assert p2.life == 20, "the ability was countered"
+    assert p1.mana_pool.get("R", 0) == 1, "and the red mana was not taken"
+
+
+def test_ayesha_tanaka_counters_when_its_controller_cannot_pay(set_pool):
+    _game, _p1, p2 = _ayesha_board(set_pool, {})
+
+    assert p2.life == 20
