@@ -1661,3 +1661,96 @@ that buy nothing), and demanded a card be verified **in a game** rather than at
 the compiler. That last rule is what produced Cleanse, the `_PRODUCES` gap and
 the three-player seat check — none of which a compile-time gate would have said
 a word about.
+
+## LEG round 21: three more worktrees, and a sweep that would have taken the board
+
+*(2026-08-25.)* The second parallel round, same shape: three agents, three
+worktrees, merged one branch at a time with the full suite and every `--check`
+between. **Twelve cards**, LEG 208 → 220.
+
+**Groups:** static/continuous effects, counterspells narrowed by spell class,
+library and hand manipulation. Three conflicts, every one of them a per-set test
+file and every one a pure append over the merge base — the three-stage
+reconstruction (`git show :1:/:2:/:3:`) settles those exactly, and hand-stitching
+is the wrong tool for them.
+
+### Cards
+**Statics:** Living Plane, Dakkon Blackblade, Arcades Sabboth, Rabid Wombat, Kismet.
+**Counters:** Avoid Fate, Ring of Immortals, Invoke Prejudice.
+**Library:** Storm Seeker, Winds of Change, Visions, Land Tax.
+
+Declined, correctly: **Mana Drain** (its second sentence is a delayed triggered
+ability, CR 603.7 — the grammar has no production for "at the beginning of your
+next \<step\>" at all) and **Recall** (a variable-count discard *plus* a
+resolution-time repeated graveyard pick whose count is unknown until the discard
+happens).
+
+### A union across two axes
+Avoid Fate and Ring of Immortals print "counter target **instant or Aura**
+spell". "Instant" is a card type (CR 205.2) and "Aura" a subtype (CR 205.3), and
+every matcher here ANDs `card_types` against `subtypes` — so recording the
+phrase in both fields describes an instant that is *also* an Aura, a set nothing
+is in. The card would have countered nothing while reporting supported. Each
+alternative now carries the axis it was read on. The four tests that matter are
+the discriminating ones: instant countered, Aura countered, a spell aimed at
+someone else's permanent left alone, a sorcery left alone.
+
+### Three pre-existing bugs
+* **`destroy_all_matching` would have swept the board.** It resolved only the
+  `"target"` attachment referent and fell through with `host = None` on anything
+  else — which drops the relation and destroys *every* matching permanent.
+  Latent while one referent existed; armed the moment a second was added. It now
+  answers every referent the noun parser can produce and **returns** rather than
+  widening. Same shape as round 20's Cleanse, one layer down.
+* **`opponent_casts_spell` emitted no `cast_card`**, unlike its `spell_cast`
+  sibling, so any opponent-scoped trigger whose effect is *about* the spell
+  resolved with nothing to find and let it through. Nothing had asked until
+  Invoke Prejudice did.
+* **A counted search was two by construction.** `_parse_two_card_search` had
+  "up to **two**" as a literal and required a destination per find, though the
+  lowering already built one entry per find and the confirm flow answered them
+  whole. Cultivate's payload is byte-identical after the generalisation.
+
+### Two narrowings that could not be said
+`LordBuffFilter` carried a *single* state qualifier, so Arcades Sabboth's "each
+**untapped** creature you control … as long as it's **not attacking**" was
+unsayable; it carries a tuple now, and the trailing clause folds into the
+subject filter rather than being read as a condition — read as a condition, "it"
+binds to the source and Arcades buffs its whole team whenever Arcades stays
+home. And both `land_animation.py` and `characteristic_defining.py` read their
+head noun through the land-*subtype* catalog, where the word "lands" does not
+appear: Living Plane and Dakkon Blackblade were refused by a lookup table that
+had no row for the general case.
+
+### One guard deliberately widened
+`test_grammar_derived_lines.py::pool_lines` read `load_catalog()` — the shipped
+pool — so a derivation table written for a *measured* set's card was called dead
+on the round that added it. It reads `include_measured=True` now. This is a
+reachability question, not a coverage floor: the guard still fails on a table
+that matches no card anywhere, and the alternative was writing every table after
+promotion rather than with the card that needs it.
+
+### Numbers
+LEG 208 → **220** of 310 (67.1% → 71.0%); LEG parse 62.9% → 65.4%, lowers 58.5%
+→ 61.0%, executes 32.9% → 35.5%. Shipped pool unchanged at 734/734 and its
+coverage flat — this round bought a measured set's cards and fixed shipped
+*latent* defects rather than adding shipped text. Suite 7,217 → **7,273**, every
+`--check` green, no hooks added.
+
+### Standing debt
+`engine/effect_labels.py` still carries no entries for the LEG-only kinds
+(`remove_self_keyword`, `upkeep_pay_or_destroy_self`, and this round's
+`others_enter_tapped`): `TRIGGERED_LABELS` is guard-held to the shipped pool.
+They belong in the promotion commit, with round 12's Wall of Dust.
+
+New this round: `reorder_target_library_top`'s handler derives `may_shuffle` by
+**substring-matching oracle text inside a handler**, which CLAUDE.md forbids
+outright. Left alone deliberately — fixing it changes Natural Selection's
+payload, and Natural Selection is *shipped*, so `behaviour_classes --check`
+would drift with no `--accept` available mid-round. Promotion-time cleanup.
+
+`engine/grammar/nouns.py` (998) and `engine/grammar/lowering/characteristics.py`
+(997) are both within three lines of the 1,000-line guard. The next work landing
+in either should split it, not shave comments — `names.py` split out of `nouns`
+this round and absorbed exactly the growth that would otherwise have tripped the
+guard one merge later.

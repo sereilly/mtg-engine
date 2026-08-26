@@ -10,7 +10,7 @@ How much of the card pool the oracle-text parser (`engine/grammar/`) reads. It i
 | Lowered | That AST mapped onto instructions, a sidecar registry, or a keyword line |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `attachments, characteristics, chosen_numbers, coin_flips, combat_restrictions, control, counters, counterspells, damage, destruction, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
+Categories currently switched on: `attachments, characteristics, chosen_numbers, coin_flips, combat_restrictions, control, counters, counterspells, damage, destruction, enter_statics, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 
@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 89.2% | 89.2% | 61.7% | 67 |
 | 3ED | 296 | 389 | 82.0% | 81.0% | 45.5% | 160 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 62.9% | 58.5% | 32.9% | 130 |
+| LEG *(measured)* | 310 | 431 | 65.4% | 61.0% | 35.5% | 140 |
 | **All (shipped)** | **1618** | **2286** | **82.2%** | **81.2%** | **48.5%** | **965** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,9 +34,9 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 224 | 116 | expected a subject |  |
-| 125 | 55 | unrecognized effect verb |  |
-| 68 | 44 | unconsumed text |  |
+| 223 | 115 | expected a subject |  |
+| 121 | 51 | unrecognized effect verb |  |
+| 66 | 40 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 10 | 7 | expected 'a' |  |
@@ -48,7 +48,6 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 6 | 3 | expected a quantity |  |
 | 5 | 5 | expected 'unless defending player controls' |  |
 | 4 | 1 | expected 'that' |  |
-| 4 | 2 | expected 'your' |  |
 | 4 | 2 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 3 | 2 | expected a permanent to put counters on |  |
 | 3 | 2 | expected a destination zone after 'return' |  |
@@ -59,6 +58,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 2 | 2 | expected what to remove a counter from as a cost |  |
 | 2 | 2 | expected 'counter or counters' |  |
 | 1 | 1 | a destroy sweep over a source relation stays with its card hook until the probe review takes it |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -113,6 +113,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{4}{W}: This creature gets +3/+3 until end of turn.`
 - **Arcades Sabboth**
   - `At the beginning of your upkeep, sacrifice Arcades Sabboth unless you pay {G}{W}{U}.`
+  - `Each untapped creature you control gets +0/+2 as long as it's not attacking.`
   - `{W}: Arcades Sabboth gets +0/+1 until end of turn.`
 - **Archfiend's Vessel**
   - `When this creature enters, if it entered from your graveyard or you cast it from your graveyard, exile it. If you do, create a 5/5 black Demon creature token with flying.`
@@ -151,6 +152,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
 - **Aven Gagglemaster**
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
+- **Avoid Fate**
+  - `Counter target instant or Aura spell that targets a permanent you control.`
 - **Ayesha Tanaka**
   - `{T}: Counter target activated ability from an artifact source unless that ability's controller pays {W}. (Mana abilities can't be targeted.)`
 - **Backfire**
@@ -825,6 +828,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
 - **Invigorating Surge**
   - `Put a +1/+1 counter on target creature you control, then double the number of +1/+1 counters on that creature.`
+- **Invoke Prejudice**
+  - `Whenever an opponent casts a creature spell that doesn't share a color with a creature you control, counter that spell unless that player pays {X}, where X is its mana value.`
 - **Iron Star**
   - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
@@ -909,6 +914,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `When this creature enters, discard up to two cards, then draw that many cards.`
 - **King Suleiman**
   - `{T}: Destroy target Djinn or Efreet.`
+- **Kismet**
+  - `Artifacts, creatures, and lands your opponents control enter tapped.`
 - **Kitesail Freebooter**
   - `When this creature enters, target opponent reveals their hand. You choose a noncreature, nonland card from it. Exile that card until this creature leaves the battlefield.`
 - **Kobold Drill Sergeant**
@@ -926,6 +933,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Lady Caleria deals 3 damage to target attacking or blocking creature.`
 - **Lady Evangela**
   - `{W}{B}, {T}: Prevent all combat damage that would be dealt by target creature this turn.`
+- **Land Tax**
+  - `At the beginning of your upkeep, if an opponent controls more lands than you, you may search your library for up to three basic land cards, reveal them, put them into your hand, then shuffle.`
 - **Leafkin Avenger**
   - `{T}: Add {G} for each creature with power 4 or greater you control.`
   - `{7}{R}: This creature deals damage equal to its power to target player or planeswalker.`
@@ -986,6 +995,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `All Forests are 1/1 creatures that are still lands.`
   - `All Forests are 1/1 creatures that are still lands.`
   - `All Forests are 1/1 creatures that are still lands.`
+- **Living Plane**
+  - `All lands are 1/1 creatures that are still lands.`
 - **Living Wall**
   - `{1}: Regenerate this creature.`
   - `{1}: Regenerate this creature.`
@@ -1267,6 +1278,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
 - **Quirion Dryad**
   - `Whenever you cast a spell that's white, blue, black, or red, put a +1/+1 counter on this creature.`
+- **Rabid Wombat**
+  - `This creature gets +2/+2 for each Aura attached to it.`
 - **Radha, Heart of Keld**
   - `{4}{R}{G}: Radha gets +X/+X until end of turn, where X is the number of lands you control.`
 - **Radiant Fountain**
@@ -1353,6 +1366,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever you cast a Dog spell, create a 1/1 green Cat creature token.`
   - `Whenever you cast a Cat spell, create a 1/1 white Dog creature token.`
   - `{R}{G}{W}, {T}: Rin and Seri deals damage to any target equal to the number of Dogs you control. You gain life equal to the number of Cats you control.`
+- **Ring of Immortals**
+  - `{3}, {T}: Counter target instant or Aura spell that targets a permanent you control.`
 - **Rise Again**
   - `Return target creature card from your graveyard to the battlefield.`
 - **Riven Turnbull**
@@ -1591,6 +1606,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Destroy target land.`
 - **Storm Caller**
   - `When this creature enters, it deals 2 damage to each opponent.`
+- **Storm Seeker**
+  - `Storm Seeker deals damage to target player equal to the number of cards in that player's hand.`
 - **Storm World**
   - `At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is 4 minus the number of cards in their hand.`
 - **Stormwing Entity**
@@ -1834,6 +1851,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever you cast an enchantment spell, you may draw a card.`
 - **Village Rites**
   - `Draw two cards.`
+- **Visions**
+  - `Look at the top five cards of target player's library. You may then have that player shuffle that library.`
 - **Vito, Thorn of the Dusk Rose**
   - `Whenever you gain life, target opponent loses that much life.`
   - `{3}{B}{B}: Creatures you control gain lifelink until end of turn.`
@@ -1912,6 +1931,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Wind-Scarred Crag**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {R} or {W}.`
+- **Winds of Change**
+  - `Each player shuffles the cards from their hand into their library, then draws that many cards.`
 - **Witch's Cauldron**
   - `{1}{B}, {T}, Sacrifice a creature: You gain 1 life and draw a card.`
 - **Wooden Sphere**
