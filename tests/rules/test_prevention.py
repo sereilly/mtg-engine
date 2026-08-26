@@ -604,3 +604,70 @@ def test_615_1_shields_apply_to_players_and_permanents_through_one_pipeline():
     # pool to do the work on the creature's.
     assert p1.reverse_damage_charges == 0
     assert p1.damage_prevention_pool == 2
+
+
+# ---------------------------------------------------------------------------
+# A shield keyed on a printed noun phrase, and one keyed on several colours
+# (CR 615.1 / 615.9) - the two shapes round 22 added
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("615.1", "615.9")
+def test_615_9_a_subject_shield_rechecks_its_phrase_against_each_source():
+    """A shield may record a printed noun phrase rather than one property word,
+    and CR 615.9 rechecks it when the damage would be dealt.
+
+    So the shield covers a source that did not exist when it was armed, and
+    stops covering one that has changed - nothing has to be updated either way,
+    because the phrase is what was recorded and the set was not.
+    """
+    from engine.shields import make_subject_shield
+
+    game, p1, p2 = _game()
+    ogre = Permanent(card=_mk_creature("Ogre"))
+    p2.battlefield.append(ogre)
+    add_shield(p1, make_subject_shield({"type_filter": "creature", "attacking_only": True}, 0))
+
+    assert _damage_dealt(game, p1, 3, source=ogre) == 3, "not attacking yet"
+    ogre.attacking = True
+    assert _damage_dealt(game, p1, 3, source=ogre) == 0, "now the phrase names it"
+    assert _damage_dealt(game, p1, 3, source=ogre) == 0, "a blanket is not used up"
+    ogre.attacking = False
+    assert _damage_dealt(game, p1, 3, source=ogre) == 3, "and it stops being covered"
+
+
+@pytest.mark.cr("615.1", "615.3")
+def test_615_3_a_subject_shield_ends_with_its_duration_not_with_a_use():
+    """It holds neither points nor charges, so nothing can use it up; what ends
+    it is its ``lifetime``, which is why no turn step needs a line naming it."""
+    from engine.shields import clear_shields, make_subject_shield
+
+    game, p1, p2 = _game()
+    ogre = Permanent(card=_mk_creature("Ogre"))
+    ogre.attacking = True
+    p2.battlefield.append(ogre)
+    shield = add_shield(p1, make_subject_shield({"attacking_only": True}, 0))
+
+    _damage_dealt(game, p1, 9, source=ogre)
+    assert not shield.spent
+    clear_shields(p1, END_OF_TURN)
+    assert _damage_dealt(game, p1, 3, source=ogre) == 3
+
+
+@pytest.mark.cr("615.8", "615.9")
+def test_615_9_a_colour_shield_may_record_several_admissible_colours():
+    """"a black **or red** source of your choice" is one recorded property with
+    two admissible values, so a source of either colour matches - and it is one
+    shield, spent whole by the first instance it prevents (CR 615.8)."""
+    from engine.shields import make_color_shield
+
+    game, p1, p2 = _game()
+    zombie = Permanent(card=_mk_creature("Zombie", ("B",)))
+    goblin = Permanent(card=_mk_creature("Goblin", ("R",)))
+    elf = Permanent(card=_mk_creature("Elf", ("G",)))
+    p2.battlefield.extend([zombie, goblin, elf])
+    add_shield(p1, make_color_shield(("B", "R")))
+
+    assert _damage_dealt(game, p1, 4, source=elf) == 4, "neither recorded colour"
+    assert _damage_dealt(game, p1, 4, source=goblin) == 0, "the second one matches"
+    assert _damage_dealt(game, p1, 4, source=zombie) == 4, "and one shield is one use"
