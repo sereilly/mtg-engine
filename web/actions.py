@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
+from engine.activation_permissions import card_widens_activation
 from engine.cast_permissions import permission_for
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
@@ -275,18 +276,20 @@ def _action_activate(session, req, seat_type):
         raise HTTPException(status_code=400, detail="permanent_name or permanent_index is required")
     controller = session.game.players[req.seat]
     resolved = _find_controlled_permanent(controller, req.permanent_name, req.permanent_index)
-    # Ifh-Bíff Efreet: "Any player may activate this ability." — the
-    # permanent may sit on another player's battlefield; the activator
-    # still pays the cost and controls the ability.
+    # "Any player may activate this ability." (Ifh-Bíff Efreet), "Only your
+    # opponents may activate this ability." (Clergy of the Holy Nimbus) — the
+    # permanent may sit on another player's battlefield; the activator still
+    # pays the cost and controls the ability. Asked of the one table the engine
+    # enforces from, rather than of the substring this used to test, so a
+    # permission added there is reachable through the API by construction.
     source_controller_seat = None
     if resolved is None:
         for other_seat, other in enumerate(session.game.players):
             if other_seat == req.seat:
                 continue
             candidate = _find_controlled_permanent(other, req.permanent_name, req.permanent_index)
-            if candidate is not None and (
-                "any player may activate this ability"
-                in candidate[1].card.oracle_text.lower()
+            if candidate is not None and card_widens_activation(
+                candidate[1].effective_card
             ):
                 resolved = candidate
                 source_controller_seat = other_seat

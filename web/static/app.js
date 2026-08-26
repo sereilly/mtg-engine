@@ -13192,9 +13192,13 @@ function initBattlefieldCanvas() {
         // Beyond this point we're trying to use the permanent (tap/activate),
         // which only the controller may do. Targeting an opponent's permanent
         // for a pending spell/ability was already handled above. Exception:
-        // "Any player may activate this ability" (Ifh-Bíff Efreet).
-        const anyPlayerAbility =
-          (card.oracle_text || "").toLowerCase().includes("any player may activate this ability");
+        // a permanent whose printed permission lets another seat activate it
+        // ("Any player may activate this ability", Ifh-Bíff Efreet; "Only your
+        // opponents may activate this ability", Clergy of the Holy Nimbus).
+        // The server answers, from the same table the engine enforces from —
+        // this used to test the oracle text for one of those spellings and so
+        // silently refused the click for every other one.
+        const anyPlayerAbility = Boolean(card.activatable_by_other_seats);
         if (cardSeat !== seat && !anyPlayerAbility) {
           updateActionHint("You don't control this permanent.", true);
           return;

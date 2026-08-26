@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import random
 
+from ...activation_permissions import (activation_permission_denial,
+                                        card_widens_activation)
 from ...activation_restrictions import activation_denial
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
 from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
@@ -193,17 +195,15 @@ class AbilityActivationMixin:
         if resolved is None:
             raise ValueError(f"Permanent not found: {permanent_name}")
         _, permanent = resolved
-        # Personal Incarnation: "Only this creatures owner may activate this
-        # ability." grants the owner activation rights even while an opponent
-        # controls the creature (CR 118.9a-style permission override).
-        owner_may_activate = (
-            "only this creatures owner may activate this ability" in permanent.effective_card.oracle_text.lower()
-            and self.owner_index_of(permanent) == controller_index
-        )
-        if (
-            source_owner is not controller
-            and not owner_may_activate
-            and "any player may activate this ability" not in permanent.effective_card.oracle_text.lower()
+        # CR 602.1a: a permanent's abilities are its controller's to activate,
+        # unless the card prints a permission that says otherwise. This is the
+        # *reachability* half — may this seat touch this permanent at all —
+        # asked of `engine/activation_permissions.py` rather than of two
+        # substrings written out here, which is what it was. Which of the
+        # permanent's abilities the seat may then activate is the per-ability
+        # question below, read off that ability's own printed line.
+        if source_owner is not controller and not card_widens_activation(
+            permanent.effective_card
         ):
             details = f"{permanent.card.name}'s abilities can only be activated by its controller"
             self.log.append(details)
@@ -435,6 +435,22 @@ class AbilityActivationMixin:
             details = f"{permanent.card.name}: {denial}"
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        # Every printed "…may activate this ability" permission on *this* line
+        # (engine/activation_permissions.py, CR 602.1a). Asked per ability for
+        # the reason the restriction above is: a permanent with two abilities
+        # prints the clause on one of them, and the card-wide reachability test
+        # further up deliberately cannot tell them apart. This is also the
+        # direction the old substring pair never had — "Only your opponents may
+        # activate this ability" (Clergy of the Holy Nimbus) *denies* the
+        # controller, and a permission that only ever widened would have left
+        # the ability working for the one player the card forbids.
+        permission = activation_permission_denial(
+            self, controller_index, permanent, ability.source_line or ""
+        )
+        if permission is not None:
+            self.log.append(permission)
+            return SimulationResult(permanent.card.name, False, "unsupported", permission)
 
         # "…and its activated abilities can't be activated unless they're mana
         # abilities." (Faith's Fetters.) CR 605.1a decides which abilities the

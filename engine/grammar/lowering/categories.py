@@ -258,6 +258,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the same subject, so it shares the category rather than minting one that
     # would always be switched on and off alongside it.
     "deny_regeneration_to_target": "regeneration",
+    "deny_regeneration_to_self": "regeneration",
     # Looking at a hand reads a hidden zone; the legacy rule and the handler
     # both live in the engine's zones modules.
     "exile_target_graveyard": "zones",

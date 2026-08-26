@@ -213,15 +213,30 @@ def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestrict
     it only lets the line satisfy the grammar's full-consumption invariant
     instead of failing and sending the whole ability back to the legacy rules.
     """
+    from ...activation_permissions import permission_clause_readable
+
     mark = stream.mark()
     stream.accept_punct(".", ";")
     words: list[str] = []
     if stream.accept_word("activate"):
         words.append("activate")
-    elif stream.accept_phrase("any", "player", "may", "activate"):
-        words.extend(["any", "player", "may", "activate"])
-    elif stream.accept_phrase("only", "this", "creature", "'s", "owner", "may", "activate"):
-        words.extend(["only", "this", "creature", "'s", "owner", "may", "activate"])
+    elif stream.at_word("any", "only"):
+        # A "who may activate" permission (CR 602.1a). The spellings used to be
+        # listed here as literal token sequences -- a fourth copy of a table
+        # `engine/activation_permissions.py` now holds -- so a permission the
+        # engine could not enforce still consumed its line and the card was
+        # admitted with the clause dropped. The sentence is read verbatim and
+        # handed to that module, which is the code that enforces it: a shape it
+        # does not implement leaves the line refused.
+        probe_words: list[str] = []
+        while not stream.exhausted and not stream.at_punct("."):
+            probe_words.append(str(stream.next().text))
+        sentence = " ".join(probe_words).replace(" '", "'")
+        if not permission_clause_readable(sentence):
+            stream.reset(mark)
+            return None
+        stream.accept_punct(".")
+        return ast.ActivationRestriction(sentence)
     else:
         stream.reset(mark)
         return None

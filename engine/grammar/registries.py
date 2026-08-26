@@ -36,6 +36,7 @@ from ..named_counters import CAP_CLAIM, counter_cap_line
 from ..extra_triggers import extra_trigger_line
 from ..land_play_allowance import land_play_line
 from ..prevention import prevention_claims_line
+from ..regeneration import self_regeneration_line
 from ..replacements import replacement_claims_line
 from ..revealed_hands import revealed_hands_line
 from ..targeting import enchant_line_subject
@@ -100,6 +101,14 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # stays unclaimed and visible in the backlog.
     if enchant_line_subject(line) is not None:
         return "auras"
+
+    # engine/regeneration.py — "If this creature would be destroyed, regenerate
+    # it." (Clergy of the Holy Nimbus.) CR 701.19b's static form: both
+    # destruction paths derive it from the permanent's own text at the moment a
+    # destruction would happen, so there is no instruction to lower and one
+    # would apply the replacement a second time.
+    if self_regeneration_line(line):
+        return "regeneration"
 
     # engine/auras.py — an Aura's *continuous* effect lines: the P/T grant
     # (layer 7c), the keyword grants (layer 6), the protection cycle, the combat

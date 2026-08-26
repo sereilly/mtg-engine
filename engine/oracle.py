@@ -2293,6 +2293,17 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if counter_cap_line(normalized, card_name) is not None:
         return True
+    # "If this creature would be destroyed, regenerate it." (Clergy of the Holy
+    # Nimbus.) CR 701.19b: a *static* regeneration, which the two destruction
+    # paths derive from the permanent's own text through
+    # `engine/regeneration.py` — so there is no instruction, and like every
+    # table above the gate asks the code that performs it rather than keeping a
+    # literal. Anchored there, so a conditional variant keeps refusing instead
+    # of being admitted and then regenerating unconditionally.
+    from .regeneration import self_regeneration_line
+
+    if self_regeneration_line(normalized):
+        return True
     # A CR 601.2f cost change the casting path derives from every permanent's
     # own text — "Noncreature spells cost {1} more to cast" (Vryn Wingmare),
     # "Creature spells with flying you cast cost {1} less" (Watcher of the
@@ -2897,6 +2908,7 @@ def _derived_static_claims(
     from .global_statics import global_static_for
     from .land_play_allowance import land_play_allowance_for
     from .prevention import prevention_claims_line
+    from .regeneration import self_regeneration_line
     from .replacements import replacement_claims_line
     from .revealed_hands import revealed_hands_line
     from .target_immunity import CLAIM as TARGET_IMMUNITY_CLAIM
@@ -2957,6 +2969,14 @@ def _derived_static_claims(
     # library-top twin (Field of Dreams) is the `library_top` claim below.
     if any(revealed_hands_line(line) for line in oracle_text.splitlines()):
         claims.append("revealed_hands")
+    # "If this creature would be destroyed, regenerate it." (Clergy of the Holy
+    # Nimbus.) CR 701.19b's static form: both destruction paths derive it from
+    # the permanent's own text through `engine/regeneration.py`, so there is no
+    # instruction — and on a creature whose only line is this sentence, no
+    # instruction would mean the card reports unsupported however well the
+    # replacement works. Asked of the same reader that performs it.
+    if any(self_regeneration_line(line) for line in oracle_text.splitlines()):
+        claims.append("regeneration")
     # The *name-keyed* half of the same CR 504 story (Island Sanctuary's
     # skip-your-draw-for-protection), registered in card_hooks and carried out by
     # phases/draw_step.py, phases/declare_attackers_step.py and
