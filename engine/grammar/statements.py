@@ -744,7 +744,12 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         if stream.accept_word("may"):
             if stream.at_word("pay"):
                 stream.advance()
-                cost = _parse_mana_payment(stream)
+                # "You may pay **{X}**, where X is the number of +1/+1 counters
+                # on it." (Primordial Ooze.) Admitted here and refused at
+                # lowering unless the sentence really defines an X — the offer
+                # is made by the same handler either way, and an undefined X
+                # would make it "pay {0}", which is not a choice.
+                cost = _parse_mana_payment(stream, allow_variable=True)
                 return ast.May(ast.PlayerRef("you"), cost=cost)
             # The causative "you may have <subject> <verb> …" (Goblin
             # Arsonist's "you may have it deal 1 damage to any target") is the

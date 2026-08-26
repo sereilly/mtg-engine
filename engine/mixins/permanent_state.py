@@ -4,6 +4,7 @@ import re
 
 
 from ..enter_effects import (
+    sacrifice_any_number_on_enter,
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
     CHOOSE_CARD_NAME_ON_ENTER,
     CHOOSE_OPPONENT_ON_ENTER,
@@ -101,6 +102,12 @@ def _count_dynamic_pt(
         battlefields = [player.battlefield]
 
     what = payload.get("count")
+    if what == "sacrificed_as_entered":
+        # Wood Elemental: the Forests were sacrificed as this creature entered
+        # and are cards in a graveyard now (CR 400.7, CR 613.1), so there is
+        # nothing on a battlefield left to tally. The number was recorded where
+        # it happened; this reads it back.
+        return int(permanent.metadata.get("sacrificed_as_entered") or 0)
     if what == "chosen_number":
         # Shapeshifter: the value is a number a player chose, not a tally of
         # anything, so it answers before the battlefield loop rather than inside
@@ -179,6 +186,33 @@ def _apply_conditional_bonus(
 
 class PermanentStateMixin:
     def _initialize_permanent_state(
+        self,
+        permanent: Permanent,
+        caster_index: int,
+        target_player_index: int | None,
+    ) -> None:
+        """Perform CR 614.1c's entry state, and mark what it left unanswered.
+
+        A permanent whose entry choice is still owed **has not finished
+        entering**: the choice is part of arriving, not something that happens
+        to it afterwards (CR 614.1c), so its characteristics are not settled and
+        CR 704.5f cannot yet be applied to a characteristic-defining P/T that
+        counts nothing yet. Every prompt this raises is therefore stamped with
+        the permanent it is about, and the state-based sweep reads that.
+
+        It was invisible until Wood Elemental, only because every earlier entry
+        choice defaulted to something survivable: Shapeshifter's middle of the
+        range is a 3/4. Wood Elemental's honest default is zero, so the creature
+        went to the graveyard between the prompt being raised and the player
+        seeing it — with the prompt still queued, about a permanent that no
+        longer existed.
+        """
+        armed_before = len(self.pending_choices)
+        self._perform_entry_state(permanent, caster_index, target_player_index)
+        for choice in self.pending_choices[armed_before:]:
+            choice.data.setdefault("_entering_permanent", permanent)
+
+    def _perform_entry_state(
         self,
         permanent: Permanent,
         caster_index: int,
@@ -339,6 +373,38 @@ class PermanentStateMixin:
                 minimum=low, maximum=high,
                 default_number=permanent.metadata["chosen_number"],
             )
+            break
+
+        # "As this creature enters, sacrifice any number of untapped Forests."
+        # (Wood Elemental.) CR 614.1c puts it at entry for the same reason
+        # Shapeshifter's number is there: what the controller gives up is what
+        # the creature's characteristic-defining P/T is *defined* by, so a
+        # trigger would leave it on the battlefield as a 0/0 long enough to die
+        # to the state-based check.
+        #
+        # The record is stamped at zero first and the answer overwrites it —
+        # every other entry choice here works that way — and zero is also the
+        # stated policy a non-interactive seat takes: an optional sacrifice is a
+        # cost nobody asked that seat to pay. Wood Elemental then enters as a
+        # 0/0 and dies, which is what the card does when its controller declines.
+        for raw_line in entry_lines:
+            offered = sacrifice_any_number_on_enter(
+                raw_line, permanent.effective_card.name
+            )
+            if offered is None:
+                continue
+            permanent.metadata["sacrificed_as_entered"] = 0
+            candidates = self._sacrifice_candidate_indices(
+                self.players[caster_index], offered, None
+            )
+            # "Any number" of nothing is zero, already recorded — and arming a
+            # prompt over an empty board would ask a question with one answer.
+            if candidates:
+                self.arm_forced_sacrifice(
+                    caster_index, len(candidates), filter=offered,
+                    reason=f"{permanent.card.name} enters",
+                    up_to=True, count_onto=permanent,
+                )
             break
 
         # enters with fixed counters (Clockwork Beast). Track the counter count so

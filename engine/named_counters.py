@@ -98,8 +98,18 @@ def counters_key(kind: str) -> str:
 
 
 def counters_on(permanent, kind: str) -> int:
-    """How many *kind* counters are on *permanent*."""
-    return int(permanent.metadata.get(counters_key(kind), 0) or 0)
+    """How many *kind* counters are on *permanent*.
+
+    Through ``pt.pt_counter_key`` rather than :func:`counters_key` directly, so
+    "how many +1/+1 counters are on it" is the *same* question as "how many doom
+    counters are on it" and gets the same reader. A P/T counter is recorded in
+    the persistent P/T channel under a key of its own (CR 122.1a), and reading
+    it here by this file's spelling would have answered zero for every card that
+    counts one — silently, because a missing key is a legal zero.
+    """
+    from .pt import pt_counter_key
+
+    return int(permanent.metadata.get(pt_counter_key(kind), 0) or 0)
 
 
 def add_counters(permanent, kind: str, count: int = 1) -> int:

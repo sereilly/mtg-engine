@@ -26,6 +26,12 @@ Payload vocabulary
                   control", Dakkon Blackblade), which counts every land
 ``exclude_type``  with ``count="creature"``, a type that disqualifies (Keldon
                   Warlord's "non-Wall")
+
+Two values of ``count`` tally nothing on any battlefield — ``chosen_number`` is
+a number a player picked as the permanent entered, and ``sacrificed_as_entered``
+is how many permanents they gave up doing it. They are here because what they
+*define* is a characteristic-defining P/T like every other row, and CR 604.3
+does not care where the number comes from.
 """
 
 from __future__ import annotations
@@ -126,6 +132,11 @@ def _chosen_number(match: re.Match) -> dict[str, object]:
     return {"count": "chosen_number", "complement": int(match.group("total"))}
 
 
+def _sacrificed_on_entry_count(match: re.Match) -> dict[str, object]:
+    """Wood Elemental. The tally its own entry sacrifice recorded."""
+    return {"count": "sacrificed_as_entered"}
+
+
 def _attacking_split_land_count(match: re.Match) -> dict[str, object]:
     return {
         "count": "land",
@@ -202,6 +213,24 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
         _creature_count,
     ),
     (
+        # Wood Elemental: "…equal to the number of **Forests sacrificed as it
+        # entered**". The number is not on any battlefield — the Forests are in
+        # a graveyard, and are different objects there (CR 400.7) — so it is
+        # counted where it happened, by the entry sacrifice
+        # (engine/enter_effects.sacrifice_any_number_on_enter), and read back
+        # off the permanent here.
+        #
+        # The noun is captured and checked as a noun phrase but is not part of
+        # the payload: the record is a count of what that card's own entry line
+        # gave up, and the two sentences are one printed idiom. A card whose two
+        # halves named *different* things would be a card this reads wrongly,
+        # which is why the head noun has to parse at all rather than being ".+".
+        re.compile(
+            rf"^{_SUBJECT} {_PT} (?P<phrase>.+?) sacrificed as it entered$"
+        ),
+        _sacrificed_on_entry_count,
+    ),
+    (
         # Shapeshifter. Both halves in one pattern, because the second is not a
         # rider: a rule claiming the power clause alone would leave a printed
         # toughness of 0 standing and the creature would die on arrival.
@@ -228,5 +257,24 @@ def dynamic_pt_for(normalized_line: str) -> DynamicPT | None:
         # means "creatures named like me" when X is the subject.
         if "named" in groups and groups.get("subject") != groups.get("named"):
             return None
+        # "…the number of **<noun phrase>** sacrificed as it entered": the noun
+        # has to be one the engine can read, or the sentence is one it does not
+        # understand and the card is reported unsupported rather than counted
+        # against a phrase nobody parsed.
+        if "phrase" in groups and _names_objects(groups["phrase"] or "") is False:
+            return None
         return DynamicPT("dynamic_pt_count", build(match))
     return None
+
+
+def _names_objects(phrase: str) -> bool:
+    """Whether *phrase* is a printed noun phrase the engine reads.
+
+    Asked of the counted half of Wood Elemental's sentence. Through the same
+    noun parser the entry sacrifice uses, so "the number of Forests" and
+    "sacrifice any number of untapped Forests" are read by one reader — a second
+    one here is how a card compiles supported and then counts something else.
+    """
+    from .grammar.phrases import parse_subject_filter
+
+    return parse_subject_filter(phrase, plural=True) is not None

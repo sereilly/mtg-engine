@@ -3772,13 +3772,19 @@ function applySacrificeSelectPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
+  // "Sacrifice any number of untapped Forests" (Wood Elemental) offers a
+  // ceiling; every other sacrifice demands an exact count. None is a legal
+  // answer to the first and never to the second.
+  const upTo = Boolean(info.up_to);
   title.textContent = `${info.reason || "Sacrifice"} — Choose Sacrifices`;
-  body.textContent = `Choose ${need} permanent(s) to sacrifice.`;
+  body.textContent = upTo
+    ? `Choose any number of permanents to sacrifice (up to ${need}).`
+    : `Choose ${need} permanent(s) to sacrifice.`;
 
   // Only the count, never the card list — the battlefield is the picker.
-  const ready = sacrificeSelection.length === need;
+  const ready = upTo ? sacrificeSelection.length <= need : sacrificeSelection.length === need;
   steps.innerHTML = [
-    `<div>Selected ${sacrificeSelection.length}/${need}</div>`,
+    `<div>Selected ${sacrificeSelection.length}/${need}${upTo ? " (any number)" : ""}</div>`,
     "<div>Action: click your highlighted permanents to select; click a selected one again to unselect it.</div>",
     `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="sacrificeConfirmBtn"${ready ? "" : " disabled"}>Confirm</button></div>`,
   ].join("");

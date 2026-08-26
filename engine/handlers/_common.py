@@ -81,6 +81,19 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
     back_reference = spec.get("back_reference")
     if back_reference is not None:
         return max(0, int(context.results.get(back_reference, 0) or 0))
+    # "…where X is the number of **+1/+1 counters on it**" (Primordial Ooze).
+    # Counters sitting on the ability's own source: not a set of objects in any
+    # zone, so `evaluate_count` has nothing to scan for it. The kind is data,
+    # and `counters_on` is the one reader that knows whether it means the P/T
+    # channel or a store the card invented (CR 122.1).
+    counters = spec.get("source_counters")
+    if counters is not None:
+        source = context.source_permanent
+        if source is None:
+            return 0
+        from ..named_counters import counters_on
+
+        return counters_on(source, str(counters))
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):
         return _characteristic_of_object(game, context, characteristic)

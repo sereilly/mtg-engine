@@ -616,6 +616,11 @@ def _sacrifice(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_seat": choice.player_index,
         "count": state["count"],
+        # Whether the count is owed or offered. "Sacrifice any number of
+        # untapped Forests" (Wood Elemental) is answered by any subset, none
+        # included, and a picker that could only confirm at exactly the ceiling
+        # would make the offer a demand.
+        "up_to": state["up_to"],
         "reason": state["reason"],
         "permanents": [
             {"index": i, **ctx.serialize_card(player.battlefield[i].card)}

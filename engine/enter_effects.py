@@ -135,6 +135,52 @@ def enters_with_named_counter(line: str, card_name: str | None = None) -> tuple[
     # strictly smaller card, silently.
     return None if count is None else (count, match.group("counter"))
 
+#: "As this creature enters, sacrifice any number of untapped Forests."
+#: (Wood Elemental.) CR 614.1c again: the sacrifice happens *as* the permanent
+#: arrives, which is what lets a characteristic-defining P/T read the number
+#: back off it before the state-based check ever sees a 0/0.
+#:
+#: The noun phrase is a capture and is read by the same noun parser every other
+#: printed noun phrase in the engine goes through, so "any number of untapped
+#: Forests" costs no more code than "any number of creatures you control" would.
+SACRIFICE_ANY_NUMBER_ON_ENTER = re.compile(
+    r"^as this [a-z]+ enters, sacrifice any number of (?P<phrase>.+)$"
+)
+
+
+def sacrifice_any_number_on_enter(line: str, card_name: str | None = None) -> dict | None:
+    """The filter payload naming what may be given up as the permanent enters.
+
+    Read by the entry state that arms the prompt *and* by the support gate, so
+    what is offered and what is claimed cannot drift.
+
+    A phrase the noun parser refuses, or one carrying a narrowing the sacrifice
+    prompt cannot test, refuses the whole line: the prompt lists one player's
+    battlefield with no observer and no source behind it, so a restriction
+    outside :data:`subject_filters.OBJECT_ONLY_FILTER_KEYS` would be quietly
+    ignored and the player would be offered permanents the card does not name.
+    """
+    from .grammar.lowering._common import dropped_narrowings
+    from .grammar.phrases import parse_subject_filter
+    from .subject_filters import object_only_filter
+
+    match = SACRIFICE_ANY_NUMBER_ON_ENTER.match(_self_normalized(line, card_name))
+    if match is None:
+        return None
+    # ``plural=True``: the phrase is *counted* ("any number of") rather than
+    # quantified, which is the position parse_subject_filter documents that
+    # word for.
+    filt = parse_subject_filter(match.group("phrase"), plural=True)
+    if filt is None or filt.zone != "battlefield" or filt.is_card:
+        return None
+    payload = filt.to_payload()
+    # A narrowing with no payload form leaves no key behind, so the testable-key
+    # check below cannot see it go missing.
+    if dropped_narrowings(filt, payload):
+        return None
+    return object_only_filter(payload)
+
+
 #: "As this creature enters, choose a number between 0 and 7." (Shapeshifter.)
 #: The bounds are data, like every other parameter in this file: a card printed
 #: "between 1 and 5" is the same choice. Matched by shape rather than listed as
@@ -298,6 +344,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "enters with P/T counters"
     if choose_number_on_enter(normalized) is not None:
         return "chooses a number as it enters"
+    if sacrifice_any_number_on_enter(normalized) is not None:
+        return "sacrifices any number as it enters"
     return None
 
 
@@ -316,6 +364,8 @@ __all__ = [
     "ENTERS_WITH_X_PLUS_1_1_COUNTERS",
     "LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER",
     "NO_MAXIMUM_HAND_SIZE",
+    "SACRIFICE_ANY_NUMBER_ON_ENTER",
+    "sacrifice_any_number_on_enter",
     "SPEND_ANY_COLOR",
     "SPEND_WHITE_AS_RED",
     "copy_on_enter_type",

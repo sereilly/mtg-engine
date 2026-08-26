@@ -323,3 +323,205 @@ def test_r31_the_cast_gate_reads_the_ids_a_caller_names(set_pool):
     assert not result.supported, result.details
     assert "Wall of Shadows" in result.details
     assert game.is_on_battlefield(shadows)
+
+# Round 31 — Wood Elemental: a variable sacrifice as it enters, counted back
+# ---------------------------------------------------------------------------
+#
+# "As this creature enters, sacrifice any number of untapped Forests." plus
+# "Wood Elemental's power and toughness are each equal to the number of Forests
+# sacrificed as it entered."
+#
+# Two mechanisms meet here. The sacrifice prompt learned a **ceiling** ("any
+# number", none included) and learned to record how many were given up onto the
+# permanent that asked. The CDA table learned a row that reads that number back
+# — the Forests are cards in a graveyard by then (CR 400.7), so there is nothing
+# on any battlefield left to count.
+
+
+def _r31_forest(name: str = "Forest") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Basic Land - Forest",
+        oracle_text="", colors=(), color_identity=("G",), keywords=(),
+        produced_mana=("G",),
+        raw={"name": name, "type_line": "Basic Land - Forest"},
+    )
+
+
+def _r31_wood_elemental(set_pool, *, forests=3, tapped=0, interactive=True):
+    """Seat 0 with *forests* Forests, of which *tapped* are tapped, casting it."""
+    lands = []
+    for i in range(forests):
+        perm = Permanent(card=_r31_forest())
+        perm.tapped = i < tapped
+        lands.append(perm)
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Wood Elemental"]],
+                     battlefield=lands)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    if interactive:
+        game.interactive_seats = {0}
+    game.cast_from_hand(0, "Wood Elemental")
+    return game, p1
+
+
+def test_wood_elemental_offers_its_forests_as_it_enters(set_pool):
+    """CR 614.1c: the sacrifice is part of entering, and the offer is a ceiling
+    — a tapped Forest is not among what the card names."""
+    game, p1 = _r31_wood_elemental(set_pool, forests=3, tapped=1)
+
+    prompt = game.pending_sacrifice_state()
+    assert prompt is not None and prompt["player_index"] == 0
+    assert prompt["count"] == 2, "only the untapped Forests are offered"
+    assert prompt["up_to"] is True, "any number, not exactly two"
+    elemental = next(p for p in p1.battlefield if p.card.name == "Wood Elemental")
+    assert (elemental.effective_power, elemental.effective_toughness) == (0, 0)
+
+
+def test_wood_elementals_body_is_the_number_of_forests_it_ate(set_pool):
+    game, p1 = _r31_wood_elemental(set_pool, forests=3)
+    prompt = game.pending_sacrifice_state()
+
+    assert game.confirm_sacrifice(0, prompt["valid_indices"][:2])
+
+    elemental = next(p for p in p1.battlefield if p.card.name == "Wood Elemental")
+    assert (elemental.effective_power, elemental.effective_toughness) == (2, 2)
+    assert [p.card.name for p in p1.battlefield if p.card.name == "Forest"] == ["Forest"]
+    assert len(p1.graveyard) == 2
+
+
+def test_a_different_number_of_forests_is_a_different_body(set_pool):
+    """The control on the test above: nothing about the card is 2/2."""
+    game, p1 = _r31_wood_elemental(set_pool, forests=4)
+    prompt = game.pending_sacrifice_state()
+
+    assert game.confirm_sacrifice(0, prompt["valid_indices"])
+
+    elemental = next(p for p in p1.battlefield if p.card.name == "Wood Elemental")
+    assert (elemental.effective_power, elemental.effective_toughness) == (4, 4)
+
+
+def test_sacrificing_none_is_a_legal_answer_and_kills_it(set_pool):
+    """"Any number" includes none, and a 0/0 dies to CR 704.5f. Refusing the
+    empty answer would force a player to give up lands the card offered them
+    the choice of keeping."""
+    game, p1 = _r31_wood_elemental(set_pool, forests=3)
+
+    assert game.confirm_sacrifice(0, [])
+
+    assert [p.card.name for p in p1.battlefield] == ["Forest"] * 3
+    assert [c.name for c in p1.graveyard] == ["Wood Elemental"]
+
+
+def test_a_non_interactive_seat_gives_up_nothing(set_pool):
+    """The stated policy, not a heuristic: a seat that is merely offered the
+    chance to pay a cost pays none of it, and the card does what it does when
+    its controller declines. Nothing is left queued either — a suspending prompt
+    an AI seat never answers would be a hang, not a weak play."""
+    game, p1 = _r31_wood_elemental(set_pool, forests=3, interactive=False)
+
+    assert game.pending_choices == []
+    assert [p.card.name for p in p1.battlefield] == ["Forest"] * 3
+    assert [c.name for c in p1.graveyard] == ["Wood Elemental"]
+
+
+def test_with_no_forests_at_all_it_asks_nothing(set_pool):
+    game, p1 = _r31_wood_elemental(set_pool, forests=0)
+
+    assert game.pending_choices == []
+    assert [c.name for c in p1.graveyard] == ["Wood Elemental"]
+
+
+# ---------------------------------------------------------------------------
+# Round 31 — Primordial Ooze: an offer whose price is what the card has grown to
+# ---------------------------------------------------------------------------
+#
+# "At the beginning of your upkeep, put a +1/+1 counter on this creature. Then
+# you may pay {X}, where X is the number of +1/+1 counters on it. If you don't,
+# tap this creature and it deals X damage to you."
+#
+# Nothing here is a new prompt. The offer is the ordinary ``optional_pay``, and
+# the whole card is three additions to things that already existed: a P/T
+# counter is a counter kind the "the number of <kind> counters on it" phrase can
+# name; a where-clause may be defined by one; and an offered mana cost may carry
+# an ``{X}`` that is read at resolution rather than at lowering — which is what
+# CR 608.2 asks for, since the counter this ability just placed is part of the
+# number.
+
+
+def _r31_ooze(set_pool, *, counters=0, lands=4, interactive=True):
+    """Primordial Ooze under seat 0 with *lands* untapped Mountains beside it."""
+    from engine.pt import add_pt_counters
+    from tests.helpers import CARDS_BY_NAME
+
+    ooze = Permanent(card=set_pool("LEG")["Primordial Ooze"])
+    if counters:
+        add_pt_counters(ooze, "+1/+1", counters)
+    battlefield = [ooze] + [
+        Permanent(card=CARDS_BY_NAME["Mountain"]) for _ in range(lands)
+    ]
+    p1 = PlayerState(name="P1", battlefield=battlefield,
+                     library=[_vanilla("Filler", 1, 1) for _ in range(5)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    if interactive:
+        game.interactive_seats = {0}
+    game.start_turn(0)
+    game._settle()
+    return game, p1, ooze
+
+
+def test_the_upkeep_offer_is_priced_by_the_counter_it_just_placed(set_pool):
+    """CR 608.2: the count is taken when the ability resolves, and the counter
+    this same ability placed is part of it — two counters plus the new one is
+    {3}, not {2}."""
+    game, _p1, ooze = _r31_ooze(set_pool, counters=2)
+
+    assert ooze.metadata["plus_counters"] == 3
+    offer = game.pending_optional_pays[0]
+    assert offer["cost"] == {"generic": 3}
+    assert offer["prompt"] == "Pay {3}?"
+    assert game.waiting_prompt() is not None, "the upkeep waits on the answer"
+
+
+def test_paying_leaves_it_untapped_and_unharmed(set_pool):
+    game, p1, ooze = _r31_ooze(set_pool, counters=2)
+
+    assert game.resolve_pending_choice("optional_pay", 0, accept=True)
+
+    assert not ooze.tapped and p1.life == 20
+    untapped = [p for p in p1.battlefield if p.card.name == "Mountain" and not p.tapped]
+    assert len(untapped) == 1, "three of the four lands paid for it"
+
+
+def test_declining_taps_it_and_deals_that_same_number(set_pool):
+    """The "if you don't" branch reads the *same* X the offer was priced by —
+    one sentence, one number."""
+    game, p1, ooze = _r31_ooze(set_pool, counters=2)
+
+    assert game.resolve_pending_choice("optional_pay", 0, accept=False)
+
+    assert ooze.tapped and p1.life == 17
+
+
+def test_a_seat_that_cannot_pay_is_never_offered_and_takes_the_consequence(set_pool):
+    """An offer nobody could take is not made, and its decline branch still
+    applies — the ordinary rule for an optional cost, here with a variable one."""
+    game, p1, ooze = _r31_ooze(set_pool, counters=2, lands=0)
+
+    assert game.pending_optional_pays == []
+    assert ooze.tapped and p1.life == 17
+
+
+def test_the_price_grows_with_the_creature(set_pool):
+    """The control: nothing about this card is {3}. A second upkeep is a bigger
+    creature and a bigger bill."""
+    game, p1, ooze = _r31_ooze(set_pool, counters=0)
+
+    assert game.pending_optional_pays[0]["cost"] == {"generic": 1}
+    assert game.resolve_pending_choice("optional_pay", 0, accept=False)
+    assert p1.life == 19
+
+    game.start_turn(0)
+    game._settle()
+    assert ooze.metadata["plus_counters"] == 2
+    assert game.pending_optional_pays[0]["cost"] == {"generic": 2}

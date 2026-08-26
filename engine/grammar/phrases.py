@@ -20,6 +20,7 @@ from dataclasses import replace
 
 from ..pt import pt_counter_deltas
 from . import ast
+from .amounts import accept_counters_on_source
 from .errors import GrammarError
 from .lexer import (MANA, NUMBER, PUNCT, QUOTE, WORD, tokenize)
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
@@ -848,6 +849,13 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
         return ast.GreatestPowerAmong(parse_object_filter(stream))
     if not stream.accept_phrase("number", "of"):
         raise stream.error("expected 'the number of' in a where-clause")
+    # "…the number of **+1/+1 counters on it**" (Primordial Ooze). In front of
+    # the noun parser for the reason `_parse_counted_amount` puts it there: a
+    # counter is not an object, so ``parse_object_filter`` would refuse the
+    # words and take the whole line with it.
+    counters = accept_counters_on_source(stream)
+    if counters is not None:
+        return counters
     filt = parse_object_filter(stream)
     # "…the number of creatures **that died this way**" (Hellfire). Neither the
     # board nor the turn's history: the objects one earlier step of this same
