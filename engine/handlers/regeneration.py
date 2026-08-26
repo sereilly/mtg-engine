@@ -2,25 +2,40 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import _one_choice, resolve_target_permanent
+from ._common import permanent_matches_filter, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
+    from ..models import Permanent
     from ..oracle import OracleInstruction
 
 
 @effect_handler("grant_regeneration_to_target_creature")
 def grant_regeneration_to_target_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
-    regenerated = game._grant_regeneration_shield(
-        target,
-        target_permanent_index=_one_choice(context.target_permanent_index),
-        target_permanent_id=_one_choice(context.target_permanent_id),
-        filter=instruction.payload,
+    """"Regenerate target creature" (Death Ward), "target Elephant" (Elephant
+    Graveyard), "target black creature" (Horror of Horrors).
+
+    The printed narrowing arrives as the ordinary filter payload and is tested
+    by the one matcher, so what this accepts is what ``legality.py``'s picker
+    offered. ``fallback_on_invalid_choice=False`` because an explicitly chosen
+    illegal target fizzles (CR 608.2b) rather than sliding onto whatever else is
+    on the battlefield.
+    """
+    described = instruction.payload
+
+    def eligible(perm: Permanent) -> bool:
+        return perm.is_creature and permanent_matches_filter(perm, described)
+
+    chosen = resolve_target_permanent(
+        game, context, predicate=eligible, fallback_on_invalid_choice=False
     )
-    game.log.append("Regeneration shield granted" if regenerated else "No valid creature to regenerate")
+    if chosen is None:
+        game.log.append("No valid creature to regenerate")
+        return True, "resolved"
+    chosen.regeneration_shield += 1
+    game.log.append("Regeneration shield granted")
     return True, "resolved"
 
 
