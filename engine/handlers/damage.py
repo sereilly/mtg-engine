@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..damage_redirects import DamageRedirect, add_redirect
+from ..dexterity import flip_lands_on
 from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
@@ -629,6 +630,54 @@ def hurricane_damage(game: Game, instruction: OracleInstruction, context: Oracle
     damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     _mass_damage_players_and_creatures(game, card, damage, _has_flying)
     game.log.append(f"{card.name} dealt {damage} hurricane damage to each flying creature and each player")
+    return True, "resolved"
+
+
+@effect_handler("deal_damage_to_random_creatures")
+def deal_damage_to_random_creatures(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Damage a randomly chosen handful of creatures, optionally tapping them.
+
+    Falling Star: the creatures a flipped card "lands on" are chosen by
+    ``engine.dexterity``, which is where that substitution is explained. Only
+    the *count* is this card's — the payload carries it, so a card landing on a
+    different number needs no code here.
+
+    The damage goes through ``apply_damage_to_creature`` like any other
+    non-combat damage, so shields, replacements, lifelink and "dealt damage"
+    triggers all see it, and death is left to the state-based sweep. Tapping
+    reads what was **actually dealt**: a creature whose damage was fully
+    prevented was not "dealt damage by" the source (CR 615.1), so it does not
+    tap.
+    """
+    card = context.card
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    minimum = int(instruction.payload.get("minimum", 0))
+    maximum = int(instruction.payload.get("maximum", 1))
+    tap_damaged = bool(instruction.payload.get("tap_damaged", False))
+
+    candidates = [perm for _seat, perm in game.permanents_with_controller() if perm.is_creature]
+    hits = flip_lands_on(candidates, minimum=minimum, maximum=maximum)
+    if not hits:
+        game.log.append(f"{card.name} landed on no creatures")
+        return True, "resolved"
+
+    def _hit(perm: Permanent) -> None:
+        def _after(dealt: int) -> None:
+            if dealt > 0 and tap_damaged:
+                game.become_tapped(perm)
+
+        apply_damage_to_creature(
+            game, perm, amount, card,
+            log_message=lambda dealt: (
+                f"{card.name} landed on {perm.card.name} and dealt {dealt} damage"
+            ),
+            then=_after,
+        )
+
+    for perm in hits:
+        _hit(perm)
     return True, "resolved"
 
 

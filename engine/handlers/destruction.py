@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import random
 from typing import TYPE_CHECKING
 
+from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ._common import permanent_matches_filter, resolve_target_permanent
@@ -344,8 +344,10 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
         for seat, perm in game.permanents_with_controller()
         if perm is not source_permanent
     ]
-    num_to_destroy = random.randint(0, min(2, len(candidates)))
-    chosen = random.sample(candidates, num_to_destroy) if num_to_destroy > 0 else []
+    # The flip itself is a CR 104.1 physical action the engine cannot perform;
+    # ``engine.dexterity`` is the one place that substitution is made and
+    # explained. Only the count is this card's ("up to two permanents").
+    chosen = flip_lands_on(candidates, maximum=2)
     for victim_player, victim_perm in chosen:
         game.remove_from_battlefield(victim_perm)
         game._permanent_to_graveyard(victim_player, victim_perm)

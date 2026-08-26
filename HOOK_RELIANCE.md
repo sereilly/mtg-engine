@@ -27,7 +27,7 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 | ATQ | 85 | 85 (100.0%) | 4 (4.7%) | 120 | 4 (3.3%) | 4 | 4.7 |
 | 3ED | 296 | 296 (100.0%) | 44 (14.9%) | 389 | 42 (10.8%) | 47 | 15.9 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| LEG *(measured)* | 310 | 286 (92.3%) | 1 (0.3%) | 388 | 1 (0.3%) | 1 | 0.3 |
+| LEG *(measured)* | 310 | 290 (93.5%) | 2 (0.7%) | 398 | 2 (0.5%) | 2 | 0.7 |
 | **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **80 (10.9%)** | **1119** | **75 (6.7%)** | **86** | **11.7** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
@@ -38,7 +38,7 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 75 | 76 |
+| `CARD_LINE_INSTRUCTIONS` | 76 | 77 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ENCHANTED_LAND_TAPPED_FOR_MANA` | 1 | 1 |
@@ -75,6 +75,7 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 - **Ebony Horse** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Erg Raiders** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Eye for an Eye** (`CARD_LINE_INSTRUCTIONS`) — 1 line
+- **Falling Star** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **False Orders** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Farmstead** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Forcefield** (`CARD_LINE_INSTRUCTIONS`) — 1 line

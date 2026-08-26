@@ -281,6 +281,20 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "become unblocked. you may have it block an attacking creature of your choice":
             _line("remove_creature_from_combat", "spell_pattern"),
     },
+    # CR 104.1: the card asks a player to flip it onto a table, which this
+    # engine cannot do. ``engine/dexterity.py`` substitutes a random landing
+    # and explains why; the numbers here are the card's own reading of it —
+    # one to three creatures. A hook because the four sentences are one card's
+    # (Chaos Orb is the only other flip, and its effect is a different one),
+    # while the *substitution* they share is not hooked at all.
+    'Falling Star': {
+        "flip falling star onto the playing area from a height of at least one "
+        "foot. falling star deals 3 damage to each creature it lands on. tap all "
+        "creatures dealt damage by falling star. if falling star doesn't turn "
+        "completely over at least once during the flip, it has no effect":
+            _line("deal_damage_to_random_creatures", "spell_pattern",
+                amount=3, minimum=1, maximum=3, tap_damaged=True),
+    },
     'Farmstead': {
         'enchanted land has "at the beginning of your upkeep, you may pay '
         '{w}{w}. if you do, you gain 1 life."':

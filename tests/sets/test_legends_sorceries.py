@@ -779,3 +779,134 @@ def test_a_non_interactive_seat_answers_both_prompts_and_finishes(set_pool):
     assert game.effect_suspended is False
     assert len(p1.hand) == 2
     assert [c.name for c in p1.exile] == ["Recall"]
+
+
+# ---------------------------------------------------------------------------
+# Falling Star (round 31) — a CR 104.1 flip, simulated
+# ---------------------------------------------------------------------------
+#
+# The card asks a player to flip it onto a table from a height of at least one
+# foot. There is no table, so ``engine/dexterity.py`` substitutes a random
+# landing on one to three creatures; these tests pin what the substitution is
+# allowed to do, not where any particular flip lands. Seeded where a specific
+# landing is needed, because the module-level RNG is what
+# ``run_ai_simulation`` seeds.
+
+
+def _r31_sized(name: str, power: int, toughness: int) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _r31_falling_star(set_pool, board: list[tuple[str, int, int]], *, seats: int = 2):
+    """Seat 0 casts Falling Star; *board* is split evenly across the seats, so
+    the flip can land on either side — it is not "target creature an opponent
+    controls"."""
+    from engine.models import Permanent
+
+    players = [PlayerState(name=f"P{i + 1}", life=20) for i in range(seats)]
+    for i, (name, power, toughness) in enumerate(board):
+        players[i % seats].battlefield.append(
+            Permanent(card=_r31_sized(name, power, toughness))
+        )
+    players[0].hand = [set_pool("LEG")["Falling Star"]]
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    return game, players
+
+
+def _r31_all_creatures(players):
+    return [perm for p in players for perm in p.battlefield]
+
+
+def test_falling_star_lands_on_between_one_and_three_creatures(set_pool):
+    """The substitution's whole contract. Run over many seeds rather than one,
+    because a single flip cannot distinguish "one to three" from "always two"."""
+    import random
+
+    sizes = set()
+    for seed in range(40):
+        random.seed(seed)
+        game, players = _r31_falling_star(
+            set_pool, [(f"Bear {i}", 2, 4) for i in range(6)]
+        )
+        result = game.cast_from_hand(0, "Falling Star")
+        assert result.supported, result.details
+        hit = [p for p in _r31_all_creatures(players) if p.damage_marked > 0]
+        sizes.add(len(hit))
+
+    assert sizes and sizes <= {1, 2, 3}, sizes
+    assert sizes == {1, 2, 3}, f"the count should vary across seeds, saw {sizes}"
+
+
+def test_falling_star_deals_three_and_taps_what_it_hit(set_pool):
+    """"deals 3 damage to each creature it lands on. Tap all creatures dealt
+    damage by Falling Star." Both halves, and only to what it hit — a creature
+    it missed is undamaged *and* untapped."""
+    import random
+
+    random.seed(0)
+    game, players = _r31_falling_star(
+        set_pool, [(f"Bear {i}", 2, 4) for i in range(6)]
+    )
+
+    result = game.cast_from_hand(0, "Falling Star")
+
+    assert result.supported, result.details
+    hit = [p for p in _r31_all_creatures(players) if p.damage_marked > 0]
+    missed = [p for p in _r31_all_creatures(players) if p.damage_marked == 0]
+    assert hit, game.log
+    assert all(p.damage_marked == 3 for p in hit), [p.damage_marked for p in hit]
+    assert all(p.tapped for p in hit), game.log
+    assert all(not p.tapped for p in missed), game.log
+
+
+def test_falling_star_can_land_on_its_casters_own_creatures(set_pool):
+    """"each creature it lands on" is every creature on the table. A flip that
+    only ever hit the opponent would be a different, much better card."""
+    import random
+
+    seats_hit = set()
+    for seed in range(40):
+        random.seed(seed)
+        game, players = _r31_falling_star(
+            set_pool, [(f"Bear {i}", 2, 4) for i in range(6)]
+        )
+        game.cast_from_hand(0, "Falling Star")
+        for seat, player in enumerate(players):
+            if any(p.damage_marked > 0 for p in player.battlefield):
+                seats_hit.add(seat)
+
+    assert seats_hit == {0, 1}, seats_hit
+
+
+def test_falling_star_kills_what_it_lands_on_when_the_damage_is_lethal(set_pool):
+    """Death is the state-based sweep's job, not the handler's (CR 704.5g), so
+    a 2/2 hit for 3 is gone by the time the spell has resolved."""
+    import random
+
+    random.seed(0)
+    game, players = _r31_falling_star(
+        set_pool, [(f"Bear {i}", 2, 2) for i in range(6)]
+    )
+    before = len(_r31_all_creatures(players))
+
+    game.cast_from_hand(0, "Falling Star")
+
+    assert len(_r31_all_creatures(players)) < before, game.log
+
+
+def test_falling_star_on_an_empty_board_resolves_and_does_nothing(set_pool):
+    """A flip with nothing to land on is not an error — the minimum of one is
+    clamped to what is actually there."""
+    game, players = _r31_falling_star(set_pool, [])
+
+    result = game.cast_from_hand(0, "Falling Star")
+
+    assert result.supported, result.details
+    assert all(p.life == 20 for p in players), game.log
