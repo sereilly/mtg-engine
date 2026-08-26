@@ -99,7 +99,11 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # "Discard your hand" (Chandra, Heart of Fire) — no count to read, and
     # `whole_hand` rather than a sentinel amount so "discard all cards" (a
     # wording no card prints) stays unparsed.
-    if stream.accept_phrase("your", "hand"):
+    # The possessive agrees with whoever is discarding — "discard **your**
+    # hand" (Chandra, Heart of Fire), "that player discards **their** hand"
+    # (Nicol Bolas) — so both spellings are one production. Which player it is
+    # was read before this function was called; the pronoun only repeats them.
+    if stream.accept_phrase("your", "hand") or stream.accept_phrase("their", "hand"):
         return ast.Discard(player, ast.AllOf(), whole_hand=True)
     # "Discard **up to** two cards" (Kinetic Augur). Read before the amount, and
     # recorded rather than consumed: a ceiling read as an exact count is a card

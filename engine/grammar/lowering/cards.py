@@ -53,11 +53,22 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
             f"no {node.player.kind!r} discard handler carries a narrowing", node=node
         )
     if node.whole_hand:
-        if node.player.kind != "you":
-            raise LoweringError(
-                f"no whole-hand discard handler for {node.player.kind!r}", node=node
+        if node.player.kind == "you":
+            return (OracleInstruction("discard_hand", "", {}),)
+        # "…, that player discards their hand" (Nicol Bolas). The same effect
+        # aimed at the seat the firing event recorded, so it is the same
+        # instruction with a `who` — a second kind would be a second copy of
+        # emptying a hand. Admitted only under a trigger whose fire site
+        # actually froze a damaged player: under any other event the words name
+        # a seat nobody recorded, and the discard would silently empty the
+        # ability's own controller's hand.
+        if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
+            return (
+                OracleInstruction("discard_hand", "", {"who": "damaged_player"}),
             )
-        return (OracleInstruction("discard_hand", "", {}),)
+        raise LoweringError(
+            f"no whole-hand discard handler for {node.player.kind!r}", node=node
+        )
     # "Each player discards a card." (Liliana, Waker of the Dead.) The handler
     # records which players could not, because the printed rider "Each opponent
     # who can't loses 3 life." reads that answer out of the same resolution.

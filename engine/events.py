@@ -473,6 +473,26 @@ def _opponent_cast_filter(
     not_from = trig.condition.payload.get("not_from_zone")
     if not_from and event.payload.get("cast_from_zone", "hand") == not_from:
         return False
+    # "…**other than the first instant spell that player casts each turn**"
+    # (Ichneumon Druid). An ordinal *exclusion*, and the mirror of the
+    # first-spell ordinal above: both count the caster's own record of the
+    # spells this condition's narrowing admits, and the spell that fired this
+    # event is already on it — so its position in that list is the list's
+    # length. The trigger fires once that position is past the exempted one.
+    after = trig.condition.payload.get("after_spell_ordinal")
+    if after is not None:
+        exempt = _NUMBER_WORDS.get(str(after))
+        if exempt is None:
+            # An ordinal this engine cannot count. Refusing is the safe
+            # direction: firing would ignore the exemption the card prints.
+            return False
+        caster = game.players[caster_index]
+        matching = [
+            spell for spell in caster.spells_cast_this_turn
+            if _cast_narrowing_admits(game, permanent, trig, spell)
+        ]
+        if len(matching) <= exempt:
+            return False
     # "…casts an **artifact** spell" (Citanul Druid), asked of the same helper
     # the other two cast kinds use.
     return _cast_narrowing_admits(game, permanent, trig, card)

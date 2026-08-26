@@ -29,6 +29,11 @@ _EOT_METADATA_KEYS = (
     "exile_if_dies_this_turn",
     # Sengir Vampire damage-source tracking (cleared each turn)
     "damaged_by_sources_this_turn",
+    # The other direction of the same record: whom this permanent has dealt
+    # damage to this turn (Whirling Dervish's intervening-if). Two keys because
+    # they answer two questions and are read by two different clauses — the
+    # victim's list names its killers, this one names a damager's victims.
+    "dealt_damage_to_seats_this_turn",
     # Dragon Whelp firebreathing activation counter ("four or more times this turn")
     "pump_activation_count",
     # Pyramids: unused land-destruction shield expires with the turn

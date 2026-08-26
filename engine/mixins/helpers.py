@@ -1716,10 +1716,16 @@ class GameHelpersMixin:
             for trig in program.triggered_abilities:
                 # Sengir Vampire: "Whenever a creature dealt damage by this
                 # creature this turn dies, put a +1/+1 counter on this creature."
+                # Axelrod Gunnarson prints the same condition with a different
+                # effect, and this branch used to require the counter
+                # instruction as well — a dispatcher narrowed to the one card
+                # that reached it first, so a second card carrying the condition
+                # compiled a real instruction and fired nowhere. What the
+                # ability *does* is the effect's business; the condition is
+                # about a death.
                 if (
                     trig.condition.kind == "creature_dealt_damage_by_self_dies"
                     and trig.instruction is not None
-                    and trig.instruction.kind == "add_counter_to_self"
                 ):
                     damagers = dead_permanent.metadata.get("damaged_by_sources_this_turn", [])
                     # By identity: ``in`` compares Permanent by value, and a

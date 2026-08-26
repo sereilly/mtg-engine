@@ -1783,8 +1783,24 @@ def reveal_top_to_hand_or_bottom(game: Game, instruction: OracleInstruction, con
 def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Discard your hand" (Chandra, Heart of Fire). Every card, no choice to
     make, so no prompt — each discard still goes through _discard_card so
-    anything watching discards sees them."""
+    anything watching discards sees them.
+
+    ``who`` names a *different* seat when the sentence did: "whenever this
+    creature deals damage to an opponent, **that player** discards their hand"
+    (Nicol Bolas) empties the hand of the player the firing event recorded
+    (CR 603.10), read from the trigger's context under the key every damage fire
+    site stamps. No record means the words named nobody and nothing is
+    discarded, which is the same rule the random-discard handler above follows —
+    never a fall back to the ability's controller, who is the one player this
+    effect must not hit.
+    """
     caster = context.caster
+    if instruction.payload.get("who") == "damaged_player":
+        seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: no recorded player, no discard")
+            return True, "resolved"
+        caster = game.players[seat]
     discarded = list(caster.hand)
     caster.hand = []
     for card in discarded:

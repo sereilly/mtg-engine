@@ -70,6 +70,15 @@ NUMBER_WORDS: dict[str, int] = {
     "twelve": 12, "thirteen": 13, "fifteen": 15, "twenty": 20,
 }
 
+#: The ordinals a printed "…the **first** <thing> that player <verb>s each
+#: turn" clause names. Beside :data:`NUMBER_WORDS` rather than folded into it:
+#: "two spells" is a count and "the second spell" is a position, and one table
+#: answering both would let a production read a count where the card printed a
+#: position.
+ORDINAL_WORDS: dict[str, int] = {
+    "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
+}
+
 # Keyword abilities the engine actually implements. A keyword outside this set
 # still *parses* (it is in the Scryfall catalog) but lowering refuses it, which
 # is the honest answer: the word is recognized, the behavior is not built.
@@ -128,7 +137,8 @@ __all__ = [
     "ABILITY_WORDS", "ALL_SUBTYPES", "ARTIFACT_TYPES", "CARD_TYPES",
     "COLOR_WORDS", "CREATURE_TYPES", "ENCHANTMENT_TYPES", "IMPLEMENTED_KEYWORDS",
     "KEYWORD_ABILITIES", "KEYWORD_ACTIONS", "KEYWORD_INDEX", "LAND_TYPES",
-    "NUMBER_WORDS", "PLANESWALKER_TYPES", "SPELL_TYPES", "SUBTYPE_INDEX",
+    "NUMBER_WORDS", "ORDINAL_WORDS", "PLANESWALKER_TYPES", "SPELL_TYPES",
+    "SUBTYPE_INDEX",
     "SUPERTYPES", "TYPE_LINE_SUPERTYPES", "manifest", "match_longest",
 ]
 

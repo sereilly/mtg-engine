@@ -163,13 +163,6 @@ class OracleInstructionsMixin:
         oracle compiler already recognizes these conditions, so a card written
         "whenever you cast an enchantment spell" needs no registry entry.
         """
-        # The record "you've cast an instant or sorcery spell this turn"
-        # (Stormwing Entity) reads, kept here rather than at the payment site
-        # because this is where the *cast* is announced: a spell that is
-        # countered was still cast, and CR 601.2i finishes the casting before
-        # anything can respond.
-        if 0 <= caster_index < len(self.players):
-            self.players[caster_index].spells_cast_this_turn.append(card)
         emit(self, "you_cast_spell", subject=card, caster_index=caster_index)
         # The ordinal form (Double Vision) is the *same* event asked a different
         # question, so it is announced from the same place rather than given a
@@ -238,9 +231,16 @@ class OracleInstructionsMixin:
         # resolved with no object to find, logged that the spell was no longer
         # on the stack, and let it through. Nothing in the pool had asked until
         # a card did.
+        # The caster's seat under the key a "that player" back-reference reads
+        # (`EVENT_SUBJECT_PLAYER`), beside the `caster_index` the event filters
+        # use. Two names for one seat because they are read at two moments: the
+        # filter asks it while deciding whether the trigger fires, the effect
+        # asks the *frozen* context while resolving — and the second is the one
+        # a per-seat key has to survive into.
         emit(
             self, "opponent_casts_spell", subject=card, caster_index=caster_index,
             cast_from_zone=cast_from_zone, cast_card=card,
+            event_subject_player=caster_index,
         )
 
     def _apply_self_resolved_hook(

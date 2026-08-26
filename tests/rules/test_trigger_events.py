@@ -587,3 +587,38 @@ def test_a_source_you_control_is_a_seat_rather_than_a_permanent():
 
     game._deal_damage_to_player(opponent, 1, source=mine)
     assert [item.card.name for item in game.stack] == ["Seat Watcher"]
+
+
+@pytest.mark.cr("601.2i", "603.2")
+def test_an_opponent_scoped_cast_trigger_can_count_the_spell_that_fired_it():
+    """CR 601.2i: the spell **becomes cast**, and only then do the abilities
+    that trigger on a cast trigger.
+
+    So every ordinal — "your first instant or sorcery spell each turn", "their
+    second spell each turn", "other than the first instant spell that player
+    casts each turn" — counts a record that already holds this spell. The
+    record was written between the two announcements rather than before both,
+    so an opponent-scoped ordinal counted a list missing the very spell that
+    fired it and was one cast late.
+    """
+    watcher = Permanent(card=_card(
+        "Watcher",
+        "Whenever an opponent casts an instant spell other than the first "
+        "instant spell that player casts each turn, this creature deals 4 "
+        "damage to that player.",
+    ))
+    game, _owner, opponent = _game(watcher)
+    trick = _card("Trick", "Target creature gets +1/+1 until end of turn.",
+                  type_line="Instant")
+    opponent.hand = [trick, trick]
+
+    game.cast_from_hand(1, "Trick", target_player_index=0, target_permanent_index=0)
+    game.resolve_stack()
+    assert len(opponent.spells_cast_this_turn) == 1, (
+        "the spell that fired the event is already recorded"
+    )
+    assert opponent.life == 20, "and the first instant is the one the card exempts"
+
+    game.cast_from_hand(1, "Trick", target_player_index=0, target_permanent_index=0)
+    game.resolve_stack()
+    assert opponent.life == 16, "the second instant is past the exemption"
