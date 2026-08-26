@@ -118,6 +118,7 @@ from .zones import (
     _reads_no_return_restriction,
     _lower_put_onto_battlefield,
     _lower_return_to_zone,
+    _lower_put_source_into_zone,
     _lower_put_on_library_top,
 )
 from .exile import (
@@ -312,6 +313,7 @@ __all__ = [
     "_lower_put_on_library_top",
     "_lower_put_onto_battlefield",
     "_lower_return_to_zone",
+    "_lower_put_source_into_zone",
     "_lower_reveal_top",
     "_lower_reveal_until",
     "_lower_tap_or_untap",

@@ -170,7 +170,15 @@ def _lower_exile(
             raise LoweringError(
                 "a timed exile of the source has no handler", node=node
             )
-        return (OracleInstruction("exile_self", "", {}),)
+        # "…**with two scream counters on it**" (All Hallow's Eve). Payload, so
+        # the counter word and the number never reach an instruction *kind*;
+        # the handler registers the exiled card with them
+        # (``engine/exiled_records.py``) and the card's own upkeep trigger
+        # reads them back off the register.
+        payload: dict = {}
+        if node.counters:
+            payload["counters"] = {name: count for name, count in node.counters}
+        return (OracleInstruction("exile_self", "", payload),)
     # "Exile **that token**…" (Stangg). The token this same effect created,
     # addressed by the id the token maker wrote to the scratchpad — not a
     # chosen target and not the source, so it gets its own kind for the reason

@@ -430,6 +430,16 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # id the token maker recorded. A zone change like the two beside it.
     "exile_created_token": "zones",
     "exile_target_graveyard_card": "zones",
+    # "Put it into your graveyard." (All Hallow's Eve, from exile.) The
+    # ability's own source moving zones — the same category as the self-exile
+    # above, because it is the same kind of move made by the same kind of
+    # sentence; the destination is payload.
+    "put_self_into_zone": "zones",
+    # "Each player returns all creature cards from their graveyard to the
+    # battlefield." (All Hallow's Eve.) A sweep reanimation, filed with the
+    # targeted graveyard returns beside it for the reason the two exiles share
+    # a category: what varies is which cards, not what happens to them.
+    "return_all_cards_from_graveyard": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
     # "…return a card from your graveyard to your hand **for each card
     # discarded this way**." (Recall.) The same zone change, counted by an

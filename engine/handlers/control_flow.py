@@ -22,6 +22,8 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
+from ..exiled_records import is_live, record_in_context, source_object
+from ..named_counters import counters_on
 from ..oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
@@ -413,6 +415,33 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # rather than a guess at a board that no longer holds the answer.
         return bool((context.trigger_context or {}).get("had_plus1_counter"))
 
+    if kind == "source_exiled_with_counter":
+        # "if this card is exiled with a scream counter on it" (All Hallow's
+        # Eve). Both halves of the sentence, in the order it prints them: the
+        # source is in exile, *and* it carries one of the named counters.
+        #
+        # The zone half is asked of the register rather than assumed from the
+        # trigger having fired: an ability on the stack is independent of its
+        # source (CR 608.2), so between the upkeep scan and this resolution
+        # anything at all could have taken the card out of exile — and a gate
+        # that answered off the trigger would be no gate.
+        record = record_in_context(context)
+        if record is None or not is_live(game, record):
+            return False
+        return counters_on(record, str(payload.get("counter", ""))) > 0
+
+    if kind == "source_counter_count":
+        # "if there are no more scream counters on it" (All Hallow's Eve),
+        # asked after the removal that may have taken the last one off. The
+        # source is a permanent or a card in exile, and one reader answers for
+        # both — see ``engine/exiled_records.source_object``.
+        holder = source_object(context)
+        if holder is None:
+            return False
+        return counters_on(holder, str(payload.get("counter", ""))) == int(
+            payload.get("count", 0)
+        )
+
     if kind == "returned_to_hand_this_turn":
         # "a permanent was put into your hand from the battlefield this turn"
         # (Barrin). "Your" is the ability's controller; the bounce paths feed
@@ -556,7 +585,10 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
         if source is None:
             return False
         counter = str(instruction.payload.get("counter", "doom"))
-        return int(source.metadata.get(f"{counter}_counters", 0)) > 0
+        # The same reader the removal itself uses (``named_counters.counters_on``),
+        # so the offer and the action cannot disagree about where the counters
+        # are — the whole reason ``exiled_records.source_object`` exists.
+        return counters_on(source, counter) > 0
     # "Each player **may** ante the top card of their library. If a player does,
     # that player's life total becomes 20." (Rebirth.) An empty library has no
     # top card, so there is no ante to offer — and taking the offer anyway would
@@ -588,7 +620,9 @@ def _narrow_to_takeable_actions(
     always has. A ``choose_one`` loses just the modes that cannot be taken, and
     becomes unmakeable only when it has none left.
     """
-    source = context.source_permanent
+    # "The source" is a permanent or a card in exile — one reader for both, so
+    # an offer made from exile is gated on the same state the action reads.
+    source = source_object(context)
     narrowed = []
     for step in steps:
         if step.kind == "choose_one":

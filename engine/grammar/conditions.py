@@ -332,6 +332,50 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         _parse_duration(stream)
         return ast.ReturnedToHandThisTurn()
 
+    # "if **this card is exiled with a scream counter on it**" (All Hallow's
+    # Eve). CR 603.4's intervening-if over an object in exile — the one zone
+    # this engine had no way to ask about, because a card there is a bare
+    # ``CardDefinition`` with no object to carry state. The register in
+    # ``engine/exiled_records.py`` is what answers it.
+    #
+    # Read before the tapped/untapped state clause below, which shares the
+    # "<source> is" opening: both mark and reset, so the order decides only
+    # which refusal survives, and the more specific question asking first keeps
+    # "exiled" from being reported as an unrecognised state word.
+    exiled_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_phrase("is", "exiled", "with"):
+        stream.accept_word("a", "an")
+        counter_word = stream.peek_word()
+        if counter_word is not None and counter_word not in ("counter", "counters"):
+            stream.advance()
+            if (
+                stream.accept_word("counter", "counters")
+                and stream.accept_phrase("on", "it")
+            ):
+                return ast.SourceExiledWithCounter(counter_word)
+    stream.reset(exiled_mark)
+
+    # "if **there are no more scream counters on it**" (All Hallow's Eve), the
+    # sentence after the removal. A count of the source's counters against a
+    # number; only the zero comparison is printed in this pool, and the node
+    # carries the number rather than a flag so the wider comparison is an
+    # extension here rather than a second condition.
+    #
+    # "no more" and "no" are one phrase with an optional word: the difference
+    # is English, not a different question — both say the count is zero.
+    empty_mark = stream.mark()
+    if stream.accept_phrase("there", "are", "no"):
+        stream.accept_word("more")
+        counter_word = stream.peek_word()
+        if counter_word is not None and counter_word not in ("counter", "counters"):
+            stream.advance()
+            if (
+                stream.accept_word("counters", "counter")
+                and stream.accept_phrase("on", "it")
+            ):
+                return ast.SourceCounterCount(counter_word, 0)
+    stream.reset(empty_mark)
+
     # "if it had a +1/+1 counter on it" (Basri's Lieutenant). Past tense, and
     # that is the whole point: "it" is the creature that just died, so the
     # answer is last-known information (CR 603.10) recorded as the trigger

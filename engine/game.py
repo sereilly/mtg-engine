@@ -255,6 +255,14 @@ class Game(
     pending_replacement_choices: list = field(default_factory=list)
     # 610.3: tracks creatures exiled "until end of turn" — (owner_player_index, card)
     exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
+    # Cards in exile that something still reads — All Hallow's Eve's scream
+    # counters, and the upkeep trigger that removes them. One
+    # ``exiled_records.ExiledRecord`` per exiled *object*, because two copies of
+    # a card are one ``CardDefinition`` and a register keyed on the card would
+    # merge their counters. An entry speaks only while its card is actually in
+    # that seat's exile (``exiled_records.is_live``), which is what lets the
+    # ~28 places that append to ``player.exile`` stay ignorant of this list.
+    exiled_records: list = field(default_factory=list)
     # 104.4: True when the game ends in a draw for all players
     is_draw: bool = False
     # 700.4-style turn tracking: creatures that died this turn (e.g. Scavenging Ghoul)

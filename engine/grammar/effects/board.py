@@ -12,6 +12,8 @@ should own the other's vocabulary.
 import dataclasses
 
 from .. import ast
+from ..errors import GrammarError
+from ..readers import accept_source_reference
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDEX, match_longest)
@@ -82,8 +84,41 @@ def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:
     return ast.GainControl(subject, "while_you_control_source")
 
 
-def _parse_return(stream: TokenStream) -> ast.Statement:
-    """``Return <objects> [from <zone>] to <zone>`` (CR 400.7).
+def _parse_put_source_into_zone(stream: TokenStream) -> ast.Statement | None:
+    """``Put it into your graveyard.`` (All Hallow's Eve, from exile.)
+
+    The ability moving its own source, which is neither a target nor a noun
+    phrase — so it is read here, ahead of the counter production that otherwise
+    claims every sentence opening with "put" and refuses this one naming a
+    counter kind nobody printed.
+
+    Refuses without consuming unless the whole sentence is there: the word
+    after "put" must be a self-reference and the destination must be a zone.
+    Anything else is somebody else's "put", and taking part of it would strand
+    the rest.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("put"):
+        stream.reset(mark)
+        return None
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("into"):
+        stream.reset(mark)
+        return None
+    try:
+        zone = _parse_zone(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    return ast.PutSourceIntoZone(zone)
+
+
+def _parse_return(
+    stream: TokenStream, actor: "ast.PlayerRef | None" = None
+) -> ast.Statement:
+    """``[<player> ]Return <objects> [from <zone>] to <zone>`` (CR 400.7).
 
     One production for Raise Dead, Regrowth, Resurrection and Unsummon, which
     the legacy registry needed three separately-ordered substring rules for —
@@ -92,7 +127,11 @@ def _parse_return(stream: TokenStream) -> ast.Statement:
     "target creature card from your graveyard" is one noun phrase; the
     destination is parsed here.
     """
-    stream.expect_word("return")
+    # Both spellings of the verb: a bare imperative prints "Return", and one
+    # with a subject prints "returns". Same production — English inflection is
+    # not a different effect.
+    if not (stream.accept_word("return") or stream.accept_word("returns")):
+        raise stream.error("expected 'return'")
     # "Return target spell or creature to its owner's hand." (Unsubstantiate.)
     # A union across two zones — the stack and the battlefield — which no
     # object filter expresses, so the template is read whole and the node
@@ -190,6 +229,7 @@ def _parse_return(stream: TokenStream) -> ast.Statement:
         return ast.ReturnToZone(
             each, destination, each_from, entering_tapped=entering_tapped,
             under_control_of=under_control_of, repetitions=repetitions,
+            actor=actor,
         )
 
     if further:

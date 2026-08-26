@@ -1263,3 +1263,156 @@ def test_eureka_starts_with_its_caster(set_pool, catalog_by_name):
 
     puts = [line.split()[0] for line in game.log if line.endswith("(Eureka)")]
     assert puts == ["P1", "P2", "P3"], game.log
+
+
+# ---------------------------------------------------------------------------
+# All Hallow's Eve (round 36) — a sorcery that keeps working from exile
+# ---------------------------------------------------------------------------
+
+
+def _r36_eve(set_pool, catalog_by_name, graveyards, copies=1):
+    """A duel with All Hallow's Eve in hand and named creature cards in each
+    graveyard."""
+    players = [
+        PlayerState(
+            name=f"P{seat + 1}",
+            life=20,
+            graveyard=[catalog_by_name[name] for name in names],
+            library=[catalog_by_name["Swamp"]] * 10,
+        )
+        for seat, names in enumerate(graveyards)
+    ]
+    players[0].hand = [set_pool("LEG")["All Hallow's Eve"]] * copies
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, players
+
+
+def _r36_creatures(player):
+    return sorted(
+        perm.card.name for perm in player.battlefield if perm.card.name != "Swamp"
+    )
+
+
+def test_all_hallows_eve_leaves_the_stack_carrying_its_counters(
+    set_pool, catalog_by_name
+):
+    """"Exile All Hallow's Eve **with two scream counters on it**." A card in
+    exile is a bare CardDefinition shared by every copy in the catalog, so the
+    counters live in the game's exile register — and the rider is read rather
+    than shed, which is the whole card."""
+    game, players = _r36_eve(set_pool, catalog_by_name, [[], []])
+
+    assert game.cast_from_hand(0, "All Hallow's Eve").supported
+    game.resolve_stack()
+
+    assert [card.name for card in players[0].exile] == ["All Hallow's Eve"]
+    assert [record.metadata for record in game.exiled_records] == [
+        {"scream_counters": 2}
+    ]
+
+
+def test_the_upkeep_trigger_fires_from_exile_one_counter_at_a_time(
+    set_pool, catalog_by_name
+):
+    """The trigger's source is in exile, where there is no permanent to scan —
+    and it is "at the beginning of **your** upkeep", so the opponent's turn
+    does not move it along."""
+    game, players = _r36_eve(set_pool, catalog_by_name, [["Grizzly Bears"], []])
+    game.cast_from_hand(0, "All Hallow's Eve")
+    game.resolve_stack()
+
+    counters = []
+    for _ in range(3):
+        game.start_next_turn()
+        game.resolve_stack()
+        # Copied: the record's metadata is a live dict, and appending the
+        # object itself would make every snapshot read as the last one.
+        counters.append([dict(record.metadata) for record in game.exiled_records])
+
+    # Opponent's turn, then the controller's — one removal, not two.
+    assert counters[0] == [{"scream_counters": 2}]
+    assert counters[1] == [{"scream_counters": 1}]
+    assert counters[2] == [{"scream_counters": 1}]
+
+
+def test_the_last_counter_bins_the_card_and_refills_both_graveyards(
+    set_pool, catalog_by_name
+):
+    """"If there are no more scream counters on it, put it into your graveyard
+    and **each player** returns all creature cards from their graveyard to the
+    battlefield." Each player's own creatures, under their own control — read
+    without its subject the sweep would hand the table's graveyards to whoever's
+    upkeep it was."""
+    game, players = _r36_eve(
+        set_pool, catalog_by_name,
+        [["Grizzly Bears", "Lightning Bolt"], ["Savannah Lions"]],
+    )
+    game.cast_from_hand(0, "All Hallow's Eve")
+    game.resolve_stack()
+
+    for _ in range(4):
+        game.start_next_turn()
+        game.resolve_stack()
+
+    assert _r36_creatures(players[0]) == ["Grizzly Bears"]
+    assert _r36_creatures(players[1]) == ["Savannah Lions"]
+    # The noncreature card stays put, and the sorcery itself lands in the
+    # graveyard rather than staying in exile forever.
+    assert [card.name for card in players[0].graveyard] == [
+        "Lightning Bolt", "All Hallow's Eve",
+    ]
+    assert players[0].exile == []
+    assert game.exiled_records == []
+
+
+def test_nothing_happens_on_the_upkeep_before_the_last_counter(
+    set_pool, catalog_by_name
+):
+    """The reanimation is inside "if there are no more scream counters on it",
+    so the first upkeep removes a counter and does nothing else. A card that
+    reanimated on every upkeep would pass the test above."""
+    game, players = _r36_eve(set_pool, catalog_by_name, [["Grizzly Bears"], []])
+    game.cast_from_hand(0, "All Hallow's Eve")
+    game.resolve_stack()
+
+    for _ in range(2):  # the opponent's turn, then the first of the caster's
+        game.start_next_turn()
+        game.resolve_stack()
+
+    assert _r36_creatures(players[0]) == []
+    assert [card.name for card in players[0].graveyard] == ["Grizzly Bears"]
+
+
+def test_two_copies_in_one_game_keep_their_own_counters(
+    set_pool, catalog_by_name
+):
+    """Two copies of a card are the *same* CardDefinition, so a register keyed
+    on the card would merge their counters and take both off with one removal.
+    The second copy, cast a turn later, is a turn behind all the way down."""
+    game, players = _r36_eve(set_pool, catalog_by_name, [[], []], copies=2)
+    game.cast_from_hand(0, "All Hallow's Eve")
+    game.resolve_stack()
+
+    game.start_next_turn()  # the opponent's
+    game.resolve_stack()
+    game.start_next_turn()  # the caster's: the first copy loses a counter
+    game.resolve_stack()
+    game.cast_from_hand(0, "All Hallow's Eve")
+    game.resolve_stack()
+
+    assert [record.metadata for record in game.exiled_records] == [
+        {"scream_counters": 1}, {"scream_counters": 2},
+    ]
+
+    game.start_next_turn()
+    game.resolve_stack()
+    game.start_next_turn()  # the caster's again
+    game.resolve_stack()
+
+    # The first copy is spent and gone; the second still has one to go.
+    assert [record.metadata for record in game.exiled_records] == [
+        {"scream_counters": 1}
+    ]
+    assert [card.name for card in players[0].exile] == ["All Hallow's Eve"]

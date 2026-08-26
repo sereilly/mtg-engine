@@ -407,6 +407,45 @@ class ItHappened:
     """
 
 
+@dataclass(frozen=True)
+class SourceExiledWithCounter:
+    """"if **this card is exiled with a scream counter on it**" (All Hallow's
+    Eve) — CR 603.4's intervening-if asked of an object that is in *exile*.
+
+    Two claims, and both are read: the source is in exile (CR 406.2 — a public
+    zone, so this is answerable at any time) and it carries at least one
+    counter of the named kind. Dropping either half would make the trigger fire
+    off a card that had left exile or off one whose last counter has already
+    come off, which is the difference between a card that reanimates once and a
+    card that reanimates every upkeep forever.
+
+    The counter word is payload for the reason every counter word in this
+    engine is: CR 122.1 lets a card invent one, so "scream" is data.
+    """
+
+    counter: str
+
+
+@dataclass(frozen=True)
+class SourceCounterCount:
+    """"if **there are no more scream counters on it**" (All Hallow's Eve).
+
+    A count of the named counters on the ability's own source, compared against
+    a number. Only the zero comparison is printed here, and that is what the
+    parser reads; the field is a number rather than a flag so the card that
+    prints "if there are two or more" extends the production instead of needing
+    a second node.
+
+    Asked of the *source*, whichever zone it is in — a permanent's metadata or
+    an exile record's — through the one reader in
+    ``engine/exiled_records.py``. A second reader for the exile answer is how a
+    card ends up counting counters nothing put there.
+    """
+
+    counter: str
+    count: int
+
+
 Condition = Union[
     EveryOf, CoinFlipResult, Controls, DestroyedThisWay, DiscardedCardWas,
     IsState, StartedTheTurnState, DiedThisTurn,
@@ -415,4 +454,5 @@ Condition = Union[
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
     DealtDamageThisTurn, SubjectCharacteristicIs, BlockersOfBoundCreature,
+    SourceExiledWithCounter, SourceCounterCount,
 ]

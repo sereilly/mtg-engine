@@ -15,6 +15,7 @@ import re
 
 from ..auras import aura_enchants
 from ..delayed_triggers import fire_delayed_triggers
+from ..exiled_records import live_records
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords)
 from ..copies import RECOPY_EACH_UPKEEP, grants_ability
@@ -674,6 +675,46 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                         enqueue_damage=_enqueue_upkeep_damage,
                     ))
                     continue
+
+        # Upkeep triggers of a card that is in **exile**. All Hallow's Eve
+        # keeps working from there: "At the beginning of your upkeep, if this
+        # card is exiled with a scream counter on it, remove a scream counter
+        # from it."
+        #
+        # A parallel scan rather than a row in the loop above, because the loop
+        # above iterates ``permanents_with_controller()`` and there is no
+        # permanent here to iterate — a sorcery exiling itself never becomes
+        # one. What the two scans share is the *event*, which is why this
+        # appends to the same ``upkeep_events`` list and goes on the stack in
+        # the same APNAP batch (CR 603.3b): an exiled card's trigger is an
+        # ordinary triggered ability in every respect except where its source
+        # is.
+        #
+        # The stack item carries ``card=`` and no source permanent, which
+        # ``_enqueue_triggered_ability`` has always supported; the record rides
+        # the trigger context, because CR 603.10 freezes what the ability needs
+        # as it goes on the stack and nothing on the board could name the right
+        # record afterwards. The intervening-if is *not* pre-checked here — CR
+        # 603.4 checks it at both ends, the fire site and the resolution, and
+        # the resolution end is already armed in ``_run_stack_item_resolution``.
+        for record in live_records(self):
+            if record.controller_index != player_index:
+                continue
+            for trig in matching_triggers(record.card, condition_kinds={"upkeep_self"}):
+                if trig.instruction.kind not in EFFECT_HANDLERS:
+                    continue
+                upkeep_events.append({
+                    "controller_index": record.controller_index,
+                    "card": record.card,
+                    "source_permanent": None,
+                    "instruction": trig.instruction,
+                    "effect_kind": triggered_label(trig.instruction.kind, "upkeep_self"),
+                    "ability_text": trig.source_line or None,
+                    "trigger_context": {
+                        "event_subject_player": player_index,
+                        "exile_record": record,
+                    },
+                })
 
         # Handle enchant-land auras with optional upkeep life gain (e.g. Farmstead)
         for permanent in self.all_permanents():

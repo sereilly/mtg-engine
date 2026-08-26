@@ -29,6 +29,7 @@ from ._events import (CREATED_TOKEN, EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS,
                       _back_reference_payload)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
+    chargeable_card_filter,
     dropped_narrowings,
     _describe_targets,
     _filter_payload,
@@ -84,6 +85,34 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
         }
     card_type = filt.card_types[0] if filt.card_types else None
     return {"any_card": card_type is None, "card_type": card_type}
+
+
+def _lower_put_source_into_zone(node) -> tuple[OracleInstruction, ...]:
+    """``Put it into your graveyard.`` (All Hallow's Eve.)
+
+    The zone stays payload — the handler switches on it — but only the
+    destination that has a handler is admitted here. A "put it into your hand"
+    lowered to the same kind would be a card reporting itself supported and
+    then doing whatever the graveyard branch does, which is the silent failure
+    this grammar refuses by construction.
+
+    "your graveyard" and "its owner's graveyard" are one destination for a card
+    the ability's controller owns, and CR 400.3 sends a card to its owner's
+    graveyard whatever the effect printed — so both spellings are admitted and
+    the handler does the owner lookup. A named third player's graveyard is a
+    different sentence and refuses.
+    """
+    zone = node.zone
+    if zone.name != "graveyard":
+        raise LoweringError(
+            f"no handler puts a source into a {zone.name}", node=node
+        )
+    if zone.owner is not None and zone.owner.kind not in ("you", "owner"):
+        raise LoweringError(
+            "the source goes to its owner's graveyard, not a named player's",
+            node=node,
+        )
+    return (OracleInstruction("put_self_into_zone", "", {"zone": "graveyard"}),)
 
 
 def _lower_return_to_zone(
@@ -424,6 +453,68 @@ def _lower_return_to_zone(
                 "phrase says you own it", node=node,
             )
         return (OracleInstruction("return_all_matching", "", {"filter": swept}),)
+    # "**Each player** returns all creature cards from their graveyard to the
+    # battlefield." (All Hallow's Eve.) A sweep *reanimation*: every card a
+    # noun phrase names, out of a graveyard and onto the battlefield, with
+    # nothing chosen and nothing targeted.
+    #
+    # Who returns them is the whole difference between this card and a card
+    # that wins the game, so the actor and the graveyard's owner are checked
+    # **against each other** rather than either being read alone: "each player
+    # … from their graveyard" is one claim said twice, and a pairing this
+    # cannot resolve refuses instead of picking one half.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("all", "each")
+        and not subject.targeted
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+        and node.to.name == "battlefield"
+        and node.to.owner is None
+    ):
+        if (
+            node.entering_tapped
+            or node.under_control_of
+            or node.repetitions
+            or node.also_stack
+        ):
+            raise LoweringError("the sweep reanimation reads no rider", node=node)
+        actor = node.actor.kind if node.actor is not None else None
+        owner = (
+            subject.filter.zone_owner.kind
+            if subject.filter.zone_owner is not None
+            else None
+        )
+        if actor == "each_player" and owner in ("owner", "each_player"):
+            who = "each_player"
+        elif actor is None and owner == "you":
+            who = "you"
+        else:
+            raise LoweringError(
+                "the sweep reanimation reads \"each player … their graveyard\" "
+                "or an unnamed subject over your own",
+                node=node,
+            )
+        # Through the *card* gate every other printed card phrase runs through,
+        # with the zone taken off first: the zone is read above, by this
+        # production, and leaving it on would make the shared gate refuse a
+        # phrase it can answer. Everything else — the narrowing, the keys the
+        # card matcher cannot test — is that gate's answer and not a second
+        # copy of it here.
+        scoped = dataclasses.replace(
+            subject.filter, zone="battlefield", zone_owner=None
+        )
+        swept = chargeable_card_filter(scoped)
+        if swept is None:
+            raise LoweringError(
+                "the sweep reanimation cannot read this card phrase", node=node
+            )
+        return (
+            OracleInstruction(
+                "return_all_cards_from_graveyard", "",
+                {"filter": swept, "who": who},
+            ),
+        )
     if not _is_target(subject):
         # "target" and "up to one target" (Liliana, Death Mage's +1) both
         # resolve one chosen object; anything wider has no handler.

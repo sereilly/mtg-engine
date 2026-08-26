@@ -8,7 +8,9 @@ from ..land_types import MIRE_COUNTER, change_land_type
 from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
 from ..oracle_types import OracleInstruction
-from ..pt import set_base_pt
+from ..exiled_records import source_object
+from ..named_counters import counters_on
+from ..pt import pt_counter_key, set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import CREATED_TOKEN_RESULT_KEY, make_token_card
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
@@ -872,13 +874,27 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
     The counter's name is payload, matching the accumulation side
     (phases/upkeep_effects.py), so the pair is one template rather than a card.
     Removing from zero is a no-op, not a negative count.
+
+    The source may be a card in **exile** rather than a permanent — All
+    Hallow's Eve's upkeep trigger takes a scream counter off a card in a zone
+    with no objects in it. ``exiled_records.source_object`` is the one reader
+    that answers for both, and it answers with something carrying ``.card`` and
+    ``.metadata``, which is all this function ever needed. The gate on the
+    optional spelling of this same removal (``control_flow._action_is_takeable``)
+    reads it too, so "is there a counter to remove" and "remove the counter"
+    cannot disagree about where the counters are.
     """
-    permanent = context.source_permanent
+    permanent = source_object(context)
     if permanent is None:
         return True, "resolved"
     counter = str(instruction.payload.get("counter", "doom"))
-    key = f"{counter}_counters"
-    current = int(permanent.metadata.get(key, 0))
+    # Through the one counter reader, not this file's own spelling of the key.
+    # ``counters_on`` asks ``pt.pt_counter_key``, which is where a counter with
+    # rules meaning is recorded (CR 122.1a) — reading ``"<kind>_counters"``
+    # here would answer zero for exactly those kinds, silently, because a
+    # missing key is a legal zero.
+    key = pt_counter_key(counter)
+    current = counters_on(permanent, counter)
     if current <= 0:
         # The record "if you can't" reads (Cocoon): removing from zero is a
         # no-op, and it is also the removal *not happening*.

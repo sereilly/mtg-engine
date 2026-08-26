@@ -318,6 +318,16 @@ def _lower_condition(
         return {"kind": "returned_to_hand_this_turn"}
     if isinstance(condition, ast.HadPlus1Counter):
         return {"kind": "had_plus1_counter"}
+    if isinstance(condition, ast.SourceExiledWithCounter):
+        # The counter word is payload the whole way down, so a card printing a
+        # differently-named counter needs nothing here.
+        return {"kind": "source_exiled_with_counter", "counter": condition.counter}
+    if isinstance(condition, ast.SourceCounterCount):
+        return {
+            "kind": "source_counter_count",
+            "counter": condition.counter,
+            "count": condition.count,
+        }
     if isinstance(condition, ast.DealtDamageThisTurn):
         # The recipient rides the payload, exactly as the seat does on the life
         # clause below: "…to a player" is the same question asked of a wider

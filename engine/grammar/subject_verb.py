@@ -29,6 +29,7 @@ from .paragraphs import (
 from .references import parse_recipient
 from .stream import TokenStream
 from .phrases import _parse_can_attack_as_though, _parse_duration, parse_bound_subject
+from .vocabulary import NUMBER_WORDS
 from .effects import (
     _parse_add_mana, _parse_ante, _parse_assigns_no_combat_damage, _parse_attach,
     _parse_becomes, _parse_cant_attack_or_block, _parse_change_base_pt,
@@ -43,11 +44,59 @@ from .effects import (
     _parse_has, _parse_life_total_becomes, _parse_look_at_hand, _parse_loses,
     _parse_mill, _parse_modal_head, _parse_pay_life, _parse_player_adds_mana,
     _parse_prevent, _parse_put_iterated_card_on_library,
-    _parse_put_counter, _parse_put_exiled_with_source, _parse_remove_counter,
+    _parse_put_counter, _parse_put_exiled_with_source,
+    _parse_put_source_into_zone, _parse_remove_counter,
     _parse_remove_from_combat, _parse_return, _parse_reveal_top, _parse_sacrifice,
     _parse_scry, _parse_search_library, _parse_source_of_choice_effect,
     _parse_switch_pt, _parse_tap_untap, _parse_wins,
 )
+
+
+def _parse_entering_counters(stream: TokenStream) -> tuple[tuple[str, int], ...]:
+    """``with two scream counters on it`` — counters an object carries into a zone.
+
+    "Exile All Hallow's Eve **with two scream counters on it**." The counters
+    are put on as part of the move (CR 121.2), so they are a property of the
+    exiling rather than a second sentence, and reading them here is what stops
+    the phrase being shed as unconsumed text — the whole card is those counters
+    coming back off one per upkeep.
+
+    The counter word and the number are both payload. Nothing about "scream"
+    reaches this production: any word followed by "counter"/"counters" is a
+    counter of that name (CR 122.1), which is the same open vocabulary
+    ``engine/named_counters.py`` stores.
+
+    Returns an empty tuple with the cursor untouched when the phrase is not
+    there, so an exile that prints no counters is unaffected and a "with" this
+    production cannot finish falls back to whatever else the line says.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("with"):
+        return ()
+    if stream.accept_word("a", "an"):
+        count = 1
+    else:
+        word = stream.peek_word()
+        count = NUMBER_WORDS.get(word) if word is not None else None
+        if count is None:
+            stream.reset(mark)
+            return ()
+        stream.advance()
+    name = stream.peek_word()
+    if name is None or name in ("counter", "counters"):
+        stream.reset(mark)
+        return ()
+    stream.advance()
+    if not (stream.accept_word("counters") or stream.accept_word("counter")):
+        stream.reset(mark)
+        return ()
+    # "on it" is required, not optional: the phrase names *which* object the
+    # counters go on, and an exile that dropped it would be reading a sentence
+    # nobody printed.
+    if not stream.accept_phrase("on", "it"):
+        stream.reset(mark)
+        return ()
+    return ((name, count),)
 
 
 def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:
@@ -152,6 +201,11 @@ def parse_subject_verb(
         iterated = _parse_put_iterated_card_on_library(stream)
         if iterated is not None:
             return iterated
+        # "Put it into your graveyard." (All Hallow's Eve.) The ability moving
+        # its own source; same treatment and same reason as the two above.
+        moved = _parse_put_source_into_zone(stream)
+        if moved is not None:
+            return moved
         return _parse_put_counter(stream)
     if stream.at_word("double"):
         return _parse_double(stream)
@@ -245,7 +299,11 @@ def parse_subject_verb(
         subject = parse_recipient(stream)
         if subject is None:
             raise stream.error("expected something to exile")
-        return ast.Exile(subject, _parse_duration(stream))
+        # Read before the duration: the two never co-occur on a printed card,
+        # and a duration parser that ran first would answer "no duration" and
+        # leave the counter phrase to die as unconsumed text.
+        counters = _parse_entering_counters(stream)
+        return ast.Exile(subject, _parse_duration(stream), counters=counters)
     if stream.at_word("add"):
         return _parse_add_mana(stream)
     if stream.at_word("look"):
@@ -410,6 +468,16 @@ def parse_subject_verb(
             return _parse_discard(stream, source_spec)
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
+        # "**Each player** returns all creature cards from their graveyard to
+        # the battlefield." (All Hallow's Eve.) The return production with a
+        # printed subject: only the bare imperative ("Return target creature
+        # card…", which means you) had a reading, so a named returner was an
+        # unrecognized verb. The subject is handed to the production, which
+        # records it — who returns the cards is who they come back under the
+        # control of (CR 110.2), and dropping it would give one player the
+        # table's graveyards.
+        if token.text in ("returns", "return") and isinstance(source_spec, ast.PlayerRef):
+            return _parse_return(stream, source_spec)
         # "Target player **chooses a card name**, then reveals the top card of
         # their library…" (Petra Sphinx) — a paragraph, because the two
         # sentences after it test the name and the card this one produced.

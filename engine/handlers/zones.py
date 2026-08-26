@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
+from ..exiled_records import forget_record, record_exiled_card, source_object
 from ..linked_exile import LEAVES, UNTAPPED, link_exiled_card, linked_entries, take_linked_entries
 from ..keywords import grant_keyword
 from ..models import Permanent
@@ -1435,7 +1436,37 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
     Records whether it happened, so "**If you do**, create a 5/5 black Demon
     creature token" is the ordinary if-you-do branch rather than a fused
     instruction.
+
+    ``counters`` is "…with two scream counters on it" (All Hallow's Eve): the
+    card goes to exile carrying them, and the register in
+    ``engine/exiled_records.py`` is what remembers so — a ``CardDefinition`` in
+    an exile list has nowhere to keep them and no identity to key them on. The
+    registration happens here, where the exiling is *decided*, for both paths:
+    a spell exiling itself is binned at the very end of its own resolution
+    (CR 608.2n), so this is the only moment both a permanent and a spell pass
+    through.
     """
+    def _register(owner_index: int, card) -> None:
+        counters = instruction.payload.get("counters") or {}
+        if not counters:
+            return
+        record_exiled_card(
+            game, card, owner_index,
+            # CR 108.4: a card in exile has no controller, so its abilities
+            # belong to its owner. Recorded explicitly rather than left to
+            # default, because "at the beginning of **your** upkeep" needs a
+            # seat and the register is the only thing that still has one.
+            controller_index=owner_index,
+            counters={str(k): int(v) for k, v in counters.items()},
+        )
+        game.log.append(
+            f"{card.name} was exiled with "
+            + ", ".join(
+                f"{count} {name} counter" + ("s" if count != 1 else "")
+                for name, count in counters.items()
+            )
+        )
+
     source = context.source_permanent
     if source is None or not game.is_on_battlefield(source):
         # **A spell exiling itself** (Experimental Overload's "Exile Experimental
@@ -1449,6 +1480,7 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
             game.exile_resolving_spell = True
             context.results["exiled_self"] = True
             game.log.append(f"{context.card.name} will be exiled as it resolves")
+            _register(game.players.index(context.caster), context.card)
             return True, "resolved"
         game.log.append(f"{context.card.name}: nothing to exile")
         return True, "resolved"
@@ -1458,6 +1490,13 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
     if not source.metadata.get("is_token", False):
         # CR 111.7: a token ceases to exist rather than going to exile.
         owner.exile.append(source.card)
+        # The seat the owner lookup already found. ``players.index(owner)``
+        # would compare ``PlayerState`` by value, which is the look-alike bug
+        # the control seam documents for permanents.
+        _register(
+            owner_index if owner_index is not None else game.players.index(context.caster),
+            source.card,
+        )
     context.results["exiled_self"] = True
     game.log.append(f"{source.card.name} was exiled")
     return True, "resolved"
@@ -3103,4 +3142,101 @@ def put_iterated_card_on_library(game: Game, instruction: OracleInstruction, con
         f"{context.card.name}: {player.name} put {card.name} on "
         f"{'the bottom' if position == 'bottom' else 'top'} of their library"
     )
+    return True, "resolved"
+
+
+@effect_handler("put_self_into_zone")
+def put_self_into_zone(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put it into your graveyard." — the ability's own source changes zones.
+
+    The source is a permanent or a card in **exile** (All Hallow's Eve, whose
+    upkeep trigger finally bins the exiled card once its last scream counter
+    has come off), and ``exiled_records.source_object`` is the one reader that
+    answers for both.
+
+    The destination is payload, and today the only one the grammar admits is a
+    graveyard — see ``lowering/zones._lower_put_source_into_zone``, which
+    refuses the rest by name rather than letting a card report itself supported
+    and land somewhere else.
+
+    CR 400.3 sends a card to **its owner's** graveyard whatever the effect
+    printed, which is why "your graveyard" and "its owner's graveyard" lower to
+    the same instruction and the owner lookup happens here.
+    """
+    zone = str(instruction.payload.get("zone", "graveyard"))
+    if zone != "graveyard":  # pragma: no cover - the lowering refuses the rest
+        return False, f"no handler puts a source into a {zone}"
+    source = source_object(context)
+    if source is None:
+        game.log.append(f"{context.card.name}: nothing left to move")
+        return True, "resolved"
+    if isinstance(source, Permanent):
+        owner_index = game.owner_index_of(source)
+        owner = game.players[owner_index] if owner_index is not None else context.caster
+        if not game.is_on_battlefield(source):
+            game.log.append(f"{context.card.name}: nothing left to move")
+            return True, "resolved"
+        game.remove_from_battlefield(source)
+        game._permanent_to_graveyard(owner, source)
+        return True, "resolved"
+    # An exile record. The card leaves exile, the register forgets it — in that
+    # order and by identity, because two copies of the card produce two
+    # equal-looking entries and removing "the first equal one" would strand the
+    # other copy's counters on a card that is no longer there.
+    owner = game.players[source.owner_index]
+    for index, card in enumerate(owner.exile):
+        if card is source.card:
+            owner.exile.pop(index)
+            break
+    forget_record(game, source)
+    owner.graveyard.append(source.card)
+    game.log.append(f"{source.card.name} was put into {owner.name}'s graveyard from exile")
+    return True, "resolved"
+
+
+@effect_handler("return_all_cards_from_graveyard")
+def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player returns all creature cards from their graveyard to the
+    battlefield." (All Hallow's Eve.)
+
+    A sweep reanimation: no target, no pick, every card a printed noun phrase
+    names. ``who`` is the returning player — ``each_player`` or the ability's
+    controller — and it is payload rather than two kinds because the sentence
+    is the same one either way.
+
+    Each card comes back under **its own player's** control, which is what the
+    printed subject says: "each player returns … from *their* graveyard".
+    Reading the sentence without its subject would hand the table's graveyards
+    to whoever's upkeep it was, which is a different card.
+
+    The graveyard is drained highest-index-first, so popping one does not
+    renumber the slots still to come — the ordering every other multi-card
+    graveyard move in this engine follows, and the reason it is not a removal
+    by value: two copies of one card in a graveyard are the *same*
+    ``CardDefinition``, so ``.remove()`` would take whichever came first.
+    """
+    described = dict(instruction.payload.get("filter") or {})
+    who = str(instruction.payload.get("who", "you"))
+    if who == "each_player":
+        seats = list(range(len(game.players)))
+    else:
+        seats = [game.players.index(context.caster)]
+    returned = 0
+    for seat in seats:
+        player = game.players[seat]
+        taken = [
+            index for index, card in enumerate(player.graveyard)
+            if _card_matches_filter(card, described)
+        ]
+        cards = [player.graveyard[index] for index in taken]
+        for index in sorted(taken, reverse=True):
+            player.graveyard.pop(index)
+        for card in cards:
+            game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+            game.log.append(
+                f"{player.name} returned {card.name} to the battlefield from the graveyard"
+            )
+            returned += 1
+    if not returned:
+        game.log.append(f"{context.card.name}: no cards to return")
     return True, "resolved"

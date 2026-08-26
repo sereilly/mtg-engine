@@ -54,6 +54,30 @@ class Exile:
     """
     subject: Recipient
     duration: Duration = field(default_factory=lambda: Duration())
+    #: ``…with two scream counters on it`` (All Hallow's Eve). Counters the
+    #: object carries *into* exile, as ``((counter word, how many), …)``.
+    #: A tuple of pairs rather than a dict because the node is frozen and
+    #: hashable, and the counter word and the number are payload for the same
+    #: reason every other parameter in this grammar is — a card printing three
+    #: verse counters is this sentence, not a second one.
+    counters: tuple[tuple[str, int], ...] = ()
+
+
+@dataclass(frozen=True)
+class PutSourceIntoZone:
+    """``Put it into your graveyard.`` (All Hallow's Eve, from exile.)
+
+    The ability moving its **own source** to a zone, with nothing chosen and
+    nothing targeted — the same shape :class:`Exile` takes over the source, and
+    a different one from ``ReturnToZone``, which resolves a noun phrase.
+
+    The zone is the node's one field for the reason every parameter in this
+    grammar is payload: "put it into your hand" is this sentence with a
+    different destination, not a second production. Which destinations have a
+    handler is the lowering's question, and it refuses the rest by name.
+    """
+
+    zone: Zone
 
 
 @dataclass(frozen=True)
@@ -254,6 +278,18 @@ class ReturnToZone:
     # not printing it are different cards; lowering refuses any shape it cannot
     # repeat, so the clause is never parsed and then dropped.
     repetitions: Amount | None = None
+    # "**Each player** returns all creature cards from their graveyard to the
+    # battlefield." (All Hallow's Eve.) Who does the returning — which is who
+    # the cards come back *under the control of*, and whose graveyard "their"
+    # means. Recorded rather than dropped: reading the sentence without it
+    # would hand every player's creatures to the ability's controller, which is
+    # a different card and one that wins the game on the spot.
+    #
+    # Not folded into ``under_control_of``: that field is an effect naming a
+    # controller for objects somebody else moved ("under the control of that
+    # creature's owner"), and this is the sentence's grammatical subject. A
+    # card could print both.
+    actor: PlayerRef | None = None
 
 
 @dataclass(frozen=True)

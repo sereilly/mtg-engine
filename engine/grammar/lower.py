@@ -101,6 +101,7 @@ from .lowering import (
     _lower_discard,
     _lower_draw,
     _lower_exile,
+    _lower_put_source_into_zone,
     _lower_extra_turn,
     _lower_for_each,
     _lower_repeat_process,
@@ -671,6 +672,9 @@ def lower_statement(
     # lives in the `game` family, which is below this dispatcher.
     if isinstance(statement, ast.RepeatProcess):
         return _lower_repeat_process(statement, lower_statement)
+
+    if isinstance(statement, ast.PutSourceIntoZone):
+        return _lower_put_source_into_zone(statement)
 
     if isinstance(statement, ast.Exile):
         # `produced` is the gate on "exile **that token**": the phrase names
