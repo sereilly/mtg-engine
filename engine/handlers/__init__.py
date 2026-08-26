@@ -21,6 +21,7 @@ from . import (  # noqa: E402,F401
     destruction,
     life_and_game,
     mana,
+    permanent_choices,
     prevention,
     pump,
     pt_switch,

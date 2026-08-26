@@ -415,6 +415,12 @@ def _lower_damage(
         and len(node.recipients) == 1
         and isinstance(node.recipients[0], ast.TargetSpec)
         and node.recipients[0].distinct_from_prior
+        # Both slots are *targets*. "another target creature" and "another
+        # creature" are different cards — the second chooses on resolution
+        # (CR 601.2c names nothing) — and this kind builds a two-slot cast-time
+        # picker, so admitting the untargeted phrase would raise a picker for a
+        # choice the card never announces and drop the printed word.
+        and node.recipients[0].targeted
     ):
         return (
             OracleInstruction(

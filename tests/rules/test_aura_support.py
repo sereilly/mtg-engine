@@ -139,3 +139,64 @@ def test_the_two_bespoke_entry_texts_are_still_claimed():
     )
     assert aura_effect_claim(animate, "") is not None
     assert aura_effect_claim(earthbind, "") is not None
+# ---------------------------------------------------------------------------
+# CR 303.4j — an Aura moved onto something it can't legally enchant
+# ---------------------------------------------------------------------------
+
+
+def _moving_board(set_pool):
+    """A game with one Aura on a creature, plus a land and a second creature."""
+    from engine import Game, PlayerState
+    from engine.auras import attach_aura
+    from engine.models import Permanent
+
+    catalog = {**set_pool("LEA"), **set_pool("LEG")}
+    p1 = PlayerState(name="P1", hand=[catalog["Enchantment Alteration"]])
+    p2 = PlayerState(name="P2")
+    host = Permanent(card=catalog["Grizzly Bears"])
+    twin = Permanent(card=catalog["Grizzly Bears"])
+    land = Permanent(card=catalog["Forest"])
+    aura = Permanent(card=catalog["Holy Strength"])
+    p1.battlefield = [host, twin, land, aura]
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    attach_aura(aura, host)
+    return game, aura, host, twin, land
+
+
+@pytest.mark.cr("303.4j")
+def test_303_4j_an_aura_is_not_moved_onto_an_illegal_host(set_pool):
+    """"Enchant creature" is asked of the *new* host too, so a land is never a
+    legal answer — and the refusal is the Aura staying put, not falling off."""
+    from engine.auras import aura_attach_refusal
+
+    game, aura, host, twin, land = _moving_board(set_pool)
+
+    assert aura_attach_refusal(game, aura, twin) is None
+    assert aura_attach_refusal(game, aura, land) is not None
+    assert aura_attach_refusal(game, aura, aura) is not None
+    assert aura.metadata["attached_to"] is host
+
+
+@pytest.mark.cr("608.2d", "117.3b")
+def test_608_2d_a_permanent_chosen_on_resolution_holds_the_resolution_open(set_pool):
+    """A choice an effect offers is announced while the effect is applied, so
+    the object stays on the stack and nobody receives priority until it is
+    answered."""
+    game, aura, _host, twin, _land = _moving_board(set_pool)
+    game.interactive_seats = {0}
+
+    game.cast_from_hand(
+        0, "Enchantment Alteration",
+        target_player_index=0, target_permanent_ids=[aura.permanent_id],
+    )
+
+    waiting = game.waiting_prompt()
+    assert waiting is not None and waiting.kind == "permanent_choice"
+    # Nothing later in the sentence has run: the attach reads the answer, so it
+    # waits for one rather than acting on a board the choice has not shaped.
+    assert aura.metadata["attached_to"] is not twin
+
+    assert game.confirm_permanent_choice(0, twin.permanent_id)
+    assert game.waiting_prompt() is None
+    assert aura.metadata["attached_to"] is twin

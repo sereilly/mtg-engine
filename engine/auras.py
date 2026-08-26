@@ -609,6 +609,43 @@ def auras_attached_to(permanent) -> list:
     return list(permanent.metadata.get("attached_auras") or [])
 
 
+def aura_attach_refusal(game, aura, host) -> str | None:
+    """Why *aura* may not become attached to *host*, or None when it may.
+
+    CR 303.4j: an effect that would attach an Aura to something it can't legally
+    enchant simply doesn't move it — so this is asked *before* the move, and the
+    Aura stays where it is when it answers. One predicate rather than a check at
+    each mover, for the reason ``equip_refusal`` is one: the cast gate, the
+    CR 704.5m sweep, a picker and a resolution all ask the same question, and a
+    fifth copy is a fifth chance to disagree.
+
+    Every clause is one the engine already reads somewhere else:
+    ``aura_enchant_noun`` is what the cast gate matches a target against,
+    ``enchant_noun_own_only`` is the seat half of the same clause (CR 702.5),
+    and ``cannot_be_enchanted`` is CR 303.4's protection half.
+    """
+    from .mixins.stack import (aura_enchant_noun, enchant_noun_own_only,
+                               permanent_matches_enchant_noun)
+    from .target_immunity import cannot_be_enchanted
+
+    if host is None or not game.is_on_battlefield(host):
+        return "it is no longer on the battlefield"
+    if host is aura:
+        return "an Aura can't enchant itself"
+    noun = aura_enchant_noun(aura.effective_card)
+    if noun is None:
+        return f"{aura.card.name} has no enchant ability"
+    if not permanent_matches_enchant_noun(host, noun):
+        return f"it isn't a legal {noun}"
+    if enchant_noun_own_only(noun):
+        seat = game.controller_index_of(aura)
+        if seat is None or game.controller_index_of(host) != seat:
+            return f"{noun} names a permanent its controller doesn't control"
+    if cannot_be_enchanted(host, by_aura=aura):
+        return "it can't be enchanted"
+    return None
+
+
 def attach_aura(aura, target) -> None:
     """Attach *aura* to *target*, recording it as an owned continuous effect.
 

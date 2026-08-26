@@ -62,6 +62,7 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "controller", "tapped", "attacking", "blocking", "other_than_source",
     "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
     "colored", "with_plus1_counter", "supertypes",
+    "attached_to_types",
 })
 
 
@@ -110,6 +111,12 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # reads them — the counter lowering — carries each as its own key.
     "any_classes": "any_classes",
     "targets_object": "targets_object",
+    # "another permanent **of that type**" (Enchantment Alteration). Which type
+    # "that" is depends on the object the sentence's *other* clause named, so
+    # no read of the candidate alone can answer it and there is no payload form.
+    # The one admitting lowering strips the field and carries the relation as
+    # its own key; every other lowering refuses the phrase by name.
+    "of_bound_type": "of_bound_type",
 }
 
 

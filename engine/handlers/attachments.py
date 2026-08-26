@@ -44,6 +44,9 @@ def attach_source_to_target(
     resolves (CR 113.7a) but there is nothing to move, and the effect does
     nothing rather than attaching a card in a graveyard.
     """
+    if instruction.payload.get("subject_from") == "target":
+        return _attach_chosen_to_chosen(game, instruction, context)
+
     # Function-level, as every handler that asks it does: subject_filters
     # imports handlers._common, so the package cannot import it at the top.
     from ..subject_filters import subject_matches
@@ -93,3 +96,50 @@ def attach_source_to_target(
         return True, "resolved"
     attach_equipment(game, equipment, chosen)
     return True, "resolved"
+
+
+def _attach_chosen_to_chosen(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Attach **target Aura** attached to a creature or land to another
+    permanent of that type." (Enchantment Alteration.)
+
+    The same keyword action as the equip above (CR 701.3) with both ends chosen
+    rather than one: the thing that moves is the spell's target, and the thing
+    it moves onto is the permanent recorded by the ``choose_permanent`` step in
+    front of this one — by id, so a permanent that left and a look-alike that
+    slid into its slot are told apart (CR 400.7).
+
+    CR 303.4j is the whole of the failure mode and is re-asked here rather than
+    trusted from the choice: an Aura that can't legally enchant the chosen
+    permanent **doesn't move**. It stays where it is, which is not the same as
+    falling off — dropping it would put it in a graveyard on the next
+    state-based check for a card that never said to destroy it.
+    """
+    from ..auras import attach_aura, aura_attach_refusal, detach_aura
+
+    card_name = getattr(context.card, "name", "")
+    target_id = context.target_permanent_id
+    if isinstance(target_id, list):
+        target_id = target_id[0] if target_id else None
+    aura = game.permanent_by_id(target_id) if isinstance(target_id, int) else None
+    if aura is None or not game.is_on_battlefield(aura):
+        game.log.append(f"{card_name}: its target is no longer on the battlefield")
+        return True, "resolved"
+    host_id = context.results.get(instruction.payload.get("host_from"))
+    host = game.permanent_by_id(host_id) if isinstance(host_id, int) else None
+    refusal = aura_attach_refusal(game, aura, host) if host is not None else "nothing was chosen"
+    if refusal is not None:
+        game.log.append(f"{card_name}: {aura.card.name} does not move — {refusal}")
+        return True, "resolved"
+    previous = aura.metadata.get("attached_to")
+    if previous is host:
+        game.log.append(f"{card_name}: {aura.card.name} is already attached to {host.card.name}")
+        return True, "resolved"
+    if previous is not None:
+        detach_aura(aura, previous)
+    attach_aura(aura, host)
+    game.log.append(f"{card_name}: {aura.card.name} now enchants {host.card.name}")
+    game.check_state_based_actions()
+    return True, "resolved"
+

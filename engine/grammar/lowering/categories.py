@@ -155,6 +155,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # moving an Equipment onto a creature is neither a tap nor a zone change,
     # and sharing a switch with either would let one be gated off by the other.
     "attach_source_to_target": "attachments",
+    # "…to **another permanent of that type**" (Enchantment Alteration): the
+    # permanent the controller picks as the spell resolves, recorded for the
+    # attach behind it. The same category, so GRAMMAR_CATEGORIES is unchanged —
+    # the choice is one step of the attachment sentence, and gating it apart
+    # from the attach would leave the card half-lowered.
+    "choose_permanent": "attachments",
     "tap_self": "tapping",
     "untap_target_permanent": "tapping",
     "untap_target_land": "tapping",

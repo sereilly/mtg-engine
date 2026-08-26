@@ -123,6 +123,24 @@ def _action_reflexive_target_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="invalid target")
 
+@action_handler("permanent_choice_confirm")
+def _action_permanent_choice_confirm(session, req, seat_type):
+    # The general "a permanent chosen as the spell resolves" prompt. Answered by
+    # stable id and re-checked by the engine against the live candidate rule, so
+    # a client that offers a whole battlefield cannot widen the choice.
+    pending = next(
+        (c for c in session.game.pending_choices_of("permanent_choice")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no permanent choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.target_permanent_id is None:
+        raise HTTPException(status_code=400, detail="target_permanent_id is required")
+    if not session.game.confirm_permanent_choice(req.seat, req.target_permanent_id):
+        raise HTTPException(status_code=400, detail="invalid permanent choice")
+
 @action_handler("tap_any_number_confirm")
 def _action_tap_any_number_confirm(session, req, seat_type):
     pending = next(

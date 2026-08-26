@@ -2339,6 +2339,17 @@ function getNameAndStripInfo(state = currentState) {
   return info;
 }
 
+// Enchantment Alteration: a permanent chosen as the spell resolves, where
+// nothing was targeted. Answered by stable id — the candidates may sit on
+// either battlefield and an index is positional on one seat.
+function getPermanentChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.permanent_choice;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.candidates) || info.candidates.length === 0) return null;
+  return info;
+}
+
 // Tolarian Kraken: the reflexive trigger ("When you do, …") choosing its target.
 function getReflexiveTargetInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -2714,6 +2725,26 @@ function getPromptBoardTargeting(state = currentState) {
           target_permanent_id: byKey.get(`${targetSeat}-${idx}`),
         }),
       invalidHint: "Only a planeswalker the ability names can take the counter.",
+    });
+  }
+
+  // Enchantment Alteration: the permanent the resolving spell asks for. By id,
+  // for the same reason the two prompts below are: the candidates may sit on
+  // either battlefield.
+  const permanentChoiceInfo = getPermanentChoiceInfo(state);
+  if (permanentChoiceInfo) {
+    const byKey = new Map(
+      (permanentChoiceInfo.candidates || []).map((c) => [`${c.seat}-${c.index}`, c.id]),
+    );
+    return promptTargeting({
+      permanentKeys: [...byKey.keys()],
+      onPermanent: (targetSeat, idx) =>
+        submitPromptAction({
+          seat,
+          action: "permanent_choice_confirm",
+          target_permanent_id: byKey.get(`${targetSeat}-${idx}`),
+        }),
+      invalidHint: "Only a permanent the resolving spell names can be chosen.",
     });
   }
 

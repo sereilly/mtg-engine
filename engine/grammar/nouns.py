@@ -233,6 +233,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     their_choice = False
     named: str | None = None
     attached_to: str | None = None
+    attached_to_types: tuple[str, ...] = ()
+    of_bound_type = False
     zone = "battlefield"
     zone_owner: ast.PlayerRef | None = None
     saw_head = False
@@ -869,6 +871,25 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 if matched is not None:
                     attached_to = matched[1]
                     continue
+                # "target Aura **attached to a creature or land**" (Enchantment
+                # Alteration). Not a back-reference but a type: what the
+                # attachment is on, asked of the attachment itself. Read
+                # through the same noun-phrase parser rather than by a word
+                # list here, and admitted only when the phrase is *nothing but*
+                # card types — anything else in it would be a restriction the
+                # matcher drops, which on an Aura-mover is the wrong Aura moved.
+                nested = stream.mark()
+                stream.accept_word("a", "an")
+                try:
+                    host = parse_object_filter(stream)
+                except GrammarError:
+                    host = None
+                if host is not None and host.card_types and host == ast.ObjectFilter(
+                    card_types=host.card_types, type_match=host.type_match
+                ):
+                    attached_to_types = host.card_types
+                    continue
+                stream.reset(nested)
             stream.reset(probe)
             break
         if stream.at_word("of"):
@@ -885,6 +906,13 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             stream.advance()
             if stream.accept_phrase("their", "choice"):
                 their_choice = True
+                continue
+            # "another permanent **of that type**" (Enchantment Alteration) —
+            # the type of the object the sentence's earlier clause named.
+            # Recorded, never resolved here: the noun phrase cannot know what
+            # that object was, and a lowering with no answer for it refuses.
+            if stream.accept_phrase("that", "type"):
+                of_bound_type = True
                 continue
             stream.reset(probe)
             break
@@ -936,6 +964,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         is_source=is_source,
         is_enchanted=is_enchanted,
         attached_to=attached_to,
+        attached_to_types=tuple(attached_to_types),
+        of_bound_type=of_bound_type,
         in_combat_with_source=in_combat_with_source,
         dealt_damage_to_source_this_turn=dealt_damage_to_source_this_turn,
     )
