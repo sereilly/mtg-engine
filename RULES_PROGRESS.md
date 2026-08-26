@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**305 / 611 tracked rules covered (49%)** — 1415 tests, 0 unannotated.
+**306 / 611 tracked rules covered (50%)** — 1432 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -87,7 +87,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/15 | 13% |
-| [701. Keyword Actions](#701-keyword-actions) | 11/19 | 57% |
+| [701. Keyword Actions](#701-keyword-actions) | 12/19 | 63% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 26/26 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 5/8 | 62% |
@@ -430,7 +430,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **303.1** A player who has priority may cast an enchantment card from their hand during a main phase of the... *(2 tests)*
 - [x] **303.2** When an enchantment spell resolves, its controller puts it onto the battlefield under their control. *(4 tests)*
 - [x] **303.3** Enchantment subtypes are always a single word and are listed after a long dash: “Enchantment — Sh... *(3 tests)*
-- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(33 tests, subrules abcdefghijm)*
+- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(35 tests, subrules abcdefghijm)*
 - [x] **303.5** Some enchantments have the subtype “Saga.” See rule 714 for more information about Saga cards. *(2 tests)*
 - [x] **303.6** Some enchantments have the subtype “Class.” See rule 716 for more information about Class cards. *(2 tests)*
 - [x] **303.7** Some Aura enchantments also have the subtype “Role.” *(3 tests, subrules a)*
@@ -483,7 +483,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(4 tests)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(5 tests)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -681,11 +681,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(1 tests)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(13 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(19 tests, subrules b)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(20 tests, subrules b)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(3 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(1 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(2 tests, subrules c)*
-- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(1 tests)*
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(10 tests, subrules bcd)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(3 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(1 tests)*
@@ -806,15 +806,15 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 615. Prevention Effects
 
-- [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(12 tests, subrules a)*
+- [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(14 tests, subrules a)*
 - [ ] **615.2** Many prevention effects apply to damage from a source. See rule 609.7.
-- [x] **615.3** There are no special restrictions on casting a spell or activating an ability that generates a pr... *(2 tests)*
+- [x] **615.3** There are no special restrictions on casting a spell or activating an ability that generates a pr... *(3 tests)*
 - [ ] **615.4** Prevention effects must exist before the appropriate damage event occurs—they can’t “go back in t...
 - [x] **615.5** Some prevention effects also include an additional effect, which may refer to the amount of damag... *(1 tests)*
 - [x] **615.6** If damage that would be dealt is prevented, it never happens. A modified event may occur instead,... *(1 tests)*
 - [x] **615.7** Some prevention effects generated by the resolution of a spell or ability refer to a specific amo... *(10 tests)*
-- [x] **615.8** Some prevention effects generated by the resolution of a spell or ability refer to the next time ... *(3 tests)*
-- [x] **615.9** Some effects generated by the resolution of a spell or ability prevent damage from a source of a ... *(2 tests)*
+- [x] **615.8** Some prevention effects generated by the resolution of a spell or ability refer to the next time ... *(4 tests)*
+- [x] **615.9** Some effects generated by the resolution of a spell or ability prevent damage from a source of a ... *(4 tests)*
 - [ ] **615.10** Some prevention effects generated by static abilities refer to a specific amount of damage—for ex...
 - [ ] **615.11** Some prevention effects prevent the next N damage that would be dealt to each of a number of unta...
 - [ ] **615.12** Some effects state that damage “can’t be prevented.” If unpreventable damage would be dealt, any ...
@@ -852,7 +852,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [ ] **701.8** Destroy
 - [x] **701.9** Discard *(4 tests, subrules ac)*
-- [ ] **701.12** Exchange
+- [x] **701.12** Exchange *(6 tests, subrules ab)*
 - [ ] **701.13** Exile
 - [x] **701.14** Fight *(4 tests, subrules abd)*
 - [x] **701.17** Mill *(5 tests, subrules a)*

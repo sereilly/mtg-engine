@@ -1868,3 +1868,95 @@ pool alone passes against the wildcard.
 **Numbers.** No card moved: LEG 220 of 310, shipped pool 734/734. Suite 7,273 →
 **7,276** (three new tests: one corrected regression, two new guards). Every
 `--check` green. AI simulation identical.
+
+## LEG round 22: a subsystem, five mechanisms for six cards, and a stale veto
+
+*(2026-08-25.)* Third parallel round, and the first where a group's honest
+deliverable was **machinery** rather than cards. Eleven cards, LEG 220 → 232.
+
+**Delayed triggered abilities (CR 603.7) exist now.** There was no general
+mechanism — only a list of bare dicts on `Game` with two hard-coded events read
+by `entry.get(...)` in three places, plus a `destroy_at_end_of_combat` metadata
+flag and a card hook. `engine/delayed_triggers.py` holds the entry as an object,
+one fire routine, one expiry routine, and `DELAYED_EVENTS`: every event with a
+fire site, guarded by a test that fails if a listed event is named nowhere else
+in `engine/`. The three ad-hoc sites migrated onto it and four new fire sites
+joined. CR 603.7b's "only once unless it has a stated duration" is a *field*,
+not something a fire site decides.
+
+`Choose target <noun>.` — the opener three of those cards share — parses only
+when the sentence binding what it chose follows. A spell whose one instruction
+chose a target and did nothing would otherwise report itself supported.
+
+**"Prevent" was a verb again.** The playbook records that Legends' prevention
+bucket needed four mechanisms across two rounds; this round's six cards needed
+**five**. The generalisations are the value: a colour shield records a *set* of
+colours (one shield either colour spends, not one per colour, and `Shield.color`
+survives as a read-only property returning None for a multi-colour shield —
+there is no one colour it is "the" shield of); the directional turn-long
+shield's *width* is payload, so Horn of Deafening and Kry Shield are one
+instruction one word apart; a `Shield` can carry a printed noun phrase matched
+through `subject_matches` at damage time.
+
+### Three pre-existing defects
+
+* **A stale blanket veto.** `oracle.UNSUPPORTED_PATTERNS` refused any card whose
+  text contained `"exchange control"`, naming no clause — and kept refusing
+  *after* the clause was implemented. Gauntlets of Chaos compiled cleanly and
+  was still rejected by that line. The tuple is empty now; every "exchange" card
+  in the pool was audited and only Gauntlets flipped, with Juxtapose and Tempest
+  Efreet still refusing and now naming their actual clause.
+* **A declared producer that never wrote.** `_PRODUCES` lists
+  `tap_target_permanent` as producing `tapped_permanents`, but only its
+  several-target branch wrote the key. Frost Breath prints "up to two" and takes
+  that branch, so nothing had ever exercised the singular one — Telekinesis's
+  third sentence marked nothing while the card compiled clean. The `untap` twin
+  had the identical hole.
+* **A resolving spell carries no targets by the time it deals damage** — the
+  stack object is popped before its instructions run. `Game.resolving_targets`
+  is the seam, beside `resolving_seats`, for the same reason.
+
+### Where the riders went
+
+Two riders were folded into the production that holds their subject rather than
+parsed as their own step, and both would otherwise have been board-wide sweeps:
+Gauntlets' "destroy all Auras attached to them" (an Aura on a third permanent
+must survive — asserted) and Glyph of Doom's blocked-set. That is the third
+round running in which the dangerous shape was a narrowing that reads as
+guarded because something *adjacent* to it is.
+
+### Integration
+
+Two conflicts, both additive AST unions or pure-append test files. One genuine
+cross-branch collision: `_parse_bound_subject` moved from `statements` to
+`phrases` and lost its underscore in one worktree while another wrote a call
+against the old name — invisible to both agents, caught by the suite the moment
+the branches met. That is what the serial merge is for.
+
+`lowering/board.py` reached 1,007 lines when two branches' additions met, and
+split along tap/untap (CR 701.20/701.21 — a permanent's *status*, orthogonal to
+its existence and controller, which is what `board` otherwise covers). 711 now.
+
+**`engine/grammar/lower.py` is at 995 and cannot be split the usual way.** Its
+`_lower_where_x` family recurses into `lower_statement`, so moving it into
+`lowering/` would import upward, which the layering guard forbids — and
+shuffling helpers to shave lines is what that guard's own comment warns against.
+What actually grows is `lower_statement`'s 374-line if-chain over node types,
+one line per type. The shape that fixes it permanently is a **dict dispatch
+keyed by node type**, which is the engine's own idiom everywhere else
+(`EFFECT_HANDLERS[instruction.kind]`, "O(1) dict dispatch"). That is a
+deliberate refactor of the hottest file and wants its own round, not an
+integration afterthought.
+
+**Numbers.** LEG 220 → **232** of 310 (71.0% → 74.8%); LEG parse 65.4% → 68.0%,
+lowers 61.0% → 63.8%, executes 35.5% → 38.1%. ARN parse 69.4% → 71.3% by-catch.
+Shipped pool unchanged at 734/734. Suite 7,276 → **7,351**, every `--check`
+green, no hooks added.
+
+**Not reached, and why:** Feint (a noun phrase narrowed by a relation to a
+target chosen in the same sentence — a nested `TargetSpec` inside a filter);
+Enchantment Alteration and Juxtapose (a permanent chosen on *resolution* with no
+"target" printed, needing a new `PendingChoice` kind and its web plumbing — the
+nearest prompt, `kudzu_reattach`, is index-keyed and Kudzu-named through to the
+JS); Glyph of Delusion and Glyph of Reincarnation (the block record this round
+added is there for them now, but each needs machinery beyond it).

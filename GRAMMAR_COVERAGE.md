@@ -10,7 +10,7 @@ How much of the card pool the oracle-text parser (`engine/grammar/`) reads. It i
 | Lowered | That AST mapped onto instructions, a sidecar registry, or a keyword line |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `attachments, characteristics, chosen_numbers, coin_flips, combat_restrictions, control, counters, counterspells, damage, destruction, enter_statics, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
+Categories currently switched on: `attachments, characteristics, chosen_numbers, coin_flips, combat_restrictions, control, counters, counterspells, damage, delayed_triggers, destruction, enter_statics, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, targeting, text_change, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 
@@ -19,11 +19,11 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | LEA | 290 | 388 | 80.4% | 79.6% | 43.3% | 154 |
 | LEB | 292 | 389 | 80.5% | 79.7% | 43.4% | 155 |
 | 2ED | 292 | 389 | 80.5% | 79.7% | 43.4% | 155 |
-| ARN | 78 | 108 | 69.4% | 64.8% | 42.6% | 37 |
+| ARN | 78 | 108 | 71.3% | 64.8% | 42.6% | 37 |
 | ATQ | 85 | 120 | 89.2% | 89.2% | 61.7% | 67 |
 | 3ED | 296 | 389 | 82.0% | 81.0% | 45.5% | 160 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 65.4% | 61.0% | 35.5% | 140 |
+| LEG *(measured)* | 310 | 431 | 68.0% | 63.8% | 38.1% | 151 |
 | **All (shipped)** | **1618** | **2286** | **82.2%** | **81.2%** | **48.5%** | **965** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,16 +34,16 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 223 | 115 | expected a subject |  |
+| 217 | 109 | expected a subject |  |
 | 121 | 51 | unrecognized effect verb |  |
-| 66 | 40 | unconsumed text |  |
+| 63 | 37 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
-| 10 | 7 | expected 'a' |  |
 | 10 | 6 | a conditional static bonus is derived by engine/static_bonuses.py |  |
-| 9 | 4 | expected a colour or a creature body after 'becomes' |  |
 | 9 | 5 | expected a keyword ability |  |
 | 8 | 4 | expected 'the number of' in a where-clause |  |
+| 8 | 3 | expected a colour or a creature body after 'becomes' |  |
+| 7 | 4 | expected 'a' |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 6 | 3 | expected a quantity |  |
 | 5 | 5 | expected 'unless defending player controls' |  |
@@ -55,10 +55,10 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected something to shield |  |
+| 2 | 2 | unsupported destroy quantifier |  |
 | 2 | 2 | expected what to remove a counter from as a cost |  |
 | 2 | 2 | expected 'counter or counters' |  |
 | 1 | 1 | a destroy sweep over a source relation stays with its card hook until the probe review takes it |  |
-| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -76,6 +76,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{B}{R}{G}, {T}: Return target creature card from your graveyard to your hand.`
 - **Aisling Leprechaun**
   - `Whenever this creature blocks or becomes blocked by a creature, that creature becomes green. (This effect lasts indefinitely.)`
+- **Al-abara's Carpet**
+  - `{5}, {T}: Prevent all damage that would be dealt to you this turn by attacking creatures without flying.`
 - **Alabaster Potion**
   - `• Target player gains X life.`
   - `• Prevent the next X damage that would be dealt to any target this turn.`
@@ -86,6 +88,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{8}, {T}: This artifact deals 4 damage to any target.`
 - **Alchemist's Gift**
   - `Target creature gets +1/+1 and gains your choice of deathtouch or lifelink until end of turn. (Any amount of damage a creature with deathtouch deals to a creature is enough to destroy it. Damage dealt by a creature with lifelink also causes its controller to gain that much life.)`
+- **Alchor's Tomb**
+  - `{2}, {T}: Target permanent you control becomes the color of your choice. (This effect lasts indefinitely.)`
 - **Ali Baba**
   - `{R}: Tap target Wall.`
 - **Alpine Houndmaster**
@@ -667,6 +671,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever a Mountain is tapped for mana, its controller adds an additional {R}.`
   - `Red creatures get +1/+1.`
   - `Whenever a Mountain is tapped for mana, its controller adds an additional {R}.`
+- **Gauntlets of Chaos**
+  - `{5}, Sacrifice this artifact: Exchange control of target artifact, creature, or land you control and target permanent an opponent controls that shares one of those types with it. If those permanents are exchanged this way, destroy all Auras attached to them.`
 - **Ghostly Pilferer**
   - `Whenever this creature becomes untapped, you may pay {2}. If you do, draw a card.`
   - `Whenever an opponent casts a spell from anywhere other than their hand, draw a card.`
@@ -687,6 +693,10 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever this creature becomes blocked by a creature, that creature's controller loses 2 life and you gain 2 life.`
 - **Glorious Anthem**
   - `Creatures you control get +1/+1.`
+- **Glyph of Doom**
+  - `Choose target Wall creature. At this turn's next end of combat, destroy all creatures that were blocked by that creature this turn.`
+- **Glyph of Life**
+  - `Choose target Wall creature. Whenever that creature is dealt damage by an attacking creature this turn, you gain that much life.`
 - **Goblin Arsonist**
   - `When this creature dies, you may have it deal 1 damage to any target.`
 - **Goblin Artisans**
@@ -718,6 +728,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Target creature gets -4/-4 until end of turn.`
 - **Great Defender**
   - `Target creature gets +0/+X until end of turn, where X is its mana value.`
+- **Greater Realm of Preservation**
+  - `{1}{W}: The next time a black or red source of your choice would deal damage to you this turn, prevent that damage.`
 - **Greed**
   - `{B}, Pay 2 life: Draw a card.`
 - **Green Mana Battery**
@@ -929,6 +941,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `All Swamps are 1/1 black creatures that are still lands.`
   - `All Swamps are 1/1 black creatures that are still lands.`
   - `All Swamps are 1/1 black creatures that are still lands.`
+- **Kry Shield**
+  - `{2}, {T}: Prevent all damage that would be dealt this turn by target creature you control. That creature gets +0/+X until end of turn, where X is its mana value.`
 - **Lady Caleria**
   - `{T}: Lady Caleria deals 3 damage to target attacking or blocking creature.`
 - **Lady Evangela**
@@ -1028,6 +1042,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Battalion — Whenever this creature and at least two other creatures attack, put a +1/+1 counter on this creature.`
 - **Malefic Scythe**
   - `Whenever equipped creature dies, put a soul counter on this Equipment.`
+- **Mana Drain**
+  - `Counter target spell. At the beginning of your next main phase, add an amount of {C} equal to that spell's mana value.`
 - **Mana Flare**
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
@@ -1331,6 +1347,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Return target card from your graveyard to your hand.`
   - `Return target card from your graveyard to your hand.`
   - `Return target card from your graveyard to your hand.`
+- **Reincarnation**
+  - `Choose target creature. When that creature dies this turn, return a creature card from its owner's graveyard to the battlefield under the control of that creature's owner.`
 - **Relic Barrier**
   - `{T}: Tap target artifact.`
 - **Relic Bind**
@@ -1622,6 +1640,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}, Sacrifice this land: Destroy target land.`
 - **Su-Chi**
   - `When this creature dies, add {C}{C}{C}{C}.`
+- **Subdue**
+  - `Prevent all combat damage that would be dealt by target creature this turn. That creature gets +0/+X until end of turn, where X is its mana value.`
 - **Subira, Tulzidi Caravanner**
   - `{1}: Another target creature with power 2 or less can't be blocked this turn.`
 - **Sublime Epiphany**
@@ -1665,6 +1685,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever you draw a card, target opponent mills two cards. (They put the top two cards of their library into their graveyard.)`
 - **Teferi's Wavecaster**
   - `When this creature enters, you may search your library and/or graveyard for a card named Teferi, Timeless Voyager, reveal it, and put it into your hand. If you search your library this way, shuffle.`
+- **Telekinesis**
+  - `Tap target creature. Prevent all combat damage that would be dealt by that creature this turn. It doesn't untap during its controller's next two untap steps.`
 - **Tempered Veteran**
   - `{W}, {T}: Put a +1/+1 counter on target creature with a +1/+1 counter on it.`
   - `{4}{W}{W}, {T}: Put a +1/+1 counter on target creature.`
