@@ -84,16 +84,33 @@ class CombatDamageStepMixin:
         return sorted(blockers)
 
     def _attacker_blocked_by_banding(self, attacker_idx: int) -> bool:
-        """CR 702.22j: is this attacker blocked by at least one creature with banding?"""
+        """CR 702.22j: does the **defending** player divide this attacker's damage?
+
+        Two ways the rule reaches, and the second is the one "bands with other"
+        adds: the attacker is blocked "by a creature with banding, **or** by
+        both a [quality] creature with 'bands with other [quality]' and another
+        [quality] creature". A pair inside the blocking set, not every blocker —
+        a third blocker of some unrelated type does not take the division back.
+
+        One answer for the whole engine and the web layer both: the prompt that
+        offers the division reads this, so what a player is asked to divide and
+        what the damage step then honours cannot be two different sets of
+        attackers.
+        """
+        from ..banding import bands_with_other_pair
+
         defending_index = self.combat_attackers.get(attacker_idx)
         if defending_index is None or not (0 <= defending_index < len(self.players)):
             return False
         defender = self.players[defending_index]
-        for blocker_idx in self._attacker_all_blockers(attacker_idx):
-            if 0 <= blocker_idx < len(defender.battlefield):
-                if self._creature_has_banding(defender.battlefield[blocker_idx]):
-                    return True
-        return False
+        blockers = [
+            defender.battlefield[blocker_idx]
+            for blocker_idx in self._attacker_all_blockers(attacker_idx)
+            if 0 <= blocker_idx < len(defender.battlefield)
+        ]
+        if any(self._creature_has_banding(blocker) for blocker in blockers):
+            return True
+        return bands_with_other_pair(self, blockers)
 
     def assign_banding_combat_damage(
         self,

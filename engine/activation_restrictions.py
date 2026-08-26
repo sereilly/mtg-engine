@@ -191,7 +191,14 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
     # the activation path *and* by the support gate, so a clause nobody enforces
     # cannot also report as understood.
     ActivationRestriction(
-        re.compile(r"^only during any upkeep step$"),
+        # Both printed spellings of one clause. Armageddon Clock drops the verb
+        # ("Any player may activate this ability but only during any upkeep
+        # step"), Tolaria keeps it ("Activate only during any upkeep step") —
+        # and the verbless spelling was the only one here, so Tolaria's ability
+        # was **unenforced**: usable in any step, with nothing to notice. That
+        # is the failure this module was written for, arriving on the second
+        # card to print the clause.
+        re.compile(r"^(?:activate )?only during any upkeep step$"),
         _during_any_upkeep,
         "only during an upkeep step",
     ),

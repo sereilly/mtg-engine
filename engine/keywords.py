@@ -78,10 +78,18 @@ def keyword_ability_name(keyword: str) -> str:
     rather than restated, and imported inside the function because this module
     sits underneath the grammar in the import order.
     """
+    from .banding import BANDS_WITH_OTHER, is_bands_with_other
     from .grammar.vocabulary import NUMERIC_ARGUMENT_KEYWORDS
 
     if keyword.startswith("protection from "):
         return "protection"
+    # "Bands with other legendary creatures" is the ability *bands with other*
+    # carrying a quality (CR 702.22b) — the same shape protection has one line
+    # up, so the registry holds one entry and every printed quality strips to
+    # it. Without this, asking the registry about a granted band would be asking
+    # about a word no list can contain: the quality is whatever the card prints.
+    if is_bands_with_other(keyword):
+        return BANDS_WITH_OTHER
     head = keyword.split(" ")[0]
     return head if head in NUMERIC_ARGUMENT_KEYWORDS else keyword
 

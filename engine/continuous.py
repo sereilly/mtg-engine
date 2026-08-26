@@ -144,19 +144,102 @@ def _apply_one(effect: ContinuousEffect, state: State) -> None:
         effect.modify(state[oid])
 
 
+#: The set-valued characteristics, whose action is "these are what it puts in"
+#: rather than "this is what the object ended up holding".
+_SET_CHARACTERISTICS = ("card_types", "subtypes", "supertypes", "colors", "abilities")
+
+
+def _set_action(effect: ContinuousEffect, char: Characteristics) -> tuple:
+    """**What an effect does** to the set-valued characteristics.
+
+    Probed against the same object with those sets *emptied*, which is what
+    makes the answer a property of the effect rather than of what it happened
+    to find. Adding flying is "flying goes in" whether or not the creature
+    already had it; removing flying is "flying comes out" whether or not there
+    was any.
+
+    That distinction is 613.8a's third clause read as written — "what it *does*
+    to any of the things it applies to", not what those things end up like —
+    and getting it wrong is silent in both directions. Comparing *results*
+    makes any two grants in a layer look mutually dependent (adding trample
+    does change the answer to "what is the ability set after adding flying"),
+    and then, because ``_apply_group`` applies the first effect that depends on
+    nothing, a **removal** — which no result-comparison can see a dependency
+    for, the object having no flying either way — is applied before the grants
+    it was printed to undo, and the grant puts the ability straight back.
+
+    Not hypothetical: a legendary creature under Adventurers' Guildhouse,
+    granted banding and then stripped of it by Tolaria, kept both abilities.
+    Layer 6 had never before held two grants *and* a removal at once.
+
+    A ``modify`` that reads a set to decide what to do would see an object that
+    is not there; it falls back to the real reading, which is no worse than
+    what this replaced.
+    """
+    probe = char.copy()
+    for name in _SET_CHARACTERISTICS:
+        getattr(probe, name).clear()
+    try:
+        effect.modify(probe)
+    except Exception:  # pragma: no cover - a modify that needs its own input
+        probe = char.copy()
+        effect.modify(probe)
+        return tuple(
+            (
+                tuple(sorted(getattr(probe, name) - getattr(char, name))),
+                tuple(sorted(getattr(char, name) - getattr(probe, name))),
+            )
+            for name in _SET_CHARACTERISTICS
+        )
+    return tuple(tuple(sorted(getattr(probe, name))) for name in _SET_CHARACTERISTICS)
+
+
+def _action(
+    effect: ContinuousEffect, before: Characteristics, after: Characteristics
+) -> tuple:
+    """*effect*'s action on one object: the sets it writes, and the numbers.
+
+    A number contributes both its new value and its delta, because a sublayer
+    that *sets* is state-independent in the first and one that *modifies* is
+    state-independent in the second, and there is no third reading that leaves
+    an unchanged action looking unchanged for both.
+    """
+    parts: list[object] = [_set_action(effect, before)]
+    for name in ("power", "toughness"):
+        was, now = getattr(before, name), getattr(after, name)
+        delta = None if (was is None or now is None) else now - was
+        parts.append((now, delta))
+    # The scalars that are *set* rather than adjusted are recorded as the value
+    # they leave behind, unconditionally. Recording "did it change?" instead
+    # brings back the idempotence trap the set probe above exists to avoid: a
+    # second effect handing control to the seat that already has it would read
+    # as doing nothing, and would therefore look dependent on whatever handed
+    # it over first — which is how the *later* control effect stopped winning
+    # (CR 613.9). Both layers are applied as their own group, so a value that
+    # no effect in the group writes is a constant and contributes nothing.
+    parts.append(after.controller_index)
+    parts.append(after.switched)
+    return tuple(parts)
+
+
 def _signature(effect: ContinuousEffect, state: State) -> tuple:
     """What *effect* would do to *state*, without committing it.
 
     Used to detect dependency: 613.8a asks whether applying another effect
     would change this one's existence, what it applies to, or what it does to
     what it applies to. Probing all three by trial application answers the
-    question generally, rather than enumerating known card interactions.
+    question generally, rather than enumerating known card interactions — the
+    third through :func:`_action`, which is where the two readings of "what it
+    does" come apart.
     """
     trial = {oid: char.copy() for oid, char in state.items()}
     targets = _targets(effect, trial)
+    actions = []
     for oid in targets:
+        was = trial[oid].copy()
         effect.modify(trial[oid])
-    return (targets, tuple(trial[oid].snapshot() for oid in targets))
+        actions.append(_action(effect, was, trial[oid]))
+    return (targets, tuple(actions))
 
 
 def _depends_on(
@@ -399,7 +482,18 @@ def remove_abilities(
     abilities = tuple(abilities)
 
     def modify(char: Characteristics) -> None:
-        char.abilities.difference_update(abilities)
+        # A removal may name a *set* rather than an ability: "loses all 'bands
+        # with other' abilities" names the family, and CR 702.22b makes "loses
+        # banding" name it too. Both have to be resolved against what the
+        # permanent actually has, which is only knowable here — the removal was
+        # recorded before this permanent's ability set existed. Removing the
+        # family name literally would take nothing away and report success,
+        # which is the silent half of a removal (engine/banding.py).
+        from .banding import expand_ability_removal
+
+        char.abilities.difference_update(
+            expand_ability_removal(abilities, char.abilities)
+        )
 
     return ContinuousEffect(
         layer=LAYER_ABILITY, modify=modify, applies_to=target,

@@ -482,3 +482,43 @@ def test_a_layer_one_effect_is_refused_rather_than_silently_dropped():
     )
     with pytest.raises(ValueError, match="engine/copies.py"):
         apply_layers([stray], _state(o1=_creature(2, 2)))
+
+
+@pytest.mark.cr("613.8a", "613.9")
+def test_a_removal_is_not_promoted_ahead_of_the_grants_it_undoes():
+    """613.8a's third clause is about **what an effect does**, not about what
+    the object ends up like.
+
+    Two grants and a removal in one layer, the removal newest. Comparing
+    *results* to detect dependency reads the two grants as depending on each
+    other (adding trample changes the answer to "what is the ability set after
+    adding flying") while the removal depends on nothing — the object has no
+    flying either way — so the removal is applied first and the grant puts the
+    ability straight back.
+
+    Layer 6 only grew a third contributor when a granted "bands with other"
+    landed beside a granted keyword and a removal, which is why this shape had
+    never been exercised. Written with plain keywords so it stays a statement
+    about the layer system.
+    """
+    state = _state(o1=_creature(2, 2))
+    lord = grant_abilities(scope_only(1), ["trample"], timestamp=0, label="lord")
+    grant = grant_abilities(scope_only(1), ["flying"], timestamp=1, label="grant")
+    removal = remove_abilities(scope_only(1), ["flying"], timestamp=2, label="removal")
+
+    apply_layers([lord, grant, removal], state)
+
+    assert state[1].abilities == {"trample"}
+
+
+@pytest.mark.cr("613.8a", "613.9")
+def test_a_grant_after_a_removal_still_wins_by_timestamp():
+    """The other order, so the fix above cannot be "removals always last"."""
+    state = _state(o1=_creature(2, 2))
+    lord = grant_abilities(scope_only(1), ["trample"], timestamp=0, label="lord")
+    removal = remove_abilities(scope_only(1), ["flying"], timestamp=1, label="removal")
+    grant = grant_abilities(scope_only(1), ["flying"], timestamp=2, label="grant")
+
+    apply_layers([lord, removal, grant], state)
+
+    assert state[1].abilities == {"trample", "flying"}

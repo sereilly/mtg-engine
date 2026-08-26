@@ -88,6 +88,13 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
     "forestwalk", "islandwalk", "mountainwalk", "plainswalk", "desertwalk",
     "lifelink", "deathtouch", "indestructible", "flash", "menace", "hexproof",
     "prowess", "rampage",
+    # CR 702.22b's specialized banding. A **family** word like "protection" and
+    # "landwalk" beside it: what a card prints is the word plus a quality
+    # ("bands with other legendary creatures"), and the quality is payload read
+    # by engine/banding.py. The registry lists abilities, so it lists this one
+    # once — `keywords.keyword_ability_name` is what strips a printed quality
+    # back to it, exactly as it strips protection's colour.
+    "bands with other",
 })
 
 

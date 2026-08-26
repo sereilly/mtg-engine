@@ -1700,6 +1700,17 @@ def _qualified_keyword_part(part: str) -> bool:
     # the qualities `_protection_qualities` models.
     if rampage_amount(part) is not None:
         return True
+    # "Bands with other legendary creatures" (CR 702.22b). The quality is a
+    # printed noun phrase rather than a word from a list, so what admits the
+    # line is the reader that *implements* it — engine/banding.py, which turns
+    # the phrase into the filter payload the combat sites test. A quality the
+    # noun parser cannot read, or one carrying a restriction the matcher cannot
+    # answer, keeps the line refused: a band whose quality is dropped is a band
+    # any creature may join.
+    from .banding import is_bands_with_other, is_implemented as _band_implemented
+
+    if is_bands_with_other(part):
+        return _band_implemented(part)
     for prefix, admit in (
         ("protection from ", _protection_quality_word),
         # Hexproof stays colour-only: _can_be_targeted's hexproof branch reads
@@ -3043,10 +3054,37 @@ def _compile_card_oracle(
                     normalized_text,
                 )
 
+        # **Passing the gate is not doing the thing.** The check above says a
+        # reader claims the land's static line; this is the line being carried,
+        # as the same ``lord_buff`` instruction a creature's anthem compiles to
+        # (`_parse_creature_program` step 4). Without it Legends' five banding
+        # lands would go back to exactly the state round 24 caught — reported
+        # supported, tapping for mana, granting nothing — with the difference
+        # that the gate would now agree with them.
+        #
+        # Only the derivations a *land* can print are read here, one table at a
+        # time, rather than the whole creature chain: a land has no P/T for a
+        # static bonus to change and no combat to restrict.
+        land_statics: list[OracleInstruction] = []
+        land_static_lines: list[str] = []
+        for raw_line in (oracle_text or "").splitlines():
+            line = _PARENTHETICAL_RE.sub("", raw_line).strip()
+            if not line or ":" in line:
+                continue
+            normalized = normalize_creature_line(line)
+            lord = lord_buff_for(normalized)
+            if lord is not None:
+                land_statics.append(
+                    OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(lord))
+                )
+                land_static_lines.append(normalized)
+
         return OracleProgram(
             True, "land_mana", "basic land support", normalized_text,
+            instructions=tuple(land_statics),
             activated_abilities=activated_abilities,
             triggered_abilities=triggered_abilities,
+            static_lines=tuple(land_static_lines),
         )
 
     if primary_type == "creature":

@@ -117,12 +117,18 @@ def _vocabulary():
 def grantable_keywords() -> frozenset[str]:
     """Keyword abilities a lord may grant, at CR 613 layer 6.
 
-    "protection" and "landwalk" are category words rather than abilities —
-    protection has its own metadata channel with its own checks, and a bare
-    "landwalk" names no land type — so claiming either here would say layer 6
-    carries something it does not.
+    "protection", "landwalk" and "bands with other" are category words rather
+    than abilities — protection has its own metadata channel with its own
+    checks, a bare "landwalk" names no land type, and a bare "bands with other"
+    names no quality — so claiming any of them here would say layer 6 carries
+    something it does not. A band *with* its quality is granted, but by the
+    quoted-ability branch of :func:`lord_buff_for`, which is the form Magic
+    prints it in ("…have \"bands with other legendary creatures.\"") and the
+    only one whose quality survives the keyword list's comma/"and" splitting.
     """
-    return _vocabulary().IMPLEMENTED_KEYWORDS - {"protection", "landwalk"}
+    return _vocabulary().IMPLEMENTED_KEYWORDS - {
+        "protection", "landwalk", "bands with other"
+    }
 
 
 @dataclass(frozen=True)
@@ -131,6 +137,13 @@ class LordBuffFilter:
 
     colors: tuple[str, ...] = ()
     subtypes: tuple[str, ...] = ()
+    # "**Legendary** creatures you control…" (Legends' five banding lands).
+    # A supertype (CR 205.4), not a creature type — read off the type line by
+    # ``permanent_matches_filter``'s ``supertypes`` key, which is the same
+    # reader a targeted "legendary creature" already goes through. Its own
+    # field rather than a subtype entry because ``has_type`` answers about
+    # types and would say no to every legend in the pool.
+    supertypes: tuple[str, ...] = ()
     # "you" scopes the anthem to its controller ("creatures you control");
     # None means every player's creatures (Bad Moon, Crusade).
     controller: str | None = None
@@ -265,6 +278,7 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
     qualifiers: list[str] = []
     colors: list[str] = []
     subtypes: list[str] = []
+    supertypes: list[str] = []
     with_plus1_counter = False
 
     # "Each creature you control…" / "All creatures…": a distributive article
@@ -283,9 +297,22 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
         # costs nothing and says what the phrase means.
         qualifiers.append(words[index])
         index += 1
+    # The colour and the supertypes, in either printed order. Magic prints
+    # "Green legendary creatures" and "Legendary green creatures" for the same
+    # set, so one loop reads both slots rather than two fixed positions — a
+    # fixed order would leave the second word unconsumed and refuse the line,
+    # which is safe and wrong. Each word may appear once; a repeat leaves it
+    # unconsumed and the line refuses, as any unrecognized adjective does.
     color_words = _vocabulary().COLOR_WORDS
-    if index < len(words) and words[index] in color_words:
-        colors.append(color_words[words[index]])
+    supertype_words = _vocabulary().TYPE_LINE_SUPERTYPES
+    while index < len(words):
+        word = words[index]
+        if word in color_words and not colors:
+            colors.append(color_words[word])
+        elif word in supertype_words and word not in supertypes:
+            supertypes.append(word)
+        else:
+            break
         index += 1
     if index < len(words):
         subtype = _creature_subtype(words[index])
@@ -324,6 +351,7 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
     return LordBuffFilter(
         colors=tuple(colors),
         subtypes=tuple(subtypes),
+        supertypes=tuple(supertypes),
         controller=controller,
         other_than_source=other,
         qualifiers=tuple(qualifiers),
@@ -381,6 +409,26 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
     quoted = re.match(r'^ha(?:ve|s) "(?P<ability>.+)"$', effect)
     if quoted is not None:
         ability = quoted.group("ability").strip()
+        # A quoted **keyword** ability, which Magic prints in quotes exactly
+        # when the keyword takes a printed argument the sentence would
+        # otherwise swallow: "…have \"bands with other legendary creatures.\""
+        # (CR 702.22b, Legends' five lands). It lands in `keywords` rather than
+        # in `granted_ability` because it *is* a layer-6 word — the derived
+        # grant channel carries it, and `engine/banding.py` reads the quality
+        # back off it. Gated on that reader, so a quality nothing can test
+        # refuses the whole line rather than granting a band any creature may
+        # join.
+        # The sentence-ending period Magic prints inside the quotes belongs to
+        # the sentence, not to the ability's name — stripped here rather than
+        # above, because GRANTED_ACTIVATED_ABILITIES is keyed by the whole
+        # quoted text *including* its period and its cost.
+        from .banding import is_bands_with_other, is_implemented
+        band = ability.strip().rstrip(".").strip()
+        if is_bands_with_other(band):
+            if not is_implemented(band):
+                return None
+            keywords = (band,)
+            return LordBuff(subject, 0, 0, keywords, (), None, condition)
         if ability not in GRANTED_ACTIVATED_ABILITIES:
             return None
         granted_ability = ability
@@ -419,6 +467,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["colors"] = list(buff.filter.colors)
     if buff.filter.subtypes:
         payload["subtypes"] = list(buff.filter.subtypes)
+    if buff.filter.supertypes:
+        payload["supertypes"] = list(buff.filter.supertypes)
     if buff.filter.controller:
         payload["controller"] = buff.filter.controller
     if buff.filter.other_than_source:
@@ -446,6 +496,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
         filter=LordBuffFilter(
             colors=tuple(payload.get("colors") or ()),
             subtypes=tuple(payload.get("subtypes") or ()),
+            supertypes=tuple(payload.get("supertypes") or ()),
             controller=payload.get("controller"),
             other_than_source=bool(payload.get("other")),
             qualifiers=tuple(payload.get("while") or ()),

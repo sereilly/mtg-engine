@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 
+from ...banding import BANDS_WITH_OTHER
 from ...keywords import LINE_DERIVED_KEYWORDS, keyword_ability_name
 from ...oracle_types import OracleInstruction
 from .. import ast
@@ -180,6 +181,17 @@ def _check_grantable(keyword: str, node) -> None:
         raise LoweringError(
             f"granting {keyword!r} needs the keyword implemented", node=node
         )
+    # The bare family name, which only a *removal* prints ("loses all 'bands
+    # with other' abilities"). CR 702.22b's ability is the word plus a quality;
+    # granting the family alone would put a word into layer 6 that names no set
+    # of creatures, so the band it created would be one nothing could join —
+    # the grant-of-nothing this function exists to refuse, in the one spelling
+    # the keyword registry cannot catch, since the family word is what the
+    # registry lists.
+    if keyword == BANDS_WITH_OTHER:
+        raise LoweringError(
+            f"granting {keyword!r} needs the quality the band is with", node=node
+        )
     if name in NUMERIC_ARGUMENT_KEYWORDS and keyword == name:
         raise LoweringError(
             f"granting {keyword!r} needs the printed number it takes", node=node
@@ -198,7 +210,12 @@ def _lower_lose_keyword(
     word whose behaviour is not built would report a removal of nothing.
     """
     for keyword in node.keywords:
-        if keyword not in IMPLEMENTED_KEYWORDS:
+        # Through the ability's *name*, so a keyword carrying a printed
+        # argument is asked about the ability rather than about the argument:
+        # "all 'bands with other' abilities" and "bands with other legendary
+        # creatures" are the same registry entry, and only the first is a word
+        # any list could hold.
+        if keyword_ability_name(keyword) not in IMPLEMENTED_KEYWORDS:
             raise LoweringError(
                 f"removing {keyword!r} needs the keyword implemented", node=node
             )

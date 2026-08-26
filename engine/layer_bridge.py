@@ -17,6 +17,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from .banding import band_quality
 from .auras import (
     animating_auras,
     aura_keyword_grants,
@@ -236,6 +237,15 @@ def _printed_abilities_cached(
         if value.startswith("other "):
             continue
         abilities.update(word for word in _TEXT_KEYWORDS if word in value)
+        # A printed "bands with other [quality]" line (CR 702.22b) — the Wolves
+        # of the Hunt token Master of the Hunt makes carries one. It cannot ride
+        # the word scan above: the ability's name *is* the printed quality, so
+        # there is no word to look for. Each comma-joined part is asked
+        # separately, exactly as the keyword-line gate admits them.
+        for part in value.split(","):
+            part = part.strip()
+            if band_quality(part) is not None:
+                abilities.add(part)
     return frozenset(abilities)
 
 
