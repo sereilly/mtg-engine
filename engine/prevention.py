@@ -71,6 +71,7 @@ from .shields import (
     PREVENT_ALL_BUT,
     PREVENT_AND_GAIN_LIFE,
     PREVENT_FROM_COLOR,
+    PREVENT_FROM_SUBJECT,
     PREVENT_NEXT_N,
     Shield,
     drop_spent,
@@ -94,6 +95,11 @@ COMBAT_SHIELD = 20  # "…dealt to and dealt by that creature this turn"
 # class of source — no charges, so applying it costs its recipient nothing, and
 # it belongs with the other blankets rather than with the consumables below.
 SOURCE_TYPE_BLANKET = 25
+# "Prevent all damage that would be dealt to you this turn by attacking
+# creatures without flying." (Al-abara's Carpet.) A blanket a *player* was
+# handed rather than one a permanent prints, but a blanket all the same — no
+# charges, so it sits with the others here and ahead of every consumable.
+SUBJECT_BLANKET = 26
 SOURCE_CAP = 100  # Forcefield against a chosen attacker
 GENERIC_CAP = 200  # Forcefield with no chosen attacker
 SOURCE_SHIELD = 300  # Reverse Damage against a chosen source
@@ -242,7 +248,30 @@ COMBAT_SHIELD_BOTH = "to_and_by"
 
 #: The directional turn-long marker, beside Ebony Horse's boolean rather than
 #: replacing it. Both are swept by ``_EOT_METADATA_KEYS``.
+#:
+#: The record is a list of ``[direction, combat_only]`` pairs rather than one
+#: direction word, because **how wide the shield is, is payload**: "Prevent all
+#: *combat* damage that would be dealt by target creature this turn" (Horn of
+#: Deafening, Lady Evangela) and "Prevent all damage that would be dealt this
+#: turn by target creature you control" (Kry Shield) are the same sentence one
+#: word apart. A second metadata key per width would be a second mechanism for
+#: a narrowing, and the wide one would then have to be remembered in every place
+#: the narrow one already is.
 _COMBAT_SHIELD_DIRECTION_KEY = "prevent_combat_damage_direction_until_eot"
+
+
+def add_directional_shield(perm, direction: str, *, combat_only: bool) -> None:
+    """Shield *perm* in *direction* for the rest of the turn (CR 615.1).
+
+    *combat_only* is the printed word "combat": True covers combat damage
+    alone, False covers damage of every kind. Duplicate records are folded, so
+    two resolutions of the same effect leave one entry.
+    """
+    record = [list(entry) for entry in (perm.metadata.get(_COMBAT_SHIELD_DIRECTION_KEY) or ())]
+    entry = [str(direction), bool(combat_only)]
+    if entry not in record:
+        record.append(entry)
+    perm.metadata[_COMBAT_SHIELD_DIRECTION_KEY] = record
 
 #: The Aura form (Gaseous Form, Demonic Torment). Not a marker at all - it is
 #: read off the attached Aura's own text at the moment damage would be dealt,
@@ -284,8 +313,13 @@ def _attached_combat_shield(perm) -> str | None:
     return None
 
 
-def _combat_shield_directions(perm) -> frozenset[str]:
-    """Every direction *perm* is currently shielded in, from either source.
+def _shield_directions(perm, *, combat: bool) -> frozenset[str]:
+    """Every direction *perm* is currently shielded in against an event of this
+    width, from any of the three places a directional shield is recorded.
+
+    *combat* is the event's own ``combat`` flag. Ebony Horse's boolean and the
+    Aura form are both printed "combat damage", so they answer nothing at all
+    for a burn spell; the marker records its width per entry.
 
     Accepts None and non-permanent damage sources (a spell's
     ``CardDefinition``), which carry no shield at all.
@@ -294,25 +328,31 @@ def _combat_shield_directions(perm) -> frozenset[str]:
     if not metadata:
         return frozenset()
     directions: set[str] = set()
-    if metadata.get(_COMBAT_SHIELD_KEY):
+    if combat and metadata.get(_COMBAT_SHIELD_KEY):
         directions.add(COMBAT_SHIELD_BOTH)
-    marker = metadata.get(_COMBAT_SHIELD_DIRECTION_KEY)
-    if marker:
-        directions.add(str(marker))
-    attached = _attached_combat_shield(perm)
-    if attached is not None:
-        directions.add(attached)
+    for entry in metadata.get(_COMBAT_SHIELD_DIRECTION_KEY) or ():
+        direction, combat_only = entry
+        if combat_only and not combat:
+            # "Prevent all **combat** damage …": a shield that ignored the word
+            # would stop the creature's ping ability as well, which is a
+            # strictly larger effect than the card prints.
+            continue
+        directions.add(str(direction))
+    if combat:
+        attached = _attached_combat_shield(perm)
+        if attached is not None:
+            directions.add(attached)
     return frozenset(directions)
 
 
-def shields_combat_damage(perm, *, dealt_to: bool) -> bool:
-    """Whether *perm*'s combat shields cover an event it is on one end of.
+def shields_damage(perm, *, dealt_to: bool, combat: bool) -> bool:
+    """Whether *perm*'s shields cover an event it is on one end of.
 
     *dealt_to* says which end: True when *perm* is the recipient, False when it
     is the source. The two-way marker answers both; a one-way one answers only
     its own end, which is the whole point of carrying the direction.
     """
-    directions = _combat_shield_directions(perm)
+    directions = _shield_directions(perm, combat=combat)
     wanted = COMBAT_SHIELD_TO if dealt_to else COMBAT_SHIELD_BY
     return COMBAT_SHIELD_BOTH in directions or wanted in directions
 
@@ -350,13 +390,35 @@ def _source_matches(game, shield: Shield, source) -> bool:
     if shield.source is not None:
         if game._match_chosen_damage_source([shield.source], source) is None:
             return False
-    if shield.color is not None and shield.color not in source_colors(source):
+    if shield.colors and not set(shield.colors) & set(source_colors(source)):
         return False
     if shield.source_type is not None and not source_has_type(
         game, source, shield.source_type
     ):
         return False
+    if shield.source_filter is not None and not _source_in_subject(game, shield, source):
+        return False
     return True
+
+
+def _source_in_subject(game, shield: Shield, source) -> bool:
+    """Whether *source* is one of the permanents *shield*'s noun phrase names.
+
+    Asked through ``subject_filters.subject_matches`` — the one answer every
+    reader of a printed noun phrase uses — rather than field by field here, so
+    a phrase the matcher cannot test is refused where the line is *compiled*
+    instead of being quietly ignored at damage time.
+
+    A source that is not a permanent (a spell's ``CardDefinition``, CR 109.5)
+    matches no phrase describing permanents, so it is not shielded against.
+    """
+    from .subject_filters import subject_matches
+
+    if source is None or not hasattr(source, "metadata"):
+        return False
+    return subject_matches(
+        game, source, dict(shield.source_filter or {}), observer=shield.filter_seat
+    )
 
 
 def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
@@ -458,16 +520,18 @@ def _applies_scoped_combat(game, event: dict) -> bool:
 
 
 def _applies_combat_to_and_by(game, event: dict) -> bool:
-    """Whether either end of this combat damage event is shielded.
+    """Whether either end of this damage event is shielded.
 
     Each end is asked with the direction it is on, so a "dealt **by**" shield
     stops the shielded creature's own damage without also stopping damage dealt
     *to* it — which is the difference between Gaseous Form and Demonic Torment,
-    printed one word apart.
+    printed one word apart. The event's own width is passed down rather than
+    checked here, because a shield that names no "combat" covers a ping as well
+    (Kry Shield) and one that names it covers only combat.
     """
-    return bool(event.get("combat")) and (
-        shields_combat_damage(event["recipient"], dealt_to=True)
-        or shields_combat_damage(event.get("source"), dealt_to=False)
+    combat = bool(event.get("combat"))
+    return shields_damage(event["recipient"], dealt_to=True, combat=combat) or shields_damage(
+        event.get("source"), dealt_to=False, combat=combat
     )
 
 
@@ -560,7 +624,9 @@ def _reverse_damage_generic(game, event: dict) -> PreventionOutcome | None:
 def _log_color_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:
     game.log.append(
         f"Circle of Protection prevented {prevented} damage to "
-        f"{event['recipient'].name} from a {used[0].color} source"
+        f"{event['recipient'].name} from a "
+        + ("/".join(used[0].colors) or str(used[0].source_type or "chosen"))
+        + " source"
     )
 
 
@@ -571,6 +637,27 @@ def _circle_of_protection(game, event: dict) -> PreventionOutcome | None:
     activation, matched against the source's colors at damage time (CR 615.9)
     and prevented in full."""
     return _spend(game, event, PREVENT_FROM_COLOR, rider=_log_color_prevention)
+
+
+def _log_subject_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:
+    game.log.append(
+        f"{used[0].source_name or 'A shield'} prevented {prevented} damage to "
+        f"{event['recipient'].name}"
+    )
+
+
+@prevention_effect(SUBJECT_BLANKET, applies=_arms(PREVENT_FROM_SUBJECT))
+def _prevent_from_subject(game, event: dict) -> PreventionOutcome | None:
+    """Al-abara's Carpet: "Prevent all damage that would be dealt to you this
+    turn by attacking creatures without flying."
+
+    A blanket rather than a charge: the shield holds neither points nor uses, so
+    every matching source this turn is prevented in full and the sweep is what
+    ends it. Which sources match is the printed noun phrase, rechecked against
+    each one when the damage would be dealt (CR 615.9) — a creature that has
+    since gained flying, or has left combat, is no longer described by it.
+    """
+    return _spend(game, event, PREVENT_FROM_SUBJECT, rider=_log_subject_prevention)
 
 
 def _log_pool_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:

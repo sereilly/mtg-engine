@@ -662,7 +662,12 @@ class LegalityMixin:
         # color on the stack — fold those into the same target list.
         if spec.get("also_stack"):
             targets += self._enumerate_stack_targets(
-                caster_index, card, {"stack_color_filter": spec.get("color_filter")}
+                caster_index,
+                card,
+                {
+                    "stack_color_filter": spec.get("color_filter"),
+                    "stack_any_colors": spec.get("any_colors"),
+                },
             )
         return targets
 
@@ -835,6 +840,12 @@ class LegalityMixin:
                 # not, so the picker offered nothing while a script could kill
                 # it — one question about one permanent with two answers.
                 return color_filter in perm.effective_colors
+            any_colors = spec.get("any_colors")
+            if any_colors:
+                # "a black **or red** source of your choice" — the disjunction
+                # ``ObjectFilter.any_colors`` spells the same way, asked of the
+                # same layer-5 answer as the single-colour branch above.
+                return any(colour in perm.effective_colors for colour in any_colors)
             if spec.get("enchant_enchantment"):
                 return "enchantment" in type_line
             return True
@@ -952,6 +963,11 @@ class LegalityMixin:
                     continue
             if color_filter and color_filter not in self._stack_item_colors(item):
                 continue
+            stack_any_colors = spec.get("stack_any_colors")
+            if stack_any_colors:
+                item_colors = self._stack_item_colors(item)
+                if not any(colour in item_colors for colour in stack_any_colors):
+                    continue
             # The UI (and the cast/activate action) index the stack top-first, the
             # reverse of the engine's bottom-first list — emit the top-first index.
             targets.append({"kind": "stack", "stack_index": depth - 1 - i, "name": item_card.name})

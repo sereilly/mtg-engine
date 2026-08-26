@@ -11,6 +11,7 @@ from ..shields import (
     make_life_gain_charge,
     make_life_gain_source,
     make_numeric_pool,
+    make_subject_shield,
 )
 from ._common import resolve_amount, resolve_target_permanent
 from .registry import effect_handler
@@ -68,6 +69,13 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # means the caster/controller is always the beneficiary. Conservator-style
     # abilities ("...dealt to you this turn") set to_self=True for the same reason.
     prevention_color = instruction.payload.get("prevention_color")
+    # "a black **or red** source of your choice" (Greater Realm of
+    # Preservation): one shield answering to either colour, never one shield
+    # per colour — two would let a black source and a red source each be
+    # prevented off a single activation.
+    prevention_colors = tuple(
+        instruction.payload.get("prevention_colors") or ()
+    ) or ((prevention_color,) if prevention_color else ())
     # Circle of Protection: Artifacts — the same Circle keyed on a card type.
     # Its own branch rather than a widened colour one: `make_color_shield` sets
     # the colour field, and a shield holding a card type in it would be
@@ -92,15 +100,19 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         # can never match anything. The legacy parse rule can still produce one
         # from a card whose text has no colour word, and arming nothing is what
         # the old list-of-None amounted to.
-        for _ in range(max(1, amount) if prevention_color else 0):
-            add_shield(caster, make_color_shield(prevention_color, source_name))
+        for _ in range(max(1, amount) if prevention_colors else 0):
+            add_shield(caster, make_color_shield(prevention_colors, source_name))
         # The chosen source (if the controller picked a specific permanent) is
         # recorded only for the log; matching is by color.
         chosen_perm = resolve_target_permanent(game, context, predicate=lambda p: True, fallback_players=())
         chosen = chosen_perm.card.name if chosen_perm is not None else None
         game.log.append(
             f"{caster.name} sets a Circle of Protection shield against "
-            + (f"{chosen} (a {prevention_color} source)" if chosen else f"a {prevention_color} source")
+            + (
+                f"{chosen} (a {'/'.join(prevention_colors)} source)"
+                if chosen
+                else f"a {'/'.join(prevention_colors)} source"
+            )
         )
         return True, "resolved"
 
@@ -275,10 +287,40 @@ def arm_mirror_damage(game: Game, instruction: OracleInstruction, context: Oracl
     return True, "resolved"
 
 
-@effect_handler("prevent_combat_damage_by_target_until_eot")
-def prevent_combat_damage_by_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Prevent all combat damage that would be dealt by target creature this
-    turn." (Horn of Deafening, Lady Evangela.)
+@effect_handler("grant_source_class_prevention_shield")
+def grant_source_class_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Al-abara's Carpet: "Prevent all damage that would be dealt to you this
+    turn by attacking creatures without flying."
+
+    One :class:`~engine.shields.Shield` on the ability's controller carrying the
+    printed noun phrase, so this needs no field on ``PlayerState`` and no
+    clearing line in a turn step — the sweep reads its ``lifetime``.
+
+    The *set* of sources is deliberately not captured: the phrase is re-matched
+    when damage would be dealt (CR 615.9), so a creature that attacks after this
+    resolves is covered and one that gains flying in the meantime is not.
+    """
+    caster = context.caster
+    described = dict(instruction.payload.get("filter") or {})
+    seat = game.players.index(caster)
+    source_name = context.card.name if context.card else None
+    add_shield(caster, make_subject_shield(described, seat, source_name))
+    game.log.append(
+        f"{caster.name} is shielded this turn from damage dealt by matching "
+        f"sources ({source_name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("prevent_damage_by_target_until_eot")
+def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Prevent all [combat] damage that would be dealt by target creature this
+    turn." (Horn of Deafening, Lady Evangela, Kry Shield.)
+
+    The printed word "combat" is payload, not a second kind: with it the shield
+    sees combat damage alone, without it (Kry Shield) it sees the creature's
+    ping abilities too. Dropping it would make Horn of Deafening the wider card
+    it is not.
 
     A shield on the damage's **source**, not on a recipient: the creature is
     still perfectly able to be dealt combat damage and to die to it. That
@@ -289,8 +331,9 @@ def prevent_combat_damage_by_target_until_eot(game: Game, instruction: OracleIns
     Cleared by the cleanup step through ``_EOT_METADATA_KEYS``, which is what
     "this turn" means here.
     """
-    from ..prevention import COMBAT_SHIELD_BY, _COMBAT_SHIELD_DIRECTION_KEY
+    from ..prevention import COMBAT_SHIELD_BY, add_directional_shield
 
+    combat_only = bool(instruction.payload.get("combat_only"))
     perm = resolve_target_permanent(
         game, context,
         predicate=lambda p: p.is_creature,
@@ -300,9 +343,9 @@ def prevent_combat_damage_by_target_until_eot(game: Game, instruction: OracleIns
     if perm is None:
         game.log.append(f"{context.card.name}: no creature to silence")
         return True, "resolved"
-    perm.metadata[_COMBAT_SHIELD_DIRECTION_KEY] = COMBAT_SHIELD_BY
+    add_directional_shield(perm, COMBAT_SHIELD_BY, combat_only=combat_only)
     game.log.append(
-        f"all combat damage {perm.card.name} would deal this turn is prevented "
-        f"({context.card.name})"
+        f"all {'combat ' if combat_only else ''}damage {perm.card.name} would "
+        f"deal this turn is prevented ({context.card.name})"
     )
     return True, "resolved"

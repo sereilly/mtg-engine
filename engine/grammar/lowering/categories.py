@@ -178,7 +178,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The same blanket, narrowed to a printed noun phrase (Pack Leader). Same
     # category: what differs is who it covers, not what kind of effect it is.
     "prevent_all_combat_damage_to_matching": "prevention",
-    "prevent_combat_damage_by_target_until_eot": "prevention",
+    "prevent_damage_by_target_until_eot": "prevention",
+    "grant_source_class_prevention_shield": "prevention",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets
     # (Dwarven Song and its four siblings). Same category: what differs is how

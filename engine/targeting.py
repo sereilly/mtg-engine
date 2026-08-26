@@ -522,11 +522,19 @@ def _prevention_shield_spec(payload: dict) -> dict | None:
         # battlefield, or a spell of that colour on the stack; `also_stack`
         # folds both into one prompt because the engine matches the shield by
         # colour rather than by identity.
-        return {
+        spec = {
             "kind": "permanent",
             "color_filter": payload.get("prevention_color"),
             "also_stack": True,
         }
+        colours = payload.get("prevention_colors")
+        if colours:
+            # "a black **or red** source of your choice". The picker narrows to
+            # exactly what the shield will answer to, so the offer and the
+            # recheck at damage time (CR 615.9) agree; dropping it here would
+            # offer a green source for a shield that can never match one.
+            spec["any_colors"] = list(colours)
+        return spec
     return _from_targets_payload(payload.get("targets")) or {"kind": "any"}
 
 
