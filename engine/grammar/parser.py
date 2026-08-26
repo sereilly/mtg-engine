@@ -240,6 +240,22 @@ def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
     return False
 
 
+def _sentence_ended_on_a_quote(stream: TokenStream) -> bool:
+    """Whether the sentence just read ended on a closing quotation mark.
+
+    "…that creature gains "Remove a matrix counter from this creature:
+    Regenerate this creature." **Activate only during your upkeep.**" (Life
+    Matrix.) Magic prints the sentence's full stop *inside* the quoted ability,
+    so the quoted ability's own terminator ends the outer sentence as well and
+    there is no bare "." left for the loop below to see. Without this the words
+    behind the quote read as unconsumed text and the whole line refuses — which
+    is the loud failure this parser wants everywhere the boundary is genuinely
+    missing, and exactly the wrong answer where the card printed one.
+    """
+    previous = stream.peek(-1)
+    return previous is not None and previous.kind == QUOTE
+
+
 def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     """Parse the remaining tokens as one or more sentences, joining them into a
     ``Sequence``. A rider sentence folds into the effect it modifies instead of
@@ -334,7 +350,11 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
                 continue
 
         steps.append(parse_statement(stream))
-        if not stream.exhausted and not stream.at_punct(".", ";"):
+        if (
+            not stream.exhausted
+            and not stream.at_punct(".", ";")
+            and not _sentence_ended_on_a_quote(stream)
+        ):
             raise stream.error("unconsumed text")
 
     if not steps:

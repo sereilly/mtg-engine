@@ -93,6 +93,7 @@ from .characteristics import (
 )
 from .keywords import (
     _KEYWORD_GRANTS,
+    _lower_gain_ability_text,
     _lower_gain_keyword,
     _lower_lose_keyword,
 )
@@ -255,6 +256,7 @@ __all__ = [
     "_lower_change_base_pt",
     "_lower_set_base_pt",
     "_KEYWORD_GRANTS",
+    "_lower_gain_ability_text",
     "_lower_gain_keyword",
     "_lower_lose_keyword",
     "_lower_player_gets_counters",

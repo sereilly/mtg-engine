@@ -87,6 +87,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_target_flying_until_eot": "pump",
     "grant_self_flying_until_eot": "pump",
     "grant_target_keyword_until_eot": "pump",
+    # The quoted-text grants (Life Matrix): the same layer-6 family, carrying a
+    # whole printed ability instead of a word.
+    "grant_target_ability_text": "pump",
+    "grant_self_ability_text": "pump",
     # The negative twin ("It loses indestructible until end of turn", Soul Sear).
     "remove_target_keyword_until_eot": "pump",
     # The durationless half of the same effect, on the ability's own source
@@ -96,6 +100,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_self_keyword_until_eot": "pump",
     "grant_banding_to_target": "pump",
     "add_named_counter_to_self": "pump",
+    "add_named_counter_to_target": "pump",
     "add_counter_to_self": "pump",
     "add_counter_to_target": "pump",
     "double_target_power_until_eot": "pump",

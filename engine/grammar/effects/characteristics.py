@@ -12,7 +12,7 @@ change a characteristic; where it sits is incidental.
 from .. import ast
 from ..amounts import expect_pt, parse_amount, parse_equal_to
 from ..errors import GrammarError
-from ..lexer import (GToken, PT, WORD)
+from ..lexer import (GToken, PT, PUNCT, QUOTE, WORD, tokenize)
 from ..nouns import parse_object_filter
 from ..references import parse_recipient
 from ..stream import TokenStream
@@ -159,6 +159,16 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             pass
         stream.reset(mark)
 
+    # "…gains "Remove a matrix counter from this creature: Regenerate this
+    # creature."" (Life Matrix.) CR 113.3: what a card grants in quotes is a
+    # whole printed ability, not a keyword — so it is read out as text and the
+    # compiler makes the ability, exactly as it does for the emblem shape one
+    # module up. Checked before the keyword list because a quote is not a word:
+    # `_parse_keywords` would refuse it and take the whole line down with it.
+    if stream.at_kind(QUOTE):
+        abilities = _parse_quoted_abilities(stream)
+        return ast.GainAbilityText(subject, abilities, _parse_duration(stream))
+
     # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift).
     # CR 609.3: the choice is made as the effect resolves, and the keyword list
     # behind it reads exactly like a conjunction — so the alternatives are
@@ -181,6 +191,64 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         return ast.Conjunction((grant, pump))
     stream.reset(mark)
     return grant
+
+
+def _parse_quoted_abilities(stream: TokenStream) -> tuple[str, ...]:
+    """The quoted abilities a grant hands over, ``"A" [and "B"]``, as printed.
+
+    Recovered from the *source line* through the tokens' own offsets rather than
+    rebuilt from the tokens, because the payload is text the compiler will read
+    again: rebuilding it would lose the card's spacing and punctuation, and the
+    compiler would then be reading a sentence the card did not print.
+
+    The slice is checked against the tokens it came from before it is trusted.
+    A line whose offsets do not line up (reminder text cut out ahead of the
+    quote is the way that happens) yields a slice of the wrong words, and a
+    wrong sentence that happens to compile is a granted ability nobody printed
+    — so the mismatch raises here instead.
+    """
+    abilities: list[str] = []
+    while True:
+        if stream.accept_kind(QUOTE) is None:
+            break
+        start = stream.mark()
+        while not stream.exhausted and not stream.at_kind(QUOTE):
+            stream.next()
+        end = stream.mark()
+        if stream.accept_kind(QUOTE) is None:
+            raise stream.error("unterminated granted ability")
+        if end == start:
+            raise stream.error("an empty granted ability")
+        text = stream.text_between(start, end)
+        if _token_shape(tokenize(text).tokens) != _token_shape(stream.tokens[start:end]):
+            raise stream.error("granted ability text could not be read as printed")
+        abilities.append(text)
+        mark = stream.mark()
+        # "gains "A" and "B"" (Glyph of Delusion) — two whole abilities, not a
+        # conjunction inside one. The "and" is only this list's when a second
+        # quote follows it; anything else belongs to the sentence around us.
+        if stream.accept_word("and") and stream.at_kind(QUOTE):
+            continue
+        stream.reset(mark)
+        break
+    if not abilities:
+        raise stream.error("a quoted grant needs an ability in quotes")
+    return tuple(abilities)
+
+
+def _token_shape(tokens) -> tuple[str, ...]:
+    """*tokens* as bare words, with trailing sentence punctuation dropped.
+
+    Bare words rather than (kind, text) pairs because the two lexings are not
+    given the same context: the granting card's name makes a self-reference one
+    SELF token, and re-lexing the slice on its own makes it words. Both spell
+    the same thing, which is what this comparison is asking.
+    """
+    kept = list(tokens)
+    while kept and kept[-1].kind == PUNCT:
+        kept.pop()
+    return tuple(token.text.lower() for token in kept)
+
 
 
 def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:

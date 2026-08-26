@@ -165,6 +165,69 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     _describe_targets(payload, node.subject)
     return (OracleInstruction("grant_target_keyword_until_eot", "", payload),)
 
+def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstruction, ...]:
+    """"…gains "<ability>"." (Life Matrix.) CR 113.3 / CR 611.2c.
+
+    The grant is the *text*: `engine/keywords.py`'s granted-ability-lines
+    channel records it, ``Permanent.effective_card`` folds it into the rules
+    text, and the compiler makes the ability from there — so the activation
+    enumerator, the trigger scans and the web payload all find it without
+    knowing that a spell granted it.
+
+    Two gates, both of them the difference between a card that works and a card
+    that reports supported and sits inert:
+
+    * the quoted text has to compile (``granted_ability_supported``), because a
+      grant of a sentence the engine cannot read grants nothing;
+    * the duration has to be one the engine can end. Every grant channel here
+      expires at the cleanup step or not at all, so a printed "until end of
+      combat" (Johan) would silently run to end of turn.
+    """
+    from ...granted_abilities import granted_ability_supported
+
+    if not node.abilities:
+        raise LoweringError("a quoted grant needs an ability", node=node)
+    for text in node.abilities:
+        if not granted_ability_supported(text):
+            raise LoweringError(
+                f"the granted ability {text!r} is not one the engine compiles",
+                node=node,
+            )
+    if node.duration.kind not in (None, "until_end_of_turn", "this_turn"):
+        raise LoweringError(
+            f"no granted-ability channel expires {node.duration.kind!r}", node=node
+        )
+    payload: dict[str, object] = {
+        "abilities": tuple(node.abilities),
+        # A grant with no printed duration lasts as long as the object
+        # (CR 611.2c's last bullet) — the same reading the durationless keyword
+        # grant above takes, and the reason the channel takes a flag rather
+        # than assuming one answer.
+        "until_eot": node.duration.kind in ("until_end_of_turn", "this_turn"),
+    }
+    if _is_source(node.subject):
+        return (OracleInstruction("grant_self_ability_text", "", payload),)
+    # "Put a matrix counter on target creature and **that creature** gains …"
+    # (Life Matrix.) The bound object the clause in front of it already
+    # targeted, not a second choice — so no ``targets`` description is emitted
+    # and the handler acts on the ability's one target, exactly as the
+    # where-clause pump reads the same pronoun. A bound object carries no
+    # narrowing to honour, so a restated adjective refuses rather than being
+    # dropped.
+    bound = (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and not _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
+    )
+    if bound:
+        return (OracleInstruction("grant_target_ability_text", "", payload),)
+    if not _is_target(node.subject):
+        raise LoweringError("unsupported granted-ability subject", node=node)
+    assert isinstance(node.subject, ast.TargetSpec)
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("grant_target_ability_text", "", payload),)
+
+
 def _check_grantable(keyword: str, node) -> None:
     """Refuse a grant of a keyword the engine cannot actually give.
 

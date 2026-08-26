@@ -111,6 +111,7 @@ from .characteristics import (
     Pump,
     SetBasePT,
     ChangeBasePT,
+    GainAbilityText,
     GainKeyword,
     LoseKeyword,
     DoublePower,
@@ -302,6 +303,7 @@ __all__ = [
     # characteristics
     "Pump",
     "SetBasePT",
+    "GainAbilityText",
     "GainKeyword",
     "LoseKeyword",
     "DoublePower",

@@ -95,6 +95,7 @@ from .lowering import (
     _lower_extra_turn,
     _lower_for_each,
     _lower_gain_control,
+    _lower_gain_ability_text,
     _lower_gain_keyword,
     _lower_lose_keyword,
     _lower_gain_life,
@@ -212,6 +213,8 @@ def lower_statement(
         return _lower_set_base_pt(statement)
     if isinstance(statement, ast.ChangeBasePT):
         return _lower_change_base_pt(statement)
+    if isinstance(statement, ast.GainAbilityText):
+        return _lower_gain_ability_text(statement)
     if isinstance(statement, ast.GainKeyword):
         return _lower_gain_keyword(statement)
     if isinstance(statement, ast.LoseKeyword):

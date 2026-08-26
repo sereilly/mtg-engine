@@ -114,6 +114,17 @@ class ActivatedAbilityCost:
     # an inert marker (CR 122.1) — never unpayable, and read by nothing but the
     # card's own state trigger. The counter's printed word, or None.
     put_counter: str | None = None
+    # Scavenging Ghoul: "**Remove a corpse counter from this creature**:
+    # Regenerate this creature." The mirror of ``put_counter`` and the half that
+    # *can* be unpayable — CR 602.1a makes a counter removal an activation cost
+    # like any other, so an ability whose source has none may not be activated.
+    #
+    # The counter's printed word, exactly as ``put_counter`` carries it, because
+    # the kinds are open (CR 122.1): "corpse", "matrix", "dream". This was a
+    # substring test for one of those words inside the activation path, so an
+    # ability granted with any other counter's name — Life Matrix grants one —
+    # was activated for free and could be activated forever.
+    remove_counter: str | None = None
     # Shacklegeist: "Tap two untapped Spirits you control: …" — N permanents the
     # payer taps, named by the printed noun phrase. Distinct from
     # ``requires_tap``, which taps the *source* and is the {T} symbol: this taps

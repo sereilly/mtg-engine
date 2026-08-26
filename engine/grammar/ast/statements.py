@@ -43,6 +43,7 @@ from .characteristics import (
     BecomeCreature,
     ChangeBasePT,
     ChangeText,
+    GainAbilityText,
     GainKeyword,
     LoseKeyword,
     Pump,
@@ -136,7 +137,7 @@ from .game import (
 
 
 Effect = Union[
-    DealDamage, Pump, SetBasePT, ChangeBasePT, GainKeyword, GainType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
+    DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
     GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary, Exile,

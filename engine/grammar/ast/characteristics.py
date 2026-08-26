@@ -102,6 +102,28 @@ class GainKeyword:
 
 
 @dataclass(frozen=True)
+class GainAbilityText:
+    """``<subject> gains "<ability>"[ and "<ability>"] [duration].``
+
+    (Life Matrix, Glyph of Delusion, Johan.) The sibling of :class:`GainKeyword`
+    for the case CR 113.3 makes different in kind: what is granted is a whole
+    *printed ability*, not a word the layer system can hold.
+
+    The text rides as printed rather than being read into a described effect,
+    for the reason the emblem node states one file over — the compiler is the
+    engine's one reader of a printed ability, and paraphrasing the sentence here
+    would be this module deciding what "regenerate this creature" means. Whether
+    the compiler can read it is asked at lowering time
+    (``engine/granted_abilities.py``), so a grant the engine cannot perform
+    refuses the line instead of shipping an ability that does nothing.
+    """
+
+    subject: Recipient
+    abilities: tuple[str, ...]
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class LoseKeyword:
     subject: Recipient
     keywords: tuple[str, ...]

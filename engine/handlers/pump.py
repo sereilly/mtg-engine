@@ -833,6 +833,92 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
     return True, "resolved"
 
 
+@effect_handler("grant_self_ability_text")
+def grant_self_ability_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"<This permanent> gains "<ability>"." (CR 113.3.)
+
+    The twin of ``grant_self_keyword_until_eot`` for an ability the layer-6
+    word set cannot hold. See ``engine/granted_abilities.py``: the grant is the
+    printed line, and the compiler is what turns it back into an ability.
+    """
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    _grant_ability_texts(game, source_permanent, instruction, context)
+    return True, "resolved"
+
+
+@effect_handler("grant_target_ability_text")
+def grant_target_ability_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…that creature gains "<ability>"." (Life Matrix.)
+
+    The printed noun phrase is enforced here as well as at announcement, for
+    the reason recorded on ``grant_target_keyword_until_eot`` above: a picker
+    and a resolution that disagree are a target the player may announce and the
+    effect then declines to affect.
+    """
+    target_creature = resolve_target_permanent(
+        game, context, predicate=_target_grant_predicate(game, instruction, context)
+    )
+    if target_creature is None:
+        game.log.append(f"{context.card.name}: no valid creature target")
+        return True, "resolved"
+    _grant_ability_texts(game, target_creature, instruction, context)
+    return True, "resolved"
+
+
+def _grant_ability_texts(game, permanent, instruction, context) -> None:
+    """Record every quoted ability the instruction grants, in printed order.
+
+    Capitalised on the way in because the channel is folded into the
+    permanent's *rules text*, which the UI shows — the same reason the
+    line-derived keyword grant capitalises. The compiler normalises it again.
+    """
+    from ..keywords import grant_ability_line
+
+    until_eot = bool(instruction.payload.get("until_eot"))
+    texts = tuple(instruction.payload.get("abilities") or ())
+    for text in texts:
+        line = text.strip()
+        if not line:
+            continue
+        grant_ability_line(
+            permanent, line[:1].upper() + line[1:], until_eot=until_eot
+        )
+    if texts:
+        lasting = " until end of turn" if until_eot else ""
+        game.log.append(
+            f"{permanent.card.name} gains "
+            + " and ".join(f'"{text}"' for text in texts)
+            + f"{lasting} ({context.card.name})"
+        )
+
+
+def _target_grant_predicate(game, instruction, context):
+    """Which creatures a targeted grant may reach, from its printed filter.
+
+    Split out of ``grant_target_keyword_until_eot`` so the quoted-ability grant
+    asks the *same* three questions rather than a second spelling of them: the
+    printed filter, CR 109.5's source exclusion, and the seat "you control"
+    compares against.
+    """
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    source = context.source_permanent
+
+    def legal(perm) -> bool:
+        if not perm.is_creature or not permanent_matches_filter(perm, filters):
+            return False
+        if filters.get("exclude_self") and perm is source:
+            return False
+        if filters.get("controller") == "you" and not game.controls(
+            game.players.index(context.caster), perm
+        ):
+            return False
+        return True
+
+    return legal
+
+
 def _grant_one_keyword(game, permanent, keyword: str, context) -> None:
     """Put one granted keyword where its reader will find it.
 

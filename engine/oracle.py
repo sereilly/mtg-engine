@@ -1010,6 +1010,12 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # "Put a page counter on this artifact" (Mazemind Tome).
     counter_cost = re.search(r"\bput an? ([a-z]+) counter on this ", cost_lower)
     put_counter = counter_cost.group(1) if counter_cost else None
+    # "Remove a corpse counter from this creature" (Scavenging Ghoul), and the
+    # ability Life Matrix grants with its own counter's word. Read out of the
+    # phrase rather than listed, for the reason CR 122.1 gives: the kinds are
+    # open, and a card - or a grant - may invent one.
+    removal_cost = re.search(r"\bremove an? ([a-z]+) counter from ", cost_lower)
+    remove_counter = removal_cost.group(1) if removal_cost else None
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         sacrifice_filter,
@@ -1021,6 +1027,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         discard_whole_hand=discard_whole_hand,
         discard_self=discard_self,
         put_counter=put_counter,
+        remove_counter=remove_counter,
         pay_life=_life_payment_cost(cost_lower),
     )
 

@@ -245,3 +245,83 @@ def test_tolaria_is_refused_outside_an_upkeep_step(set_pool):
     )
 
     assert not result.supported
+
+
+# ---------------------------------------------------------------------------
+# The Tabernacle at Pendrell Vale (round 26) - a board-wide static that grants a
+# triggered ability to every creature, whoever controls it
+# ---------------------------------------------------------------------------
+
+
+def _tabernacle_board(set_pool, mana=None):
+    """The Tabernacle plus one creature on each side."""
+    tabernacle = Permanent(card=set_pool("LEG")["The Tabernacle at Pendrell Vale"])
+    mine = Permanent(card=_legend("Mine", ("G",)))
+    theirs = Permanent(card=_legend("Theirs", ("G",)))
+    p1 = PlayerState(
+        name="P1", battlefield=[tabernacle, mine],
+        mana_pool=dict(mana) if mana else {},
+    )
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game._refresh_dynamic_creatures()
+    return game, p1, p2, mine, theirs
+
+
+def test_the_tabernacle_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["The Tabernacle at Pendrell Vale"])
+    assert program.supported, program.reason
+
+
+def test_the_ability_is_appended_to_every_creature_on_both_sides(set_pool):
+    """The grant reaches the effective card, so the compiler produces the
+    trigger like a printed one - which is what makes the upkeep step find it
+    without knowing a land granted it."""
+    _game, _p1, _p2, mine, theirs = _tabernacle_board(set_pool)
+
+    for creature in (mine, theirs):
+        (trigger,) = compile_card_oracle(creature.effective_card).triggered_abilities
+        assert trigger.condition.kind == "upkeep_self"
+        assert trigger.instruction.kind == "upkeep_pay_or_destroy_self"
+        assert trigger.instruction.payload["mana"]["generic"] == 1
+
+
+@pytest.mark.cr("613.1f")
+def test_an_unpaid_creature_is_destroyed_on_its_own_controllers_upkeep(set_pool):
+    """"At beginning of **your** upkeep" is the creature's controller's upkeep,
+    so P2's creature is untouched while P1 is the active player."""
+    game, p1, _p2, mine, theirs = _tabernacle_board(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert not game.is_on_battlefield(mine)
+    assert [card.name for card in p1.graveyard] == ["Mine"]
+    assert game.is_on_battlefield(theirs)
+
+
+@pytest.mark.cr("613.1f")
+def test_a_paid_creature_survives_and_the_mana_is_spent(set_pool):
+    game, p1, _p2, mine, _theirs = _tabernacle_board(
+        set_pool, {"W": 0, "U": 0, "B": 0, "R": 0, "G": 1, "C": 0}
+    )
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.is_on_battlefield(mine)
+    assert sum(p1.mana_pool.values()) == 0
+
+
+@pytest.mark.cr("611.3")
+def test_the_grant_ends_when_the_tabernacle_leaves(set_pool):
+    game, p1, _p2, mine, _theirs = _tabernacle_board(set_pool)
+    game.remove_from_battlefield(p1.battlefield[0])
+    game._refresh_dynamic_creatures()
+
+    assert not compile_card_oracle(mine.effective_card).triggered_abilities
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.is_on_battlefield(mine)
