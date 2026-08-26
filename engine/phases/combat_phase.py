@@ -94,11 +94,36 @@ class CombatPhaseMixin:
                     return True
         return False
 
+    def _combat_awaits_an_answer(self) -> bool:
+        """Whether a decision is owed that the combat rail must wait for.
+
+        CR 608.2 / CR 117.3b, the rule ``Game.waiting_prompt`` states and the
+        priority rail already honours: while a prompt is owed the resolution
+        that armed it is not finished, so no step advances and nobody receives
+        priority. The combat rail did not ask. ``_resolve_priority_window``
+        below returns with the held object still on the stack — that is its
+        documented behaviour — and the next two lines closed the step and
+        entered the following one anyway, so a "you may" offered in the
+        declare-blockers step was still on screen when the combat damage step
+        had already dealt its damage. Round 23 reverted Floral Spuzzem over
+        exactly this and recorded the reason.
+
+        The seat test is what keeps a headless or AI run identical: those seats
+        never answer a prompt themselves — their defaults are drained by
+        ``auto_resolve_pending_choices`` *after* the step — so blocking on one
+        would stop the rail with nothing left to unblock it. It is the same
+        question ``_resolve_priority_window`` asks before pausing at all.
+        """
+        waiting = self.waiting_prompt()
+        return waiting is not None and waiting.player_index in self.interactive_seats
+
     def advance_combat_phase(self, allow_damage_skip: bool = True) -> None:
         # allow_damage_skip: when a player has flagged the combat-damage step on the
         # phase rail (hold priority), the caller passes False so the engine enters
         # the step and opens a priority window there instead of auto-resolving damage
         # and skipping straight to end-of-combat.
+        if self._combat_awaits_an_answer():
+            return
         combat_steps = list(self._phase_steps("combat"))
         if self.current_turn_phase != "combat":
             self._enter_combat_step(combat_steps[0])
@@ -193,6 +218,11 @@ class CombatPhaseMixin:
         # Close current combat step, then enter the next one.
         if self._receives_priority(self.current_step):
             self._resolve_priority_window()
+            # The window may have stopped part-way through a resolution
+            # (CR 608.2). Closing the step now would run the rest of combat
+            # around an unanswered question — see ``_combat_awaits_an_answer``.
+            if self._combat_awaits_an_answer():
+                return
         self._on_step_or_phase_end("combat", self.current_step)
 
         next_idx = idx + 1

@@ -899,13 +899,20 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             if stream.accept_word("leaves"):
                 stream.accept_phrase("the", "battlefield")
                 return ast.TriggerEvent("leaves_battlefield", "when")
-            # "**When** this creature blocks" (Elder Land Wurm) — the event the
-            # "whenever" table already names, printed with the one-shot word.
-            # One production either way: the declare-blockers fire site reads
-            # the kind, not the word.
-            if stream.accept_word("blocks"):
-                return ast.TriggerEvent("creature_blocks", "when")
         stream.reset(mark)
+        # "**When** this creature blocks" (Elder Land Wurm), "**when** this
+        # creature attacks or blocks" (Time Elemental) — events the "whenever"
+        # table already names, printed with the one-shot word. CR 603.1 makes
+        # the two words one kind of ability; the difference is how often it
+        # triggers while it exists, not what triggers it, and every fire site in
+        # this engine reads the kind rather than the word. So the *table* is
+        # asked here rather than a hand-written subset of it: a branch naming
+        # "blocks" alone was why Elder Land Wurm's condition read and Time
+        # Elemental's — one printed word longer, and already in the table —
+        # did not.
+        for kind, phrase in _WHENEVER_EVENTS:
+            if accept_event_phrase(stream, phrase):
+                return ast.TriggerEvent(kind, "when")
         return None
     return None
 

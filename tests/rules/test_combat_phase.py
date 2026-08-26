@@ -875,3 +875,72 @@ def test_creature_did_not_have_to_attack_even_if_only_legal_attacker():
     # Declaring no attackers is legal — nothing was required to attack.
     ok, _ = game.declare_attackers(0, [])
     assert ok
+
+
+@pytest.mark.cr("608.2", "117.3b", "511.1")
+def test_the_combat_rail_does_not_advance_while_a_prompt_is_owed():
+    """CR 608.2 / CR 117.3b: a resolution that stopped to ask an interactive
+    seat something is not finished, so no step advances and nobody receives
+    priority until it is answered.
+
+    The priority rail has honoured this since ``ChoiceSpec.holds_priority``
+    landed; the *combat* rail did not ask. ``_resolve_priority_window`` returns
+    with the held object still on the stack — its documented behaviour — and
+    ``advance_combat_phase`` then closed the step and entered the next one
+    anyway, so an offer made in the declare-blockers step was still unanswered
+    when the combat damage step had already dealt its damage.
+
+    The seat matters: a non-interactive seat never answers a prompt itself (its
+    default is drained after the step), so blocking on one would stop the rail
+    with nothing left to unblock it. Only a seat that must answer holds it.
+    """
+    attacker = Permanent(card=_mk_creature("Raider", 2, 2))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2"),
+    ])
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game._settle()
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+    game._settle()
+    assert game.current_step == "declare_blockers"
+
+    game.arm_pending_choice("scry", 0, count=1)
+    game.advance_combat_phase()
+
+    assert game.waiting_prompt() is not None
+    assert game.current_step == "declare_blockers"
+    assert game.players[1].life == 20
+
+
+@pytest.mark.cr("608.2", "511.1")
+def test_a_prompt_owed_by_a_non_interactive_seat_never_stalls_combat():
+    """The other half, and the reason the seat is part of the question: an AI
+    or headless seat's prompt is drained by ``auto_resolve_pending_choices``
+    *after* the step, so a rail that waited for one would deadlock — and a
+    seeded simulation would stop reproducing."""
+    attacker = Permanent(card=_mk_creature("Raider", 2, 2))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2"),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game._settle()
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+    game._settle()
+
+    game.arm_pending_choice("scry", 0, count=1)
+    game.advance_combat_phase()
+
+    assert game.current_step != "declare_blockers"

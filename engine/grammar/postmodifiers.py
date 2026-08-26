@@ -325,6 +325,16 @@ def _parse_postmodifiers(
             # a spell or an ability on the stack can be asked — so the inner
             # noun phrase is parsed in full and recorded whole, and every
             # lowering not written for it refuses the field by name.
+            # "…**that isn't enchanted**" (Time Elemental). CR 303.4a: a
+            # permanent is enchanted while an Aura is attached to it, so this is
+            # a question about the candidate alone and the pure matcher answers
+            # it. An Equipment attached to the same permanent does *not* make it
+            # enchanted, which is why the matcher asks for the Aura subtype
+            # rather than for the attachment record this engine shares between
+            # the two (CR 301.5f).
+            elif stream.accept_phrase("isn't", "enchanted"):
+                d.not_enchanted = True
+                continue
             elif stream.accept_word("targets"):
                 stream.accept_word("a", "an")
                 d.targets_object = parse_filter(stream)

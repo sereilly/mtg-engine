@@ -174,6 +174,7 @@ class _FilterDraft:
     other_than_source: bool = False
     is_source: bool = False
     is_enchanted: bool = False
+    not_enchanted: bool = False
     is_card: bool = False
     with_plus1_counter: bool = False
     nontoken: bool = False
@@ -575,6 +576,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         other_than_source=d.other_than_source,
         is_source=d.is_source,
         is_enchanted=d.is_enchanted,
+        not_enchanted=d.not_enchanted,
         attached_to=d.attached_to,
         attached_to_types=tuple(d.attached_to_types),
         of_bound_type=d.of_bound_type,

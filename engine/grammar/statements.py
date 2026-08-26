@@ -25,7 +25,8 @@ from .paragraphs import (
     _parse_transmute_by_sacrifice,
 )
 from .delayed import (_parse_choose_target, _parse_choose_then_gain,
-                      _parse_create_delayed_trigger, parse_trailing_delay,
+                      _parse_create_delayed_trigger, delay_binds_an_object,
+                      parse_trailing_delay,
                       resolve_that_turn)
 from .references import parse_recipient
 from .vocabulary import CARD_TYPES
@@ -488,10 +489,13 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
             raise stream.error(
                 "a delayed sentence's X must say when it is counted"
             )
+    statement = resolve_that_turn(statement) or statement
     return ast.CreateDelayedTrigger(
-        event=event, effect=resolve_that_turn(statement) or statement,
+        event=event, effect=statement,
         once=once, duration=duration,
-        binds_target=binds, subject=None, agent=None,
+        # A permission, not the answer — see ``delay_binds_an_object``.
+        binds_target=delay_binds_an_object(binds, statement),
+        subject=None, agent=None,
     )
 
 

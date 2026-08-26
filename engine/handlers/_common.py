@@ -540,6 +540,18 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         ):
             return False
 
+    # "target permanent **that isn't enchanted**" (Time Elemental) — CR 303.4a.
+    # The attachment record this engine keeps is shared with Equipment
+    # (CR 301.5f attaches both the same way), so the *Aura subtype* is what is
+    # asked: an equipped creature is not an enchanted one, and answering off the
+    # bare list would have made Time Elemental refuse to bounce it.
+    if payload.get("not_enchanted"):
+        if any(
+            attached.has_type("aura")
+            for attached in (perm.metadata.get("attached_auras") or [])
+        ):
+            return False
+
     def _has_type(name: str) -> bool:
         # is_creature (not the printed line) so animated lands count.
         return perm.is_creature if name == "creature" else perm.has_type(name)

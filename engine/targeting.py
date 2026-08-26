@@ -195,6 +195,14 @@ def _narrowing_flags(source: dict) -> dict:
         # let a "an opponent controls" ability untap the activator's own
         # artifact — a restriction dropped in the player's favour.
         flags["opponent_only"] = True
+    if source.get("not_enchanted"):
+        # "target permanent **that isn't enchanted**" (Time Elemental) —
+        # CR 303.4a. A picker flag rather than a restriction left to the
+        # handler, and for the reason ``own_only`` above gives: the handler
+        # already refuses an enchanted permanent at resolution, so a picker that
+        # offered one would let a player tap the Elemental and pay {2}{U}{U} for
+        # a bounce that then returns nothing, with nothing on screen saying why.
+        flags["not_enchanted"] = True
     if source.get("exclude_self"):
         # "up to two **other** target creatures you control" (Basri's Acolyte),
         # "**another** target creature" as a fight's opponent (Brash Taunter).

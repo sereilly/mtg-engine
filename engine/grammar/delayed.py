@@ -59,12 +59,66 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # "At this turn's next end of combat, …" (Glyph of Doom).
     (("at", "this", "turn", "'s", "next", "end", "of", "combat"),
      "next_end_of_combat", True, "end_of_turn", True),
+    # The same delay printed short — "…, at end of combat, sacrifice it and it
+    # deals 5 damage to you" (Time Elemental). CR 511.1 gives a combat phase one
+    # end-of-combat step, so "at end of combat" inside a sentence that is being
+    # performed *during* combat names the same moment the longer spelling does;
+    # it is one event with two printed wordings, not two events.
+    (("at", "end", "of", "combat"),
+     "next_end_of_combat", True, "end_of_turn", True),
     # "At the beginning of your next upkeep, …" (Giant Slug, Hazezon Tamar).
     # The controller's own upkeep, however many turns away — so it waits for
     # the step rather than expiring with the turn.
     (("at", "the", "beginning", "of", "your", "next", "upkeep"),
      "controllers_next_upkeep", True, "until_it_triggers", False),
 )
+
+
+def delay_binds_an_object(may_bind: bool, effect) -> bool:
+    """Whether a delay's sentence is actually **about** an object the creating
+    spell chose (CR 603.7c).
+
+    The ``binds`` column of :data:`_DELAYED_OPENERS` says a row *may* bind: the
+    opener names no object itself, so whether one was chosen is a fact about the
+    sentence behind it. Glyph of Doom's "destroy all creatures that were blocked
+    by **that creature** this turn" refers back and must resolve the target it
+    was given; Time Elemental's "sacrifice it and it deals 5 damage to you" —
+    one printed word shorter in its opener and under the very same event —
+    refers to nothing but its own source.
+
+    Reading the column alone is what would break that second card, and break it
+    in the worst direction: ``create_delayed_trigger`` resolves a target when the
+    payload says the ability binds one, finds none, and arms **nothing** while
+    the card compiles supported. So the column is a permission and this is the
+    answer.
+
+    The question is asked of the AST rather than of a list of cards, and the
+    markers are the ones the noun phrase already carries: a ``that <noun>``
+    quantifier, or any filter field whose name says it is about a bound object.
+    Written against the field *names* rather than a hand-listed set, so a
+    narrowing added later — the ``blocked_by_bound_object`` / ``of_bound_type``
+    family — is covered the day it is named rather than the day someone
+    remembers this function.
+    """
+    if not may_bind:
+        return False
+    return _names_a_bound_object(effect)
+
+
+def _names_a_bound_object(node) -> bool:
+    if isinstance(node, ast.TargetSpec) and node.quantifier == "that":
+        return True
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        for field in dataclasses.fields(node):
+            value = getattr(node, field.name)
+            if "bound" in field.name and value:
+                return True
+            if _names_a_bound_object(value):
+                return True
+        return False
+    if isinstance(node, (tuple, list)):
+        return any(_names_a_bound_object(item) for item in node)
+    return False
 
 
 def parse_trailing_delay(stream: TokenStream) -> tuple[str, bool, str, bool] | None:
@@ -188,10 +242,15 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
     if not stream.exhausted and not stream.at_punct(".", ";"):
         stream.reset(mark)
         return None
+    effect = resolve_that_turn(effect) or effect
     return ast.CreateDelayedTrigger(
-        event=event, effect=resolve_that_turn(effect) or effect,
+        event=event, effect=effect,
         once=once, duration=duration,
-        binds_target=binds, subject=subject, agent=agent,
+        binds_target=(
+            binds if subject is not None
+            else delay_binds_an_object(binds, effect)
+        ),
+        subject=subject, agent=agent,
     )
 
 

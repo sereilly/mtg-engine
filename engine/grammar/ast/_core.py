@@ -381,6 +381,15 @@ class ObjectFilter:
     is_source: bool = False
     # "enchanted creature" — the permanent this Aura is attached to.
     is_enchanted: bool = False
+    # "target permanent **that isn't enchanted**" (Time Elemental) — a permanent
+    # with no Aura attached to it (CR 303.4a defines "enchanted" as exactly
+    # that). Not the negation of ``is_enchanted`` above, which is a different
+    # question entirely: that field is a *referent* ("the permanent this Aura is
+    # on"), this one is a restriction on any candidate. Two fields because two
+    # phrases, and collapsing them into a tri-state would make "enchanted
+    # creature" and "a creature that is enchanted" the same words to every
+    # reader downstream.
+    not_enchanted: bool = False
     # "all Equipment **attached to that creature**" (Turn to Slag). Which object
     # it is attached to, as a referent rather than a filter: "that creature" is
     # the spell's own target, and no read of the Equipment alone can say so.
@@ -543,6 +552,8 @@ class ObjectFilter:
             payload["exclude_self"] = True
         if self.not_ability_targeted_by_same_name:
             payload["not_ability_targeted_by_same_name"] = True
+        if self.not_enchanted:
+            payload["not_enchanted"] = True
         if self.nontoken:
             payload["nontoken"] = True
         if self.token_only:

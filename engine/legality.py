@@ -805,6 +805,15 @@ class LegalityMixin:
         # Artifact copying a Mox is an "Artifact Enchantment" and must be a
         # legal target both as an artifact and as an enchantment.
         type_line = perm.effective_card.type_line.lower()
+        # "…**that isn't enchanted**" (Time Elemental). Asked before the kind
+        # switch because the restriction is not about the head noun: the card
+        # prints it on "permanent", and a card printing it on "creature" would
+        # want the same answer. The pure matcher answers it, so the picker and
+        # the handler's ``subject_matches`` call cannot disagree.
+        if spec.get("not_enchanted") and not permanent_matches_filter(
+            perm, {"not_enchanted": True}
+        ):
+            return False
         if kind == "player_or_planeswalker":
             # "Target player or planeswalker" (Chandra's Magmutt): the only
             # permanents in the union are planeswalkers — the player faces were

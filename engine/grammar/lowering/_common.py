@@ -84,7 +84,7 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "excluded_types", "excluded_subtypes", "with_keywords", "without_keywords",
     "controller", "tapped", "attacking", "blocking", "other_than_source",
     "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
-    "colored", "with_plus1_counter", "supertypes",
+    "colored", "with_plus1_counter", "supertypes", "not_enchanted",
     "attached_to_types",
     # "target permanent you both **own** and control" (Obelisk of Undoing).
     # ``to_payload`` reads it — but only alongside ``controller``, so it is in

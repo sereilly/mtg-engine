@@ -630,13 +630,13 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # "whenever", the same argument the `you_gain_life` note below makes.
     ("permanent_becomes_tapped",
      r"when(?:ever)? enchanted (?P<tapped_attached>[a-z]+) becomes tapped"),
-    # "**When** this creature blocks, it loses defender." (Elder Land Wurm.)
-    # The same event the "whenever" table names, one printed word apart — here
-    # for the reason `attached_creature_dies` is in both tables: which trigger
-    # word a card printed is not a difference the dispatcher can act on, and a
-    # table holding only one of them leaves the other's cards refusing a
-    # condition the engine already fires.
-    ("creature_blocks",             r"when this creature blocks"),
+    # A row per event the "whenever" table already names used to live here —
+    # "when this creature blocks" (Elder Land Wurm). It is gone, and so is the
+    # whole idea of copying rows between the tables: `_parse_trigger_condition`
+    # now falls back to the whenever table for any "when" line this one misses,
+    # so **every** event is readable under both printed words. The hand-copied
+    # subset was why Time Elemental's "when this creature attacks or blocks" —
+    # a condition already in the whenever table, already dispatched — refused.
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is
@@ -1170,6 +1170,23 @@ def _parse_trigger_condition(normalized_line: str) -> tuple[TriggerCondition | N
         cond = _match_trigger_patterns(normalized_line, _COMPILED_WHEN_PATTERNS, "when")
         if cond:
             remainder = normalized_line[len(cond.raw_text):].lstrip(" ,")
+            return cond, remainder
+        # CR 603.1 makes "when" and "whenever" one kind of ability: the words
+        # differ in how often it triggers while it exists, never in what
+        # triggers it, and no dispatcher in this engine reads the word. So a
+        # "when" line this table misses is asked of the *whenever* table with
+        # the one word swapped, rather than by copying rows between the two —
+        # which is what the tables used to do, one card at a time, leaving every
+        # event nobody had copied refusing its "when" printing while the engine
+        # fired it happily for "whenever". The remainder is sliced off the
+        # rewritten line because that is the string the pattern matched; the
+        # condition still reports the word the card printed.
+        as_whenever = "whenever " + normalized_line[len("when "):]
+        cond = _match_trigger_patterns(
+            as_whenever, _COMPILED_WHENEVER_PATTERNS, "when"
+        )
+        if cond:
+            remainder = as_whenever[len(cond.raw_text):].lstrip(" ,")
             return cond, remainder
 
     if normalized_line.startswith("at "):

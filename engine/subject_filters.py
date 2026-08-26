@@ -64,6 +64,10 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # *granted* flying is a creature with flying (CR 613.1f), so it escapes a
     # without-flying restriction exactly as a printed flyer does.
     "with_keywords", "without_keywords", "controller", "owner", "exclude_self",
+    # "target permanent **that isn't enchanted**" (Time Elemental). CR 303.4a
+    # again: whether an Aura is attached is readable off the permanent alone,
+    # so it belongs to the pure half like every other state word.
+    "not_enchanted",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two

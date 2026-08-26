@@ -244,7 +244,47 @@ _COVERED_ELSEWHERE = {
     "controller": "test_the_relative_keys_refuse_without_the_context_they_need",
     "owner": "test_ownership_is_asked_separately_from_control",
     "exclude_self": "test_the_relative_keys_refuse_without_the_context_they_need",
+    "not_enchanted": "test_not_enchanted_rejects_a_permanent_carrying_an_aura",
 }
+
+
+def _r30_attach(aura, host):
+    from engine.auras import attach_aura
+
+    attach_aura(aura, host)
+
+
+def test_not_enchanted_rejects_a_permanent_carrying_an_aura(pool):
+    """"target permanent **that isn't enchanted**" (Time Elemental) — CR 303.4a.
+
+    Its own demonstration rather than a row in ``_REJECTIONS``: that table
+    builds a bare permanent, and a bare permanent is exactly what this key
+    *accepts*. The rejected one has to be given an Aura first.
+
+    The equipped creature is the second half, and the half a matcher reading the
+    shared attachment record would fail: this engine attaches an Equipment
+    through the very same list (CR 301.5f), so "isn't enchanted" has to ask for
+    the Aura subtype or Time Elemental would refuse to bounce an equipped
+    creature it is allowed to bounce.
+    """
+    bare = Permanent(card=pool["Grizzly Bears"])
+    enchanted = Permanent(card=pool["Grizzly Bears"])
+    equipped = Permanent(card=pool["Grizzly Bears"])
+    aura = Permanent(card=pool["Holy Strength"])
+    gear = Permanent(card=pool["Short Sword"])
+    game = Game(players=[
+        PlayerState(
+            name="P1",
+            battlefield=[bare, enchanted, equipped, aura, gear],
+        ),
+        PlayerState(name="P2"),
+    ])
+    _r30_attach(aura, enchanted)
+    _r30_attach(gear, equipped)
+
+    assert subject_matches(game, bare, {"not_enchanted": True})
+    assert subject_matches(game, equipped, {"not_enchanted": True})
+    assert not subject_matches(game, enchanted, {"not_enchanted": True})
 
 
 def test_a_conjunction_of_types_matches_only_a_permanent_that_is_both(pool):
