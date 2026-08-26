@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ..combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
 from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
@@ -23,6 +24,10 @@ _EOT_METADATA_KEYS = (
     # have defender" (Wall of Wonder). Named through
     # `engine/combat_permissions.py` so the write, the read and this sweep
     # cannot spell the channel three ways.
+    # "This creature assigns no combat damage **this turn**." (Floral
+    # Spuzzem.) The window is the whole of what the mark says, so the sweep
+    # here is what ends it.
+    ASSIGNS_NO_COMBAT_DAMAGE,
     ATTACK_AS_THOUGH_NO_DEFENDER,
     # Disintegrate-style riders that last only "this turn"
     "cant_be_regenerated_this_turn",

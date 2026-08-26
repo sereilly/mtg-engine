@@ -652,3 +652,167 @@ def test_an_empty_hand_reveals_nothing_and_exchanges_nothing(
     zones = _r31_te_zones(players)
     assert zones["p1_hand"] == [], game.log
     assert zones["p1_graveyard"] == ["Tempest Efreet"], game.log
+
+
+# ---------------------------------------------------------------------------
+# Round 32 — a trigger that reads the combat it fired in, and a record that
+# switches off combat damage
+# ---------------------------------------------------------------------------
+
+
+def _r32_spuzzem_game(set_pool, catalog_by_name):
+    """Floral Spuzzem and an artifact of *its own* under P1; two of P2's.
+
+    The artifact on P1's side is the whole point of the board: "target artifact
+    **defending player controls**" must never offer it, and the fire site used
+    to stamp the attacker's own battlefield slot as the target — so what the
+    ability destroyed was whatever sat at that index on the attacker's side.
+    """
+    spuzzem = Permanent(card=set_pool("LEG")["Floral Spuzzem"])
+    p1 = PlayerState(name="P1", battlefield=[
+        spuzzem, Permanent(card=catalog_by_name["Mox Pearl"]),
+    ])
+    p2 = PlayerState(name="P2", battlefield=[
+        Permanent(card=catalog_by_name["Mox Ruby"]),
+        Permanent(card=catalog_by_name["Black Lotus"]),
+    ])
+    game = Game(players=[p1, p2])
+    # An interactive seat is what makes the two prompts *queue* rather than take
+    # their defaults at once, which is what lets a test answer them.
+    game.interactive_seats = {0}
+    return game, p1, p2, spuzzem
+
+
+def _r32_attack_unblocked(game):
+    """Attack with the creature in slot 0 and run to the moment blocks lock."""
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game._settle()
+    game.advance_combat_phase()   # declare blockers
+    ok, msg = game.declare_blockers(1, {})
+    assert ok, msg
+    game._settle()
+    game.advance_combat_phase()   # blocks lock: the trigger fires here
+    return game.pending_choices_of("trigger_target")
+
+
+def _r32_finish_combat(game):
+    """Advance to the end of the combat phase, however many steps are left."""
+    game._settle()
+    for _ in range(len(list(game._phase_steps("combat"))) + 1):
+        if game.current_turn_phase != "combat":
+            break
+        before = (game.current_turn_phase, game.current_step)
+        game.advance_combat_phase()
+        game._settle()
+        if (game.current_turn_phase, game.current_step) == before:
+            break
+
+
+def test_floral_spuzzem_offers_only_the_defending_players_artifacts(
+    set_pool, catalog_by_name
+):
+    """CR 603.3d: the ability chooses its target as it goes on the stack, and
+    the noun phrase is "artifact **defending player controls**" — so the
+    attacker's own Mox is not a candidate."""
+    game, _, p2, _ = _r32_spuzzem_game(set_pool, catalog_by_name)
+
+    pending = list(_r32_attack_unblocked(game))
+
+    assert len(pending) == 1, game.log
+    offered = pending[0].data["targets"]
+    assert {t["name"] for t in offered} == {"Mox Ruby", "Black Lotus"}, game.log
+    assert {t["seat"] for t in offered} == {1}, game.log
+    assert {t["permanent_id"] for t in offered} == {
+        p.permanent_id for p in p2.battlefield
+    }
+
+
+def test_floral_spuzzem_destroys_the_artifact_and_then_deals_no_combat_damage(
+    set_pool, catalog_by_name
+):
+    """The rider is the card. "If you do, this creature assigns no combat
+    damage this turn" has to be read by the damage step, not merely set — so
+    this asserts the defending player's life, not a flag."""
+    game, _, p2, spuzzem = _r32_spuzzem_game(set_pool, catalog_by_name)
+
+    pending = list(_r32_attack_unblocked(game))
+    chosen = pending[0].data["targets"][0]
+    assert game.confirm_trigger_target(0, chosen["permanent_id"])
+    game._settle()
+    assert game.confirm_optional_pay(0, "Floral Spuzzem", accept=True)
+    _r32_finish_combat(game)
+
+    assert [p.card.name for p in p2.battlefield] == ["Black Lotus"], game.log
+    assert p2.life == 20, game.log
+
+
+def test_floral_spuzzem_declining_the_may_leaves_the_damage_alone(
+    set_pool, catalog_by_name
+):
+    """The other half of "if you do": nothing destroyed, so the rider never
+    runs and the 2/2 connects for two."""
+    game, _, p2, spuzzem = _r32_spuzzem_game(set_pool, catalog_by_name)
+
+    pending = list(_r32_attack_unblocked(game))
+    assert game.confirm_trigger_target(0, pending[0].data["targets"][0]["permanent_id"])
+    game._settle()
+    assert game.confirm_optional_pay(0, "Floral Spuzzem", accept=False)
+    _r32_finish_combat(game)
+
+    assert len(p2.battlefield) == 2, game.log
+    assert p2.life == 18, game.log
+
+
+def test_floral_spuzzem_is_free_to_hit_again_next_turn(set_pool, catalog_by_name):
+    """"…this turn": the mark is swept with the rest of the turn's records, so
+    a second combat is unaffected by the first. The test that catches a record
+    written once and never ended."""
+    game, _, p2, spuzzem = _r32_spuzzem_game(set_pool, catalog_by_name)
+
+    pending = list(_r32_attack_unblocked(game))
+    assert game.confirm_trigger_target(0, pending[0].data["targets"][0]["permanent_id"])
+    game._settle()
+    assert game.confirm_optional_pay(0, "Floral Spuzzem", accept=True)
+    _r32_finish_combat(game)
+    assert p2.life == 20, game.log
+
+    # CR 514.2's cleanup is what ends "this turn", and it is the only thing
+    # that does — the mark is swept there with the rest of the turn's records.
+    game.resolve_cleanup_step(0)
+    assert not spuzzem.metadata.get("assigns_no_combat_damage_until_eot")
+
+    pending = list(_r32_attack_unblocked(game))
+    # Only one artifact left, so there is still a legal target and the ability
+    # still goes on the stack — this time the offer is declined.
+    assert game.confirm_trigger_target(0, pending[0].data["targets"][0]["permanent_id"])
+    game._settle()
+    assert game.confirm_optional_pay(0, "Floral Spuzzem", accept=False)
+    _r32_finish_combat(game)
+
+    assert p2.life == 18, game.log
+
+
+def test_floral_spuzzem_with_no_artifact_to_name_never_goes_on_the_stack(
+    set_pool, catalog_by_name
+):
+    """CR 603.3d's last sentence: "if no legal choices can be made for it …
+    the ability is simply removed from the stack." An empty defending board is
+    that case, and the attack is an ordinary one."""
+    spuzzem = Permanent(card=set_pool("LEG")["Floral Spuzzem"])
+    p1 = PlayerState(name="P1", battlefield=[
+        spuzzem, Permanent(card=catalog_by_name["Mox Pearl"]),
+    ])
+    p2 = PlayerState(name="P2", battlefield=[])
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0}
+
+    assert list(_r32_attack_unblocked(game)) == []
+    assert not game.stack, game.log
+    _r32_finish_combat(game)
+
+    assert p2.life == 18, game.log

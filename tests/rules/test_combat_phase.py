@@ -944,3 +944,67 @@ def test_a_prompt_owed_by_a_non_interactive_seat_never_stalls_combat():
     game.advance_combat_phase()
 
     assert game.current_step != "declare_blockers"
+
+
+# --- CR 510.1a: what a creature assigns is not always its power -------------
+
+
+def _r32_combat_to_damage(game, attackers, blockers=None):
+    """Run one combat from declare-attackers through the damage step."""
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, attackers)[0]
+    game._settle()
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, blockers or {})[0]
+    game._settle()
+    game.advance_combat_phase()
+    game._settle()
+
+
+@pytest.mark.cr("510.1a", "510.1b")
+def test_an_attacker_that_assigns_no_combat_damage_assigns_none_to_the_player():
+    """"This creature assigns no combat damage this turn." (Floral Spuzzem.)
+    CR 510.1a assigns damage equal to power; the mark makes the answer zero,
+    and it is read where the assignment happens rather than prevented after."""
+    from engine.combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
+
+    attacker = Permanent(card=_mk_creature("Idler", 3, 3))
+    attacker.metadata[ASSIGNS_NO_COMBAT_DAMAGE] = True
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2"),
+    ])
+
+    _r32_combat_to_damage(game, [0])
+
+    assert game.players[1].life == 20
+
+
+@pytest.mark.cr("510.1a", "510.1c")
+def test_a_blocker_that_assigns_no_combat_damage_still_takes_it():
+    """The other direction of CR 510.1a's one sentence — it names "each
+    attacking creature **and each blocking creature**". A mark read only on
+    the attacking side would be a card that works everywhere it was tested and
+    silently does nothing the first time it blocks.
+
+    It is an assignment, not a prevention and not a P/T change: the blocker
+    still has its 3 power for anything that asks, and it still receives the
+    attacker's damage in full."""
+    from engine.combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
+
+    attacker = Permanent(card=_mk_creature("Raider", 2, 5))
+    blocker = Permanent(card=_mk_creature("Idler", 3, 5))
+    blocker.metadata[ASSIGNS_NO_COMBAT_DAMAGE] = True
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[blocker]),
+    ])
+
+    _r32_combat_to_damage(game, [0], {0: [0]})
+
+    assert attacker.damage_marked == 0, game.log
+    assert blocker.damage_marked == 2, game.log
+    assert blocker.effective_power == 3

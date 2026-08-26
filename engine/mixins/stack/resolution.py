@@ -21,6 +21,57 @@ from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import INLINE_TRIGGER_CONDITIONS, modal_trigger_modes
 from ...resumption import run_resumable
 
+#: How a printed controller narrowing reaches the target spec. A key here is a
+#: narrowing `legality._enumerate_targets` performs; a controller word absent
+#: from it is one the enumerator cannot answer, and
+#: `_choose_trigger_targets` declines rather than offering a wider list than
+#: the card prints.
+_CONTROLLER_SPEC_FLAGS = {
+    "you": "own_only",
+    "opponent": "opponent_only",
+    "defending_player": "defending_player_only",
+}
+
+
+def _target_filter_controller(payload) -> str | None:
+    """The ``controller`` word of an instruction's printed target phrase.
+
+    Walked rather than read off one key because the phrase is carried in two
+    shapes: a destroy lifts it to the payload's top level, while a damage
+    instruction keeps it under ``targets.filter`` — and a ``may`` or a
+    ``sequence`` wraps either of them. One walk rather than a list of the
+    kinds, for the reason every registry in this engine gives.
+    """
+    if isinstance(payload, dict):
+        described = payload.get("filter")
+        if isinstance(described, dict) and described.get("controller"):
+            return described["controller"]
+        if payload.get("controller"):
+            return payload["controller"]
+        for value in payload.values():
+            found = _target_filter_controller(value)
+            if found is not None:
+                return found
+        return None
+    if isinstance(payload, (list, tuple)):
+        for entry in payload:
+            found = _target_filter_controller(entry)
+            if found is not None:
+                return found
+        return None
+    inner = getattr(payload, "payload", None)
+    return None if inner is None else _target_filter_controller(inner)
+
+
+def _controller_narrowing_is_in(spec: dict, instruction) -> bool:
+    """Whether *spec* carries the controller narrowing *instruction* prints."""
+    controller = _target_filter_controller(getattr(instruction, "payload", None))
+    if controller is None:
+        return True
+    flag = _CONTROLLER_SPEC_FLAGS.get(controller)
+    return bool(flag and spec.get(flag))
+
+
 class StackResolutionMixin:
     def _bin_spell_card(
         self, owner, card: CardDefinition, *, exile_instead: bool, verb: str
@@ -182,6 +233,112 @@ class StackResolutionMixin:
             _trigger_item=item,
         )
 
+    #: Target kinds :meth:`_choose_trigger_targets` picks for. Objects on the
+    #: battlefield only, and deliberately: those are the kinds whose printed
+    #: noun phrase can *narrow* ("target artifact defending player controls"),
+    #: so a fire site that names one by position rather than by choice is
+    #: naming something the card may not permit. A player, a spell on the
+    #: stack and a card in a zone reach the resolution through their own paths
+    #: and are left exactly as they were.
+    _CHOOSABLE_TRIGGER_TARGET_KINDS = frozenset({
+        "permanent", "creature", "artifact", "enchantment", "land",
+        "planeswalker",
+    })
+
+    def _choose_trigger_targets(self, item: StackItem) -> None:
+        """Choose *item*'s target as it goes on the stack (CR 603.3d/601.2c).
+
+        The non-modal twin of :meth:`_choose_trigger_mode`, and it exists for
+        the same reason at the same moment: a triggered ability chooses its
+        targets as it is put on the stack, not when it resolves.
+
+        Most fire sites in this engine already name the object their event was
+        about — "destroy **that Wall**" (Battering Ram) is bound by the block
+        that fired it, and CR 603.3d has nothing to choose. This is for the
+        ability whose printed noun phrase is a *choice* the event does not
+        make: Floral Spuzzem's "target artifact defending player controls" is
+        any of the defender's artifacts, and the fire site had been stamping
+        the attacking creature's own slot into the target field — so the
+        ability resolved against whatever permanent sat at that index on the
+        *controller's* battlefield.
+
+        Three ways out, all of them the safe direction:
+
+        * the ability names no object target — nothing to choose;
+        * the fire site already bound one (``target_permanent_id``) — the event
+          made the choice and CR 603.3d has none left to make;
+        * no legal target exists — CR 603.3c removes the ability from the
+          stack rather than resolving it into a no-op, which is the same rule
+          :meth:`_choose_trigger_mode` applies to a mode that cannot be chosen.
+
+        The candidates come from ``_enumerate_targets``, the one list the web
+        picker is handed and the one list the answer is checked against.
+        """
+        from ...targeting import derive_instruction_spec
+
+        instruction = item.ability_instruction
+        if instruction is None or modal_trigger_modes(instruction):
+            return
+        if item.target_permanent_id is not None or item.target_stack_item is not None:
+            return
+        spec = derive_instruction_spec([instruction])
+        if spec is None or spec.get("kind") not in self._CHOOSABLE_TRIGGER_TARGET_KINDS:
+            return
+        # **Only pick what the enumerator can narrow.** A printed noun phrase's
+        # controller reaches the spec as a flag ("you control" → `own_only`,
+        # "an opponent controls" → `opponent_only`, "defending player controls"
+        # → `defending_player_only`); one that did not is one the enumerator
+        # would ignore, and offering a wider list than the card prints is the
+        # single thing a picker must never do.
+        #
+        # "…that **that player** controls" (Chandra's Incinerator) is that
+        # case, and deliberately so: the seat is one the *event* picked, known
+        # only to the handler holding the trigger's context, which does the
+        # narrowing itself as it resolves. Left to this picker it would offer
+        # every permanent on the board and stamp the first.
+        if not _controller_narrowing_is_in(spec, instruction):
+            return
+        spec = dict(spec)
+        # "Defending player controls" is a seat the *combat* knows and the
+        # enumerator does not, so it travels with the spec. The fire site froze
+        # it into the trigger's context when the ability triggered (CR 603.10),
+        # which is the same key the attack triggers already use.
+        defending = (item.trigger_context or {}).get("trigger_defending_player_index")
+        if isinstance(defending, int):
+            spec["defending_player_index"] = defending
+        candidates = self._enumerate_targets(
+            item.caster_index, item.card, spec, for_cast=False,
+            ability_instruction=instruction,
+            source_permanent=item.source_permanent,
+            ability_source=item.source_permanent,
+        )
+        offered = []
+        for candidate in candidates:
+            if candidate.get("kind") != "permanent":
+                continue
+            perm = self.permanent_at(candidate["seat"], candidate["index"])
+            if perm is None:
+                continue
+            offered.append({
+                "seat": candidate["seat"],
+                "permanent_index": candidate["index"],
+                "permanent_id": perm.permanent_id,
+                "name": perm.card.name,
+            })
+        if not offered:
+            self.stack = [existing for existing in self.stack if existing is not item]
+            self.log.append(
+                f"{item.card.name}'s triggered ability was removed from the stack: "
+                "it has no legal target (603.3c)"
+            )
+            return
+        self.arm_pending_choice(
+            "trigger_target", item.caster_index,
+            card_name=item.card.name,
+            targets=offered,
+            _trigger_item=item,
+        )
+
     def _default_trigger_mode_target(self, option: dict, controller_index: int) -> dict | None:
         """Which candidate a non-interactive seat takes for *option*.
 
@@ -310,6 +467,20 @@ class StackResolutionMixin:
         if not self.stack:
             return False
         top = self.stack[-1]
+        # **A choice made as the object went on the stack, not yet answered.**
+        # CR 601.2b-c and CR 603.3c-d put a modal trigger's mode and a targeted
+        # ability's targets *before* the object is announced, so an object with
+        # one of those still owed has not finished being put on the stack and
+        # cannot resolve. Those prompts record the object as ``_trigger_item``
+        # rather than ``_stack_item``, because nothing was resolving when they
+        # were armed — which is exactly why the two checks below, which read
+        # ``_stack_item``, never saw them.
+        #
+        # Only an interactive seat can ever be here: every announcement prompt
+        # is registered ``default_at_arm``, so a headless or AI seat has already
+        # answered by the time this runs and nothing waits.
+        if self.announcement_choice_for(top) is not None:
+            return False
         # A Word of Command paused mid-resolution stays on the stack until its
         # card choice is confirmed. Once the choice has been recorded (deferred
         # confirm), releasing priority lands here and finishes the resolution:

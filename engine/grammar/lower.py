@@ -72,6 +72,7 @@ from .lowering import (
     _lower_gain_type,
     _lower_cant_be,
     _lower_attack_as_though,
+    _lower_assigns_no_combat_damage,
     _lower_attacking_doesnt_tap,
     _lower_remove_from_combat,
     _lower_change_text,
@@ -539,6 +540,9 @@ def lower_statement(
         return _lower_attack_as_though(statement)
     if isinstance(statement, ast.CantBe):
         return _lower_cant_be(statement)
+
+    if isinstance(statement, ast.AssignsNoCombatDamage):
+        return _lower_assigns_no_combat_damage(statement)
 
     if isinstance(statement, ast.AttackingDoesntTap):
         return _lower_attacking_doesnt_tap(statement)

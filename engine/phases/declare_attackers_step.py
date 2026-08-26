@@ -167,6 +167,7 @@ class DeclareAttackersStepMixin:
         self.combat_first_strike_done = False
         self.combat_attackers_locked = True
         self.combat_blockers_locked = False
+        self.combat_unblocked_triggers_fired = False
         self._prune_combat_state()
 
         declared: list[Permanent] = []

@@ -97,6 +97,7 @@ from .stack import (
     _parse_activation_restriction,
 )
 from .combat import (
+    _parse_assigns_no_combat_damage,
     _parse_attacking_doesnt_tap,
     _BASIC_LAND_WORDS,
     _parse_cant_attack_or_block,
@@ -180,6 +181,7 @@ __all__ = [
     "_parse_activation_restriction",
     "_BASIC_LAND_WORDS",
     "_parse_cant_attack_or_block",
+    "_parse_assigns_no_combat_damage",
     "_parse_attacking_doesnt_tap",
     "_parse_remove_from_combat",
     "_CANT_BE_ACTIONS",

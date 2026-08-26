@@ -704,6 +704,15 @@ class LegalityMixin:
             # the other direction.
             if spec.get("opponent_only") and seat == caster_index:
                 continue
+            # "…**defending player controls**" (Floral Spuzzem). Not relative
+            # to the seat choosing but to the combat the ability's trigger
+            # fired in, so the seat travels on the spec beside the flag. A flag
+            # with no seat offers nothing rather than everything: a narrowing
+            # nobody can answer must refuse, never widen.
+            if spec.get("defending_player_only") and seat != spec.get(
+                "defending_player_index"
+            ):
+                continue
             for idx, perm in enumerate(player.battlefield):
                 if not self._permanent_matches_target_kind(perm, kind, spec, casting_aura):
                     continue

@@ -1483,7 +1483,7 @@ class GameHelpersMixin:
         permanent = self.permanent_at(seat, index)
         return None if permanent is None else permanent.permanent_id
 
-    def _stack_push(self, item):
+    def _stack_push(self, item=None, *, targets_already_chosen: bool = False):
         """Put *item* on the stack and finish announcing it, then return it.
 
         Two steps, because the second is only meaningful once the first has
@@ -1502,6 +1502,22 @@ class GameHelpersMixin:
         """
         self._stack_push_object(item)
         self._choose_trigger_mode(item)
+        # …and its non-modal twin: an ability whose printed noun phrase is a
+        # *choice* the event did not make chooses it now, at the same moment
+        # and for the same rule (CR 603.3d/601.2c). Both hang off this method
+        # for the reason above — it is the one place an object goes on the
+        # stack, and a fire site that builds its own StackItem still passes
+        # through here.
+        #
+        # *targets_already_chosen* is the one exception, and it is a rule
+        # rather than a list of callers: an **activated** ability chose its
+        # targets when it was activated (CR 602.2b, gated once in
+        # `legality.activation_target_refusal`), and a **copy** inherits the
+        # original's (CR 707.10). Both were announced with their targets
+        # already made, so asking again would replace a choice a player has
+        # made with one they have not.
+        if not targets_already_chosen:
+            self._choose_trigger_targets(item)
         return item
 
     def _stack_push_object(self, item) -> None:

@@ -28,49 +28,13 @@ idiom every caller used to write is safe only while a pass cannot be
 interrupted.
 """
 
+from ..combat_assignment import combat_damage_assigned_by
 from ..damage_events import deal_damage, lifelink_life_gained
 from ..models import Permanent
 from ..resumption import run_resumable
 
 
 class CombatDamageStepMixin:
-    def _fire_unblocked_attack_triggers(self) -> None:
-        """Put "whenever this creature attacks and isn't blocked" triggers
-        (Merchant Ship) on the stack. Deferred from declare-attackers — the
-        condition can only be evaluated once blockers are known — and fired at
-        the combat damage step, the reliable choke point every combat flow
-        passes through."""
-        from ..game_types import StackItem
-        from ..trigger_utils import matching_triggers
-
-        controller_index = self.active_player_index
-        controller = self.players[controller_index]
-        for idx in list(self.combat_attackers):
-            if not (0 <= idx < len(controller.battlefield)):
-                continue
-            permanent = controller.battlefield[idx]
-            if permanent.blocked or self._attacker_all_blockers(idx):
-                continue
-            for trig in matching_triggers(
-                permanent.effective_card, condition_kinds={"attacks_unblocked"}
-            ):
-                self._stack_push(
-                    StackItem(
-                        card=permanent.card,
-                        caster_index=controller_index,
-                        target_player_index=controller_index,
-                        target_permanent_index=idx,
-                        x_value=None,
-                        ability_instruction=trig.instruction,
-                        ability_effect_kind=trig.effect_kind,
-                        source_permanent=permanent,
-                        ability_text=trig.source_line,
-                    )
-                )
-                self.log.append(
-                    f"{permanent.card.name} triggered (attacked and wasn't blocked)"
-                )
-
     def _attacker_band(self, attacker_idx: int) -> list[int] | None:
         for band in self.combat_bands:
             if attacker_idx in band:
@@ -141,7 +105,7 @@ class CombatDamageStepMixin:
                 if amount < 0:
                     return False, "combat damage assignment cannot be negative"
                 total += amount
-            power = max(0, attacker.effective_power)
+            power = combat_damage_assigned_by(attacker)
             if total > power:
                 return False, "assigned combat damage exceeds attacker power"
             # CR 702.22j: the defender divides ALL the attacker's combat damage
@@ -187,7 +151,7 @@ class CombatDamageStepMixin:
                 if amount > 0 and int(a_idx) not in attackers:
                     return False, "blocker damage assigned to a creature it isn't blocking"
                 total += amount
-            power = max(0, blocker.effective_power)
+            power = combat_damage_assigned_by(blocker)
             if total > power:
                 return False, "assigned blocker damage exceeds blocker power"
             # CR 510.1d: the blocker assigns ALL its combat damage among the
@@ -275,7 +239,7 @@ class CombatDamageStepMixin:
 
             if len(blockers) == 1:
                 blocker_idx = blockers[0]
-                assign = max(0, attacker.effective_power)
+                assign = combat_damage_assigned_by(attacker)
                 # For trample assign only lethal to the blocker; the remainder
                 # flows to the defending player via the existing trample logic.
                 if has_trample:
@@ -288,7 +252,7 @@ class CombatDamageStepMixin:
             # last blocker that received lethal. This kills as many blockers as the
             # attacker's power allows. It's just the default — any non-negative
             # division summing to <= power is legal (CR 510.1c).
-            power_left = max(0, attacker.effective_power)
+            power_left = combat_damage_assigned_by(attacker)
             per_blocker: dict[int, int] = {}
             last_lethal_idx: int | None = None
             exhausted = False
@@ -420,7 +384,7 @@ class CombatDamageStepMixin:
                 if amount > 0 and member_idx not in allowed:
                     return False, "blocker damage assigned to a creature it isn't blocking"
                 total += amount
-            power = max(0, split_blocker.effective_power)
+            power = combat_damage_assigned_by(split_blocker)
             if total > power:
                 return False, "assigned blocker damage exceeds blocker power"
             # CR 510.1c/702.22j: the blocker assigns ALL its combat damage —
@@ -459,13 +423,18 @@ class CombatDamageStepMixin:
             if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
-            if attacker.effective_power <= 0:
+            # CR 510.1a: how much this creature assigns — its power, unless
+            # something says it assigns none (Floral Spuzzem). One rule, read
+            # at every site that assigns, because a flag tested at three of
+            # four is a card that quietly works in the fourth.
+            assignable = combat_damage_assigned_by(attacker)
+            if assignable <= 0:
                 continue
             if not self._strikes_in_pass(attacker, run_first_pass, has_first_strike_pass):
                 continue
 
             blockers = self._attacker_all_blockers(attacker_idx)
-            power_left = attacker.effective_power
+            power_left = assignable
             # CR 510.1b: an unblocked creature assigns its damage to the player,
             # or to the planeswalker, it is attacking — recorded on the event so
             # the dealing half needs no second look at the combat maps.
@@ -528,7 +497,7 @@ class CombatDamageStepMixin:
                 if requested_damage > 0:
                     to_blockers.append((defending_index, blocker_idx, requested_damage, attacker_idx))
 
-            if assigned_total > attacker.effective_power:
+            if assigned_total > assignable:
                 return False, "assigned combat damage exceeds attacker power", [], []
             if has_trample and power_left > 0 and trample_underlethal:
                 return False, "trample requires lethal damage assigned to each blocker", [], []
@@ -571,14 +540,6 @@ class CombatDamageStepMixin:
             return True, "no attackers"
 
         attacker_controller = self.players[self.active_player_index]
-
-        # "Whenever this creature attacks and isn't blocked" (Merchant Ship):
-        # deferred from declare-attackers, fired now that blocks are known. The
-        # second-strike pass is the one and only re-entry into this method for a
-        # given combat, and combat_first_strike_done is exactly what marks it, so
-        # gating on that flag is what keeps the trigger from firing twice.
-        if not self.combat_first_strike_done:
-            self._fire_unblocked_attack_triggers()
 
         # None means "no explicit assignment given" — fall back to the engine's
         # default assignment (full power to blockers). An empty dict, by contrast,
@@ -688,7 +649,7 @@ class CombatDamageStepMixin:
                 split = self.combat_multiblock_damage.get(blocker_idx)
             if split:
                 blocker = defender.battlefield[blocker_idx]
-                if blocker.effective_power <= 0:
+                if combat_damage_assigned_by(blocker) <= 0:
                     return
                 if not self._strikes_in_pass(blocker, run_first_pass, has_first_strike_pass):
                     return
@@ -716,7 +677,8 @@ class CombatDamageStepMixin:
                 return
             blocker = defender.battlefield[blocker_idx]
             attacker = attacker_controller.battlefield[attacker_idx]
-            if blocker.effective_power <= 0:
+            blocker_assigns = combat_damage_assigned_by(blocker)
+            if blocker_assigns <= 0:
                 return
             if not self._strikes_in_pass(blocker, run_first_pass, has_first_strike_pass):
                 return
@@ -724,7 +686,7 @@ class CombatDamageStepMixin:
             if self._is_protected_from(attacker, blocker):
                 return
             self._mark_damage_on_permanent(
-                attacker, blocker.effective_power, source=blocker, combat=True,
+                attacker, blocker_assigns, source=blocker, combat=True,
                 then=_dealt_to_creature(attacker, blocker, defending_idx), asks=True,
             )
 

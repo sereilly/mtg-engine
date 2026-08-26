@@ -1605,8 +1605,13 @@ def test_merchant_ship_gains_life_only_when_unblocked(arn_by_name, all_cards):
     game.resolve_stack()
     assert p1.life == 20  # NOT at attack declaration any more
 
-    game._set_phase_and_step("combat", "combat_damage")
-    game.resolve_combat_damage(0)
+    # CR 509.1h: the creature became unblocked when blocks were declared, and
+    # that is where the trigger fires (LEG round 32 moved it there from inside
+    # `resolve_combat_damage`, one step too late for anything that changes what
+    # the damage does). So the declare-blockers step has to be walked, not
+    # jumped over — P2 has no creatures, so it auto-skips.
+    game._set_phase_and_step("combat", "declare_blockers")
+    game.advance_combat_phase()
     game.resolve_stack()
     assert p1.life == 22  # unblocked: the trigger fired with blocks known
 
@@ -1639,11 +1644,15 @@ def test_merchant_ship_gains_nothing_when_blocked(arn_by_name, all_cards):
 
 def test_merchant_ship_gains_life_once_across_both_strike_passes(arn_by_name, all_cards):
     """CR 510.4 gives a combat two damage steps when anything in it has first
-    strike, and the "attacked and wasn't blocked" trigger is fired from the
-    method that runs one step. A first striker attacking beside the Ship used to
+    strike, and the "attacked and wasn't blocked" trigger must fire once for the
+    combat, not once per step. A first striker attacking beside the Ship used to
     hand the Ship's trigger to the stack once per step — 4 life instead of 2 —
     because the guard on it tested ``combat_damage_resolved``, which the
-    first-strike pass deliberately leaves False."""
+    first-strike pass deliberately leaves False.
+
+    LEG round 32 moved the firing out of the damage step altogether: it happens
+    once, as blocks lock (CR 509.1h), which is why the two damage passes below
+    cannot double it however they are entered."""
     from tests.helpers import _game as _mk_game, _nosick as _clear_sick
 
     ship = _clear_sick(Permanent(card=arn_by_name["Merchant Ship"]))
@@ -1658,6 +1667,10 @@ def test_merchant_ship_gains_life_once_across_both_strike_passes(arn_by_name, al
     game.active_player_index = 0
     game._set_phase_and_step("combat", "declare_attackers")
     game.declare_attackers(0, [0, 2])
+    game.resolve_stack()
+
+    game._set_phase_and_step("combat", "declare_blockers")
+    game.advance_combat_phase()
     game.resolve_stack()
 
     game._set_phase_and_step("combat", "combat_damage")

@@ -191,3 +191,28 @@ def _is_self_reference(recipient: ast.Recipient) -> bool:
         and recipient.filter.is_source
         and not recipient.targeted
     )
+
+
+def _parse_assigns_no_combat_damage(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.AssignsNoCombatDamage | None":
+    """``<subject> assigns no combat damage <duration>.`` (Floral Spuzzem.)
+
+    CR 510.1 says a creature assigns its combat damage as the step begins; this
+    is that assignment switched off. Read as its own sentence rather than as a
+    prevention shield, because it is not one: no damage is prevented, none is
+    ever assigned, so nothing a shield counts is spent and a replacement that
+    watches for damage never fires.
+
+    Returns None — cursor untouched — for any other reading of "assigns", so a
+    future "assigns its combat damage as though …" keeps its own refusal
+    instead of failing on words this production expected.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("assigns", "assign"):
+        return None
+    if not stream.accept_phrase("no", "combat", "damage"):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    return ast.AssignsNoCombatDamage(subject, duration)

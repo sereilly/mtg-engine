@@ -214,6 +214,23 @@ class CombatPhaseMixin:
             self.log.append(
                 f"Declare blockers step complete: {total_blockers} blocker(s) declared"
             )
+            # CR 509.1h: an attacking creature becomes unblocked as blocks are
+            # declared, and "whenever this creature attacks and isn't blocked"
+            # triggers then — **in this step**, so the ability resolves in the
+            # priority window below, before any combat damage is assigned.
+            #
+            # It used to fire from inside `resolve_combat_damage`, described
+            # there as "the reliable choke point every combat flow passes
+            # through". It was reliable and it was one step too late: Floral
+            # Spuzzem's "if you do, this creature assigns no combat damage this
+            # turn" was set *after* the damage it is printed to stop, so the
+            # card destroyed an artifact and hit for two anyway.
+            #
+            # Here instead, because this line is the choke point *for the
+            # declaration*: a declaration, an auto-skipped defender with no
+            # legal block, and a Camouflage resolution all reach it, and none
+            # of them reaches the other two's code.
+            self._fire_unblocked_attack_triggers()
 
         # Close current combat step, then enter the next one.
         if self._receives_priority(self.current_step):
@@ -318,6 +335,7 @@ class CombatPhaseMixin:
         self.combat_first_strike_done = False
         self.combat_attackers_locked = False
         self.combat_blockers_locked = False
+        self.combat_unblocked_triggers_fired = False
         for permanent in self.all_permanents():
             permanent.attacking = False
             permanent.defending_player_index = None

@@ -135,6 +135,15 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "'s", "one", "or", "more", "colors"):
             colored = True
             continue
+        # "target artifact **defending player controls**" (Floral Spuzzem).
+        # A seat only the combat that fired the trigger knows, so it is carried
+        # like `that_player` beside it — refused by the pure matcher and
+        # resolved by whoever holds the event's context. Reading it as
+        # "opponent" would be right in a duel by coincidence and wrong the
+        # moment a third seat is not the one being attacked.
+        if stream.accept_phrase("defending", "player", "controls"):
+            d.controller = "defending_player"
+            continue
         if stream.accept_phrase("that", "player", "controls"):
             d.controller = "that_player"
             continue

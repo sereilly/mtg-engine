@@ -21,7 +21,17 @@ class PhaseStepsMixin:
         pause_for_choices = bool(self.interactive_seats)
         while True:
             self.resolve_stack(pause_for_choices=pause_for_choices)
-            if not self.stack or self.stack[-1].resolution_held:
+            if not self.stack:
+                return
+            top = self.stack[-1]
+            # Two ways the top can refuse to resolve, and both end this loop:
+            # its resolution is held pending a decision it armed, or it is
+            # still owed the mode/target it should have chosen as it was
+            # announced (``announcement_choice_for``). Only the first was
+            # asked, so an unanswered announcement prompt turned this into a
+            # spin — `resolve_stack` returning at once, the stack never
+            # shrinking, the condition never true.
+            if top.resolution_held or self.announcement_choice_for(top) is not None:
                 return
 
     def _close_or_defer_step(self, phase: str, step: str, defer_priority: bool) -> None:
