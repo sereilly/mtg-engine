@@ -45,6 +45,7 @@ from .continuous import (
     switch_pt,
 )
 from .keywords import ability_effects, derived_grants
+from .landwalk import landwalk_requirement
 from .land_types import land_type_changes
 from .lord_buffs import QUALIFIER_FIELDS
 
@@ -245,6 +246,13 @@ def _printed_abilities_cached(
         for part in value.split(","):
             part = part.strip()
             if band_quality(part) is not None:
+                abilities.add(part)
+            # "Legendary landwalk" (Livonya Silone) — the same shape, and it
+            # cannot ride the word scan above either: CR 702.14a builds the
+            # ability's name out of the printed quality, so there is no fixed
+            # word to look for. The ingested keywords field usually carries it,
+            # but a fixture card built from oracle text alone has only this.
+            if landwalk_requirement(part) is not None:
                 abilities.add(part)
     return frozenset(abilities)
 

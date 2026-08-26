@@ -68,7 +68,29 @@ class CombatRestriction:
 #   can_block_only_with_keyword     phases/declare_blockers_step
 #   must_be_blocked                 phases/declare_blockers_step
 #   must_be_blocked_by_all_able     phases/declare_blockers_step
+#   max_attackers_each_combat       phases/declare_attackers_step.declare_attackers
+#   max_blockers_each_combat        phases/declare_blockers_step.declare_blockers
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        # "No more than two creatures can attack each combat." (Caverns of
+        # Despair.) The only entry here that restricts the **declaration** as a
+        # whole rather than any one creature, so it is enforced where the
+        # declaration is assembled instead of in `can_attack` — a per-creature
+        # predicate cannot say "and no more of you".
+        #
+        # The number is payload, like every other number in this file: a card
+        # printed "no more than one creature" is the same restriction, and
+        # spelling two into the kind would make each printed count a new kind, a
+        # new enforcement branch and a new gate entry. The noun agrees with the
+        # number it follows, so the plural is optional for the same reason: "no
+        # more than one **creature**" is this sentence, not another one.
+        re.compile(r"^no more than (?P<count>\w+) creatures? can attack each combat$"),
+        "max_attackers_each_combat",
+    ),
+    (
+        re.compile(r"^no more than (?P<count>\w+) creatures? can block each combat$"),
+        "max_blockers_each_combat",
+    ),
     (
         re.compile(
             rf"^this creature can't attack unless defending player controls "
@@ -443,3 +465,29 @@ def _blocker_noun(part: str, card_name: str | None = None) -> dict | None:
     if singular in CREATURE_TYPES:
         return {"subtype_filter": singular}
     return None
+
+
+def participation_cap(permanents, kind: str) -> int | None:
+    """The cap the battlefield currently puts on how many creatures may *kind*
+    (``"attack"`` / ``"block"``) this combat, or None when nothing caps it.
+
+    The **smallest** cap wins when several permanents impose one: each is a
+    restriction in its own right (CR 509.1b/508.1c), and obeying only the
+    loosest would let a declaration break the tighter one. Two Caverns of
+    Despair, or one beside a card printing a different number, are both
+    answered by that without either card knowing the other exists.
+
+    Takes the permanents rather than the game because this file reads text and
+    nothing else; the callers are the two declaration steps, which hold the
+    board already.
+    """
+    from .oracle import compile_card_oracle
+
+    wanted = f"max_{kind}ers_each_combat"
+    caps = [
+        int(instruction.payload.get("count", 0))
+        for permanent in permanents
+        for instruction in compile_card_oracle(permanent.effective_card).instructions
+        if instruction.kind == wanted
+    ]
+    return min(caps) if caps else None

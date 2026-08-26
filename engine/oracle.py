@@ -1718,6 +1718,16 @@ def _qualified_keyword_part(part: str) -> bool:
 
     if is_bands_with_other(part):
         return _band_implemented(part)
+    # "Legendary landwalk" (CR 702.14a's quality-first shape). Same reasoning
+    # again: the ability's name is built from the printed quality, so no word
+    # list can hold it — what admits the line is `engine/landwalk.py`, the
+    # reader the declare-blockers step *enforces* it with. A quality that
+    # reader cannot test keeps the line refused, because admitting the word
+    # would ship a creature whose evasion silently never applies.
+    from .landwalk import is_landwalk
+
+    if is_landwalk(part):
+        return True
     for prefix, admit in (
         ("protection from ", _protection_quality_word),
         # Hexproof stays colour-only: _can_be_targeted's hexproof branch reads

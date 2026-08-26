@@ -305,15 +305,20 @@ def _lower_tap_or_untap(node: ast.TapOrUntap) -> tuple[OracleInstruction, ...]:
     ``tap_target_permanent`` beside it does, so the narrowing is carried rather
     than refused.
 
-    What still refuses is a narrowing the *matcher* cannot test — the payload is
-    handed to ``permanent_matches_filter``, which answers about a permanent alone,
-    so a phrase reaching past it would be dropped where it is applied.
+    What still refuses is a narrowing the *matcher* cannot test. The handler asks
+    ``subject_matches`` with the resolving seat as its observer, so a *relative*
+    phrase is answerable too — "target artifact **an opponent controls**"
+    (Hyperion Blacksmith) is a seat comparison, and the picker carries the same
+    restriction through the ``opponent_only`` flag ``engine/targeting.py``
+    derives, so the list offered and the list accepted are the same list. The
+    gate is therefore `TESTABLE_SUBJECT_FILTER_KEYS`, not the object-only
+    subset: anything outside it would be dropped where it is applied.
     """
     spec = node.subject
     if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":
         raise LoweringError("no handler for a non-targeted tap-or-untap", node=node)
     described = _filter_payload(spec.filter)
-    if described and object_only_filter(described) is None:
+    if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
         raise LoweringError("no tap-or-untap handler honours this restriction", node=node)
     payload = _targets_only(spec)
     payload.update(described)

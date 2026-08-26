@@ -1291,12 +1291,32 @@ def test_tap_or_untap_carries_the_noun_phrase_it_is_printed_with(line):
     )
 
 
+def test_tap_or_untap_carries_a_controller_narrowing():
+    """"…an opponent controls" (Hyperion Blacksmith) / "…you control".
+
+    A seat comparison, so the pure permanent matcher cannot answer it — which
+    used to refuse the line. The handler asks ``subject_matches`` with the
+    resolving seat as its observer and the picker carries the same restriction,
+    so the narrowing is carried rather than refused, and it reaches the payload
+    where both of them read it."""
+    for text, controller in (
+        ("Tap or untap target creature you control.", "you"),
+        ("Tap or untap target artifact an opponent controls.", "opponent"),
+    ):
+        result = compile_line(text, card_name="Test")
+
+        assert result.lowered, result.lowering_error
+        (instruction,) = result.instructions
+        assert instruction.kind == "tap_or_untap_target"
+        assert instruction.payload["controller"] == controller
+
+
 def test_tap_or_untap_still_refuses_a_restriction_the_matcher_cannot_test():
-    """The filter is handed to ``permanent_matches_filter``, which answers about
-    a permanent alone. A phrase reaching past it would be dropped where it is
-    applied, so the line refuses instead."""
+    """The gate moved out to ``TESTABLE_SUBJECT_FILTER_KEYS``; it did not go
+    away. A phrase naming something no filter payload can carry is still
+    refused, because it would be dropped where the narrowing is applied."""
     result = compile_line(
-        "Tap or untap target creature you control.", card_name="Test"
+        "Tap or untap target creature blocking this creature.", card_name="Test"
     )
 
     assert result.parsed and not result.lowered
@@ -2754,14 +2774,28 @@ def test_a_chosen_discard_still_lowers_to_the_handler_that_prompts():
     ]
 
 
-def test_a_fixed_count_discarded_at_random_refuses():
-    """There is no handler for it. ``discard_target_cards`` is the only handler
-    that reads a counted amount, and it hands the victim the choice this card
-    denies them."""
-    result = compile_line("Target player discards two cards at random.", card_name="Test")
+def test_a_fixed_count_discarded_at_random_uses_the_random_handler():
+    """Gwendlyn Di Corci discards one at random, Mind Twist discards X. Who
+    picks the cards is what separates the two handlers — nobody does, in both —
+    so the count is payload on the random handler rather than a third kind."""
+    assert _instructions(
+        "Target player discards a card at random.", "Gwendlyn Di Corci"
+    ) == [("discard_x_target_cards", {"amount": 1})]
+    assert _instructions(
+        "Target player discards two cards at random.", "Test"
+    ) == [("discard_x_target_cards", {"amount": 2})]
+
+
+def test_a_random_discard_from_a_seat_nobody_targeted_refuses():
+    """"That player" names the seat a firing event recorded, and only the
+    damage triggers record one. Under any other event the handler's target is a
+    seat nobody chose, so the wrong hand would be emptied."""
+    result = compile_line(
+        "Whenever this creature attacks, that player discards a card at random.",
+        card_name="Test",
+    )
 
     assert result.parsed and not result.lowered
-    assert "at random" in result.failure_reason
 
 
 def test_a_variable_discard_that_is_not_random_refuses():

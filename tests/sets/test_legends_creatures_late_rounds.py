@@ -1471,3 +1471,166 @@ def test_shimian_night_stalker_redirect_expires_with_the_turn(set_pool):
 
     assert p1.life == 16
     assert stalker.damage_marked == 0
+
+
+# ---------------------------------------------------------------------------
+# Round 27 — creature abilities
+# ---------------------------------------------------------------------------
+
+
+def _r27_land(name: str, type_line: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line},
+    )
+
+
+def _r27_attack_into(attacker: Permanent, defender_board: list[Permanent]):
+    """Attack with *attacker* alone; the defender's first permanent tries to
+    block it. Returns whether the declaration was legal."""
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=defender_board)
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()   # declare_blockers
+    return game.declare_blockers(1, {0: 0})
+
+
+def test_livonya_silone_is_unblockable_through_a_legendary_land(set_pool):
+    """"Legendary landwalk" — CR 702.14a's quality-first shape, where the
+    quality is a supertype rather than a land subtype welded into the word."""
+    blocker = Permanent(card=_vanilla("Blocker", 2, 2))
+    ok, msg = _r27_attack_into(
+        Permanent(card=set_pool("LEG")["Livonya Silone"]),
+        [blocker, Permanent(card=_r27_land("Karakas", "Legendary Land"))],
+    )
+
+    assert not ok, msg
+
+
+def test_livonya_silone_is_blockable_when_the_land_is_not_legendary(set_pool):
+    """The control. A land alone is not the quality the ability names, so the
+    restriction does not apply — a supertype dropped from the payload would
+    have made every land answer and every block illegal."""
+    blocker = Permanent(card=_vanilla("Blocker", 2, 2))
+    ok, msg = _r27_attack_into(
+        Permanent(card=set_pool("LEG")["Livonya Silone"]),
+        [blocker, Permanent(card=_r27_land("Wasteland", "Land"))],
+    )
+
+    assert ok, msg
+
+
+def test_livonya_silone_is_blockable_with_no_land_at_all(set_pool):
+    blocker = Permanent(card=_vanilla("Blocker", 2, 2))
+    ok, msg = _r27_attack_into(
+        Permanent(card=set_pool("LEG")["Livonya Silone"]), [blocker]
+    )
+
+    assert ok, msg
+
+
+def _r27_gwendlyn(set_pool, active_seat: int):
+    leg = set_pool("LEG")
+    gwendlyn = Permanent(card=leg["Gwendlyn Di Corci"])
+    p1 = PlayerState(name="P1", battlefield=[gwendlyn])
+    p2 = PlayerState(
+        name="P2",
+        hand=[leg["Livonya Silone"], leg["Hyperion Blacksmith"], leg["Time Elemental"]],
+    )
+    game = Game(players=[p1, p2])
+    game.start_turn(active_seat)
+    game._close_current_priority_step()
+    return game, p2
+
+
+def test_gwendlyn_di_corci_discards_one_card_at_random(set_pool):
+    """"Target player discards a card at random." The count is payload on the
+    random handler — the chooser is what picks the handler, and it is nobody
+    here exactly as it is for Mind Twist's X."""
+    game, victim = _r27_gwendlyn(set_pool, active_seat=0)
+
+    result = game.activate_permanent_ability(
+        0, "Gwendlyn Di Corci", target_player_index=1
+    )
+    game._settle()
+
+    assert result.supported
+    assert len(victim.hand) == 2
+
+
+def test_gwendlyn_di_corci_cannot_be_activated_on_an_opponents_turn(set_pool):
+    """"Activate only during your turn." (CR 602.5.) A restriction nothing
+    enforced would be an ability that works more often than the card allows,
+    which is the silent direction."""
+    game, victim = _r27_gwendlyn(set_pool, active_seat=1)
+
+    result = game.activate_permanent_ability(
+        0, "Gwendlyn Di Corci", target_player_index=1
+    )
+    game._settle()
+
+    assert not result.supported
+    assert len(victim.hand) == 3
+
+
+def _r27_blacksmith(set_pool):
+    leg = set_pool("LEG")
+    smith = Permanent(card=leg["Hyperion Blacksmith"])
+    mine = Permanent(card=leg["Alchor's Tomb"])
+    theirs = Permanent(card=leg["Knowledge Vault"])
+    theirs.tapped = True
+    p1 = PlayerState(name="P1", battlefield=[smith, mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    return game, smith, mine, theirs
+
+
+def test_hyperion_blacksmith_untaps_an_opponents_artifact(set_pool):
+    game, _smith, _mine, theirs = _r27_blacksmith(set_pool)
+
+    game.activate_permanent_ability(
+        0, "Hyperion Blacksmith", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert not theirs.tapped
+
+
+def test_hyperion_blacksmith_offers_only_the_opponents_artifacts(set_pool):
+    """"…an opponent controls" is a seat comparison, so the picker carries it
+    rather than the permanent matcher. A picker that offered the activator's own
+    own artifact would let them choose a target the effect then declines to
+    affect — and the resolution agrees, so naming it does nothing."""
+    game, smith, mine, _theirs = _r27_blacksmith(set_pool)
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    ability = compile_card_oracle(smith.card).activated_abilities[0]
+    spec = derive_activation_spec(ability)
+    offered = game._enumerate_targets(
+        0, smith.card, spec, for_cast=False,
+        ability_instruction=ability.instruction, ability_source=smith,
+    )
+
+    assert spec["opponent_only"] is True
+    assert [t["seat"] for t in offered] == [1]
+
+    game.activate_permanent_ability(
+        0, "Hyperion Blacksmith", target_player_index=0, target_permanent_index=1
+    )
+    game._settle()
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert not mine.tapped

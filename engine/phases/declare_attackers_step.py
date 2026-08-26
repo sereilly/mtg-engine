@@ -11,6 +11,7 @@ pass. Also holds the attack-legality query (``can_attack``),
 
 from ..auras import aura_restriction_active
 from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
+from ..combat_restrictions import participation_cap
 from ..subject_filters import subject_matches
 from ..events import emit
 from ..models import Permanent, PlayerState
@@ -91,6 +92,18 @@ class DeclareAttackersStepMixin:
             if target not in living_opponents_set:
                 return False, "that player has already left the game"
 
+        # "No more than two creatures can attack each combat." (Caverns of
+        # Despair.) CR 508.1c is a restriction on the *declaration*, not on any
+        # one creature, so it cannot live in `can_attack` — a per-creature
+        # predicate has no way to say "and no more of you". Read off the board
+        # rather than off the attacker, because the enchantment is a permanent
+        # nobody is attacking with.
+        attack_cap = participation_cap(self.all_permanents(), "attack")
+        if attack_cap is not None and len(unique_indices) > attack_cap:
+            return False, (
+                f"no more than {attack_cap} creature(s) can attack each combat"
+            )
+
         required_attackers: list[str] = []
         for idx, attacker in enumerate(controller.battlefield):
             if not self._is_creature(attacker) or attacker.tapped:
@@ -101,6 +114,14 @@ class DeclareAttackersStepMixin:
                 self.can_attack(attacker, opp) for opp in living_opponents
             ):
                 required_attackers.append(attacker.card.name)
+        # CR 508.1d: requirements are obeyed to the maximum **subject to** the
+        # restrictions. A declaration already sitting at the cap has obeyed as
+        # many "attacks each combat if able" requirements as it legally can, so
+        # a further one is not violated — Primordial Ooze under Caverns of
+        # Despair is exactly this, and enforcing the requirement anyway would
+        # make a legal declaration impossible.
+        if attack_cap is not None and len(unique_indices) >= attack_cap:
+            required_attackers = []
         if required_attackers:
             if len(required_attackers) == 1:
                 return False, f"{required_attackers[0]} must attack if able"

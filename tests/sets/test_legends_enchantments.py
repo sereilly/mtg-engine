@@ -1576,3 +1576,69 @@ def test_lands_edge_may_be_activated_by_the_other_player(set_pool, cards):
     assert [c.name for c in game.players[0].hand] == ["Mountain"], (
         "the activator's own hand pays the cost"
     )
+
+
+# ---------------------------------------------------------------------------
+# Round 27 — Caverns of Despair
+# ---------------------------------------------------------------------------
+
+
+def _r27_caverns_combat(set_pool, *, with_caverns: bool):
+    """Three attackers facing three potential blockers, with or without the
+    enchantment on the defender's side. Stops at declare_blockers."""
+    attackers = [Permanent(card=_creature(f"Attacker {i}", 1, 1)) for i in range(3)]
+    blockers = [Permanent(card=_creature(f"Blocker {i}", 1, 1)) for i in range(3)]
+    defender_board = list(blockers)
+    if with_caverns:
+        defender_board.append(Permanent(card=set_pool("LEG")["Caverns of Despair"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=attackers),
+        PlayerState(name="P2", battlefield=defender_board),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    return game
+
+
+def test_caverns_of_despair_caps_the_attack_at_two(set_pool):
+    """"No more than two creatures can attack each combat." A restriction on
+    the declaration as a whole, so it cannot live in the per-creature
+    `can_attack` predicate — three attackers is illegal, two is not."""
+    game = _r27_caverns_combat(set_pool, with_caverns=True)
+
+    ok, msg = game.declare_attackers(0, [0, 1, 2])
+    assert not ok
+    assert "attack each combat" in msg
+
+    ok, msg = game.declare_attackers(0, [0, 1])
+    assert ok, msg
+
+
+def test_caverns_of_despair_caps_the_block_at_two(set_pool):
+    """The blocking half, checked over the finished assignment for the same
+    reason menace is (CR 509.1c)."""
+    game = _r27_caverns_combat(set_pool, with_caverns=True)
+    ok, msg = game.declare_attackers(0, [0, 1])
+    assert ok, msg
+    game.advance_combat_phase()   # declare_blockers
+
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 0, 2: 1})
+    assert not ok
+    assert "block each combat" in msg
+
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 1})
+    assert ok, msg
+
+
+def test_three_attackers_and_blockers_are_legal_without_the_enchantment(set_pool):
+    """The control for both halves above: nothing else in this board caps
+    anything, so a cap that fired here would be one nobody printed."""
+    game = _r27_caverns_combat(set_pool, with_caverns=False)
+
+    ok, msg = game.declare_attackers(0, [0, 1, 2])
+    assert ok, msg
+    game.advance_combat_phase()   # declare_blockers
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 1, 2: 2})
+    assert ok, msg

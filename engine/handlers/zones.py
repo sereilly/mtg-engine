@@ -475,9 +475,22 @@ def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_libr
 
 @effect_handler("discard_x_target_cards")
 def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target player discards X cards at random." (Mind Twist.) "Target player
+    discards a card at random." (Gwendlyn Di Corci.)
+
+    One handler, because only the *number* differs and who picks the cards —
+    nobody, `random.sample` does — is what separates a discard handler from its
+    sibling. The count is therefore payload with the chosen X as its fallback,
+    rather than a second kind: a printed count baked into the kind name would
+    make every other printed number a new kind with a new handler, which is the
+    shape this codebase refuses everywhere else. The kind keeps its historical
+    name; the X in it is where the count *used* to live.
+    """
     target = context.target
-    x_value = context.x_value
-    x = max(0, x_value or 0)
+    amount = instruction.payload.get("amount")
+    if not isinstance(amount, int):
+        amount = context.x_value
+    x = max(0, amount or 0)
     actual = min(x, len(target.hand))
     indices = random.sample(range(len(target.hand)), actual)
     for i in sorted(indices, reverse=True):
