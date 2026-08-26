@@ -397,3 +397,39 @@ def gain_twice_artifact_damage_taken(game: Game, instruction: OracleInstruction,
     else:
         game.log.append(f"{context.card.name}: no artifact damage taken this turn")
     return True, "resolved"
+
+
+#: Whether *player* could pay *amount* life right now (CR 119.4). One reader,
+#: because the gate that decides whether "pay 4 life" is *offered* as an
+#: alternative and the handler that performs it have to agree — an alternative
+#: offered and then refused is a decision a player makes and does not get.
+def can_pay_life(player, amount: int) -> bool:
+    return player.life >= max(0, int(amount))
+
+
+@effect_handler("pay_life")
+def pay_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Pay 4 life." (Sylvan Library.) CR 119.4: the payment is a loss of that
+    much life.
+
+    Separate from ``target_loses_life`` for the reason ``ast.PayLife`` gives:
+    this is an act a player has to be able to perform, and
+    ``handlers/control_flow._action_is_takeable`` asks :func:`can_pay_life`
+    before offering it. Reaching here unable to pay means the offer was never
+    narrowed — so it is logged and nothing happens, rather than taking a
+    player below zero on a cost they could not have chosen.
+    """
+    player = context.caster
+    amount = max(0, int(instruction.payload.get("amount", 0)))
+    if not can_pay_life(player, amount):
+        game.log.append(
+            f"{context.card.name}: {player.name} cannot pay {amount} life"
+        )
+        return True, "resolved"
+    before = player.life
+    player.life -= amount
+    game.log.append(
+        f"{context.card.name}: {player.name} paid {amount} life "
+        f"({before} -> {player.life})"
+    )
+    return True, "resolved"

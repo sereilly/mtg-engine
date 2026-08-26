@@ -2057,6 +2057,81 @@ class PendingChoicesMixin:
         if not live or not self._resolve_put_from_hand_choice(choice, live[0]):
             self._resolve_put_from_hand_choice(choice, None)
 
+    # -- Cards picked out of a hand for a later step to act on ---------------
+
+    def arm_choose_cards_in_hand(self, player_index: int, payload: dict, context) -> None:
+        """Queue "choose N cards in your hand …" for *player_index*.
+
+        The whole payload travels rather than the candidate list, for the
+        reason ``arm_put_from_hand_choice`` gives: it is the *rule* the
+        candidates came from, and re-running it is what keeps the list offered
+        and the list an answer is checked against from being two lists.
+        """
+        self.arm_pending_choice(
+            "choose_cards_in_hand", player_index,
+            card_name=context.card.name,
+            count=int(payload.get("count", 1)),
+            _payload=dict(payload),
+            _context=context,
+        )
+
+    def live_choose_cards_in_hand(self, choice: PendingChoice) -> list[int]:
+        """The hand slots still eligible, from the engine's own rule."""
+        from ...handlers.zones import chosen_hand_card_candidates
+
+        return chosen_hand_card_candidates(
+            self, choice.data.get("_payload") or {}, self.players[choice.player_index]
+        )
+
+    def _how_many_cards_to_choose(self, choice: PendingChoice) -> int:
+        """How many the seat owes: the printed number, or every eligible card
+        when the hand holds fewer (CR 608.2, do as much as possible)."""
+        return min(int(choice.data.get("count", 1)), len(self.live_choose_cards_in_hand(choice)))
+
+    def confirm_choose_cards_in_hand(self, player_index: int, hand_indices) -> bool:
+        return self.resolve_pending_choice(
+            "choose_cards_in_hand", player_index, hand_indices=hand_indices
+        )
+
+    def _record_chosen_cards_in_hand(self, choice: PendingChoice, cards: list) -> None:
+        context = choice.data["_context"]
+        key = str((choice.data.get("_payload") or {}).get("result_key") or "chosen_hand_cards")
+        # The card objects, not their hand slots: the step that reads this
+        # record moves cards out of the hand, and an index stops naming the
+        # same card the moment one leaves.
+        context.results[key] = list(cards)
+        self.discard_pending_choice(choice)
+
+    def _resolve_choose_cards_in_hand(self, choice: PendingChoice, hand_indices) -> bool:
+        player = self.players[choice.player_index]
+        live = self.live_choose_cards_in_hand(choice)
+        wanted = self._how_many_cards_to_choose(choice)
+        picks = list(hand_indices or [])
+        if len(picks) != wanted or len(set(picks)) != len(picks):
+            return False
+        if any(index not in live for index in picks):
+            return False
+        cards = [player.hand[index] for index in picks]
+        self._record_chosen_cards_in_hand(choice, cards)
+        name = choice.data.get("card_name", "Effect")
+        self.log.append(
+            f"{player.name} chose {', '.join(c.name for c in cards) or 'no cards'} ({name})"
+        )
+        return True
+
+    def _default_choose_cards_in_hand(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** eligible cards in hand order.
+
+        Not a valuation — hand order is seed-deterministic, which is what AI
+        and headless play need, and it is the same policy every other pick out
+        of a hand in this file states. A seat that should choose cleverly needs
+        a weight in ``engine/ai_valuation.py``, not a branch here.
+        """
+        live = self.live_choose_cards_in_hand(choice)
+        wanted = self._how_many_cards_to_choose(choice)
+        if not self._resolve_choose_cards_in_hand(choice, live[:wanted]):
+            self._record_chosen_cards_in_hand(choice, [])
+
     # -- Kudzu's reattachment ------------------------------------------------
 
     def confirm_kudzu_reattach(self, player_index: int, land_index: int) -> bool:
@@ -3541,6 +3616,28 @@ register_choice(
 )
 
 register_choice(
+    "choose_cards_in_hand",
+    resolve=lambda game, choice, r: game._resolve_choose_cards_in_hand(
+        choice, r.get("hand_indices")
+    ),
+    default=lambda game, choice: game._default_choose_cards_in_hand(choice),
+    action="choose_cards_in_hand_confirm",
+    prompt_key="choose_cards_in_hand",
+    blocked_detail="choose the cards in your hand before other actions",
+    blocks_every_seat=True,
+    # The pick is what the next step of the same resolution repeats over, so
+    # that step must not run before the answer exists.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible, for ``put_from_hand_choice``'s
+    # reason: the candidates are cards in a hand (CR 400.2, a hidden zone), so
+    # rendering them to a seatless viewer would publish the hand.
+)
+
+register_choice(
     "kudzu_reattach",
     resolve=lambda game, choice, r: game._resolve_kudzu_reattach(choice, r["land_index"]),
     default=lambda game, choice: game._default_kudzu_reattach(choice),
@@ -3658,6 +3755,13 @@ register_choice(
     blocked_detail="choose a mode for the triggered ability before other actions",
     default_at_arm=True,
     spectator_visible=True,
+    # "**For each of those cards**, pay 4 life or put the card on top of your
+    # library." (Sylvan Library.) A choice reached inside a repetition, whose
+    # branch acts on the object the repetition is *currently* on — so the next
+    # iteration must not start before this answer is applied. Without it both
+    # iterations armed at once and both answers were applied against whichever
+    # card the loop had ended on.
+    suspends=True,
 )
 
 register_choice(

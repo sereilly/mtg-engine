@@ -2953,3 +2953,100 @@ def take_revealed_card_in_exchange(game: Game, instruction: OracleInstruction, c
         f"owns {card_name} (CR 407)"
     )
     return True, "resolved"
+
+
+def chosen_hand_card_candidates(game, payload: dict, player) -> list[int]:
+    """The hand slots "choose N cards in your hand …" may be answered with.
+
+    Public and singular for ``put_from_hand_candidates``' reason: the prompt
+    renderer shows the seat what it may pick and the resolver checks what came
+    back, and a list built twice is a list that can be offered wider than it is
+    checked.
+
+    Two narrowings, and they are asked of different things. The printed noun
+    phrase is a question about the *card* and goes through the shared card
+    matcher. "Drawn this turn" is not a question about the card at all —
+    nothing on its face answers it and ``_card_matches_filter`` has no player to
+    ask — so it is answered here, against the record every draw path already
+    feeds (``PlayerState.cards_drawn_this_turn``). By identity, never by name: a
+    second copy of a card drawn this turn is a different object and was not
+    drawn.
+    """
+    described = payload.get("card_filter") or {}
+    drawn_this_turn = bool(payload.get("drawn_this_turn"))
+    provenance = player.cards_drawn_this_turn if drawn_this_turn else ()
+    return [
+        index
+        for index, card in enumerate(player.hand)
+        if _card_matches_filter(card, described)
+        and (
+            not drawn_this_turn
+            or any(card is drawn for drawn in provenance)
+        )
+    ]
+
+
+@effect_handler("choose_cards_in_hand")
+def choose_cards_in_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose two cards in your hand drawn this turn." (Sylvan Library.)
+
+    Nothing moves: the pick is recorded under the key the lowering named, and
+    the sentence after it ("for each of those cards, …") is what acts on them.
+    The cards themselves are recorded rather than hand indices — a hand index
+    stops naming the same card the moment anything leaves the hand, which the
+    very next step does.
+
+    CR 608.2's "as much as possible": a hand holding fewer eligible cards than
+    the printed number chooses all of them rather than none.
+    """
+    payload = instruction.payload
+    player = context.caster
+    seat = game.players.index(player)
+    candidates = chosen_hand_card_candidates(game, payload, player)
+    result_key = str(payload.get("result_key") or "chosen_hand_cards")
+    if not candidates:
+        context.results[result_key] = []
+        game.log.append(
+            f"{context.card.name}: {player.name} has no card to choose"
+        )
+        return True, "resolved"
+    game.arm_choose_cards_in_hand(seat, payload, context)
+    return True, "resolved"
+
+
+@effect_handler("put_iterated_card_on_library")
+def put_iterated_card_on_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put the card on top of your library." (Sylvan Library.)
+
+    "The card" is the object the enclosing repetition is on, so this reads
+    ``context.iteration_target`` and refuses to guess without one: a sentence
+    naming a loop's object outside a loop names nothing, and picking some card
+    out of the hand instead would be a card doing something it never says.
+
+    Through ``Game.put_card_into_library`` rather than by moving the card
+    itself, because CR 903.9b's return to the command zone has no single fire
+    site and this is one more of them.
+    """
+    card = context.iteration_target
+    if card is None:
+        game.log.append(
+            f"{context.card.name}: no card for this step to move"
+        )
+        return True, "resolved"
+    player = context.caster
+    if not any(c is card for c in player.hand):
+        # It left the hand between the choice and this step. CR 608.2: do as
+        # much as possible, which here is nothing.
+        game.log.append(
+            f"{context.card.name}: {getattr(card, 'name', 'that card')} is no "
+            f"longer in {player.name}'s hand"
+        )
+        return True, "resolved"
+    player.hand = [c for c in player.hand if c is not card]
+    position = "bottom" if str(instruction.payload.get("position", "top")) == "bottom" else "top"
+    game.put_card_into_library(player, card, position)
+    game.log.append(
+        f"{context.card.name}: {player.name} put {card.name} on "
+        f"{'the bottom' if position == 'bottom' else 'top'} of their library"
+    )
+    return True, "resolved"

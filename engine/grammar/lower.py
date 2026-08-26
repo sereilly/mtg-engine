@@ -104,6 +104,10 @@ from .lowering import (
     _lower_for_each,
     _lower_repeat_process,
     _lower_for_each_destroyed,
+    _lower_for_each_chosen,
+    _lower_choose_cards_in_hand,
+    _lower_put_iterated_card_on_library,
+    _lower_pay_life,
     _lower_gain_control,
     _lower_gain_ability_text,
     _lower_gain_keyword,
@@ -254,6 +258,8 @@ def lower_statement(
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
         return _lower_lose_life(statement, event, produced)
+    if isinstance(statement, ast.PayLife):
+        return _lower_pay_life(statement)
     if isinstance(statement, ast.Destroy):
         return _lower_destroy(statement, dispatch_event, dispatch_subject)
     if isinstance(statement, ast.DoesntUntapNextStep):
@@ -369,6 +375,12 @@ def lower_statement(
 
     if isinstance(statement, ast.PutOnLibraryTop):
         return _lower_put_on_library_top(statement)
+
+    if isinstance(statement, ast.ChooseCardsInHand):
+        return _lower_choose_cards_in_hand(statement)
+
+    if isinstance(statement, ast.PutIteratedCardOnLibrary):
+        return _lower_put_iterated_card_on_library(statement)
 
     if isinstance(statement, ast.PutOnLibraryBottom):
         return _lower_put_on_library_bottom(statement)
@@ -600,6 +612,18 @@ def lower_statement(
         # `ast.WhereX`'s is — the lowering below only repeats it.
         if isinstance(statement.iterator, ast.DiedThisWay):
             return _lower_for_each_destroyed(
+                statement,
+                lower_statement(
+                    statement.effect, produced,
+                    event=event, event_subject=event_subject, whole_effect=False,
+                ),
+                produced,
+            )
+        # "For each of **those cards**" — the third iterator, and the same
+        # split: a set an earlier step of this effect chose, walked one at a
+        # time, and refused when nothing chose one.
+        if isinstance(statement.iterator, ast.ChosenThisWay):
+            return _lower_for_each_chosen(
                 statement,
                 lower_statement(
                     statement.effect, produced,

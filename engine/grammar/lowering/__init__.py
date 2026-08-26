@@ -154,6 +154,10 @@ from .tapping import (
     _lower_doesnt_untap_while_source_tapped,
 )
 from .cards import (
+    CHOSEN_HAND_CARDS_RESULT,
+    _lower_choose_cards_in_hand,
+    _lower_for_each_chosen,
+    _lower_put_iterated_card_on_library,
     _lower_discard,
     _fused_discard_then_draw,
     _fused_draw_then_discard,
@@ -222,6 +226,7 @@ from .game import (
     _lower_lose_game,
     _lower_win_game,
     _lower_lose_life,
+    _lower_pay_life,
 )
 
 __all__ = [
@@ -326,6 +331,10 @@ __all__ = [
     "_lower_exile",
     "_fused_exile_then_controller_life",
     "_DAMAGED_PLAYER_EVENTS",
+    "CHOSEN_HAND_CARDS_RESULT",
+    "_lower_choose_cards_in_hand",
+    "_lower_for_each_chosen",
+    "_lower_put_iterated_card_on_library",
     "_lower_discard",
     "_fused_discard_then_draw",
     "_fused_draw_then_discard",
@@ -389,5 +398,6 @@ __all__ = [
     "_lower_lose_game",
     "_lower_win_game",
     "_lower_lose_life",
+    "_lower_pay_life",
     "count_spec",
 ]

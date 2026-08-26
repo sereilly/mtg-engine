@@ -90,7 +90,7 @@ def test_every_admitted_cost_clause_is_charged(pool):
                             f"{card.name}: charged {charged.discard_filters} for "
                             f"{tuple(f.to_payload() for f in cost.filters)}"
                         )
-                if isinstance(cost, ast.PayLife):
+                if isinstance(cost, ast.PayLifeCost):
                     # Not "is life charged" but "is *this much* charged". The
                     # amount is printed, and a charger reading a smaller one is
                     # the same dropped-rider shape a narrowed sacrifice is —

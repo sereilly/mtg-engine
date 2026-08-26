@@ -585,3 +585,24 @@ def _parse_life_total_becomes(stream: TokenStream) -> ast.Statement | None:
         stream.reset(mark)
         return None
     return ast.SetLifeTotal(player, amount)
+
+
+def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
+    """``pay 4 life`` (Sylvan Library) — CR 119.4.
+
+    A bare imperative whose subject is the effect's controller, like the bare
+    draw and discard beside it. Refuses without consuming, so "pay {R}{R}" and
+    every other payment sentence keeps the reading it had.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("pay", "pays"):
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("life"):
+        stream.reset(mark)
+        return None
+    return ast.PayLife(player=ast.PlayerRef("you"), amount=amount)

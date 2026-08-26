@@ -545,3 +545,39 @@ class LookAtHand:
     content of the clause.
     """
     player: PlayerRef
+
+
+@dataclass(frozen=True)
+class ChooseCardsInHand:
+    """"choose two cards in your hand drawn this turn" (Sylvan Library).
+
+    A *pick*, not a move: the cards stay where they are and a later sentence
+    of the same effect is what does something to them ("for each of those
+    cards, …"). So the node carries only what was printed — how many, what
+    they have to be, and whether the phrase narrowed them by provenance.
+
+    ``drawn_this_turn`` is that provenance and rides here rather than on the
+    :class:`ObjectFilter`, because it is not a characteristic of a card at
+    all: nothing on the face answers it and no reader of a card in a zone can.
+    It is a fact about the *player's* turn, so it is answered where the player
+    is known — see ``handlers/cards.chosen_hand_card_candidates``, the one rule
+    the picker and the resolver both ask.
+    """
+    count: Amount
+    filter: ObjectFilter
+    drawn_this_turn: bool = False
+
+
+@dataclass(frozen=True)
+class PutIteratedCardOnLibrary:
+    """"put the card on top of your library" (Sylvan Library).
+
+    "The card" is the one the enclosing "for each of those cards" is on, which
+    is why this is its own node rather than a :class:`PutOnLibraryTop` with an
+    unusual target: that node moves a *permanent* off the battlefield, and this
+    moves a card that has been in a hand the whole time.
+
+    ``position`` is payload for the reason every printed word is: a card
+    printing "on the bottom" is the same production.
+    """
+    position: str = "top"

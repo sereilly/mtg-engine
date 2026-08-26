@@ -384,6 +384,26 @@ def _action_put_from_hand_confirm(session, req, seat_type):
     if not session.game.confirm_put_from_hand_choice(req.seat, hand_index):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
+@action_handler("choose_cards_in_hand_confirm")
+def _action_choose_cards_in_hand_confirm(session, req, seat_type):
+    # Sylvan Library: the seat picks which of its eligible cards the next step
+    # acts on. The engine re-checks the picks against the same candidate rule
+    # the prompt was drawn from, so a client sending a whole hand cannot widen
+    # the choice — and it refuses a short answer, because the sentence names a
+    # number and a partial pick is not one of its outcomes.
+    pending = next(
+        (c for c in session.game.pending_choices_of("choose_cards_in_hand")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no hand choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.hand_indices is None:
+        raise HTTPException(status_code=400, detail="hand_indices is required")
+    if not session.game.confirm_choose_cards_in_hand(req.seat, req.hand_indices):
+        raise HTTPException(status_code=400, detail="invalid card choice")
+
+
 @action_handler("face_down_cast_confirm")
 def _action_face_down_cast_confirm(session, req, seat_type):
     # Illusionary Mask: the controller picks a hand creature to cast face down,

@@ -552,6 +552,16 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
     # one player and the ante comes off that player's own library (CR 407.4).
     if instruction.kind == "ante_top_card":
         return bool(player.library)
+    # "**Pay 4 life** or put the card on top of your library." (Sylvan
+    # Library.) CR 119.4: a player may pay life only with a life total at least
+    # the amount, so at 3 life the payment is not one of the two things this
+    # sentence lets its controller choose between. Asked through the handler's
+    # own predicate, so the alternative that is offered and the alternative
+    # that is performed are decided by one rule.
+    if instruction.kind == "pay_life":
+        from .life_and_game import can_pay_life
+
+        return can_pay_life(player, int(instruction.payload.get("amount", 0)))
     return True
 
 
@@ -625,8 +635,19 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     """
     actor = instruction.payload.get("actor", "you")
     seats = _offered_seats(game, actor, context)
-    for player_index in seats:
-        _offer_to_seat(game, instruction, context, player_index, rebind=actor in _EACH_ACTORS)
+
+    def offer(player_index: int) -> None:
+        _offer_to_seat(
+            game, instruction, context, player_index, rebind=actor in _EACH_ACTORS
+        )
+
+    # Through ``run_resumable`` like every other loop in this file, and for the
+    # reason ``engine/resumption.py`` states: the offer suspends on an
+    # interactive seat's answer, and a bare ``for`` here would lose every seat
+    # behind the one that stopped ("each player may ante the top card of their
+    # library" — Rebirth). The loop is the last thing this handler does, which
+    # is the other half of that rule.
+    run_resumable(game, seats, offer)
     return True, "resolved"
 
 
@@ -826,6 +847,27 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
     modes = tuple(instruction.payload.get("modes") or ())
     if not modes:
         return True, "resolved"
+    # CR 601.2b/119.4: a player chooses among the alternatives they are *able*
+    # to take. The same predicate ``may``'s offer narrows through, asked here
+    # too — a bare ``choose_one`` reached mid-resolution had no narrowing at
+    # all, so "pay 4 life or …" was offered to a player at 2 life as a mode
+    # they could pick and then not perform. One table, both readers.
+    #
+    # A narrowing that removes *every* mode leaves nothing to choose, and the
+    # step is over: that is CR 608.2's "as much as possible" and not a prompt
+    # with an empty list.
+    takeable = tuple(
+        mode for mode in modes
+        if _action_is_takeable(
+            game, context.caster, mode["instruction"], context.source_permanent
+        )
+    )
+    if not takeable:
+        game.log.append(
+            f"{context.card.name}: no alternative can be taken"
+        )
+        return True, "resolved"
+    modes = takeable
     player_index = game.players.index(context.caster)
     game.arm_pending_choice(
         "mode_choice", player_index,

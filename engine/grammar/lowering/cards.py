@@ -323,3 +323,110 @@ def _lower_scry(node: ast.Scry) -> tuple[OracleInstruction, ...]:
     library, so the handler reads ``context.caster``.
     """
     return (OracleInstruction("scry", "", {"amount": _amount_payload(node.count)}),)
+
+
+#: The scratchpad key "choose N cards in your hand" writes and "for each of
+#: those cards" reads. One name, declared once, so the two halves of the
+#: sentence cannot be wired to different keys — the same discipline
+#: ``destroyed_this_way_objects`` follows in ``lowering/board.py``.
+CHOSEN_HAND_CARDS_RESULT = "chosen_hand_cards"
+
+
+def _lower_choose_cards_in_hand(
+    node: ast.ChooseCardsInHand,
+) -> tuple[OracleInstruction, ...]:
+    """"Choose two cards in your hand drawn this turn." (Sylvan Library.)
+
+    The pick alone: nothing moves, and the cards are recorded for the sentence
+    after this one to repeat over.
+
+    ``zone`` and ``zone_owner`` are honoured **by construction** rather than
+    carried in the payload — this instruction reads one hand and it is the
+    hand of the seat making the choice — so they are named here as carried and
+    everything else in the phrase has to survive ``card_only_filter``. A
+    narrowing that cannot be tested refuses the line, because a prompt offering
+    a wider set than the card prints is a card that reports supported and
+    cheats.
+    """
+    from ...subject_filters import card_only_filter
+    from ._common import _restrictions_beyond, _PAYLOAD_HONOURED_FILTER_FIELDS
+
+    filt = node.filter
+    if filt.zone_owner is None or filt.zone_owner.kind != "you":
+        raise LoweringError("the hand pick reads your own hand", node=node)
+    leftover = _restrictions_beyond(
+        filt,
+        _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card", "zone", "zone_owner"},
+    )
+    if leftover:
+        raise LoweringError(
+            f"the hand pick does not honour {leftover[0]!r}", node=node
+        )
+    payload_filter = filt.to_payload()
+    payload_filter.pop("zone", None)
+    payload_filter.pop("zone_owner", None)
+    described = card_only_filter(payload_filter)
+    if described is None:
+        raise LoweringError("no hand pick can test this narrowing", node=node)
+    count = _amount_payload(node.count)
+    if not isinstance(count, int) or count < 1:
+        raise LoweringError("the hand pick chooses a printed number", node=node)
+    return (
+        OracleInstruction(
+            "choose_cards_in_hand", "",
+            {
+                "count": count,
+                "card_filter": described,
+                # The provenance the phrase printed. Its own key rather than a
+                # filter entry, because no reader of a *card* can answer it —
+                # see ``ast.ChooseCardsInHand``.
+                "drawn_this_turn": bool(node.drawn_this_turn),
+                "result_key": CHOSEN_HAND_CARDS_RESULT,
+            },
+        ),
+    )
+
+
+def _lower_put_iterated_card_on_library(
+    node: ast.PutIteratedCardOnLibrary,
+) -> tuple[OracleInstruction, ...]:
+    """"Put the card on top of your library." (Sylvan Library.)
+
+    "The card" is the one the enclosing repetition is on, so this lowers to an
+    instruction that reads ``context.iteration_target`` and nothing else. Its
+    refusal outside a loop is the handler's, not this lowering's: a sentence
+    can name the loop's object several steps in (inside an alternative, inside
+    a conditional), and a lowering that tried to prove the loop exists from
+    here would have to re-derive the whole enclosing statement.
+    """
+    return (
+        OracleInstruction(
+            "put_iterated_card_on_library", "", {"position": node.position}
+        ),
+    )
+
+
+def _lower_for_each_chosen(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each of those cards,** <effect>." (Sylvan Library.)
+
+    The sibling of ``_lower_for_each_destroyed``, and refused the same way: a
+    back-reference with no earlier step that made a choice names nothing, and
+    an empty loop is a sentence that reports supported and does not run.
+    """
+    if CHOSEN_HAND_CARDS_RESULT not in produced:
+        raise LoweringError(
+            "'those cards' with no earlier step in this effect that chose any",
+            node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-card loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {"iterator": {"produced_by": CHOSEN_HAND_CARDS_RESULT}, "effect": inner},
+        ),
+    )

@@ -73,6 +73,7 @@ ActionKind = Literal[
     "kudzu_reattach_confirm",
     "face_down_cast_confirm",
     "put_from_hand_confirm",
+    "choose_cards_in_hand_confirm",
     "time_vault_skip",
     "time_vault_decline",
     "island_sanctuary_skip",
@@ -286,6 +287,10 @@ class GameActionRequest(BaseModel):
     emblem_index: int | None = Field(default=None, ge=0)
     x_value: int | None = Field(default=None, ge=0)
     hand_index: int | None = Field(default=None, ge=0)
+    # "Choose two cards in your hand drawn this turn" (Sylvan Library): the
+    # whole answer at once, because the prompt owes a *set* and a card at a
+    # time would leave a half-made choice the engine has no state for.
+    hand_indices: list[int] | None = None
     mana_color: Literal["W", "U", "B", "R", "G", "C"] | None = None
     # Text-change spells (Magical Hack / Sleight of Mind): the "from" word to
     # replace. `mana_color` carries the "to" word. Both are color symbols (a basic

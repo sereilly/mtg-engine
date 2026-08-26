@@ -181,7 +181,7 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             if not stream.accept_word("life"):
                 stream.reset(mark)
                 raise stream.error("unrecognized activation cost")
-            costs.append(ast.PayLife(amount))
+            costs.append(ast.PayLifeCost(amount))
             stream.accept_punct(",")
             continue
         if stream.at_word("tap"):

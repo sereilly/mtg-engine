@@ -167,7 +167,9 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     )
 
 
-def _parse_leading_for_each(stream: TokenStream) -> ast.DiedThisWay | None:
+def _parse_leading_for_each(
+    stream: TokenStream,
+) -> "ast.DiedThisWay | ast.ChosenThisWay | None":
     """``For each <objects> that died this way,`` — the set a later clause
     repeats over, in the leading printed position.
 
@@ -184,6 +186,15 @@ def _parse_leading_for_each(stream: TokenStream) -> ast.DiedThisWay | None:
     mark = stream.mark()
     if not stream.accept_phrase("for", "each"):
         return None
+    # "For each of **those cards**, …" (Sylvan Library) — the set an earlier
+    # sentence of this same effect chose. Read before the noun phrase, because
+    # "those cards" is a back-reference and not a filter: read as one it would
+    # name every card in every hand.
+    if stream.accept_phrase("of", "those", "cards"):
+        if not stream.accept_punct(","):
+            stream.reset(mark)
+            return None
+        return ast.ChosenThisWay()
     try:
         filt = parse_object_filter(stream)
     except GrammarError:
@@ -288,7 +299,12 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # own "for each" would be one production per effect that can carry one.
     per_death = _parse_leading_for_each(stream)
     if per_death is not None:
-        return ast.ForEach(per_death, parse_statement(stream, top_level=False))
+        # The repeated act may be printed as a choice of two ("pay 4 life **or**
+        # put the card on top of your library"), so it is read through the same
+        # alternatives reader "you may …" uses. One reader, so a statement-level
+        # "or" means one thing wherever the pool prints it — and neither
+        # position can quietly take the first half and drop the rest.
+        return ast.ForEach(per_death, _parse_optional_action(stream))
     # "Each player shuffles the cards from their hand into their library, then
     # draws that many cards." (Winds of Change.) Same position and the same
     # reason: the subject-verb reader below has no "shuffles", and the sentence

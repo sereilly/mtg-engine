@@ -759,6 +759,29 @@ def _put_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("choose_cards_in_hand")
+def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
+    """Sylvan Library: which cards in this seat's hand the next step acts on.
+
+    The candidates come from the engine's own rule, so the list offered and the
+    list an answer is checked against are one rule rather than two copies.
+    ``count`` is what the seat owes — the printed number, or fewer when the
+    hand holds fewer eligible cards (CR 608.2) — so a board cannot enable a
+    Confirm on a pick the engine will refuse.
+    """
+    choice = choices[0]
+    owner = ctx.game.players[choice.player_index]
+    live = ctx.game.live_choose_cards_in_hand(choice)
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "count": ctx.game._how_many_cards_to_choose(choice),
+        "choices": [
+            {"hand_index": index, "name": owner.hand[index].name} for index in live
+        ],
+    }
+
+
 @prompt_renderer("word_of_command")
 def _word_of_command(ctx: PromptContext, choices: list) -> dict:
     target = ctx.game.players[choices[0].data["target_index"]]

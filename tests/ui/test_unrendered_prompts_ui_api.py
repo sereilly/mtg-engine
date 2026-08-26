@@ -309,3 +309,76 @@ def test_name_then_reveal_top_round_trip(set_pool):
     assert [c.name for c in p2.hand] == ["Shock"]
     assert p2.graveyard == []
     assert _state(sid, seat=1)["name_then_reveal_top"] is None
+
+
+# --- choose_cards_in_hand: Sylvan Library (round 34) ------------------------
+
+def test_choose_cards_in_hand_round_trip(set_pool):
+    """The whole of Sylvan Library over the wire: the offer, the hand pick the
+    browser renders as a toggle list, and one mode per chosen card.
+
+    The pick is what the round-trip is for — it is the one prompt this round
+    added, and it is answered with a *set* in a single action.
+    """
+    pool = set_pool("LEG")
+    lea = set_pool("LEA")
+    sid, session, game = _session()
+    p1 = game.players[0]
+    p1.library = [lea[name] for name in ("Forest", "Mountain", "Island", "Swamp")]
+    p1.hand = []
+    p1.life = 20
+    library = Permanent(card=pool["Sylvan Library"])
+    p1.battlefield.append(library)
+
+    game.turn = 3
+    game.resolve_draw_step(0)
+    assert _act(sid, seat=0, action="resolve_optional_pay",
+                card_name="Sylvan Library", accept=True).status_code == 200
+
+    prompt = _state(sid, 0)["choose_cards_in_hand"]
+    assert prompt["count"] == 2
+    assert [c["name"] for c in prompt["choices"]] == ["Forest", "Mountain", "Island"]
+
+    assert _act(sid, seat=0, action="choose_cards_in_hand_confirm",
+                hand_indices=[1, 2]).status_code == 200
+    # The prompt is answered and the ability has moved on to its per-card
+    # decision — the shape the client's dispatch relies on.
+    assert _state(sid, 0).get("choose_cards_in_hand") is None
+    assert [m["label"] for m in _state(sid, 0)["mode_choice"]["modes"]] == [
+        "pay 4 life", "put the card on top of your library",
+    ]
+
+    for _ in range(2):
+        assert _act(sid, seat=0, action="mode_choice_confirm",
+                    hand_index=0).status_code == 200
+
+    assert p1.life == 12
+    assert [c.name for c in p1.hand] == ["Forest", "Mountain", "Island"]
+
+
+def test_choose_cards_in_hand_refuses_a_pick_it_never_offered(set_pool):
+    """A client sending a hand slot outside the candidate rule is refused, not
+    obeyed: the list offered and the list an answer is checked against are one
+    rule, so a wider answer has nowhere to land."""
+    pool = set_pool("LEG")
+    lea = set_pool("LEA")
+    sid, session, game = _session()
+    p1 = game.players[0]
+    p1.library = [lea[name] for name in ("Forest", "Mountain", "Island", "Swamp")]
+    # A card that was in hand before the turn began: eligible by type, and
+    # ineligible because the phrase says "drawn this turn".
+    p1.hand = [lea["Black Lotus"]]
+    p1.battlefield.append(Permanent(card=pool["Sylvan Library"]))
+
+    game.turn = 3
+    game.resolve_draw_step(0)
+    _act(sid, seat=0, action="resolve_optional_pay",
+         card_name="Sylvan Library", accept=True)
+
+    prompt = _state(sid, 0)["choose_cards_in_hand"]
+    assert 0 not in [c["hand_index"] for c in prompt["choices"]], "not drawn this turn"
+
+    refused = _act(sid, seat=0, action="choose_cards_in_hand_confirm",
+                   hand_indices=[0, 1])
+    assert refused.status_code == 400
+    assert _state(sid, 0)["choose_cards_in_hand"] is not None, "still owed"

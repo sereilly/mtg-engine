@@ -159,6 +159,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # game has, and this one is inert outside the ante variant.
     "ante_top_card": "ante",
     "target_loses_life": "life",
+    # "Pay 4 life." (Sylvan Library.) CR 119.4 makes paying life a loss of
+    # that life, so the family is the same one; what it is not is the same
+    # *kind* — see ``lowering/game._lower_pay_life``.
+    "pay_life": "life",
     "destroy_target_permanent": "destruction",
     "destroy_all_artifacts": "destruction",
     "destroy_all_creatures": "destruction",
@@ -305,6 +309,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "opponents_who_could_not_discard_lose_life": "life",
     "discard_hand": "zones",
     "put_target_on_library_top": "zones",
+    # "Choose two cards in your hand drawn this turn." (Sylvan Library.) A
+    # pick out of a hidden zone that moves nothing; the sentence after it is
+    # what moves anything.
+    "choose_cards_in_hand": "zones",
+    "put_iterated_card_on_library": "zones",
     "put_graveyard_card_on_library_bottom": "zones",
     # Unsubstantiate: a spell unstacked to its owner's hand, or a creature bounced.
     "return_spell_or_creature_to_hand": "zones",
@@ -511,6 +520,11 @@ _PRODUCES: dict[str, str] = {
     # the number exists — the hand the step was handed is not the hand the
     # player chose from.
     "discard_controller_cards": "discarded_count",
+    # "Choose two cards in your hand … **For each of those cards**, …"
+    # (Sylvan Library.) The pick records what it chose, which is the only
+    # place the next sentence can read that set from: nothing about a hand
+    # says which of its cards an earlier step named.
+    "choose_cards_in_hand": "chosen_hand_cards",
     # "Remove any number of +1/+1 counters … create **that many** … tokens"
     # (Tetravus). The removal records how many it took, under the key the token
     # maker's "that many" already reads.

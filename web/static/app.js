@@ -1104,7 +1104,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2440,6 +2440,17 @@ function getFaceDownCastInfo(state = currentState) {
   return info;
 }
 
+// Sylvan Library: the seat picks which of its eligible hand cards the next step
+// acts on. A *set*, so the prompt is a toggle list with one Confirm — the engine
+// refuses a short answer, and a card-at-a-time flow would leave a half-made
+// choice it has no state for.
+function getChooseCardsInHandInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.choose_cards_in_hand;
+  if (!info || !Array.isArray(info.choices) || info.choices.length === 0) return null;
+  return info;
+}
+
 // Eureka: the offered seat picks a card in its hand to put onto the battlefield.
 function getPutFromHandInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -3059,6 +3070,7 @@ function isAnyPromptActive(state = currentState) {
   if (getKudzuReattachInfo(state)) return true;
   if (getFaceDownCastInfo(state)) return true;
   if (getPutFromHandInfo(state)) return true;
+  if (getChooseCardsInHandInfo(state)) return true;
   if (getTimeVaultInfo(state)) return true;
   if (getWordOfCommandInfo(state)) return true;
   if (getRagingRiverInfo(state)) return true;
@@ -3076,7 +3088,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -4884,6 +4896,67 @@ function applyFaceDownCastPrompt(info) {
 // battlefield", repeated until a whole round declines. One panel per offer; the
 // Decline button is drawn only when the sentence said "may", because the engine
 // refuses a decline a mandatory pick never offered.
+let chooseCardsInHandSelected = [];
+
+// Sylvan Library: "choose two cards in your hand drawn this turn". The hand
+// slots offered come from the engine's own candidate rule, and Confirm is
+// enabled only at exactly the number owed — the engine refuses anything else,
+// so a board that let the seat send it would only produce a 400.
+function applyChooseCardsInHandPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const offered = new Set(info.choices.map((c) => c.hand_index));
+  chooseCardsInHandSelected = chooseCardsInHandSelected.filter((i) => offered.has(i));
+  const wanted = Number(info.count) || 0;
+
+  title.textContent = `${info.card_name} — choose cards in your hand`;
+  body.textContent = `Choose ${wanted} card${wanted === 1 ? "" : "s"} in your hand.`;
+  const buttons = info.choices
+    .map(
+      (c) =>
+        `<button type="button" class="prompt-choice-btn` +
+        `${chooseCardsInHandSelected.includes(c.hand_index) ? " selected" : ""}"` +
+        ` data-cch-hand="${c.hand_index}">${escapeHtml(c.name)}</button>`
+    )
+    .join("");
+  const ready = chooseCardsInHandSelected.length === wanted;
+  steps.innerHTML =
+    `<div class="prompt-choice-column">${buttons}</div>` +
+    `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn"` +
+    `${ready ? "" : " disabled"} data-cch-confirm="1">` +
+    `Confirm (${chooseCardsInHandSelected.length}/${wanted})</button></div>`;
+
+  steps.querySelectorAll("[data-cch-hand]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const index = Number(btn.dataset.cchHand);
+      chooseCardsInHandSelected = chooseCardsInHandSelected.includes(index)
+        ? chooseCardsInHandSelected.filter((i) => i !== index)
+        : [...chooseCardsInHandSelected, index];
+      applyChooseCardsInHandPrompt(info);
+    });
+  });
+  steps.querySelector("[data-cch-confirm]")?.addEventListener("click", async () => {
+    if (chooseCardsInHandSelected.length !== wanted) return;
+    const picks = [...chooseCardsInHandSelected];
+    chooseCardsInHandSelected = [];
+    await sendAction({ seat, action: "choose_cards_in_hand_confirm", hand_indices: picks });
+  });
+}
+
 function applyPutFromHandPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -6640,6 +6713,12 @@ function renderActivationPrompt() {
   const putFromHandInfo = getPutFromHandInfo();
   if (putFromHandInfo) {
     applyPutFromHandPrompt(putFromHandInfo);
+    return;
+  }
+
+  const chooseCardsInHandInfo = getChooseCardsInHandInfo();
+  if (chooseCardsInHandInfo) {
+    applyChooseCardsInHandPrompt(chooseCardsInHandInfo);
     return;
   }
 

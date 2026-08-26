@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from .conditions import Condition
-from .conditions import DiedThisTurn, DiedThisWay
+from .conditions import ChosenThisWay, DiedThisTurn, DiedThisWay
 from ._core import (
     Cost,
     Duration,
@@ -96,7 +96,9 @@ from .cards import (
     RevealHandAndChoose,
     ExileTopOfLibrary,
     PutExiledWithSource,
+    ChooseCardsInHand,
     LookAtHand,
+    PutIteratedCardOnLibrary,
     LookAtLibraryTop,
     LookTopPickToHand,
     Mill,
@@ -144,6 +146,7 @@ from .game import (
     GainLife,
     LoseGame,
     LoseLife,
+    PayLife,
     SetLifeTotal,
     WinGame,
 )
@@ -152,7 +155,7 @@ from .game import (
 Effect = Union[
     DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
-    GainLife, LoseLife, SetLifeTotal, Ante, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
+    GainLife, LoseLife, PayLife, SetLifeTotal, Ante, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary, Exile,
     ExileUntilLeavesOrUntaps, Tap, Untap,
     TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
@@ -160,6 +163,7 @@ Effect = Union[
     Regenerate, ChooseTarget, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     RevealTop, RevealUntil, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
+    ChooseCardsInHand, PutIteratedCardOnLibrary,
     ExileGraveyardUntilLeaves, CastFromExiledWith,
     PhaseOut,
     AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
@@ -288,7 +292,7 @@ class ForEach:
     plain filter "creature" would count the creatures still on the battlefield
     — a different number, and one that moves in the opposite direction.
     """
-    iterator: ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
+    iterator: ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay | ChosenThisWay
     effect: "Statement"
 
 

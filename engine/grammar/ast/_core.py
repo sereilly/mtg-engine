@@ -808,7 +808,16 @@ class TapPermanentsCost:
 
 
 @dataclass(frozen=True)
-class PayLife:
+class PayLifeCost:
+    """``Pay 4 life`` in front of a colon — an activation cost (CR 119.4).
+
+    Named for its siblings ``SacrificeCost``, ``DiscardCost`` and
+    ``RemoveCounterCost`` rather than for the words it reads. It used to be
+    the bare ``PayLife``, which is also what the *effect* "pay 4 life" reads
+    to (``ast/game.py``) — one name for a cost and for a statement, in an AST
+    whose two unions are told apart by type.
+    """
+
     amount: Amount = field(default_factory=lambda: Fixed(1))
 
 
@@ -824,7 +833,7 @@ class RemoveCounterCost:
 
 
 Cost = Union[
-    ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLife, ExileSelf, RemoveCounterCost
+    ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLifeCost, ExileSelf, RemoveCounterCost
 ]
 
 

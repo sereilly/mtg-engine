@@ -221,3 +221,19 @@ class DrawGame:
     for everyone. Its own node rather than a ``WinGame`` with a flag, because
     104.4 is a third outcome and not a win with an asterisk.
     """
+
+
+@dataclass(frozen=True)
+class PayLife:
+    """"pay 4 life" (Sylvan Library) — CR 119.4.
+
+    Not a :class:`LoseLife` with a different verb. Paying is something a player
+    must be *able* to do (CR 119.4: only with a life total at least the amount),
+    so it is an act that can be unofferable — which is exactly the question
+    ``handlers/control_flow._action_is_takeable`` asks of every alternative
+    before it is offered. A loss is never refused and never chosen; a payment is
+    both. Folding them together would put "pay 4 life" in front of a player at
+    2 life as a mode they could pick.
+    """
+    player: PlayerRef
+    amount: Amount

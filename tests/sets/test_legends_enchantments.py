@@ -2007,3 +2007,171 @@ def test_puppet_master_buys_itself_back_for_three_blue(set_pool):
 
         assert len(game.players[0].hand) == expected_hand
         assert game.players[0].mana_pool["U"] == expected_pool
+
+
+# -- Sylvan Library (round 34) ------------------------------------------------
+
+
+def _r34_sylvan_library(set_pool, *, life: int = 20, interactive: bool = True):
+    """Sylvan Library on the battlefield, with a stocked library to draw from.
+
+    ``turn`` is past 1 so CR 103.8a's skipped first draw step does not swallow
+    the trigger, and the seat is interactive so the offer queues rather than
+    taking its default where it stands.
+    """
+    pool = set_pool("LEG")
+    lea = set_pool("LEA")
+    deck = [lea[name] for name in (
+        "Forest", "Mountain", "Island", "Swamp", "Plains", "Black Lotus",
+    )]
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=pool["Sylvan Library"])],
+        library=list(deck),
+        life=life,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", library=list(deck))])
+    game.enforce_mana_costs = False
+    game.turn = 3
+    game.interactive_seats = {0} if interactive else set()
+    return game, p1
+
+
+def test_sylvan_library_draws_two_more_and_then_asks_which_two_to_settle(set_pool):
+    """"At the beginning of your draw step, you may draw two additional cards.
+    If you do, choose two cards in your hand drawn this turn."
+
+    The draw-step draw plus the two extras are all "drawn this turn", so all
+    three are offered — the provenance narrows the hand, not the extras.
+    """
+    game, p1 = _r34_sylvan_library(set_pool)
+
+    game.resolve_draw_step(0)
+    assert [c.name for c in p1.hand] == ["Forest"], "the turn-based draw alone"
+
+    assert game.confirm_optional_pay(0, "Sylvan Library", accept=True)
+
+    assert [c.name for c in p1.hand] == ["Forest", "Mountain", "Island"]
+    choice = game.pending_choice_of("choose_cards_in_hand")
+    assert choice is not None
+    assert game.live_choose_cards_in_hand(choice) == [0, 1, 2]
+
+
+def test_sylvan_library_declined_draws_nothing_and_asks_nothing(set_pool):
+    """The offer is the gate on the whole rest of the ability: with no extra
+    draw there is nothing to choose and nothing to pay for."""
+    game, p1 = _r34_sylvan_library(set_pool)
+
+    game.resolve_draw_step(0)
+    assert game.confirm_optional_pay(0, "Sylvan Library", accept=False)
+
+    assert [c.name for c in p1.hand] == ["Forest"]
+    assert game.pending_choices == []
+    assert p1.life == 20
+
+
+def _r34_settle(game, picks, modes):
+    """Answer the whole ability: take the offer, choose *picks*, then answer one
+    mode per chosen card."""
+    game.confirm_optional_pay(0, "Sylvan Library", accept=True)
+    assert game.confirm_choose_cards_in_hand(0, picks)
+    for mode in modes:
+        assert game.resolve_pending_choice(
+            "mode_choice", 0, mode_index=mode, target=None
+        )
+
+
+def test_sylvan_library_pays_four_life_per_card_kept(set_pool):
+    """"For each of those cards, pay 4 life or put the card on top of your
+    library." Keeping both costs 8 life and the hand keeps all three cards."""
+    game, p1 = _r34_sylvan_library(set_pool)
+    game.resolve_draw_step(0)
+
+    _r34_settle(game, [1, 2], [0, 0])
+
+    assert p1.life == 12
+    assert [c.name for c in p1.hand] == ["Forest", "Mountain", "Island"]
+    assert game.pending_choices == []
+
+
+def test_sylvan_library_puts_the_unpaid_cards_back_on_top(set_pool):
+    """The other alternative, and the order it leaves the library in: each card
+    goes on *top* as its own iteration runs, so the last one settled is the
+    next one drawn."""
+    game, p1 = _r34_sylvan_library(set_pool)
+    game.resolve_draw_step(0)
+
+    _r34_settle(game, [1, 2], [1, 1])
+
+    assert p1.life == 20
+    assert [c.name for c in p1.hand] == ["Forest"]
+    assert [c.name for c in p1.library[:2]] == ["Island", "Mountain"]
+
+
+def test_sylvan_library_settles_each_chosen_card_on_its_own(set_pool):
+    """One decision per card, not one for the pair: paying for the first and
+    putting the second back leaves the hand and the life total each showing
+    exactly one of the two answers."""
+    game, p1 = _r34_sylvan_library(set_pool)
+    game.resolve_draw_step(0)
+
+    _r34_settle(game, [1, 2], [0, 1])
+
+    assert p1.life == 16
+    assert [c.name for c in p1.hand] == ["Forest", "Mountain"]
+    assert [c.name for c in p1.library[:1]] == ["Island"]
+
+
+def test_sylvan_library_reads_this_turn_afresh_on_the_second_trigger(set_pool):
+    """Two draw steps in a row. The second one's choice is offered over the
+    cards *that* turn drew — a record accumulated across turns would offer the
+    first turn's cards again, and settle them a second time."""
+    game, p1 = _r34_sylvan_library(set_pool)
+    game.players[0].library = game.players[0].library * 3
+
+    game.resolve_draw_step(0)
+    _r34_settle(game, [1, 2], [0, 0])
+    assert p1.life == 12
+    first_turn_hand = [c.name for c in p1.hand]
+
+    game.begin_turn_bookkeeping(0)
+    game.resolve_draw_step(0)
+    game.confirm_optional_pay(0, "Sylvan Library", accept=True)
+    choice = game.pending_choice_of("choose_cards_in_hand")
+
+    offered = [p1.hand[i].name for i in game.live_choose_cards_in_hand(choice)]
+    assert len(offered) == 3, "only this turn's three draws"
+    assert offered == [c.name for c in p1.hand[len(first_turn_hand):]]
+
+
+def test_sylvan_library_never_offers_a_life_payment_a_seat_cannot_make(set_pool):
+    """CR 119.4: a player may pay 4 life only at 4 or more. At 3 the alternative
+    is not one of the two the sentence lets its controller choose between, so
+    the card goes back and the life total is untouched."""
+    game, p1 = _r34_sylvan_library(set_pool, life=3)
+    game.resolve_draw_step(0)
+
+    game.confirm_optional_pay(0, "Sylvan Library", accept=True)
+    assert game.confirm_choose_cards_in_hand(0, [1, 2])
+    labels = game.pending_choice_of("mode_choice").data["labels"]
+    assert labels == ["put the card on top of your library"]
+
+    for _ in range(2):
+        game.resolve_pending_choice("mode_choice", 0, mode_index=0, target=None)
+
+    assert p1.life == 3
+    assert [c.name for c in p1.hand] == ["Forest"]
+
+
+def test_sylvan_library_runs_to_the_end_for_a_non_interactive_seat(set_pool):
+    """Every prompt the ability arms has a default, so a headless or AI seat
+    never stalls part-way through it — and the resolution leaves nothing
+    suspended behind it."""
+    game, p1 = _r34_sylvan_library(set_pool, interactive=False)
+
+    game.resolve_draw_step(0)
+    game.auto_resolve_pending_choices()
+
+    assert game.pending_choices == []
+    assert game.effect_suspended is False
+    assert len(p1.hand) == 3

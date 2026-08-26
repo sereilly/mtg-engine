@@ -616,3 +616,23 @@ def _lower_repeat_process(node: ast.RepeatProcess, lower) -> tuple[OracleInstruc
             },
         ),
     )
+
+
+def _lower_pay_life(node: ast.PayLife) -> tuple[OracleInstruction, ...]:
+    """"Pay 4 life." (Sylvan Library.) CR 118.8.
+
+    Its own kind rather than a life loss with a flag, for the reason
+    ``ast.PayLife`` gives: a payment is something a player has to be *able* to
+    make, and ``handlers/control_flow._action_is_takeable`` is where that is
+    asked of every alternative before it is offered. A loss lowered onto the
+    same kind would start answering that question about sentences that never
+    pose it.
+    """
+    if node.player.kind != "you":
+        raise LoweringError(
+            f"no handler makes {node.player.kind!r} pay life", node=node
+        )
+    amount = _amount_payload(node.amount)
+    if not isinstance(amount, int) or amount < 0:
+        raise LoweringError("a life payment is a printed number", node=node)
+    return (OracleInstruction("pay_life", "", {"amount": amount}),)

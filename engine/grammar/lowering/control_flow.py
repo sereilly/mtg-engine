@@ -166,6 +166,95 @@ def _lower_may(
     return (OracleInstruction("may", "", payload),)
 
 
+#: The branches of a ``may`` whose records are visible to the steps *after* it.
+#: The offer's action and its "if you do" consequence are steps of this same
+#: resolution, so a later sentence naming what they recorded ("**those cards**"
+#: after "you may draw two additional cards. If you do, choose two cards…") is
+#: naming something this effect really does write.
+#:
+#: ``otherwise`` and ``reflexive`` are deliberately absent, for the reasons
+#: ``_lower_may`` gives about threading *into* them: the first runs only when
+#: the action did not happen, and the second is a separate ability under
+#: CR 603.12 with a scratchpad of its own.
+_MAY_BRANCHES_VISIBLE_AFTER = ("action", "then")
+
+
+def _records_produced(instruction: OracleInstruction) -> frozenset[str]:
+    """The scratchpad keys *instruction* may write, its own and its offer's.
+
+    An offer records nothing itself, so a step after "you may … If you do,
+    choose two cards in your hand" would otherwise see an empty set and refuse
+    the back-reference that follows it. What is threaded is only the
+    *possibility*: a declined offer writes nothing and the loop after it runs
+    over nothing, which is what the card says happens.
+
+    Read through ``_PRODUCES`` at every level rather than a second table, so an
+    instruction's record has one declaration however deeply it is nested.
+    """
+    keys = set()
+    key = _PRODUCES.get(instruction.kind)
+    if key is not None:
+        keys.add(key)
+    if instruction.kind == "may":
+        for branch in _MAY_BRANCHES_VISIBLE_AFTER:
+            for nested in instruction.payload.get(branch) or ():
+                keys |= _records_produced(nested)
+    return frozenset(keys)
+
+
+def _references_record(instruction: OracleInstruction, keys: frozenset[str]) -> bool:
+    """Whether *instruction*, or anything nested in it, reads one of *keys*.
+
+    A back-reference is a payload entry naming the scratchpad key it reads —
+    ``{"produced_by": …}`` for a loop's set, ``{"key": …}`` for an "if you do".
+    Both are matched by *value*, not by which key spells them, because what
+    matters is that the name of a record turns up somewhere in the payload at
+    all; a lowering that names one under a third spelling would be folded here
+    too rather than silently missed.
+    """
+
+    def walk(value) -> bool:
+        if isinstance(value, OracleInstruction):
+            return walk(value.payload)
+        if isinstance(value, dict):
+            return any(
+                (isinstance(v, str) and v in keys) or walk(v) for v in value.values()
+            )
+        if isinstance(value, (tuple, list)):
+            return any(walk(item) for item in value)
+        return False
+
+    return walk(instruction.payload)
+
+
+def _fold_into_offer(
+    instructions: tuple[OracleInstruction, ...],
+    offer_index: int,
+    folded: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """*instructions* with *folded* appended to the offer's "if you do" branch.
+
+    "You may draw two additional cards. If you do, choose two cards in your
+    hand drawn this turn. **For each of those cards, …**" (Sylvan Library.) The
+    third sentence reads what the second one recorded, and the second one only
+    happens if the offer is taken — so it is a step of the offer's consequence
+    however it was punctuated. Left as a sibling step it runs *before* the
+    offer is answered: an offer to an interactive seat arms a prompt and
+    returns, so the sequence would carry on to the loop with nothing chosen and
+    then report itself resolved.
+
+    Folding is what keeps the order right without making every optional cost in
+    the game suspend the resolution it is part of. The alternative — a
+    ``suspends`` flag on the offer's prompt — stops loops that have no such
+    dependency at all, which is a change to every "you may" in the pool made on
+    the strength of one card.
+    """
+    offer = instructions[offer_index]
+    then = tuple(offer.payload.get("then") or ()) + folded
+    rebuilt = OracleInstruction(offer.kind, offer.value, {**offer.payload, "then": then})
+    return instructions[:offer_index] + (rebuilt,) + instructions[offer_index + 1:]
+
+
 def _lower_steps(
     steps: tuple[ast.Statement, ...],
     produced: frozenset[str],
@@ -177,6 +266,11 @@ def _lower_steps(
     """Lower consecutive steps, threading what each one records forward."""
     instructions: tuple[OracleInstruction, ...] = ()
     last_produced: str | None = None
+    # The most recent offer whose branches record something, and what they
+    # record. A later step reading one of those names is a step of that offer's
+    # consequence, whatever the punctuation says.
+    offer_index: int | None = None
+    offer_keys: frozenset[str] | None = None
     for step in steps:
         # "…**If you do**, …" after an action that was not optional. The branch
         # asks whether the step before it took place, and this is the one place
@@ -214,11 +308,28 @@ def _lower_steps(
             last_produced = None
             continue
         lowered = lower_statement(step, produced, event=event, event_subject=event_subject, whole_effect=False)
+        # A step reading a record only an earlier offer's branch writes belongs
+        # *inside* that offer — see ``_fold_into_offer``.
+        if offer_index is not None and offer_keys and all(
+            _references_record(instruction, offer_keys) for instruction in lowered
+        ):
+            instructions = _fold_into_offer(instructions, offer_index, lowered)
+            last_produced = None
+            continue
         last_produced = None
-        for instruction in lowered:
+        offer_index = offer_keys = None
+        for position, instruction in enumerate(lowered):
+            # Two different questions, and they take different answers. What is
+            # *available* to a back-reference includes what an offer's branches
+            # write; what "if you do" tests is this step's own record, because
+            # the rider asks whether **this** step happened.
+            inner = _records_produced(instruction)
+            produced = produced | inner
             result = _PRODUCES.get(instruction.kind)
             if result is not None:
-                produced = produced | {result}
                 last_produced = result
+            if instruction.kind == "may" and inner:
+                offer_index = len(instructions) + position
+                offer_keys = inner
         instructions += lowered
     return instructions

@@ -133,6 +133,19 @@ class DiedThisWay:
 
 
 @dataclass(frozen=True)
+class ChosenThisWay:
+    """"for each of **those cards**" (Sylvan Library).
+
+    The third sibling of :class:`DiedThisTurn` and :class:`DiedThisWay`, and
+    the same distinction one more time: this names exactly what an earlier
+    sentence of *this same effect* chose, and nothing on the board or in the
+    turn's history answers it. Like ``DiedThisWay`` the lowering refuses it
+    without a producer — with no earlier "choose" step the words name nothing,
+    and an empty loop is a sentence that reports supported and does not run.
+    """
+
+
+@dataclass(frozen=True)
 class LifeGainedThisTurn:
     """"if you gained 3 or more life this turn" (CR 603.4 intervening-if).
 

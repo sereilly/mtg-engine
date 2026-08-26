@@ -77,6 +77,8 @@ from .mana import (
 )
 from .cards import (
     _parse_draw,
+    _parse_choose_cards_in_hand,
+    _parse_put_iterated_card_on_library,
     _parse_discard,
     _parse_mill,
     _parse_scry,
@@ -111,6 +113,7 @@ from .game import (
     _parse_wins,
     _parse_choose_number,
     _parse_flip_coin,
+    _parse_pay_life,
     _parse_game_is_a_draw,
     _parse_token_keywords,
     _parse_create_token,
@@ -150,6 +153,8 @@ __all__ = [
     "_parse_attach",
     "_parse_exchange_control",
     "_parse_draw",
+    "_parse_choose_cards_in_hand",
+    "_parse_put_iterated_card_on_library",
     "_parse_sacrifice",
     "_parse_counted_sacrifice",
     "_parse_sacrifice_expansion_permanents",
@@ -191,6 +196,7 @@ __all__ = [
     "_parse_wins",
     "_parse_choose_number",
     "_parse_flip_coin",
+    "_parse_pay_life",
     "_parse_game_is_a_draw",
     "_parse_token_keywords",
     "_parse_create_token",

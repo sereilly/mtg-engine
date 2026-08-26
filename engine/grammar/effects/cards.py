@@ -38,6 +38,13 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
             return ast.Draw(player, counted)
         stream.reset(mark)
     count = parse_amount(stream)
+    # "draw two **additional** cards" (Sylvan Library). The word says the draw
+    # is on top of one the turn already provides; it names no second effect and
+    # changes no number, so it is consumed rather than recorded. Recording it
+    # would invite a reader to treat "additional" as a modifier on the draw,
+    # which is what it is *not* — the draw step's own card is a turn-based
+    # action this ability neither performs nor replaces (CR 504.1).
+    stream.accept_word("additional")
     stream.expect_word("card", "cards")
     # "draw a card **for each color among permanents you control**" (Chromatic
     # Orrery) — a multiplier over the count just read, in the trailing position
@@ -833,3 +840,66 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         )
     stream.reset(mark)
     return None
+
+
+def _parse_choose_cards_in_hand(stream: TokenStream) -> "ast.ChooseCardsInHand | None":
+    """``choose two cards in your hand drawn this turn`` (Sylvan Library).
+
+    Refuses without consuming, so every other sentence opening with "choose"
+    keeps the reading it already had.
+
+    The noun phrase goes through the shared object parser, which is what makes
+    "choose two **creature** cards in your hand" the same production; only the
+    zone is required, because a pick out of anywhere else is a different
+    sentence with different hidden-information rules (CR 400.2).
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        return None
+    try:
+        count = parse_amount(stream)
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (filt.is_card and filt.zone == "hand"):
+        stream.reset(mark)
+        return None
+    # "…**drawn this turn**". A provenance rather than a characteristic — see
+    # ``ast.ChooseCardsInHand`` — so it rides the node, not the filter.
+    drawn = bool(stream.accept_phrase("drawn", "this", "turn"))
+    return ast.ChooseCardsInHand(count=count, filter=filt, drawn_this_turn=drawn)
+
+
+def _parse_put_iterated_card_on_library(
+    stream: TokenStream,
+) -> "ast.PutIteratedCardOnLibrary | None":
+    """``put the card on top of your library`` (Sylvan Library).
+
+    "The card" is whatever the enclosing repetition is on, so this production
+    reads only the *destination*; what it moves is decided by the loop around
+    it, and the lowering refuses the sentence outside one.
+
+    Refuses without consuming: every other "put …" sentence — a counter, a
+    permanent, a card named by a filter — keeps the production it already had.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("put"):
+        return None
+    if not (stream.accept_phrase("the", "card") or stream.accept_phrase("that", "card")):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("on"):
+        stream.reset(mark)
+        return None
+    if stream.accept_phrase("top", "of"):
+        position = "top"
+    elif stream.accept_phrase("the", "bottom", "of"):
+        position = "bottom"
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("your", "library"):
+        stream.reset(mark)
+        return None
+    return ast.PutIteratedCardOnLibrary(position=position)

@@ -32,14 +32,16 @@ from .phrases import _parse_can_attack_as_though, _parse_duration, parse_bound_s
 from .effects import (
     _parse_add_mana, _parse_ante, _parse_assigns_no_combat_damage, _parse_attach,
     _parse_becomes, _parse_cant_attack_or_block, _parse_change_base_pt,
-    _parse_change_text, _parse_choose_number, _parse_counter, _parse_create_token,
+    _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_number,
+    _parse_counter, _parse_create_token,
     _parse_damage, _parse_damage_redirect, _parse_destroy, _parse_discard,
     _parse_doesnt_untap_next_step, _parse_double, _parse_draw, _parse_enchant,
     _parse_end_the_turn, _parse_exchange_control, _parse_exile_graveyard,
     _parse_exile_top_of_library, _parse_extra_turn, _parse_fight, _parse_flip_coin,
     _parse_gain_control, _parse_gains, _parse_game_is_a_draw, _parse_gets,
     _parse_has, _parse_life_total_becomes, _parse_look_at_hand, _parse_loses,
-    _parse_mill, _parse_modal_head, _parse_player_adds_mana, _parse_prevent,
+    _parse_mill, _parse_modal_head, _parse_pay_life, _parse_player_adds_mana,
+    _parse_prevent, _parse_put_iterated_card_on_library,
     _parse_put_counter, _parse_put_exiled_with_source, _parse_remove_counter,
     _parse_remove_from_combat, _parse_return, _parse_reveal_top, _parse_sacrifice,
     _parse_scry, _parse_search_library, _parse_source_of_choice_effect,
@@ -143,6 +145,12 @@ def parse_subject_verb(
         linked = _parse_put_exiled_with_source(stream)
         if linked is not None:
             return linked
+        # "Put the card on top of your library." (Sylvan Library.) The same
+        # treatment and for the same reason: the counter production reads
+        # "the" as a counter kind and refuses with a site naming counters.
+        iterated = _parse_put_iterated_card_on_library(stream)
+        if iterated is not None:
+            return iterated
         return _parse_put_counter(stream)
     if stream.at_word("double"):
         return _parse_double(stream)
@@ -275,6 +283,12 @@ def parse_subject_verb(
         chosen_number = _parse_choose_number(stream)
         if chosen_number is not None:
             return chosen_number
+        # "Choose two cards in your hand drawn this turn." (Sylvan Library.)
+        # Also non-consuming on refusal — it declines anything that is not a
+        # pick out of a hand, so the naming productions below keep their say.
+        hand_pick = _parse_choose_cards_in_hand(stream)
+        if hand_pick is not None:
+            return hand_pick
         # Nebuchadnezzar's naming paragraph. Tried before Necromentia's, which
         # is the last resort here and raises rather than refusing — the two
         # differ from the fifth word on, and this one declines without
@@ -303,6 +317,13 @@ def parse_subject_verb(
         ante = _parse_ante(stream)
         if ante is not None:
             return ante
+    # "Pay 4 life." (Sylvan Library, inside its per-card choice.) A bare
+    # imperative like the draw and discard above, and non-consuming on refusal
+    # so "pay {R}{R}" and the unless-pay templates keep their readings.
+    if stream.at_word("pay"):
+        paid = _parse_pay_life(stream)
+        if paid is not None:
+            return paid
     if stream.at_word("counter"):
         return _parse_counter(stream)
     if stream.at_word("enchant"):

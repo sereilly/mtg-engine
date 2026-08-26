@@ -295,6 +295,15 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # whether the round happens again, so the round has to still be there
         # to decide it.
         "put_from_hand_choice",
+        # "choose two cards in your hand drawn this turn. **For each of those
+        # cards**, …" (Sylvan Library): the pick is the set the next step of
+        # the same resolution repeats over.
+        "choose_cards_in_hand",
+        # "**For each of those cards**, pay 4 life or put the card on top of
+        # your library" (Sylvan Library): a mode picked inside a repetition
+        # acts on the object the repetition is currently on, so the next
+        # iteration is a later step that must wait for this answer.
+        "mode_choice",
     }, suspending
 
 
