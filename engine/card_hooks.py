@@ -487,17 +487,15 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'that player paid this way':
             _line('deal_damage', 'spell_pattern', amount=2),
     },
-    # Two bullets of one modal activated ability, hooked separately. The
-    # destroy half is not the generic destroy production's shape: "Aura attached
-    # to a land" is a restriction `_filter_payload` has no field for, and the
-    # handler reads it as `attached_to_land`.
+    # One bullet of a two-bullet modal activated ability. The destroy half used
+    # to be hooked beside it, because "Aura attached to a land" was a
+    # restriction the filter had no field for; ``attached_to_types`` gave it one
+    # (round 23, for Enchantment Alteration's "attached to a creature or land"),
+    # so the production reads the line and the entry would be dead.
     'Pyramids': {
         "{2}: the next time target land would be destroyed this turn, remove all "
         "damage marked on it instead":
             _line("shield_target_land_from_destruction", "activated_prevent"),
-        '{2}: destroy target aura attached to a land':
-            _line('destroy_target_permanent', 'activated_destroy',
-                type_filter='enchantment', attached_to_land=True),
     },
     'Raging River': {
         'whenever one or more creatures you control attack, each defending '

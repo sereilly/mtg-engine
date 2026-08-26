@@ -1678,6 +1678,100 @@ class PendingChoicesMixin:
         self.discard_pending_choice(choice)
         return True
 
+    # -- A permanent chosen as an effect resolves -----------------------------
+    #
+    # The general form of the reattachment below, and the one every new card
+    # uses: the effect names a set of permanents, one seat picks one of them,
+    # and the answer is a ``permanent_id`` written into the resolution's
+    # ``results`` for the steps behind it to read. See
+    # ``engine/handlers/permanent_choices.py`` for why that is the whole of it.
+
+    def arm_permanent_choice(
+        self,
+        player_index: int,
+        *,
+        card_name: str,
+        prompt: str,
+        result_key: str,
+        payload: dict,
+        context,
+        candidates,
+    ) -> PendingChoice | None:
+        """Queue "choose one of these permanents" for *player_index*.
+
+        The payload is carried whole rather than the candidate list alone: it is
+        the *rule* the candidates came from, and re-running it is what keeps the
+        list offered and the list an answer is checked against from drifting
+        (CR 608.2b's spirit, applied to a choice rather than to a target).
+        """
+        return self.arm_pending_choice(
+            "permanent_choice", player_index,
+            card_name=card_name,
+            prompt=prompt,
+            result_key=result_key,
+            _payload=dict(payload),
+            _context=context,
+            _candidates=tuple(candidates),
+        )
+
+    def live_permanent_choices(self, choice: PendingChoice) -> list:
+        """The armed candidates that are still legal answers.
+
+        Public because the prompt renderer is a second legitimate caller, for
+        the same reason ``live_loyalty_recipients`` is: one rule, asked twice.
+        """
+        from ...handlers.permanent_choices import permanent_choice_candidates
+
+        return permanent_choice_candidates(
+            self,
+            choice.data.get("_payload") or {},
+            choice.data["_context"],
+            among=choice.data.get("_candidates") or (),
+        )
+
+    def confirm_permanent_choice(self, player_index: int, permanent_id: int) -> bool:
+        """Answer a pending permanent choice with a permanent's stable id."""
+        return self.resolve_pending_choice(
+            "permanent_choice", player_index, permanent_id=permanent_id
+        )
+
+    def _record_permanent_choice(self, choice: PendingChoice, permanent_id) -> None:
+        choice.data["_context"].results[choice.data["result_key"]] = permanent_id
+        self.discard_pending_choice(choice)
+
+    def _resolve_permanent_choice(self, choice: PendingChoice, permanent_id) -> bool:
+        live = self.live_permanent_choices(choice)
+        if not live:
+            # Everything the effect offered has left or stopped qualifying. The
+            # sentence carries on with nothing chosen rather than staying owed a
+            # prompt nobody can answer.
+            self._record_permanent_choice(choice, None)
+            self.log.append(
+                f"{choice.data.get('card_name', 'Effect')}: nothing is left to choose"
+            )
+            return True
+        perm = self.permanent_by_id(permanent_id) if permanent_id is not None else None
+        if perm is None or not any(perm is candidate for candidate in live):
+            return False
+        self._record_permanent_choice(choice, perm.permanent_id)
+        self.log.append(
+            f"{choice.data.get('card_name', 'Effect')}: chose {perm.card.name}"
+        )
+        return True
+
+    def _default_permanent_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** live candidate in board order.
+
+        Not a valuation — board order is seed-deterministic, which is what AI
+        and headless play need. A card whose choice should be made cleverly
+        needs a weight in ``engine/ai_valuation.py``, not a branch here.
+        """
+        live = self.live_permanent_choices(choice)
+        if not live or not self._resolve_permanent_choice(
+            choice, live[0].permanent_id
+        ):
+            self._record_permanent_choice(choice, None)
+
     # -- Kudzu's reattachment ------------------------------------------------
 
     def confirm_kudzu_reattach(self, player_index: int, land_index: int) -> bool:
@@ -2876,6 +2970,24 @@ register_choice(
     # answer the prompt as much as the confirm does; everything else waits.
     blocked_detail="pay for the spell on the stack before other actions",
     also_answers=("tap", "activate"),
+)
+
+register_choice(
+    "permanent_choice",
+    resolve=lambda game, choice, r: game._resolve_permanent_choice(choice, r["permanent_id"]),
+    default=lambda game, choice: game._default_permanent_choice(choice),
+    action="permanent_choice_confirm",
+    prompt_key="permanent_choice",
+    blocked_detail="choose a permanent for the resolving spell before other actions",
+    # The steps behind this one in the same sentence are what read the answer
+    # (Enchantment Alteration's attach), so the loop they are part of has to
+    # stop until it exists.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    spectator_visible=True,
 )
 
 register_choice(

@@ -230,6 +230,15 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         quantifier = "target"
         targeted = True
         distinct_from_prior = True
+    elif stream.at_word("another") and stream.peek_word(1) != "target":
+        # "…to **another permanent** of that type" (Enchantment Alteration) —
+        # the untargeted twin of the branch above: one object, distinct from the
+        # one the sentence already named, chosen as the effect resolves rather
+        # than declared as a target (CR 601.2c). Same quantifier as a bare "a",
+        # because that is what it is; the word "another" is only the exclusion.
+        stream.advance()
+        quantifier = "a"
+        distinct_from_prior = True
     elif stream.accept_word("each"):
         quantifier = "each"
     elif stream.accept_word("all"):

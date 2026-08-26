@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
+from engine.auras import attach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 
@@ -1080,3 +1081,116 @@ def test_glyph_of_doom_fires_once(set_pool):
     _one_combat(game, {0: 0})
 
     assert game.delayed_triggers == []
+# ---------------------------------------------------------------------------
+# Enchantment Alteration (round 23) — an Aura moved onto a permanent chosen as
+# the spell resolves. CR 701.3 attach, CR 303.4j legality, CR 400.7 identity.
+# ---------------------------------------------------------------------------
+
+
+def _alteration_board(set_pool, aura_name: str, host_name: str, other_names):
+    """One Aura already attached to *host_name*, plus *other_names* beside it.
+
+    The hosts are deliberately same-named where a test wants two: an index would
+    address either of them and locating by value would find the first, which is
+    the bug class ``tests/engine/test_control_reads.py`` exists for.
+    """
+    leg, lea = set_pool("LEG"), set_pool("LEA")
+    pool = {**lea, **leg}
+    p1 = PlayerState(name="P1", hand=[leg["Enchantment Alteration"]])
+    p2 = PlayerState(name="P2")
+    host = Permanent(card=pool[host_name])
+    others = [Permanent(card=pool[name]) for name in other_names]
+    aura = Permanent(card=pool[aura_name])
+    p1.battlefield = [host, *others, aura]
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    attach_aura(aura, host)
+    return game, aura, host, others
+
+
+def _cast_alteration(game, aura):
+    return game.cast_from_hand(
+        0, "Enchantment Alteration",
+        target_player_index=0, target_permanent_ids=[aura.permanent_id],
+    )
+
+
+def test_enchantment_alteration_compiles_to_a_choice_and_an_attach(set_pool):
+    """Two steps, not one fused kind: the host is picked on resolution."""
+    program = compile_card_oracle(set_pool("LEG")["Enchantment Alteration"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == ["choose_permanent", "attach_source_to_target"]
+    choice = steps[0].payload
+    # Both printed riders survive lowering: "another" and "of that type".
+    assert choice["exclude_relative_host"] and choice["shares_type_with_relative_host"]
+    assert steps[1].payload["host_from"] == choice["result_key"]
+
+
+def test_enchantment_alteration_moves_the_aura_to_the_chosen_creature(set_pool):
+    """Two identically named Bears: the Aura lands on the one the seat named,
+    which only a stable id can say."""
+    game, aura, host, (other,) = _alteration_board(
+        set_pool, "Holy Strength", "Grizzly Bears", ["Grizzly Bears"],
+    )
+    game.interactive_seats = {0}
+
+    _cast_alteration(game, aura)
+    choice = game.pending_choice_of("permanent_choice", 0)
+    assert choice is not None
+    assert [p.permanent_id for p in game.live_permanent_choices(choice)] == [
+        other.permanent_id
+    ]
+
+    assert game.confirm_permanent_choice(0, other.permanent_id)
+    assert aura.metadata["attached_to"] is other
+    assert other.effective_power == 3 and host.effective_power == 2
+
+
+def test_enchantment_alteration_offers_only_the_type_it_is_on(set_pool):
+    """"another permanent **of that type**" — an Aura on a land is offered
+    lands, never the creature standing beside them."""
+    game, aura, _host, others = _alteration_board(
+        set_pool, "Wild Growth", "Forest", ["Forest", "Grizzly Bears"],
+    )
+    game.interactive_seats = {0}
+    second_forest, bear = others
+
+    _cast_alteration(game, aura)
+    choice = game.pending_choice_of("permanent_choice", 0)
+    assert [p.permanent_id for p in game.live_permanent_choices(choice)] == [
+        second_forest.permanent_id
+    ]
+    # The engine re-checks the answer, so naming the creature is refused rather
+    # than obeyed — a client cannot widen the choice.
+    assert not game.confirm_permanent_choice(0, bear.permanent_id)
+    assert game.confirm_permanent_choice(0, second_forest.permanent_id)
+    assert aura.metadata["attached_to"] is second_forest
+
+
+def test_enchantment_alteration_leaves_the_aura_alone_with_nowhere_legal(set_pool):
+    """CR 303.4j: with no legal new host the Aura **doesn't move**. Not the same
+    as falling off — dropping it would bin a card nothing destroyed."""
+    game, aura, host, _others = _alteration_board(
+        set_pool, "Holy Strength", "Grizzly Bears", ["Forest"],
+    )
+    game.interactive_seats = {0}
+
+    _cast_alteration(game, aura)
+
+    assert game.pending_choice_of("permanent_choice", 0) is None
+    assert aura.metadata["attached_to"] is host
+    assert game.is_on_battlefield(aura)
+
+
+def test_enchantment_alteration_takes_a_default_for_a_non_interactive_seat(set_pool):
+    """AI and headless play never queue it: the stated default (the first live
+    candidate) is taken where the effect stands, so the sentence finishes."""
+    game, aura, _host, (other,) = _alteration_board(
+        set_pool, "Holy Strength", "Grizzly Bears", ["Grizzly Bears"],
+    )
+
+    _cast_alteration(game, aura)
+
+    assert game.pending_choices == []
+    assert aura.metadata["attached_to"] is other

@@ -274,6 +274,12 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # sentence uses. Shapeshifter arms the same kind at the end of what it
         # is part of, where suspending costs nothing.
         "number_choice",
+        # "Attach target Aura … to **another permanent of that type**"
+        # (Enchantment Alteration): the attach behind the choice is a later step
+        # of the same sentence and reads the answer out of `results`. Only an
+        # interactive seat ever queues it — `default_at_arm` answers for
+        # everyone else before the flag is set.
+        "permanent_choice",
     }, suspending
 
 

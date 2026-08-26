@@ -490,11 +490,19 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     if payload.get("attacking_only") and not perm.attacking:
         return False
 
-    # Pyramids: "target Aura attached to a land" — only Auras whose enchanted
-    # permanent is currently a land qualify.
-    if payload.get("attached_to_land"):
+    # "target Aura attached to a **land**" (Pyramids) / "…to a **creature or
+    # land**" (Enchantment Alteration). Which card types the host may have, as a
+    # list rather than the single boolean this was: the printed type is payload
+    # data, and a second card naming a second type would otherwise have needed a
+    # second key. The relation is readable off the attachment alone, which is why
+    # it lives in the pure matcher at all.
+    attached_types = payload.get("attached_to_types")
+    if attached_types:
         attached = perm.metadata.get("attached_to")
-        if attached is None or getattr(getattr(attached, "card", None), "primary_type", "") != "land":
+        if attached is None or not any(
+            attached.is_creature if name == "creature" else attached.has_type(name)
+            for name in attached_types
+        ):
             return False
 
     def _has_type(name: str) -> bool:

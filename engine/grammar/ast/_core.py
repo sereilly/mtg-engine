@@ -388,6 +388,14 @@ class ObjectFilter:
     # that has the context resolves it, the split the ``controls`` condition
     # already makes for "another".
     attached_to: str | None = None
+    # "target Aura **attached to a creature or land**" (Enchantment Alteration)
+    # — the host named by card type instead of by back-reference, which a
+    # read of the attachment alone *can* answer.
+    attached_to_types: tuple[str, ...] = ()
+    # "another permanent **of that type**" — shares a card type with the
+    # permanent the sentence's earlier clause named. Resolved by the lowering
+    # that knows which object that was; a lowering that does not must refuse.
+    of_bound_type: bool = False
     # "that's one or more colors" (Ugin, the Spirit Dragon's −X): the object
     # has at least one color, read off its effective colors.
     colored: bool = False
@@ -497,6 +505,8 @@ class ObjectFilter:
             payload["exclude_colors"] = list(self.excluded_colors)
         if self.excluded_types:
             payload["exclude_types"] = list(self.excluded_types)
+        if self.attached_to_types:
+            payload["attached_to_types"] = list(self.attached_to_types)
         # Additive keys — handlers read these with .get() defaults.
         if self.with_keywords:
             payload["with_keywords"] = list(self.with_keywords)
