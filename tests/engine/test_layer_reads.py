@@ -285,9 +285,6 @@ PRINTED_TEXT_EXEMPTIONS: dict[str, str] = {
     # would make the answer depend on itself. Both readers live here for that
     # reason — ``_refresh_global_statics`` calls in rather than keeping its own.
     "global_statics.py": "the text that defines a static cannot be read through it",
-    # The resolving spell's own card, reached through the execution context.
-    # A spell is not a permanent and has no layers applied to it here.
-    "handlers/zones.py": "the resolving spell's card, not a permanent",
 }
 
 

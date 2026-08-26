@@ -131,3 +131,28 @@ __all__ = [
     "NUMBER_WORDS", "PLANESWALKER_TYPES", "SPELL_TYPES", "SUBTYPE_INDEX",
     "SUPERTYPES", "TYPE_LINE_SUPERTYPES", "manifest", "match_longest",
 ]
+
+
+#: Head nouns that name an object without naming a card type — "permanent",
+#: "card", "spell", "source", "target". Here rather than in `nouns` because the
+#: singularizer below needs them and both are word lookup, not parsing: a module
+#: *under* `nouns` in the layer order (`abilities`) can reach them only here.
+GENERIC_NOUNS = frozenset({
+    "permanent", "permanents", "card", "cards", "spell", "spells",
+    "source", "sources", "target", "targets",
+})
+
+
+def singular(word: str) -> str:
+    """Best-effort singularization for vocabulary lookup. Only trims when the
+    trimmed form is itself known, so "wall"/"walls" both resolve but a real
+    word ending in s is left alone."""
+    if word.endswith("s"):
+        stem = word[:-1]
+        if stem in CARD_TYPES or stem in ALL_SUBTYPES or stem in GENERIC_NOUNS:
+            return stem
+        if word.endswith("es"):
+            stem2 = word[:-2]
+            if stem2 in CARD_TYPES or stem2 in ALL_SUBTYPES:
+                return stem2
+    return word

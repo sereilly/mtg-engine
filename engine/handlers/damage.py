@@ -385,7 +385,8 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # 115.4: "any target" is limited to creatures, players, planeswalkers, and battles.
         # Noncreature artifacts (and other noncreature non-planeswalker permanents) are not
         # valid "any target" targets — the spell fizzles against them.
-        if "any target" in card.oracle_text.lower():
+        targets = instruction.payload.get("targets") or {}
+        if targets.get("quantifier") == "any_target":
             # is_creature / has_type (not the printed type line) so animated
             # lands — Kormus Bell swamps, Living Lands forests — count as
             # creatures here, and a layer-4 type change is honored.

@@ -24,6 +24,9 @@ from .errors import GrammarError
 from .lexer import PT, SELF, WORD
 from .names import parse_card_name
 from .stream import TokenStream
+from .abilities import _accept_ability_noun, _accept_ability_source
+from .vocabulary import GENERIC_NOUNS as _GENERIC_NOUNS
+from .vocabulary import singular as _singular
 from .vocabulary import (
     ALL_SUBTYPES,
     CARD_TYPES,
@@ -37,10 +40,6 @@ from .vocabulary import (
 
 # Head nouns that are not card types but name a set of objects. "target" is one
 # of them: Fireball's "among any number of targets" uses it as a bare noun.
-_GENERIC_NOUNS = frozenset({
-    "permanent", "permanents", "card", "cards", "spell", "spells",
-    "source", "sources", "target", "targets",
-})
 
 # "this <self-word>" refers to the ability's own source.
 _SELF_NOUNS = frozenset({
@@ -84,19 +83,6 @@ _COMPARISON_WORDS = {
 _ZONE_NOUNS = frozenset({"graveyard", "hand", "library", "exile"})
 
 
-def _singular(word: str) -> str:
-    """Best-effort singularization for vocabulary lookup. Only trims when the
-    trimmed form is itself known, so "wall"/"walls" both resolve but a real
-    word ending in s is left alone."""
-    if word.endswith("s"):
-        stem = word[:-1]
-        if stem in CARD_TYPES or stem in ALL_SUBTYPES or stem in _GENERIC_NOUNS:
-            return stem
-        if word.endswith("es"):
-            stem2 = word[:-2]
-            if stem2 in CARD_TYPES or stem2 in ALL_SUBTYPES:
-                return stem2
-    return word
 
 
 def _match_subtype(stream: TokenStream, start: int) -> tuple[str, int] | None:
@@ -208,65 +194,6 @@ def _parse_comparison(stream: TokenStream) -> ast.Comparison:
             return ast.Comparison(_COMPARISON_WORDS[word], amount)
         raise stream.error("expected 'less' or 'greater'")
     return ast.Comparison("eq", amount)
-
-
-#: The printed kinds of ability a spell may name on the stack, longest first so
-#: "activated or triggered" is read whole rather than as its first half.
-_ABILITY_KIND_PHRASES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
-    (("activated", "or", "triggered"), ("activated", "triggered")),
-    (("triggered", "or", "activated"), ("activated", "triggered")),
-    (("activated",), ("activated",)),
-    (("triggered",), ("triggered",)),
-)
-
-
-def _accept_ability_noun(stream: TokenStream) -> tuple[str, ...]:
-    """The ability kinds a phrase like "activated or triggered ability" names,
-    or () when the cursor is not at one.
-
-    The word "ability" is required. Without it "triggered" is an adjective
-    looking for a noun and the phrase is somebody else's — and a phrase that
-    consumed "activated" and then found no "ability" would have eaten a word
-    the rest of the parse needs.
-    """
-    for phrase, kinds in _ABILITY_KIND_PHRASES:
-        mark = stream.mark()
-        if not stream.accept_phrase(*phrase):
-            stream.reset(mark)
-            continue
-        if stream.accept_word("ability", "abilities"):
-            return kinds
-        stream.reset(mark)
-    return ()
-
-
-def _accept_ability_source(stream: TokenStream) -> tuple[str, ...]:
-    """``from an <card type> source`` after an ability noun, or () if absent.
-
-    The one adjective an ability on the stack can carry: it has no card and no
-    type line (CR 113.7a), so "artifact" here describes the *permanent the
-    ability came from*, not the ability. Consumed here rather than by the
-    adjective loop below for the same reason the ability noun returns early —
-    that loop asks questions of a card.
-
-    A word that is not a card type leaves the cursor where it was, so the line
-    fails full-token consumption and the card falls back, rather than the
-    narrowing being dropped and the counter reaching every ability.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("from"):
-        stream.reset(mark)
-        return ()
-    stream.accept_word("a", "an")
-    word = stream.peek_word()
-    if word is None or _singular(word) not in CARD_TYPES:
-        stream.reset(mark)
-        return ()
-    stream.advance()
-    if not stream.accept_word("source"):
-        stream.reset(mark)
-        return ()
-    return (_singular(word),)
 
 
 def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast.ObjectFilter:

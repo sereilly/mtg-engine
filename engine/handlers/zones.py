@@ -315,8 +315,10 @@ def reorder_target_library_top(game: Game, instruction: OracleInstruction, conte
     target_index = game.players.index(target)
     top_count = min(3, len(target.library))
     # "You may have that player shuffle" (Natural Selection) lets the caster
-    # optionally shuffle the target's library after reordering.
-    may_shuffle = "you may have that player shuffle" in context.card.oracle_text.lower()
+    # optionally shuffle the target's library after reordering. Read off the
+    # instruction, not the card: a handler that re-reads oracle text is a second
+    # reading of a sentence the compiler already read, and the two drift.
+    may_shuffle = bool(instruction.payload.get("may_shuffle"))
     game.arm_pending_choice(
         "reorder_library", caster_index,
         target_index=target_index, top_count=top_count, may_shuffle=may_shuffle,

@@ -1754,3 +1754,58 @@ would drift with no `--accept` available mid-round. Promotion-time cleanup.
 in either should split it, not shave comments — `names.py` split out of `nouns`
 this round and absorbed exactly the growth that would otherwise have tripped the
 guard one merge later.
+
+## LEG debt round: two handlers stopped reading oracle text, two modules split
+
+*(2026-08-25.)* No cards. Rounds 20 and 21 recorded four pieces of debt; this
+pays the three that could be paid and establishes that the fourth cannot.
+
+**Two handlers were re-reading printed text.** `reorder_target_library_top`
+derived Natural Selection's optional shuffle by substring-matching the card's
+own sentence at resolution, and the damage handler decided whether a target had
+to be a creature by looking for the words "any target". Both facts are already
+in the compiled program — the hook line can carry `may_shuffle`, and
+`_describe_targets` has always recorded `quantifier: "any_target"` — so both
+handlers now read the instruction. A handler that re-reads oracle text is a
+second reading of a sentence the compiler already read, and the two drift.
+
+`tests/engine/test_layer_reads.py`'s `PRINTED_TEXT_EXEMPTIONS` is a shrink-only
+ratchet and it caught the leftover immediately: with the read gone the exemption
+went stale, and the list is down to one entry (`global_statics.py`, which is a
+genuine cycle — the text that defines a static cannot be read through it).
+
+**`engine/effect_labels.py` is not debt, and the round proved it.** Rounds 20
+and 21 both recorded the missing labels for LEG-only kinds as promotion debt.
+Trying to pay it early — widening the guard's fixture to the measured sets, the
+way `test_grammar_derived_lines` was widened in round 21 — caught 17 unlabelled
+abilities and was the **wrong** move, so it was reverted. The two guards ask
+different questions. The derived-lines one asks *is this table reachable*, which
+is about the card that needed it. This one carries the vocabulary
+`engine/parsing/` produced, so a card is not silently re-bucketed when the
+grammar learns its line — and a card that never had a legacy rule has nothing to
+carry. Seventeen entries restating the category default is what the sibling
+guard calls "a special case pretending to be one". It stays a promotion task
+because the promotion is when those cards acquire a bucket anyone reads.
+
+**Two modules split, both at the guard.** `lowering/characteristics.py` (997)
+lost its keyword half to `lowering/keywords.py`: CR 208 is what a creature's
+power and toughness *are* (layer 7), CR 702 is an ability it *has* (layer 6),
+and the two families shared no helper — only the module. It is now 793.
+
+`nouns.py` (998) lost the ability-on-the-stack vocabulary to
+`engine/grammar/abilities.py`. That cut needed one thing first: the new module
+sits *below* `nouns` in the layer order, so it cannot reach `_singular` there.
+`singular` and `GENERIC_NOUNS` moved down into `vocabulary`, which is where they
+belonged — both are word lookup rather than parsing, and `nouns` re-exports them
+under their old private names so its own body and `references` are untouched.
+`nouns.py` is now 925.
+
+**What is still near the guard**, recorded so the next round does not discover
+it mid-merge: `lower.py` (982), `ast/_core.py` (976), `effects/cards.py` (959),
+`lowering/board.py` (941), `lowering/_common.py` (902). `lower.py` is the
+dispatch roof and will trip first.
+
+**Numbers.** No card moved: LEG stays at 220 of 310 and the shipped pool at
+734/734. Suite 7,273, unchanged — the two handler fixes are behaviour-preserving
+by construction, and the splits move code without changing it. Every `--check`
+green.

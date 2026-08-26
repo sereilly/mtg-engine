@@ -84,12 +84,14 @@ from .characteristics import (
     _lower_pump,
     _lower_change_base_pt,
     _lower_set_base_pt,
-    _KEYWORD_GRANTS,
-    _lower_gain_keyword,
-    _lower_lose_keyword,
     _lower_become_color,
     _lower_gain_type,
     _lower_change_text,
+)
+from .keywords import (
+    _KEYWORD_GRANTS,
+    _lower_gain_keyword,
+    _lower_lose_keyword,
 )
 from .counters import (
     _fused_tap_enchanted_then_counters,

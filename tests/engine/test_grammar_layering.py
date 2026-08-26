@@ -45,6 +45,10 @@ GRAMMAR = Path(__file__).resolve().parent.parent.parent / "engine" / "grammar"
 # order is therefore an assertion about the split, not a convention — a
 # condition that grew a need for an effect would fail here.
 PARSE_LAYERS = [
+    # An ability on the stack (CR 113.7a) has no card and no type line, so it
+    # shares no vocabulary with the filter parser that reads one. Below
+    # `nouns`, which returns the moment one of these matches.
+    "abilities",
     # A card **name** is a literal string, not a description of a set of
     # objects, so the scan that reads one shares no vocabulary with the filter
     # parser above it. Split out of `nouns` when the cross-axis class union
@@ -88,8 +92,11 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # ever splits, reuse these names so the mirror re-forms instead of forking.
 # `counters` split out of `lowering/characteristics.py` at 975 lines, the day
 # before a set ingest: a counter (CR 122) is a marker on an object, not a
-# characteristic of it, and the two halves shared no imports.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "mana", "counters"]
+# characteristic of it, and the two halves shared no imports. `keywords` split
+# out of the same module the second time it reached the guard, on the same
+# reasoning: CR 208 is what a creature's P/T *is* (layer 7), CR 702 is an
+# ability it *has* (layer 6), and the two families shared no helper.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "mana", "counters", "keywords"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 
