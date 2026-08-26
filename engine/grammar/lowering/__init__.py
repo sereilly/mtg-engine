@@ -27,6 +27,7 @@ cannot do.
 """
 
 from .categories import INSTRUCTION_CATEGORIES, _PRODUCES, categories_of
+from .where_x import lower_where_x
 from ._events import (
     _BLOCK_PAIR_EVENTS,
     binds_block_pair,
@@ -204,6 +205,7 @@ from .game import (
 )
 
 __all__ = [
+    "lower_where_x",
     "_lower_condition",
     "INSTRUCTION_CATEGORIES",
     "_PRODUCES",
