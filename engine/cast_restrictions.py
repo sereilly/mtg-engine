@@ -29,6 +29,36 @@ def _during_own_declare_attackers(game: "Game", caster_index: int) -> bool:
     return game.current_step == "declare_attackers" and game.active_player_index == caster_index
 
 
+def _during_declare_attackers(game: "Game", caster_index: int) -> bool:
+    # Teleport: "the declare attackers step", not "your" — whoever is the
+    # active player, the window is that step. The seat is deliberately not
+    # consulted; the sibling above reads it because its own line says "your".
+    return game.current_step == "declare_attackers"
+
+
+def _before_blockers_are_declared(game: "Game", caster_index: int) -> bool:
+    # Rapid Fire: no phase floor at all — anything earlier in the turn than the
+    # declare blockers step qualifies, so the test is that the turn has not
+    # reached it. (`_during_combat_before_blockers` is the *narrower* sibling:
+    # its line says "during combat before blockers are declared", which adds a
+    # combat-phase floor this one does not have.)
+    past_blockers = (
+        game.current_turn_phase in ("postcombat_main", "ending")
+        or (
+            game.current_turn_phase == "combat"
+            and game.current_step in ("declare_blockers", "combat_damage", "end_of_combat")
+        )
+    )
+    return not past_blockers
+
+
+def _after_combat(game: "Game", caster_index: int) -> bool:
+    # Glyph of Reincarnation: after the combat *phase* has ended, so the
+    # postcombat main phase and the ending phase. The end of combat step is
+    # still combat.
+    return game.current_turn_phase in ("postcombat_main", "ending")
+
+
 def _during_declare_blockers(game: "Game", caster_index: int) -> bool:
     return game.current_turn_phase == "combat" and game.current_step == "declare_blockers"
 
@@ -85,6 +115,21 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "cast this spell only during your declare attackers step",
         _during_own_declare_attackers,
         "can only be cast during your declare attackers step",
+    ),
+    CastRestriction(
+        "cast this spell only during the declare attackers step",
+        _during_declare_attackers,
+        "can only be cast during the declare attackers step",
+    ),
+    CastRestriction(
+        "cast this spell only before blockers are declared",
+        _before_blockers_are_declared,
+        "can only be cast before blockers are declared",
+    ),
+    CastRestriction(
+        "cast this spell only after combat",
+        _after_combat,
+        "can only be cast after combat",
     ),
     CastRestriction(
         "cast this spell only during the declare blockers step",

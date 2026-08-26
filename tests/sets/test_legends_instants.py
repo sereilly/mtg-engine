@@ -1080,3 +1080,134 @@ def test_glyph_of_doom_fires_once(set_pool):
     _one_combat(game, {0: 0})
 
     assert game.delayed_triggers == []
+
+
+# ---------------------------------------------------------------------------
+# Teleport (round 23) — "Cast this spell only during the declare attackers
+# step." / "Target creature can't be blocked this turn."
+#
+# Two mechanisms: a row in engine/cast_restrictions.py (the step is shared, so
+# the clause names no seat — unlike Camouflage's "your declare attackers step")
+# and `grant_unblockable_to_target`, the unrestricted printing of a grant the
+# engine only had in Dwarven Warriors' "power 2 or less" narrowing.
+# ---------------------------------------------------------------------------
+
+
+def _teleport_board(set_pool):
+    """P1 holds Teleport; P1 has a bear that could attack, P2 one that could
+    block it."""
+    from tests.helpers import _nosick
+
+    attacker = _nosick(Permanent(card=_creature("Attacker")))
+    blocker = _nosick(Permanent(card=_creature("Blocker")))
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Teleport"]], battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, p1, p2, attacker, blocker
+
+
+def test_teleport_compiles_to_the_unrestricted_unblockable_grant(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Teleport"])
+    assert program.supported, program.reason
+    assert [i.kind for i in program.instructions] == ["grant_unblockable_to_target"]
+
+
+def test_teleport_is_refused_outside_the_declare_attackers_step(set_pool):
+    """The failure a timing clause has when nothing enforces it is silent: the
+    spell simply works more often than the card allows. So this drives the real
+    cast path in the precombat main phase and asserts the card stays in hand."""
+    game, p1, _p2, _attacker, blocker = _teleport_board(set_pool)
+    game.start_turn(0)
+
+    result = game.cast_from_hand(
+        0, "Teleport", target_player_index=1, target_permanent_index=0
+    )
+
+    assert result.supported is False
+    assert any(card.name == "Teleport" for card in p1.hand)
+    assert blocker.metadata.get("cant_be_blocked_until_eot") is None
+
+
+def test_teleport_resolves_in_the_declare_attackers_step_and_stops_the_block(set_pool):
+    """The window the clause opens, checked by what a blocker may then do."""
+    game, p1, _p2, attacker, blocker = _teleport_board(set_pool)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, _msg = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok
+
+    result = game.cast_from_hand(
+        0, "Teleport", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported is True
+    assert attacker.metadata.get("cant_be_blocked_until_eot") is True
+    assert game._can_block_attacker(blocker, attacker) is False
+
+
+def test_teleport_is_castable_in_an_opponents_declare_attackers_step(set_pool):
+    """The clause says "the" declare attackers step, not "your" — the step is
+    shared, so the non-active player is inside the window too. A predicate that
+    copied Camouflage's would have refused this seat."""
+    game, p1, _p2, _attacker, blocker = _teleport_board(set_pool)
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.current_step == "declare_attackers"
+
+    result = game.cast_from_hand(
+        0, "Teleport", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported is True
+    assert blocker.metadata.get("cant_be_blocked_until_eot") is True
+
+
+@pytest.mark.parametrize(
+    "name,legal_phase,legal_step,illegal_phase,illegal_step,denial",
+    [
+        # Rapid Fire — "only before blockers are declared". No phase floor at
+        # all: the whole turn up to that step is the window, which is what
+        # separates it from Blaze of Glory's "during combat before blockers are
+        # declared".
+        (
+            "Rapid Fire", "precombat_main", "precombat_main",
+            "combat", "declare_blockers",
+            "can only be cast before blockers are declared",
+        ),
+        # Glyph of Reincarnation — "only after combat". The end of combat step
+        # is still combat, so the window opens at the postcombat main phase.
+        (
+            "Glyph of Reincarnation", "postcombat_main", "postcombat_main",
+            "combat", "end_of_combat",
+            "can only be cast after combat",
+        ),
+    ],
+)
+def test_the_remaining_legends_timing_clauses_are_enforced(
+    set_pool, name, legal_phase, legal_step, illegal_phase, illegal_step, denial
+):
+    """The two siblings Teleport's row brought in.
+
+    Neither card is supported yet — their *effect* lines are still refused — so
+    the table row is checked directly against the printed text. The row is what
+    would otherwise be an unenforced clause the day the effect lands.
+    """
+    from engine.cast_restrictions import check_cast_timing
+
+    text = set_pool("LEG")[name].oracle_text.lower()
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    game.start_turn(0)
+
+    game.current_turn_phase, game.current_step = legal_phase, legal_step
+    assert check_cast_timing(game, 0, text) is None
+
+    game.current_turn_phase, game.current_step = illegal_phase, illegal_step
+    assert check_cast_timing(game, 0, text) == denial

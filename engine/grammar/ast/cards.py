@@ -110,6 +110,15 @@ class AddMana:
     # runs, in a later phase, the card is in a graveyard and the stack item is
     # gone. The symbol, again, so a card printing another colour needs no code.
     from_countered_spell: str | None = None
+    # "an amount of {C} equal to **that creature's** mana value" (Energy Tap).
+    # A third back-reference of the same printed shape, naming the permanent an
+    # earlier step of this same effect recorded — and, unlike the two above,
+    # one that is still on the battlefield when this clause runs, so the number
+    # is read off it rather than remembered as a number. Named for the printed
+    # words rather than for a producer: which step recorded the creature is the
+    # lowering's question, and the producer gate there is what makes the words
+    # legal at all.
+    from_bound_creature: str | None = None
     # "Add {G} **for each creature with power 4 or greater you control**"
     # (Leafkin Avenger). A board count multiplying the whole clause, the same
     # shape a life gain and a counter placement already carry — so it is a

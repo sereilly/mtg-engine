@@ -178,6 +178,18 @@ _UNTAPPED_PERMANENTS = "untapped_permanents"
 # number out of something that is not one.
 _PRODUCED_QUANTITIES: frozenset[str] = frozenset({"damage_dealt"})
 
+# The scratchpad keys that hold *permanents*, by id — what an earlier step of
+# this effect acted on rather than a number it computed. A clause reading a
+# characteristic off "that creature" (Energy Tap's mana value) resolves against
+# these: the permanent is still on the battlefield, so the characteristic is
+# read at resolution instead of being remembered. The mirror of
+# `_PRODUCED_QUANTITIES` above and narrow for the same reason — a producer
+# missing from here refuses the words rather than reading a mana value out of
+# something that is not a permanent.
+_RECORDED_PERMANENTS: frozenset[str] = frozenset({
+    "tapped_permanents", _UNTAPPED_PERMANENTS,
+})
+
 
 def _back_reference_payload(
     amount: ast.ThatMuch,

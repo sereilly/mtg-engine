@@ -407,6 +407,25 @@ def grant_unblockable_to_self(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("grant_unblockable_to_target")
+def grant_unblockable_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature can't be blocked this turn." (Teleport.)
+
+    The unrestricted printing: any creature is a legal target, so the only
+    thing to honour is the choice itself. The sibling below is the one whose
+    printed line narrows the target by power.
+    """
+    target_creature = resolve_target_permanent(
+        game, context, predicate=lambda p: p.is_creature
+    )
+    if target_creature is None:
+        game.log.append(f"{context.card.name}: no creature to make unblockable")
+        return True, "resolved"
+    target_creature.metadata["cant_be_blocked_until_eot"] = True
+    game.log.append(f"{target_creature.card.name} can't be blocked this turn")
+    return True, "resolved"
+
+
 @effect_handler("grant_unblockable_to_low_power_target")
 def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # Honor the specifically chosen creature (the player picked one in the UI);

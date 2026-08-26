@@ -22,6 +22,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "hurricane_damage": "damage",
     "deal_damage_each_creature_and_player": "damage",
     "deal_damage_each_attacking_creature": "damage",
+    "deal_damage_to_recorded_permanents": "damage",
     "deal_damage_and_opponent_choice": "damage",
     "self_damage_unless_pay": "damage",
     # Dispatched by the (trigger condition, instruction kind) registry in
@@ -300,6 +301,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "player_loses_game": "game_end",
     "target_player_loses_game": "game_end",
     "game_is_draw": "game_end",
+    "grant_unblockable_to_target": "evasion",
     "grant_unblockable_to_low_power_target": "evasion",
     "grant_unblockable_to_self": "evasion",
     # Restrictions on declaring attackers/blockers (CR 506, 509).

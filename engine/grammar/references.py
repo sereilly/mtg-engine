@@ -230,6 +230,21 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         quantifier = "target"
         targeted = True
         distinct_from_prior = True
+    elif stream.at_word("those"):
+        # "each of **those creatures with flying**" (Winter Blast) — the objects
+        # an earlier sentence of this same effect already acted on, narrowed by
+        # a printed adjective. The bound plural `phrases.parse_bound_subject`
+        # reads in the *subject* position, reached here in the object position
+        # and with the filter read in full rather than from the noun alone:
+        # this is the one place the adjective can select a subset of the bound
+        # set, and a filter dropped here would damage every creature the earlier
+        # sentence tapped.
+        #
+        # Safe to admit widely for the reason that bound subject is: every
+        # lowering refuses quantifier "those" unless it says otherwise, so a
+        # sentence reaching one fails by name rather than failing to parse.
+        stream.advance()
+        return ast.TargetSpec("those", parse_object_filter(stream))
     elif stream.accept_word("each"):
         quantifier = "each"
     elif stream.accept_word("all"):

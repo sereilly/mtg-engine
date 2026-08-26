@@ -168,6 +168,33 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         )
         return True, "resolved"
 
+    # "…add an amount of {C} equal to **that creature's** mana value." (Energy
+    # Tap.) The creature is the one an earlier step of this same effect
+    # recorded — by id, because a permanent may have left in between (CR 400.7)
+    # and a slot would by then address whichever creature slid into it. Still
+    # on the battlefield, so the number is read now rather than remembered;
+    # gone, and the clause adds nothing, which is what "that creature" with no
+    # creature means.
+    mana_value_key = instruction.payload.get("count_from_mana_value_of")
+    if mana_value_key:
+        symbol = str(instruction.payload.get("symbol", "C"))
+        recorded = (context.results or {}).get(str(mana_value_key)) or ()
+        count = 0
+        for permanent_id in recorded:
+            permanent = game.permanent_by_id(permanent_id)
+            if permanent is not None:
+                # CR 202.3b — mana value is computed from the mana cost, and
+                # `effective_card` is what the permanent's cost *is* after
+                # layer 1 (a copy carries the copied cost, not its own).
+                count += max(0, int(permanent.effective_card.cmc or 0))
+        if count:
+            caster.mana_pool[symbol] = caster.mana_pool.get(symbol, 0) + count
+        game.log.append(
+            f"{card.name} produced {'{' + symbol + '}' * count}"
+            if count else f"{card.name} produced no mana"
+        )
+        return True, "resolved"
+
     pips_choice = instruction.payload.get("pips_choice")
     if pips_choice:
         alternatives = [symbol for symbol, _count in pips_choice]

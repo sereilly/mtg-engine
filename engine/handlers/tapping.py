@@ -258,19 +258,46 @@ def untap_all_matching(game: Game, instruction: OracleInstruction, context: Orac
 @effect_handler("tap_target_permanent")
 def tap_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     targets_desc = instruction.payload.get("targets") or {}
-    maximum = targets_desc.get("count") if isinstance(targets_desc, dict) else None
+    printed_count = targets_desc.get("count") if isinstance(targets_desc, dict) else None
+    # "**X** target creatures" (Winter Blast) — the count is the announced X,
+    # which is a string on the payload because it is not a number until the
+    # spell is cast. An `isinstance(int)` test skipped that spelling entirely
+    # and fell through to the one-target branch below, tapping the first slot
+    # and dropping the rest; the untap beside this one reads the same key with
+    # `not in (None, 1)` and never had the hole.
+    maximum = (
+        resolve_amount(printed_count, context.x_value)
+        if printed_count is not None else None
+    )
     if isinstance(maximum, int) and maximum > 1:
         return _tap_several_targets(game, instruction, context, targets_desc, maximum)
     target = context.target
     # Ali Baba: "Tap target Wall." — the parsed noun-phrase filter restricts
     # what the ability may tap; an explicitly chosen non-matching permanent
     # fizzles rather than falling back to an arbitrary one.
-    if any(k in instruction.payload for k in ("type_filter", "subtype_filter", "color_filter")):
+    #
+    # Every filter key, not the three type-ish ones a hand-written probe used to
+    # name: "Tap target **untapped creature you control**" (Energy Tap) carries
+    # a seat, and a seat this branch never looked at is a restriction dropped —
+    # the spell tapping an opponent's creature and making its mana. So the test
+    # is `subject_matches`, the one answer for what a printed noun phrase means,
+    # with the resolving controller as "you" (CR 109.5); the lowering admits
+    # only payloads it can test in full.
+    from ..subject_filters import subject_matches
+
+    described = {
+        key: value for key, value in instruction.payload.items() if key != "targets"
+    }
+    if described:
         caster = context.caster
+        observer = game.players.index(caster) if caster in game.players else None
         perm = resolve_target_permanent(
             game,
             context,
-            predicate=lambda p: permanent_matches_filter(p, instruction.payload),
+            predicate=lambda p: subject_matches(
+                game, p, described, observer=observer,
+                source=context.source_permanent,
+            ),
             fallback_players=(target, caster),
             fallback_on_invalid_choice=False,
         )
