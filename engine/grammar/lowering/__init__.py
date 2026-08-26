@@ -28,6 +28,7 @@ cannot do.
 
 from .categories import INSTRUCTION_CATEGORIES, _PRODUCES, categories_of
 from .where_x import lower_where_x
+from .conditions import _lower_condition
 from ._events import (
     _BLOCK_PAIR_EVENTS,
     binds_block_pair,
@@ -37,7 +38,6 @@ from ._events import (
     EVENT_SUBJECT_PLAYER,
 )
 from ._common import (
-    _lower_condition,
     _filter_payload,
     _restrictions_beyond,
     GRAMMAR_ONLY_PAYLOAD_KEYS,

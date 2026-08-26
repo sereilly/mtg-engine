@@ -243,3 +243,27 @@ def expect_pt(stream: TokenStream) -> tuple[ast.Amount, bool, ast.Amount, bool]:
 
 
 __all__ = ["expect_pt", "parse_amount", "parse_equal_to", "parse_pt_pair"]
+
+
+# A printed comparison is a bound on an amount — "power **3 or greater**" —
+# so it lives with the amounts it compares rather than with the filter that
+# happens to carry one. It was in `nouns` only because a filter was its first
+# caller, and it could not follow `accept_source_reference` down to `readers`:
+# it reads `parse_amount`, and `amounts` reads `readers`.
+_COMPARISON_WORDS = {
+    "less": "le",       # "2 or less"
+    "greater": "ge",    # "3 or greater"
+    "more": "ge",
+}
+
+def parse_comparison(stream: TokenStream) -> ast.Comparison:
+    """Parse "N or less" / "N or greater" / "N" following power/toughness."""
+    amount = parse_amount(stream)
+    if stream.accept_word("or"):
+        token = stream.peek()
+        word = token.text if token is not None and token.kind == WORD else None
+        if word in _COMPARISON_WORDS:
+            stream.advance()
+            return ast.Comparison(_COMPARISON_WORDS[word], amount)
+        raise stream.error("expected 'less' or 'greater'")
+    return ast.Comparison("eq", amount)

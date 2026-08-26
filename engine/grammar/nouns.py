@@ -25,6 +25,8 @@ from .lexer import PT, SELF, WORD
 from .names import parse_card_name
 from .stream import TokenStream
 from .abilities import _accept_ability_noun, _accept_ability_source
+from .amounts import parse_comparison  # re-exported: a comparison bounds an amount
+from .readers import _SELF_NOUNS, accept_source_reference
 from .vocabulary import GENERIC_NOUNS as _GENERIC_NOUNS
 from .vocabulary import singular as _singular
 from .vocabulary import (
@@ -41,18 +43,6 @@ from .vocabulary import (
 # Head nouns that are not card types but name a set of objects. "target" is one
 # of them: Fireball's "among any number of targets" uses it as a bare noun.
 
-# "this <self-word>" refers to the ability's own source.
-_SELF_NOUNS = frozenset({
-    "creature", "artifact", "enchantment", "land", "permanent", "spell", "aura", "card",
-    # "Sacrifice this **token**" — modern templating for a token's own printed
-    # ability (the Treasure token). Not a card type: it is what the object is,
-    # exactly as "this permanent" is, and it names the same source.
-    "token",
-    # "Sacrifice this **Equipment**" / "put a soul counter on this Equipment"
-    # (Malefic Scythe). An Equipment subtype used as the card's own noun, the
-    # same way "this Aura" already is above.
-    "equipment",
-})
 
 # "…attached to that creature" / "…attached to it" — the trailing clause naming
 # what an Aura or Equipment is on, and the referent each consumer resolves.
@@ -69,11 +59,6 @@ _STATE_ADJECTIVES = {
     "unblocked": ("blocked", False),
 }
 
-_COMPARISON_WORDS = {
-    "less": "le",       # "2 or less"
-    "greater": "ge",    # "3 or greater"
-    "more": "ge",
-}
 
 # Zones a noun phrase can be scoped to ("target creature card **from your
 # graveyard**"). The battlefield is deliberately absent: it is already the
@@ -125,35 +110,6 @@ def _accept_card_noun(stream: TokenStream) -> bool:
     return stream.accept_word("card", "cards")
 
 
-def accept_source_reference(stream: TokenStream) -> bool:
-    """Consume a reference to the ability's own source — "it", "this", or
-    "this <noun the card calls itself>" — and say whether one was there.
-
-    A predicate rather than a filter, because the callers that need it are
-    asking about *identity* and not about characteristics: an intervening-if
-    naming the source is answered from ``context.source_permanent``, so an
-    ``ObjectFilter`` built here would carry a narrowing nothing consults. The
-    three spellings are one production so a card printing "this artifact" is
-    read the same way as one printing "it", which is the whole difference
-    between Mana Vault's draw-step clause and Basalt Monolith's.
-    """
-    if stream.accept_word("it"):
-        return True
-    # The card naming itself ("blocked by Sentinel") — the lexer has already
-    # collapsed the name to one SELF token, so this spelling and "this
-    # creature" are the same reference here as everywhere else.
-    token = stream.peek()
-    if token is not None and token.kind == SELF:
-        stream.advance()
-        return True
-    mark = stream.mark()
-    if stream.accept_word("this"):
-        noun = stream.peek_word()
-        if noun is not None and _singular(noun) in _SELF_NOUNS:
-            stream.advance()
-        return True
-    stream.reset(mark)
-    return False
 
 
 def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
@@ -183,17 +139,6 @@ def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
     return tuple(keywords)
 
 
-def parse_comparison(stream: TokenStream) -> ast.Comparison:
-    """Parse "N or less" / "N or greater" / "N" following power/toughness."""
-    amount = parse_amount(stream)
-    if stream.accept_word("or"):
-        token = stream.peek()
-        word = token.text if token is not None and token.kind == WORD else None
-        if word in _COMPARISON_WORDS:
-            stream.advance()
-            return ast.Comparison(_COMPARISON_WORDS[word], amount)
-        raise stream.error("expected 'less' or 'greater'")
-    return ast.Comparison("eq", amount)
 
 
 def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast.ObjectFilter:

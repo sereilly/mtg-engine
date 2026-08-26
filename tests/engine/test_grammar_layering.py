@@ -45,6 +45,9 @@ GRAMMAR = Path(__file__).resolve().parent.parent.parent / "engine" / "grammar"
 # order is therefore an assertion about the split, not a convention — a
 # condition that grew a need for an effect would fail here.
 PARSE_LAYERS = [
+    # Small printed readers `nouns` shares *upward* — a comparison, a
+    # self-reference. Below it because nothing about them is about a filter.
+    "readers",
     # An ability on the stack (CR 113.7a) has no card and no type line, so it
     # shares no vocabulary with the filter parser that reads one. Below
     # `nouns`, which returns the moment one of these matches.
@@ -166,7 +169,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "categories"), ()),
+        ("lowering", ("_common", "_events", "categories", "conditions"), ()),
         ("ast", ("_core",), ("statements",)),
     ],
     ids=["effects", "lowering", "ast"],

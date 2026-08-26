@@ -11,11 +11,11 @@ of modes the engine can carry out.
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from .conditions import _lower_condition
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     _describe_targets,
     _filter_payload,
-    _lower_condition,
     _restrictions_beyond,
     is_mana_value_x,
 )
