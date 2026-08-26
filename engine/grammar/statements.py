@@ -69,6 +69,7 @@ from .effects import (
     _parse_modal_head,
     _parse_player_adds_mana,
     _parse_produces_instead,
+    _parse_spend_mana_as_though,
     _parse_prevent,
     _parse_double,
     _parse_switch_pt,
@@ -572,6 +573,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         except GrammarError:
             pass
         stream.reset(mark)
+
+    # "For one spell this turn, you may spend mana as though it were mana of
+    # any type to pay that spell's mana cost." (North Star.) A CR 609.4
+    # permission rather than an action: nothing happens when it resolves.
+    # Refuses without consuming, so "for each …" and every other clause opening
+    # with the word keeps its reading.
+    if stream.at_word("for"):
+        as_though = _parse_spend_mana_as_though(stream)
+        if as_though is not None:
+            return as_though
 
     # "If target Plains is tapped for mana, it produces colorless mana instead
     # of white mana." (Quarum Trench Gnomes.) The printed shape opens like an

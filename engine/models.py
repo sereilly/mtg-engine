@@ -590,6 +590,14 @@ class PlayerState:
     #: pip. Its own flag rather than a widening of the one above, because the
     #: two are different permissions and a card may grant either.
     spends_mana_as_any_color: bool = False
+    #: "For one spell this turn, you may spend mana as though it were mana of
+    #: any type to pay that spell's mana cost." (North Star.) A *count* rather
+    #: than a flag, because the permission is bounded: it covers a stated
+    #: number of this turn's spells and is used up. One entry per grant, each
+    #: ``{"spells": n, "any_type": bool}`` — two grants of different breadth
+    #: are two permissions and merging them would widen the narrower one.
+    #: Cleared at cleanup ("this turn").
+    spend_mana_as_though_grants: list = field(default_factory=list)
     channel_active_until_eot: bool = False
     # "Pay {1} any time you could cast an instant: prevent the next 1 damage to
     # that permanent or player" emblems the player controls until end of turn

@@ -114,3 +114,25 @@ class ProducesManaInstead:
     replaced: str
     #: The symbol it produces instead.
     produced: str
+
+
+@dataclass(frozen=True)
+class SpendManaAsThough:
+    """"For one spell this turn, you may spend mana as though it were mana of
+    any type to pay that spell's mana cost." (North Star.)
+
+    CR 609.4's "as though": nothing about the mana in the pool changes, and no
+    mana is produced. What the effect grants is a permission the *payment*
+    reads, for a bounded number of the player's spells this turn.
+
+    Two things are payload rather than two nodes. ``count`` is how many spells
+    the permission covers, because "one" is a printed number like any other.
+    ``any_type`` is which permission it is: CR 106.1b's five colours **plus**
+    colorless for "any type", the five colours alone for "any color" — and the
+    difference is exactly whether a {C} in the cost may be paid by a coloured
+    mana, which is a card the engine would otherwise get wrong in the direction
+    that makes a spell castable when it is not.
+    """
+
+    count: int
+    any_type: bool

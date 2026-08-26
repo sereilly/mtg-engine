@@ -83,6 +83,7 @@ from .mana import (
     AddMana,
     AddManaForTappedLand,
     ProducesManaInstead,
+    SpendManaAsThough,
 )
 from .cards import (
     CastPermission,
@@ -151,7 +152,7 @@ Effect = Union[
     RevealTop, RevealUntil, NameAndStrip, NameThenRevealTop,
     ExileGraveyardUntilLeaves, CastFromExiledWith,
     PhaseOut,
-    AddManaForTappedLand, ProducesManaInstead, PreventDamage,
+    AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
     SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
     ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
     RevealHandAndChoose,

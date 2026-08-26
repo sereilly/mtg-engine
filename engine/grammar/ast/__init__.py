@@ -154,6 +154,7 @@ from .mana import (
     AddMana,
     AddManaForTappedLand,
     ProducesManaInstead,
+    SpendManaAsThough,
 )
 from .cards import (
     Draw,
@@ -346,6 +347,7 @@ __all__ = [
     "AddMana",
     "AddManaForTappedLand",
     "ProducesManaInstead",
+    "SpendManaAsThough",
     "CastPermission",
     "ExileGraveyard",
     "RevealHandAndChoose",

@@ -327,3 +327,27 @@ def produce_mana_instead(game: Game, instruction: OracleInstruction, context: Or
         f"{{{produced}}} instead of {{{replaced}}}"
     )
     return True, "resolved"
+
+
+@effect_handler("grant_spend_mana_as_though")
+def grant_spend_mana_as_though(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"For one spell this turn, you may spend mana as though it were mana of
+    any type to pay that spell's mana cost." (North Star.)
+
+    CR 609.4: nothing about the pool changes and no mana is made. The grant is
+    recorded on the player and spent by the payment, which is why it is a list
+    of bounded permissions rather than a flag — "one spell" is a printed number
+    and the permission runs out.
+    """
+    caster = context.caster
+    caster.spend_mana_as_though_grants.append({
+        "spells": max(1, int(instruction.payload.get("spells", 1))),
+        "any_type": bool(instruction.payload.get("any_type")),
+    })
+    breadth = "type" if instruction.payload.get("any_type") else "color"
+    game.log.append(
+        f"{context.card.name}: {caster.name} may spend mana as though it were "
+        f"mana of any {breadth} for {instruction.payload.get('spells', 1)} "
+        "spell(s) this turn"
+    )
+    return True, "resolved"

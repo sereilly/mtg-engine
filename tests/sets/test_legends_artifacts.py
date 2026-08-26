@@ -761,3 +761,123 @@ def test_mana_matrix_does_not_discount_an_opponents_spell(set_pool):
         set_pool, ["Mana Matrix"], ["Divine Offering"], seat=1, W=1,
     )
     assert not game.queue_from_hand(1, "Divine Offering").supported
+
+
+# ---------------------------------------------------------------------------
+# North Star (round 26) — CR 609.4, a bounded "as though" on the payment
+# ---------------------------------------------------------------------------
+
+
+def _north_star_game(set_pool, hand=("Divine Offering",)):
+    pool = set_pool("LEG")
+    star = Permanent(card=pool["North Star"])
+    p1 = PlayerState(
+        name="P1", battlefield=[star],
+        hand=[pool[name] for name in hand],
+        library=[pool["Karakas"]] * 6,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = True
+    game.start_turn(0)
+    return game, p1
+
+
+def _charge_north_star(game, player):
+    player.mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 4, "C": 0}
+    result = game.activate_permanent_ability(0, "North Star", permanent_index=0)
+    game._settle()
+    return result
+
+
+def _pool(player, **mana):
+    player.mana_pool = {
+        sym: mana.get(sym, 0) for sym in ("W", "U", "B", "R", "G", "C")
+    }
+
+
+def test_north_star_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["North Star"])
+    assert program.supported, program.reason
+
+
+def test_north_star_lets_green_mana_pay_a_white_pip(set_pool):
+    """Divine Offering is {1}{W} and the pool is two green. Without the
+    permission that is not a payment; with it, it is — and the pool afterwards
+    is what shows the mana was actually spent."""
+    game, p1 = _north_star_game(set_pool)
+    refused, _ = _north_star_game(set_pool)
+    _pool(refused.players[0], G=2)
+    assert not refused.queue_from_hand(0, "Divine Offering").supported
+
+    assert _charge_north_star(game, p1).supported
+    _pool(p1, G=2)
+
+    assert game.queue_from_hand(0, "Divine Offering").supported
+    assert sum(p1.mana_pool.values()) == 0
+
+
+def test_north_star_covers_only_one_spell(set_pool):
+    """"For **one** spell this turn." The permission is bounded, so the second
+    spell is paid the ordinary way or not at all."""
+    game, p1 = _north_star_game(
+        set_pool, hand=("Divine Offering", "Divine Offering"),
+    )
+    assert _charge_north_star(game, p1).supported
+
+    _pool(p1, G=2)
+    assert game.queue_from_hand(0, "Divine Offering").supported
+
+    _pool(p1, G=2)
+    assert not game.queue_from_hand(0, "Divine Offering").supported
+
+
+def test_north_star_is_not_spent_on_a_spell_that_did_not_need_it(set_pool):
+    """The ordinary payment is tried first, so a spell the pool covers outright
+    leaves the permission for the spell the player actually wanted it for."""
+    game, p1 = _north_star_game(
+        set_pool, hand=("Divine Offering", "Divine Offering"),
+    )
+    assert _charge_north_star(game, p1).supported
+
+    _pool(p1, W=1, C=1)
+    assert game.queue_from_hand(0, "Divine Offering").supported
+    assert p1.spend_mana_as_though_grants == [{"spells": 1, "any_type": True}]
+
+    _pool(p1, G=2)
+    assert game.queue_from_hand(0, "Divine Offering").supported
+
+
+def test_north_star_permission_expires_with_the_turn(set_pool):
+    """"…this turn." Nothing sweeps a card name; the grant carries its own
+    lifetime and the cleanup step drops it."""
+    game, p1 = _north_star_game(set_pool)
+    assert _charge_north_star(game, p1).supported
+
+    game.resolve_cleanup_step(0)
+    assert p1.spend_mana_as_though_grants == []
+
+    _pool(p1, G=2)
+    assert not game.queue_from_hand(0, "Divine Offering").supported
+
+
+def test_north_star_does_not_pay_for_an_activated_ability(set_pool):
+    """"…to pay that **spell's** mana cost." An activated ability is not a
+    spell (CR 602.1), so the permission never reaches one."""
+    pool = set_pool("LEG")
+    star = Permanent(card=pool["North Star"])
+    bees = Permanent(card=pool["Killer Bees"])
+    bees.summoning_sick = False
+    p1 = PlayerState(name="P1", battlefield=[star, bees])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = True
+    game.start_turn(0)
+    assert _charge_north_star(game, p1).supported
+
+    # Killer Bees costs {G} to pump and the pool is white. The permission would
+    # cover it if it applied to abilities; it does not.
+    _pool(p1, W=1)
+    assert not game.activate_permanent_ability(
+        0, "Killer Bees", permanent_index=1,
+    ).supported
+    assert p1.spend_mana_as_though_grants == [{"spells": 1, "any_type": True}]
+    assert p1.mana_pool["W"] == 1, "nothing was paid"

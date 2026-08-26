@@ -273,3 +273,57 @@ def _parse_produces_instead(stream: TokenStream) -> "ast.ProducesManaInstead | N
         stream.reset(mark)
         return None
     return ast.ProducesManaInstead(target, replaced=replaced, produced=produced)
+
+
+def _parse_spend_mana_as_though(stream: TokenStream) -> "ast.SpendManaAsThough | None":
+    """``For <N> spell(s) this turn, you may spend mana as though it were mana
+    of any color/type to pay that spell's mana cost.``
+
+    North Star. Refuses without consuming: "for" opens "for each …" and a
+    dozen other clauses, and this production must add a reading rather than
+    take one away.
+
+    Every word after the comma is matched. The clause names *which* cost the
+    permission covers — "that spell's **mana cost**" — and a production that
+    stopped at "any type" would read the same as one covering the additional
+    costs the reminder text explicitly excludes.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("for"):
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value <= 0:
+        stream.reset(mark)
+        return None
+    if not (stream.accept_word("spell") or stream.accept_word("spells")):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("this", "turn") or not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "you", "may", "spend", "mana", "as", "though", "it", "were", "mana", "of", "any"
+    ):
+        stream.reset(mark)
+        return None
+    # "any **type**" is CR 106.1b's five colours plus colorless; "any **color**"
+    # is the five. Recorded rather than collapsed: the difference is whether a
+    # {C} in the cost may be paid by coloured mana, and reading the narrower
+    # word as the wider one makes a spell castable that is not.
+    if stream.accept_word("type"):
+        any_type = True
+    elif stream.accept_word("color"):
+        any_type = False
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "to", "pay", "that", "spell", "'s", "mana", "cost"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.SpendManaAsThough(count=count.value, any_type=any_type)

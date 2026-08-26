@@ -248,3 +248,22 @@ def _lower_produces_mana_instead(
             },
         ),
     )
+
+
+def _lower_spend_mana_as_though(
+    node: ast.SpendManaAsThough,
+) -> tuple[OracleInstruction, ...]:
+    """"For one spell this turn, you may spend mana as though it were mana of
+    any type…" (North Star.)
+
+    One kind with both the count and the breadth on the payload. The breadth is
+    the half that must not be widened: "any color" is CR 106.1b's five, "any
+    type" adds colorless, and the payment reads the key rather than the words.
+    """
+    return (
+        OracleInstruction(
+            "grant_spend_mana_as_though",
+            "",
+            {"spells": node.count, "any_type": node.any_type},
+        ),
+    )

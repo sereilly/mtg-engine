@@ -158,6 +158,7 @@ from .mana import (
     _TAPPED_LAND_MANA_RECIPIENTS,
     _lower_add_mana_for_tapped_land,
     _lower_produces_mana_instead,
+    _lower_spend_mana_as_though,
 )
 from .library import (
     _lower_reveal_top,
@@ -314,6 +315,7 @@ __all__ = [
     "_TAPPED_LAND_MANA_RECIPIENTS",
     "_lower_add_mana_for_tapped_land",
     "_lower_produces_mana_instead",
+    "_lower_spend_mana_as_though",
     "_lower_double_power",
     "_lower_switch_pt",
     "_fused_prepare_then_interact",
