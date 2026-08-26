@@ -251,6 +251,16 @@ def _narrowing_flags(source: dict) -> dict:
         # let a "an opponent controls" ability untap the activator's own
         # artifact — a restriction dropped in the player's favour.
         flags["opponent_only"] = True
+    elif source.get("controller") == "defending_player":
+        # "target artifact **defending player controls**" (Floral Spuzzem).
+        # The third seat test, and the one the enumerator cannot answer on its
+        # own: "you" and "opponent" are relative to the seat choosing, while
+        # this one is relative to the *combat* the ability's trigger fired in.
+        # So the flag says the narrowing exists and the caller that knows the
+        # attack — the trigger's announcement — supplies the seat beside it.
+        # With no seat supplied the enumerator offers nothing, which is the
+        # safe direction: an unanswerable narrowing must never widen to "any".
+        flags["defending_player_only"] = True
     if source.get("not_enchanted"):
         # "target permanent **that isn't enchanted**" (Time Elemental) —
         # CR 303.4a. A picker flag rather than a restriction left to the

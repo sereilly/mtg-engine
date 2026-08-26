@@ -155,6 +155,26 @@ class PendingChoicesMixin:
         would leave the wrong one on the stack."""
         return [c for c in self.pending_choices if c.data.get("_stack_item") is item]
 
+    def announcement_choice_for(self, item):
+        """The choice *item* made as it was **announced**, still unanswered.
+
+        The other half of the pair above, and separate from it on purpose. A
+        prompt armed while an object resolved carries ``_stack_item`` and means
+        "the resolution is not finished"; a mode (CR 601.2b, CR 603.3c) and a
+        target (CR 601.2c, CR 603.3d) are chosen *before* the object is
+        announced, carry ``_trigger_item``, and mean something stronger — the
+        object has not finished being put on the stack and must not resolve at
+        all.
+
+        One reader for both kinds that carry ``_trigger_item``, so a third
+        added later is covered by the data it arms with rather than by an edit
+        here.
+        """
+        for choice in self.pending_choices:
+            if choice.data.get("_trigger_item") is item:
+                return choice
+        return None
+
     def stack_item_is_waiting(self, item) -> bool:
         """Whether *item*'s resolution still owes somebody a decision."""
         return any(
@@ -2510,6 +2530,64 @@ class PendingChoicesMixin:
         self.log.append(f'{card_name}: chose "{label}"{chosen_for}')
         return True
 
+    def confirm_trigger_target(self, player_index: int, permanent_id: int) -> bool:
+        """Answer a triggered ability's target choice with a permanent's id."""
+        return self.resolve_pending_choice(
+            "trigger_target", player_index, permanent_id=permanent_id
+        )
+
+    def _resolve_trigger_target(self, choice: PendingChoice, permanent_id: int) -> bool:
+        """Record the chosen target on the stack object that asked (CR 601.2c).
+
+        The ability stays on the stack and resolves later, with a target it now
+        names — the same shape as a modal trigger's answer, and different from
+        ``_resolve_reflexive_target``, which runs its steps immediately because
+        a reflexive ability was never on the stack at all.
+
+        The id is checked against the list that was offered rather than against
+        the board: targets are chosen once, at announcement, so a permanent
+        that became legal a moment later is not a legal answer.
+        """
+        offered = {
+            target.get("permanent_id")
+            for target in (choice.data.get("targets") or ())
+        }
+        if permanent_id not in offered:
+            return False
+        perm = self.permanent_by_id(permanent_id)
+        if perm is None:
+            return False
+        seat = self.controller_index_of(perm)
+        if seat is None:
+            return False
+        item = choice.data.get("_trigger_item")
+        if item is None:
+            return False
+        self.discard_pending_choice(choice)
+        item.target_player_index = seat
+        item.target_permanent_index = self.battlefield_index_of(perm)
+        item.target_permanent_id = permanent_id
+        self.log.append(
+            f"{choice.data.get('card_name', 'Ability')}: targets {perm.card.name}"
+        )
+        return True
+
+    def _default_trigger_target(self, choice: PendingChoice) -> bool:
+        """What a non-interactive seat answers with: the **first** target
+        offered.
+
+        The stated policy every other picker in this engine takes when nothing
+        distinguishes the candidates, and stated here rather than valued —
+        ``_default_trigger_mode_target`` next door is the one that reads an
+        effect family, and it can only do so because a mode carries its own
+        instruction.
+        """
+        targets = choice.data.get("targets") or ()
+        if not targets:
+            self.discard_pending_choice(choice)
+            return True
+        return self._resolve_trigger_target(choice, targets[0]["permanent_id"])
+
     def _select_trigger_mode_target(self, option: dict, target: dict) -> dict | None:
         """The offered candidate *target* names, or None if it names none.
 
@@ -3251,6 +3329,22 @@ register_choice(
     action="resolve_optional_pay",
     prompt_key="optional_pay",
     blocked_detail="resolve the pay-for-life trigger before other actions",
+)
+
+register_choice(
+    "trigger_target",
+    resolve=lambda game, choice, r: game._resolve_trigger_target(
+        choice, r["permanent_id"]
+    ),
+    default=lambda game, choice: game._default_trigger_target(choice),
+    action="trigger_target_confirm",
+    prompt_key="trigger_target",
+    blocked_detail="choose the triggered ability's target before other actions",
+    # The choice is part of putting the ability on the stack (CR 603.3d), so a
+    # non-interactive seat takes it there and then — nothing queues, and
+    # headless and AI play run exactly as they did.
+    default_at_arm=True,
+    spectator_visible=True,
 )
 
 register_choice(

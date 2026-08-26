@@ -51,6 +51,7 @@ from .effects import (
     _parse_change_text,
     _parse_source_of_choice_effect,
     _parse_damage_redirect,
+    _parse_assigns_no_combat_damage,
     _parse_attacking_doesnt_tap,
     _parse_bound_targeting_prevention,
     _parse_counter,
@@ -424,6 +425,14 @@ def _parse_subject_verb(
         if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):
             stream.advance()
             return _parse_sacrifice(stream, source_spec)
+        # "This creature **assigns no combat damage** this turn." (Floral
+        # Spuzzem.) Non-consuming on refusal, so any other sentence opening
+        # with the word keeps its own refusal rather than failing on words this
+        # production expected.
+        if token.text in ("assigns", "assign"):
+            no_damage = _parse_assigns_no_combat_damage(stream, source_spec)
+            if no_damage is not None:
+                return no_damage
         if token.text in ("becomes", "become"):
             return _parse_becomes(stream, source_spec)
         if token.text in ("phases", "phase"):

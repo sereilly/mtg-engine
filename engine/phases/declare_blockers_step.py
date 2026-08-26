@@ -870,6 +870,73 @@ class DeclareBlockersStepMixin:
             pairs.append((blocker_idx, defender.battlefield[blocker_idx], blocked))
         return pairs
 
+    def _fire_unblocked_attack_triggers(self) -> None:
+        """"Whenever this creature attacks and isn't blocked" (Merchant Ship,
+        Floral Spuzzem) — CR 509.1h.
+
+        The third of this step's fire sites, and it belongs here for the same
+        reason the other two do: the condition is about the *declaration*, and
+        it can only be evaluated once blocks are known. It used to be evaluated
+        one step later, from inside ``resolve_combat_damage``, which was
+        reliable and wrong — an ability that changes what combat damage does
+        was resolving after the damage.
+
+        Unlike its two neighbours it is **not** called from
+        :meth:`declare_blockers`: an attacker with nobody blocking it is
+        unblocked whether or not any declaration happened at all, and the
+        defender with no legal block is auto-skipped without ever reaching
+        that method. The caller is the declare-blockers step's completion in
+        ``combat_phase``, the one point every path to locked blocks reaches,
+        and ``combat_unblocked_triggers_fired`` is what makes it once.
+
+        The ability names **no target**. "Attacks and isn't blocked" is about
+        the attacker, which travels as the stack item's ``source_permanent``;
+        one that targets chooses its target as it is put on the stack
+        (``_choose_trigger_targets``), from the list the picker offers.
+        """
+        from ..game_types import StackItem
+
+        if self.combat_unblocked_triggers_fired:
+            return
+        self.combat_unblocked_triggers_fired = True
+        if not (0 <= self.active_player_index < len(self.players)):
+            return
+        controller_index = self.active_player_index
+        controller = self.players[controller_index]
+        for idx in list(self.combat_attackers):
+            if not (0 <= idx < len(controller.battlefield)):
+                continue
+            permanent = controller.battlefield[idx]
+            if permanent.blocked or self._attacker_all_blockers(idx):
+                continue
+            # CR 506.2: which seat is being attacked, frozen into the
+            # announcement (CR 603.10) rather than looked up when the ability
+            # resolves — the attacker can leave combat in response, and
+            # "defending player" would then name nobody.
+            defending_index = self.combat_attackers.get(idx)
+            for trig in matching_triggers(
+                permanent.effective_card, condition_kinds={"attacks_unblocked"}
+            ):
+                self._stack_push(
+                    StackItem(
+                        card=permanent.card,
+                        caster_index=controller_index,
+                        target_player_index=controller_index,
+                        target_permanent_index=None,
+                        x_value=None,
+                        ability_instruction=trig.instruction,
+                        ability_effect_kind=trig.effect_kind,
+                        source_permanent=permanent,
+                        ability_text=trig.source_line,
+                        trigger_context={
+                            "trigger_defending_player_index": defending_index,
+                        },
+                    )
+                )
+                self.log.append(
+                    f"{permanent.card.name} triggered (attacked and wasn't blocked)"
+                )
+
     def _fire_becomes_blocked_triggers(
         self, controller_index: int, assignments: dict[int, list[int]]
     ) -> None:

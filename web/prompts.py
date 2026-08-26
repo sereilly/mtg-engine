@@ -359,6 +359,33 @@ def _name_and_strip(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("trigger_target")
+def _trigger_target(ctx: PromptContext, choices: list) -> dict:
+    """"…you may destroy target artifact defending player controls." (Floral
+    Spuzzem.)
+
+    CR 603.3d: a triggered ability chooses its targets as it is put on the
+    stack, so the candidates were enumerated *then* and are replayed here. The
+    same shape as the reflexive prompt below and for the same reason — an
+    answer naming something the picker never offered is refused rather than
+    quietly performed.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "candidates": [
+            {
+                "seat": target.get("seat"),
+                "index": target.get("permanent_index"),
+                "id": target.get("permanent_id"),
+                "name": target.get("name"),
+            }
+            for target in choice.data.get("targets") or ()
+        ],
+    }
+
+
 @prompt_renderer("reflexive_target")
 def _reflexive_target(ctx: PromptContext, choices: list) -> dict:
     """"When you do, you may tap or untap target creature." (Tolarian Kraken.)

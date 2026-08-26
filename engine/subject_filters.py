@@ -203,7 +203,12 @@ def subject_matches(
         #
         # So it refuses, and the handler that has the context resolves it —
         # the same split "another" and ``attached_to`` already make.
-        if controller == "that_player":
+        #
+        # "**Defending player** controls" (Floral Spuzzem) is the same shape
+        # with the same answer: the seat is a fact about the combat the trigger
+        # fired in, known to the announcement that armed the pick and to
+        # nothing here.
+        if controller in ("that_player", "defending_player"):
             return False
         seat = game.controller_index_of(obj)
         if seat is None or observer is None:

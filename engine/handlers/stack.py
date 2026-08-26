@@ -37,7 +37,10 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
         return True, "resolved"
     caster_index = game.players.index(caster)
     game._stack_push(
-        StackItem(
+        # CR 707.10: a copy has the original's targets (or the ones the
+        # copying effect changed them to). It does not choose again.
+        targets_already_chosen=True,
+        item=StackItem(
             card=copied.card,
             caster_index=caster_index,
             target_player_index=copied.target_player_index,
@@ -90,7 +93,10 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         new_target_permanent_index = copied.target_permanent_index
 
     game._stack_push(
-        StackItem(
+        # CR 707.10: a copy has the original's targets (or the ones the
+        # copying effect changed them to). It does not choose again.
+        targets_already_chosen=True,
+        item=StackItem(
             card=copied.card,
             caster_index=caster_index,
             target_player_index=new_target_player_index,

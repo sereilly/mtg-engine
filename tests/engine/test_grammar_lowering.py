@@ -3340,15 +3340,34 @@ def test_remove_does_not_claim_the_other_sentences_that_start_with_it():
     """"Remove target creature ... from combat" and "remove all damage marked on
     it" open the same way and are entirely different effects. They have to keep
     failing on their own missing production, not on a counter kind they never
-    mentioned."""
-    for line in (
+    mentioned.
+
+    The two refuse at different *stages* now, and the stage is not what this
+    guards. Once "defending player controls" became a noun-phrase narrowing the
+    parser reads (Floral Spuzzem, LEG round 32), the first line parses whole
+    and refuses in lowering, by the name of its own production — which is the
+    same claim, made one layer later. The second still has no production at all.
+    What must stay true of both is that neither is *lowered*, and that neither
+    blames the counter-removal reading they merely share an opening word with.
+    """
+    unlowerable = (
         "Remove target creature defending player controls from combat.",
         "The next time target land would be destroyed this turn, "
         "remove all damage marked on it instead.",
-    ):
+    )
+    for line in unlowerable:
         result = compile_line(line, card_name="Test")
-        assert not result.parsed
-        assert result.failure_reason == "expected a subject"
+        assert not result.lowered, line
+        assert "counter" not in (result.failure_reason or ""), line
+
+    combat = compile_line(unlowerable[0], card_name="Test")
+    assert combat.parsed
+    assert combat.failure_reason == (
+        "remove-from-combat acts on the object the sentence already chose"
+    )
+    damage = compile_line(unlowerable[1], card_name="Test")
+    assert not damage.parsed
+    assert damage.failure_reason == "expected a subject"
 
 
 @pytest.mark.parametrize(

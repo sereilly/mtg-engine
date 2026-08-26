@@ -2384,6 +2384,16 @@ function getPermanentChoiceInfo(state = currentState) {
   return info;
 }
 
+// Floral Spuzzem: a triggered ability choosing its target as it goes on the
+// stack (CR 603.3d).
+function getTriggerTargetInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.trigger_target;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.candidates) || info.candidates.length === 0) return null;
+  return info;
+}
+
 // Tolarian Kraken: the reflexive trigger ("When you do, …") choosing its target.
 function getReflexiveTargetInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -2779,6 +2789,25 @@ function getPromptBoardTargeting(state = currentState) {
           target_permanent_id: byKey.get(`${targetSeat}-${idx}`),
         }),
       invalidHint: "Only a permanent the resolving spell names can be chosen.",
+    });
+  }
+
+  // Floral Spuzzem: the triggered ability's own target, chosen as it went on
+  // the stack (CR 603.3d). By id, and only from the list the picker offered.
+  const triggerTargetInfo = getTriggerTargetInfo(state);
+  if (triggerTargetInfo) {
+    const byKey = new Map(
+      (triggerTargetInfo.candidates || []).map((c) => [`${c.seat}-${c.index}`, c.id]),
+    );
+    return promptTargeting({
+      permanentKeys: [...byKey.keys()],
+      onPermanent: (targetSeat, idx) =>
+        submitPromptAction({
+          seat,
+          action: "trigger_target_confirm",
+          target_permanent_id: byKey.get(`${targetSeat}-${idx}`),
+        }),
+      invalidHint: "Only a permanent the triggered ability could target can be chosen.",
     });
   }
 

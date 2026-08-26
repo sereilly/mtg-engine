@@ -332,3 +332,28 @@ def _attack_tap_gate_filter(node: ast.AttackingDoesntTap) -> dict[str, object]:
             node=node,
         )
     return described
+
+
+def _lower_assigns_no_combat_damage(
+    node: ast.AssignsNoCombatDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"This creature assigns no combat damage this turn." (Floral Spuzzem.)
+
+    The subject must be the effect's own source and the window must be the rest
+    of the turn, because those are the two things the record behind it can say:
+    it is a mark on one permanent, swept by the cleanup step with the rest of
+    the turn's marks. A sentence naming somebody else's creature, or a window
+    the sweep does not end, refuses rather than lowering onto a record that
+    would answer a different question.
+    """
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "only the effect's own source can be marked as assigning no "
+            "combat damage", node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "an assigns-no-combat-damage mark lasts the rest of the turn and "
+            "nothing else ends it", node=node,
+        )
+    return (OracleInstruction("assign_no_combat_damage_until_eot", "", {}),)

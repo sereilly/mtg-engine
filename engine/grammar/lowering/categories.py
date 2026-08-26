@@ -360,6 +360,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "Attacking doesn't cause creatures you control to tap this combat…"
     # (Johan.) A restriction on what declaring an attacker does, so it files
     # with the other CR 506/508 clauses and GRAMMAR_CATEGORIES is unchanged.
+    # "This creature assigns no combat damage this turn." (Floral Spuzzem.)
+    # CR 510.1's assignment switched off for one permanent — a restriction on
+    # what the combat damage step does, so it files with the other CR 506/510
+    # clauses.
+    "assign_no_combat_damage_until_eot": "combat_restrictions",
     "exempt_from_attack_tapping": "combat_restrictions",
     "remove_from_combat": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",

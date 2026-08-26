@@ -199,6 +199,7 @@ from .combat import (
     _lower_combat_restriction,
     _lower_cant_be,
     _lower_attack_as_though,
+    _lower_assigns_no_combat_damage,
     _lower_attacking_doesnt_tap,
     _lower_remove_from_combat,
 )
@@ -360,6 +361,7 @@ __all__ = [
     "_lower_combat_restriction",
     "_lower_cant_be",
     "_lower_attack_as_though",
+    "_lower_assigns_no_combat_damage",
     "_lower_attacking_doesnt_tap",
     "_lower_remove_from_combat",
     "_lower_gain_life",

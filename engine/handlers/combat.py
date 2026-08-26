@@ -11,6 +11,7 @@ from ._common import (
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword
+from ..combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
 from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
 from ..pt import add_pt_modifier
 from ..rampage import rampage_bonus
@@ -536,5 +537,29 @@ def exempt_from_attack_tapping(
     game.log.append(
         f"attacking doesn't cause those creatures to tap this combat "
         f"({context.card.name if context.card is not None else 'an effect'})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("assign_no_combat_damage_until_eot")
+def assign_no_combat_damage_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"This creature assigns no combat damage this turn." (Floral Spuzzem.)
+
+    Marks the effect's own source; ``engine/combat_assignment.py`` is what the
+    combat damage step reads and the cleanup sweep is what ends it.
+
+    With no source on the battlefield there is nothing the sentence is about,
+    and the effect refuses rather than reporting a mark it did not make — the
+    rider is the whole reason the card's first half is worth doing, so a
+    silently dropped one is the card doing strictly more than it prints.
+    """
+    source = context.source_permanent
+    if source is None:
+        return False, "ability not implemented"
+    source.metadata[ASSIGNS_NO_COMBAT_DAMAGE] = True
+    game.log.append(
+        f"{source.card.name} assigns no combat damage this turn"
     )
     return True, "resolved"

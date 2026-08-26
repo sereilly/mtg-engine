@@ -168,6 +168,13 @@ class Game(
     combat_first_strike_done: bool = False
     combat_attackers_locked: bool = False
     combat_blockers_locked: bool = False
+    # CR 509.1h: "whenever this creature attacks and isn't blocked" fires when
+    # blocks are declared, and once per combat. Three paths lock blocks — a
+    # declaration, the auto-skip of a defender with no legal block, and a
+    # Camouflage resolution — and the step's completion is the one point all
+    # three reach, so the firing hangs off that and this flag is what keeps a
+    # second `advance_combat_phase` at the same step from firing again.
+    combat_unblocked_triggers_fired: bool = False
     # Banding (CR 702.22). ``combat_bands`` holds the attacking bands declared this
     # combat (each a list of attacker indices). ``combat_band_blocks`` maps an
     # attacker index to the blocker indices that block it via band propagation

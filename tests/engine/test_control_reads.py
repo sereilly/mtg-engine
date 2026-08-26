@@ -320,10 +320,14 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "engine/mixins/stack/activation.py": 2,
     "engine/mixins/stack/casting.py": 4,
     "engine/mixins/stack/choices.py": 4,
-    "engine/phases/combat_damage_step.py": 17,
+    # One read moved between these two in LEG round 32, and nothing else about
+    # them changed: "whenever this creature attacks and isn't blocked" fires
+    # when blocks lock (CR 509.1h) rather than inside `resolve_combat_damage`,
+    # so its `controller.battlefield[idx]` went with it.
+    "engine/phases/combat_damage_step.py": 16,
     "engine/phases/combat_phase.py": 11,
     "engine/phases/declare_attackers_step.py": 4,
-    "engine/phases/declare_blockers_step.py": 16,
+    "engine/phases/declare_blockers_step.py": 17,
     "engine/phases/untap_step.py": 1,
     "engine/phases/upkeep_step.py": 3,
     "engine/replacements.py": 1,

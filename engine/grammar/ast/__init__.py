@@ -196,6 +196,7 @@ from .stack import (
     ModalNode,
 )
 from .combat import (
+    AssignsNoCombatDamage,
     AttackingDoesntTap,
     CantBe,
     AttackAsThough,
@@ -392,6 +393,7 @@ __all__ = [
     # combat
     "CantBe",
     "AttackAsThough",
+    "AssignsNoCombatDamage",
     "AttackingDoesntTap",
     "CombatRestriction",
     "RemoveFromCombat",

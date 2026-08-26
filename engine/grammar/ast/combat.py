@@ -133,3 +133,24 @@ class AttackingDoesntTap:
     gate_state: str | None = None
     #: Whether the printed clause negated it ("is **un**tapped").
     gate_negated: bool = False
+
+
+@dataclass(frozen=True)
+class AssignsNoCombatDamage:
+    """``<subject> assigns no combat damage <duration>.`` (Floral Spuzzem.)
+
+    CR 510.1's assignment turned off for the creatures the sentence names. Not
+    a prevention effect (CR 615) and not a P/T change: the creature still has
+    its power, still deals *non*-combat damage, and nothing is "prevented" — the
+    combat damage step simply assigns nothing from it. Keeping the three apart
+    is what stops a shield's counter being spent or a lord's +1/+1 being lost
+    where the card says neither.
+
+    The duration is carried rather than baked in for the reason every other
+    node here carries one: "this turn" and "this combat" are the same
+    restriction over different windows, and a card printing the second is a
+    payload change rather than a second node.
+    """
+
+    subject: Recipient
+    duration: Duration = field(default_factory=Duration)

@@ -49,6 +49,7 @@ ActionKind = Literal[
     "search_exile_confirm",
     "search_destination_confirm",
     "tap_any_number_confirm",
+    "trigger_target_confirm",
     "reflexive_target_confirm",
     "permanent_choice_confirm",
     "untap_up_to_confirm",

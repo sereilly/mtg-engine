@@ -134,6 +134,24 @@ def _action_name_then_reveal_top_confirm(session, req, seat_type):
     if not session.game.confirm_name_then_reveal_top(req.seat, req.card_name):
         raise HTTPException(status_code=400, detail="the name could not be applied")
 
+@action_handler("trigger_target_confirm")
+def _action_trigger_target_confirm(session, req, seat_type):
+    pending = next(
+        (c for c in session.game.pending_choices_of("trigger_target")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no trigger target pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.target_permanent_id is None:
+        raise HTTPException(status_code=400, detail="target_permanent_id is required")
+    # Checked against the list the prompt offered, not against the board:
+    # CR 603.3d chose the targets as the ability went on the stack.
+    ok = session.game.confirm_trigger_target(req.seat, req.target_permanent_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail="invalid target")
+
 @action_handler("reflexive_target_confirm")
 def _action_reflexive_target_confirm(session, req, seat_type):
     pending = next(

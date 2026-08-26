@@ -293,3 +293,126 @@ def test_603_3_an_ordinary_upkeep_trigger_goes_on_the_stack():
     # records and an empty stack does not distinguish from never firing.
     assert "Dawn Bell ability resolved" in game.log
     assert [c.name for c in p1.hand] == ["Somewhere"]
+
+
+# ---------------------------------------------------------------------------
+# What it targets, and when it chooses (CR 603.3d)
+# ---------------------------------------------------------------------------
+
+
+def _r32_invented_creature(name: str, oracle_text: str) -> CardDefinition:
+    """A 2/2 nobody printed, carrying *oracle_text*."""
+    raw = {
+        "name": name, "type_line": "Creature - Test",
+        "oracle_text": oracle_text, "power": "2", "toughness": "2",
+    }
+    return CardDefinition(
+        name=name, mana_cost="{2}", cmc=2.0, type_line="Creature - Test",
+        oracle_text=oracle_text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw=raw,
+    )
+
+
+_R32_UNBLOCKED_DESTROY = (
+    "Whenever this creature attacks and isn't blocked, destroy target artifact "
+    "defending player controls."
+)
+
+
+def _r32_unblocked_attack(game):
+    """Attack with slot 0 and run to the moment blocks lock."""
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game._settle()
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+    game._settle()
+    game.advance_combat_phase()
+
+
+@pytest.mark.cr("603.3d", "601.2c", "509.1h")
+def test_a_targeted_trigger_chooses_its_target_as_it_goes_on_the_stack():
+    """CR 603.3d routes a trigger's remaining announcement through CR 601.2c,
+    which is where targets are chosen — so the choice belongs to the moment the
+    ability is put on the stack, not to its resolution.
+
+    The card is invented, so what is tested is the route rather than the one
+    pool card that reaches it. The narrowing matters twice over: "defending
+    player controls" must exclude the *attacker's* own artifact, and the fire
+    site used to stamp the attacking creature's own battlefield slot as the
+    target — which on this board is exactly that artifact.
+    """
+    raider = _nosick(Permanent(card=_r32_invented_creature(
+        "Sapper", _R32_UNBLOCKED_DESTROY,
+    )))
+    ours = Permanent(card=_invented("Our Engine", "Artifact", ""))
+    theirs = Permanent(card=_invented("Their Engine", "Artifact", ""))
+    game, p1, p2 = _duel()
+    p1.battlefield = [raider, ours]
+    p2.battlefield = [theirs]
+    game.interactive_seats = {0}
+    game._sync_control()
+
+    _r32_unblocked_attack(game)
+
+    pending = list(game.pending_choices_of("trigger_target"))
+    assert len(pending) == 1, game.log
+    assert [t["name"] for t in pending[0].data["targets"]] == ["Their Engine"]
+
+
+@pytest.mark.cr("603.3d", "608.2")
+def test_a_targeted_trigger_cannot_resolve_before_its_target_is_chosen():
+    """The choice is part of *putting the ability on the stack*, so an ability
+    that still owes it has not finished being announced and cannot resolve.
+
+    This is the half a prompt armed mid-resolution already had: those record
+    their stack object and hold it. An announcement prompt records the object
+    too, and until it was read the ability resolved with no target at all —
+    destroying nothing while the picker was still on screen.
+    """
+    raider = _nosick(Permanent(card=_r32_invented_creature(
+        "Sapper", _R32_UNBLOCKED_DESTROY,
+    )))
+    theirs = Permanent(card=_invented("Their Engine", "Artifact", ""))
+    game, p1, p2 = _duel()
+    p1.battlefield = [raider]
+    p2.battlefield = [theirs]
+    game.interactive_seats = {0}
+    game._sync_control()
+
+    _r32_unblocked_attack(game)
+
+    assert len(game.stack) == 1, game.log
+    assert [p.card.name for p in p2.battlefield] == ["Their Engine"]
+
+    pending = list(game.pending_choices_of("trigger_target"))[0]
+    assert game.confirm_trigger_target(0, pending.data["targets"][0]["permanent_id"])
+    game._settle()
+
+    assert p2.battlefield == [], game.log
+
+
+@pytest.mark.cr("603.3d")
+def test_a_targeted_trigger_with_nothing_to_name_leaves_the_stack():
+    """CR 603.3d's last sentence: "If a choice is required when the triggered
+    ability goes on the stack but no legal choices can be made for it … the
+    ability is simply removed from the stack." Not resolved into a no-op —
+    removed, which is a different game state that nothing responds to.
+    """
+    raider = _nosick(Permanent(card=_r32_invented_creature(
+        "Sapper", _R32_UNBLOCKED_DESTROY,
+    )))
+    ours = Permanent(card=_invented("Our Engine", "Artifact", ""))
+    game, p1, p2 = _duel()
+    p1.battlefield = [raider, ours]
+    game.interactive_seats = {0}
+    game._sync_control()
+
+    _r32_unblocked_attack(game)
+
+    assert not game.stack, game.log
+    assert not list(game.pending_choices_of("trigger_target"))
+    assert [p.card.name for p in p1.battlefield] == ["Sapper", "Our Engine"]

@@ -970,7 +970,10 @@ class AbilityActivationMixin:
             return SimulationResult(permanent.card.name, supported, ability.effect_kind, details)
 
         self._stack_push(
-            StackItem(
+            # CR 602.2b: an activated ability's targets were chosen when it
+            # was activated, so it does not choose again here.
+            targets_already_chosen=True,
+            item=StackItem(
                 card=permanent.card,
                 caster_index=controller_index,
                 target_player_index=target_idx,
@@ -1083,7 +1086,10 @@ class AbilityActivationMixin:
         self.log.append(f"{controller.name} discarded {card.name} to activate its ability")
 
         self._stack_push(
-            StackItem(
+            # CR 602.2b: an activated ability's targets were chosen when it
+            # was activated, so it does not choose again here.
+            targets_already_chosen=True,
+            item=StackItem(
                 card=card,
                 caster_index=controller_index,
                 target_player_index=None,
