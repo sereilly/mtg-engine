@@ -94,6 +94,13 @@ def _lower_lord_effects(
     keywords: list[str] = []
     for effect in effects:
         if isinstance(effect, ast.Pump):
+            if effect.per_each is not None:
+                # "…gets +2/+2 for each Aura attached to it." The delta is a
+                # count, and LordBuff carries a pair of integers — attached
+                # unread it would be a flat +2/+2 on the whole set.
+                raise LoweringError(
+                    "engine/lord_buffs.py carries no repeated bonus", node=node
+                )
             power = _signed(effect.power, effect.power_negative)
             toughness = _signed(effect.toughness, effect.toughness_negative)
             if not isinstance(power, int) or not isinstance(toughness, int):
@@ -249,7 +256,8 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
     # lowering knows how to say that, so this routes rather than repeats.
     if len(effects) == 1 and isinstance(effects[0], ast.Pump):
         pump = effects[0]
-        if pump.x_definition is not None and _is_source(pump.subject):
+        computed = pump.x_definition is not None or pump.per_each is not None
+        if computed and _is_source(pump.subject):
             return _lower_pump(pump)
     buff = _lower_lord_effects(node, effects)
     return (OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(buff)),)

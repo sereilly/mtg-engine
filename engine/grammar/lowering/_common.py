@@ -557,6 +557,21 @@ def count_spec(
         "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
         "filter": payload,
     }
+    # "the number of Auras **attached to it**" (Rabid Wombat). A relation to one
+    # named permanent, not a property of each object, so it rides the spec
+    # rather than the filter — ``permanent_matches_filter`` cannot test it, and
+    # a key handed to that matcher is a key silently ignored. It also settles
+    # *which pile* is counted: what is attached to a permanent is recorded on
+    # that permanent, so the count is not a battlefield scan and does not
+    # inherit the owner scope above (an opponent's Aura on your creature is
+    # attached to your creature).
+    if filt.attached_to is not None:
+        if filt.attached_to != "source":
+            raise LoweringError(
+                f"no count resolves an attachment to the {filt.attached_to}",
+                node=node,
+            )
+        spec["attached_to"] = filt.attached_to
     # Omitted when it is the default, so every spec written before aggregates
     # existed is byte-identical.
     if aggregate != "count":

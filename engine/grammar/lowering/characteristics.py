@@ -52,6 +52,21 @@ def _static_x_amount(amount: ast.Amount, negative: bool, node) -> int | str:
     raise LoweringError("a static computed bonus needs X or a number", node=node)
 
 
+def _per_each_amount(amount: ast.Amount, negative: bool, node) -> dict | int:
+    """One half of a "for each" bonus: how much *each* repetition is worth.
+
+    ``{"times_x": n}`` is what ``resolve_amount`` multiplies by the count. A
+    printed 0 stays a plain 0 — nothing times a count is still nothing, and the
+    literal keeps every payload written before this existed byte-identical.
+    """
+    if not isinstance(amount, ast.Fixed):
+        raise LoweringError(
+            'a "for each" bonus needs a printed number to repeat', node=node
+        )
+    value = -amount.value if negative else amount.value
+    return {"times_x": value} if value else 0
+
+
 def _x_definition_spec(definition: ast.Amount, node) -> dict:
     """The spec behind a where-clause's X, whichever aggregate it names."""
     if isinstance(definition, ast.GreatestPowerAmong):
@@ -111,6 +126,32 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         raise LoweringError(
             "\"for each creature tapped this way\" with no tap in this effect",
             node=node,
+        )
+    if node.per_each is not None:
+        # "This creature gets +2/+2 **for each Aura attached to it**" (Rabid
+        # Wombat). A CR 613 layer-7c contribution whose *size* is a count, like
+        # the where-clause form below it — only the spelling of the
+        # multiplication differs, so it lands on the same ``dynamic_pt_bonus``
+        # kind and the same shared count spec. Every other reading refuses
+        # rather than falling through: a duration would make it a one-shot pump
+        # whose handler has no repetition, and a subject other than the source
+        # would point the bonus at a permanent the refresh is not refreshing.
+        if node.duration.kind is not None or not _is_source(node.subject):
+            raise LoweringError(
+                'a "for each" pump is only a continuous bonus on its own source',
+                node=node,
+            )
+        return (
+            OracleInstruction("dynamic_pt_bonus", "", {
+                # The printed number sizes *one* repetition. Carried as an
+                # amount rather than folded into the spec's multiplier: the
+                # spec is one count and the two halves may scale differently.
+                "power": _per_each_amount(node.power, node.power_negative, node),
+                "toughness": _per_each_amount(
+                    node.toughness, node.toughness_negative, node
+                ),
+                "x_from_count": count_spec(node.per_each, node),
+            }),
         )
     if node.duration.kind is None:
         # "This creature gets +X/+0, where X is the greatest power among

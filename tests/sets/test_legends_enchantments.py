@@ -905,3 +905,31 @@ def test_living_plane_animates_lands_of_every_type_on_both_sides(set_pool):
     game._refresh_dynamic_creatures()
     assert not mine.is_creature
     assert not theirs.is_creature
+
+
+def test_kismet_taps_the_three_types_it_names_on_the_opponents_side(set_pool):
+    """"Artifacts, creatures, and lands your opponents control enter tapped."
+    Three types and one side, both read off the printed noun phrase."""
+    kismet = Permanent(card=set_pool("LEG")["Kismet"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[kismet]),
+        PlayerState(name="P2"),
+    ])
+
+    def _enters(seat: int, type_line: str) -> Permanent:
+        card = CardDefinition(
+            name="Subject", mana_cost="", cmc=0.0, type_line=type_line,
+            oracle_text="", colors=(), color_identity=(), keywords=(),
+            produced_mana=(),
+            raw={"name": "Subject", "type_line": type_line,
+                 "power": "2", "toughness": "2"},
+        )
+        perm = Permanent(card=card)
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        return perm
+
+    for type_line in ("Creature - Bear", "Artifact", "Basic Land - Forest"):
+        assert _enters(1, type_line).tapped, type_line
+        assert not _enters(0, type_line).tapped, type_line
+    # An enchantment is not one of the three types the card names.
+    assert not _enters(1, "Enchantment").tapped

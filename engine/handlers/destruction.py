@@ -196,11 +196,19 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     }
     attached_to = instruction.payload.get("attached_to")
     host = None
-    if attached_to == "target":
-        host = game.permanent_by_id(context.target_permanent_id)
+    if attached_to is not None:
+        # Every referent the noun parser can produce is answered here. Falling
+        # through with `host` still None would drop the relation and sweep every
+        # matching permanent on the board, which is the widening this whole
+        # payload key exists to prevent — so an unresolvable one ends the
+        # resolution instead.
+        if attached_to == "target":
+            host = game.permanent_by_id(context.target_permanent_id)
+        elif attached_to == "source":
+            host = context.source_permanent
         if host is None:
             game.log.append(
-                f"{context.card.name}: nothing is attached to a creature that is gone"
+                f"{context.card.name}: nothing is attached to a permanent that is gone"
             )
             return True, "resolved"
     matched = [

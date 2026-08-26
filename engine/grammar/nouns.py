@@ -54,11 +54,11 @@ _SELF_NOUNS = frozenset({
     "equipment",
 })
 
-# "…attached to that creature" — the trailing clause naming what an Aura or
-# Equipment is on. Only "that creature" is admitted: it is the referent the
-# spell's own target supplies, and any other noun would be a set the handler has
-# no way to resolve.
-_ATTACHED_TO_REFERENTS = {("that", "creature"): "target"}
+# "…attached to that creature" / "…attached to it" — the trailing clause naming
+# what an Aura or Equipment is on, and the referent each consumer resolves.
+# Every consumer must answer every entry: a referent nothing resolves is a
+# relation dropped, and a dropped relation on a sweep takes the whole board.
+_ATTACHED_TO_REFERENTS = {("that", "creature"): "target", ("it",): "source"}
 
 _STATE_ADJECTIVES = {
     "tapped": ("tapped", True),

@@ -22,7 +22,7 @@ from __future__ import annotations
 import pytest
 
 from engine import oracle
-from engine.card_loader import load_catalog
+from engine.card_loader import load_catalog, load_cards, manifest_set_paths
 from engine.grammar import ast as grammar_ast, compile_line
 from engine.grammar.derived import TABLES, derived_instruction_for_line
 from engine.grammar.errors import GrammarError
@@ -31,9 +31,18 @@ from engine.grammar.parser import _parse_line
 
 @pytest.fixture(scope="module")
 def pool_lines():
-    """Every printed line of every card, with the card that printed it."""
+    """Every printed line of every card, with the card that printed it.
+
+    The **measured** sets are included, unlike ``load_catalog``'s shipped pool.
+    A derivation table is written for the card that needs it, and that card is
+    in a measured set for the whole of the set's implementation — so a
+    shipped-only reading would call every new table dead on the round that
+    added it and force the entry to be written after the promotion instead of
+    with the card. This is a reachability question, not a coverage floor, so
+    the wider pool is the one it should ask about.
+    """
     lines = []
-    for card in load_catalog():
+    for card in load_cards(manifest_set_paths(include_measured=True)):
         text = oracle.expand_modal_activated_lines(card.oracle_text or "")
         for raw in text.splitlines():
             line = raw.strip()

@@ -25,6 +25,10 @@ from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..tokens import make_token_card
 from ..keywords import add_derived_grant, clear_derived_grants
+from ..enter_tapped_statics import (
+    ENTER_TAPPED_STATIC_KIND,
+    enter_tapped_filter_from_payload,
+)
 from ..land_animation import (
     LAND_ANIMATION_KIND,
     LandAnimation,
@@ -44,6 +48,7 @@ from ..lord_buffs import (
 )
 from ..handlers._common import evaluate_count, resolve_amount
 from ..search_filters import name_key
+from ..subject_filters import subject_matches
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..pt import clear_base_pt, set_base_pt
@@ -204,6 +209,16 @@ class PermanentStateMixin:
         if any(line for line in program.static_lines if ENTERS_TAPPED in line) or (
             ENTERS_TAPPED in text and "unless" not in text
         ):
+            permanent.tapped = True
+
+        # CR 614.1c, the *other* sentence: a permanent already on the
+        # battlefield saying how somebody else's permanents enter ("Artifacts,
+        # creatures, and lands your opponents control enter tapped", Kismet).
+        # Asked of the board rather than of the card being read, which is the
+        # whole difference between the two — and asked here, at the one seam an
+        # entry passes through, so a permanent arriving by any road (cast,
+        # token, reanimation) meets it.
+        if self._enters_tapped_by_a_static(permanent):
             permanent.tapped = True
 
         # "As this creature enters, it becomes your choice of <body>, <body>,
@@ -691,7 +706,14 @@ class PermanentStateMixin:
             for bonus in prog.instructions:
                 if bonus.kind != "dynamic_pt_bonus":
                     continue
-                value = evaluate_count(self, player, bonus.payload.get("x_from_count") or {})
+                # The permanent being refreshed *is* the source of its own
+                # static ability, which is what lets a spec name a relation to
+                # it ("Auras attached to it") rather than only a set of
+                # characteristics.
+                value = evaluate_count(
+                    self, player, bonus.payload.get("x_from_count") or {},
+                    source=permanent,
+                )
                 _add_static_pt(
                     permanent,
                     resolve_amount(bonus.payload.get("power", 0), value),
@@ -855,6 +877,35 @@ class PermanentStateMixin:
                 game.controller_index_of(permanent)
                 == game.controller_index_of(source)
             )
+        return False
+
+    def _enters_tapped_by_a_static(self, permanent: Permanent) -> bool:
+        """Whether a static already on the battlefield taps *permanent* as it
+        enters (CR 614.1c).
+
+        Whose permanents such a static reaches is relative to **its own**
+        controller (CR 109.5), so the observer handed to ``subject_matches`` is
+        the source's seat and never the entering permanent's. Read the other way
+        round, Kismet would tap its controller's permanents and leave the
+        opponent's alone — the card backwards, and right-looking on every board
+        where only one player is doing anything.
+
+        Through ``subject_matches`` rather than a comparison here, so "artifacts,
+        creatures, and lands your opponents control" means on this seam exactly
+        what it means on a trigger's subject or in a sweep. The permanent is
+        already on its controller's battlefield by the time this runs
+        (``Game._enter_battlefield`` appends before initializing), which is what
+        lets the matcher answer a relative key at all.
+        """
+        for source_seat, source in self.permanents_with_controller():
+            for instr in compile_card_oracle(source.effective_card).instructions:
+                if instr.kind != ENTER_TAPPED_STATIC_KIND:
+                    continue
+                described = enter_tapped_filter_from_payload(instr.payload)
+                if subject_matches(
+                    self, permanent, described, observer=source_seat, source=source
+                ):
+                    return True
         return False
 
     def _refresh_land_animation(

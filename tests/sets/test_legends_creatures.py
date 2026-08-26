@@ -1928,3 +1928,34 @@ def test_arcades_sabboth_buffs_only_untapped_non_attacking_creatures(set_pool):
     game.remove_from_battlefield(arcades)
     game._recompute_continuous_effects()
     assert resting.effective_toughness == 2
+
+
+def test_rabid_wombat_grows_with_every_aura_on_it(set_pool):
+    """"This creature gets +2/+2 for each Aura attached to it." Printed 0/1."""
+    from engine.auras import attach_aura, detach_aura
+
+    def _aura(name: str) -> CardDefinition:
+        return CardDefinition(
+            name=name, mana_cost="{1}", cmc=1.0, type_line="Enchantment - Aura",
+            oracle_text="Enchant creature", colors=(), color_identity=(),
+            keywords=(), produced_mana=(),
+            raw={"name": name, "type_line": "Enchantment - Aura"},
+        )
+
+    wombat = Permanent(card=set_pool("LEG")["Rabid Wombat"])
+    auras = [Permanent(card=_aura(f"Aura {n}")) for n in range(2)]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[wombat, *auras]),
+        PlayerState(name="P2"),
+    ])
+    game._refresh_dynamic_creatures()
+    assert (wombat.effective_power, wombat.effective_toughness) == (0, 1)
+
+    for aura in auras:
+        attach_aura(aura, wombat)
+    game._refresh_dynamic_creatures()
+    assert (wombat.effective_power, wombat.effective_toughness) == (4, 5)
+
+    detach_aura(auras[0], wombat)
+    game._refresh_dynamic_creatures()
+    assert (wombat.effective_power, wombat.effective_toughness) == (2, 3)

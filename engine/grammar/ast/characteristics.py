@@ -21,6 +21,7 @@ from ._core import (
     Duration,
     Fixed,
     PlayerRef,
+    ObjectFilter,
     Recipient,
 )
 
@@ -46,6 +47,12 @@ class Pump:
     # was already tapped. A flag rather than an `ObjectFilter`, because the set
     # is not describable: only the sentence in front of it knows which ones.
     per_each_tapped_this_way: bool = False
+    # "gets +2/+2 **for each Aura attached to it**" (Rabid Wombat). A count of
+    # the board rather than a back-reference, so unlike the flag above the set
+    # *is* describable and the noun phrase describes it. The printed P/T is the
+    # size of one repetition, not the whole bonus: the delta is that number
+    # times the count.
+    per_each: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)
