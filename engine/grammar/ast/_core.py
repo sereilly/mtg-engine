@@ -481,6 +481,15 @@ class ObjectFilter:
     # several combats, and without a bound object the phrase names a blocker
     # nobody recorded.
     blocked_by_bound_object: bool = False
+    # "…all creatures that were blocked by **target Wall** this turn" (Glyph of
+    # Reincarnation). The same history read against a different referent: the
+    # blocker is the *spell's own target* rather than the object a delayed
+    # ability was bound to, so the relation carries the filter that target had
+    # to satisfy and the lowering hoists it into the instruction's `targets`
+    # description. A sibling of `blocked_by_bound_object` rather than a
+    # widening of it — which object the record is read off decides which seam
+    # the handler asks, and one field meaning either would leave it guessing.
+    blocked_by_target_object: "ObjectFilter | None" = None
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.

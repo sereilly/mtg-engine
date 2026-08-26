@@ -764,3 +764,72 @@ def test_509_1b_the_tightest_cap_wins_when_two_are_on_the_battlefield():
     assert not ok
     ok, msg = game.declare_blockers(1, {0: 0})
     assert ok, msg
+
+
+# ---------------------------------------------------------------------------
+# The per-turn block record, and the seat frozen beside each pair (round 33).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("509.1a", "613.1b")
+def test_r33_a_block_records_the_attacker_and_the_seat_it_blocked_under():
+    """Declaring a block records *what* was blocked and *whose* it was.
+
+    Control is CR 613 layer 2 and moves, so a card asking who controlled a
+    creature when it became blocked cannot ask the board later — by then the
+    creature may have changed hands, or be a card in a graveyard with no
+    controller at all. The seat is frozen here, at the one moment CR 509.1a
+    describes.
+    """
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    blocker = Permanent(card=_mk_creature("Blocker", 0, 4))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0})
+
+    assert blocker.metadata["blocked_attacker_ids_this_turn"] == [
+        attacker.permanent_id
+    ]
+    assert blocker.metadata["blocked_attacker_controllers_this_turn"] == {
+        attacker.permanent_id: 0
+    }
+
+
+@pytest.mark.cr("509.1a")
+def test_r33_a_creature_blocked_by_another_blocker_is_not_in_this_ones_record():
+    """The record is per blocker, which is what lets a card name one of them.
+
+    A record kept per *turn* rather than per blocker would answer "was this
+    creature blocked at all", and an effect reading it would reach every
+    attacker in the combat instead of the ones the named creature stopped.
+    """
+    first = Permanent(card=_mk_creature("Attacker One", 2, 2))
+    second = Permanent(card=_mk_creature("Attacker Two", 2, 2))
+    named = Permanent(card=_mk_creature("Named Blocker", 0, 4))
+    other = Permanent(card=_mk_creature("Other Blocker", 0, 4))
+    p1 = PlayerState(name="P1", battlefield=[first, second])
+    p2 = PlayerState(name="P2", battlefield=[named, other])
+    game = Game(players=[p1, p2])
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    game.declare_attackers(0, [0, 1])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0, 1: 1})
+
+    assert named.metadata["blocked_attacker_ids_this_turn"] == [
+        first.permanent_id
+    ]
+    assert other.metadata["blocked_attacker_ids_this_turn"] == [
+        second.permanent_id
+    ]

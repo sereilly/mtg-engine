@@ -421,7 +421,15 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             stream.expect_word("the")
             stream.expect_word("battlefield")
             under = bool(stream.accept_phrase("under", "your", "control"))
-            return ast.PutOntoBattlefield(moved, under_your_control=under)
+            # "…**under its owner's control**" (Glyph of Reincarnation) — the
+            # other seat CR 400.3 lets a card arrive under. Read only when
+            # "under your control" was not, so one sentence cannot claim both.
+            owners = not under and bool(
+                stream.accept_phrase("under", "its", "owner", "'s", "control")
+            )
+            return ast.PutOntoBattlefield(
+                moved, under_your_control=under, under_owners_control=owners,
+            )
     stream.reset(move_mark)
     up_to = stream.accept_phrase("up", "to")
     count = parse_amount(stream)

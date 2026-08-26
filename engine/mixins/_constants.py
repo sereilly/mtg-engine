@@ -58,6 +58,10 @@ _EOT_METADATA_KEYS = (
     # block pairs a blocker was part of, kept per turn because a turn holds
     # several combats and `blocked_this_combat` is cleared by each one.
     "blocked_attacker_ids_this_turn",
+    # The same pairs with the attacker's controller frozen beside each id
+    # (Glyph of Reincarnation). Swept with the ids it keys, or a later turn's
+    # sentence would read a seat from a block that is no longer in the window.
+    "blocked_attacker_controllers_this_turn",
 )
 
 _TURN_PHASES: tuple[str, ...] = (

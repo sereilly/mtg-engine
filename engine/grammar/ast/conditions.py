@@ -116,6 +116,23 @@ class DiedThisTurn:
 
 
 @dataclass(frozen=True)
+class DiedThisWay:
+    """"for each creature that **died this way**" (Glyph of Reincarnation).
+
+    A sibling of :class:`DiedThisTurn` and emphatically not the same set. "This
+    turn" is a window of the turn's history that anything may have contributed
+    to; "this way" is exactly what an earlier step of *this same effect* just
+    destroyed. Reading one as the other would iterate every creature that died
+    all turn — including the ones this spell had nothing to do with.
+
+    The lowering refuses it without a producer, as every back-reference in this
+    grammar is refused: with no earlier step the words name nothing, and an
+    empty loop is a sentence that reports supported and does not run.
+    """
+    filter: ObjectFilter = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
 class LifeGainedThisTurn:
     """"if you gained 3 or more life this turn" (CR 603.4 intervening-if).
 

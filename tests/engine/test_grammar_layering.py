@@ -129,7 +129,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # two-source shield landed. The parse side keeps prevention with damage because
 # the two read the same recipient and duration vocabulary; the lowering halves
 # share not one helper, which is the same asymmetry the families above record.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "where_x"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "where_x", "control_flow"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 

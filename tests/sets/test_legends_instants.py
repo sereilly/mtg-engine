@@ -2151,3 +2151,228 @@ def test_indestructible_aura_shields_the_creature_it_named(set_pool):
     assert deal_damage(
         game, {"recipient": bystander, "amount": 3, "source": None, "combat": False}
     ).dealt == 3
+
+
+# ---------------------------------------------------------------------------
+# Glyph of Reincarnation (round 33) — the block record read off a *target*
+# rather than a bound object, and the seat frozen beside it. Three sentences:
+# a relative sweep, a no-regeneration rider, and a loop over what the sweep
+# killed that reanimates from a graveyard the board can no longer name.
+# ---------------------------------------------------------------------------
+
+
+def _r33_wall(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Wall",
+        oracle_text="Defender", colors=(), color_identity=(),
+        keywords=("Defender",), produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Wall",
+             "power": "0", "toughness": "9"},
+    )
+
+
+def _r33_reincarnation_board(set_pool, *, p1_graveyard=("Old Bear",)):
+    """P1 attacks with two creatures into P2's two Walls.
+
+    P2 holds the Glyph, and both players have a creature card already in the
+    graveyard — P2's is the one the effect must *not* reach, because the
+    graveyard the sentence names is the dead attacker's controller's.
+    """
+    blocking_wall = Permanent(card=_r33_wall("Named Wall"))
+    other_wall = Permanent(card=_r33_wall("Other Wall"))
+    first = Permanent(card=_creature("Attacker One"))
+    second = Permanent(card=_creature("Attacker Two"))
+    p1 = PlayerState(
+        name="P1", battlefield=[first, second],
+        graveyard=[_creature(name) for name in p1_graveyard],
+    )
+    p2 = PlayerState(
+        name="P2", battlefield=[blocking_wall, other_wall],
+        hand=[set_pool("LEG")["Glyph of Reincarnation"]],
+        graveyard=[_creature("Wrong Corpse")],
+    )
+    game = Game(players=[p1, p2])
+    return game, p1, p2, blocking_wall, other_wall, first, second
+
+
+def _r33_combat(game, blocks):
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    game.declare_attackers(0, [0, 1])
+    game.advance_combat_phase()   # declare_blockers
+    game.declare_blockers(1, blocks)
+    game.advance_combat_phase()   # combat damage
+    game.end_combat(step_already_started=True)
+    game._settle()
+
+
+def _r33_cast_glyph(game, wall_index=0):
+    """Cast the Glyph after combat, naming the Wall at *wall_index*."""
+    # "Cast this spell only after combat" — the combat phase is over, and the
+    # postcombat main phase is where the card may be cast at all.
+    game.current_turn_phase = "postcombat_main"
+    result = game.cast_from_hand(
+        1, "Glyph of Reincarnation",
+        target_player_index=1, target_permanent_index=wall_index,
+    )
+    game._settle()
+    return result
+
+
+def test_glyph_of_reincarnation_targets_a_wall(set_pool):
+    """The blocker is the spell's own target, so the sweep's noun phrase has
+    to hoist a Wall picker out of a relative clause — without it the spell is
+    cast with nothing chosen and reads no block record at all."""
+    from engine.targeting import derive_cast_spec
+
+    card = set_pool("LEG")["Glyph of Reincarnation"]
+    program = compile_card_oracle(card)
+    assert program.supported, program.reason
+    sweep = program.instructions[0].payload["steps"][0]
+    assert sweep.kind == "destroy_all_matching"
+    assert sweep.payload["blocked_by_target_object"] is True
+    # "They can't be regenerated" is the sweep's rider, not a lost sentence.
+    assert sweep.payload["bypass_regeneration"] is True
+    assert derive_cast_spec(card, program) == {
+        "kind": "creature", "wall_only": True,
+    }
+
+
+def test_glyph_of_reincarnation_destroys_only_what_its_wall_blocked(set_pool):
+    """The relation is the whole card. Dropped, the sweep reads "destroy all
+    creatures" and takes both attackers — here each is blocked by a different
+    Wall and only the named one's victim dies."""
+    game, p1, _p2, _named, _other, _first, _second = _r33_reincarnation_board(
+        set_pool
+    )
+    _r33_combat(game, {0: 0, 1: 1})
+
+    assert _r33_cast_glyph(game).supported
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Attacker Two"]
+    assert "Attacker One" in [card.name for card in p1.graveyard]
+
+
+def test_glyph_of_reincarnation_reanimates_from_the_blocked_controllers_graveyard(
+    set_pool,
+):
+    """Whose graveyard, and whose battlefield. Both are the dead attacker's
+    seat, not the caster's — P2 chooses and P1 receives."""
+    game, p1, p2, _named, _other, _first, _second = _r33_reincarnation_board(
+        set_pool
+    )
+    _r33_combat(game, {0: 0})
+    _r33_cast_glyph(game)
+
+    # The pick is the caster's (CR 608.2c) and looks in the other seat's zone.
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("search_library", 1)
+    ]
+    choice = game.pending_choices[0]
+    assert choice.data["zone_seat"] == 0
+    assert choice.data["battlefield_seat"] == 0
+
+    assert game.confirm_search_library(1, 0, zone="graveyard")
+    game._settle()
+
+    assert "Old Bear" in [p.card.name for p in game.controlled_by(0)]
+    assert "Old Bear" not in [p.card.name for p in game.controlled_by(1)]
+    # P2's own graveyard is never searched: the sentence names the graveyard of
+    # the player who controlled the dead creature, not the caster's.
+    assert [card.name for card in p2.graveyard] == [
+        "Wrong Corpse", "Glyph of Reincarnation",
+    ]
+
+
+def test_glyph_of_reincarnation_reads_the_seat_the_creature_blocked_under(
+    set_pool,
+):
+    """The record is frozen at the block, which is the point of keeping it.
+
+    Control moves after the block — Attacker One changes hands — and the
+    sentence still names the seat that controlled it *when it became blocked*.
+    A reader asking the board instead would find the new controller, and a
+    creature in a graveyard has no controller at all.
+    """
+    from engine.control import change_control
+
+    game, p1, p2, _named, _other, first, _second = _r33_reincarnation_board(
+        set_pool
+    )
+    _r33_combat(game, {0: 0})
+    # Somebody steals the blocked attacker before the Glyph is cast.
+    change_control(first, 1, source="test")
+    game._sync_control()
+
+    _r33_cast_glyph(game)
+
+    choice = game.pending_choices[0]
+    assert choice.data["zone_seat"] == 0
+    assert choice.data["battlefield_seat"] == 0
+
+
+def test_glyph_of_reincarnation_with_an_empty_graveyard_reanimates_nothing(
+    set_pool,
+):
+    """The loop still runs; there is simply nothing to find. The spell
+    resolves rather than hanging on a prompt with no legal answer."""
+    game, p1, _p2, _named, _other, _first, _second = _r33_reincarnation_board(
+        set_pool, p1_graveyard=(),
+    )
+    _r33_combat(game, {0: 0})
+    _r33_cast_glyph(game)
+
+    assert [card.name for card in p1.graveyard] == ["Attacker One"]
+    choice = game.pending_choices[0]
+    assert game.decline_search_library(1)
+    game._settle()
+    assert choice not in game.pending_choices
+    assert [p.card.name for p in game.controlled_by(0)] == ["Attacker Two"]
+
+
+def test_glyph_of_reincarnation_naming_an_unblocking_wall_destroys_nothing(
+    set_pool,
+):
+    """A Wall that blocked nothing this turn names no blocks, and the sweep
+    is over an empty set rather than over the board."""
+    game, p1, _p2, _named, _other, _first, _second = _r33_reincarnation_board(
+        set_pool
+    )
+    _r33_combat(game, {0: 0})
+
+    # Target the *other* Wall, which blocked nobody.
+    assert _r33_cast_glyph(game, wall_index=1).supported
+
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Attacker One", "Attacker Two",
+    ]
+    assert game.pending_choices == []
+
+
+def test_glyph_of_reincarnation_with_its_wall_gone_sweeps_nothing(set_pool):
+    """CR 608.2b, and the direction that matters.
+
+    A dropped relation on this card is not a sweep that does less — it is
+    "destroy all creatures". The Wall leaves while the spell is on the stack,
+    so by resolution there is no record to read at all.
+    """
+    game, p1, _p2, named, _other, _first, _second = _r33_reincarnation_board(
+        set_pool
+    )
+    _r33_combat(game, {0: 0})
+
+    game.current_turn_phase = "postcombat_main"
+    game.queue_from_hand(
+        1, "Glyph of Reincarnation",
+        target_player_index=1, target_permanent_index=0,
+    )
+    game.remove_from_battlefield(named)
+    game.resolve_top_of_stack()
+    game._settle()
+
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Attacker One", "Attacker Two",
+    ]
+    assert game.pending_choices == []

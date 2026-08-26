@@ -168,6 +168,7 @@ class _FilterDraft:
     blocking_target: ast.ObjectFilter | None = None
     blocking_bound_target: bool = False
     blocked_by_bound_object: bool = False
+    blocked_by_target_object: ast.ObjectFilter | None = None
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
     toughness: ast.Comparison | None = None
@@ -561,6 +562,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         blocking_target=d.blocking_target,
         blocking_bound_target=d.blocking_bound_target,
         blocked_by_bound_object=d.blocked_by_bound_object,
+        blocked_by_target_object=d.blocked_by_target_object,
         blocked=d.blocked,
         power=d.power,
         toughness=d.toughness,

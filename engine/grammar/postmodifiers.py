@@ -81,6 +81,42 @@ def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
     return tuple(keywords)
 
 
+def _parse_zone_owner_of(stream: TokenStream) -> "ast.PlayerRef | None":
+    """The player named after "from the <zone> **of** …", or None.
+
+    Its own small reader rather than a call into ``references.parse_player_ref``
+    because that module sits *above* this one — it reads noun phrases, which are
+    built from what this file parses — and the phrases printed in this position
+    are not the ones a recipient clause prints. Widening it means adding a
+    spelling here, and a spelling nothing lists refuses the whole noun phrase
+    rather than silently naming some other player's graveyard.
+
+    "…the graveyard of **the player who controlled that creature the last time
+    it became blocked by that Wall**" (Glyph of Reincarnation) is a seat no read
+    of the board can answer: control is CR 613 layer 2 and moves, and by the
+    time the sentence is read the creature is a card in a graveyard with no
+    controller at all. The block seam freezes the seat as the block happens, and
+    this referent names that record — "the last time" being exactly the
+    overwrite-on-each-block that seam performs. Every word is required, and the
+    noun after "by that" is checked rather than skipped: a dropped word here
+    leaves a phrase naming some other player, and a reanimation out of the wrong
+    graveyard is a different card.
+    """
+    probe = stream.mark()
+    if stream.accept_phrase(
+        "the", "player", "who", "controlled", "that", "creature",
+        "the", "last", "time", "it", "became", "blocked", "by", "that",
+    ):
+        noun = stream.peek_word()
+        if noun is not None and (
+            _singular(noun) in CARD_TYPES or _singular(noun) in CREATURE_TYPES
+        ):
+            stream.advance()
+            return ast.PlayerRef("controller_when_blocked")
+    stream.reset(probe)
+    return None
+
+
 def _parse_postmodifiers(
     stream: TokenStream,
     d,
@@ -250,6 +286,18 @@ def _parse_postmodifiers(
             noun = stream.peek_word()
             if noun in _ZONE_NOUNS:
                 stream.advance()
+                # "from **the graveyard of** <player>" (Glyph of
+                # Reincarnation) — the possessive said the other way round.
+                # Tried only when the possessive spellings above found nothing,
+                # so a phrase naming its owner twice cannot quietly keep the
+                # second answer; and the referent has to be one this file
+                # reads, because "the graveyard of" followed by words nothing
+                # claims names a graveyard that cannot be found.
+                if owner is None and stream.accept_word("of"):
+                    owner = _parse_zone_owner_of(stream)
+                    if owner is None:
+                        stream.reset(probe)
+                        break
                 d.zone = noun
                 d.zone_owner = owner
                 continue
@@ -360,6 +408,19 @@ def _parse_postmodifiers(
                     if stream.accept_phrase("this", "turn"):
                         d.blocked_by_bound_object = True
                         continue
+            # "…that were blocked by **target Wall** this turn" (Glyph of
+            # Reincarnation). The same history against the *spell's own target*
+            # instead of a bound object, so the blocker's own noun phrase is
+            # read and travels with the relation — the lowering hoists it into
+            # the instruction's `targets` description, which is what makes the
+            # picker offer Walls. "This turn" is required here for the reason it
+            # is required above: the record is kept per turn, and a clause
+            # naming some other window is a different sentence.
+            elif stream.accept_phrase("were", "blocked", "by", "target"):
+                blocker = parse_filter(stream)
+                if stream.accept_phrase("this", "turn"):
+                    d.blocked_by_target_object = blocker
+                    continue
             elif stream.accept_phrase("dealt", "damage", "to"):
                 if accept_source_reference(stream) and stream.accept_phrase(
                     "this", "turn"

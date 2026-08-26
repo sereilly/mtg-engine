@@ -223,6 +223,17 @@ class OracleExecutionContext:
     results: dict = field(default_factory=dict)
     # The object currently being iterated by a "for each …" instruction.
     iteration_target: Permanent | None = None
+    # The seats an earlier step recorded **about that object**, resolved for the
+    # iteration in progress. ``results`` holds those records whole — a
+    # ``{permanent_id: seat}`` map written by the step that knew the answer — and
+    # inside a loop over exactly those objects the map has one entry that
+    # matters. A reader would otherwise need the loop's object *and* the record's
+    # shape to ask a question that has one answer, which is two things to get
+    # wrong; the loop resolves it once and every reader asks by name.
+    #
+    # Empty outside a loop, so the readers that consult it fall through to the
+    # trigger context exactly as they did before it existed.
+    iteration_seats: dict = field(default_factory=dict)
 
 
 class OracleStateMachine:

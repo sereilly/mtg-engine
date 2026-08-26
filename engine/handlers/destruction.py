@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
+from ..oracle_types import PER_OBJECT_SEAT_RECORDS
 from ._common import permanent_matches_filter, resolve_target_permanent
 from .registry import effect_handler
 
@@ -194,7 +195,7 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         key: value for key, value in instruction.payload.items()
         if key not in (
             "attached_to", "bypass_regeneration", "targets",
-            "blocked_by_bound_object",
+            "blocked_by_bound_object", "blocked_by_target_object",
         )
     }
     # "…all creatures that were blocked by **that creature** this turn."
@@ -219,6 +220,34 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             )
             return True, "resolved"
         blocked_ids = set(bound.metadata.get("blocked_attacker_ids_this_turn") or ())
+    # "…all creatures that were blocked by **target Wall** this turn." (Glyph
+    # of Reincarnation.) The same record read off a different referent: the
+    # blocker is this spell's own target. Resolved by id, never by index — the
+    # sweep below removes permanents, and CR 400.7 makes an index meaningless
+    # the moment one leaves.
+    #
+    # The seats frozen beside those ids travel on to the next sentence, which
+    # names "the player who controlled that creature the last time it became
+    # blocked by that Wall". Read *here*, while the Wall is still the object
+    # the spell targeted: once the sweep has run the creatures are cards in a
+    # graveyard and nothing on the board can answer the question.
+    blocked_controllers: dict[int, int] = {}
+    if instruction.payload.get("blocked_by_target_object"):
+        blocker = game.permanent_by_id(context.target_permanent_id)
+        if blocker is None:
+            # CR 608.2b would normally have countered the spell for having no
+            # legal target left; a blocker that is nonetheless gone (an ability
+            # naming it, a copy resolving late) names no blocks this effect can
+            # read. Ending here rather than falling through, for the reason the
+            # bound-object branch above ends: the relation is the whole card.
+            game.log.append(
+                f"{context.card.name}: the creature whose blocks it names is gone"
+            )
+            return True, "resolved"
+        blocked_ids = set(blocker.metadata.get("blocked_attacker_ids_this_turn") or ())
+        blocked_controllers = dict(
+            blocker.metadata.get("blocked_attacker_controllers_this_turn") or {}
+        )
     attached_to = instruction.payload.get("attached_to")
     host = None
     if attached_to is not None:
@@ -244,21 +273,35 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     ]
     if not matched:
         context.results["destroyed_this_way"] = 0
+        context.results["destroyed_this_way_objects"] = []
         game.log.append(f"{context.card.name}: nothing to destroy")
         return True, "resolved"
-    destroyed = 0
+    died: list[Permanent] = []
     for perm in matched:
         seat = game.controller_index_of(perm)
         if seat is None:
             continue
-        destroyed += len(game._destroy_swept_permanents(
+        died.extend(game._destroy_swept_permanents(
             game.players[seat],
             lambda candidate, target=perm: candidate is target,
             allow_regeneration=not instruction.payload.get("bypass_regeneration"),
         ))
     # See `_sweep_by_type`: the record is what died, which is what a later
-    # "that died this way" counts.
-    context.results["destroyed_this_way"] = destroyed
+    # "that died this way" counts. The *objects* ride beside the number for a
+    # later sentence that iterates them rather than counting them (Glyph of
+    # Reincarnation), and the number is derived from the list so the two
+    # records cannot come to disagree.
+    context.results["destroyed_this_way_objects"] = died
+    context.results["destroyed_this_way"] = len(died)
+    # The seat each of them was under when the named blocker blocked it, keyed
+    # by the same permanent ids. Recorded only when the sweep read a block
+    # relation at all, so no other card carries an empty map it never asked for.
+    if blocked_controllers:
+        context.results[PER_OBJECT_SEAT_RECORDS["controller_when_blocked"]] = {
+            perm.permanent_id: blocked_controllers[perm.permanent_id]
+            for perm in died
+            if perm.permanent_id in blocked_controllers
+        }
     game.log.append(
         f"{context.card.name} destroyed " + ", ".join(p.card.name for p in matched)
     )

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from .conditions import Condition
-from .conditions import DiedThisTurn
+from .conditions import DiedThisTurn, DiedThisWay
 from ._core import (
     Cost,
     Duration,
@@ -288,7 +288,7 @@ class ForEach:
     plain filter "creature" would count the creatures still on the battlefield
     — a different number, and one that moves in the opposite direction.
     """
-    iterator: ObjectFilter | PlayerRef | DiedThisTurn
+    iterator: ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
     effect: "Statement"
 
 
