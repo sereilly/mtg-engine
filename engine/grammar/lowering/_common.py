@@ -754,6 +754,14 @@ def _lower_condition(
         return {"kind": "returned_to_hand_this_turn"}
     if isinstance(condition, ast.HadPlus1Counter):
         return {"kind": "had_plus1_counter"}
+    if isinstance(condition, ast.DealtDamageThisTurn):
+        # The recipient rides the payload, exactly as the seat does on the life
+        # clause below: "…to a player" is the same question asked of a wider
+        # set of seats, not a second condition.
+        return {
+            "kind": "dealt_damage_this_turn",
+            "who": condition.recipient,
+        }
     if isinstance(condition, ast.LifeGainedThisTurn):
         # The seat rides the payload rather than being baked into the kind, so
         # "if an opponent gained…" is the same condition with a different `who`

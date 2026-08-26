@@ -217,6 +217,16 @@ class EndStepMixin:
             gate = (trig.instruction.payload or {}).get(END_STEP_INTERVENING_IF)
             if gate is None or (id(permanent), id(trig.instruction)) in already:
                 continue
+            # CR 603.4: a gated trigger whose condition is false **does not
+            # trigger**. So it is marked seen here, before the gate is asked,
+            # rather than only on the path that fires it — the catch-all scan
+            # below enqueues every end-step trigger it has not already seen, so
+            # a failing gate used to put the ability on the stack anyway and
+            # leave the resolution re-check to say it "did nothing". An ability
+            # that never triggered is not an ability that resolves to nothing:
+            # it holds no priority, it cannot be countered, and nothing in
+            # response sees it.
+            already.add((id(permanent), id(trig.instruction)))
             fire_context = OracleExecutionContext(
                 caster=self.players[controller_index],
                 target=self.players[controller_index],
@@ -225,7 +235,6 @@ class EndStepMixin:
             )
             if not evaluate_condition(self, fire_context, gate):
                 continue
-            already.add((id(permanent), id(trig.instruction)))
             events.append(make_trigger_event(controller_index, permanent, trig))
 
         # Everything else with an end-step condition. The scans above are keyed

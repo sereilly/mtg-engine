@@ -34,7 +34,9 @@ from .phrases import (
     parse_subject_filter_at,
 )
 from .stream import TokenStream
-from .vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, NUMBER_WORDS)
+from .vocabulary import (
+    CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, NUMBER_WORDS, ORDINAL_WORDS,
+)
 
 
 _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -349,6 +351,75 @@ _DAMAGE_RECIPIENTS: tuple[tuple[tuple[str, ...], str], ...] = (
 
 _DAMAGER_NOUNS = ("creature", "artifact", "enchantment", "land", "permanent")
 
+#: What `_accept_ordinal_exclusion` returns when the clause is there but says
+#: something this engine would have to guess at. A sentinel rather than None,
+#: because None already means "no such clause was printed" and the two must not
+#: collapse: one is a card with no exclusion, the other is a card whose
+#: exclusion nothing would enforce.
+_REFUSED = object()
+
+
+def _accept_ordinal_exclusion(stream: TokenStream, type_word: str):
+    """"…other than the **first** <type> spell that player casts each turn".
+
+    The ordinal an opponent-cast trigger exempts, or None when no such clause
+    is printed. The type word is repeated by the printed clause and must be the
+    one already read: a card exempting a *different* type is not this trigger
+    narrowed, it is a trigger this production cannot express, so it refuses.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("other", "than", "the"):
+        stream.reset(mark)
+        return None
+    ordinal = stream.peek_word()
+    if ordinal is None or ordinal not in ORDINAL_WORDS:
+        stream.reset(mark)
+        return _REFUSED
+    stream.advance()
+    if not stream.accept_phrase(
+        type_word, "spell", "that", "player", "casts", "each", "turn"
+    ):
+        stream.reset(mark)
+        return _REFUSED
+    return ordinal
+
+
+def accept_event_phrase(stream: TokenStream, phrase: tuple[str, ...]) -> bool:
+    """Consume *phrase*, reading a SELF token wherever it spells "this <noun>".
+
+    The tables in this file write the source out the modern way — "this
+    creature attacks", "a creature dealt damage by this creature this turn
+    dies" — and a pre-Sixth-Edition card says its own name instead, which the
+    lexer collapses to one SELF token. Those are the same two words, so a plain
+    word-run match reads only one of the two spellings: Axelrod Gunnarson's
+    death trigger and Nicol Bolas's damage trigger are Sengir Vampire's and
+    Hypnotic Specter's conditions printed the old way, and both front ends
+    refused them while the productions that ask ``at_kind(SELF)`` by hand read
+    theirs. So the substitution is made here, once, for every entry in every
+    table rather than by spelling a second row per card.
+
+    All-or-nothing, like ``accept_phrase``: a partial match leaves the stream
+    where it was, because a production that consumed half a phrase would strand
+    the rest of the line and break full-token consumption.
+    """
+    mark = stream.mark()
+    index = 0
+    while index < len(phrase):
+        if (
+            phrase[index] == "this"
+            and index + 1 < len(phrase)
+            and phrase[index + 1] in _DAMAGER_NOUNS
+            and stream.at_kind(SELF)
+        ):
+            stream.advance()
+            index += 2
+            continue
+        if not stream.accept_phrase(phrase[index]):
+            stream.reset(mark)
+            return False
+        index += 1
+    return True
+
 
 def _parse_damage_dealt_event(
     stream: TokenStream, word: str
@@ -604,6 +675,23 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                         # consumed either way, or the line fails the
                         # full-consumption invariant.
                         unshared = _accept_unshared_colour(stream)
+                        # "…**other than the first <type> spell that player
+                        # casts each turn**" (Ichneumon Druid). The ordinal
+                        # exclusion, read here so the words are consumed —
+                        # left to the effect parser they would fail the line,
+                        # and skipped they would be a narrowing this front end
+                        # dropped while the other kept it.
+                        # The clause is *consumed* and not carried: the
+                        # condition — this narrowing included — comes from
+                        # `engine/oracle.py`'s table, and this side only has to
+                        # read the whole line rather than choke on it. The same
+                        # split the "if it wasn't sacrificed" qualifier makes
+                        # below. A clause it cannot read refuses the line, so
+                        # the two front ends cannot end up watching different
+                        # sets.
+                        if _accept_ordinal_exclusion(stream, type_word) is _REFUSED:
+                            stream.reset(mark)
+                            break
                         return ast.TriggerEvent(
                             scope, "whenever",
                             subject=ast.ObjectFilter(card_types=(type_word,)),
@@ -706,7 +794,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # unnarrowed "this creature blocks" with its rider on the floor.
         for phrase, kind in _FILTERED_EVENTS:
             mark = stream.mark()
-            if stream.accept_phrase(*phrase):
+            if accept_event_phrase(stream, phrase):
                 subject = parse_subject_filter_at(stream)
                 if subject is not None:
                     return ast.TriggerEvent(kind, "whenever", subject=subject)
@@ -742,7 +830,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         if damage is not None:
             return damage
         for kind, phrase in _WHENEVER_EVENTS:
-            if stream.accept_phrase(*phrase):
+            if accept_event_phrase(stream, phrase):
                 return ast.TriggerEvent(kind, "whenever")
         # "Whenever an **artifact you control** is put into a graveyard from
         # the battlefield" (Tablet of Epityr, Urza's Miter). Subject-led, so it
@@ -823,7 +911,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                 return ast.TriggerEvent(kind, "at")
         return None
     if stream.accept_word("when"):
-        if stream.accept_phrase("this", "creature", "dies"):
+        if accept_event_phrase(stream, ("this", "creature", "dies")):
             return ast.TriggerEvent("dies", "when")
         # "When there are four or more page counters on this artifact"
         # (Mazemind Tome). CR 603.8's state trigger. Read here as well as in

@@ -298,6 +298,19 @@ def _announce(game, event: dict, dealt: int) -> None:
                 payload["target_player_index"] = seat
         if seat is not None:
             payload["defending_player_index"] = seat
+    if isinstance(recipient, PlayerState) and isinstance(source, Permanent):
+        # "…if this creature dealt damage to an opponent this turn" (Whirling
+        # Dervish). A *history*, so it has to be recorded as it happens
+        # (CR 603.10) — and here rather than at a combat fire site for the
+        # reason this whole function exists: a ping from an ability is damage
+        # this record must see too. Seats rather than PlayerState objects,
+        # because the clause asks "was it an opponent of the ability's
+        # controller", which is a seat comparison. Cleared with the turn by
+        # `_EOT_METADATA_KEYS`.
+        seats = source.metadata.setdefault("dealt_damage_to_seats_this_turn", [])
+        seat = game.players.index(recipient)
+        if seat not in seats:
+            seats.append(seat)
     emit(game, "damage_dealt", **payload)
     if not isinstance(recipient, PlayerState):
         # "Whenever that creature is dealt damage by an attacking creature this

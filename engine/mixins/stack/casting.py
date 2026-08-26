@@ -651,6 +651,18 @@ class SpellCastingMixin:
             # fire now, as the spell is put on the stack, and go on the stack above
             # it (CR 603.3) — so the trigger resolves while the triggering spell is
             # still on the stack, not after it has already resolved.
+            # The record every ordinal reads — "you've cast an instant or
+            # sorcery spell this turn" (Stormwing Entity), "their second spell
+            # each turn" (Mangara), "other than the first instant spell that
+            # player casts each turn" (Ichneumon Druid). CR 601.2i finishes the
+            # casting before anything can respond, so the spell is on the list
+            # before *any* of the announcements below, not just the ones that
+            # used to follow it: it was appended inside `_apply_cast_triggers`,
+            # which runs second, so an opponent-scoped ordinal counted a list
+            # missing the very spell that fired it and every such trigger was
+            # one cast late.
+            if 0 <= caster_index < len(self.players):
+                self.players[caster_index].spells_cast_this_turn.append(card)
             self._apply_spell_cast_any_triggers(caster_index, card, from_zone)
             self._apply_cast_triggers(caster_index, card)
             return SimulationResult(card.name, True, classification.effect_kind, "queued")

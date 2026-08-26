@@ -569,6 +569,34 @@ def test_603_4_intervening_if_false_does_nothing(all_cards):
     assert len(p1.hand) - before == 1  # normal draw only
 
 
+@pytest.mark.cr("603.4")
+def test_603_4_a_false_intervening_if_never_reaches_the_stack():
+    """"The ability triggers only if it is; otherwise it does nothing."
+
+    Not "resolves to nothing": an ability that never triggered holds no
+    priority, cannot be responded to and is never on the stack. The end step
+    checked the gate and then enqueued the trigger anyway from its catch-all
+    scan, leaving the resolution re-check to undo it — the right board state by
+    the wrong route, and a stack item nobody should have seen.
+    """
+    watcher = _mk_card(
+        "Watcher", "Creature — Test",
+        "At the beginning of each end step, if this creature dealt damage to "
+        "an opponent this turn, put a +1/+1 counter on it.",
+        power="1", toughness="1",
+    )
+    perm = Permanent(card=watcher)
+    p1 = PlayerState(name="P1", battlefield=[perm], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+
+    game.resolve_end_step(0)
+
+    assert game.stack == []
+    assert (perm.effective_power, perm.effective_toughness) == (1, 1)
+
+
 # ===========================================================================
 # Rule 604 — Handling Static Abilities
 # ===========================================================================

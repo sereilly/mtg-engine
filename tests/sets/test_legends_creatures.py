@@ -2055,3 +2055,159 @@ def test_bronze_horse_still_takes_damage_nothing_targeted_it_with(set_pool):
         "recipient": horse, "amount": 3, "source": ogre, "combat": True,
     }).dealt
     assert dealt == 3
+
+
+# ---------------------------------------------------------------------------
+# Round 23 — triggers narrowed by a history or an ordinal
+# ---------------------------------------------------------------------------
+
+
+def _rig(p1_perms, p2_perms=(), *, p2_hand=()):
+    from tests.helpers import _game
+
+    p1 = PlayerState(name="P1", battlefield=list(p1_perms), life=20)
+    p2 = PlayerState(
+        name="P2", battlefield=list(p2_perms), life=20, hand=list(p2_hand)
+    )
+    return _game(p1, p2), p1, p2
+
+
+def _ready(card) -> Permanent:
+    from tests.helpers import _nosick
+
+    return _nosick(Permanent(card=card))
+
+
+def _attack_alone(game, attacker_seat, defender_seat):
+    """Declare the seat's only creature as an attacker and deal combat damage."""
+    game.active_player_index = attacker_seat
+    game._set_phase_and_step("combat", "declare_attackers")
+    game.combat_defending_player_index = defender_seat
+    game.declare_attackers(attacker_seat, [0], defender_seat)
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(attacker_seat)
+    game.resolve_stack()
+
+
+def test_whirling_dervish_grows_only_after_it_damaged_an_opponent(set_pool):
+    """"At the beginning of each end step, **if this creature dealt damage to
+    an opponent this turn**, put a +1/+1 counter on it." CR 603.4's
+    intervening-if over a history no board read can answer — so the damage seam
+    records whom each permanent damaged, and the gate asks that record."""
+    dervish = _ready(set_pool("LEG")["Whirling Dervish"])
+    game, _p1, p2 = _rig([dervish])
+
+    _attack_alone(game, 0, 1)
+    game.resolve_end_step(0)
+    game.resolve_stack()
+
+    assert p2.life == 19
+    assert (dervish.effective_power, dervish.effective_toughness) == (2, 2)
+
+
+def test_whirling_dervish_does_not_even_trigger_on_an_idle_turn(set_pool):
+    """The other half of CR 603.4: a trigger whose intervening-if is false does
+    not trigger at all. Not "resolves to nothing" — nothing goes on the stack,
+    so nobody may respond to it and the Dervish stays a 1/1."""
+    dervish = _ready(set_pool("LEG")["Whirling Dervish"])
+    game, _p1, _p2 = _rig([dervish])
+
+    game.active_player_index = 0
+    game.resolve_end_step(0)
+
+    assert game.stack == []
+    assert (dervish.effective_power, dervish.effective_toughness) == (1, 1)
+
+
+def test_axelrod_gunnarson_pays_off_when_a_creature_it_damaged_dies(set_pool, cards):
+    """"Whenever a creature dealt damage by Axelrod Gunnarson this turn dies,
+    you gain 1 life and Axelrod deals 1 damage to target player."
+
+    The condition Sengir Vampire prints, spelled the pre-Sixth-Edition way —
+    the card names itself — with a different effect behind it."""
+    axelrod = _ready(set_pool("LEG")["Axelrod Gunnarson"])
+    giant = _ready(cards["Hill Giant"])
+    game, p1, p2 = _rig([axelrod], [giant])
+
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    game.combat_defending_player_index = 0
+    game.declare_attackers(1, [0], 0)
+    game._set_phase_and_step("combat", "declare_blockers")
+    game.declare_blockers(0, {0: 0})
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(1)
+    game.resolve_stack()
+
+    assert giant not in game.controlled_by(1), "Axelrod killed it"
+    assert p1.life == 21, "you gain 1 life"
+    assert p2.life == 19, "and it deals 1 damage"
+
+
+def test_axelrod_gunnarson_ignores_a_death_it_had_no_part_in(set_pool, cards):
+    """The narrowing is the whole card: a creature Axelrod never damaged dying
+    is not this trigger's event."""
+    axelrod = _ready(set_pool("LEG")["Axelrod Gunnarson"])
+    bear = _ready(cards["Grizzly Bears"])
+    game, p1, p2 = _rig([axelrod], [bear])
+    p1.hand.append(cards["Lightning Bolt"])
+
+    game.cast_from_hand(0, "Lightning Bolt", target_player_index=1, target_permanent_index=0)
+    game.resolve_stack()
+
+    assert bear not in game.controlled_by(1), "the Bolt killed it"
+    assert p1.life == 20 and p2.life == 20, "but Axelrod had not damaged it"
+
+
+def test_ichneumon_druid_exempts_the_first_instant_each_turn(set_pool, cards):
+    """"Whenever an opponent casts an instant spell **other than the first
+    instant spell that player casts each turn**, this creature deals 4 damage
+    to that player."
+
+    An ordinal exclusion, counted over the same set the trigger fires on."""
+    druid = _ready(set_pool("LEG")["Ichneumon Druid"])
+    hand = [cards["Healing Salve"], cards["Giant Growth"], cards["Lightning Bolt"]]
+    game, _p1, p2 = _rig([druid], p2_hand=hand)
+    game.active_player_index = 1
+
+    lives = []
+    for name in ("Healing Salve", "Giant Growth", "Lightning Bolt"):
+        game.cast_from_hand(1, name, target_player_index=0)
+        game.resolve_stack()
+        lives.append(p2.life)
+
+    assert lives[0] == 20, "the first instant is the one the card exempts"
+    assert lives[1] == 16, "the second is not"
+    assert lives[2] == 12, "and neither is the third"
+
+
+def test_ichneumon_druid_counts_only_the_type_the_card_names(set_pool, cards):
+    """The ordinal counts the *narrowed* set: a sorcery is neither an instant
+    the trigger fires on nor one that uses up the exemption."""
+    druid = _ready(set_pool("LEG")["Ichneumon Druid"])
+    hand = [cards["Disintegrate"], cards["Healing Salve"]]
+    game, _p1, p2 = _rig([druid], p2_hand=hand)
+    game.active_player_index = 1
+
+    game.cast_from_hand(1, "Disintegrate", target_player_index=0, x_value=1)
+    game.resolve_stack()
+    assert p2.life == 20, "a sorcery is not this trigger's event"
+
+    game.cast_from_hand(1, "Healing Salve", target_player_index=0)
+    game.resolve_stack()
+    assert p2.life == 20, "and it did not spend the first-instant exemption"
+
+
+def test_nicol_bolas_empties_the_hand_of_the_player_it_damaged(set_pool, cards):
+    """"Whenever Nicol Bolas deals damage to an opponent, that player discards
+    their hand." The card names itself, which is what kept both front ends from
+    reading a condition this engine already announces."""
+    bolas = _ready(set_pool("LEG")["Nicol Bolas"])
+    hand = [cards["Healing Salve"], cards["Lightning Bolt"]]
+    game, p1, p2 = _rig([bolas], p2_hand=hand)
+
+    _attack_alone(game, 0, 1)
+
+    assert p2.life == 13
+    assert p2.hand == [], "the damaged player discarded their hand"
+    assert p1.hand == [], "and not the ability's controller"

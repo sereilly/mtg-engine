@@ -77,6 +77,12 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # three-player game is not "the opponent" — so it is frozen by the draw
     # sweep that announces it rather than re-derived at resolution.
     "draws_card",
+    # "Whenever an opponent casts an instant spell …, this creature deals 4
+    # damage to **that player**" (Ichneumon Druid). The condition names one
+    # seat — whoever cast the spell — and nothing chose it, so it is the seat
+    # the cast froze rather than a target. Read as `target_player` instead, the
+    # ability would ask for a choice the card never offers.
+    "opponent_casts_spell",
 })
 
 #: Delayed-trigger events (CR 603.7) whose fire site freezes the **owner** of

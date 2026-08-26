@@ -34,6 +34,16 @@ from .vocabulary import NUMBER_WORDS
 #: — a spec naming anything else would describe a permanent nothing looks up.
 _SOURCE_SPEC = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
 
+#: Whom a damage *history* clause names, longest phrase first — the same set
+#: `triggers._DAMAGE_RECIPIENTS` reads on the event side, because one printed
+#: phrase should mean one thing whether a card asks about the damage as it
+#: happens or about the damage it dealt earlier this turn.
+_DAMAGE_HISTORY_RECIPIENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("an", "opponent"), "an opponent"),
+    (("a", "player"), "a player"),
+    (("you",), "you"),
+)
+
 
 def _parse_condition(stream: TokenStream) -> ast.Condition:
     """One condition, or several joined by "and".
@@ -284,6 +294,26 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # "it's untapped" reaches the same branch as "it is": the lexer splits the
     # contraction into "it" + "'s", so both copulas are accepted here rather
     # than the apostrophe being skipped wherever it turns up.
+    # "if this creature dealt damage to an opponent this turn" (Whirling
+    # Dervish). CR 603.4's intervening-if over a *history*: the board says
+    # nothing about whom this permanent has damaged, so the damage seam records
+    # it (`engine/damage_events.py`) and this reads that record.
+    #
+    # Whom the damage went to is read from the same recipient table the damage
+    # *trigger* uses, and for the same reason: a card printed "…to a player" or
+    # "…to you" is this production with a different payload, not a second
+    # condition. The duration is required rather than optional — "dealt damage"
+    # with no window is a different claim, and admitting it would answer a
+    # question the record cannot ask.
+    damage_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_phrase("dealt", "damage", "to"):
+        for phrase, recipient in _DAMAGE_HISTORY_RECIPIENTS:
+            if stream.accept_phrase(*phrase):
+                if _parse_duration(stream).kind == "this_turn":
+                    return ast.DealtDamageThisTurn(_SOURCE_SPEC, recipient)
+                break
+    stream.reset(damage_mark)
+
     state_mark = stream.mark()
     if accept_source_reference(stream) and (
         stream.accept_word("is") or stream.accept_word("'s")

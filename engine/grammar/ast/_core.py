@@ -818,6 +818,17 @@ class LifeGainedThisTurn:
 
 
 @dataclass(frozen=True)
+class DealtDamageThisTurn:
+    """"if this creature dealt damage to an opponent this turn" (Whirling
+    Dervish). A history like :class:`LifeGainedThisTurn`, asked of the ability's
+    own source: no board read answers it, so the damage seam records it as it
+    happens. The recipient is payload — "a player" and "you" are this production.
+    """
+    subject: "TargetSpec"
+    recipient: str
+
+
+@dataclass(frozen=True)
 class PaidCost:
     cost: Cost | None = None
 
@@ -974,6 +985,7 @@ Condition = Union[
     EveryOf, CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
+    DealtDamageThisTurn,
 ]
 
 

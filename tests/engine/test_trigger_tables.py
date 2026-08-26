@@ -320,3 +320,41 @@ def test_hypnotic_specter_keeps_its_recipient_narrowing():
     assert conditions[0].payload == {
         "damager_self": "this creature", "damage_recipient": "an opponent",
     }
+
+
+# --- a card that names itself is printing the modern condition --------------
+
+@pytest.mark.parametrize("condition", [
+    "Whenever a creature dealt damage by {self} this turn dies",
+    "Whenever {self} deals damage to an opponent",
+    "Whenever {self} attacks",
+    "When {self} dies",
+])
+def test_a_self_named_condition_reads_as_its_modern_spelling(condition):
+    """Pre-Sixth-Edition templating writes the source as the card's own name:
+    "Whenever a creature dealt damage by **Axelrod Gunnarson** this turn
+    dies". That is the same condition modern templating spells "this creature",
+    and both front ends have to agree — the lexer collapses the name to one
+    SELF token for the grammar, and the pattern tables read a collapsed copy of
+    the line.
+
+    Read as two different conditions, one front end refuses the card and the
+    stricter of them wins: every Legends creature that names itself in a
+    trigger reported "text too complex" for an event this engine announces.
+    """
+    modern = _mk_creature_card(
+        "Old One", 2, 2, f"{condition.format(self='this creature')}, you gain 1 life."
+    )
+    legacy = _mk_creature_card(
+        "Old One", 2, 2, f"{condition.format(self='Old One')}, you gain 1 life."
+    )
+
+    modern_program = compile_card_oracle(modern)
+    legacy_program = compile_card_oracle(legacy)
+
+    assert modern_program.supported, modern_program.reason
+    assert legacy_program.supported, legacy_program.reason
+    assert (
+        [ta.condition.kind for ta in legacy_program.triggered_abilities]
+        == [ta.condition.kind for ta in modern_program.triggered_abilities]
+    )

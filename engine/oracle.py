@@ -480,6 +480,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("opponent_casts_spell",
      r"whenever an opponent casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell "
      r"that doesn't share a color with (?P<unshared_color_subject>an? [^,]+)"),
+    # "…**other than the first instant spell that player casts each turn**"
+    # (Ichneumon Druid). An *ordinal exclusion*: the same cast event, admitted
+    # only once the player has already cast that many of them this turn. The
+    # ordinal is payload — a card printed "other than the second" is this row —
+    # and the repeated type word is a backreference, so a card whose two halves
+    # name different types refuses the line rather than compiling one of them.
+    # Before the bare type row below, which is its strict prefix and would drop
+    # the exclusion entirely: an ordinal a dispatcher never sees is a trigger
+    # that fires on the spell the card exempts.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell"
+     r" other than the (?P<after_spell_ordinal>[a-z]+) (?P=cast_type) spell that player casts each turn"),
     # "Whenever an opponent casts an artifact spell" (Citanul Druid) — the
     # type narrowing again, on the opponent-scoped kind. Before the bare row.
     ("opponent_casts_spell",
@@ -1194,6 +1206,25 @@ def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedT
     normalized = normalize_creature_line(line)
 
     condition, remainder = _parse_trigger_condition(normalized)
+    if condition is None and card_name:
+        # The card's own name collapsed to "this creature", for the reason
+        # `_restriction_line` gives about the static tables: every row here is
+        # anchored on the modern templating, and a card that says its own name
+        # ("Whenever a creature dealt damage by **Axelrod Gunnarson** this turn
+        # dies") is printing the condition this engine already dispatches, the
+        # old way. Without it the row matched nothing and the card reported
+        # "text too complex" while the grammar — whose lexer collapses the same
+        # references — read the line. Two front ends disagreeing about one
+        # printed line is a card refused by the stricter of them.
+        #
+        # A *fallback* rather than the first reading, because the collapse is a
+        # whole-word substitution over the entire line and a card whose name is
+        # an ordinary word ("Fire", or a test fixture called "Player") would
+        # have its recipient clause rewritten out from under a row that already
+        # matched. Nothing this reads is text the uncollapsed pass could read.
+        collapsed = _collapse_self_references(normalized, card_name, "this creature")
+        if collapsed != normalized:
+            condition, remainder = _parse_trigger_condition(collapsed)
     if condition is None:
         return None  # not a triggered ability line
 

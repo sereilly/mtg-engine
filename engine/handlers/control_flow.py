@@ -263,6 +263,25 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         seat = game.players.index(context.caster)
         return int(game.permanents_to_hand_this_turn.get(seat, 0)) > 0
 
+    if kind == "dealt_damage_this_turn":
+        # "if this creature dealt damage to an opponent this turn" (Whirling
+        # Dervish). Answered from the record the damage seam keeps on the
+        # source permanent, because nothing on the board can be read for it
+        # — the damaged player's life total says only what the whole turn did
+        # to them. An absent record means this permanent damaged nobody, which
+        # is the reading that leaves the Dervish uncountered.
+        source = context.source_permanent
+        if source is None:
+            return False
+        seats = source.metadata.get("dealt_damage_to_seats_this_turn") or []
+        who = payload.get("who", "a player")
+        if who == "a player":
+            return bool(seats)
+        controller_seat = game.players.index(context.caster)
+        if who == "you":
+            return controller_seat in seats
+        return any(seat != controller_seat for seat in seats)
+
     if kind == "life_gained_this_turn":
         # Per player, because the counter is: "you" is the ability's
         # controller, which is context.caster for a triggered ability too.
