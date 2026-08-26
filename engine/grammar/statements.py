@@ -24,8 +24,9 @@ from .paragraphs import (
     _parse_name_then_reveal_top,
     _parse_transmute_by_sacrifice,
 )
-from .delayed import (_parse_choose_target, _parse_create_delayed_trigger,
-                      parse_trailing_delay)
+from .delayed import (_parse_choose_target, _parse_choose_then_gain,
+                      _parse_create_delayed_trigger, parse_trailing_delay,
+                      resolve_that_turn)
 from .references import parse_recipient
 from .vocabulary import CARD_TYPES
 from .stream import TokenStream
@@ -488,7 +489,8 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
                 "a delayed sentence's X must say when it is counted"
             )
     return ast.CreateDelayedTrigger(
-        event=event, effect=statement, once=once, duration=duration,
+        event=event, effect=resolve_that_turn(statement) or statement,
+        once=once, duration=duration,
         binds_target=binds, subject=None, agent=None,
     )
 
@@ -568,6 +570,14 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     chosen = _parse_choose_target(stream, parse_statement)
     if chosen is not None:
         return chosen
+    # "Choose flying, first strike, trample, or rampage 3. <source> gains that
+    # ability …" (Gabriel Angelfire) / "Choose a basic land type. This creature
+    # gains landwalk of the chosen type …" (Giant Slug). The same rule as the
+    # production above: the "choose" sentence means nothing without the one
+    # that binds it, so the pair is read together or not at all.
+    choose_then_gain = _parse_choose_then_gain(stream)
+    if choose_then_gain is not None:
+        return choose_then_gain
     # "When that creature dies this turn, …" / "At the beginning of your next
     # main phase, …" — a delayed triggered ability (CR 603.7). Read before the
     # productions its inner effect uses, whose sentences this one's tail is:

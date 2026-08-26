@@ -10,7 +10,7 @@ at all.
 from .. import ast
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..phrases import _parse_duration
+from ..phrases import BASIC_LAND_WORDS, _parse_duration
 
 
 # The two printed combat restrictions the engine enforces (CR 506, 509). Both
@@ -22,7 +22,9 @@ from ..phrases import _parse_duration
 # The land type and the power threshold are captured, not baked into the
 # production, for the same reason they are payload rather than kind names: a
 # card naming Mountain, or a threshold of 4, is the same restriction.
-_BASIC_LAND_WORDS = ("plains", "island", "swamp", "mountain", "forest")
+#: Moved to `phrases` when the choose-a-type grant needed the same five
+#: words; re-bound here so this file reads as it always did.
+_BASIC_LAND_WORDS = BASIC_LAND_WORDS
 
 
 def _parse_cant_attack_or_block(

@@ -267,7 +267,7 @@ def test_cleanup_step_discards_and_expires_temporary_effects():
     permanent = Permanent(card=creature, power_bonus=2, toughness_bonus=3)
     permanent.metadata["temporary_power_bonus_until_eot"] = 2
     permanent.metadata["temporary_toughness_bonus_until_eot"] = 3
-    grant_keyword(permanent, "flying", until_eot=True)
+    grant_keyword(permanent, "flying", duration="end_of_turn")
     p1 = PlayerState(name="P1", hand=hand_cards, battlefield=[permanent], damage_prevention_pool=4)
     p2 = PlayerState(name="P2", combat_damage_cap_one_charges=1)
     game = Game(players=[p1, p2], combat_damage_prevented_until_eot=True)

@@ -218,11 +218,42 @@ def test_set_base_power_only_records_the_restriction():
 
 def test_keyword_grants():
     assert _instructions("Target creature gains flying until end of turn.") == [
-        ("grant_target_flying_until_eot", {})
+        ("grant_target_flying_until_eot", {"duration": "end_of_turn"})
     ]
     assert _instructions("{R}: This creature gains flying until end of turn.") == [
-        ("grant_self_flying_until_eot", {})
+        ("grant_self_flying_until_eot", {"duration": "end_of_turn"})
     ]
+
+
+def test_a_keyword_grant_carries_the_duration_it_printed():
+    """Every grant kind names end of turn, and for most of the pool that is
+    what the card says — but the duration is what the sweep reads, so it has to
+    be payload. It was a boolean at the channel, which made every other printed
+    duration *become* end of turn."""
+    assert _instructions(
+        "{R}: This creature gains trample until end of combat."
+    ) == [
+        (
+            "grant_self_keyword_until_eot",
+            {"keywords": ("trample",), "duration": "end_of_combat"},
+        )
+    ]
+    assert _instructions(
+        "{R}: This creature gains trample until your next upkeep."
+    ) == [
+        (
+            "grant_self_keyword_until_eot",
+            {"keywords": ("trample",), "duration": "your_next_upkeep"},
+        )
+    ]
+
+
+def test_a_keyword_grant_refuses_a_duration_no_sweep_ends():
+    """"Until your next turn" has no sweep, so the line refuses rather than
+    being granted until end of turn — which is what it silently did."""
+    result = compile_line("{R}: This creature gains trample until your next turn.")
+    assert not result.lowered
+    assert "until_your_next_turn" in (result.lowering_error or "")
 
 
 def test_counter_on_self():
@@ -411,14 +442,20 @@ def test_the_team_keyword_grant_carries_how_wide_it_reaches():
     emitted only for the wider reading, which keeps every payload written before
     it byte-identical."""
     assert _instructions("Creatures you control gain trample until end of turn.") == [
-        ("grant_team_keyword_until_eot", {"keywords": ("trample",)})
+        (
+            "grant_team_keyword_until_eot",
+            {"keywords": ("trample",), "duration": "end_of_turn"},
+        )
     ]
     assert _instructions(
         "Permanents you control gain hexproof and indestructible until end of turn."
     ) == [
         (
             "grant_team_keyword_until_eot",
-            {"keywords": ("hexproof", "indestructible"), "every_permanent": True},
+            {
+                "keywords": ("hexproof", "indestructible"),
+                "every_permanent": True, "duration": "end_of_turn",
+            },
         )
     ]
 

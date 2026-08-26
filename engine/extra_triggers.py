@@ -94,13 +94,20 @@ def extra_trigger_line(line: str) -> bool:
     return _PATTERN.match((line or "").strip().lower()) is not None
 
 
-def additional_triggers(game, source_permanent, controller_index: int) -> int:
+def additional_triggers(
+    game, source_permanent, controller_index: int, *, delayed: bool = False
+) -> int:
     """How many **extra** times an ability of *source_permanent* triggers.
 
-    Zero for a delayed or reflexive trigger, which has no source permanent —
-    CR 603.2d says such an ability is not one the object "has".
+    Zero for a delayed or reflexive trigger — CR 603.2d says such an ability is
+    not one the object "has".
+
+    *delayed* is asked rather than inferred from a missing source permanent. It
+    was inferred, and correctly right up until a delayed ability needed a source
+    to act on ("this creature gains landwalk of the chosen type"): from then on
+    the proxy would have doubled exactly the abilities the rule excludes.
     """
-    if source_permanent is None:
+    if source_permanent is None or delayed:
         return 0
     extra = 0
     for seat, permanent in game.permanents_with_controller():

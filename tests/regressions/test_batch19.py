@@ -80,19 +80,25 @@ class TestErhnamDjinn:
         # Hill Giant is index 2 — deliberately NOT the first legal candidate,
         # which is what the old auto-target always picked.
         game.resolve_upkeep(0, trigger_targets={"Erhnam Djinn": (1, 2)})
-        assert p2.battlefield[2].metadata.get("has_forestwalk") is True
-        assert p2.battlefield[0].metadata.get("has_forestwalk") is None
+        game.resolve_stack()
+        # Read through the layer-6 accessor, not a metadata key: round 29
+        # retired the card-keyed hook that wrote one, and the grant now goes
+        # where every other granted keyword goes.
+        assert game._has_keyword(p2.battlefield[2], "forestwalk")
+        assert not game._has_keyword(p2.battlefield[0], "forestwalk")
 
     def test_no_choice_falls_back_to_the_first_legal_creature(self, arn_by_name):
         # AI/headless play supplies no target and must still resolve.
         game, _, p2 = self._djinn_game(arn_by_name)
         game.resolve_upkeep(0)
-        assert p2.battlefield[0].metadata.get("has_forestwalk") is True
+        game.resolve_stack()
+        assert game._has_keyword(p2.battlefield[0], "forestwalk")
 
     def test_a_target_that_left_the_battlefield_falls_back(self, arn_by_name):
         game, _, p2 = self._djinn_game(arn_by_name)
         game.resolve_upkeep(0, trigger_targets={"Erhnam Djinn": (1, 99)})
-        assert p2.battlefield[0].metadata.get("has_forestwalk") is True
+        game.resolve_stack()
+        assert game._has_keyword(p2.battlefield[0], "forestwalk")
 
     def test_no_legal_target_offers_no_trigger(self, arn_by_name):
         djinn = _nosick(Permanent(card=arn_by_name["Erhnam Djinn"]))

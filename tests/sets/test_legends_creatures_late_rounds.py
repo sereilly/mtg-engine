@@ -2240,3 +2240,163 @@ def test_hazezon_leaves_a_bystander_creature_alone(set_pool):
 
     assert [perm.card.name for perm in p1.battlefield].count("Bystander") == 1
     assert _r29_sand_warriors(p1) == []
+
+
+# ---------------------------------------------------------------------------
+# Round 29 — Gabriel Angelfire and Giant Slug: choose a thing in one sentence,
+# gain it in the next, and a duration that is a channel with a sweep.
+# ---------------------------------------------------------------------------
+
+
+def _r29_upkeep(game, seat: int):
+    """Run *seat*'s upkeep and let everything it put on the stack resolve."""
+    game.active_player_index = seat
+    game.resolve_upkeep(seat)
+    game._settle()
+    game.resolve_stack()
+    game._settle()
+
+
+def _r29_gabriel(set_pool):
+    gabriel = Permanent(card=set_pool("LEG")["Gabriel Angelfire"])
+    p1 = PlayerState(name="P1", battlefield=[gabriel])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+    return game, gabriel
+
+
+def test_gabriel_angelfire_compiles_supported(set_pool):
+    """Two printed sentences, one effect: the choice and the sentence that says
+    what the choice was for."""
+    program = compile_card_oracle(set_pool("LEG")["Gabriel Angelfire"])
+
+    assert program.supported, program.reason
+    trigger, = program.triggered_abilities
+    assert trigger.condition.kind == "upkeep_self"
+    assert trigger.instruction.kind == "choose_one"
+    labels = [mode["label"] for mode in trigger.instruction.payload["modes"]]
+    assert labels == ["flying", "first strike", "trample", "rampage 3"]
+    assert all(
+        mode["instruction"].payload["duration"] == "your_next_upkeep"
+        for mode in trigger.instruction.payload["modes"]
+    )
+
+
+def test_gabriel_angelfire_gains_the_chosen_ability_at_upkeep(set_pool):
+    game, gabriel = _r29_gabriel(set_pool)
+    assert not game._has_keyword(gabriel, "flying")
+
+    _r29_upkeep(game, 0)
+
+    assert game._has_keyword(gabriel, "flying")
+
+
+def test_gabriel_angelfire_keeps_it_through_the_opponents_upkeep(set_pool):
+    """"Until **your** next upkeep" — the seat is the ability's controller
+    (CR 109.5), so nobody else's upkeep ends it."""
+    game, gabriel = _r29_gabriel(set_pool)
+    _r29_upkeep(game, 0)
+
+    _r29_upkeep(game, 1)
+
+    assert game._has_keyword(gabriel, "flying")
+
+
+def test_gabriel_angelfire_keeps_it_past_the_cleanup_step(set_pool):
+    """The duration a boolean would have collapsed. The grant lasts into the
+    next turn, and the end-of-turn sweep must not take it."""
+    game, gabriel = _r29_gabriel(set_pool)
+    _r29_upkeep(game, 0)
+
+    game.resolve_cleanup_step(0)
+
+    assert game._has_keyword(gabriel, "flying")
+
+
+def test_gabriel_angelfire_ends_the_old_grant_at_its_own_next_upkeep(set_pool):
+    """One entry, not two: the sweep runs at the start of the upkeep, before
+    this turn's trigger grants a fresh one."""
+    game, gabriel = _r29_gabriel(set_pool)
+    _r29_upkeep(game, 0)
+
+    _r29_upkeep(game, 0)
+
+    assert len(gabriel.metadata["ability_effects"]) == 1
+
+
+def _r29_giant_slug(set_pool):
+    slug = Permanent(card=set_pool("LEG")["Giant Slug"])
+    slug.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[slug])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=set_pool("LEA")["Plains"])])
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+    p1.mana_pool["C"] = 5
+    return game, p1, slug
+
+
+def test_giant_slug_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Giant Slug"])
+
+    assert program.supported, program.reason
+    ability, = program.activated_abilities
+    assert ability.instruction.kind == "create_delayed_trigger"
+    assert ability.instruction.payload["event"] == "controllers_next_upkeep"
+
+
+def test_giant_slug_offers_the_five_basic_land_types(set_pool):
+    """"Choose a basic land type" is CR 205.3i's five, and CR 702.14a's
+    "[type]walk" turns each into the ability granted — so the type is payload
+    and the production is one, not five."""
+    program = compile_card_oracle(set_pool("LEG")["Giant Slug"])
+    inner = program.activated_abilities[0].instruction.payload["instruction"]
+
+    assert [mode["label"] for mode in inner.payload["modes"]] == [
+        "plainswalk", "islandwalk", "swampwalk", "mountainwalk", "forestwalk",
+    ]
+
+
+def test_giant_slug_grants_nothing_when_the_ability_resolves(set_pool):
+    """The whole effect is delayed to a later upkeep, so activating it now
+    changes nothing on the board now."""
+    game, _p1, slug = _r29_giant_slug(set_pool)
+
+    result = game.activate_permanent_ability(0, "Giant Slug")
+    game.resolve_stack()
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game._has_keyword(slug, "plainswalk")
+    entry, = game.delayed_triggers
+    assert entry.event == "controllers_next_upkeep"
+
+
+def test_giant_slug_gains_the_chosen_landwalk_at_the_delayed_upkeep(set_pool):
+    """The sentence names its own source, so the delayed ability has to carry
+    one (CR 603.7d). Without it the ability resolved, logged, and granted
+    nothing at all."""
+    game, _p1, slug = _r29_giant_slug(set_pool)
+    game.activate_permanent_ability(0, "Giant Slug")
+    game.resolve_stack()
+    game._settle()
+
+    _r29_upkeep(game, 0)
+
+    assert game._has_keyword(slug, "plainswalk")
+
+
+def test_giant_slug_landwalk_ends_with_that_turn(set_pool):
+    """"Until the end of **that** turn" is the turn the delay is about, and the
+    delayed ability resolves during it — so the ordinary end-of-turn sweep is
+    what ends the grant."""
+    game, _p1, slug = _r29_giant_slug(set_pool)
+    game.activate_permanent_ability(0, "Giant Slug")
+    game.resolve_stack()
+    game._settle()
+    _r29_upkeep(game, 0)
+    assert game._has_keyword(slug, "plainswalk")
+
+    game.resolve_cleanup_step(0)
+
+    assert not game._has_keyword(slug, "plainswalk")

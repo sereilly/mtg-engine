@@ -398,7 +398,7 @@ class TestErhnamDjinnTargetPrompt:
             },
         )
         assert resp.status_code == 200, resp.text
-        assert game.players[1].battlefield[0].metadata.get("has_forestwalk") is True
+        assert game._has_keyword(game.players[1].battlefield[0], "forestwalk")
 
     def test_no_legal_target_skips_the_prompt_entirely(self, arn_by_name):
         sid, session, game = _upkeep_session(

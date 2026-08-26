@@ -9,7 +9,7 @@ combat" is still known, then clears until-end-of-combat effects and combat state
 
 from ..attack_tapping import clear_attack_tap_exemptions
 from ..delayed_triggers import fire_delayed_triggers
-from ..keywords import clear_granted_ability_lines
+from ..keywords import clear_granted_ability_lines, clear_granted_keywords
 from ..models import Permanent
 from ..pt import remove_temporary_pt
 from ..oracle import compile_card_oracle
@@ -43,6 +43,7 @@ class EndOfCombatStepMixin:
             # than in a step of its own, because both are the same duration
             # ending and a second sweep site is a second place to forget one.
             clear_granted_ability_lines(permanent, "end_of_combat")
+            clear_granted_keywords(permanent, "end_of_combat")
             if permanent.metadata.get("animate_until_end_of_combat"):
                 permanent.metadata.pop("animate_until_end_of_combat", None)
                 permanent.metadata.pop("absolute_power", None)

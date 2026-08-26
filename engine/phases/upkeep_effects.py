@@ -603,28 +603,6 @@ class UpkeepEffectsMixin:
                     ),
                 )
 
-    @upkeep_effect("upkeep_self", "grant_forestwalk_until_next_upkeep")
-    def _on__upkeep_self__grant_forestwalk_until_next_upkeep(self, ctx: UpkeepContext) -> None:
-        controller = ctx.controller
-        permanent = ctx.permanent
-        trigger_targets = ctx.trigger_targets
-        # Erhnam Djinn: "target non-Wall creature an opponent
-        # controls". A human controller picks the target through
-        # the upkeep trigger-target channel (trigger_targets,
-        # gathered by get_upkeep_target_triggers); AI/headless
-        # play falls back to the first legal creature.
-        target_perm = self._resolve_upkeep_trigger_target(
-            permanent.card.name,
-            trigger_targets,
-            self._forestwalk_grant_candidates(controller),
-        )
-        if target_perm is not None:
-            target_perm.metadata["has_forestwalk"] = True
-            target_perm.metadata["forestwalk_until_next_upkeep_of"] = self.players.index(controller)
-            self.log.append(
-                f"{permanent.card.name} grants {target_perm.card.name} forestwalk until {controller.name}'s next upkeep"
-            )
-
     @upkeep_effect("upkeep_self", "set_source_base_pt_from_target_until_next_upkeep")
     def _on__upkeep_self__set_source_base_pt_from_target_until_next_upkeep(self, ctx: UpkeepContext) -> None:
         """Halfdane: "…change Halfdane's base power and toughness to the power

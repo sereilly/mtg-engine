@@ -15,6 +15,8 @@ import re
 
 from ..auras import aura_enchants
 from ..delayed_triggers import fire_delayed_triggers
+from ..keywords import (clear_granted_ability_lines,
+                        clear_granted_keywords)
 from ..copies import RECOPY_EACH_UPKEEP, grants_ability
 from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..layer_bridge import GAINED_TYPES
@@ -306,18 +308,6 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             })
         return triggers
 
-    def _forestwalk_grant_candidates(self, controller) -> list[Permanent]:
-        """Legal targets for Erhnam Djinn's upkeep grant: "target non-Wall
-        creature an opponent controls"."""
-        controller_seat = self.seat_index(controller)
-        return [
-            perm
-            for seat, perm in self.permanents_with_controller()
-            if seat != controller_seat
-            and perm.is_creature
-            and "wall" not in perm.effective_card.type_line.lower()
-        ]
-
     def _base_pt_copy_candidates(self, source: Permanent) -> list[Permanent]:
         """Legal targets for a "change …'s base power and toughness to the
         power and toughness of target creature other than ~" upkeep trigger
@@ -352,6 +342,50 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     return candidate
         return candidates[0] if candidates else None
 
+    def _printed_target_upkeep_trigger(self, trig, controller) -> tuple | None:
+        """The target-prompt entry an upkeep trigger's own instruction supplies,
+        or None when it names no object target.
+
+        The twin of the hand-written table in ``get_upkeep_target_triggers``,
+        and the arm that should grow: the printed noun phrase is already in the
+        instruction's ``targets`` payload — put there by the same lowering that
+        built the effect — so a card that says "target non-Wall creature an
+        opponent controls" needs no row of its own, and neither does the next
+        one. The table above it holds the effects whose legal targets are *not*
+        a filter over the battlefield (a land of your own to sacrifice, every
+        creature but the source).
+
+        It was Erhnam Djinn's row, with a hand-written candidate lookup beside
+        it, back when a card-keyed hook carried the whole ability. Deriving the
+        candidates from the payload is what let the hook go without the human
+        losing the choice.
+        """
+        from ..subject_filters import subject_matches
+
+        described = trig.instruction.payload.get("targets")
+        if not isinstance(described, dict) or described.get("kind") != "object":
+            return None
+        if described.get("quantifier") != "target":
+            return None
+        filters = described.get("filter") or {}
+        seat = self.seat_index(controller)
+
+        def find_candidates(_controller, source):
+            return [
+                perm
+                for perm in self.all_permanents()
+                if subject_matches(
+                    self, perm, filters, observer=seat, source=source
+                )
+            ]
+
+        return (
+            "upkeep_trigger_target",
+            "creature" if filters.get("type_filter") == "creature" else "permanent",
+            lambda name: f"{name}: choose a target for its upkeep trigger.",
+            find_candidates,
+        )
+
     def get_upkeep_target_triggers(self, player_index: int) -> list[dict]:
         """Mandatory upkeep triggers that need the controller to choose a target.
 
@@ -366,15 +400,6 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # and handing both over is what let the base-P/T copy exclude its own
         # source without the table growing a second shape.
         targeted_kinds = {
-            "grant_forestwalk_until_next_upkeep": (
-                "upkeep_grant_forestwalk",
-                "creature",
-                lambda name: (
-                    f"{name}: choose a non-Wall creature an opponent controls "
-                    "to gain forestwalk until your next upkeep."
-                ),
-                lambda controller, source: self._forestwalk_grant_candidates(controller),
-            ),
             "upkeep_sacrifice_land_conditional_damage": (
                 "upkeep_sacrifice_land",
                 "land",
@@ -400,6 +425,8 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 if trig.instruction is None or trig.condition.kind != "upkeep_self":
                     continue
                 entry = targeted_kinds.get(trig.instruction.kind)
+                if entry is None:
+                    entry = self._printed_target_upkeep_trigger(trig, controller)
                 if entry is None:
                     continue
                 if perm.card.name in seen:
@@ -515,16 +542,22 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         self._process_mire_cleanups(player_index)
-        # Erhnam Djinn: a granted forestwalk (or similar) lasting "until your
-        # next upkeep" expires now, at the start of that same upkeep, before
-        # this turn's own upkeep triggers (which might grant a fresh one) run.
+        # Layer 6: a keyword or a quoted ability granted "until your next
+        # upkeep" (Erhnam Djinn, Gabriel Angelfire) expires now, at the start
+        # of that same upkeep, before this turn's own upkeep triggers — which
+        # may grant a fresh one — run.
+        #
+        # This was two metadata keys written by a card-keyed hook, because the
+        # keyword channel recorded its duration as a boolean and had no room
+        # for a third answer. The hook is gone; both grant channels take the
+        # sweep's name, so a card printing this duration over any keyword or
+        # any quoted line ends here without an edit.
         for perm in self.all_permanents():
-            if perm.metadata.get("forestwalk_until_next_upkeep_of") == player_index:
-                perm.metadata.pop("has_forestwalk", None)
-                perm.metadata.pop("forestwalk_until_next_upkeep_of", None)
+            clear_granted_keywords(perm, "your_next_upkeep", seat=player_index)
+            clear_granted_ability_lines(perm, "your_next_upkeep", seat=player_index)
             # "Until **your** next upkeep, target noncreature artifact becomes
             # an artifact creature…" (Xenic Poltergeist) — the same moment and
-            # the same reasoning as the forestwalk above: it expires at the
+            # the same reasoning as the sweep above: it expires at the
             # start of that upkeep, before this turn's own triggers get a
             # chance to grant a fresh one. Whose upkeep is the seat recorded
             # when the ability resolved, because CR 109.5 makes it the
@@ -590,9 +623,19 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     # `upkeep_enchanted_controller` and `upkeep_chosen` name a
                     # seat this loop does not have in hand.
                     if kind in EFFECT_HANDLERS:
+                        # The target its controller picked at the prompt, if
+                        # this trigger asked for one (CR 603.3d — targets are
+                        # chosen as the ability is put on the stack). Without
+                        # this the stack object carries none and the handler
+                        # falls back to the first legal candidate, which is
+                        # the answer for an AI seat and the wrong one for a
+                        # player who was just asked.
+                        picked = (trigger_targets or {}).get(permanent.card.name)
                         upkeep_events.append({
                             "controller_index": controller_seat,
                             "source_permanent": permanent,
+                            "target_player_index": picked[0] if picked else None,
+                            "target_permanent_index": picked[1] if picked else None,
                             "instruction": trig.instruction,
                             "effect_kind": triggered_label(kind, cond),
                             "ability_text": trig.source_line or None,

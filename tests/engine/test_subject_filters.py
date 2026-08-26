@@ -181,7 +181,7 @@ def test_a_keyword_narrowing_is_asked_of_layer_six(pool):
     described = {"type_filter": "creature", "with_keywords": ["defender"]}
 
     assert not subject_matches(game, perm, described)
-    grant_keyword(perm, "defender", until_eot=True)
+    grant_keyword(perm, "defender", duration="end_of_turn")
     assert subject_matches(game, perm, described)
     assert "defender" not in (perm.card.keywords or ()), (
         "the printed card still has no defender — a matcher reading it would "
@@ -199,7 +199,7 @@ def test_a_without_keyword_narrowing_is_asked_of_layer_six_too(pool):
     described = {"type_filter": "creature", "without_keywords": ["flying"]}
 
     assert subject_matches(game, perm, described)
-    grant_keyword(perm, "flying", until_eot=True)
+    grant_keyword(perm, "flying", duration="end_of_turn")
     assert not subject_matches(game, perm, described)
 
 

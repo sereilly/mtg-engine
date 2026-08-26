@@ -115,7 +115,10 @@ class StackResolutionMixin:
         # than recursing is what the rule's "doesn't invoke itself repeatedly"
         # asks for. Each instance is its own stack object and so chooses its own
         # targets; it is not a copy (CR 707), which would inherit them.
-        for _ in range(1 + additional_triggers(self, source_permanent, controller_index)):
+        for _ in range(1 + additional_triggers(
+            self, source_permanent, controller_index,
+            delayed=effect_kind == "triggered_delayed",
+        )):
             self._stack_push(
                 StackItem(
                     card=stack_card,
