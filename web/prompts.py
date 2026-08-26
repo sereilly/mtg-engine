@@ -281,6 +281,29 @@ def _name_then_reveal_top(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("name_and_random_reveal")
+def _name_and_random_reveal(ctx: PromptContext, choices: list) -> dict:
+    """Nebuchadnezzar's "choose a card name".
+
+    No suggestion list, for the reason Petra Sphinx's has none: the cards this
+    will reveal are in the opponent's hand, which the chooser may not look at
+    (CR 400.2), and a list drawn from anywhere else would be a list of the
+    wrong cards. CR 202.1 lets them name any card and the engine accepts
+    whatever they type.
+
+    How many will be revealed *is* shown — it is the X they announced, and it
+    is what makes the guess worth taking.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "target_seat": choice.data.get("target_seat"),
+        "count": choice.data.get("count", 0),
+        "zone": choice.data.get("zone", "hand"),
+    }
+
+
 # Zones whose contents every player may look at (CR 400.2): what a prompt may
 # list to a seat other than the zone's owner.
 _PUBLIC_ZONES = frozenset({"graveyard", "exile", "battlefield", "ante", "command_zone"})

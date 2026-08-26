@@ -1,12 +1,12 @@
-"""Cards moving, and mana: draw, discard, mill, search, shuffle, add.
+"""Cards moving: draw, discard, mill, search, shuffle, reveal.
 
 Draw, discard and mill share a shape — a player and a count — and are separate
 nodes anyway, because the zones a card moves between are what each of them
 means.
 
-The two mana nodes are separate for a sharper version of the same reason:
-`AddMana` writes out a quantity for the ability's own controller, while
-`AddManaForTappedLand` names referents only the enclosing trigger can bind.
+Mana used to be here. It is `ast/mana.py` now, mirroring `lowering/mana.py`,
+which split off for the same reason: what a permanent *produces* turned out to
+be a family of its own rather than a corner of this one.
 """
 
 from __future__ import annotations
@@ -74,83 +74,6 @@ class Scry:
     is why it is a decision rather than a transfer.
     """
     count: Amount = field(default_factory=lambda: Fixed(1))
-
-
-@dataclass(frozen=True)
-class AddMana:
-    pips: tuple[tuple[str, int], ...] = ()
-    # The printed "or" (``Add {B} or {R}``): *one* of the pips, chosen as the
-    # mana is made, never all of them. Recorded rather than folded away —
-    # without it "Add {B} or {R}" and "Add {B}{R}" are the same node, and the
-    # add-everything reading is exactly the mana a dual land does not make.
-    choice: bool = False
-    # "Add **X** mana of any one color" (Sanctum of Fruitful Harvest) — how many,
-    # as an :class:`Amount`, because the number can be a board count and not just
-    # a printed digit. Zero is "this clause names no any-colour mana".
-    any_color: "Amount | int" = 0
-    # The clause verbatim. The current mana handler re-reads the text rather
-    # than taking structured pips, so lowering passes it through unchanged;
-    # this field goes away when the handler takes ``pips`` directly.
-    source_text: str = ""
-    # "Spend this mana only to cast an instant or sorcery spell." (Vodalian
-    # Arcanist.) The restriction *key* from `engine/restricted_mana.py`, not the
-    # phrase: which spells it admits is that module's question, asked again by
-    # the payer, so one rule answers "what may this pay for?" in both places.
-    spend_only: str | None = None
-    # "an amount of {B} equal to the sacrificed artifact's mana value" (Priest
-    # of Yawgmoth). The mana symbol, with the *amount* named as a
-    # back-reference rather than a number: it is the mana value of whatever the
-    # ability's sacrifice cost ate, which is last-known information by the time
-    # this resolves.
-    from_sacrificed_cost: str | None = None
-    # "an amount of {C} equal to **that spell's** mana value" (Mana Drain). The
-    # same printed shape as `from_sacrificed_cost` above, back-referring to a
-    # different object: the spell an earlier sentence countered, whose mana
-    # value only that sentence could read (CR 608.2h) — by the time this clause
-    # runs, in a later phase, the card is in a graveyard and the stack item is
-    # gone. The symbol, again, so a card printing another colour needs no code.
-    from_countered_spell: str | None = None
-    # "an amount of {C} equal to **that creature's** mana value" (Energy Tap).
-    # A third back-reference of the same printed shape, naming the permanent an
-    # earlier step of this same effect recorded — and, unlike the two above,
-    # one that is still on the battlefield when this clause runs, so the number
-    # is read off it rather than remembered as a number. Named for the printed
-    # words rather than for a producer: which step recorded the creature is the
-    # lowering's question, and the producer gate there is what makes the words
-    # legal at all.
-    from_bound_creature: str | None = None
-    # "Add {G} **for each creature with power 4 or greater you control**"
-    # (Leafkin Avenger). A board count multiplying the whole clause, the same
-    # shape a life gain and a counter placement already carry — so it is a
-    # filter here rather than a number, and the count is taken at resolution.
-    per_each: object | None = None
-
-
-@dataclass(frozen=True)
-class AddManaForTappedLand:
-    """"…**that player** adds one mana of any type that land produced" (Mana
-    Flare) / "…**its controller** adds an additional {R}" (Gauntlet of Might).
-
-    Separate from :class:`AddMana`, which always adds a written-out quantity to
-    the ability's own controller. Every part of this clause is a referent the
-    *trigger* binds and the statement grammar cannot see on its own: who "that
-    player" / "its controller" is, and which mana "that land produced". Lowering
-    therefore refuses unless the enclosing trigger is ``land_tapped_for_mana``,
-    the one event that binds them.
-
-    ``additional`` records the word "additional". It is redundant on the board —
-    the trigger fires after the land's own mana is already in the pool — but a
-    word a production consumes without recording is a word the deletion probe
-    can delete without changing the parse, which is the dropped-rider bug class.
-    """
-
-    recipient: PlayerRef
-    # Written-out symbols: (("R", 1),).
-    pips: tuple[tuple[str, int], ...] = ()
-    # "one mana of any type that land produced" — a count of mana whose type is
-    # whatever the tapped land just made, so it cannot be written as pips.
-    of_type_produced: int = 0
-    additional: bool = False
 
 
 @dataclass(frozen=True)
@@ -461,6 +384,30 @@ class NameAndStrip:
     token_toughness: int
     token_colors: tuple[str, ...]
     token_subtypes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class NameAndRandomReveal:
+    """``Choose a card name. Target opponent reveals X cards at random from
+    their hand. Then that player discards all cards with that name revealed
+    this way.`` (Nebuchadnezzar.)
+
+    One node for the whole three-sentence effect, for the reason
+    :class:`NameAndStrip` is one: the sentences share a choice and a pile.
+    "That name" is what the first sentence chose, and "all cards with that name
+    **revealed this way**" is a strict subset of the hand — the cards the
+    random reveal happened to turn up, not every copy in it. Parsed apart, the
+    third sentence would discard the whole hand's worth of that name and the
+    randomness would mean nothing.
+
+    ``count`` is an :class:`Amount` because the number is the announced X, and
+    ``zone`` is read where it is printed: the same effect over a graveyard is
+    the same template with one word changed.
+    """
+
+    player: PlayerRef
+    count: Amount
+    zone: str
 
 
 @dataclass(frozen=True)

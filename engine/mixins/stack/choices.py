@@ -1579,6 +1579,62 @@ class PendingChoicesMixin:
         ):
             self.discard_pending_choice(choice)
 
+    # -- "Choose a card name, then reveal N at random from a hand" -----------
+
+    def confirm_name_and_random_reveal(self, player_index: int, card_name: str) -> bool:
+        """Answer Nebuchadnezzar's "choose a card name" prompt."""
+        return self.resolve_pending_choice(
+            "name_and_random_reveal", player_index, card_name=card_name
+        )
+
+    def _resolve_name_and_random_reveal(
+        self, choice: PendingChoice, card_name: str
+    ) -> bool:
+        """Reveal *count* cards at random from the target's zone, then discard
+        every revealed card carrying the named name.
+
+        The reveal happens **here**, after the name is fixed: turning cards over
+        while the prompt was open would tell the chooser what to name.
+
+        The randomness is over *indices*, so two copies of one card are two
+        chances to be revealed, and it draws from the module RNG the rest of the
+        engine seeds — a given seed replays the ability exactly.
+
+        "All cards with that name **revealed this way**" is the whole reason
+        this is one step: the discard is over the revealed subset, not over the
+        hand, so a fourth copy the reveal missed stays put.
+        """
+        data = choice.data
+        target = self.players[data["target_seat"]]
+        zone = getattr(target, data.get("zone", "hand"), [])
+        named = (card_name or "").strip()
+        count = min(max(0, int(data.get("count", 0))), len(zone))
+        # By index, not by card: `random.sample` over the objects would collapse
+        # two equal cards into one candidate on any implementation that compares
+        # by value, and this engine's CardDefinition is shared between copies.
+        revealed_indices = sorted(random.sample(range(len(zone)), count)) if count else []
+        revealed = [zone[i] for i in revealed_indices]
+        discarded = [card for card in revealed if named and card.name == named]
+        for index in reversed(revealed_indices):
+            if named and zone[index].name == named:
+                target.graveyard.append(zone.pop(index))
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{target.name} revealed {len(revealed)} card(s) at random from their "
+            f"{data.get('zone', 'hand')}"
+            + (
+                f" and discarded {len(discarded)} named {named}"
+                if discarded else f" and discarded nothing named {named or 'nothing'}"
+            )
+        )
+        return True
+
+    def _default_name_and_random_reveal(self, choice: PendingChoice) -> None:
+        if not self._resolve_name_and_random_reveal(
+            choice, choice.data.get("default_name", "")
+        ):
+            self.discard_pending_choice(choice)
+
     def confirm_enter_choice(
         self, player_index: int, opponent_index: int | None = None,
         mana_color: str | None = None, card_name: str | None = None,
@@ -3127,6 +3183,17 @@ register_choice(
     action="name_then_reveal_top_confirm",
     prompt_key="name_then_reveal_top",
     blocked_detail="name a card before other actions",
+)
+
+register_choice(
+    "name_and_random_reveal",
+    resolve=lambda game, choice, r: game._resolve_name_and_random_reveal(
+        choice, r["card_name"]
+    ),
+    default=lambda game, choice: game._default_name_and_random_reveal(choice),
+    action="name_and_random_reveal_confirm",
+    prompt_key="name_and_random_reveal",
+    blocked_detail="name a card for the reveal before other actions",
 )
 
 register_choice(

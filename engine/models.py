@@ -256,10 +256,33 @@ class Permanent:
         current = self.basic_land_types
         printed = _printed_basic_types(self.card.type_line)
         if current and set(current) != printed:
-            return tuple(_LAND_TYPE_MANA[land_type] for land_type in current)
+            return self._swapped_mana(
+                tuple(_LAND_TYPE_MANA[land_type] for land_type in current)
+            )
         # A copy (Copy Artifact of a Mox / Sol Ring) produces the copied
         # card's mana, so read the effective card rather than the copier's own.
-        return self.effective_card.produced_mana
+        return self._swapped_mana(self.effective_card.produced_mana)
+
+    def _swapped_mana(self, symbols: tuple[str, ...]) -> tuple[str, ...]:
+        """*symbols* after every "produces X instead of Y" effect on this land.
+
+        "If target Plains is tapped for mana, it produces colorless mana instead
+        of white mana." (Quarum Trench Gnomes.) A CR 611.2 continuous effect with
+        no duration, recorded on the permanent by the handler and applied here
+        because this property is the one place the engine asks what a land makes.
+
+        Applied in the order the effects were created (CR 613.7), so a second
+        swap reads the first one's answer — and a symbol the land never produced
+        is left alone, which is what makes the same sentence about a Swamp
+        harmless on a Plains.
+        """
+        swaps = self.metadata.get("produced_mana_swaps")
+        if not swaps:
+            return symbols
+        current = list(symbols)
+        for replaced, produced in swaps:
+            current = [produced if sym == replaced else sym for sym in current]
+        return tuple(current)
 
     @property
     def copied_from(self) -> str | None:
@@ -567,6 +590,14 @@ class PlayerState:
     #: pip. Its own flag rather than a widening of the one above, because the
     #: two are different permissions and a card may grant either.
     spends_mana_as_any_color: bool = False
+    #: "For one spell this turn, you may spend mana as though it were mana of
+    #: any type to pay that spell's mana cost." (North Star.) A *count* rather
+    #: than a flag, because the permission is bounded: it covers a stated
+    #: number of this turn's spells and is used up. One entry per grant, each
+    #: ``{"spells": n, "any_type": bool}`` — two grants of different breadth
+    #: are two permissions and merging them would widen the narrower one.
+    #: Cleared at cleanup ("this turn").
+    spend_mana_as_though_grants: list = field(default_factory=list)
     channel_active_until_eot: bool = False
     # "Pay {1} any time you could cast an instant: prevent the next 1 damage to
     # that permanent or player" emblems the player controls until end of turn

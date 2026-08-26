@@ -2427,3 +2427,46 @@ def name_then_reveal_top(game: Game, instruction: OracleInstruction, context: Or
         ),
     )
     return True, "pending_name_then_reveal_top"
+
+
+@effect_handler("name_and_random_reveal")
+def name_and_random_reveal(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Nebuchadnezzar: name a card, make an opponent reveal N cards at random
+    from a hidden zone, then discard every revealed card with that name.
+
+    One handler for the whole effect because the three printed sentences share
+    one choice and one pile: "all cards with that name **revealed this way**"
+    is the subset the random reveal turned up, not every copy in the hand.
+    Split apart, the discard would take the whole hand's worth and the
+    randomness would mean nothing.
+
+    The name is chosen as the ability resolves (CR 608.2), and the reveal is
+    taken from the pile that exists *then* — which is why the count is resolved
+    here rather than at activation: X was announced, but how many cards the
+    opponent holds is a fact about this moment.
+    """
+    caster = context.caster
+    target = context.target
+    if target is None or target is caster:
+        game.log.append(f"{context.card.name}: no opponent to reveal from")
+        return True, "resolved"
+    seat = game.players.index(target)
+    count = resolve_amount(instruction.payload.get("count", 0), context.x_value)
+    game.arm_pending_choice(
+        "name_and_random_reveal", game.players.index(caster),
+        card_name=context.card.name,
+        target_seat=seat,
+        count=max(0, int(count)),
+        zone=str(instruction.payload.get("zone", "hand")),
+        # A non-interactive seat names the commonest card in the opponent's
+        # **graveyard**, which is the only zone bearing on this it may look at
+        # (CR 400.2) — naming from the hand it is about to reveal from would be
+        # the AI reading hidden information. An empty graveyard names nothing,
+        # which reveals and discards nothing: legal, and the honest answer for a
+        # seat with no information. Basics are not excluded, because this card
+        # prints no restriction on the name (CR 202.1).
+        default_name=_commonest_visible_name(
+            game, seat, ("graveyard",), exclude_basics=False
+        ),
+    )
+    return True, "pending_name_and_random_reveal"

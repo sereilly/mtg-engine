@@ -80,9 +80,13 @@ from .board import (
     DoesntUntapNextStep,
     Untap,
 )
-from .cards import (
+from .mana import (
     AddMana,
     AddManaForTappedLand,
+    ProducesManaInstead,
+    SpendManaAsThough,
+)
+from .cards import (
     CastPermission,
     Discard,
     Draw,
@@ -96,6 +100,7 @@ from .cards import (
     RevealTop,
     ExileGraveyardUntilLeaves,
     CastFromExiledWith,
+    NameAndRandomReveal,
     NameAndStrip,
     NameThenRevealTop,
     RevealUntil,
@@ -146,10 +151,10 @@ Effect = Union[
     DelayedSelfAction, Attach, ExchangeControl,
     Regenerate, ChooseTarget, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
-    RevealTop, RevealUntil, NameAndStrip, NameThenRevealTop,
+    RevealTop, RevealUntil, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
     ExileGraveyardUntilLeaves, CastFromExiledWith,
     PhaseOut,
-    AddManaForTappedLand, PreventDamage,
+    AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
     SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
     ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
     RevealHandAndChoose,

@@ -15,6 +15,7 @@ from ..errors import LoweringError
 from ._common import (
     _amount_payload,
     _filter_payload,
+    _targets_payload,
 )
 from ._events import _RECORDED_PERMANENTS
 
@@ -211,3 +212,58 @@ def _lower_add_mana_for_tapped_land(
     if node.additional:
         payload["additional"] = True
     return (OracleInstruction("add_mana_for_tapped_land", "", payload),)
+
+
+def _lower_produces_mana_instead(
+    node: ast.ProducesManaInstead,
+) -> tuple[OracleInstruction, ...]:
+    """"…it produces colorless mana instead of white mana." (Quarum Trench
+    Gnomes.)
+
+    Nothing is produced when this resolves. What the instruction carries is the
+    standing swap the handler records on the land — the symbol replaced and the
+    symbol replacing it, both payload, so the same sentence about any two
+    symbols is the same instruction.
+
+    The target is described the way every other targeted effect describes one —
+    the filter flat on the payload for the handler, and a ``targets`` entry for
+    ``engine/targeting.py``'s picker — so the two agree on which lands are
+    legal instead of each reading the printed noun again.
+    """
+    described = _targets_payload(node.target)
+    if described is None:
+        raise LoweringError(
+            "a produced-mana swap names the land it changes with 'target'",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "produce_mana_instead",
+            "",
+            {
+                **_filter_payload(node.target.filter),
+                "targets": described,
+                "replaced": node.replaced,
+                "produced": node.produced,
+            },
+        ),
+    )
+
+
+def _lower_spend_mana_as_though(
+    node: ast.SpendManaAsThough,
+) -> tuple[OracleInstruction, ...]:
+    """"For one spell this turn, you may spend mana as though it were mana of
+    any type…" (North Star.)
+
+    One kind with both the count and the breadth on the payload. The breadth is
+    the half that must not be widened: "any color" is CR 106.1b's five, "any
+    type" adds colorless, and the payment reads the key rather than the words.
+    """
+    return (
+        OracleInstruction(
+            "grant_spend_mana_as_though",
+            "",
+            {"spells": node.count, "any_type": node.any_type},
+        ),
+    )

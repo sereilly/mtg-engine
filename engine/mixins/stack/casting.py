@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 
+from .._constants import _MANA_SYMBOLS as _POOL_SYMBOLS
 from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
 from ...cast_costs import AdditionalCost, additional_costs
@@ -1366,6 +1367,49 @@ class SpellCastingMixin:
     def _pay_mana_cost(
         self, player: PlayerState, required: dict[str, int], *, spell=None
     ) -> bool:
+        """Pay *required* from *player*'s pool, or leave the pool untouched.
+
+        Two steps, and the order is what makes the second one honest. The
+        ordinary payment goes first; only when it cannot pay is a CR 609.4
+        "you may spend mana as though…" grant spent (North Star). A grant tried
+        first would be consumed by a spell that never needed it — "for **one**
+        spell this turn" is a bounded permission, and the player would choose
+        the spell that could not otherwise be cast.
+
+        An activated ability is not a spell, so no grant applies to one: the
+        clause says "that **spell's** mana cost", and *spell* being None is
+        that rule rather than a missing argument.
+        """
+        if self._pay_mana_cost_directly(player, required, spell=spell):
+            return True
+        if spell is None:
+            return False
+        grant = next(
+            (g for g in player.spend_mana_as_though_grants if int(g.get("spells", 0)) > 0),
+            None,
+        )
+        if grant is None:
+            return False
+        paid = (
+            self._pay_with_fungible_types(player, required)
+            if grant.get("any_type")
+            else self._pay_with_fungible_colors(player, required)
+        )
+        if not paid:
+            return False
+        # Spent only when it actually paid, so a grant is never burned by a
+        # cost the pool could not have covered under any permission.
+        grant["spells"] = int(grant["spells"]) - 1
+        self.log.append(
+            f"{player.name} spent mana as though it were mana of any "
+            f"{'type' if grant.get('any_type') else 'color'} to cast "
+            f"{getattr(spell, 'name', 'a spell')}"
+        )
+        return True
+
+    def _pay_mana_cost_directly(
+        self, player: PlayerState, required: dict[str, int], *, spell=None
+    ) -> bool:
         # "Spend this mana only to…" (CR 106.6): a restricted bucket joins the
         # pool only for a spell its own restriction admits, and whatever the
         # payment consumes is attributed to the restricted bucket first (its
@@ -1383,7 +1427,7 @@ class SpellCastingMixin:
                 sym: snapshot.get(sym, 0) + restricted.get(sym, 0)
                 for sym in ("W", "U", "B", "R", "G", "C")
             }
-            if not self._pay_mana_cost(player, required):
+            if not self._pay_mana_cost_directly(player, required):
                 player.mana_pool = snapshot
                 return False
             for sym in ("W", "U", "B", "R", "G", "C"):
@@ -1459,6 +1503,33 @@ class SpellCastingMixin:
                     break
 
         player.mana_pool = temp
+        return True
+
+    def _pay_with_fungible_types(
+        self, player: PlayerState, required: dict[str, int]
+    ) -> bool:
+        """Pay *required* while every unit in the pool counts as any mana
+        *type* — CR 106.1b's five colours **and** colorless.
+
+        Its own function rather than a flag on the colour version above,
+        because the two differ in exactly one place and it is the place that
+        matters: with colorless in the set, a {C} the cost names is payable by
+        a coloured mana, so there is nothing to reserve and no way for a pip to
+        starve one. The payment collapses to a single question about the total,
+        which is why this is short where that one is careful.
+        """
+        pool = {sym: int(player.mana_pool.get(sym, 0)) for sym in _POOL_SYMBOLS}
+        owed = sum(required.get(sym, 0) for sym in _POOL_SYMBOLS)
+        owed += required.get("generic", 0)
+        if sum(pool.values()) < owed:
+            return False
+        for sym in _POOL_SYMBOLS:
+            spend = min(pool[sym], owed)
+            pool[sym] -= spend
+            owed -= spend
+            if owed == 0:
+                break
+        player.mana_pool = pool
         return True
 
     def _pay_with_fungible_colors(

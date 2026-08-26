@@ -2347,6 +2347,15 @@ function getNameThenRevealTopInfo(state = currentState) {
   return info;
 }
 
+// Nebuchadnezzar: the activating player names a card, then an opponent reveals
+// N cards at random from their hand and discards the ones that match.
+function getNameAndRandomRevealInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.name_and_random_reveal;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 // Enchantment Alteration: a permanent chosen as the spell resolves, where
 // nothing was targeted. Answered by stable id — the candidates may sit on
 // either battlefield and an index is positional on one seat.
@@ -4522,6 +4531,60 @@ function applyNameThenRevealTopPrompt(info) {
   steps.querySelector("[data-name-then-reveal-confirm]")?.addEventListener("click", submit);
 }
 
+// Nebuchadnezzar's naming prompt. No suggestion list: the cards it will turn
+// over are in the opponent's hand, which this seat may not look at (CR 400.2),
+// so any list would be a list of the wrong cards.
+let nameAndRandomRevealDraft = null;
+function applyNameAndRandomRevealPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  if (nameAndRandomRevealDraft === null) nameAndRandomRevealDraft = "";
+  const count = Number(info.count || 0);
+  title.textContent = "Name a card";
+  body.textContent =
+    `${info.card_name || "This ability"}: name a card. Your opponent then reveals ` +
+    `${count} card${count === 1 ? "" : "s"} at random from their ${info.zone || "hand"} ` +
+    "and discards every revealed card with that name.";
+  steps.innerHTML =
+    `<div class="name-strip-row"><input id="nameAndRandomRevealInput" type="text" placeholder="Card name" value="${escapeHtml(nameAndRandomRevealDraft)}" autocomplete="off" /><button type="button" class="prompt-choice-btn" data-name-random-reveal-confirm="1">Name It</button></div>`;
+
+  const input = steps.querySelector("#nameAndRandomRevealInput");
+  const submit = async () => {
+    const name = (input?.value || "").trim();
+    if (!name) {
+      updateActionHint("Type a card name first.", true);
+      return;
+    }
+    try {
+      await sendAction({ seat, action: "name_and_random_reveal_confirm", card_name: name });
+      nameAndRandomRevealDraft = null;
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  };
+  input?.addEventListener("input", () => {
+    nameAndRandomRevealDraft = input.value;
+  });
+  input?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submit();
+  });
+  steps.querySelector("[data-name-random-reveal-confirm]")?.addEventListener("click", submit);
+}
+
 // Power Sink: "Counter target spell unless its controller pays {X}." The targeted
 // spell's controller taps lands to fill their pool, then pays {X} to keep their
 // spell or declines (and it is countered, tapping their lands and draining mana).
@@ -6380,6 +6443,12 @@ function renderActivationPrompt() {
   const nameThenRevealTopInfo = getNameThenRevealTopInfo();
   if (nameThenRevealTopInfo) {
     applyNameThenRevealTopPrompt(nameThenRevealTopInfo);
+    return;
+  }
+
+  const nameAndRandomRevealInfo = getNameAndRandomRevealInfo();
+  if (nameAndRandomRevealInfo) {
+    applyNameAndRandomRevealPrompt(nameAndRandomRevealInfo);
     return;
   }
 

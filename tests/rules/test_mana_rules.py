@@ -520,3 +520,51 @@ def test_106_6b_a_printed_card_declares_its_restriction(set_pool):
 
     assert restriction is not None
     assert restriction.key == "instant_or_sorcery"
+
+
+# ---------------------------------------------------------------------------
+# CR 609.4 — "you may spend mana as though it were mana of any type"
+# ---------------------------------------------------------------------------
+
+
+def _fungible_game():
+    from engine import Game, PlayerState
+
+    player = PlayerState(name="P1")
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = True
+    return game, player
+
+
+@pytest.mark.cr("609.4", "106.1b")
+def test_609_4_any_type_covers_colorless_where_any_color_does_not():
+    """The two permissions differ in exactly one place, and it is the place a
+    cost error would hide: a {C} in the cost. "Any **color**" is CR 106.1b's
+    five, so a coloured mana cannot pay a {C}; "any **type**" adds colorless as
+    the sixth, so it can. Reading the narrower word as the wider one makes a
+    spell castable that is not."""
+    game, player = _fungible_game()
+
+    player.mana_pool = {"W": 0, "U": 0, "B": 0, "R": 2, "G": 0, "C": 0}
+    assert not game._pay_with_fungible_colors(
+        player, {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 1, "generic": 1}
+    )
+    assert player.mana_pool["R"] == 2, "a refused payment spends nothing"
+
+    assert game._pay_with_fungible_types(
+        player, {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 1, "generic": 1}
+    )
+    assert sum(player.mana_pool.values()) == 0
+
+
+@pytest.mark.cr("609.4")
+def test_609_4_an_as_though_permission_does_not_create_mana():
+    """"As though" applies only to the stated effect: it changes which pips a
+    unit of mana may pay, never how many units there are."""
+    game, player = _fungible_game()
+    player.mana_pool = {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0}
+
+    assert not game._pay_with_fungible_types(
+        player, {"W": 1, "U": 1, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
+    )
+    assert player.mana_pool["R"] == 1

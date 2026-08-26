@@ -278,3 +278,76 @@ def channel_life_for_mana(game: Game, instruction: OracleInstruction, context: O
     caster.channel_active_until_eot = True
     game.log.append(f"{caster.name} may pay life for {{C}} mana until end of turn (Channel)")
     return True, "resolved"
+
+
+@effect_handler("produce_mana_instead")
+def produce_mana_instead(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"If target Plains is tapped for mana, it produces colorless mana instead
+    of white mana." (Quarum Trench Gnomes.)
+
+    A CR 611.2 continuous effect with no duration — "this effect lasts
+    indefinitely" — so it is recorded on the land rather than applied here. The
+    record is read by ``Permanent.effective_produced_mana``, the one place the
+    engine asks what a land makes, which is why nothing else has to change: the
+    tap path, the payment planner, the AI's land read and the web payload all
+    go through that property already.
+
+    It dies with the permanent, which is right without any sweep: CR 400.7
+    makes a land that leaves and returns a new object, and the effect named the
+    old one.
+    """
+    from ._common import resolve_target_permanent, permanent_matches_filter
+
+    # The filter the lowering recorded for the picker, read here too — the
+    # ability's legality gate asks the same question of the same dict, so a
+    # land offered at activation is one this resolution accepts.
+    filt = (instruction.payload.get("targets") or {}).get("filter") or {}
+    replaced = str(instruction.payload.get("replaced", ""))
+    produced = str(instruction.payload.get("produced", ""))
+
+    def _eligible(perm) -> bool:
+        return permanent_matches_filter(perm, filt)
+
+    target = resolve_target_permanent(
+        game, context, predicate=_eligible, fallback_on_invalid_choice=False,
+        fallback_players=game.players,
+    )
+    if target is None:
+        game.log.append(f"{context.card.name}: no valid land target")
+        return True, "resolved"
+    # Appended rather than assigned: a land pointed at twice carries both
+    # swaps, and the order they were created in is the order CR 613.7 applies
+    # them in — "produces {C} instead of {W}" and then "produces {G} instead of
+    # {C}" is a land that makes green.
+    swaps = list(target.metadata.get("produced_mana_swaps", ()))
+    swaps.append((replaced, produced))
+    target.metadata["produced_mana_swaps"] = tuple(swaps)
+    game.log.append(
+        f"{context.card.name}: {target.card.name} now produces "
+        f"{{{produced}}} instead of {{{replaced}}}"
+    )
+    return True, "resolved"
+
+
+@effect_handler("grant_spend_mana_as_though")
+def grant_spend_mana_as_though(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"For one spell this turn, you may spend mana as though it were mana of
+    any type to pay that spell's mana cost." (North Star.)
+
+    CR 609.4: nothing about the pool changes and no mana is made. The grant is
+    recorded on the player and spent by the payment, which is why it is a list
+    of bounded permissions rather than a flag — "one spell" is a printed number
+    and the permission runs out.
+    """
+    caster = context.caster
+    caster.spend_mana_as_though_grants.append({
+        "spells": max(1, int(instruction.payload.get("spells", 1))),
+        "any_type": bool(instruction.payload.get("any_type")),
+    })
+    breadth = "type" if instruction.payload.get("any_type") else "color"
+    game.log.append(
+        f"{context.card.name}: {caster.name} may spend mana as though it were "
+        f"mana of any {breadth} for {instruction.payload.get('spells', 1)} "
+        "spell(s) this turn"
+    )
+    return True, "resolved"

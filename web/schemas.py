@@ -54,6 +54,7 @@ ActionKind = Literal[
     "untap_up_to_confirm",
     "look_top_pick_confirm",
     "name_and_strip_confirm",
+    "name_and_random_reveal_confirm",
     "name_then_reveal_top_confirm",
     "reorder_library_confirm",
     "scry_confirm",

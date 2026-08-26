@@ -171,6 +171,7 @@ _FILTERABLE_ABILITY_KINDS = {
     "steal_target_linked_to_source",
     "tap_target_permanent",
     "attach_source_to_target",
+    "produce_mana_instead",
 }
 
 
@@ -744,6 +745,13 @@ class LegalityMixin:
             # _grant_regeneration_shield enforces at resolution. Death Ward's
             # payload is empty, so every creature passes.
             return perm.is_creature and permanent_matches_filter(perm, instruction.payload)
+        if instruction.kind == "produce_mana_instead":
+            # Quarum Trench Gnomes' "target Plains" — the same subtype filter
+            # the handler tests at resolution, asked here so the ability is
+            # refused with nothing paid when no such land exists (CR 602.2b via
+            # 601.2c) and the picker offers exactly what the swap can reach.
+            targets = instruction.payload.get("targets") or {}
+            return permanent_matches_filter(perm, targets.get("filter") or {})
         if instruction.kind == "tap_target_permanent":
             # Ali Baba's "target Wall" (and any other parsed tap-target filter);
             # Icy Manipulator's payload is empty, so everything passes.

@@ -1,13 +1,15 @@
-"""Cards moving: drawing, discarding, milling, searching, and mana.
+"""Cards moving: drawing, discarding, milling, searching, revealing.
 
 Draw / discard / mill share a shape — a player reference and a count — and are
 one-liners for that reason. Library search carries the filter that decides what
-may be found, and the mana productions read both "add {G}" and the
-"that player adds" spelling a land's tapped-for-mana trigger uses.
+may be found.
 
-Mana is here rather than in its own module because adding mana is what a card
-*does* with a card or a permanent, and the payment fragment it shares with
-"unless they pay" lives in `phrases` where both can reach it.
+Mana used to be here, on the grounds that adding mana is what a card *does*
+with a card or a permanent. It is `effects/mana.py` now: a template about what
+a land *produces* rather than about a card moving pushed this module past the
+thousand-line guard, and the lowering side had already split the same family
+off for the same reason. The name is `lowering/mana.py`'s, so the mirror
+re-forms instead of forking.
 """
 
 import dataclasses
@@ -75,25 +77,6 @@ def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":
         return None
 
 
-def _parse_mana_multiplier(stream: TokenStream) -> "ast.ObjectFilter | None":
-    """``for each <objects>`` after a mana clause (Leafkin Avenger).
-
-    A multiplier over the whole clause, read where the pips are so the two stay
-    one statement: parsed apart, the count would be a sentence nothing performs
-    and the mana would come out flat. Both pip spellings ask this, because
-    "Add {G} for each …" and "Add two {G} for each …" differ only in how the
-    symbols were written.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("for", "each"):
-        return None
-    try:
-        return parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-
-
 def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     stream.expect_word("discards", "discard")
     # "Discard your hand" (Chandra, Heart of Fire) — no count to read, and
@@ -156,165 +139,6 @@ def _parse_scry(stream: TokenStream) -> ast.Statement:
     stream.expect_word("scry")
     count = parse_amount(stream)
     return ast.Scry(count)
-
-
-def _parse_add_mana(stream: TokenStream) -> ast.Statement:
-    """``Add {G}`` / ``Add {C}{C}{C}`` / ``Add one mana of any color``."""
-    start = stream.mark()
-    stream.expect_word("add")
-
-    def _clause() -> str:
-        return render(stream.tokens[start:stream.pos])
-
-    pips: dict[str, int] = {}
-    choice = False
-    while stream.at_kind(MANA):
-        token = stream.next()
-        symbol = token.text.strip("{}")
-        if symbol.isdigit() or symbol in ("T", "Q", "X"):
-            raise stream.error(f"unsupported mana symbol {token.text!r}")
-        pips[symbol] = pips.get(symbol, 0) + 1
-        # "{B} or {R}" — a dual land's choice, not two mana. The word is
-        # *recorded* on the node, because a parse that merely consumed it would
-        # read "Add {B} or {R}" and "Add {B}{R}" as the same clause.
-        if stream.at_word("or"):
-            mark = stream.mark()
-            stream.advance()
-            if not stream.at_kind(MANA):
-                stream.reset(mark)
-                break
-            choice = True
-    if pips:
-        return ast.AddMana(
-            tuple(sorted(pips.items())),
-            choice=choice,
-            source_text=_clause(),
-            per_each=_parse_mana_multiplier(stream),
-        )
-
-    # "Add **an amount of {B} equal to the sacrificed artifact's mana value**."
-    # (Priest of Yawgmoth.) The amount is a back-reference to what the ability's
-    # own sacrifice cost ate, which only the resolution holding that cost can
-    # read (CR 608.2h) — so the node records *which* back-reference and the
-    # handler does the arithmetic, the same split every other computed amount
-    # in the grammar makes.
-    #
-    # Read before `parse_amount`, which would take "an" as the number one and
-    # then fail on "amount" — a failure that says nothing about what the
-    # sentence actually is.
-    sacrificed_mark = stream.mark()
-    if stream.accept_phrase("an", "amount", "of"):
-        if stream.at_kind(MANA):
-            symbol_token = stream.next()
-            symbol = symbol_token.text.strip("{}")
-            # "…equal to **that spell's** mana value." (Mana Drain.) The other
-            # object this printed shape back-refers to; the noun is read rather
-            # than skipped, because "that spell" and "that creature" would be
-            # two different back-references and only one of them is recorded.
-            if stream.accept_phrase("equal", "to", "that", "spell", "'s", "mana", "value"):
-                return ast.AddMana(
-                    (), source_text=_clause(), from_countered_spell=symbol,
-                )
-            # "…equal to **that creature's** mana value." (Energy Tap.) A
-            # third referent for the same printed shape: the creature an
-            # earlier sentence of this effect acted on. Read as either of the
-            # two above it would name an object nothing recorded and add no
-            # mana at all, so the noun is matched rather than skipped.
-            if stream.accept_phrase(
-                "equal", "to", "that", "creature", "'s", "mana", "value"
-            ):
-                return ast.AddMana(
-                    (), source_text=_clause(), from_bound_creature=symbol,
-                )
-            if stream.accept_phrase("equal", "to", "the", "sacrificed") and stream.peek_word():
-                # The noun repeats what the cost already named ("artifact"), so
-                # it is consumed rather than re-read: the cost decided what was
-                # sacrificed, and a second reading here could only disagree.
-                stream.advance()
-                if stream.accept_phrase("'s", "mana", "value"):
-                    return ast.AddMana(
-                        (),
-                        source_text=_clause(),
-                        from_sacrificed_cost=symbol,
-                    )
-        stream.reset(sacrificed_mark)
-
-    count = parse_amount(stream)
-    # "Add six {R}." (Chandra, Heart of Fire's −9) — a counted single symbol,
-    # the same pips as "{R}{R}{R}{R}{R}{R}" spelled with a number word.
-    if stream.at_kind(MANA):
-        token = stream.next()
-        symbol = token.text.strip("{}")
-        if symbol.isdigit() or symbol in ("T", "Q", "X"):
-            raise stream.error(f"unsupported mana symbol {token.text!r}")
-        amount = count.value if isinstance(count, ast.Fixed) else 0
-        if amount <= 0:
-            raise stream.error("expected a fixed number of mana symbols")
-        return ast.AddMana(
-            ((symbol, amount),),
-            source_text=_clause(),
-            per_each=_parse_mana_multiplier(stream),
-        )
-
-    # "Add one mana of any color" / "Add three mana of any one color".
-    stream.expect_word("mana")
-    stream.expect_word("of")
-    stream.accept_word("any")
-    stream.accept_word("one")
-    stream.expect_word("color")
-    # "Add **X** mana of any one color" (Sanctum of Fruitful Harvest). The count
-    # travels as the amount it was parsed as — it used to be forced to an int
-    # here and a variable one refused, which was right while the handler read the
-    # clause *text* and could only recognize the literal "one mana of any color".
-    # The handler takes a number now, so any amount the enclosing sentence can
-    # define is one it can add.
-    return ast.AddMana((), any_color=count, source_text=_clause())
-
-
-def _parse_player_adds_mana(
-    stream: TokenStream, recipient: ast.PlayerRef
-) -> ast.AddManaForTappedLand:
-    """``<player> adds an additional {R}`` / ``<player> adds one mana of any type
-    that land produced`` — the effect half of a triggered mana ability on a land
-    being tapped (Gauntlet of Might, Mana Flare).
-
-    Distinct from :func:`_parse_add_mana`, whose bare "Add {G}" always means the
-    ability's own controller. Here the subject is a *player reference* bound by
-    the trigger, so the mana can land in someone else's pool, and "any type that
-    land produced" names a quantity no pip list can express.
-    """
-    stream.expect_word("adds", "add")
-    additional = bool(stream.accept_phrase("an", "additional"))
-
-    pips: dict[str, int] = {}
-    while stream.at_kind(MANA):
-        token = stream.next()
-        symbol = token.text.strip("{}")
-        if symbol.isdigit() or symbol in ("T", "Q", "X"):
-            raise stream.error(f"unsupported mana symbol {token.text!r}")
-        pips[symbol] = pips.get(symbol, 0) + 1
-    if pips:
-        return ast.AddManaForTappedLand(
-            recipient, pips=tuple(sorted(pips.items())), additional=additional
-        )
-
-    # "one mana of any type that land produced". Every word is read: "any type
-    # **that land** produced" is what ties the mana to the land the trigger
-    # names, and a production that skipped the tail would read the same as an
-    # unrestricted "one mana of any type" — a strictly larger effect.
-    count = parse_amount(stream)
-    stream.expect_word("mana")
-    stream.expect_word("of")
-    stream.expect_word("any")
-    stream.expect_word("type")
-    if not stream.accept_phrase("that", "land", "produced"):
-        raise stream.error("expected 'that land produced'")
-    amount = count.value if isinstance(count, ast.Fixed) else 0
-    if amount <= 0:
-        raise stream.error("expected a fixed amount of mana")
-    return ast.AddManaForTappedLand(
-        recipient, of_type_produced=amount, additional=additional
-    )
 
 
 def _parse_reveal_top(stream: TokenStream) -> ast.Statement:

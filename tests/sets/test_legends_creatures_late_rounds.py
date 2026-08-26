@@ -1139,3 +1139,213 @@ def test_shelkin_brownie_breaks_up_the_wolf_band(set_pool):
 
     ok, _ = game.declare_attackers(0, [1, 2], bands=[[1, 2]])
     assert not ok
+
+
+# ---------------------------------------------------------------------------
+# Quarum Trench Gnomes (round 26) — a standing change to what a land produces
+# ---------------------------------------------------------------------------
+
+
+def _gnomes_game(set_pool, land_name="Plains", extra=()):
+    pool = set_pool("LEG")
+    gnomes = Permanent(card=pool["Quarum Trench Gnomes"])
+    lands = [Permanent(card=set_pool("LEA")[land_name])]
+    lands += [Permanent(card=set_pool("LEA")[name]) for name in extra]
+    p1 = PlayerState(name="P1", battlefield=[gnomes, *lands])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    gnomes.summoning_sick = False
+    return game, p1, gnomes, lands
+
+
+def _aim_gnomes(game, index):
+    result = game.activate_permanent_ability(
+        0, "Quarum Trench Gnomes", permanent_index=0,
+        target_permanent_index=index, target_player_index=0,
+    )
+    game._settle()
+    return result
+
+
+def test_quarum_trench_gnomes_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Quarum Trench Gnomes"])
+    assert program.supported, program.reason
+
+
+def test_quarum_trench_gnomes_turns_a_plains_colorless(set_pool):
+    """The whole card: tap the Gnomes, then tap the Plains and see what came
+    out. Asking the compiler alone would have been happy with an ability that
+    resolved and changed nothing."""
+    game, p1, _gnomes, lands = _gnomes_game(set_pool)
+    plains = lands[0]
+    assert plains.effective_produced_mana == ("W",)
+
+    assert _aim_gnomes(game, 1).supported
+    assert plains.effective_produced_mana == ("C",)
+
+    p1.mana_pool = {sym: 0 for sym in ("W", "U", "B", "R", "G", "C")}
+    game.tap_land_for_mana(0, "Plains", permanent_index=1)
+    assert p1.mana_pool["C"] == 1
+    assert p1.mana_pool["W"] == 0, "the white mana is replaced, not added to"
+
+
+def test_quarum_trench_gnomes_changes_only_the_land_it_named(set_pool):
+    """"Target Plains" is one land, not the type — a second Plains keeps making
+    white, which is what separates this from a board-wide static."""
+    game, p1, _gnomes, lands = _gnomes_game(set_pool, extra=("Plains",))
+
+    assert _aim_gnomes(game, 1).supported
+
+    assert lands[0].effective_produced_mana == ("C",)
+    assert lands[1].effective_produced_mana == ("W",), "the other Plains is untouched"
+
+
+def test_quarum_trench_gnomes_refuses_a_land_that_is_not_a_plains(set_pool):
+    """The printed noun narrows the target, and the gate that reads it is the
+    one the picker reads (CR 602.2b) — so the ability is refused with the
+    Gnomes still untapped rather than activated onto a land it cannot change."""
+    game, _p1, gnomes, lands = _gnomes_game(set_pool, land_name="Swamp")
+
+    result = _aim_gnomes(game, 1)
+
+    assert not result.supported
+    assert not gnomes.tapped, "nothing was paid"
+    assert lands[0].effective_produced_mana == ("B",)
+
+
+def test_quarum_trench_gnomes_effect_lasts_past_the_turn(set_pool):
+    """"(This effect lasts indefinitely.)" — no duration, so no cleanup sweep
+    takes it back."""
+    game, p1, _gnomes, lands = _gnomes_game(set_pool)
+    assert _aim_gnomes(game, 1).supported
+
+    game.resolve_cleanup_step(0)
+    game.start_turn(1)
+    game.start_turn(0)
+
+    assert lands[0].effective_produced_mana == ("C",)
+
+
+def test_quarum_trench_gnomes_swap_is_read_by_the_payment_planner(set_pool):
+    """`plan_payment` asks what a land can produce through the same property,
+    so a Plains the Gnomes have changed no longer pays a {W} pip."""
+    from engine.mana_payment import plan_payment
+
+    game, p1, _gnomes, lands = _gnomes_game(set_pool)
+    empty = {sym: 0 for sym in ("W", "U", "B", "R", "G", "C")}
+    assert plan_payment(empty, lands, {"W": 1}) is not None
+
+    assert _aim_gnomes(game, 1).supported
+
+    assert plan_payment(empty, lands, {"W": 1}) is None
+    assert plan_payment(empty, lands, {"generic": 1}) is not None
+
+
+# ---------------------------------------------------------------------------
+# Nebuchadnezzar (round 26) — a named card, a random reveal, and "this way"
+# ---------------------------------------------------------------------------
+
+
+def _nebuchadnezzar_game(set_pool, opponent_hand, *, active=0):
+    leg = set_pool("LEG")
+    lea = set_pool("LEA")
+    king = Permanent(card=leg["Nebuchadnezzar"])
+    p1 = PlayerState(name="P1", battlefield=[king])
+    p2 = PlayerState(name="P2", hand=[lea[name] for name in opponent_hand])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(active)
+    king.summoning_sick = False
+    return game, p1, p2
+
+
+def _name(game, x, named, *, seat=1):
+    result = game.activate_permanent_ability(
+        0, "Nebuchadnezzar", permanent_index=0,
+        target_player_index=seat, x_value=x,
+    )
+    game._settle()
+    if result.supported and game.pending_choices:
+        game.confirm_name_and_random_reveal(0, named)
+    return result
+
+
+def test_nebuchadnezzar_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Nebuchadnezzar"])
+    assert program.supported, program.reason
+
+
+def test_nebuchadnezzar_discards_every_revealed_copy(set_pool):
+    """X equal to the whole hand reveals all of it, so what is left is exactly
+    the cards that do not carry the named name."""
+    game, _p1, p2 = _nebuchadnezzar_game(
+        set_pool, ["Plains", "Plains", "Plains", "Swamp", "Swamp"],
+    )
+
+    assert _name(game, 5, "Plains").supported
+
+    assert sorted(c.name for c in p2.hand) == ["Swamp", "Swamp"]
+    assert sorted(c.name for c in p2.graveyard) == ["Plains"] * 3
+
+
+def test_nebuchadnezzar_discards_only_what_the_reveal_turned_up(set_pool):
+    """"…all cards with that name **revealed this way**." Four copies in hand
+    and X of 1: exactly one is revealed, so exactly one is discarded. A discard
+    over the hand rather than over the revealed pile would take all four and
+    make the randomness decoration."""
+    game, _p1, p2 = _nebuchadnezzar_game(set_pool, ["Plains"] * 4)
+
+    assert _name(game, 1, "Plains").supported
+
+    assert len(p2.hand) == 3
+    assert len(p2.graveyard) == 1
+
+
+def test_nebuchadnezzar_a_name_nothing_matches_discards_nothing(set_pool):
+    """CR 202.1 lets a player name any card, including one nobody holds — the
+    reveal still happens and nothing is discarded."""
+    game, _p1, p2 = _nebuchadnezzar_game(set_pool, ["Plains", "Swamp"])
+
+    assert _name(game, 2, "Black Lotus").supported
+
+    assert len(p2.hand) == 2 and p2.graveyard == []
+
+
+def test_nebuchadnezzar_x_larger_than_the_hand_reveals_the_hand(set_pool):
+    """X is announced before the hand is looked at, so it may exceed it. The
+    reveal is capped rather than refused."""
+    game, _p1, p2 = _nebuchadnezzar_game(set_pool, ["Plains"])
+
+    assert _name(game, 6, "Plains").supported
+
+    assert p2.hand == [] and len(p2.graveyard) == 1
+
+
+def test_nebuchadnezzar_activates_only_during_your_turn(set_pool):
+    """"Activate only during your turn." (CR 602.5.) Refused with nothing
+    paid."""
+    game, _p1, p2 = _nebuchadnezzar_game(set_pool, ["Plains"], active=1)
+    king = game.players[0].battlefield[0]
+
+    result = _name(game, 1, "Plains")
+
+    assert not result.supported
+    assert not king.tapped, "nothing was paid"
+    assert len(p2.hand) == 1
+
+
+def test_nebuchadnezzar_names_an_opponent_and_only_an_opponent(set_pool):
+    """"Target **opponent**" — the picker offers no other seat, and an ability
+    aimed at its own controller reveals nothing."""
+    game, p1, _p2 = _nebuchadnezzar_game(set_pool, ["Plains"])
+    p1.hand = [set_pool("LEA")["Plains"]] * 3
+    offered = game._enumerate_targets(
+        0, set_pool("LEG")["Nebuchadnezzar"],
+        {"kind": "player", "opponents_only": True}, for_cast=False,
+    )
+
+    assert [t["seat"] for t in offered] == [1]
+
+    _name(game, 3, "Plains", seat=0)
+    assert len(p1.hand) == 3, "the controller's own hand is untouched"

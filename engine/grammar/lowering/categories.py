@@ -290,6 +290,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "reveal_top_of_library": "zones",
     "reveal_until_match": "zones",
     "name_and_strip": "zones",
+    # "Choose a card name. Target opponent reveals X cards at random from their
+    # hand. Then that player discards all cards with that name revealed this
+    # way." (Nebuchadnezzar.) The same category as the naming paragraph above:
+    # what it does is move cards out of a hidden zone.
+    "name_and_random_reveal": "zones",
     # Petra Sphinx's guess. "zones" like the reveals above it: what the card
     # does is look at the top of a library and move that card somewhere, and
     # the name is only what decides which somewhere.
@@ -392,6 +397,17 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # inline by Game.tap_land_for_mana, not through EFFECT_HANDLERS on the
     # stack, because CR 605.4a says a triggered mana ability never uses it.
     "add_mana_for_tapped_land": "mana",
+    # "If target Plains is tapped for mana, it produces colorless mana instead
+    # of white mana." (Quarum Trench Gnomes.) A CR 611.2 continuous effect on
+    # one land rather than a production of mana — the same category because
+    # what it changes is the land's mana ability, and nothing else in the
+    # engine asks about that.
+    "produce_mana_instead": "mana",
+    # "For one spell this turn, you may spend mana as though it were mana of
+    # any type…" (North Star.) A CR 609.4 permission the payment reads, not a
+    # production of mana — the same category because what it is about is how
+    # mana pays, and nothing else in the engine asks that.
+    "grant_spend_mana_as_though": "mana",
     "create_token": "tokens",
     "create_copy_token": "tokens",
     # Flipping a coin (CR 705). Its own category rather than sharing one with

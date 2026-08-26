@@ -20,6 +20,7 @@ from .paragraphs import (
     _parse_exile_graveyard_until_leaves,
     _parse_exile_until_leaves_or_untaps,
     _parse_name_and_strip,
+    _parse_name_then_random_reveal,
     _parse_name_then_reveal_top,
     _parse_transmute_by_sacrifice,
 )
@@ -68,6 +69,8 @@ from .effects import (
     _parse_scry,
     _parse_modal_head,
     _parse_player_adds_mana,
+    _parse_produces_instead,
+    _parse_spend_mana_as_though,
     _parse_prevent,
     _parse_double,
     _parse_switch_pt,
@@ -276,6 +279,13 @@ def _parse_subject_verb(
         chosen_number = _parse_choose_number(stream)
         if chosen_number is not None:
             return chosen_number
+        # Nebuchadnezzar's naming paragraph. Tried before Necromentia's, which
+        # is the last resort here and raises rather than refusing — the two
+        # differ from the fifth word on, and this one declines without
+        # consuming so nothing else loses a reading.
+        random_reveal = _parse_name_then_random_reveal(stream)
+        if random_reveal is not None:
+            return random_reveal
         return _parse_name_and_strip(stream)
     if stream.at_word("draw"):
         return _parse_draw(stream, ast.PlayerRef("you"))
@@ -571,6 +581,29 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         except GrammarError:
             pass
         stream.reset(mark)
+
+    # "For one spell this turn, you may spend mana as though it were mana of
+    # any type to pay that spell's mana cost." (North Star.) A CR 609.4
+    # permission rather than an action: nothing happens when it resolves.
+    # Refuses without consuming, so "for each …" and every other clause opening
+    # with the word keeps its reading.
+    if stream.at_word("for"):
+        as_though = _parse_spend_mana_as_though(stream)
+        if as_though is not None:
+            return as_though
+
+    # "If target Plains is tapped for mana, it produces colorless mana instead
+    # of white mana." (Quarum Trench Gnomes.) The printed shape opens like an
+    # ordinary conditional, but its "condition" is not one: nothing is tested
+    # when the ability resolves, and the arm is a standing change to what the
+    # land will produce later. Read before the conditional below, which would
+    # take the clause as an intervening-if over a sentence it has no production
+    # for — and refuses without consuming, so every other "if" keeps its
+    # reading.
+    if stream.at_word("if"):
+        produces = _parse_produces_instead(stream)
+        if produces is not None:
+            return produces
 
     # "if <condition>, <statement>"
     if stream.at_word("if"):

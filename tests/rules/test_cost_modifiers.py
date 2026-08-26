@@ -31,7 +31,7 @@ def test_601_2f_colour_scoped_spell_tax_is_read_from_the_text():
     modifier = _only("White spells cost {3} more to cast.")
 
     assert (modifier.applies_to, modifier.colour, modifier.amount) == ("cast", "W", 3)
-    assert modifier.card_type is None
+    assert modifier.card_types == ()
 
 
 @pytest.mark.cr("601.2f")
@@ -50,7 +50,7 @@ def test_601_2f_an_unscoped_tax_applies_to_every_spell():
     modifier = _only("Spells cost {1} more to cast.")
 
     assert modifier.colour is None
-    assert modifier.card_type is None
+    assert modifier.card_types == ()
     assert modifier.amount == 1
 
 
@@ -61,8 +61,8 @@ def test_601_2f_a_type_scoped_tax_is_recognized():
     typed = _only("Creature spells cost {2} more to cast.")
     both = _only("Blue creature spells cost {2} more to cast.")
 
-    assert (typed.card_type, typed.colour) == ("creature", None)
-    assert (both.card_type, both.colour) == ("creature", "U")
+    assert (typed.card_types, typed.colour) == (("creature",), None)
+    assert (both.card_types, both.colour) == (("creature",), "U")
 
 
 @pytest.mark.cr("601.2f")
@@ -73,7 +73,9 @@ def test_601_2f_activated_ability_taxes_are_separate_from_cast_taxes():
     modifier = _only("Activated abilities of white enchantments cost {3} more to activate.")
 
     assert modifier.applies_to == "activate"
-    assert (modifier.colour, modifier.card_type, modifier.amount) == ("W", "enchantment", 3)
+    assert (modifier.colour, modifier.card_types, modifier.amount) == (
+        "W", ("enchantment",), 3,
+    )
 
 
 @pytest.mark.cr("601.2f")
@@ -116,8 +118,8 @@ def test_601_2f_a_reduction_is_read_from_the_same_template():
     modifier = _only("Creature spells with flying you cast cost {1} less to cast.")
 
     assert modifier.reduces
-    assert (modifier.card_type, modifier.keyword, modifier.controller) == (
-        "creature", "flying", "you",
+    assert (modifier.card_types, modifier.keyword, modifier.controller) == (
+        ("creature",), "flying", "you",
     )
     assert modifier.amount == 1
 
@@ -129,7 +131,7 @@ def test_601_2f_a_non_type_is_the_printed_negation_of_the_same_word():
     becoming a card type of its own."""
     modifier = _only("Noncreature spells cost {1} more to cast.")
 
-    assert (modifier.card_type, modifier.reduces) == ("noncreature", False)
+    assert (modifier.card_types, modifier.reduces) == (("noncreature",), False)
 
 
 @pytest.mark.cr("118.7a")
@@ -198,3 +200,36 @@ def test_601_2f_a_self_reduction_refuses_a_condition_it_cannot_answer():
     # And a bare {X} with no clause at all names no amount, so it refuses as it
     # always did.
     assert self_cost_reduction("This spell costs {X} less to cast.") is None
+
+
+@pytest.mark.cr("601.2f")
+def test_601_2f_a_printed_type_list_is_read_as_an_alternation():
+    """"Instant and enchantment spells you cast cost {2} less to cast." (Mana
+    Matrix.) The number of types is a fact about one card, so it is payload —
+    a template that read one type would silently drop the other, taxing or
+    discounting half of what the card says."""
+    modifier = _only("Instant and enchantment spells you cast cost {2} less to cast.")
+
+    assert modifier.card_types == ("instant", "enchantment")
+    assert (modifier.reduces, modifier.amount, modifier.controller) == (True, 2, "you")
+
+
+@pytest.mark.cr("601.2f")
+def test_601_2f_a_type_list_is_not_limited_to_two():
+    """Nothing in the template counts to two: a comma-separated list of three
+    reads as three, because the count is not in the pattern."""
+    modifier = _only(
+        "Artifact, creature, and land spells cost {1} more to cast."
+    )
+
+    assert modifier.card_types == ("artifact", "creature", "land")
+
+
+@pytest.mark.cr("118.7a", "601.2f")
+def test_118_7a_a_generic_reduction_clamps_at_zero_without_touching_pips():
+    """Mana Matrix offers {2} against a cost holding {1} of generic: the
+    generic goes to nothing and the coloured pip is untouched, rather than the
+    surplus spilling onto it."""
+    assert reduce_cost({"generic": 1, "W": 1}, CostReduction(2)) == {
+        "generic": 0, "W": 1,
+    }

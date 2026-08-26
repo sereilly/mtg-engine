@@ -39,6 +39,10 @@ from .oracle_types import _COLOR_WORD_TO_SYMBOL
 # Card types a cost modifier can name. "spell" is the unfiltered form; the "non"
 # forms are the printed negation (Vryn Wingmare), not a separate mechanism.
 _TYPES = "noncreature|artifact|creature|enchantment|instant|sorcery|land"
+# A printed type *list* — "Instant and enchantment spells" (Mana Matrix). Any
+# number of alternatives, because the count is a fact about one card and not
+# about the template.
+_TYPE_LIST = rf"(?:{_TYPES})(?:(?:,| and| or)+ (?:{_TYPES}))*"
 _COLOURS = "|".join(_COLOR_WORD_TO_SYMBOL)
 _MANA_SYMBOLS = frozenset({"W", "U", "B", "R", "G", "C"})
 
@@ -52,8 +56,11 @@ class CostModifier:
     applies_to -- "cast" for spells, "activate" for activated abilities
     reduces    -- whether this takes mana off rather than adding it
     colour     -- mana symbol the affected object must have, or None for any
-    card_type  -- card type the affected object must have, or None for any;
-                  a "non"-prefixed name excludes instead of requiring
+    card_types -- card types the affected object must have *one of*, or empty
+                  for any; a "non"-prefixed name excludes instead of requiring.
+                  A list ("Instant and enchantment spells", Mana Matrix) is
+                  read as the alternation it is printed as, so the number of
+                  types is payload rather than part of the template
     keyword    -- keyword the affected object must have, or None for any
     controller -- "you" when the modifier says "you cast", "opponents" when it
                   says "your opponents cast", or None for anyone's
@@ -68,7 +75,7 @@ class CostModifier:
     applies_to: str
     reduces: bool = False
     colour: str | None = None
-    card_type: str | None = None
+    card_types: tuple[str, ...] = ()
     keyword: str | None = None
     controller: str | None = None
     life: bool = False
@@ -88,7 +95,7 @@ class CostReduction:
 
 # "<colour>? <type>? spells [with <keyword>] [you cast] cost {N} more/less to cast"
 _SPELL_TAX = re.compile(
-    rf"(?:(?P<colour>{_COLOURS}) )?(?:(?P<type>{_TYPES}) )?spells"
+    rf"(?:(?P<colour>{_COLOURS}) )?(?:(?P<type>{_TYPE_LIST}) )?spells"
     r"(?: with (?P<keyword>[a-z]+))?(?P<controller> you cast)? cost "
     r"\{(?P<amount>\d+)\} (?P<direction>more|less) to cast"
 )
@@ -118,7 +125,7 @@ _TARGETING_MANA_TAX = re.compile(
 
 # "activated abilities of <colour>? <type>s cost {N} more to activate"
 _ABILITY_TAX = re.compile(
-    rf"activated abilities of (?:(?P<colour>{_COLOURS}) )?(?P<type>{_TYPES})s? cost "
+    rf"activated abilities of (?:(?P<colour>{_COLOURS}) )?(?P<type>{_TYPE_LIST})s? cost "
     r"\{(?P<amount>\d+)\} more to activate"
 )
 
@@ -143,7 +150,7 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
                 applies_to="cast",
                 reduces=match.group("direction") == "less",
                 colour=_COLOR_WORD_TO_SYMBOL.get(match.group("colour") or ""),
-                card_type=match.group("type"),
+                card_types=_types_named(match.group("type")),
                 keyword=match.group("keyword"),
                 controller="you" if match.group("controller") else None,
             )
@@ -173,7 +180,7 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
                 amount=int(match.group("amount")),
                 applies_to="activate",
                 colour=_COLOR_WORD_TO_SYMBOL.get(match.group("colour") or ""),
-                card_type=match.group("type"),
+                card_types=_types_named(match.group("type")),
             )
         )
     return tuple(modifiers)
@@ -207,19 +214,38 @@ def cost_modifier_claims_line(line: str) -> bool:
     return self_reduction_claims_line(line)
 
 
+def _types_named(clause: str | None) -> tuple[str, ...]:
+    """The card types a printed type clause names, in order.
+
+    "instant and enchantment" is two; "white" alone is none, because the colour
+    is its own group. Splitting here rather than in the pattern keeps the count
+    of types payload — a card printing three would need no change.
+    """
+    if not clause:
+        return ()
+    return tuple(re.findall(_TYPES, clause))
+
+
+def _has_printed_type(card, wanted: str) -> bool:
+    """Whether *card*'s type line satisfies one named type.
+
+    "Noncreature" is the printed negation of the same word, so it is read as
+    one rather than as a type of its own — the type line is asked the same
+    question and the answer is inverted.
+    """
+    negated = wanted.startswith("non")
+    if negated:
+        wanted = wanted[3:]
+    return (wanted in card.type_line.lower()) != negated
+
+
 def _matches(modifier: CostModifier, card) -> bool:
     if modifier.colour and modifier.colour not in (card.colors or ()):
         return False
-    if modifier.card_type:
-        # "Noncreature spells" is the printed negation of the same word, so it
-        # is read as one rather than as a type of its own — the type line is
-        # asked the same question and the answer is inverted.
-        wanted = modifier.card_type
-        negated = wanted.startswith("non")
-        if negated:
-            wanted = wanted[3:]
-        if (wanted in card.type_line.lower()) == negated:
-            return False
+    if modifier.card_types and not any(
+        _has_printed_type(card, wanted) for wanted in modifier.card_types
+    ):
+        return False
     if modifier.keyword and modifier.keyword not in {
         word.lower() for word in (card.keywords or ())
     }:

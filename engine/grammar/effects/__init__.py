@@ -9,7 +9,8 @@ precisely so this stays true. Independence is the point: it is what makes
     damage           dealing it, and preventing it
     characteristics  P/T, keywords, colour, printed text, counters
     board            destruction, bouncing, tapping, control
-    cards            drawing, discarding, milling, searching, mana
+    cards            drawing, discarding, milling, searching, revealing
+    mana             producing it, and changing what a permanent produces
     stack            countering, choosing modes, and declining a cost
     combat           can't-attack / can't-be-blocked restrictions
     game             tokens, winning, extra turns, enchant
@@ -65,17 +66,21 @@ from .board import (
     _parse_attach,
     _parse_exchange_control,
 )
+from .mana import (
+    _parse_add_mana,
+    _parse_player_adds_mana,
+    _parse_produces_instead,
+    _parse_spend_mana_as_though,
+)
 from .cards import (
     _parse_draw,
     _parse_discard,
     _parse_mill,
     _parse_scry,
-    _parse_add_mana,
     _parse_cast_permission,
     _parse_exile_graveyard,
     _parse_reveal_hand_and_choose,
     _parse_exile_top_of_library,
-    _parse_player_adds_mana,
     _parse_look_at_hand,
     _parse_reveal_top,
     _parse_search_library,
@@ -149,6 +154,8 @@ __all__ = [
     "_parse_reveal_hand_and_choose",
     "_parse_exile_top_of_library",
     "_parse_player_adds_mana",
+    "_parse_produces_instead",
+    "_parse_spend_mana_as_though",
     "_parse_double",
     "_parse_switch_pt",
     "_parse_fight",

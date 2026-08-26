@@ -105,6 +105,10 @@ class CleanupStepMixin:
             player.mirror_damage_charges = 0
             player.mirror_damage_sources = []
             player.channel_active_until_eot = False
+            # "For one spell **this turn**" (North Star): an unused permission
+            # expires with the turn, the same way an unused regeneration shield
+            # below does.
+            player.spend_mana_as_though_grants = []
             player.prevent_one_damage_emblems = []
             for permanent in self.controlled_by(player):
                 permanent.damage_marked = 0
