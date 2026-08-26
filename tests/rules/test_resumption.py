@@ -711,3 +711,106 @@ def test_117_3b_the_rounds_behind_an_unanswered_offer_still_happen(set_pool, cat
     assert [p.card.name for p in game.players[1].battlefield] == [
         "Serra Angel"
     ], "the seat behind the one that asked was skipped"
+
+
+# -- CR 608.2c/608.2d: what a resolution offers, and when (round 34) ----------
+
+
+def _r34_offer_program(steps):
+    """A ``Game`` and an execution context to run *steps* against, with seat 0
+    interactive so an offer queues rather than answering itself."""
+    from engine.game_types import OracleExecutionContext
+
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    context = OracleExecutionContext(
+        caster=game.players[0],
+        target=game.players[0],
+        card=CardDefinition(
+            name="Test Effect", mana_cost="", cmc=0.0, type_line="Sorcery",
+            oracle_text="", colors=(), color_identity=(), keywords=(),
+            produced_mana=(), raw={"name": "Test Effect", "type_line": "Sorcery"},
+        ),
+    )
+    return game, context
+
+
+@pytest.mark.cr("608.2d", "119.4")
+def test_an_alternative_a_player_cannot_take_is_not_offered():
+    """"The player can't choose an option that's illegal or impossible."
+
+    "Pay 4 life or …" at 3 life is one alternative, not two: CR 119.4 lets a
+    player pay life only with a life total at least the amount. The gate is
+    ``_action_is_takeable``, which the optional-offer path already ran and the
+    bare choice mid-resolution did not — so the mode was offered and then
+    refused, which is a decision a player makes and does not get.
+    """
+    from engine.handlers.registry import EFFECT_HANDLERS
+    from engine.oracle_types import OracleInstruction
+
+    modes = (
+        {"label": "pay 4 life",
+         "instruction": OracleInstruction("pay_life", "", {"amount": 4})},
+        {"label": "gain 1 life",
+         "instruction": OracleInstruction(
+             "target_gains_life", "", {"amount": 1, "recipient": "caster"}
+         )},
+    )
+    for life, expected in ((20, ["pay 4 life", "gain 1 life"]), (3, ["gain 1 life"])):
+        game, context = _r34_offer_program(())
+        game.players[0].life = life
+
+        EFFECT_HANDLERS["choose_one"](
+            game, OracleInstruction("choose_one", "", {"modes": modes}), context
+        )
+
+        assert game.pending_choice_of("mode_choice").data["labels"] == expected
+
+
+@pytest.mark.cr("608.2c", "608.2d")
+def test_a_choice_inside_a_repetition_stops_it_until_it_is_answered():
+    """"…in the order written." One iteration's decision is applied before the
+    next iteration starts.
+
+    A mode picked inside a "for each" acts on the object the loop is currently
+    on, so arming every iteration's prompt at once would leave every answer to
+    land on whichever object the loop had ended on. The prompt suspends, and
+    the loop it is a step of stops with it (``engine/resumption.py``).
+    """
+    from engine.handlers.registry import EFFECT_HANDLERS
+    from engine.oracle_types import OracleInstruction
+
+    game, context = _r34_offer_program(())
+    context.results["chosen"] = ["first", "second"]
+    seen: list[str] = []
+    modes = (
+        {"label": "note it",
+         "instruction": OracleInstruction("sequence", "", {"steps": ()})},
+        {"label": "or not",
+         "instruction": OracleInstruction("sequence", "", {"steps": ()})},
+    )
+    loop = OracleInstruction(
+        "for_each", "",
+        {
+            "iterator": {"produced_by": "chosen"},
+            "effect": (OracleInstruction("choose_one", "", {"modes": modes}),),
+        },
+    )
+
+    EFFECT_HANDLERS["for_each"](game, loop, context)
+
+    assert len(game.pending_choices) == 1, "the second iteration has not started"
+    assert game.effect_suspended is True
+    seen.append(context.iteration_target)
+
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=0, target=None)
+    seen.append(context.iteration_target)
+
+    assert seen == ["first", "second"], "each answer landed on its own object"
+    assert len(game.pending_choices) == 1, "the second iteration's own prompt"
+
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=0, target=None)
+    assert game.pending_choices == []
+    assert game.effect_suspended is False
+    assert context.iteration_target is None, "the loop restored what it borrowed"
