@@ -19,6 +19,7 @@ import dataclasses
 from ..lord_buffs import (LORD_BUFF_KIND, LordBuff, LordBuffFilter,
                           QUALIFIER_FIELDS, grantable_keywords, lord_buff_payload)
 from ..oracle_types import OracleInstruction
+from ..search_filters import SEARCH_COMPARISONS
 from ..subject_filters import OBJECT_ONLY_FILTER_KEYS
 from . import ast
 from .errors import LoweringError
@@ -92,6 +93,7 @@ def _lower_lord_effects(
 
     power = toughness = 0
     keywords: list[str] = []
+    lost_keywords: list[str] = []
     for effect in effects:
         if isinstance(effect, ast.Pump):
             if effect.per_each is not None:
@@ -112,6 +114,18 @@ def _lower_lord_effects(
                         f"engine/lord_buffs.py grants no {keyword!r} at layer 6", node=node
                     )
                 keywords.append(keyword)
+        elif isinstance(effect, ast.LoseKeyword):
+            # "All creatures lose flying." (Gravity Sphere.) The mirror of the
+            # grant above and the same layer, so the same vocabulary gates it:
+            # a word the engine does not implement would be a removal of
+            # nothing, reported as a working board-wide static.
+            for keyword in effect.keywords:
+                if keyword not in grantable_keywords():
+                    raise LoweringError(
+                        f"engine/lord_buffs.py removes no {keyword!r} at layer 6",
+                        node=node,
+                    )
+                lost_keywords.append(keyword)
         else:
             raise LoweringError("static abilities need the CR 613 layers engine", node=node)
 
@@ -133,7 +147,13 @@ def _lower_lord_effects(
             "has no matching rule behind it",
             node=node,
         )
-    return LordBuff(lord_filter, power, toughness, tuple(keywords))
+    return LordBuff(
+        lord_filter,
+        power,
+        toughness,
+        tuple(keywords),
+        lost_keywords=tuple(lost_keywords),
+    )
 
 
 def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNode) -> dict:
@@ -161,12 +181,22 @@ def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNod
             f"opponent, not {who!r}",
             node=node,
         )
-    if "count" in payload or payload.get("shared_name"):
-        # The consumer asks presence (`any` over one battlefield), so a
-        # threshold or a same-name relation would be dropped, and a dropped
-        # bound is a condition weaker than printed.
+    if payload.get("shared_name"):
+        # The consumer counts matches on one battlefield; a same-name *relation*
+        # between them is not a count it takes, and a dropped relation is a
+        # condition weaker than printed.
         raise LoweringError(
-            "conditional_static_holds tests presence, not a count",
+            "conditional_static_holds counts matches, not same-name relations",
+            node=node,
+        )
+    if "count" in payload and payload.get("op") not in SEARCH_COMPARISONS:
+        # "…as long as you control **no** nonartifact, nonwhite creatures"
+        # (Angelic Voices) is a threshold, and the evaluator now answers one —
+        # through the shared comparator, so a comparison that table cannot
+        # apply refuses here rather than being answered False forever.
+        raise LoweringError(
+            f"conditional_static_holds applies no {payload.get('op')!r} "
+            "comparison to a buff condition",
             node=node,
         )
     described = payload.get("filter") or {}
@@ -183,6 +213,74 @@ def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNod
         # opponent — so the two front ends cannot drift apart on the word.
         payload = {**payload, "who": "opponent"}
     return payload
+
+
+def _lower_self_conditional_static(
+    node: ast.StaticAbilityNode, effects: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...]:
+    """"This creature <effect> as long as <condition>", with the condition read
+    by the grammar's noun parser (Beasts of Bogardan).
+
+    ``engine/static_bonuses.py`` owns the same instruction kind and the same
+    evaluator, and every condition it reads is about **you** or about the
+    creature itself: a land you control, a planeswalker you control, your
+    graveyard, your draws, this creature being untapped. The split is that
+    line — a condition about *another player's* board lowers here, everything
+    else falls through to the table.
+
+    Drawing it anywhere wider would move the cards the table already runs onto
+    this path, and ``test_as_long_as_lines_stay_unlowered_and_unusable`` says
+    what that costs: two mechanisms for one sentence, with nothing to say which
+    of them a given printing goes through.
+
+    The effect side is held to what the refresh consumes, and by the same
+    argument the anthem lowering uses one function up — a delta or a keyword
+    lowered into a payload no pass reads is a static that never applies while
+    the card reports supported.
+    """
+    power = toughness = 0
+    keywords: list[str] = []
+    for effect in effects:
+        if isinstance(effect, ast.Pump):
+            if effect.per_each is not None:
+                raise LoweringError(
+                    "the conditional static channel carries a fixed delta",
+                    node=node,
+                )
+            power = _signed(effect.power, effect.power_negative)
+            toughness = _signed(effect.toughness, effect.toughness_negative)
+            if not isinstance(power, int) or not isinstance(toughness, int):
+                raise LoweringError(
+                    "a variable conditional bonus has no channel", node=node
+                )
+        elif isinstance(effect, ast.GainKeyword):
+            for keyword in effect.keywords:
+                if keyword not in grantable_keywords():
+                    raise LoweringError(
+                        f"the derived-grant channel gives no {keyword!r} at "
+                        "layer 6",
+                        node=node,
+                    )
+                keywords.append(keyword)
+        else:
+            raise LoweringError(
+                "a conditional static bonus is derived by engine/static_bonuses.py",
+                node=node,
+            )
+    condition = _lower_anthem_condition(node.condition, node)
+    if condition.get("who") != "opponent":
+        raise LoweringError(
+            "a conditional static bonus about your own board is derived by "
+            "engine/static_bonuses.py",
+            node=node,
+        )
+    payload: dict[str, object] = {"condition": condition}
+    if power or toughness:
+        payload["power"] = power
+        payload["toughness"] = toughness
+    if keywords:
+        payload["keywords"] = keywords
+    return (OracleInstruction("conditional_static", "", payload),)
 
 
 def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstruction, ...]:
@@ -231,6 +329,16 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
         # as long as it's untapped" — still belongs to engine/static_bonuses.py,
         # whose derivation the compiler consults after this refusal.
         subject = getattr(effects[0], "subject", None) if effects else None
+        if _is_source(subject):
+            # "This creature gets +1/+1 as long as **an opponent** controls a
+            # nontoken white permanent." (Beasts of Bogardan.) The same
+            # conditional static the derivation table produces, on the same
+            # instruction kind and answered by the same evaluator — but the
+            # condition is a printed *noun phrase* about a board this engine
+            # has no text-side reader for, and writing one would be a second
+            # reader of the phrase, free to disagree with `subject_matches`
+            # about what "a nontoken white permanent" is.
+            return _lower_self_conditional_static(node, effects)
         if not (
             isinstance(subject, ast.TargetSpec)
             and subject.quantifier in ("all", "each")

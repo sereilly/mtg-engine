@@ -1626,16 +1626,6 @@ def test_rapid_fires_rampage_ends_with_the_turn(set_pool):
 # ---------------------------------------------------------------------------
 
 
-def _sized(name: str, power: int, toughness: int) -> CardDefinition:
-    return CardDefinition(
-        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
-        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
-        produced_mana=(),
-        raw={"name": name, "type_line": "Creature - Bear",
-             "power": str(power), "toughness": str(toughness)},
-    )
-
-
 def _blood_lust(set_pool, power: int, toughness: int):
     """Cast Blood Lust at a creature of the given printed size."""
     victim = Permanent(card=_sized("Bear", power, toughness))
@@ -2100,3 +2090,64 @@ def test_the_modal_bounce_offers_only_the_land_it_names(
 
     assert mode["target_kind"] == "permanent"
     assert [t["name"] for t in mode["valid_targets"]] == [named]
+
+# Round 27 — Indestructible Aura. "Prevent all damage that would be dealt to
+# target creature this turn." (CR 615.1.) The same shield Glyph of Destruction
+# arms on its pronoun, with the referent printed instead of pronounced.
+# ---------------------------------------------------------------------------
+
+
+def _r27_shield_board(set_pool, spell: str):
+    host = Permanent(card=_creature("Host"))
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")[spell]], battlefield=[host])
+    return Game(players=[p1, PlayerState(name="P2")]), host
+
+
+def test_indestructible_aura_compiles_to_the_recipient_shield(set_pool):
+    """One instruction, and the target rides its payload — without it the picker
+    would offer nothing and the handler would shield the spell's own source."""
+    program = compile_card_oracle(set_pool("LEG")["Indestructible Aura"])
+    assert program.supported, program.reason
+    assert [i.kind for i in program.instructions] == [
+        "prevent_damage_to_target_until_eot"
+    ]
+    payload = program.instructions[0].payload
+    assert payload["combat_only"] is False
+    assert payload["targets"]["filter"] == {"type_filter": "creature"}
+
+
+def test_indestructible_aura_prevents_damage_of_every_kind(set_pool):
+    """The printed sentence says "all damage", not "all combat damage" — a
+    shield armed combat-only would let every burn spell through while the card
+    reported as supported."""
+    from engine.damage_events import deal_damage
+
+    game, host = _r27_shield_board(set_pool, "Indestructible Aura")
+    result = game.cast_from_hand(
+        0, "Indestructible Aura", target_player_index=0, target_permanent_index=0
+    )
+    assert result.supported
+    game.resolve_top_of_stack()
+
+    for combat in (False, True):
+        event = {"recipient": host, "amount": 5, "source": None, "combat": combat}
+        assert deal_damage(game, event).dealt == 0
+
+
+def test_indestructible_aura_shields_the_creature_it_named(set_pool):
+    """A second creature on the same battlefield is untouched: the shield is on
+    the chosen object, not on the caster's board."""
+    from engine.damage_events import deal_damage
+
+    game, host = _r27_shield_board(set_pool, "Indestructible Aura")
+    bystander = Permanent(card=_creature("Bystander"))
+    game.players[0].battlefield.append(bystander)
+
+    game.cast_from_hand(
+        0, "Indestructible Aura", target_player_index=0, target_permanent_index=0
+    )
+    game.resolve_top_of_stack()
+
+    assert deal_damage(
+        game, {"recipient": bystander, "amount": 3, "source": None, "combat": False}
+    ).dealt == 3

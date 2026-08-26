@@ -304,20 +304,41 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
     # target, and only the resolution knows — so the instruction names neither
     # and the handler asks. The printed "combat" still rides as payload: with it
     # this is Fog for one creature, without it a shield against burn as well.
+    #
+    # "Target creature" (Indestructible Aura, Awe Strike) is the *same* shield
+    # with the referent printed instead of pronounced: the handler already
+    # resolves a chosen target first and falls back to the source, so the only
+    # difference is whether the instruction carries a target description for the
+    # picker. A second kind for the spelled-out noun would be one dispatch
+    # branch per pronoun.
     if (
         node.to is not None
         and isinstance(node.to, ast.TargetSpec)
-        and node.to.quantifier == "it"
+        and node.to.quantifier in ("it", "target")
         and node.dealt_by is None
     ):
         if node.duration.kind not in _REST_OF_TURN:
             raise LoweringError(
                 "the directional shield lasts exactly this turn", node=node
             )
+        payload: dict[str, object] = {"combat_only": bool(node.combat_only)}
+        if node.to.quantifier == "target":
+            # The handler's predicate is `is_creature` and nothing else, so a
+            # shield printed over a player or over a narrowed noun phrase would
+            # arm on the wrong object — or on none — while the card reported as
+            # supported. Both are refused rather than dropped.
+            if node.to.filter.card_types != ("creature",) or _restrictions_beyond(
+                node.to.filter, frozenset({"card_types"})
+            ):
+                raise LoweringError(
+                    "the directional shield is armed on one unnarrowed target "
+                    "creature",
+                    node=node,
+                )
+            _describe_targets(payload, node.to)
         return (
             OracleInstruction(
-                "prevent_damage_to_target_until_eot", "",
-                {"combat_only": bool(node.combat_only)},
+                "prevent_damage_to_target_until_eot", "", payload,
             ),
         )
     if not node.combat_only:

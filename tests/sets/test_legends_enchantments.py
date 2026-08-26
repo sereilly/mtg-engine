@@ -1642,3 +1642,184 @@ def test_three_attackers_and_blockers_are_legal_without_the_enchantment(set_pool
     game.advance_combat_phase()   # declare_blockers
     ok, msg = game.declare_blockers(1, {0: 0, 1: 1, 2: 2})
     assert ok, msg
+
+# Round 27 — Angelic Voices. "Creatures you control get +1/+1 as long as you
+# control no nonartifact, nonwhite creatures." A conditional anthem whose
+# condition carries a printed *threshold* — read as presence it would be its
+# own negation, which is why the lowering refused a counted condition until the
+# evaluator counted.
+# ---------------------------------------------------------------------------
+
+
+def _r27_body(name: str, colors: tuple[str, ...], type_line: str = "Creature — Bear") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=colors, color_identity=colors, keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "power": "2", "toughness": "2"},
+    )
+
+
+def _r27_voices_board(set_pool):
+    angel = Permanent(card=_r27_body("Angel", ("W",)))
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEG")["Angelic Voices"]], battlefield=[angel]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    assert game.cast_from_hand(0, "Angelic Voices").supported
+    game.resolve_top_of_stack()
+    return game, p1, angel
+
+
+def test_angelic_voices_carries_the_printed_threshold(set_pool):
+    """"No …" is `== 0`, and both halves ride the payload. A condition lowered
+    without them would be "at least one", which is the sentence inverted."""
+    program = compile_card_oracle(set_pool("LEG")["Angelic Voices"])
+    assert program.supported, program.reason
+    condition = program.instructions[0].payload["condition"]
+    assert (condition["count"], condition["op"]) == (0, "eq")
+    assert condition["who"] == "you"
+
+
+def test_angelic_voices_buffs_while_the_board_stays_white(set_pool):
+    game, seat, angel = _r27_voices_board(set_pool)
+    assert (angel.effective_power, angel.effective_toughness) == (3, 3)
+
+
+def test_angelic_voices_stops_when_an_off_colour_creature_arrives(set_pool):
+    """And starts again when it goes — CR 611.3a, the condition is asked on
+    every recompute rather than locked in at resolution."""
+    game, seat, angel = _r27_voices_board(set_pool)
+    intruder = Permanent(card=_r27_body("Grizzly", ("G",)))
+
+    seat.battlefield.append(intruder)
+    game._recalculate_lord_buffs()
+    game._refresh_dynamic_creatures()
+    assert angel.effective_power == 2
+
+    seat.battlefield.remove(intruder)
+    game._recalculate_lord_buffs()
+    game._refresh_dynamic_creatures()
+    assert angel.effective_power == 3
+
+
+def test_angelic_voices_ignores_an_artifact_creature(set_pool):
+    """"Nonartifact, nonwhite" is two exclusions, and a colourless artifact
+    creature fails the first — so the condition still holds. Dropping either
+    word would turn the card off on a board it is printed to work on."""
+    game, seat, angel = _r27_voices_board(set_pool)
+
+    seat.battlefield.append(
+        Permanent(card=_r27_body("Golem", (), "Artifact Creature — Golem"))
+    )
+    game._recalculate_lord_buffs()
+    game._refresh_dynamic_creatures()
+
+    assert angel.effective_power == 3
+
+
+# ---------------------------------------------------------------------------
+# Round 27 — two Auras whose effect the engine could already carry out and
+# whose *claim* was the thing missing.
+#
+# The Brute: "{R}{R}{R}: Regenerate enchanted creature." The claim pattern read
+# a one-symbol activation cost, so the card was unsupported for the width of
+# its mana cost.
+#
+# Spectral Cloak: "Enchanted creature has shroud as long as it's untapped."
+# Shroud is the first question `_can_be_targeted` asks and has been for a long
+# time; the word was simply outside the keyword registry, so no card could
+# grant it.
+# ---------------------------------------------------------------------------
+
+
+def _r27_aura_on_a_bear(set_pool, aura_name: str):
+    host = Permanent(card=_creature("Host", 2, 2))
+    aura = Permanent(card=set_pool("LEG")[aura_name])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host, aura]),
+        PlayerState(name="P2"),
+    ])
+    attach_aura(aura, host)
+    return game, host, aura
+
+
+def test_the_brute_compiles_its_three_symbol_activation(set_pool):
+    """The cost is read whole. Charging {R} for a {R}{R}{R} ability would be a
+    worse failure than the refusal this replaces, so the parsed cost is asserted
+    rather than just the card's support."""
+    program = compile_card_oracle(set_pool("LEG")["The Brute"])
+    assert program.supported, program.reason
+    ability = program.activated_abilities[0]
+    assert ability.cost.mana["R"] == 3
+    assert ability.instruction.kind == "grant_regeneration_to_enchanted_creature"
+
+
+def test_the_brute_regenerates_the_creature_it_enchants(set_pool):
+    """CR 614.8 — the shield replaces the destroy, taps the creature and is
+    spent. The Aura's ability reaches its *host*, not itself."""
+    game, host, aura = _r27_aura_on_a_bear(set_pool, "The Brute")
+    game.players[0].mana_pool["R"] = 3
+
+    assert game.activate_permanent_ability(0, "The Brute").supported
+    game.resolve_top_of_stack()
+    assert host.regeneration_shield == 1
+
+    game.players[1].hand.append(CardDefinition(
+        name="Terror", mana_cost="{B}", cmc=1.0, type_line="Instant",
+        oracle_text="Destroy target creature.", colors=("B",), color_identity=("B",),
+        keywords=(), produced_mana=(), raw={"name": "Terror", "type_line": "Instant"},
+    ))
+    game.cast_from_hand(1, "Terror", target_player_index=0, target_permanent_index=0)
+
+    assert host in game.players[0].battlefield
+    assert (host.tapped, host.regeneration_shield) == (True, 0)
+
+
+def test_the_brute_still_grants_its_printed_bonus(set_pool):
+    """The activated ability is a second line, not a replacement for the first —
+    a claim that swallowed the whole card would have lost the +1/+0."""
+    game, host, aura = _r27_aura_on_a_bear(set_pool, "The Brute")
+    game._refresh_dynamic_creatures()
+
+    assert (host.effective_power, host.effective_toughness) == (3, 2)
+
+
+def test_spectral_cloak_grants_shroud_only_while_untapped(set_pool):
+    """The condition is asked on every recompute (CR 611.3a), so tapping takes
+    the word away at once — a grant recorded when the Aura attached could not
+    do that."""
+    game, host, aura = _r27_aura_on_a_bear(set_pool, "Spectral Cloak")
+
+    assert host.has_keyword("shroud")
+    host.tapped = True
+    assert not host.has_keyword("shroud")
+    host.tapped = False
+    assert host.has_keyword("shroud")
+
+
+def test_spectral_cloak_shroud_actually_stops_a_spell(set_pool):
+    """CR 702.18 — and seat-blind: the check is asked of the object, so the
+    grant buys the creature real protection rather than a word nothing reads."""
+    game, host, aura = _r27_aura_on_a_bear(set_pool, "Spectral Cloak")
+    terror = CardDefinition(
+        name="Terror", mana_cost="{B}", cmc=1.0, type_line="Instant",
+        oracle_text="Destroy target creature.", colors=("B",), color_identity=("B",),
+        keywords=(), produced_mana=(), raw={"name": "Terror", "type_line": "Instant"},
+    )
+
+    assert not game._can_be_targeted(host, terror, caster_index=1)
+    host.tapped = True
+    assert game._can_be_targeted(host, terror, caster_index=1)
+
+
+def test_spectral_cloak_takes_shroud_with_it(set_pool):
+    """Removal is the Aura ceasing to be attached; there is no remembered
+    delta, which is why nothing has to undo the grant."""
+    from engine.auras import detach_aura
+
+    game, host, aura = _r27_aura_on_a_bear(set_pool, "Spectral Cloak")
+    assert host.has_keyword("shroud")
+
+    detach_aura(aura, host)
+
+    assert not host.has_keyword("shroud")

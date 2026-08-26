@@ -12,7 +12,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_path
-from engine.models import Permanent
+from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 
 
@@ -325,3 +325,67 @@ def test_storm_world_hits_its_own_controller_too(set_pool, lea_by_name):
 
     assert p1.life == 17
     assert p2.life == 20, "only the seat whose upkeep it is"
+
+
+# ---------------------------------------------------------------------------
+# Round 27 — Gravity Sphere. "All creatures lose flying." A board-wide keyword
+# *removal* at CR 613 layer 6: the mirror of the anthem's keyword grant, and
+# the same derived channel, so the ability comes back when the source leaves
+# with nothing to find and undo.
+# ---------------------------------------------------------------------------
+
+
+def _r27_flier(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature — Bird",
+        oracle_text="Flying", colors=("W",), color_identity=("W",),
+        keywords=("Flying",), produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bird",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _r27_gravity_board(set_pool):
+    mine, theirs = Permanent(card=_r27_flier("Mine")), Permanent(card=_r27_flier("Theirs"))
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Gravity Sphere"]], battlefield=[mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    return Game(players=[p1, p2]), mine, theirs
+
+
+def test_gravity_sphere_compiles_to_a_board_wide_removal(set_pool):
+    """The lost keyword rides the payload rather than being a kind of its own —
+    "lose flying" and "lose trample" are one template with the word as data."""
+    program = compile_card_oracle(set_pool("LEG")["Gravity Sphere"])
+    assert program.supported, program.reason
+    assert [i.kind for i in program.instructions] == ["lord_buff"]
+    assert program.instructions[0].payload["lost_keywords"] == ["flying"]
+    # And nothing on the granting side: a single list would have made "have
+    # flying" and "lose flying" the same payload.
+    assert not program.instructions[0].payload.get("keywords")
+
+
+def test_gravity_sphere_takes_flying_from_every_creature(set_pool):
+    """"All creatures" is both sides of the table. A removal scoped to its
+    controller would be a card Legends did not print."""
+    game, mine, theirs = _r27_gravity_board(set_pool)
+    assert (mine.has_keyword("flying"), theirs.has_keyword("flying")) == (True, True)
+
+    assert game.cast_from_hand(0, "Gravity Sphere").supported
+    game.resolve_top_of_stack()
+
+    assert (mine.has_keyword("flying"), theirs.has_keyword("flying")) == (False, False)
+
+
+def test_gravity_sphere_gives_flying_back_when_it_leaves(set_pool):
+    """CR 611.3b: the removal is derived from the board every recompute, so the
+    source leaving ends it. A stored removal would have had to be reversed, and
+    a reversal is something a zone change can forget."""
+    game, mine, theirs = _r27_gravity_board(set_pool)
+    game.cast_from_hand(0, "Gravity Sphere")
+    game.resolve_top_of_stack()
+    sphere = next(p for p in game.all_permanents() if p.card.name == "Gravity Sphere")
+
+    game.remove_from_battlefield(sphere)
+    game._recalculate_lord_buffs()
+
+    assert (mine.has_keyword("flying"), theirs.has_keyword("flying")) == (True, True)

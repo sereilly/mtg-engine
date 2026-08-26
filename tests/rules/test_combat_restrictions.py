@@ -410,8 +410,17 @@ def test_506_3_an_untestable_subject_word_refuses_the_whole_line():
     true of every creature — the restriction over-applying, which is exactly as
     silent as the widening this table refuses everywhere else. An unknown
     subtype is the mirror: "non-<word>" would exclude nothing and ground the
-    card's own exempted creatures. Both refuse, loudly."""
-    assert combat_restriction_for("creatures without shroud can't attack") is None
+    card's own exempted creatures. Both refuse, loudly.
+
+    The keyword named here has to be one the engine genuinely does not
+    implement, so it is checked against the registry rather than assumed —
+    "shroud" stood here until round 27 built it, at which point the assertion
+    was testing that an implemented keyword is refused.
+    """
+    from engine.grammar.vocabulary import IMPLEMENTED_KEYWORDS
+
+    assert "shadow" not in IMPLEMENTED_KEYWORDS
+    assert combat_restriction_for("creatures without shadow can't attack") is None
     assert combat_restriction_for(
         "non-blorb creatures you control can't attack"
     ) is None

@@ -52,6 +52,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # readings of the same printed sentence answer to different rules
     # (CR 611.2c vs 611.3a). Sharing a switch would tie them together.
     LORD_BUFF_KIND: "static_buffs",
+    # The self-conditional twin of the anthem above ("This creature gets +1/+1
+    # as long as an opponent controls a nontoken white permanent") — the same
+    # layer-7c/layer-6 contribution with the source as its own subject.
+    "conditional_static": "static_buffs",
     # A permanent's continuous bonus **to itself**, sized by a computation
     # (Carrion Grub). The same category as the anthem above and for the same
     # reason: it is a CR 613 layer 7c contribution the P/T refresh rebuilds,

@@ -24,7 +24,8 @@ from ..auras import aura_protection_colors, auras_attached_to
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..tokens import make_token_card
-from ..keywords import add_derived_grant, clear_derived_grants
+from ..keywords import (add_derived_grant, add_derived_removal,
+                        clear_derived_grants)
 from ..enter_tapped_statics import (
     ENTER_TAPPED_STATIC_KIND,
     enter_tapped_filter_from_payload,
@@ -1408,6 +1409,8 @@ class PermanentStateMixin:
                         _add_static_buff(target_perm, buff)
                         for keyword in keywords:
                             add_derived_grant(target_perm, keyword)
+                        for keyword in buff.lost_keywords:
+                            add_derived_removal(target_perm, keyword)
                         if flag is not None:
                             _grant_ability(target_perm, flag)
 

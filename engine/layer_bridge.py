@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING
 from .banding import band_quality
 from .auras import (
     animating_auras,
+    aura_conditional_grant_holds,
+    aura_conditional_keyword_grants,
     aura_keyword_grants,
     aura_pt_grant_per_counter,
     aura_static_pt_grant,
@@ -44,7 +46,7 @@ from .continuous import (
     set_pt,
     switch_pt,
 )
-from .keywords import ability_effects, derived_grants
+from .keywords import ability_effects, derived_grants, derived_removals
 from .landwalk import landwalk_requirement
 from .land_types import land_type_changes
 from .lord_buffs import QUALIFIER_FIELDS
@@ -451,17 +453,37 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
             grant_abilities(only, list(granted), timestamp=0, label="lord grant")
         )
 
+    # And the mirror: abilities a board-wide source is taking away right now
+    # ("All creatures lose flying", Gravity Sphere). Derived every recompute
+    # like the grant above, so the ability comes back the moment the source
+    # leaves — there is no stored removal to reverse.
+    removed = derived_removals(perm)
+    if removed:
+        effects.append(
+            remove_abilities(only, list(removed), timestamp=0, label="lord removal")
+        )
+
     # Layer 6 from each attached Aura, stamped with the moment it attached
     # (CR 613.7b) — derived every recompute, so the grant ends when the Aura
     # leaves without anything having to find and undo it.
     for aura in auras_attached_to(perm):
-        granted = aura_keyword_grants(aura.effective_card.oracle_text)
+        text = aura.effective_card.oracle_text
+        # "…has shroud **as long as it's untapped**." (Spectral Cloak.) The
+        # condition is about the host, and it is asked here rather than recorded
+        # when the Aura attached: CR 611.3a says a static ability applies
+        # whenever its criteria are met, so a creature that taps between
+        # recomputes loses the word immediately.
+        granted = list(aura_keyword_grants(text)) + [
+            keyword
+            for keyword, state in aura_conditional_keyword_grants(text)
+            if aura_conditional_grant_holds(perm, state)
+        ]
         if not granted:
             continue
         effects.append(
             grant_abilities(
                 only,
-                list(granted),
+                granted,
                 timestamp=int(aura.metadata.get("aura_timestamp", 0)),
                 label=f"aura:{aura.card.name}",
             )

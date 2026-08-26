@@ -318,28 +318,71 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
 
         described = condition.get("filter") or {}
         who = condition.get("who", "you")
+        # "…as long as you control **no** nonartifact, nonwhite creatures"
+        # (Angelic Voices) — a printed threshold rather than presence. Read as
+        # presence it would be its own negation, which is why the lowering
+        # refused a counted condition until this branch existed. The bare
+        # sentence is "at least one", so an absent comparison is `ge 1` and the
+        # two spellings go through one comparator (engine/search_filters.py's,
+        # the same table every other counted payload is answered by).
+        wanted = condition.get("count")
+        op = str(condition.get("op") or "ge")
+        if wanted is None:
+            wanted, op = 1, "ge"
         if who == "you":
-            return any(
-                subject_matches(game, perm, described, observer=seat, source=source)
-                for perm in game.controlled_by(seat)
-            )
-        if who == "opponent":
-            # "…as long as **an opponent** controls a nontoken red permanent"
-            # (Ivory Guardians). Any one living opponent, not all of them — the
-            # same reading ``graveyard_size`` gives the article above, so a
-            # three-seat game answers what the card says. No observer: the
-            # iteration already scopes by controller, and the lowering refused
-            # any relative key an observer would be for.
-            return any(
-                subject_matches(game, perm, described, source=source)
+            seats = [seat]
+        elif who == "opponent":
+            seats = [
+                index
                 for index, player in enumerate(game.players)
                 if index != seat and not player.lost
-                for perm in game.controlled_by(player)
-            )
-        # A payload this cannot evaluate must not be silently answered False
-        # from inside a matcher loop that looks like it tried — but an unknown
-        # seat word can only arrive from a payload no gate admitted.
+            ]
+        else:
+            # A payload this cannot evaluate must not be silently answered False
+            # from inside a matcher loop that looks like it tried — but an
+            # unknown seat word can only arrive from a payload no gate admitted.
+            return False
+        return _controls_count_holds(
+            game, seats, described, int(wanted), op,
+            observer=seat if who == "you" else None, source=source,
+        )
+    return False
+
+
+def _controls_count_holds(
+    game, seats, described: dict, wanted: int, op: str, *, observer, source
+) -> bool:
+    """Whether **any one** of *seats* controls a matching count satisfying *op*.
+
+    An `any` over the seats rather than a sum, because that is the article the
+    cards print: "as long as **an** opponent controls a nontoken red permanent"
+    (Ivory Guardians) is one opponent's board, and a game with more than two
+    seats answers what the card says. With a single seat in the list — the "you"
+    reading — the `any` is that seat's own answer.
+
+    *observer* is passed only for the controller's own board: a relative key
+    ("another", "you control") is a question about a seat, and the opponent
+    iteration already scopes by controller, so the lowering refused any relative
+    key an observer would be for on that side.
+    """
+    from .search_filters import _COMPARE
+    from .subject_filters import subject_matches
+
+    compare = _COMPARE.get(op)
+    if compare is None:
+        # An unreadable comparison must not fall through to "0 matches", which
+        # for a "no such permanent" clause is the condition always holding.
         return False
+    for index in seats:
+        found = sum(
+            1
+            for perm in game.controlled_by(index)
+            if subject_matches(
+                game, perm, described, observer=observer, source=source
+            )
+        )
+        if compare(found, wanted):
+            return True
     return False
 
 
