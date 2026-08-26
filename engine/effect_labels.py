@@ -224,6 +224,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     # other side; same ability, other position.
     "grant_self_flying_until_eot": "triggered_pump",
     "grant_target_flying_until_eot": "triggered_pump",
+    # Erhnam Djinn, once the "until your next upkeep" duration became a channel
+    # with a sweep and its card-keyed hook retired: the trigger now lowers
+    # through the ordinary keyword grant, so it needs the bucket its siblings
+    # above already have.
+    "grant_target_keyword_until_eot": "triggered_pump",
     "pump_self": "triggered_pump",
     "pump_target_creature_until_eot": "triggered_pump",
     "tap_any_number_then_pump_self": "triggered_pump",

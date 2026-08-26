@@ -104,6 +104,12 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         source_name=context.card.name,
         card=context.card,
         bound_permanent_id=bound_id,
+        # CR 603.7d's source, frozen now: an activated ability's own permanent
+        # is what "this creature" means when the delay finally fires.
+        source_permanent_id=(
+            context.source_permanent.permanent_id
+            if context.source_permanent is not None else None
+        ),
         captured=captured,
         # "…whenever **a creature you control with power 2 or less** attacks"
         # (Subira). The narrowing travels as the same filter payload every

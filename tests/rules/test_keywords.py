@@ -22,7 +22,7 @@ from engine.models import CardDefinition, Permanent, PlayerState
 
 import web.app as web_app
 from tests.helpers import LEA_PATH
-from engine.keywords import clear_until_eot_keywords, grant_keyword, remove_keyword
+from engine.keywords import clear_granted_keywords, grant_keyword, remove_keyword
 
 
 # ---------------------------------------------------------------------------
@@ -1049,14 +1049,14 @@ def test_702_22e_band_persists_after_banding_is_removed():
     # The bander has banding only via a temporary grant; once declared, the band
     # must keep functioning even after the grant is gone (block still propagates).
     bander = Permanent(card=_mk_creature("Bander", 1, 1))
-    grant_keyword(bander, "banding", until_eot=True)
+    grant_keyword(bander, "banding", duration="end_of_turn")
     ally = Permanent(card=_mk_creature("Ally", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 3, 3))
     game, p1, _ = _game([bander, ally], [blocker])
     _to_declare_attackers(game)
     assert game.declare_attackers(0, [0, 1], bands=[[0, 1]])[0]
     # Banding is stripped after the band is announced (702.22e).
-    clear_until_eot_keywords(bander)
+    clear_granted_keywords(bander, "end_of_turn")
     game.advance_combat_phase()  # declare_blockers
     assert game.combat_bands == [[0, 1]]            # band still recorded
     assert game.declare_blockers(1, {0: 0})[0]       # block only the ally
@@ -1686,7 +1686,7 @@ def test_702_22b_losing_banding_loses_every_bands_with_other_ability():
     assert zombie.has_keyword("banding")
     assert zombie.has_keyword("bands with other zombies")
 
-    remove_keyword(zombie, "banding", until_eot=True)
+    remove_keyword(zombie, "banding", duration="end_of_turn")
     assert not zombie.has_keyword("banding")
     assert not zombie.has_keyword("bands with other zombies")
 
@@ -1700,7 +1700,7 @@ def test_702_22b_removing_the_family_leaves_plain_banding_alone():
     game._recalculate_lord_buffs()
     grant_keyword(zombie, "banding")
 
-    remove_keyword(zombie, "bands with other", until_eot=True)
+    remove_keyword(zombie, "bands with other", duration="end_of_turn")
     assert zombie.has_keyword("banding")
     assert not zombie.has_keyword("bands with other zombies")
 
@@ -1711,8 +1711,8 @@ def test_702_22c_a_removed_band_can_no_longer_be_declared():
     z1, z2 = (Permanent(card=_mk_zombie(n)) for n in ("Z1", "Z2"))
     game, _, _ = _game([Permanent(card=_ZOMBIE_HALL), z1, z2], [])
     game._recalculate_lord_buffs()
-    remove_keyword(z1, "bands with other", until_eot=True)
-    remove_keyword(z2, "bands with other", until_eot=True)
+    remove_keyword(z1, "bands with other", duration="end_of_turn")
+    remove_keyword(z2, "bands with other", duration="end_of_turn")
     _to_declare_attackers(game)
 
     ok, _ = game.declare_attackers(0, [1, 2], bands=[[1, 2]])

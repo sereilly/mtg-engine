@@ -13,7 +13,7 @@ from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissi
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
 from ..keywords import (clear_granted_ability_lines,
-                        clear_until_eot_keywords)
+                        clear_granted_keywords)
 from ..control import end_until_eot_control_changes
 from ..layer_bridge import GAINED_TYPES
 from ..mixins._constants import _EOT_METADATA_KEYS
@@ -148,7 +148,7 @@ class CleanupStepMixin:
                 # Layer 6: until-end-of-turn ability grants and removals expire
                 # together, in one place, rather than needing a metadata key per
                 # keyword listed in _EOT_METADATA_KEYS.
-                clear_until_eot_keywords(permanent)
+                clear_granted_keywords(permanent, "end_of_turn")
                 clear_granted_ability_lines(permanent, "end_of_turn")
                 # CR 611.2c: an until-end-of-turn control change ends here too.
                 # Dropping the contribution *is* the reversion — the permanent

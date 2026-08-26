@@ -251,3 +251,62 @@ def test_firing_an_event_no_entry_waits_for_does_nothing():
 
     assert fire_delayed_triggers(game, "next_end_of_combat") == 0
     assert p1.life == 20
+
+
+# ---------------------------------------------------------------------------
+# CR 603.7e — an activated ability's delayed ability has that ability's source
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("603.7e")
+def test_an_activated_abilitys_delayed_ability_keeps_that_abilitys_source():
+    """"If an activated or triggered ability creates a delayed triggered
+    ability, the source of that delayed triggered ability is the same as the
+    source of that other ability."
+
+    The rule is what lets a delayed effect say "this creature": Giant Slug's
+    "{5}: At the beginning of your next upkeep, … this creature gains landwalk
+    of the chosen type" has to reach the Slug a turn later. Recorded on the
+    entry at creation, because by the time it fires nothing on the stack knows
+    which permanent armed it.
+    """
+    slug = Permanent(card=_leg()["Giant Slug"])
+    slug.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[slug], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+    p1.mana_pool["C"] = 5
+    game.activate_permanent_ability(0, "Giant Slug")
+    game.resolve_stack()
+    game._settle()
+
+    entry, = game.delayed_triggers
+    assert entry.source_permanent_id == slug.permanent_id
+
+    game.resolve_upkeep(0)
+    game._settle()
+    game.resolve_stack()
+    game._settle()
+
+    assert game._has_keyword(slug, "plainswalk")
+
+
+@pytest.mark.cr("603.2d")
+def test_a_delayed_ability_is_never_doubled_by_an_extra_triggers_effect():
+    """"An effect that states a triggered ability of an object triggers
+    additional times refers only to triggered abilities that object has, not to
+    any delayed or reflexive triggered abilities."
+
+    Asked of the ability rather than inferred from a missing source: a delayed
+    ability now *has* a source (CR 603.7e above), so "no source permanent" has
+    stopped being a synonym for "delayed".
+    """
+    from engine.extra_triggers import additional_triggers
+
+    doubler = Permanent(card=_creature("Doubler"))
+    p1 = PlayerState(name="P1", battlefield=[doubler], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    assert additional_triggers(game, doubler, 0, delayed=True) == 0

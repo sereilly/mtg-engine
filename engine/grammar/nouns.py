@@ -91,6 +91,28 @@ def _match_subtype(stream: TokenStream, start: int) -> tuple[str, int] | None:
     return match_longest(words, 0, SUBTYPE_INDEX)
 
 
+def _match_subtype_or_plural(stream: TokenStream, start: int = 0) -> tuple[str, int] | None:
+    """:func:`_match_subtype`, and the plural spelling of one.
+
+    "Destroy all Islands", "exile all Sand **Warriors**" — the catalog stores
+    singulars (except where the singular is itself plural, Plains), so a printed
+    plural has to be singularized before it can be looked up. Only a one-token
+    match is taken from the singularized probe: singularizing the *first* word
+    of a multi-word run says nothing about the words behind it.
+    """
+    matched = _match_subtype(stream, start)
+    if matched is not None:
+        return matched
+    words = stream.words_from(start)
+    if not words:
+        return None
+    singular = _singular(words[0])
+    if singular == words[0]:
+        return None
+    probe = match_longest((singular,) + words[1:], 0, SUBTYPE_INDEX)
+    return probe if probe is not None and probe[1] == 1 else None
+
+
 def _accept_card_noun(stream: TokenStream) -> bool:
     """Consume a "card"/"cards" head noun trailing a type word.
 
@@ -439,7 +461,12 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # cannot acquire an "all" it would then fail.
             if len(d.subtypes) == 1:
                 while True:
-                    adjacent = _match_subtype(stream, 0)
+                    # The plural spelling too: "all Sand **Warriors**" prints
+                    # the conjunction's last word plural, exactly as the
+                    # single-subtype branch above does, and a reader that knew
+                    # only the singular stopped after "Sand" — narrowing a
+                    # board sweep to every Sand, Warriors included or not.
+                    adjacent = _match_subtype_or_plural(stream)
                     if adjacent is None:
                         break
                     d.subtypes.append(adjacent[0])

@@ -40,6 +40,45 @@ _KEYWORD_GRANTS: dict[tuple[str, str], str] = {
 }
 
 
+#: The printed durations a grant has a sweep for, mapped to the
+#: `keywords.KEYWORD_GRANT_DURATIONS` key that names it. Everything absent
+#: refuses: a duration the engine cannot *end* is a grant that outlives what the
+#: card said, which is worse than an unsupported card.
+#:
+#: One table for both grant channels — a keyword and a quoted ability line —
+#: because the printed phrase is the same phrase and the two channels are swept
+#: together. It served the quoted line alone while the keyword grant answered
+#: the question with a boolean, which is how "until end of combat" over a
+#: keyword became "until end of turn" without anything refusing.
+_GRANT_DURATIONS: dict[str, str] = {
+    "until_end_of_turn": "end_of_turn",
+    "this_turn": "end_of_turn",
+    "until_end_of_combat": "end_of_combat",
+    # "…gains that ability **until your next upkeep**" (Gabriel Angelfire).
+    # Whose upkeep is CR 109.5's answer — the controller of the ability — and
+    # the handler freezes that seat, because by the time the sweep runs the
+    # affected permanent may be controlled by somebody else.
+    "until_your_next_upkeep": "your_next_upkeep",
+}
+
+
+def _grant_duration(node, duration) -> str:
+    """The channel key *duration* names, or a refusal.
+
+    Asked by every grant lowering in this file, so a printed duration is
+    admitted in exactly one place — which is what makes the table above the
+    answer to "which durations does this engine end" rather than a list one
+    branch happens to consult.
+    """
+    key = _GRANT_DURATIONS.get(duration.kind)
+    if key is None:
+        raise LoweringError(
+            f"no grant handler expires at the duration {duration.kind!r}",
+            node=node,
+        )
+    return key
+
+
 def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift). A
     # choice between two effects is `choose_one` — the composition seam
@@ -96,24 +135,15 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         if reason.startswith("continuous pump"):
             reason = "continuous keyword grant needs the CR 613 layers engine"
         raise LoweringError(reason, node=node)
-    # "…gains forestwalk **until your next upkeep**." (Erhnam Djinn.) Every
-    # grant kind below ends at the cleanup step, so lowering this duration onto
-    # one would grant the keyword for the rest of the turn and take it away a
-    # step early — a card doing less than it prints, silently.
-    #
-    # The duration became parseable when Xenic Poltergeist needed it, which is
-    # the widened-gate hazard in miniature: the phrase used to fail
-    # full-token consumption, so `card_hooks.CARD_LINE_INSTRUCTIONS` claimed
-    # Erhnam Djinn's line and the upkeep registry expired the grant correctly.
-    # Refusing here hands the line back to that hook. Deleting the hook in
-    # favour of a general "until your next upkeep" grant is worth doing and is
-    # not this round's work — and until it is done, refusing is the only answer
-    # that does not quietly shorten the card.
-    if node.duration.kind == "until_your_next_upkeep":
-        raise LoweringError(
-            "no keyword-grant handler expires at the granting player's next upkeep",
-            node=node,
-        )
+    # Which sweep ends this grant, decided **before** any kind is chosen. Every
+    # branch below used to hand the layer-6 channel a bare ``until_eot=True``,
+    # so a duration this table does not hold did not refuse — it became end of
+    # turn. That took "until end of combat" through the opponent's whole turn
+    # and ended "until your next turn" a step early, and it is why Erhnam
+    # Djinn's line needed a card-keyed hook: the one duration whose loss was
+    # *visible* was special-cased into a refusal here, and the hook caught it.
+    # The hook is gone with this table.
+    duration = _grant_duration(node, node.duration)
     # "Creatures you control gain flying until end of turn." (Basri, Devoted
     # Paladin's −6.) A team grant locked in at resolution (CR 611.2c) — its own
     # kind, resolved over the controller's board by the handler.
@@ -128,7 +158,10 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         and node.subject.quantifier == "all"
         and node.subject.filter.card_types in ((), ("creature",))
         and node.subject.filter.controller == "you"
-        and node.duration.kind in ("until_end_of_turn", "this_turn")
+        # The handler resolves the board once, at resolution (CR 611.2c), so a
+        # duration it can end is the only requirement — which the table above
+        # has already checked.
+        and duration == "end_of_turn"
     ):
         leftover = _restrictions_beyond(
             node.subject.filter, frozenset({"card_types", "controller"})
@@ -143,6 +176,7 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         team_payload: dict[str, object] = {"keywords": tuple(node.keywords)}
         if not node.subject.filter.card_types:
             team_payload["every_permanent"] = True
+        team_payload["duration"] = duration
         return (OracleInstruction("grant_team_keyword_until_eot", "", team_payload),)
     # "**X** target creatures gain islandwalk until end of turn." (Part Water.)
     # Several chosen targets rather than one, which is a property of the noun
@@ -156,7 +190,9 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         assert isinstance(node.subject, ast.TargetSpec)
         for keyword in node.keywords:
             _check_grantable(keyword, node)
-        several_payload: dict[str, object] = {"keywords": tuple(node.keywords)}
+        several_payload: dict[str, object] = {
+            "keywords": tuple(node.keywords), "duration": duration,
+        }
         _describe_several_targets(several_payload, node.subject)
         return (
             OracleInstruction("grant_target_keyword_until_eot", "", several_payload),
@@ -167,7 +203,7 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     if len(node.keywords) == 1:
         kind = _KEYWORD_GRANTS.get((node.keywords[0], scope))
         if kind is not None:
-            return (OracleInstruction(kind, "", {}),)
+            return (OracleInstruction(kind, "", {"duration": duration}),)
     # Any other grant rides the generic payload pair, gated on the keyword
     # registry: `grant_keyword` puts the word into layer 6 for anything, but a
     # word whose behaviour is not built would be a grant of nothing — the same
@@ -176,22 +212,15 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     # carrying them all.
     for keyword in node.keywords:
         _check_grantable(keyword, node)
-    payload: dict[str, object] = {"keywords": tuple(node.keywords)}
+    payload: dict[str, object] = {
+        "keywords": tuple(node.keywords), "duration": duration,
+    }
     if scope == "self":
         return (OracleInstruction("grant_self_keyword_until_eot", "", payload),)
     assert isinstance(node.subject, ast.TargetSpec)
     _describe_targets(payload, node.subject)
     return (OracleInstruction("grant_target_keyword_until_eot", "", payload),)
 
-#: The printed durations a quoted grant has a sweep for, mapped to the
-#: `keywords.GRANTED_ABILITY_DURATIONS` key that names it. Everything absent
-#: refuses: a duration the engine cannot *end* is a grant that outlives what the
-#: card said, which is worse than an unsupported card.
-_GRANT_DURATIONS: dict[str, str] = {
-    "until_end_of_turn": "end_of_turn",
-    "this_turn": "end_of_turn",
-    "until_end_of_combat": "end_of_combat",
-}
 
 
 def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstruction, ...]:

@@ -20,12 +20,16 @@ Taking it as an argument keeps the dependency running one way — the inversion
 
 from __future__ import annotations
 
+import dataclasses
+
 from . import ast
 from .effects.damage import _parse_bound_targeting_prevention
 from .errors import GrammarError
 from .nouns import parse_object_filter
-from .phrases import _parse_duration, parse_bound_subject
-from .references import parse_target_spec
+from .effects.characteristics import _parse_keywords
+from .phrases import (BASIC_LAND_WORDS, _parse_duration,
+                      parse_bound_subject)
+from .references import parse_recipient, parse_target_spec
 from .stream import TokenStream
 
 # ---------------------------------------------------------------------------
@@ -55,7 +59,35 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # "At this turn's next end of combat, …" (Glyph of Doom).
     (("at", "this", "turn", "'s", "next", "end", "of", "combat"),
      "next_end_of_combat", True, "end_of_turn", True),
+    # "At the beginning of your next upkeep, …" (Giant Slug, Hazezon Tamar).
+    # The controller's own upkeep, however many turns away — so it waits for
+    # the step rather than expiring with the turn.
+    (("at", "the", "beginning", "of", "your", "next", "upkeep"),
+     "controllers_next_upkeep", True, "until_it_triggers", False),
 )
+
+
+def parse_trailing_delay(stream: TokenStream) -> tuple[str, bool, str, bool] | None:
+    """The **trailing** spelling of a delay: ``<effect> at the beginning of your
+    next upkeep``.
+
+    Hazezon Tamar prints its delay after the effect rather than in front of it —
+    "create X … tokens that are red, green, and white **at the beginning of your
+    next upkeep**, where X is …". Same delay, same table, other word order, so
+    it reads the same rows :data:`_DELAYED_OPENERS` already holds; a second list
+    would be a second answer to "which delays does this engine arm".
+
+    Returns the row's ``(event, once, duration, binds)`` or None. The caller
+    builds the node, because the effect it wraps is the sentence the caller
+    already has in hand — and because the clause that defines the sentence's X
+    belongs *inside* the delay (see ``statements.parse_statement``).
+    """
+    for phrase, kind, once, duration, binds in _DELAYED_OPENERS:
+        mark = stream.mark()
+        if stream.accept_phrase(*phrase):
+            return kind, once, duration, binds
+        stream.reset(mark)
+    return None
 
 
 def _delayed_bound_subject(stream: TokenStream) -> "ast.ObjectFilter | None":
@@ -157,7 +189,8 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
         stream.reset(mark)
         return None
     return ast.CreateDelayedTrigger(
-        event=event, effect=effect, once=once, duration=duration,
+        event=event, effect=resolve_that_turn(effect) or effect,
+        once=once, duration=duration,
         binds_target=binds, subject=subject, agent=agent,
     )
 
@@ -200,3 +233,111 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         stream.reset(mark)
         return None
     return ast.ChooseTarget(ast.TargetSpec("target", filt, targeted=True))
+
+
+# ---------------------------------------------------------------------------
+# "Choose …. <subject> gains that ability …" — the other two-sentence shape
+# ---------------------------------------------------------------------------
+
+
+def resolve_that_turn(node):
+    """*node* with every ``until_end_of_that_turn`` duration made an ordinary
+    end of turn, or None when it holds none.
+
+    "…until the end of **that** turn" (Giant Slug) names the turn the delay it
+    sits inside is about, and a delayed ability resolves *during* that turn — so
+    inside a delay the two moments are the same one. Outside a delay the phrase
+    names a turn nothing in the sentence identifies, and no lowering knows the
+    kind, which is what keeps this rewrite from being a synonym table.
+
+    Written against the dataclass fields rather than a per-node list, for the
+    reason ``statements._round_every_half`` gives: a statement class added later
+    is covered by default instead of silently keeping a duration nothing ends.
+    """
+    if isinstance(node, ast.Duration) and node.kind == "until_end_of_that_turn":
+        return dataclasses.replace(node, kind="until_end_of_turn")
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        updates = {}
+        for field in dataclasses.fields(node):
+            rebuilt = resolve_that_turn(getattr(node, field.name))
+            if rebuilt is not None:
+                updates[field.name] = rebuilt
+        return dataclasses.replace(node, **updates) if updates else None
+    if isinstance(node, tuple):
+        rebuilt_items = [resolve_that_turn(item) for item in node]
+        if not any(item is not None for item in rebuilt_items):
+            return None
+        return tuple(
+            new if new is not None else old
+            for new, old in zip(rebuilt_items, node)
+        )
+    return None
+
+
+def _parse_choose_then_gain(stream: TokenStream) -> "ast.GainKeyword | None":
+    """``Choose <A>, <B>, or <C>. <subject> gains that ability <duration>.``
+    (Gabriel Angelfire)
+    ``Choose a basic land type. <subject> gains landwalk of the chosen type
+    <duration>.`` (Giant Slug)
+
+    Two sentences, one effect, and it is the *second* one that says what the
+    choice was for — which is why this is a fusion rather than two productions.
+    A "choose" sentence alone performs nothing and would report a card
+    supported while doing nothing at all; that is the same reason
+    :func:`_parse_choose_target` lives in this module rather than beside the
+    effects it precedes.
+
+    Both spellings lower to the ``choose_one`` the *one*-sentence form already
+    produces ("gains your choice of flying, first strike, trample, or rampage 3
+    until end of turn"), so nothing downstream learns a second shape. The two
+    differ only in what the options are made of: printed keywords, or the five
+    basic land types turned into landwalks by the binding sentence. That is why
+    the domain and the binding phrase are read as a pair — "choose a basic land
+    type" followed by anything but "landwalk of the chosen type" is a card this
+    does not read, and declining leaves whatever refusal the line already had.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        stream.reset(mark)
+        return None
+    land_choice = bool(stream.accept_phrase("a", "basic", "land", "type"))
+    if land_choice:
+        options: tuple[str, ...] = BASIC_LAND_WORDS
+    else:
+        try:
+            options = _parse_keywords(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        # A single option is not a choice. "Choose flying." with a binding
+        # sentence behind it is a wording no card prints, and admitting it
+        # would put a one-option prompt in front of the player.
+        if len(options) < 2:
+            stream.reset(mark)
+            return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    # ``parse_recipient`` rather than ``parse_target_spec``: both cards name
+    # the source, and one of them does it by printing its own name — which the
+    # lexer has collapsed into a SELF token that only this reader knows.
+    subject = parse_recipient(stream)
+    if not isinstance(subject, ast.TargetSpec) or not stream.accept_word("gains", "gain"):
+        stream.reset(mark)
+        return None
+    if land_choice:
+        if not stream.accept_phrase("landwalk", "of", "the", "chosen", "type"):
+            stream.reset(mark)
+            return None
+        # CR 702.14a spells the family as "[type]walk", so the chosen type and
+        # the granted ability are the same word carrying a suffix — payload,
+        # never five productions.
+        keywords = tuple(f"{option}walk" for option in options)
+    else:
+        if not stream.accept_phrase("that", "ability"):
+            stream.reset(mark)
+            return None
+        keywords = options
+    return ast.GainKeyword(
+        subject, keywords, _parse_duration(stream), choose_one=True
+    )

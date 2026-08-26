@@ -124,7 +124,7 @@ class TestBlazeOfGloryForcedBlocks:
         game = self._combat(cards)
         # Attacker One gains flying; the ground blocker can't block it, so only
         # Attacker Two is required ("if able").
-        grant_keyword(game.players[0].battlefield[0], "flying", until_eot=True)
+        grant_keyword(game.players[0].battlefield[0], "flying", duration="end_of_turn")
         ok, msg = game.declare_blockers(1, {0: [1]})
         assert ok, msg
 

@@ -103,35 +103,111 @@ def keyword_ability_name(keyword: str) -> str:
     return head if head in NUMERIC_ARGUMENT_KEYWORDS else keyword
 
 
-def _record(perm: Permanent, keyword: str, *, grant: bool, until_eot: bool) -> None:
+#: How long a layer-6 keyword grant or removal lasts, each key naming the sweep
+#: that ends it. The same table :data:`GRANTED_ABILITY_DURATIONS` is for a
+#: quoted ability line, and literally the same object: a card printing one
+#: duration over a keyword and another over a quote must not find two different
+#: answers, and two frozensets side by side is how they come to differ.
+#:
+#: It was a ``until_eot`` boolean, and round 28 fixed exactly this shape one
+#: channel over. A boolean is a duration table with two rows, so every printed
+#: duration that was not "until end of turn" silently **became** it: "until end
+#: of combat" ran on through the second main phase and the whole of the
+#: opponent's turn, "until your next turn" ended a step early, and the lowering
+#: had no table to refuse against — it passed ``until_eot=True`` and lost the
+#: word. ``None`` — no printed duration — lasts as long as the object
+#: (CR 611.2c) and appears in no sweep.
+KEYWORD_GRANT_DURATIONS: frozenset[str] = frozenset({
+    "end_of_turn", "end_of_combat", "your_next_upkeep",
+})
+
+#: The durations whose sweep has to know *whose* they are. "Until **your** next
+#: upkeep" is one player's step, and CR 109.5 makes that the controller of the
+#: ability rather than of the affected permanent — so the seat is frozen when
+#: the grant is recorded and compared when it is swept.
+SEATED_GRANT_DURATIONS: frozenset[str] = frozenset({"your_next_upkeep"})
+
+
+def _check_duration(duration: str | None, seat: int | None, table) -> None:
+    """Refuse a duration with no sweep, and a seated one with no seat.
+
+    Both channels below ask this, so "which durations exist" is answered once.
+    Loudly, because a duration nothing ends is a grant that outlives what the
+    card said — the failure the table exists to prevent.
+    """
+    if duration is not None and duration not in table:
+        raise ValueError(f"no sweep ends a granted ability at {duration!r}")
+    if duration in SEATED_GRANT_DURATIONS and seat is None:
+        raise ValueError(f"a {duration!r} grant needs the seat whose step ends it")
+
+
+def _expires_at(entry: dict, duration: str, seat: int | None) -> bool:
+    """Whether *entry* is one the sweep for *duration* (and *seat*) takes."""
+    if entry.get("duration") != duration:
+        return False
+    return seat is None or entry.get("seat") == seat
+
+
+def _record(
+    perm: Permanent, keyword: str, *, grant: bool,
+    duration: str | None, seat: int | None,
+) -> None:
+    _check_duration(duration, seat, KEYWORD_GRANT_DURATIONS)
+    entry: dict = {
+        "keyword": keyword.lower(),
+        "grant": grant,
+        "duration": duration,
+        "timestamp": next_timestamp(),
+    }
+    if seat is not None:
+        entry["seat"] = seat
     effects = perm.metadata.setdefault(ABILITY_EFFECTS, [])
-    effects.append(
-        {
-            "keyword": keyword.lower(),
-            "grant": grant,
-            "until_eot": until_eot,
-            "timestamp": next_timestamp(),
-        }
-    )
+    effects.append(entry)
 
 
-def grant_keyword(perm: Permanent, keyword: str, *, until_eot: bool = False) -> None:
-    """Layer 6: give *perm* a keyword ability from now (613.7b)."""
-    _record(perm, keyword, grant=True, until_eot=until_eot)
+def grant_keyword(
+    perm: Permanent, keyword: str, *,
+    duration: str | None = None, seat: int | None = None,
+) -> None:
+    """Layer 6: give *perm* a keyword ability from now (613.7b).
+
+    *duration* names the sweep that will take it away again, a key of
+    :data:`KEYWORD_GRANT_DURATIONS`.
+    """
+    _record(perm, keyword, grant=True, duration=duration, seat=seat)
 
 
-def remove_keyword(perm: Permanent, keyword: str, *, until_eot: bool = False) -> None:
+def remove_keyword(
+    perm: Permanent, keyword: str, *,
+    duration: str | None = None, seat: int | None = None,
+) -> None:
     """Layer 6: take a keyword ability away. Whether this beats a grant is
     decided by timestamp, so a later grant restores the ability."""
-    _record(perm, keyword, grant=False, until_eot=until_eot)
+    _record(perm, keyword, grant=False, duration=duration, seat=seat)
 
 
-def clear_until_eot_keywords(perm: Permanent) -> None:
-    """Drop the until-end-of-turn grants and removals during cleanup."""
+def clear_granted_keywords(
+    perm: Permanent, duration: str, *, seat: int | None = None
+) -> None:
+    """Drop the grants and removals whose duration is *duration*, at that sweep.
+
+    The twin of :func:`clear_granted_ability_lines`, called beside it at every
+    sweep: a keyword and a quoted line granted by the same sentence end at the
+    same moment, and two spellings of "which entries go" is how they come to
+    disagree.
+
+    *seat* narrows to the entries armed by one player, which is what "**your**
+    next upkeep" means — a seated duration swept without one would take an
+    opponent's grant at the wrong step.
+    """
     effects = perm.metadata.get(ABILITY_EFFECTS)
     if not effects:
         return
-    remaining = [entry for entry in effects if not entry.get("until_eot")]
+    remaining = [
+        entry for entry in effects if not _expires_at(entry, duration, seat)
+    ]
+    if len(remaining) == len(effects):
+        return
     if remaining:
         perm.metadata[ABILITY_EFFECTS] = remaining
     else:
@@ -162,11 +238,12 @@ def clear_derived_grants(perm: Permanent) -> None:
 #: so the lowering can refuse a printed duration by asking this table instead of
 #: by carrying a list of its own. ``None`` — no printed duration — lasts as long
 #: as the object (CR 611.2c) and appears in no sweep.
-GRANTED_ABILITY_DURATIONS: frozenset[str] = frozenset({"end_of_turn", "end_of_combat"})
+GRANTED_ABILITY_DURATIONS: frozenset[str] = KEYWORD_GRANT_DURATIONS
 
 
 def grant_ability_line(
-    perm: Permanent, line: str, *, duration: str | None = None
+    perm: Permanent, line: str, *,
+    duration: str | None = None, seat: int | None = None,
 ) -> None:
     """Layer 6: give *perm* a printed ability *line* (see GRANTED_ABILITY_LINES).
 
@@ -181,10 +258,12 @@ def grant_ability_line(
     have recorded that as end of turn and left the grant running through the
     second main phase and the whole of the opponent's turn.
     """
-    if duration is not None and duration not in GRANTED_ABILITY_DURATIONS:
-        raise ValueError(f"no sweep ends a granted ability at {duration!r}")
+    _check_duration(duration, seat, GRANTED_ABILITY_DURATIONS)
     lines = perm.metadata.setdefault(GRANTED_ABILITY_LINES, [])
-    lines.append({"line": line, "duration": duration})
+    entry: dict = {"line": line, "duration": duration}
+    if seat is not None:
+        entry["seat"] = seat
+    lines.append(entry)
 
 
 def granted_ability_lines(perm: Permanent) -> tuple[str, ...]:
@@ -192,17 +271,21 @@ def granted_ability_lines(perm: Permanent) -> tuple[str, ...]:
     return tuple(entry["line"] for entry in perm.metadata.get(GRANTED_ABILITY_LINES) or ())
 
 
-def clear_granted_ability_lines(perm: Permanent, duration: str) -> None:
+def clear_granted_ability_lines(
+    perm: Permanent, duration: str, *, seat: int | None = None
+) -> None:
     """Drop the granted lines whose duration is *duration*, at that sweep.
 
-    The twin of :func:`clear_until_eot_keywords`, called beside it at cleanup
+    The twin of :func:`clear_granted_keywords`, called beside it at cleanup
     and again at the end of combat step: a grant that outlived its duration
     would leave the permanent compiling an ability it no longer has.
     """
     lines = perm.metadata.get(GRANTED_ABILITY_LINES)
     if not lines:
         return
-    remaining = [entry for entry in lines if entry.get("duration") != duration]
+    remaining = [
+        entry for entry in lines if not _expires_at(entry, duration, seat)
+    ]
     if len(remaining) == len(lines):
         return
     if remaining:
@@ -245,7 +328,8 @@ __all__ = [
     "add_derived_removal", "derived_removals",
     "GRANTED_ABILITY_DURATIONS",
     "clear_derived_grants", "clear_granted_ability_lines",
-    "clear_until_eot_keywords", "derived_grants", "grant_ability_line",
+    "KEYWORD_GRANT_DURATIONS", "SEATED_GRANT_DURATIONS",
+    "clear_granted_keywords", "derived_grants", "grant_ability_line",
     "keyword_ability_name",
     "granted_ability_lines", "grant_keyword", "remove_keyword",
 ]

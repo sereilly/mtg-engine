@@ -482,7 +482,7 @@ def test_moat_asks_layer_six_so_a_granted_wing_escapes(set_pool):
     game.start_turn(0)
 
     assert not game.can_attack(bear, 1)
-    grant_keyword(bear, "flying", until_eot=True)
+    grant_keyword(bear, "flying", duration="end_of_turn")
     assert game.can_attack(bear, 1)
 
 

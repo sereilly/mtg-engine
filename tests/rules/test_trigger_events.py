@@ -364,7 +364,7 @@ def test_a_subject_filter_asks_the_layers_rather_than_the_printed_card():
     game, _, _ = _game(watcher, grounded)
 
     assert collect(game, Event("matching_creature_attacks", subject=grounded)) == []
-    grant_keyword(grounded, "flying", until_eot=True)
+    grant_keyword(grounded, "flying", duration="end_of_turn")
     assert len(collect(game, Event("matching_creature_attacks", subject=grounded))) == 1
 
 

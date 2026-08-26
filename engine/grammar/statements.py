@@ -24,7 +24,9 @@ from .paragraphs import (
     _parse_name_then_reveal_top,
     _parse_transmute_by_sacrifice,
 )
-from .delayed import _parse_choose_target, _parse_create_delayed_trigger
+from .delayed import (_parse_choose_target, _parse_choose_then_gain,
+                      _parse_create_delayed_trigger, parse_trailing_delay,
+                      resolve_that_turn)
 from .references import parse_recipient
 from .vocabulary import CARD_TYPES
 from .stream import TokenStream
@@ -462,8 +464,35 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     statement = _parse_statement_body(stream)
     if not top_level:
         return statement
+    # "…**at the beginning of your next upkeep**, where X is …" (Hazezon
+    # Tamar): the delay printed after its effect rather than in front of it.
+    # Read before the where-clause and wrapped *around* it, because the delay
+    # governs the whole sentence — the definition included.
+    delay = parse_trailing_delay(stream)
     definition = _parse_where_x(stream)
-    return ast.WhereX(statement, definition) if definition is not None else statement
+    if definition is not None:
+        statement = ast.WhereX(statement, definition)
+    if delay is None:
+        return statement
+    event, once, duration, binds = delay
+    if definition is not None:
+        # "…, where X is the number of lands you control **at that time**."
+        # The words decide which of two different cards this is. Inside the
+        # delay the count is taken when the ability *resolves*, which is what
+        # "at that time" says; a card meaning the count as it stood when the
+        # ability was created would need the number frozen at arming time, and
+        # this engine has nowhere to freeze it. So the phrase is required
+        # rather than tolerated, and its absence refuses the line instead of
+        # counting the wrong board.
+        if not stream.accept_phrase("at", "that", "time"):
+            raise stream.error(
+                "a delayed sentence's X must say when it is counted"
+            )
+    return ast.CreateDelayedTrigger(
+        event=event, effect=resolve_that_turn(statement) or statement,
+        once=once, duration=duration,
+        binds_target=binds, subject=None, agent=None,
+    )
 
 
 def _distribute_duration(
@@ -541,6 +570,14 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     chosen = _parse_choose_target(stream, parse_statement)
     if chosen is not None:
         return chosen
+    # "Choose flying, first strike, trample, or rampage 3. <source> gains that
+    # ability …" (Gabriel Angelfire) / "Choose a basic land type. This creature
+    # gains landwalk of the chosen type …" (Giant Slug). The same rule as the
+    # production above: the "choose" sentence means nothing without the one
+    # that binds it, so the pair is read together or not at all.
+    choose_then_gain = _parse_choose_then_gain(stream)
+    if choose_then_gain is not None:
+        return choose_then_gain
     # "When that creature dies this turn, …" / "At the beginning of your next
     # main phase, …" — a delayed triggered ability (CR 603.7). Read before the
     # productions its inner effect uses, whose sentences this one's tail is:

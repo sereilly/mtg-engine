@@ -451,7 +451,11 @@ def grant_banding_to_target(game: Game, instruction: OracleInstruction, context:
     if target_creature is None:
         game.log.append("No valid creature target for banding effect")
         return False, "no valid creature target for banding effect"
-    grant_keyword(target_creature, "banding", until_eot=True)
+    from .pump import grant_lifetime
+
+    grant_keyword(
+        target_creature, "banding", **grant_lifetime(game, instruction, context)
+    )
     game.log.append(f"{target_creature.card.name} gains banding until end of turn")
     return True, "resolved"
 

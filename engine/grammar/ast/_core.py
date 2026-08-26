@@ -664,7 +664,7 @@ class Duration:
     """How long a continuous effect lasts. ``None`` kind means permanent."""
     kind: str | None = None
     # until_end_of_turn | until_end_of_combat | this_turn | until_your_next_turn
-    # | until_your_next_upkeep | until_end_of_your_next_upkeep | while_source_tapped
+    # | until_your_next_upkeep | until_end_of_your_next_upkeep | until_end_of_that_turn | while_source_tapped
 
 
 @dataclass(frozen=True)

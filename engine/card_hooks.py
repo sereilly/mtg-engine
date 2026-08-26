@@ -269,11 +269,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "turn, it deals 2 damage to you unless it came under your control this turn":
             _line("end_step_damage_if_not_attacked", "triggered_damage", amount=2),
     },
-    'Erhnam Djinn': {
-        'at the beginning of your upkeep, target non-wall creature an opponent '
-        'controls gains forestwalk until your next upkeep':
-            _line('grant_forestwalk_until_next_upkeep', 'upkeep_effect'),
-    },
     'Eye for an Eye': {
         "the next time a source of your choice would deal damage to you this turn, "
         "instead that source deals that much damage to you and eye for an eye "

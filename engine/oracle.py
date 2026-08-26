@@ -2425,7 +2425,6 @@ def _parse_creature_program(
     triggered: list[ParsedTriggeredAbility] = []
     static_lines: list[str] = []
 
-    any_supported_trigger = False
     lines = text.splitlines()
     index = 0
     while index < len(lines):
@@ -2444,7 +2443,6 @@ def _parse_creature_program(
         if modal_trigger is not None:
             trig, consumed = modal_trigger
             triggered.append(trig)
-            any_supported_trigger = True
             instructions.append(trig.instruction)
             index += consumed
             continue
@@ -2461,7 +2459,6 @@ def _parse_creature_program(
             # becomes-blocked dispatcher fires it like any other trigger.
             for trig in rampage_triggers(normalized):
                 triggered.append(trig)
-                any_supported_trigger = True
                 instructions.append(trig.instruction)
             continue
 
@@ -2479,7 +2476,6 @@ def _parse_creature_program(
         if trig is not None:
             if trig.supported:
                 triggered.append(trig)
-                any_supported_trigger = True
                 if trig.instruction is not None:
                     instructions.append(trig.instruction)
                 continue
@@ -2552,7 +2548,15 @@ def _parse_creature_program(
         # exactly which clause needs a parse rule.
         return False, "unsupported", f"creature text too complex: {line!r}", (), (), (), ()
 
-    if triggered and not any_supported_trigger:
+    # **Every** trigger, not merely one of them. The gate used to ask whether
+    # *any* trigger was supported, so a creature printing two of them shipped
+    # as supported with the second one inert — Hazezon Tamar compiled its
+    # enters-the-battlefield half, reported "simple creature support", and
+    # exiled no Sand Warrior at all when it left, because nothing announced a
+    # trigger whose effect had never lowered. No creature in the pool relies
+    # on the looser reading; a trigger the engine cannot run is a card the
+    # engine cannot play, however many others on it work.
+    if any(not trig.supported for trig in triggered):
         return False, "unsupported", "unsupported triggered ability", (), (), tuple(triggered), tuple(static_lines)
 
     return (

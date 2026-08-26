@@ -59,7 +59,30 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("until_end_of_your_next_upkeep",
      ("until", "the", "end", "of", "your", "next", "upkeep")),
     ("this_turn", ("this", "turn")),
+    # "…until the end of **that** turn" (Giant Slug). Which turn "that" names
+    # is not in the sentence: it comes from the delay the sentence sits inside
+    # ("at the beginning of your next upkeep, …"). So it is its own kind, and
+    # ``delayed.resolve_that_turn`` is the one place that turns it into an
+    # ordinary end of turn — inside a delay, where "that turn" is the turn the
+    # ability resolves in. Outside one nothing lowers it, which is the honest
+    # answer: the phrase names a turn the reader cannot identify.
+    ("until_end_of_that_turn", ("until", "the", "end", "of", "that", "turn")),
 )
+
+#: The five types CR 205.3i calls **basic** land types, in the printed order
+#: (WUBRG) every card that lists them uses. Not read out of
+#: ``data/vocabulary/land_types.json``: that catalog holds every land subtype
+#: Magic prints, and "a basic land type" is a strictly smaller question with a
+#: fixed answer the rules give rather than a set that grows with each release.
+#:
+#: Here rather than in one effect family because two of them need it — the
+#: combat restriction ("can't attack unless defending player controls a
+#: Forest") and the choose-a-type grant (Giant Slug) — and a fragment two
+#: families share is what this module is for.
+BASIC_LAND_WORDS: tuple[str, ...] = (
+    "plains", "island", "swamp", "mountain", "forest",
+)
+
 
 def is_pt_counter(kind: str) -> bool:
     """Whether *kind* names a CR 122.1a power/toughness counter.

@@ -816,7 +816,7 @@ def test_611_2a_eot_metadata_flags_cleared_at_cleanup():
     game = Game(players=[p1, p2])
 
     # Apply temporary effects
-    grant_keyword(perm, "flying", until_eot=True)
+    grant_keyword(perm, "flying", duration="end_of_turn")
     perm.metadata["pt_switched"] = True
     perm.metadata["absolute_power_until_eot"] = 5
     perm.metadata["absolute_toughness_until_eot"] = 5
@@ -963,3 +963,74 @@ def test_611_2b_ending_the_linked_change_leaves_a_later_one_applying():
     assert game.controller_index_of(stolen) == 0, (
         "the unlinked contribution still applies after the linked one ended"
     )
+
+
+# ---------------------------------------------------------------------------
+# CR 611.2b — a granted ability lasts exactly as long as the card says
+# ---------------------------------------------------------------------------
+
+
+def _r29_bear_board():
+    bear = Permanent(card=_mk_card("Grizzly Bears", "Creature - Bear", power=2, toughness=2))
+    p1 = PlayerState(name="P1", battlefield=[bear])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+    return game, bear
+
+
+@pytest.mark.cr("611.2b")
+def test_a_granted_keyword_ends_at_the_duration_the_card_printed():
+    """"…the effect …" lasts for the stated duration and no longer. The channel
+    recorded that duration as a *boolean* until round 29, which is a table with
+    two rows: everything that was not end of turn became end of turn, so an
+    "until end of combat" grant ran on through the opponent's whole turn."""
+    from engine.keywords import clear_granted_keywords
+
+    game, bear = _r29_bear_board()
+    grant_keyword(bear, "flying", duration="end_of_combat")
+    grant_keyword(bear, "trample", duration="end_of_turn")
+
+    clear_granted_keywords(bear, "end_of_combat")
+
+    assert not game._has_keyword(bear, "flying")
+    assert game._has_keyword(bear, "trample"), (
+        "the end-of-turn grant is a different duration and a different sweep"
+    )
+
+
+@pytest.mark.cr("611.2b", "109.5")
+def test_a_grant_until_your_next_upkeep_ends_only_at_its_own_seats_upkeep():
+    """"Your" is the controller of the ability (CR 109.5), never the controller
+    of the permanent it touches — so the seat is frozen when the grant is
+    recorded and compared when it is swept."""
+    from engine.keywords import clear_granted_keywords
+
+    game, bear = _r29_bear_board()
+    grant_keyword(bear, "flying", duration="your_next_upkeep", seat=0)
+
+    clear_granted_keywords(bear, "your_next_upkeep", seat=1)
+    assert game._has_keyword(bear, "flying"), "another player's upkeep is not yours"
+
+    clear_granted_keywords(bear, "your_next_upkeep", seat=0)
+    assert not game._has_keyword(bear, "flying")
+
+
+@pytest.mark.cr("611.2b")
+def test_a_seated_duration_refuses_a_grant_that_names_no_seat():
+    """A "your next upkeep" grant with nobody's upkeep to end at would never be
+    swept, so it is refused where it is recorded rather than left running."""
+    _game, bear = _r29_bear_board()
+
+    with pytest.raises(ValueError):
+        grant_keyword(bear, "flying", duration="your_next_upkeep")
+
+
+@pytest.mark.cr("611.2b")
+def test_a_duration_with_no_sweep_is_refused_outright():
+    """A duration the engine cannot *end* is a grant that outlives what the
+    card said, which is why the table is the gate rather than a hint."""
+    _game, bear = _r29_bear_board()
+
+    with pytest.raises(ValueError):
+        grant_keyword(bear, "flying", duration="until_the_heat_death")

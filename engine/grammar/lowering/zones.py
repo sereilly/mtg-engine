@@ -15,15 +15,19 @@ the object and refuse the shapes none of them implement. A near-empty
 
 from __future__ import annotations
 
+import dataclasses
+
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS,
+                                TESTABLE_SUBJECT_FILTER_KEYS)
 from .. import ast
 from ..errors import LoweringError
 from ._events import (EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS,
                       _back_reference_payload)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
+    dropped_narrowings,
     _describe_targets,
     _filter_payload,
     _is_source,
@@ -511,11 +515,13 @@ def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
         filt = subject.filter
         if filt.zone != "battlefield" or filt.is_card:
             raise LoweringError("the exile sweep reads battlefield permanents", node=node)
-        payload = {}
-        if filt.card_types:
-            payload["type_filter"] = (
-                filt.card_types[0] if len(filt.card_types) == 1 else list(filt.card_types)
-            )
+        payload: dict[str, object] = {}
+        # Two keys the ordinary filter payload has no form for, lifted off the
+        # filter before the rest of it is read the way every other sweep reads
+        # one. ``mana_value`` because the bound may be the spell's **X**, which
+        # is not a number until the ability resolves; ``colored`` because
+        # "that's one or more colors" is a question about the computed colours
+        # rather than about a named one.
         if filt.colored:
             payload["colored_only"] = True
         if filt.mana_value is not None:
@@ -524,13 +530,27 @@ def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
                 "op": filt.mana_value.op,
                 "value": bound.value if isinstance(bound, ast.Fixed) else bound.name,
             }
+        rest = dataclasses.replace(filt, colored=False, mana_value=None)
+        # Everything else the noun phrase printed — "exile all **Sand
+        # Warriors**" (Hazezon Tamar). The sweep used to hand-roll a
+        # ``type_filter`` and refuse every other narrowing, which cost Hazezon
+        # its second ability; the honest widening is to carry the payload the
+        # matcher already answers and refuse only what it cannot test.
+        #
+        # ``OBJECT_ONLY_FILTER_KEYS``, not the full testable set: the handler
+        # sweeps every battlefield with no observer seat and no source
+        # permanent, so "you control" and "another" have nothing to be relative
+        # to and would be dropped where they are tested.
+        narrowings = _filter_payload(rest)
+        unusable = sorted(set(narrowings) - OBJECT_ONLY_FILTER_KEYS)
         leftovers = _restrictions_beyond(
-            filt, frozenset({"card_types", "colored", "mana_value", "zone"})
-        )
+            rest, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone"}
+        ) + dropped_narrowings(rest, narrowings) + tuple(unusable)
         if leftovers:
             raise LoweringError(
                 f"the exile sweep does not honour {leftovers[0]!r}", node=node
             )
+        payload.update(narrowings)
         return (OracleInstruction("exile_all_matching", "", payload),)
     if isinstance(subject, ast.TargetSpec) and subject.quantifier == "any_number":
         # "Exile **any number of** tokens created with this creature."

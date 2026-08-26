@@ -32,7 +32,7 @@ def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExec
         # "+X/+0 until end of turn" — apply now and track it so cleanup removes it
         # if the creature survives (Berserk only destroys it if it attacked).
         apply_temp_pt_boost(target_perm, boost)
-        grant_keyword(target_perm, "trample", until_eot=True)
+        grant_keyword(target_perm, "trample", duration="end_of_turn")
         # "At the beginning of the next end step, destroy that creature if it
         # attacked this turn." Mark it; the end step checks attacked_this_turn.
         target_perm.metadata["destroy_if_attacked_eot"] = True
@@ -358,6 +358,7 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     caster_index = game.players.index(context.caster)
     keywords = tuple(instruction.payload.get("keywords") or ())
     every_permanent = bool(instruction.payload.get("every_permanent"))
+    lifetime = grant_lifetime(game, instruction, context)
     granted = 0
     for perm in game.controlled_by(caster_index):
         if not every_permanent and not perm.is_creature:
@@ -365,11 +366,12 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
         for keyword in keywords:
             # Through the one seam, so a team grant puts a keyword where its
             # reader looks for the same reasons a single-target grant does.
-            _grant_one_keyword(game, perm, keyword, context)
+            _grant_one_keyword(game, perm, keyword, context, lifetime)
         granted += 1
     noun = "permanent(s)" if every_permanent else "creature(s)"
     game.log.append(
-        f"{context.card.name}: {granted} {noun} gain {', '.join(keywords)} until end of turn"
+        f"{context.card.name}: {granted} {noun} gain {', '.join(keywords)}"
+        + DURATION_WORDS.get(lifetime["duration"], "")
     )
     return True, "resolved"
 
@@ -764,14 +766,50 @@ def add_counter_to_each_you_control(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+def grant_lifetime(game, instruction, context) -> dict:
+    """The lifetime this grant printed, as the keyword arguments
+    :func:`engine.keywords.grant_keyword` and ``grant_ability_line`` take.
+
+    One reader for every grant handler, because "how long does this last?" is
+    one question and a handler that answered it for itself is what let the
+    duration collapse in the first place — every one of them passed
+    ``until_eot=True`` whatever the card said.
+
+    A seated duration ("until **your** next upkeep") freezes the seat now:
+    CR 109.5 makes it the controller of the *ability*, and by the time the
+    sweep runs the affected permanent may be controlled by somebody else — or
+    be somewhere else entirely.
+    """
+    from ..keywords import SEATED_GRANT_DURATIONS
+
+    duration = instruction.payload.get("duration")
+    lifetime: dict = {"duration": duration}
+    if duration in SEATED_GRANT_DURATIONS:
+        lifetime["seat"] = game.players.index(context.caster)
+    return lifetime
+
+
+#: How each grant duration reads in the log, so the message says what the card
+#: said rather than what the handler used to assume.
+DURATION_WORDS = {
+    None: "",
+    "end_of_turn": " until end of turn",
+    "end_of_combat": " until end of combat",
+    "your_next_upkeep": " until their next upkeep",
+}
+
+
 @effect_handler("grant_self_flying_until_eot")
 def grant_self_flying_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    grant_keyword(source_permanent, "flying", until_eot=True)
-    game.log.append(f"{card.name} gains flying until end of turn")
+    lifetime = grant_lifetime(game, instruction, context)
+    grant_keyword(source_permanent, "flying", **lifetime)
+    game.log.append(
+        f"{card.name} gains flying" + DURATION_WORDS.get(lifetime["duration"], "")
+    )
     return True, "resolved"
 
 
@@ -780,8 +818,13 @@ def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, co
     card = context.card
     target_creature = resolve_target_permanent(game, context)
     if target_creature is not None:
-        grant_keyword(target_creature, "flying", until_eot=True)
-        game.log.append(f"{target_creature.card.name} gains flying until end of turn from {card.name}")
+        lifetime = grant_lifetime(game, instruction, context)
+        grant_keyword(target_creature, "flying", **lifetime)
+        game.log.append(
+            f"{target_creature.card.name} gains flying"
+            + DURATION_WORDS.get(lifetime["duration"], "")
+            + f" from {card.name}"
+        )
     return True, "resolved"
 
 
@@ -827,6 +870,8 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
     # in the tap and bounce handlers: it skipped the "x" spelling, fell through
     # to the one-target branch, and affected the first chosen creature while the
     # player watched the rest do nothing.
+    lifetime = grant_lifetime(game, instruction, context)
+    lasting = DURATION_WORDS.get(lifetime["duration"], "")
     printed_count = (instruction.payload.get("targets") or {}).get("count")
     maximum = (
         resolve_amount(printed_count, context.x_value)
@@ -839,10 +884,10 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
             return True, "resolved"
         for permanent in chosen:
             for keyword in keywords:
-                _grant_one_keyword(game, permanent, keyword, context)
+                _grant_one_keyword(game, permanent, keyword, context, lifetime)
         game.log.append(
             ", ".join(p.card.name for p in chosen)
-            + f" gain {' and '.join(keywords)} until end of turn ({card.name})"
+            + f" gain {' and '.join(keywords)}{lasting} ({card.name})"
         )
         return True, "resolved"
 
@@ -853,9 +898,9 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
     for keyword in keywords:
-        _grant_one_keyword(game, target_creature, keyword, context)
+        _grant_one_keyword(game, target_creature, keyword, context, lifetime)
     game.log.append(
-        f"{target_creature.card.name} gains {' and '.join(keywords)} until end of turn ({card.name})"
+        f"{target_creature.card.name} gains {' and '.join(keywords)}{lasting} ({card.name})"
     )
     return True, "resolved"
 
@@ -903,31 +948,20 @@ def _grant_ability_texts(game, permanent, instruction, context) -> None:
     """
     from ..keywords import grant_ability_line
 
-    duration = instruction.payload.get("duration")
+    lifetime = grant_lifetime(game, instruction, context)
     texts = tuple(instruction.payload.get("abilities") or ())
     for text in texts:
         line = text.strip()
         if not line:
             continue
-        grant_ability_line(
-            permanent, line[:1].upper() + line[1:], duration=duration
-        )
+        grant_ability_line(permanent, line[:1].upper() + line[1:], **lifetime)
     if texts:
-        lasting = _GRANT_DURATION_WORDS.get(duration, "")
+        lasting = DURATION_WORDS.get(lifetime["duration"], "")
         game.log.append(
             f"{permanent.card.name} gains "
             + " and ".join(f'"{text}"' for text in texts)
             + f"{lasting} ({context.card.name})"
         )
-
-
-#: How each granted-ability duration reads in the log. The keys are
-#: `keywords.GRANTED_ABILITY_DURATIONS`; the missing key is the durationless
-#: grant, which lasts as long as the object and so says nothing.
-_GRANT_DURATION_WORDS = {
-    "end_of_turn": " until end of turn",
-    "end_of_combat": " until end of combat",
-}
 
 
 def _target_grant_predicate(game, instruction, context):
@@ -955,7 +989,7 @@ def _target_grant_predicate(game, instruction, context):
     return legal
 
 
-def _grant_one_keyword(game, permanent, keyword: str, context) -> None:
+def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) -> None:
     """Put one granted keyword where its reader will find it.
 
     Layer 6 holds a *word*, and "protection from black" is not one — it is the
@@ -980,11 +1014,15 @@ def _grant_one_keyword(game, permanent, keyword: str, context) -> None:
     # the permanent now says, and the compiler makes the ability from there.
     # Capitalised because it is folded into the permanent's *printed* rules
     # text, which the UI shows; the compiler lowercases it again.
+    # The printed duration, or end of turn for the handlers that have no
+    # instruction to read one from (a rider whose whole wording is "until end
+    # of turn").
+    lifetime = {"duration": "end_of_turn"} if lifetime is None else lifetime
     if keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS:
-        grant_ability_line(permanent, keyword.capitalize(), duration="end_of_turn")
+        grant_ability_line(permanent, keyword.capitalize(), **lifetime)
         return
     if not keyword.startswith("protection from "):
-        grant_keyword(permanent, keyword, until_eot=True)
+        grant_keyword(permanent, keyword, **lifetime)
         return
     if keyword == PROTECTION_FROM_CHOSEN_COLOR:
         symbol = game._normalize_mana_color((context.choices or {}).get("new_color"))
@@ -1020,7 +1058,7 @@ def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, 
         return True, "resolved"
     keywords = tuple(instruction.payload.get("keywords") or ())
     for keyword in keywords:
-        remove_keyword(target, keyword, until_eot=True)
+        remove_keyword(target, keyword, duration="end_of_turn")
     game.log.append(
         f"{target.card.name} loses {' and '.join(keywords)} until end of turn ({card.name})"
     )
@@ -1059,10 +1097,12 @@ def grant_self_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     if source_permanent is None:
         return False, "ability not implemented"
     keywords = tuple(instruction.payload.get("keywords") or ())
+    lifetime = grant_lifetime(game, instruction, context)
     for keyword in keywords:
-        _grant_one_keyword(game, source_permanent, keyword, context)
+        _grant_one_keyword(game, source_permanent, keyword, context, lifetime)
     game.log.append(
-        f"{card.name} gains {' and '.join(keywords)} until end of turn"
+        f"{card.name} gains {' and '.join(keywords)}"
+        + DURATION_WORDS.get(lifetime["duration"], "")
     )
     return True, "resolved"
 
@@ -1079,7 +1119,7 @@ def grant_islandwalk_and_linked_destroy(game: Game, instruction: OracleInstructi
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    grant_keyword(target_creature, "islandwalk", until_eot=True)
+    grant_keyword(target_creature, "islandwalk", duration="end_of_turn")
     if source_permanent is not None:
         links = target_creature.metadata.setdefault("on_death_destroy_permanents", [])
         if source_permanent not in links:
@@ -1148,7 +1188,7 @@ def grant_flying_and_delayed_destruction(game: Game, instruction: OracleInstruct
         game, context, player=caster, predicate=_is_legal, fallback_on_invalid_choice=False
     )
     if target_creature is not None:
-        grant_keyword(target_creature, "flying", until_eot=True)
+        grant_keyword(target_creature, "flying", duration="end_of_turn")
         target_creature.metadata["destroy_at_next_end_step"] = True
         game.log.append(f"{target_creature.card.name} gains temporary flying and delayed destruction")
     else:
