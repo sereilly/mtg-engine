@@ -2385,3 +2385,128 @@ handler guards it) but it is a gate and a dispatch disagreeing.
 LEG 253 → **263** of 310 (81.6% → 84.8%); LEG parse 74.7% → 76.8%, lowers 69.8%
 → 71.9%, executes 42.7% → 44.5%. Shipped pool 734/734 throughout. Suite 7,490 →
 **7,559**, every `--check` green, no hooks added.
+
+## LEG round 28: a duration is a channel with a sweep, and a rider that had to run
+
+The round was briefed around a missing production: three cards refuse at the
+parse site `granted ability in quotes`, so the quoted-ability grammar looked
+like the centre. It was already there. Round 26's production reads a quoted
+grant inside an effect sentence perfectly well — `granted ability in quotes` is
+the *generic* refusal `_parse_line` raises when any line carrying a quote is not
+finished, and what was actually unfinished on each of the three cards was
+something else entirely. Johan's first sentence parsed on the first probe.
+
+That is worth recording as a shape rather than as a fact about these cards: a
+refusal site names where the parser gave up, not what the card needs, and a
+guard-rail message reused by several productions will keep pointing a round at
+work that is already done. Probing each card's *sentences* individually took
+ten minutes and moved the whole plan.
+
+### What actually stopped Johan
+
+**A duration was a boolean.** `keywords.grant_ability_line` recorded
+`until_eot: bool` — a duration table with two rows and no room for a third.
+Johan grants `"Johan can't attack"` **until end of combat**, and the boolean
+would have recorded that as end of turn: Johan unable to attack through the
+second main phase and the whole of the opponent's turn, from a card that said
+"this combat". It is now a channel name (`GRANTED_ABILITY_DURATIONS`), and the
+sweep that ends it sits beside the layer-7c P/T sweep that already ran at the
+end of combat step. Same shape as `pt.TEMPORARY_PT_CHANNELS`, and for the same
+reason: **a duration is implemented by having a sweep, not by having a word**, so
+the lowering can refuse a printed duration by asking the table instead of
+carrying a list of its own. Two guards hold the two tables together in both
+directions.
+
+**The support probe was compiling the sentence under the wrong name.**
+`granted_ability_supported` compiles the quoted text on a card that says nothing
+else — the right design, and it was reporting `"Johan can't attack"` unreadable
+while the game would have read it perfectly. The sentence is only an ability at
+all on a card called Johan; under the placeholder name the self-reference is a
+proper noun the grammar has never heard of. The lexer had already answered which
+words those are — it collapsed them into a SELF token when it was given the
+granting card's name — so the name is read back off that token rather than
+plumbed down from the compiler as a second opinion about what the card is
+called. `_parse_quoted_abilities` had anticipated exactly this: its
+`_token_shape` comparison already ignored token *kind* because "the two lexings
+are not given the same context".
+
+The same fact is a lowering gate. A self-naming ability granted to some *other*
+permanent would record a line that stops compiling the moment it arrives, which
+is a grant of nothing — and the probe cannot see that, because it never learns
+who receives the grant. So the refusal is at lowering, by name.
+
+### The rider was the card
+
+"If you do, attacking doesn't cause creatures you control to tap this combat if
+Johan is untapped." A card that granted the quote and dropped this would be
+worse than an unsupported card, and it needed three things.
+
+A **production** (`_parse_attacking_doesnt_tap`), whose sentence has a gerund
+for a subject and so is invisible to the subject-verb reader. It takes
+`_parse_condition` as a *parameter* — the condition parser is in its own layer,
+and a family reaching up for it is the coupling `test_grammar_layering.py`
+refuses. `ast/combat.py` cannot import `ast/conditions.py` either, which turned
+out to be the better answer rather than an obstacle: the node stores the gate
+already reduced to the state word it asks about, because a `Condition` there
+would be storing a shape with no reader.
+
+An **engine seam**. CR 508.1f's tap was asked inline in the declare-attackers
+step as `not _has_keyword(attacker, "vigilance")`, so an effect that prints the
+same exemption without the word had nowhere to be asked. `engine/attack_tapping.py`
+is now the one place the question is answered, with vigilance and the printed
+exemption as two answers rather than two `if`s in the step — the shape this
+codebase keeps finding at the bottom of a bug.
+
+And the gate is a **filter, not a condition**. "If Johan is untapped" is the
+same question "untapped creature you control" asks with an adjective, so it
+lowers to the same filter key and `subject_matches` answers it — which is what
+lets the declare-attackers step ask it again at every declaration. Evaluated
+once at resolution and remembered, the exemption would keep running after Johan
+tapped, and that is precisely the half of the card no compile-time assertion can
+see.
+
+### Verified by running it
+
+The card compiled "supported" and did nothing on the first run, because the
+`optional_pay` prompt does not exist until the trigger has *resolved* — the
+probe answered before it was armed, silently declined, and every compile-time
+assertion still passed. Four behaviours were then checked in a game: the Bear
+attacks untapped, Johan cannot attack, tapping Johan taps the Bear again,
+declining does nothing, and both halves end with the combat.
+
+### Not landed, with what each needs
+
+**Gabriel Angelfire.** Nothing to do with quotes. Its whole effect already
+parses and lowers *as one sentence* — "gains your choice of flying, first
+strike, trample, or rampage 3 until end of turn" compiles to a `choose_one` over
+four grants today. Two gaps remain: the **two-sentence spelling** ("choose A, B,
+C, or D. <source> gains that ability …"), which wants a fusion in the shape of
+`_parse_choose_target`; and **"until your next upkeep"**, which `_lower_gain_keyword`
+refuses in a comment that already names this work. That refusal is load-bearing
+in a way worth flagging: accepting the duration makes the grammar claim Erhnam
+Djinn's line, which kills its card hook, which fails `test_card_lines.py` — so
+the duration and the hook's removal are one piece of work, not two. Doing it
+properly means giving `ABILITY_EFFECTS` the same duration-and-seat treatment
+`GAINED_TYPES` already has (Xenic Poltergeist's sweep is the model), and it runs
+into the instruction kinds whose *names* bake the duration in
+(`grant_self_keyword_until_eot`) — a kind carrying `duration: your_next_upkeep`
+would be the "narrowing re-derived from the kind's name" bug class again.
+
+**Hazezon Tamar** needs four independent things: a plural multi-word subtype
+("all Sand Warriors" stops after "Sand"), a token whose colours print *after* its
+subtypes ("… tokens that are red, green, and white"), a delayed event for the
+controller's next upkeep with a fire site, and a count evaluated at the delayed
+time rather than at arming time.
+
+**Glyph of Delusion** needs four too: "X <named> counters" (the counter parser
+takes a word or a number, not X), a second target bound by a relation to the
+first ("target creature that target Wall blocked this turn"), "where X is the
+power of that blocked creature", and one of its two quoted abilities — "doesn't
+untap during your untap step if it has a glyph counter on it" — which does not
+compile on its own yet.
+
+**Stangg** and **All Hallow's Eve** were not probed beyond round 26's findings.
+
+### Numbers
+LEG 276 → **277** of 310. Shipped pool 734/734 throughout. Suite 7,613 →
+**7,621**, every `--check` green, no hooks added and none needed.
