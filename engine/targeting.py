@@ -462,6 +462,18 @@ def _counter_spec(payload: dict) -> dict:
         # handler tests at resolution, so the picker offers exactly what the
         # counter would counter.
         spec["stack_card_types"] = list(card_types)
+    any_classes = payload.get("any_classes")
+    if any_classes:
+        # "target instant or Aura spell" (Avoid Fate, Ring of Immortals) — the
+        # cross-axis union, handed to the picker in the same shape the handler
+        # tests, so the two cannot offer and counter different sets.
+        spec["stack_any_classes"] = [list(entry) for entry in any_classes]
+    targets_filter = payload.get("targets_filter")
+    if targets_filter:
+        # "…that targets a permanent you control". Offering a spell this
+        # narrowing excludes would let Ring of Immortals be activated with
+        # nothing it could legally counter — the cost paid for no effect.
+        spec["stack_targets_filter"] = dict(targets_filter)
     return spec
 
 

@@ -217,6 +217,60 @@ def _spell_is_one_of(card, card_types) -> bool:
     return any(card_has_type(card, wanted) for wanted in card_types)
 
 
+def _spell_is_one_of_classes(card, classes) -> bool:
+    """Whether a spell on the stack is any of *classes* — "instant **or Aura**
+    spell" (Avoid Fate, Ring of Immortals).
+
+    A union whose alternatives sit on two different axes (CR 205.2 against
+    CR 205.3), so each entry carries the axis it was read on and is asked of
+    that half of ``printed_shape``. Asking one substring test of the whole type
+    line would answer both, and would also answer for a card whose *other* axis
+    happens to print the same word — the axis is free to carry, and a matcher
+    that has to guess is a matcher that can guess wrong.
+
+    ``printed_shape`` rather than ``has_type``: a spell on the stack is not a
+    permanent, so CR 613 has nothing to say about it and the printed line is the
+    whole of what there is.
+    """
+    from ..layer_bridge import printed_shape
+
+    types, subtypes = printed_shape(card)
+    for axis, name in classes:
+        if axis == "card_type" and name in types:
+            return True
+        if axis == "subtype" and name in subtypes:
+            return True
+    return False
+
+
+def _spell_targets_matching(game, item, described: dict, observer: int) -> bool:
+    """Whether the spell *item* chose a permanent the filter *described* names —
+    "…that targets a permanent you control" (Avoid Fate, Ring of Immortals).
+
+    Read off the stack item's recorded target *ids* (CR 601.2c), never its
+    indices: time passes between the spell being cast and this counter
+    resolving, and an index recorded then can address a different permanent now.
+    A target that has since left the battlefield answers None and simply is not
+    one of the permanents this counter's narrowing can see — which is the honest
+    reading, since the counter is legal only while some target still qualifies.
+
+    ``subject_matches`` is the one reader of "what does this noun phrase mean",
+    so "you control" here is the same seat question every other narrowing asks,
+    measured against the counter's own controller (CR 109.5).
+    """
+    from ..subject_filters import subject_matches
+
+    recorded = getattr(item, "target_permanent_id", None)
+    ids = recorded if isinstance(recorded, list) else [recorded]
+    for permanent_id in ids:
+        found = game.permanent_by_id(permanent_id)
+        if found is None:
+            continue
+        if subject_matches(game, found, described, observer=observer):
+            return True
+    return False
+
+
 @effect_handler("counter_top_stack_spell")
 def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
@@ -257,6 +311,32 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             game.log.append(
                 f"{card.name}: {target.card.name} is not "
                 f"{' or '.join(card_types)}, cannot counter"
+            )
+            return True, "resolved"
+        # "counter target **instant or Aura** spell" (Avoid Fate, Ring of
+        # Immortals): the cross-axis union, tested whole. Beside `card_types`
+        # rather than folded into it — the two payload keys mean different
+        # questions and a phrase produces exactly one of them.
+        any_classes = instruction.payload.get("any_classes")
+        if any_classes and not _spell_is_one_of_classes(
+            target.card, [tuple(entry) for entry in any_classes]
+        ):
+            game.log.append(
+                f"{card.name}: {target.card.name} is not "
+                f"{' or '.join(str(entry[1]) for entry in any_classes)}, cannot counter"
+            )
+            return True, "resolved"
+        # "…**that targets a permanent you control**" (Avoid Fate, Ring of
+        # Immortals). A restriction on what the chosen spell itself chose, so it
+        # is asked of the stack item's recorded targets rather than of the card.
+        targets_filter = instruction.payload.get("targets_filter")
+        if targets_filter and not _spell_targets_matching(
+            game, target, dict(targets_filter),
+            game.players.index(context.caster),
+        ):
+            game.log.append(
+                f"{card.name}: {target.card.name} does not target a matching "
+                "permanent, cannot counter"
             )
             return True, "resolved"
         # "counter target artifact spell **you control**" (Goblin Artisans).

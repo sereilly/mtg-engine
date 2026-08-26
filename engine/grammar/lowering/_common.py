@@ -101,6 +101,15 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # costs that path nothing and buys the same refuse-by-name everywhere
     # else.
     "blocking_source": "blocking_source",
+    # "target **instant or Aura** spell" and "…**that targets a permanent you
+    # control**" (Avoid Fate, Ring of Immortals). Neither has a ``to_payload``
+    # form: a cross-axis class union has no field pair that means it, and a
+    # nested "what did that spell target" phrase is a question about a stack
+    # object rather than about a permanent. Listed here so every lowering that
+    # builds a payload from a filter refuses them by name, and the one that
+    # reads them — the counter lowering — carries each as its own key.
+    "any_classes": "any_classes",
+    "targets_object": "targets_object",
 }
 
 

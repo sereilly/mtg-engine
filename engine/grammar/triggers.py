@@ -511,6 +511,28 @@ def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
     return None
 
 
+def _accept_unshared_colour(stream: TokenStream) -> ast.ObjectFilter | None:
+    """``that doesn't share a color with <noun phrase>``, or None.
+
+    CR 105.2's question asked of two objects at once. The set on the far side is
+    read with the ordinary noun parser, so "a creature you control" needs no
+    words of its own here and the next card comparing against something else
+    gets the phrase for free.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase(
+        "that", "doesn't", "share", "a", "color", "with"
+    ):
+        stream.accept_word("a", "an")
+        try:
+            return parse_object_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+    stream.reset(mark)
+    return None
+
+
 def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
     if stream.accept_word("whenever"):
         # "…one or more +1/+1 counters are put on <noun phrase>" (Wildwood
@@ -571,9 +593,24 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                 if type_word in CARD_TYPES:
                     stream.advance()
                     if stream.accept_word("spell"):
+                        # "…**that doesn't share a color with a creature you
+                        # control**" (Invoke Prejudice). A narrowing that
+                        # compares the cast spell's colours against a set of
+                        # *permanents*, so what follows is a whole noun phrase
+                        # naming a different object than the one the trigger
+                        # fires on — which is why it rides `narrowings` rather
+                        # than the subject. Optional, because the bare form
+                        # above is a real card (Citanul Druid); the words are
+                        # consumed either way, or the line fails the
+                        # full-consumption invariant.
+                        unshared = _accept_unshared_colour(stream)
                         return ast.TriggerEvent(
                             scope, "whenever",
                             subject=ast.ObjectFilter(card_types=(type_word,)),
+                            narrowings=(
+                                () if unshared is None
+                                else (("unshared_color", unshared),)
+                            ),
                         )
             stream.reset(mark)
         # "…you cast a spell that's white, blue, black, or red" (Quirion

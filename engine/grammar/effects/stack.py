@@ -62,17 +62,24 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # "that spell") are about a *spell* that an earlier sentence named, and
         # none of them can follow an ability.
         return ast.CounterAbility(subject, unless_pays=_parse_unless_pays(stream))
-    replaces_prior = False
     if subject is None:
-        # "counter **that spell**" (Lofty Denial's second sentence) — the spell
-        # the sentence before it already targeted, not a second choice. Its own
-        # quantifier for the reason round 75's "those creatures" has one: a
-        # bound reference and a chosen one reach different machinery, and every
-        # lowering refuses "that" unless it says otherwise, so a sentence that
-        # reaches one fails by name rather than failing to parse.
+        # "counter **that spell**" (Lofty Denial's second sentence, Invoke
+        # Prejudice's trigger) — a spell something already named, not a second
+        # choice. Its own quantifier for the reason round 75's "those creatures"
+        # has one: a bound reference and a chosen one reach different machinery,
+        # and every lowering refuses "that" unless it says otherwise, so a
+        # sentence that reaches one fails by name rather than failing to parse.
+        #
+        # **What named it is not this phrase's business.** The words used to set
+        # `replaces_prior_amount` here, which read "that spell" as "the spell an
+        # earlier *sentence* targeted" and made Lofty Denial's construction the
+        # only one the two words could belong to. Invoke Prejudice prints them
+        # about the spell its own trigger condition bound, with no earlier
+        # sentence at all — so the replacement is now read off the word that
+        # actually says it, "instead", and "that spell" means what "it" beside
+        # it means.
         if stream.accept_phrase("that", "spell"):
             subject = ast.TargetSpec("that", ast.ObjectFilter())
-            replaces_prior = True
         elif stream.accept_word("it"):
             # "Whenever a player casts a spell, **counter it**." (Nether Void,
             # Presence of the Master, In the Eye of Chaos.) The pronoun is
@@ -89,17 +96,15 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
 
     payment = _parse_unless_pays(stream)
     if payment is not None:
-        # "…pays {4} **instead**". Required on the bound form and refused on the
-        # chosen one: "counter target spell unless its controller pays {4}
-        # instead" replaces an amount no sentence before it named.
-        if stream.accept_word("instead"):
-            if not replaces_prior:
-                raise stream.error(
-                    "'instead' replaces an amount an earlier sentence named"
-                )
-        elif replaces_prior:
+        # "…pays {4} **instead**" (Lofty Denial). The word is the whole
+        # difference between a second counter and a replacement amount for the
+        # first, so it is what sets the flag. Refused on the chosen form:
+        # "counter target spell unless its controller pays {4} instead"
+        # replaces an amount no sentence before it named.
+        replaces_prior = stream.accept_word("instead")
+        if replaces_prior and subject.quantifier not in ("that", "it"):
             raise stream.error(
-                "a counter of the spell already targeted must say what it replaces"
+                "'instead' replaces an amount an earlier sentence named"
             )
 
         return ast.CounterSpell(

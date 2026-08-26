@@ -12,6 +12,8 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _PAYLOAD_HONOURED_FILTER_FIELDS,
+    _filter_payload,
     _lower_condition,
     _restrictions_beyond,
     is_mana_value_x,
@@ -28,6 +30,10 @@ from ._common import (
 _COUNTER_HONOURED_FILTER_FIELDS = frozenset({
     "colors", "mana_value", "card_types", "zone", "controller",
     "not_ability_targeted_by_same_name",
+    # "instant or Aura spell" and "that targets a permanent you control"
+    # (Avoid Fate, Ring of Immortals) — both read below and both tested by the
+    # handler against the spell it chose.
+    "any_classes", "targets_object",
 })
 
 # The "unless … pays" costs the counter flow can offer: ``{X}`` (Power Sink,
@@ -107,6 +113,32 @@ def _fused_conditional_counter(
     return (OracleInstruction(base.kind, base.value, payload),)
 
 
+def _counter_targets_filter(inner: ast.ObjectFilter, node) -> dict[str, object]:
+    """The payload for "that targets <noun phrase>", or a refusal.
+
+    Three gates, and each closes a way the phrase could be admitted and then
+    ignored: a field ``to_payload`` never reads, a field it reads only
+    sometimes, and a key the matcher the handler calls cannot answer. The
+    narrowing is the whole card here — a counter that skips it counters every
+    instant on the stack — so anything short of "testable in full" refuses.
+    """
+    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+
+    beyond = _restrictions_beyond(inner, _PAYLOAD_HONOURED_FILTER_FIELDS)
+    if beyond:
+        raise LoweringError(
+            "nothing tests what a spell targets by " + ", ".join(beyond), node=node
+        )
+    payload = _filter_payload(inner)
+    untestable = set(payload) - TESTABLE_SUBJECT_FILTER_KEYS
+    if untestable:
+        raise LoweringError(
+            "nothing tests a targeted permanent by " + ", ".join(sorted(untestable)),
+            node=node,
+        )
+    return payload
+
+
 def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...]:
     """"Counter target spell", with the colour, mana-value and "unless … pays"
     riders the pool's counterspells carry. The handler chooses the spell to
@@ -119,9 +151,19 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
     # picker to raise — the handler reads it off the trigger's event. Everything
     # past this point is shared with the targeted form, which is the point: the
     # filters and the "unless … pays" flow are the same card mechanics.
-    bound_to_trigger = spec.quantifier == "it"
+    bound_to_trigger = spec.quantifier in ("it", "that")
     if not bound_to_trigger and spec.quantifier != "target":
         raise LoweringError("no handler for a non-targeted counter", node=node)
+    if node.replaces_prior_amount:
+        # "…pays {4} **instead**" reaching here alone means no earlier sentence
+        # named the amount it replaces. The fused form (Lofty Denial) never
+        # arrives this way — it builds its own node from the *first* sentence's
+        # subject — so the flag surviving to here is a replacement of nothing,
+        # and dropping it would print a card that asks for one amount where it
+        # says two.
+        raise LoweringError(
+            "a replacement amount with no earlier amount to replace", node=node
+        )
     filt = spec.filter
     if filt.zone not in ("battlefield", "stack"):
         # "battlefield" is the ObjectFilter default a bare "target spell"
@@ -146,6 +188,26 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
                 node=node,
             )
         payload["card_types"] = list(filt.card_types)
+    if filt.any_classes:
+        # "target **instant or Aura** spell" (Avoid Fate, Ring of Immortals):
+        # one union across two axes, carried whole rather than split into the
+        # type and subtype keys — those are ANDed by every matcher, so the split
+        # would counter nothing at all. The printed "spell" is required for the
+        # same reason it is above: without it the phrase names a permanent.
+        if filt.zone != "stack":
+            raise LoweringError(
+                "a class-narrowed counter targets a **spell**; this phrase "
+                "names a permanent",
+                node=node,
+            )
+        payload["any_classes"] = [list(entry) for entry in filt.any_classes]
+    if filt.targets_object is not None:
+        # "…**that targets a permanent you control**" (Avoid Fate, Ring of
+        # Immortals). The inner noun phrase is admitted only when every key it
+        # produces is one ``subject_matches`` tests — an untestable narrowing
+        # here is a counter that reaches spells the card does not name, which is
+        # the direction nothing crashes and the card is simply wrong.
+        payload["targets_filter"] = _counter_targets_filter(filt.targets_object, node)
     if filt.colors:
         if len(filt.colors) > 1:
             raise LoweringError("no handler for a multi-colour counter filter", node=node)

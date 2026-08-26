@@ -282,6 +282,20 @@ class ObjectFilter:
     # them would let one Urza's Mine satisfy "an Urza's Mine and an Urza's
     # Tower" on its own.
     subtype_match: str = "any"
+    # "target **instant or Aura** spell" (Avoid Fate, Ring of Immortals). A
+    # union whose alternatives do not all live on one axis: "instant" is a card
+    # type (CR 205.2) and "Aura" a subtype (CR 205.3), and every matcher in this
+    # engine ANDs `card_types` against `subtypes` — so recording the phrase in
+    # those two fields would describe an instant that is also an Aura, a set no
+    # card can ever be in. Its own field for the reason `any_states` is one: a
+    # union spelled into the fields it happens to straddle is a union the next
+    # printed pair cannot use.
+    #
+    # Each alternative carries the axis it was read on ("card_type" / "subtype")
+    # rather than the bare word, because the two vocabularies are not disjoint
+    # in principle and a matcher guessing which one it was handed is a matcher
+    # that can guess wrong.
+    any_classes: tuple[tuple[str, str], ...] = ()
     colors: tuple[str, ...] = ()              # mana symbols: "W", "U", ...
     excluded_colors: tuple[str, ...] = ()     # "nonblack"
     excluded_types: tuple[str, ...] = ()      # "nonartifact"
@@ -385,6 +399,15 @@ class ObjectFilter:
     # collapsed to a SELF token — so the question is "another copy of me",
     # whatever the copy is called.
     not_ability_targeted_by_same_name: bool = False
+    # "…**that targets a permanent you control**" (Avoid Fate, Ring of
+    # Immortals). A restriction on what the *spell* chose, not on what the spell
+    # is — so it is a nested noun phrase rather than more adjectives, and it is
+    # relative twice over: it needs the stack object's recorded targets and the
+    # seat "you control" is measured against. Never emitted by ``to_payload``
+    # and never reaches ``permanent_matches_filter``; the one lowering written
+    # for it carries the inner phrase as its own payload key and the handler
+    # that has the stack item asks ``subject_matches`` of each target.
+    targets_object: "ObjectFilter | None" = None
     # "blocking or blocked by this creature" (Sentinel) — the object is in
     # combat with the ability's own source (CR 509). Relative, like
     # ``other_than_source``: no read of the object alone can answer it, so

@@ -575,7 +575,7 @@ class LegalityMixin:
         if kind == "graveyard_creature":
             return self._enumerate_graveyard_creatures(caster_index, spec)
         if kind == "stack":
-            return self._enumerate_stack_targets(card, spec)
+            return self._enumerate_stack_targets(caster_index, card, spec)
         if kind == "spell_or_permanent":
             # Lace recolor: legal on any permanent on the battlefield or any spell
             # on the stack. Enumerate both and concatenate. Unsubstantiate narrows
@@ -585,7 +585,7 @@ class LegalityMixin:
                 for_cast=for_cast, ability_instruction=ability_instruction,
                 ability_source=ability_source,
             )
-            return perms + self._enumerate_stack_targets(card, spec)
+            return perms + self._enumerate_stack_targets(caster_index, card, spec)
 
         targets: list[dict] = []
         # Player faces are legal for player-targeted, "any target", and divided
@@ -661,7 +661,9 @@ class LegalityMixin:
         # Circle of Protection: the chosen source may also be a spell of the named
         # color on the stack — fold those into the same target list.
         if spec.get("also_stack"):
-            targets += self._enumerate_stack_targets(card, {"stack_color_filter": spec.get("color_filter")})
+            targets += self._enumerate_stack_targets(
+                caster_index, card, {"stack_color_filter": spec.get("color_filter")}
+            )
         return targets
 
     def _ability_target_legal(
@@ -894,7 +896,17 @@ class LegalityMixin:
                     targets.append({"kind": "graveyard", "seat": seat, "index": idx, "name": card.name})
         return targets
 
-    def _enumerate_stack_targets(self, card: CardDefinition, spec: dict) -> list[dict]:
+    def _enumerate_stack_targets(
+        self, caster_index: int, card: CardDefinition, spec: dict
+    ) -> list[dict]:
+        """The spells on the stack this spec may point at.
+
+        *caster_index* is the seat doing the pointing, needed because a
+        narrowing can be *relative* to it ("that targets a permanent **you**
+        control"). It is the same seat ``subject_matches`` calls the observer,
+        and CR 109.5 is why it is the counter's controller rather than the
+        controller of the spell being looked at.
+        """
         targets: list[dict] = []
         color_filter = spec.get("stack_color_filter")
         instant_sorcery_only = spec.get("stack_instant_sorcery_only")
@@ -915,6 +927,29 @@ class LegalityMixin:
             stack_card_types = spec.get("stack_card_types")
             if stack_card_types and item_card.primary_type not in stack_card_types:
                 continue
+            # "target instant or **Aura** spell" (Avoid Fate, Ring of
+            # Immortals): the same cross-axis union the handler tests, asked
+            # through the same reader, so the picker offers exactly what the
+            # counter would counter.
+            any_classes = spec.get("stack_any_classes")
+            if any_classes:
+                from .handlers.stack import _spell_is_one_of_classes
+
+                if not _spell_is_one_of_classes(
+                    item_card, [tuple(entry) for entry in any_classes]
+                ):
+                    continue
+            # "…that targets a permanent you control" — asked of the recorded
+            # targets of the spell being offered, against the seat whose spell
+            # or ability is doing the countering.
+            targets_filter = spec.get("stack_targets_filter")
+            if targets_filter:
+                from .handlers.stack import _spell_targets_matching
+
+                if not _spell_targets_matching(
+                    self, item, dict(targets_filter), caster_index
+                ):
+                    continue
             if color_filter and color_filter not in self._stack_item_colors(item):
                 continue
             # The UI (and the cast/activate action) index the stack top-first, the

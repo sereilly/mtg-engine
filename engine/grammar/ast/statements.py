@@ -281,6 +281,18 @@ class TriggerEvent:
     kind: str
     word: str = "whenever"        # whenever | when | at
     subject: ObjectFilter | PlayerRef | None = None
+    #: Noun phrases the condition carries **beyond** its subject, each under the
+    #: stem ``engine/oracle.py``'s pattern table gives its ``<stem>_subject``
+    #: group — "…that doesn't share a color with **a creature you control**"
+    #: (Invoke Prejudice) is ``("unshared_color", <that phrase>)``.
+    #:
+    #: A trigger condition is read twice, once by each front end (the table
+    #: supplies the *condition*, the grammar the *effect*), and a phrase only
+    #: one of them sees is a card whose two halves watch different sets. The
+    #: subject alone could not express these: the set on the far side of a
+    #: comparison is a different object from the one the trigger fires on.
+    #: Paired by stem in ``test_a_narrowed_trigger_reads_the_same_subject_on_both_sides``.
+    narrowings: tuple[tuple[str, ObjectFilter], ...] = ()
 
 
 @dataclass(frozen=True)

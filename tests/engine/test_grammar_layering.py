@@ -45,6 +45,12 @@ GRAMMAR = Path(__file__).resolve().parent.parent.parent / "engine" / "grammar"
 # order is therefore an assertion about the split, not a convention — a
 # condition that grew a need for an effect would fail here.
 PARSE_LAYERS = [
+    # A card **name** is a literal string, not a description of a set of
+    # objects, so the scan that reads one shares no vocabulary with the filter
+    # parser above it. Split out of `nouns` when the cross-axis class union
+    # pushed that module past the guard below — the bottom of the parse side,
+    # because it reads tokens and nothing else.
+    "names",
     # What a noun phrase *describes* (`nouns`) sits under what it *points at*
     # (`references`): CR 109's "what is this object" against CR 115's "how many
     # does the spell choose, and is a player one of them". They were one module

@@ -325,16 +325,25 @@ def _spell_cast_filter(
     # dispatcher reading a narrowing nothing produced, which is round 1's
     # shape with the halves swapped: harmless while dead, and a second
     # opinion about what "an artifact spell" means the moment it was not.
-    return _cast_narrowing_admits(trig, card)
+    return _cast_narrowing_admits(game, permanent, trig, card)
 
 
-def _cast_narrowing_admits(trig: ParsedTriggeredAbility, card) -> bool:
+def _cast_narrowing_admits(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, card
+) -> bool:
     """Whether *card* answers this cast trigger's printed narrowing.
 
     The ordinal has to count the *same* set the trigger fires on — "your first
     **instant or sorcery** spell" counts instants and sorceries and nothing
     else — so the narrowing is asked once here and reused, rather than the
     counting loop growing its own copy of the type tests below.
+
+    *game* and *permanent* are here for the one narrowing that is not about the
+    cast card alone: "…that doesn't share a color with a creature you control"
+    compares it against a board, and "you" is the seat that controls the ability
+    (CR 109.5). Answering that one at a single fire site instead would put it
+    outside the set the ordinal counts, which is exactly the disagreement this
+    function exists to prevent.
     """
     type_line = card.type_line.lower()
     cast_types = trig.condition.payload.get("cast_types")
@@ -347,6 +356,25 @@ def _cast_narrowing_admits(trig: ParsedTriggeredAbility, card) -> bool:
                 return False
         elif cast_type not in type_line:
             return False
+    # "…a creature spell **that doesn't share a color with a creature you
+    # control**" (Invoke Prejudice). CR 105.2: an object's colours are a set, so
+    # "shares a colour" is a non-empty intersection — a colourless spell shares
+    # a colour with nothing, which is the reading that makes an artifact
+    # creature answer this trigger.
+    unshared = trig.condition.payload.get("unshared_color_filter")
+    if unshared:
+        from .subject_filters import subject_matches
+
+        observer = game.players.index(_controller_of(game, permanent))
+        cast_colors = set(card.colors or ())
+        for candidate in game.all_permanents():
+            if not subject_matches(
+                game, candidate, dict(unshared), observer=observer,
+                source=permanent,
+            ):
+                continue
+            if cast_colors & game._effective_colors(candidate):
+                return False
     return True
 
 
@@ -411,7 +439,7 @@ def _controller_cast_filter(
         caster = game.players[caster_index]
         matching = [
             spell for spell in caster.spells_cast_this_turn
-            if _cast_narrowing_admits(trig, spell)
+            if _cast_narrowing_admits(game, permanent, trig, spell)
         ]
         if len(matching) != 1 or matching[0] is not card:
             return False
@@ -447,7 +475,7 @@ def _opponent_cast_filter(
         return False
     # "…casts an **artifact** spell" (Citanul Druid), asked of the same helper
     # the other two cast kinds use.
-    return _cast_narrowing_admits(trig, card)
+    return _cast_narrowing_admits(game, permanent, trig, card)
 
 
 # The controller clause of a "whenever a <filter> becomes tapped" condition, as

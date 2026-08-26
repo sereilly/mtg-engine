@@ -362,7 +362,7 @@ def test_miscast_cannot_touch_a_creature_spell(set_pool):
 
     spec = derive_cast_spec(pool["Miscast"], program)
     assert spec == {"kind": "stack", "stack_card_types": ["instant", "sorcery"]}
-    assert game._enumerate_stack_targets(pool["Miscast"], spec) == [], (
+    assert game._enumerate_stack_targets(1, pool["Miscast"], spec) == [], (
         "a creature spell is not offered to an instant-or-sorcery counter"
     )
 

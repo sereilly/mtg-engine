@@ -216,9 +216,17 @@ class OracleInstructionsMixin:
         # The zone rides along so "…from anywhere other than their hand"
         # (Ghostly Pilferer) has something to test. Every cast announces it;
         # only a trigger that narrows on it reads it.
+        #
+        # `cast_card` rides this one for exactly the reason it rides its sibling
+        # above, and its absence here was a real gap rather than a distinction:
+        # an opponent-scoped trigger whose effect is *about* the spell — Invoke
+        # Prejudice's "counter that spell … where X is **its** mana value" —
+        # resolved with no object to find, logged that the spell was no longer
+        # on the stack, and let it through. Nothing in the pool had asked until
+        # a card did.
         emit(
             self, "opponent_casts_spell", subject=card, caster_index=caster_index,
-            cast_from_zone=cast_from_zone,
+            cast_from_zone=cast_from_zone, cast_card=card,
         )
 
     def _apply_self_resolved_hook(
