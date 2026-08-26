@@ -663,3 +663,104 @@ def test_702_14b_lifting_the_restriction_does_not_remove_the_ability():
     )
     assert ok
     assert attacker.has_keyword("islandwalk")
+
+
+# ---------------------------------------------------------------------------
+# 702.14 — landwalk whose quality is a supertype, and 509.1b's declaration cap
+# ---------------------------------------------------------------------------
+
+
+def _r27_land(name: str, type_line: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line},
+    )
+
+
+def _r27_walker_vs_land(keyword: str, land_type_line: str | None) -> bool:
+    """A creature with *keyword* attacks a defender who may control a land with
+    *land_type_line*. Returns whether the block was legal."""
+    attacker = Permanent(card=_mk_creature("Walker", 2, 2, keywords=(keyword,)))
+    board = [Permanent(card=_mk_creature("Blocker", 2, 2))]
+    if land_type_line is not None:
+        board.append(Permanent(card=_r27_land("Land", land_type_line)))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=board),
+    ])
+    _to_declare_blockers(game, [0])
+    ok, _ = game.declare_blockers(1, {0: 0})
+    return ok
+
+
+@pytest.mark.cr("702.14a", "702.14c")
+def test_702_14a_a_landwalk_quality_may_be_a_supertype():
+    """""[type]walk" … "can also be the card type land plus any combination of
+    land types, card types, and/or supertypes"." Legendary landwalk is the
+    quality in front of the family word rather than welded into it, and the
+    supertype is payload — a card printing snow or world landwalk needs no
+    code."""
+    assert not _r27_walker_vs_land("Legendary landwalk", "Legendary Land")
+    assert _r27_walker_vs_land("Legendary landwalk", "Land")
+    assert _r27_walker_vs_land("Legendary landwalk", None)
+
+
+@pytest.mark.cr("702.14c")
+def test_702_14c_a_subtype_landwalk_is_the_same_one_question():
+    """The control that the quality-first shape did not displace the welded
+    one: both resolve through the same requirement."""
+    assert not _r27_walker_vs_land("Islandwalk", "Basic Land - Island")
+    assert _r27_walker_vs_land("Islandwalk", "Basic Land - Forest")
+
+
+def _r27_capped_board(cap_text: str, blockers: int = 3):
+    """Three attackers into *blockers* creatures, with an enchantment printing
+    *cap_text* on the defender's side."""
+    attacking = [Permanent(card=_mk_creature(f"A{i}", 1, 1)) for i in range(3)]
+    board = [Permanent(card=_mk_creature(f"B{i}", 1, 1)) for i in range(blockers)]
+    board.append(Permanent(card=CardDefinition(
+        name="Cap", mana_cost="", cmc=0.0, type_line="Enchantment",
+        oracle_text=cap_text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Cap", "type_line": "Enchantment"},
+    )))
+    return Game(players=[
+        PlayerState(name="P1", battlefield=attacking),
+        PlayerState(name="P2", battlefield=board),
+    ])
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_a_cap_on_how_many_creatures_may_block_is_a_restriction():
+    """"No more than two creatures can block each combat." A restriction on the
+    declaration as a whole — no single blocker is the illegal one — so it is
+    checked over the finished assignment. The printed number is payload: the
+    same sentence with any other number is the same restriction."""
+    game = _r27_capped_board("No more than two creatures can block each combat.")
+    _to_declare_blockers(game, [0, 1])
+
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 0, 2: 1})
+    assert not ok
+    assert "block each combat" in msg
+
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 1})
+    assert ok, msg
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_the_tightest_cap_wins_when_two_are_on_the_battlefield():
+    """Each cap is a restriction in its own right, so obeying only the loosest
+    would break the tighter one."""
+    game = _r27_capped_board("No more than two creatures can block each combat.")
+    game.players[1].battlefield.append(Permanent(card=CardDefinition(
+        name="Tighter", mana_cost="", cmc=0.0, type_line="Enchantment",
+        oracle_text="No more than one creature can block each combat.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Tighter", "type_line": "Enchantment"},
+    )))
+    _to_declare_blockers(game, [0, 1])
+
+    ok, _ = game.declare_blockers(1, {0: 0, 1: 1})
+    assert not ok
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg

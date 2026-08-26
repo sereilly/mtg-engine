@@ -631,6 +631,11 @@ class LegalityMixin:
             # A sacrifice cost (Sacrifice) only offers the caster's own creatures.
             if spec.get("own_only") and seat != caster_index:
                 continue
+            # "…an opponent controls" — the activator's own permanents are not
+            # legal answers. The same seat test as `own_only` one line up, in
+            # the other direction.
+            if spec.get("opponent_only") and seat == caster_index:
+                continue
             for idx, perm in enumerate(player.battlefield):
                 if not self._permanent_matches_target_kind(perm, kind, spec, casting_aura):
                     continue

@@ -44,6 +44,7 @@ from engine.library_top import library_top_line
 from engine.prevention import prevention_claims_line
 from engine.replacements import replacement_claims_line
 from engine.enter_effects import enter_effect_line
+from engine.ante import is_ante_deck_line
 from engine.hand_size import hand_size_line
 from engine.untap_restrictions import self_untap_line
 from engine.grammar import compile_line
@@ -148,6 +149,11 @@ def _derived(normalized: str) -> bool:
         # spelling, so the artifact printings were unbacked by this guard while
         # the untap step read them perfectly well.
         or self_untap_line(normalized) is not None
+        # "Remove this card from your deck before playing if you're not playing
+        # for ante." — the thirteenth, and the only one whose enforcement site
+        # is outside the game: CR 113.6a's deck-construction instruction, read
+        # by `web/deck_legality.py` off the same constant the gate asks.
+        or is_ante_deck_line(normalized)
         # The strongest claim of all, and the last asked: **the grammar lowered
         # this line to an instruction**. "This creature gets +X/+0, where X is
         # the greatest power among creature cards in your graveyard" (Carrion

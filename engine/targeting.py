@@ -186,6 +186,15 @@ def _narrowing_flags(source: dict) -> dict:
         # that offered an opponent's creature would let a player choose a target
         # the effect then declines to affect, with nothing on screen saying why.
         flags["own_only"] = True
+    elif source.get("controller") == "opponent":
+        # "target artifact **an opponent controls**" (Hyperion Blacksmith). The
+        # mirror of `own_only` and a seat test for the same reason, so it is the
+        # picker's job rather than the permanent matcher's. Without it the
+        # narrowing had nowhere to go: `permanent_matches_filter` cannot answer
+        # a controller, so the lowering refused the line outright rather than
+        # let a "an opponent controls" ability untap the activator's own
+        # artifact — a restriction dropped in the player's favour.
+        flags["opponent_only"] = True
     if source.get("exclude_self"):
         # "up to two **other** target creatures you control" (Basri's Acolyte),
         # "**another** target creature" as a fight's opponent (Brash Taunter).

@@ -513,3 +513,113 @@ def test_506_3_the_next_turn_restriction_refuses_a_trigger_that_binds_no_blocked
         card_name="Probe Wall",
     )
     assert not attacks.usable
+
+
+# ---------------------------------------------------------------------------
+# 508.1c/d — a cap on how many creatures may attack
+# ---------------------------------------------------------------------------
+
+
+def _r27_cap_enchantment(text: str) -> CardDefinition:
+    return CardDefinition(
+        name="Cap", mana_cost="", cmc=0.0, type_line="Enchantment",
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Cap", "type_line": "Enchantment"},
+    )
+
+
+def _r27_attacker(name: str, text: str = "") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature — Test",
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Test",
+             "power": "1", "toughness": "1"},
+    )
+
+
+def _r27_attack_cap_game(cap_text: str | None, attacker_text: str = ""):
+    """Three attackers, with the cap enchantment (if any) on the defender's
+    side. Advanced to the declare-attackers step."""
+    attackers = [
+        _nosick(Permanent(card=_r27_attacker(f"A{i}", attacker_text)))
+        for i in range(3)
+    ]
+    defender_board = []
+    if cap_text is not None:
+        defender_board.append(Permanent(card=_r27_cap_enchantment(cap_text)))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=attackers),
+        PlayerState(name="P2", battlefield=defender_board),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+
+
+@pytest.mark.cr("508.1c")
+def test_508_1c_a_cap_on_attackers_makes_a_larger_declaration_illegal():
+    """"No more than two creatures can attack each combat." No single creature
+    is the illegal one, so this cannot be a per-creature predicate — it is a
+    restriction on the declaration, checked where the declaration is made."""
+    game = _r27_attack_cap_game("No more than two creatures can attack each combat.")
+
+    ok, msg = game.declare_attackers(0, [0, 1, 2])
+    assert not ok
+    assert "attack each combat" in msg
+
+    ok, msg = game.declare_attackers(0, [0, 1])
+    assert ok, msg
+
+
+@pytest.mark.cr("508.1c")
+def test_508_1c_the_printed_number_is_payload():
+    """A card printed with any other number is the same restriction. The count
+    is read out of the sentence, so the one-creature form needs no code — and
+    the noun agrees with it, which is why the plural is optional."""
+    game = _r27_attack_cap_game("No more than one creature can attack each combat.")
+
+    assert not game.declare_attackers(0, [0, 1])[0]
+    assert game.declare_attackers(0, [0])[0]
+
+
+@pytest.mark.cr("508.1c")
+def test_508_1c_nothing_caps_the_attack_without_such_a_permanent():
+    """The control: three attackers is a legal declaration on an ordinary
+    board."""
+    game = _r27_attack_cap_game(None)
+
+    ok, msg = game.declare_attackers(0, [0, 1, 2])
+    assert ok, msg
+
+
+@pytest.mark.cr("508.1d")
+def test_508_1d_a_requirement_cannot_force_a_declaration_past_a_restriction():
+    """"…the maximum possible number of requirements that could be obeyed
+    **without disobeying any restrictions**." Three creatures that attack each
+    combat if able, under a cap of two: attacking with two is legal, and
+    enforcing the third requirement anyway would make every declaration
+    illegal."""
+    game = _r27_attack_cap_game(
+        "No more than two creatures can attack each combat.",
+        attacker_text="This creature attacks each combat if able.",
+    )
+
+    ok, msg = game.declare_attackers(0, [0, 1])
+    assert ok, msg
+
+
+@pytest.mark.cr("508.1d")
+def test_508_1d_the_requirement_still_binds_below_the_cap():
+    """The control for the clause above: with room left under the cap, an able
+    creature that must attack still has to."""
+    game = _r27_attack_cap_game(
+        "No more than two creatures can attack each combat.",
+        attacker_text="This creature attacks each combat if able.",
+    )
+
+    ok, _ = game.declare_attackers(0, [0])
+    assert not ok

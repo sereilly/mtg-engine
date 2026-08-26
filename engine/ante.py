@@ -56,6 +56,23 @@ def is_ante_card(card: Any) -> bool:
     return ANTE_DECK_TEXT in text
 
 
+def is_ante_deck_line(normalized_line: str) -> bool:
+    """Whether *normalized_line* is the deck-construction instruction itself.
+
+    ``is_ante_card`` above asks about a whole card; this asks about one printed
+    line, which is what the compiler's support gate needs. Both read one
+    constant, so what bars the card from a deck and what claims the line cannot
+    come to describe different text.
+
+    The line is not an ability and does nothing while the game is running
+    (CR 113.6a: an instruction that functions outside the game). Its enforcement
+    site is deck construction — ``web/deck_legality.py`` refuses a deck holding
+    one unless the host is playing for ante — so claiming it here is a claim
+    about something the engine really does, not a line waved through.
+    """
+    return normalized_line.strip(" .").replace("’", "'") == ANTE_DECK_TEXT
+
+
 def ante_card_names(cards: Iterable[Any]) -> list[str]:
     """The names of the ante cards in *cards*, in order, without duplicates."""
     names: list[str] = []

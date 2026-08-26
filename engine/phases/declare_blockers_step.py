@@ -13,7 +13,10 @@ import random
 import re
 
 from ..auras import attached_combat_restrictions, aura_restriction_active
+from ..combat_restrictions import participation_cap
 from ..evasion_negation import negated_evasion_abilities
+from ..landwalk import land_satisfies, landwalk_requirement
+from ..layer_bridge import computed_abilities
 from ..subject_filters import subject_matches
 from ..models import Permanent
 from ..oracle import compile_card_oracle
@@ -21,17 +24,13 @@ from ..pt import add_pt_modifier
 from ..static_bonuses import conditional_static_holds
 from ..trigger_utils import matching_triggers
 
-# Landwalk keyword → the basic land subtype the defender must control for the
-# attacker to be unblockable (CR 702.14). Sourced from the attacker's printed
-# keywords or a granted "has_<type>walk" metadata flag (e.g. Goblin King).
-_LANDWALK_TO_LAND_TYPE = {
-    "plainswalk": "plains",
-    "islandwalk": "island",
-    "swampwalk": "swamp",
-    "mountainwalk": "mountain",
-    "forestwalk": "forest",
-    "desertwalk": "desert",
-}
+# Landwalk is not a fixed word list any more: what the defender must control is
+# the ability's printed **quality**, and CR 702.14a lets that quality be a land
+# subtype welded into the word ("islandwalk") or a supertype standing in front
+# of the family word ("legendary landwalk", Livonya Silone). `engine/landwalk.py`
+# reads both into one requirement, and the same reader admits the printed line
+# in `engine.oracle` — so a quality nothing here can test keeps its card
+# unsupported instead of shipping evasion that never applies.
 
 
 class DeclareBlockersStepMixin:
@@ -236,6 +235,28 @@ class DeclareBlockersStepMixin:
                     return False, (
                         f"{blocker.card.name} must block {attacker.card.name} "
                         "(Blaze of Glory)"
+                    )
+
+        # "No more than two creatures can block each combat." (Caverns of
+        # Despair.) The blocking twin of the attack cap, and a restriction on
+        # the declaration as a whole (CR 509.1b) rather than on any one pairing,
+        # so it is checked here rather than in `_can_block_attacker`. Counted
+        # across **every** defender's declaration: the sentence says "each
+        # combat", and one seat's blockers do not stop being blockers because
+        # another seat declares next. A Camouflage resolution is exempt for the
+        # reason menace and Lure are — the piles were matched at random, so
+        # there is no declaration to declare illegal.
+        if not _camouflage_resolution:
+            block_cap = participation_cap(self.all_permanents(), "block")
+            if block_cap is not None:
+                already = sum(
+                    len(other)
+                    for seat, other in self.combat_blockers.items()
+                    if seat != controller_index
+                )
+                if already + len(assignments) > block_cap:
+                    return False, (
+                        f"no more than {block_cap} creature(s) can block each combat"
                     )
 
         # Nested by defender (CR 802): only this defender's own entry is replaced,
@@ -638,28 +659,26 @@ class DeclareBlockersStepMixin:
         if defender_index is None:
             return False
         negated = self._negated_evasion_abilities()
-        for walk, land_type in _LANDWALK_TO_LAND_TYPE.items():
+        # Every ability the attacker currently has, asked one at a time whether
+        # it is a landwalk — rather than a fixed table of walk words, which
+        # could not hold a quality-first one. Computed through CR 613 layer 6,
+        # so a landwalk granted by an Aura (Burrowing, Fishliver Oil) counts
+        # alongside a printed one and ends when the Aura does, without this
+        # reader knowing an Aura exists; the `has_<walk>` metadata flags an
+        # older channel stamped are collected into layer 6 too.
+        for ability in sorted(computed_abilities(attacker)):
+            requirement = landwalk_requirement(ability)
+            if requirement is None:
+                continue
             # Switched off for blocking, but **not removed** — CR 702.14b makes
             # landwalk an evasion ability and this text lifts the restriction it
-            # creates, nothing more. `_has_keyword` still answers True below and
+            # creates, nothing more. `_has_keyword` still answers True
             # everywhere else, which is why the skip lives here rather than as a
             # layer-6 removal.
-            if walk in negated:
-                continue
-            # Computed through CR 613 layer 6, so a landwalk granted by an Aura
-            # (Burrowing, Fishliver Oil) counts alongside a printed one and
-            # ends when the Aura does — without this reader knowing an Aura
-            # exists. It used to read a `has_<walk>` flag the Aura stamped
-            # directly, which put the grant outside the layer system and needed
-            # a matching `lost_<walk>` flag to express removal; both are still
-            # collected into layer 6 for the effects that set them (Magical
-            # Hack remapping a landwalk word away).
-            if not self._has_keyword(attacker, walk):
+            if ability in negated:
                 continue
             for perm in self.controlled_by(defender_index):
-                if perm.card.primary_type != "land":
-                    continue
-                if perm.has_type(land_type):
+                if land_satisfies(perm, requirement):
                     return True
         return False
 

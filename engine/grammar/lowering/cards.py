@@ -137,11 +137,25 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
                 node=node,
             )
         kind = "discard_x_target_cards"
-    else:
-        if node.at_random:
+    elif node.at_random:
+        # "**That player**" names the seat a firing event recorded, and only the
+        # damage-trigger shape above knows one was. Under any other event this
+        # handler's ``context.target`` is a seat nobody chose, so the discard
+        # would empty the wrong hand while the card reported supported — which
+        # is why that shape is matched in full rather than folded in below.
+        if node.player.kind not in ("target_player", "target_opponent"):
             raise LoweringError(
-                "no handler discards a fixed number of cards at random", node=node
+                "no handler discards at random from a seat nobody targeted",
+                node=node,
             )
+        # "Target player discards a card at random." (Gwendlyn Di Corci.) The
+        # random handler again — the chooser is what picks the handler, and it
+        # is nobody here as much as it is for Mind Twist. The count rides in the
+        # payload rather than in the kind, so the variable and the printed forms
+        # are one handler.
+        kind = "discard_x_target_cards"
+        payload["amount"] = amount
+    else:
         kind = "discard_target_cards"
         payload["amount"] = amount
     _describe_targets(payload, node.player)

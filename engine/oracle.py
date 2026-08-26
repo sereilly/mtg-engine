@@ -1718,6 +1718,16 @@ def _qualified_keyword_part(part: str) -> bool:
 
     if is_bands_with_other(part):
         return _band_implemented(part)
+    # "Legendary landwalk" (CR 702.14a's quality-first shape). Same reasoning
+    # again: the ability's name is built from the printed quality, so no word
+    # list can hold it — what admits the line is `engine/landwalk.py`, the
+    # reader the declare-blockers step *enforces* it with. A quality that
+    # reader cannot test keeps the line refused, because admitting the word
+    # would ship a creature whose evasion silently never applies.
+    from .landwalk import is_landwalk
+
+    if is_landwalk(part):
+        return True
     for prefix, admit in (
         ("protection from ", _protection_quality_word),
         # Hexproof stays colour-only: _can_be_targeted's hexproof branch reads
@@ -2226,6 +2236,19 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     from .hand_size import hand_size_line
 
     if hand_size_line(normalized):
+        return True
+    # "Remove this card from your deck before playing if you're not playing for
+    # ante." (Tempest Efreet.) Not an ability at all — CR 113.6a, an instruction
+    # that functions outside the game — and its enforcement site is deck
+    # construction, which `engine/ante.py` and `web/deck_legality.py` already
+    # implement in full. `SUPPORTED_SPELL_PATTERNS` has claimed it for the spell
+    # path all along; a creature printing the same line was reported "text too
+    # complex" for the one line on it the engine handles completely, which hid
+    # the card's real blocker behind a solved one. Asked of the reader that bars
+    # the card from a deck, so the claim and the enforcement are one constant.
+    from .ante import is_ante_deck_line
+
+    if is_ante_deck_line(normalized):
         return True
     # "You may play two additional lands on each of your turns." (Azusa, Lost
     # but Seeking.) The land-drop path derives the allowance from every

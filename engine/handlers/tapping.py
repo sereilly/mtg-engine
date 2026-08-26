@@ -517,17 +517,27 @@ def tap_or_untap_target(game: Game, instruction: OracleInstruction, context: Ora
     # lowering. An explicitly chosen non-matching permanent fizzles instead of
     # sliding onto an arbitrary legal one — the same rule the filtered tap above
     # follows, and for the same reason.
-    narrowed = any(
-        key in instruction.payload
-        for key in ("type_filter", "subtype_filter", "color_filter")
-    )
+    # Through `subject_matches` rather than the pure matcher, with the resolving
+    # seat as the observer: "an opponent controls" (Hyperion Blacksmith) is a
+    # seat comparison (CR 109.5), not something readable off the permanent. The
+    # lowering admits exactly what this answers, and the picker carries the same
+    # narrowing, so the list offered and the list accepted are one list.
+    from ..subject_filters import subject_matches
+
+    described = {
+        key: value for key, value in instruction.payload.items() if key != "targets"
+    }
+    observer = game.players.index(context.caster) if context.caster in game.players else None
     perm = resolve_target_permanent(
         game, context,
         predicate=(
-            (lambda p: permanent_matches_filter(p, instruction.payload))
-            if narrowed else (lambda p: True)
+            (lambda p: subject_matches(
+                game, p, described,
+                observer=observer, source=context.source_permanent,
+            ))
+            if described else (lambda p: True)
         ),
-        fallback_on_invalid_choice=not narrowed,
+        fallback_on_invalid_choice=not described,
     )
     if perm is None:
         game.log.append("No valid permanent to tap or untap")
