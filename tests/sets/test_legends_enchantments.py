@@ -1201,3 +1201,163 @@ def test_greater_realm_offers_only_sources_of_the_printed_colours(set_pool):
         0, pool["Greater Realm of Preservation"], spec, for_cast=False
     )
     assert sorted(t["name"] for t in offered) == ["Black Source", "Red Source"]
+
+
+# ---------------------------------------------------------------------------
+# Horror of Horrors — "Sacrifice a Swamp: Regenerate target black creature."
+# ---------------------------------------------------------------------------
+
+
+def _coloured_creature(name: str, colors: tuple[str, ...]) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=colors, color_identity=colors, keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _horror_game(set_pool, lea_cards, *, black_creature: bool = True):
+    """Horror of Horrors, a Swamp to feed it, and a white creature to prove the
+    colour narrowing with — plus, by default, the black one it may shield.
+
+    The Swamp sits **before** the creatures on purpose: paying the cost
+    renumbers every later slot (CR 400.7), so a resolution that read the slot it
+    was handed rather than the identity would shield the wrong creature.
+    """
+    pool = set_pool("LEG")
+    battlefield = [
+        Permanent(card=pool["Horror of Horrors"]),
+        Permanent(card=lea_cards["Swamp"]),
+    ]
+    black = None
+    if black_creature:
+        black = Permanent(card=_coloured_creature("Black Creature", ("B",)))
+        battlefield.append(black)
+    white = Permanent(card=_coloured_creature("White Creature", ("W",)))
+    battlefield.append(white)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=battlefield),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    return game, black, white
+
+
+def test_horror_of_horrors_regenerates_a_black_creature(set_pool, cards):
+    """The whole card: the Swamp is eaten as the cost (CR 601.2h) and the black
+    creature — not the white one that slides into its slot — comes back with a
+    regeneration shield."""
+    game, black, white = _horror_game(set_pool, cards)
+
+    result = game.activate_permanent_ability(
+        0, "Horror of Horrors", permanent_index=0, target_player_index=0,
+        target_permanent_index=2,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert black.regeneration_shield == 1
+    assert white.regeneration_shield == 0
+    assert not any(
+        p.card.name == "Swamp" for p in game.players[0].battlefield
+    ), "the Swamp was not sacrificed"
+
+
+def test_horror_of_horrors_will_not_shield_a_white_creature(set_pool, cards):
+    """"target **black** creature": the colour is the narrowing, and a narrowing
+    the effect ignores is an effect wider than the card."""
+    game, _black, white = _horror_game(set_pool, cards)
+
+    game.activate_permanent_ability(
+        0, "Horror of Horrors", permanent_index=0, target_player_index=0,
+        target_permanent_index=3,
+    )
+    game._settle()
+
+    assert white.regeneration_shield == 0
+
+
+def test_horror_of_horrors_is_refused_with_no_black_creature_to_shield(
+    set_pool, cards
+):
+    """CR 602.2b via 601.2c: an ability whose only object target cannot be
+    filled is refused with nothing paid — so the Swamp survives rather than
+    being eaten for an effect that could never land."""
+    game, _black, _white = _horror_game(set_pool, cards, black_creature=False)
+
+    result = game.activate_permanent_ability(
+        0, "Horror of Horrors", permanent_index=0, target_player_index=0,
+        target_permanent_index=2,
+    )
+
+    assert not result.supported
+    assert any(
+        p.card.name == "Swamp" for p in game.players[0].battlefield
+    ), "the cost was paid for a refused activation"
+
+
+# ---------------------------------------------------------------------------
+# Land's Edge — "Discard a card: If the discarded card was a land card, this
+# enchantment deals 2 damage to target player or planeswalker. Any player may
+# activate this ability."
+# ---------------------------------------------------------------------------
+
+
+def _lands_edge_game(set_pool, lea_cards, held: str, opponent_holds: str = "Forest"):
+    edge = Permanent(card=set_pool("LEG")["Land's Edge"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[edge], hand=[lea_cards[held]]),
+        PlayerState(name="P2", hand=[lea_cards[opponent_holds]]),
+    ])
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_lands_edge_burns_when_the_discard_was_a_land(set_pool, cards):
+    game = _lands_edge_game(set_pool, cards, "Mountain")
+
+    result = game.activate_permanent_ability(
+        0, "Land's Edge", permanent_index=0, target_player_index=1, cost_hand_index=0,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.players[1].life == 18
+    assert [c.name for c in game.players[0].graveyard] == ["Mountain"]
+
+
+def test_lands_edge_burns_nobody_when_the_discard_was_not_a_land(set_pool, cards):
+    """The condition reads what the *cost* ate (CR 608.2h) — the card is in the
+    graveyard by the time the ability resolves, so an ability that read the
+    board instead would answer off whatever else is lying around."""
+    game = _lands_edge_game(set_pool, cards, "Lightning Bolt")
+
+    result = game.activate_permanent_ability(
+        0, "Land's Edge", permanent_index=0, target_player_index=1, cost_hand_index=0,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.players[1].life == 20, "a non-land discard dealt damage"
+    assert [c.name for c in game.players[0].graveyard] == ["Lightning Bolt"]
+
+
+def test_lands_edge_may_be_activated_by_the_other_player(set_pool, cards):
+    """"Any player may activate this ability." The opponent pays out of their
+    own hand and aims it at the enchantment's controller."""
+    game = _lands_edge_game(set_pool, cards, "Mountain", opponent_holds="Forest")
+
+    result = game.activate_permanent_ability(
+        1, "Land's Edge", target_player_index=0, cost_hand_index=0,
+        source_controller_index=0,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.players[0].life == 18
+    assert [c.name for c in game.players[1].graveyard] == ["Forest"]
+    assert [c.name for c in game.players[0].hand] == ["Mountain"], (
+        "the activator's own hand pays the cost"
+    )

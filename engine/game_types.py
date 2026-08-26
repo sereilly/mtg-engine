@@ -43,6 +43,12 @@ CHOICE_KEYS = (
     # ``Permanent`` that is no longer on any battlefield, so this is the only
     # place it survives (CR 608.2h last-known information).
     "sacrificed_for_cost",
+    # The cards a printed **discard** cost ate, same channel and same reason:
+    # "If the discarded card was a land card" (Land's Edge) is asked when the
+    # card is already in a graveyard, which CR 400.7 makes a different object.
+    # A list, because the cost's count is payload — one card today, N the day a
+    # card prints "Discard two cards:".
+    "discarded_for_cost",
 )
 
 

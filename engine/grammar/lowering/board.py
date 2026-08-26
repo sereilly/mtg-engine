@@ -449,20 +449,19 @@ def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
     if not (isinstance(subject, ast.TargetSpec) and subject.quantifier == "target"):
         raise LoweringError("no handler for regenerating this subject", node=node)
     filt = subject.filter
-    payload: dict[str, object] = {}
-    # Elephant Graveyard regenerates a *target Elephant*. The handler honours
-    # exactly one restriction, `subtype_filter`; anything else it would ignore
-    # must be refused rather than dropped, or the shield lands on the wrong
-    # creature while the card still reports as supported.
-    if filt.subtypes:
-        if len(filt.subtypes) > 1:
-            raise LoweringError("no handler for a multi-subtype regenerate", node=node)
-        payload["subtype_filter"] = filt.subtypes[0]
-    if (
-        filt.colors or filt.excluded_colors or filt.excluded_types
-        or filt.with_keywords or filt.without_keywords or filt.attacking or filt.blocking
-    ):
+    # The printed narrowing is payload, not a hand-listed key. Elephant
+    # Graveyard's "target Elephant" and Horror of Horrors' "target black
+    # creature" are the same noun phrase, and the shield's eligibility test is
+    # the one matcher every other filter reader uses. What must not ride along
+    # is a narrowing that matcher cannot answer — the shield would land on a
+    # creature the card never named — so the payload is gated by
+    # `object_only_filter`: the resolution picks from a single player's
+    # battlefield, with no observer seat and no source to compare against.
+    described = _filter_payload(filt)
+    carried = object_only_filter(described)
+    if carried is None:
         raise LoweringError("no handler honours this regenerate restriction", node=node)
+    payload: dict[str, object] = dict(carried)
     _describe_targets(payload, subject)
     return (OracleInstruction("grant_regeneration_to_target_creature", "", payload),)
 

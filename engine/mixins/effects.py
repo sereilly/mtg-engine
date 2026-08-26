@@ -350,21 +350,36 @@ class EffectsMixin:
         self,
         target: PlayerState,
         target_permanent_index: int | None = None,
-        subtype_filter: str | None = None,
+        filter: dict | None = None,
+        target_permanent_id: int | None = None,
     ) -> bool:
         # Honor an explicitly chosen creature (e.g. Death Ward's "Regenerate target
         # creature" — the player picks which one; an explicit illegal choice
         # fizzles). Fall back to the first creature only with no explicit choice.
-        # Elephant Graveyard restricts the pool to a subtype ("target Elephant").
+        # *filter* is the printed noun phrase as payload — Elephant Graveyard's
+        # "target Elephant", Horror of Horrors' "target black creature" — tested
+        # by the one matcher, so a phrase is narrowed here exactly as the picker
+        # in `legality.py` narrows it.
+        from ..handlers._common import permanent_matches_filter
+
+        described = filter or {}
+
         def _eligible(perm: Permanent) -> bool:
             if not perm.is_creature:
                 return False
-            if subtype_filter and subtype_filter not in perm.effective_card.type_line.lower():
-                return False
-            return True
+            return permanent_matches_filter(perm, described)
 
+        # By id first, index second. The slot alone is not the target: this
+        # ability's own cost may remove a permanent (Horror of Horrors eats a
+        # Swamp) and CR 400.7 renumbers every later slot, so an index chosen at
+        # CR 601.2c and read back after CR 601.2h names a different creature.
         chosen = pick_target_permanent(
-            target, target_permanent_index, predicate=_eligible, fallback_on_invalid_choice=False
+            target,
+            target_permanent_index,
+            game=self,
+            permanent_id=target_permanent_id,
+            predicate=_eligible,
+            fallback_on_invalid_choice=False,
         )
         if chosen is None:
             return False

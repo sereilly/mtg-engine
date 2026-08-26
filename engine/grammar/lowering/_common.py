@@ -705,6 +705,38 @@ def _lower_condition(
             "kind": "exiled_card_was",
             "card_types": list(condition.filter.card_types),
         }
+    if isinstance(condition, ast.DiscardedCardWas):
+        # Same discipline as the two back-references above, with the producer
+        # named in the printed words: an ability that discarded nothing has no
+        # record to read, and the evaluator would answer False forever while the
+        # card compiled clean. The one producer today is the ability's own
+        # discard cost (CR 601.2h / 602.2b), seeded by `lower_ability` off the
+        # cost clause — the only place the cost and the effect are both in view.
+        if "discarded_cards" not in produced:
+            raise LoweringError(
+                "'the discarded card' with nothing in this ability that "
+                "discarded one",
+                node=condition,
+            )
+        leftover = _restrictions_beyond(
+            condition.filter, {"card_types", "is_card", "type_match"}
+        )
+        if leftover:
+            raise LoweringError(
+                "the discarded-card test cannot ask this of a card: "
+                + ", ".join(leftover),
+                node=condition,
+            )
+        if not condition.filter.card_types:
+            raise LoweringError(
+                "'the discarded card was …' reads a card's printed type line",
+                node=condition,
+            )
+        return {
+            "kind": "discarded_card_was",
+            "card_types": list(condition.filter.card_types),
+            "type_match": condition.filter.type_match,
+        }
     if isinstance(condition, ast.EveryOf):
         # Lowered whole rather than folded into one flattened payload: each part
         # keeps its own kind, so a conjunction of two *different* condition

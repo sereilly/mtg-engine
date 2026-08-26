@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import resolve_target_permanent
+from ._common import _one_choice, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -16,8 +16,9 @@ def grant_regeneration_to_target_creature(game: Game, instruction: OracleInstruc
     target = context.target
     regenerated = game._grant_regeneration_shield(
         target,
-        target_permanent_index=context.target_permanent_index,
-        subtype_filter=instruction.payload.get("subtype_filter"),
+        target_permanent_index=_one_choice(context.target_permanent_index),
+        target_permanent_id=_one_choice(context.target_permanent_id),
+        filter=instruction.payload,
     )
     game.log.append("Regeneration shield granted" if regenerated else "No valid creature to regenerate")
     return True, "resolved"

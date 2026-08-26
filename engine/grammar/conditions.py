@@ -233,6 +233,15 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         stream.accept_word("a", "an")
         return ast.ItWas(parse_object_filter(stream))
 
+    # "if **the discarded card** was a land card" (Land's Edge). The same
+    # past-tense back-reference as the clause above, naming its producer in
+    # words instead of with a pronoun — which is why it is a separate node: the
+    # sentence says *which* record it means, and reading it as "it" would let
+    # the condition answer off whatever an earlier step happened to write.
+    if stream.accept_phrase("the", "discarded", "card", "was"):
+        stream.accept_word("a", "an")
+        return ast.DiscardedCardWas(parse_object_filter(stream))
+
     # "if it's a creature or land card" (Track Down) — the present-tense twin of
     # the clause above, and a different question: that one asks what an object
     # *was* before it left a zone, this one asks what a card revealed by an
