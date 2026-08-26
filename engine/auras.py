@@ -353,7 +353,17 @@ def aura_additional_mana_on_tap(oracle_text: str) -> str | None:
     return None
 
 
-_ATTACHED_TRIGGER = re.compile(rf"^when(?:ever)? {_ATTACHED} .+$")
+# A trigger whose *condition* is about the permanent this Aura or Equipment is
+# attached to. The attached word need not open the sentence: Imprison's
+# condition is "whenever a player activates an ability of **enchanted
+# creature** …", where the opening noun is a player and the attached permanent
+# is three words in. Bounded to before the first comma, which is where a
+# trigger condition ends everywhere in this engine — so the word has to be part
+# of what the trigger fires *on*, never part of what it then does.
+#
+# Widening the shape widens nothing about the claim: what follows still has to
+# compile a real instruction, or be one of the three named dispatchers below.
+_ATTACHED_TRIGGER = re.compile(rf"^when(?:ever)? [^,]*\b{_ATTACHED} .+$")
 
 # "When enchanted creature dies, this Aura deals damage equal to that
 # creature's toughness to the creature's controller." (Creature Bond.)
@@ -714,6 +724,48 @@ def auras_attached_to(permanent) -> list:
     only ever want "an" Aura.
     """
     return list(permanent.metadata.get("attached_auras") or [])
+
+
+def attached_subject_triggers(game, host, condition_kinds, payload_key):
+    """``(seat, attachment, trig)`` for every trigger of something attached to
+    *host* whose condition is about the permanent it is attached to.
+
+    The combat fire sites scan a creature's **own** ``effective_card``, and an
+    attached Aura's abilities are not on it — an Aura's ability is the Aura's,
+    controlled by the Aura's controller (CR 113.7a), not a granted ability of
+    its host. So an Aura printing "whenever enchanted creature attacks or
+    blocks" (Imprison) is invisible to those scans, exactly as "when enchanted
+    creature dies" was until ``mixins/helpers.py`` grew the branch this
+    function generalises.
+
+    *payload_key* is the narrowing the condition's own table wrote when it read
+    the word "enchanted" — so a trigger printed about "this creature" is not
+    picked up here and one printed about the attachment's host is not picked up
+    by the host's own scan. One condition kind, two dispatch scopes, and the
+    payload is what tells them apart.
+    """
+    from .trigger_utils import matching_triggers
+
+    found = []
+    for attachment in auras_attached_to(host):
+        seat = game.controller_index_of(attachment)
+        if seat is None:
+            continue
+        for trig in matching_triggers(
+            attachment.effective_card, condition_kinds=condition_kinds
+        ):
+            noun = trig.condition.payload.get(payload_key)
+            if not noun:
+                continue
+            # The printed noun is tested rather than assumed: "enchanted
+            # **creature** attacks" is not satisfied by an Equipment on an
+            # artifact that an animation has not made a creature (CR 613
+            # layer 4), and a word consumed and never read is a word that
+            # could be deleted.
+            if not host.has_type(str(noun)):
+                continue
+            found.append((seat, attachment, trig))
+    return found
 
 
 def aura_attach_refusal(game, aura, host) -> str | None:

@@ -229,6 +229,24 @@ def _lower_destroy(
             OracleInstruction("destroy_attached_permanent", "", attached_payload),
         )
 
+    # "**Destroy this Aura.**" (Imprison.) The sentence names its own source —
+    # the SELF token, or "this <type>" where the type is the source's own — so
+    # like the attached destroy above it chooses nothing and there is nothing
+    # for a picker to offer. Its own handler rather than the targeted one for
+    # exactly that reason: routed through `destroy_target_permanent` the
+    # ability would ask for a pick the card never printed and then destroy
+    # whichever permanent the resolution context happened to carry.
+    #
+    # Above the "that" branch below, and not folded into it: "that creature" is
+    # the object a trigger's *event* was about and only exists under an event
+    # that recorded one, while "this Aura" is the ability's source and is
+    # answerable under every event and none.
+    if _is_source(spec):
+        self_payload: dict[str, object] = {}
+        if node.no_regen:
+            self_payload["bypass_regeneration"] = True
+        return (OracleInstruction("destroy_self", "", self_payload),)
+
     # "…destroy **that planeswalker**." (Hooded Blightfang.) "That" is not a
     # target the card ever asked for — it is the object the trigger's event was
     # about, which the fire site stamps onto the stack item by permanent id. So

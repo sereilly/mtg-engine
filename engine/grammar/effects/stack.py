@@ -63,6 +63,23 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # none of them can follow an ability.
         return ast.CounterAbility(subject, unless_pays=_parse_unless_pays(stream))
     if subject is None:
+        # "**Counter that ability.**" (Imprison.) The ability the trigger's own
+        # condition was about, not one this sentence chose — so it is the bound
+        # quantifier, exactly as "that spell" below is, and it reaches
+        # `CounterAbility` rather than the spell node because an ability has no
+        # card to send to a graveyard (CR 113.7a).
+        #
+        # Read here rather than through `parse_target_spec`, which would have to
+        # admit "ability" as a noun phrase a matcher could test; it is not one,
+        # and `references.parse_player_ref` already keeps the word out of
+        # `_GENERIC_NOUNS` for that reason.
+        bound_ability = stream.mark()
+        if stream.accept_phrase("that", "ability"):
+            return ast.CounterAbility(
+                ast.TargetSpec("that", ast.ObjectFilter()),
+                unless_pays=_parse_unless_pays(stream),
+            )
+        stream.reset(bound_ability)
         # "counter **that spell**" (Lofty Denial's second sentence, Invoke
         # Prejudice's trigger) — a spell something already named, not a second
         # choice. Its own quantifier for the reason round 75's "those creatures"

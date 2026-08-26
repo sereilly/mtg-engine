@@ -158,6 +158,15 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
     """
     card = context.card
     chosen = context.stack_target
+    if instruction.payload.get("bound_to_trigger"):
+        # "**Counter that ability.**" (Imprison.) The ability is the one the
+        # trigger fired on, found on the stack by identity — CR 603.3 put this
+        # trigger *above* it, so the stack top is this ability's own object and
+        # anything activated in response sits between the two. The same shape
+        # `counter_top_stack_spell` uses for "counter it", and by identity for
+        # the same reason: two activations of the same ability are two objects.
+        bound = (context.trigger_context or {}).get("activated_ability_item")
+        chosen = next((item for item in game.stack if item is bound), None)
     if chosen is None or chosen not in game.stack:
         game.log.append(f"{card.name}: the targeted ability is no longer on the stack")
         return True, "resolved"

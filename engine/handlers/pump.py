@@ -1107,27 +1107,6 @@ def grant_self_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     return True, "resolved"
 
 
-@effect_handler("grant_islandwalk_and_linked_destroy")
-def grant_islandwalk_and_linked_destroy(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Sandals of Abdallah: "Target creature gains islandwalk until end of
-    turn. When that creature dies this turn, destroy this artifact." The grant
-    is an until-end-of-turn layer-6 grant; the death link is recorded on the
-    creature and drained by _permanent_to_graveyard + the state-based sweep."""
-    card = context.card
-    source_permanent = context.source_permanent
-    target_creature = resolve_target_permanent(game, context)
-    if target_creature is None:
-        game.log.append(f"{card.name}: no valid creature target")
-        return True, "resolved"
-    grant_keyword(target_creature, "islandwalk", duration="end_of_turn")
-    if source_permanent is not None:
-        links = target_creature.metadata.setdefault("on_death_destroy_permanents", [])
-        if source_permanent not in links:
-            links.append(source_permanent)
-    game.log.append(f"{target_creature.card.name} gains islandwalk until end of turn ({card.name})")
-    return True, "resolved"
-
-
 @effect_handler("set_base_pt_target_until_eot")
 def set_base_pt_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Sorceress Queen ("has base power and toughness 0/2") / Singing Tree

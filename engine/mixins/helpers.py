@@ -543,13 +543,6 @@ class GameHelpersMixin:
             # the controller the permanent last had; the owner is looked up
             # separately precisely because the two differ under Control Magic.
             player.creatures_died_under_your_control_this_turn += 1
-            # Sandals of Abdallah: "When that creature dies this turn, destroy
-            # this artifact." Flag the linked artifact(s); the state-based
-            # sweep destroys them (a battlefield rebuild here could race the
-            # sweep loop that is moving this creature)."""
-            linked = permanent.metadata.pop("on_death_destroy_permanents", None)
-            for artifact in linked or ():
-                artifact.metadata["destroy_linked_death"] = True
             if next(matching_triggers(
                 permanent.effective_card,
                 condition_kinds={"dies"},

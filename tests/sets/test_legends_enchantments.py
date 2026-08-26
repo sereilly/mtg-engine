@@ -2007,3 +2007,220 @@ def test_puppet_master_buys_itself_back_for_three_blue(set_pool):
 
         assert len(game.players[0].hand) == expected_hand
         assert game.players[0].mana_pool["U"] == expected_pool
+
+
+# ---------------------------------------------------------------------------
+# Imprison (round 34) — the last of the set's three "you may pay {1}" Auras,
+# and the one whose two triggers are about the creature it enchants rather
+# than about itself.
+# ---------------------------------------------------------------------------
+
+
+def _r34_nosick(permanent: Permanent) -> Permanent:
+    permanent.metadata["summoning_sick"] = False
+    permanent.entered_turn = -5
+    return permanent
+
+
+def _r34_imprison_on(set_pool, catalog_by_name, host_name: str):
+    """Imprison (P0's) attached to *host_name* (P1's), with three Swamps for P0
+    so the {1} offer is affordable. Returns ``(game, aura, host)``."""
+    aura = Permanent(card=set_pool("LEG")["Imprison"])
+    host = _r34_nosick(Permanent(card=catalog_by_name[host_name]))
+    lands = [
+        _r34_nosick(Permanent(card=catalog_by_name["Swamp"])) for _ in range(3)
+    ]
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=[aura] + lands),
+        PlayerState(name="P1", battlefield=[host]),
+    ])
+    attach_aura(aura, host)
+    return game, aura, host
+
+
+def _r34_declared_attack(set_pool, catalog_by_name):
+    """A declared attack with Imprison on the attacker, controlled by the
+    defending player — which is how the card is played."""
+    attacker = _r34_nosick(Permanent(card=catalog_by_name["Grizzly Bears"]))
+    aura = Permanent(card=set_pool("LEG")["Imprison"])
+    lands = [
+        _r34_nosick(Permanent(card=catalog_by_name["Swamp"])) for _ in range(3)
+    ]
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=[attacker]),
+        PlayerState(name="P1", battlefield=[aura] + lands),
+    ])
+    attach_aura(aura, attacker)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    return game, aura, attacker
+
+
+def test_imprison_compiles_both_of_its_triggers_and_the_self_destroy(set_pool):
+    """Three printed lines, and the card gains nothing unless all three land.
+
+    Both triggers are the same offer with a different consequence: pay and the
+    ability is countered / the creature leaves combat, decline and the Aura
+    destroys itself.
+    """
+    program = compile_card_oracle(set_pool("LEG")["Imprison"])
+    assert program.supported
+
+    kinds = {trig.condition.kind for trig in program.triggered_abilities}
+    assert kinds == {"nonmana_ability_activated", "creature_attacks_or_blocks"}
+
+    for trig in program.triggered_abilities:
+        assert trig.instruction.kind == "may"
+        assert trig.instruction.payload["cost"] == {"generic": 1}
+        assert [
+            step.kind for step in trig.instruction.payload["otherwise"]
+        ] == ["destroy_self"], "declining destroys the Aura, not the creature"
+
+    by_kind = {t.condition.kind: t for t in program.triggered_abilities}
+    assert [
+        step.kind
+        for step in by_kind["nonmana_ability_activated"].instruction.payload["then"]
+    ] == ["counter_stack_ability"]
+    assert [
+        step.kind
+        for step in by_kind["creature_attacks_or_blocks"].instruction.payload["then"]
+    ] == ["tap_enchanted_creature", "remove_from_combat"]
+
+
+def test_imprison_counters_the_tap_ability_its_controller_pays_for(
+    set_pool, catalog_by_name
+):
+    """"…you may pay {1}. If you do, counter that ability."
+
+    The trigger is announced after the ability is on the stack (CR 603.3), so
+    "that ability" is there to be countered — Prodigal Sorcerer's ping never
+    happens and the Aura survives.
+    """
+    game, aura, host = _r34_imprison_on(
+        set_pool, catalog_by_name, "Prodigal Sorcerer"
+    )
+    game.active_player_index = 1
+
+    game.queue_permanent_ability(1, "Prodigal Sorcerer")
+    game.resolve_stack(pause_for_choices=True)
+    assert [choice.kind for choice in game.pending_choices] == ["optional_pay"]
+
+    assert game.confirm_optional_pay(0, "Imprison", accept=True)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert game.players[0].life == 20, "the countered ability dealt no damage"
+    assert aura in game.players[0].battlefield
+
+
+def test_imprison_destroys_itself_when_its_controller_declines(
+    set_pool, catalog_by_name
+):
+    """"If you don't, destroy this Aura." — and the ability resolves."""
+    game, aura, host = _r34_imprison_on(
+        set_pool, catalog_by_name, "Prodigal Sorcerer"
+    )
+    game.active_player_index = 1
+
+    game.queue_permanent_ability(1, "Prodigal Sorcerer")
+    game.resolve_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(0, "Imprison", accept=False)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert game.players[0].life == 19, "the ability was not countered"
+    assert aura not in game.players[0].battlefield
+    assert [card.name for card in game.players[0].graveyard] == ["Imprison"]
+
+
+def test_a_mana_ability_of_the_enchanted_creature_does_not_trigger_imprison(
+    set_pool, catalog_by_name
+):
+    """"…that isn't a mana ability." (CR 605.3a: it never uses the stack.)
+
+    Llanowar Elves' {T} is the same printed cost and the same tap, and the Aura
+    must not answer to it — the sentence excludes it in so many words.
+    """
+    game, aura, host = _r34_imprison_on(set_pool, catalog_by_name, "Llanowar Elves")
+    game.active_player_index = 1
+
+    game.queue_permanent_ability(1, "Llanowar Elves")
+
+    assert not game.pending_choices, "a mana ability is not the printed event"
+    assert game.players[1].mana_pool.get("G") == 1
+
+
+def test_imprison_taps_the_enchanted_attacker_and_takes_it_out_of_combat(
+    set_pool, catalog_by_name
+):
+    """"…tap the creature, remove it from combat…"
+
+    "The creature" is the trigger's own subject — the creature the Aura
+    enchants — and "it" is what that tap recorded, which is why the removal
+    finds anything at all.
+    """
+    game, aura, attacker = _r34_declared_attack(set_pool, catalog_by_name)
+    game.resolve_stack(pause_for_choices=True)
+    assert [choice.player_index for choice in game.pending_choices] == [1]
+
+    assert game.confirm_optional_pay(1, "Imprison", accept=True)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert attacker.tapped
+    assert not attacker.attacking
+    assert game.combat_attackers == {}
+    assert aura in game.players[1].battlefield
+
+
+def test_declining_on_an_attack_destroys_imprison_and_leaves_the_attack(
+    set_pool, catalog_by_name
+):
+    game, aura, attacker = _r34_declared_attack(set_pool, catalog_by_name)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert game.confirm_optional_pay(1, "Imprison", accept=False)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert attacker.attacking
+    assert game.combat_attackers == {0: 1}
+    assert aura not in game.players[1].battlefield
+
+
+def test_removing_the_enchanted_blocker_leaves_its_attacker_unblocked(
+    set_pool, catalog_by_name
+):
+    """"…and creatures it was blocking that had become blocked by only that
+    creature this combat become unblocked."
+
+    CR 506.4c's own consequence, which one removal seam already performs — so
+    the printed clause is consumed as the restatement it is, and this is the
+    test that it is true.
+    """
+    attacker = _r34_nosick(Permanent(card=catalog_by_name["Hill Giant"]))
+    aura = Permanent(card=set_pool("LEG")["Imprison"])
+    lands = [
+        _r34_nosick(Permanent(card=catalog_by_name["Swamp"])) for _ in range(3)
+    ]
+    blocker = _r34_nosick(Permanent(card=catalog_by_name["Grizzly Bears"]))
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=[attacker, aura] + lands),
+        PlayerState(name="P1", battlefield=[blocker]),
+    ])
+    attach_aura(aura, blocker)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    game.resolve_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(0, "Imprison", accept=True)
+    game.resolve_stack(pause_for_choices=True)
+
+    assert blocker.tapped
+    assert game.combat_blockers == {}
+    assert not attacker.blocked, "its only blocker left combat"

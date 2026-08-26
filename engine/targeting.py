@@ -380,7 +380,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "grant_target_keyword_until_eot": {"kind": "creature"},
     "grant_target_ability_text": {"kind": "creature"},
     "add_named_counter_to_target": {"kind": "creature"},
-    "grant_islandwalk_and_linked_destroy": {"kind": "creature"},
     "grant_flying_and_delayed_destruction": {"kind": "creature"},
     "grant_unblockable_to_target": {"kind": "creature"},
     "grant_unblockable_to_low_power_target": {"kind": "creature"},

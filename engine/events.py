@@ -590,6 +590,43 @@ def _becomes_tapped_filter(
     return tapped_controller == observer
 
 
+@event_filter("nonmana_ability_activated")
+def _nonmana_ability_activated_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever a player activates an ability of **enchanted creature** with
+    {T} in its activation cost that isn't a mana ability" (Imprison).
+
+    Both printed narrowings are read off the trigger's own condition, so one
+    dispatcher covers every card written this way and no card name appears
+    here. The attached half is an *identity* check for the reason the tap
+    filter's is: two copies of a permanent compare equal by value and this Aura
+    is on exactly one of them.
+
+    ``has_type`` rather than the printed line for the noun, so a permanent made
+    a creature by an animation answers to a card that says "creature"
+    (CR 613 layer 4) — the same reader the tap filter's subtype uses.
+    """
+    subject = event.subject
+    if subject is None or not hasattr(subject, "metadata"):
+        return False
+    payload = trig.condition.payload
+    noun = payload.get("activated_attached")
+    if noun:
+        if permanent.metadata.get("attached_to") is not subject:
+            return False
+        if not subject.has_type(str(noun)):
+            return False
+    # "**with** {T} in its activation cost" — the printed word, tested rather
+    # than assumed. A card printing "without" is the opposite half of the same
+    # event, and an ignored word here would fire it on both.
+    wanted = payload.get("activated_requires_tap")
+    if wanted is not None:
+        if bool(event.payload.get("requires_tap")) != (wanted == "with"):
+            return False
+    return True
+
+
 # The printed recipient of a damage event, as `engine/oracle.py`'s table
 # captures it, mapped to the question the filter asks of the event. Absent
 # means the card named no recipient and every one qualifies.

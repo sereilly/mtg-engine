@@ -197,6 +197,13 @@ def tap_enchanted_creature(game: Game, instruction: OracleInstruction, context: 
     if attached_to is not None and game.is_on_battlefield(attached_to):
         game.become_tapped(attached_to)
         game._turn_face_up(attached_to)
+        # What this step affected, under the key every other tap writes —
+        # "tap the creature, **remove it from combat**" (Imprison) reads it
+        # back, and by id because a removal in between renumbers every later
+        # slot (CR 400.7). Recorded whether or not it was already tapped:
+        # CR 611.2c fixes the set when the effect begins, and the sentence
+        # after it is about that creature either way.
+        context.results["tapped_permanents"] = (attached_to.permanent_id,)
         game.log.append(f"{context.card.name} tapped {attached_to.card.name}")
     return True, "resolved"
 

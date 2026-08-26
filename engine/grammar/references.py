@@ -326,6 +326,28 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     if stream.at_word("itself"):
         stream.advance()
         return ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
+    # "…tap **the creature**, remove it from combat" (Imprison), "…untap **the
+    # creature**." (Paralyze). The definite article back-refers to the object
+    # the sentence has already named, which under a trigger is that trigger's
+    # event subject — exactly what a bare "it" means there. So it is that same
+    # pronoun rather than a referent of its own, and `rebinding.py` points both
+    # at the condition's subject in one place.
+    #
+    # Admitted only where the noun **ends the phrase**. Every other printed
+    # "the <noun>" in the pool runs on into a possessive or a relative clause —
+    # "the creature's controller" (Creature Bond), "the creature with the least
+    # power" (Drop of Honey), "the creature that spell becomes" (Illusionary
+    # Mask) — and each of those names a set the sentence is choosing from, not
+    # an object it already holds. Claiming those two words there would take the
+    # phrase away from the noun parser that reads the rest of them.
+    mark_definite = stream.mark()
+    if stream.accept_word("the"):
+        noun = stream.peek_word()
+        if noun is not None and noun in CARD_TYPES:
+            stream.advance()
+            if stream.exhausted or stream.at_punct(".", ",", ";"):
+                return ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
+    stream.reset(mark_definite)
     # "**that token**" — the token an earlier sentence of this same effect
     # created ("Exile that token when Stangg leaves the battlefield").
     #

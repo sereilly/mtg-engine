@@ -547,11 +547,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 power=4, toughness=4, type_line='Creature — Bird',
                 colors=('R',), keywords=('Flying',)),
     },
-    'Sandals of Abdallah': {
-        "{2}, {t}: target creature gains islandwalk until end of turn. when that "
-        "creature dies this turn, destroy this artifact":
-            _line("grant_islandwalk_and_linked_destroy", "activated_keyword"),
-    },
     'Serendib Djinn': {
         "at the beginning of your upkeep, sacrifice a land. if you sacrifice an "
         "island this way, this creature deals 3 damage to you":

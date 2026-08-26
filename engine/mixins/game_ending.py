@@ -304,20 +304,6 @@ class GameEndingMixin:
                         )
                     changed = True
 
-            # Sandals of Abdallah: the artifact whose islandwalk target died
-            # this turn is destroyed (flagged in _permanent_to_graveyard).
-            for player in self.players:
-                doomed_sandals = self._destroy_swept_permanents(
-                    player,
-                    lambda p: p.metadata.get("destroy_linked_death"),
-                    allow_regeneration=False,
-                )
-                for artifact in doomed_sandals:
-                    self.log.append(
-                        f"{artifact.card.name} was destroyed (the creature it granted islandwalk died)"
-                    )
-                    changed = True
-
             # 704.5d: a token in any zone but the battlefield ceases to exist.
             # The zone seams (put_card_into_hand / put_card_into_library) and
             # _permanent_to_graveyard refuse a token up front, so this is the

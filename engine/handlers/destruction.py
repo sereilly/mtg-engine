@@ -481,6 +481,38 @@ def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+@effect_handler("destroy_self")
+def destroy_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**Destroy this Aura.**" (Imprison.)
+
+    The twin of ``sacrifice_self``: the sentence names the ability's own
+    source, so nothing is chosen and nothing is looked up. Destruction rather
+    than sacrifice because the two are different events — a destroy is a
+    CR 701.7 action a regeneration shield or indestructible can answer, and a
+    sacrifice (CR 701.21) is neither — and a card that prints one must not
+    perform the other.
+
+    Through ``_destroy_swept_permanents``, the same seam
+    ``destroy_attached_permanent`` beside it uses, so regeneration, the
+    indestructible check and the graveyard move behave as they do for a
+    targeted destroy. A source already gone destroys nothing, which is
+    CR 608.2b doing as much as possible rather than a failure.
+    """
+    source = context.source_permanent
+    seat = game.controller_index_of(source) if source is not None else None
+    if source is None or seat is None:
+        game.log.append(f"{context.card.name}: nothing left to destroy")
+        return True, "resolved"
+    destroyed = game._destroy_swept_permanents(
+        game.players[seat],
+        lambda candidate: candidate is source,
+        allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+    )
+    if destroyed:
+        game.log.append(f"{context.card.name} was destroyed")
+    return True, "resolved"
+
+
 @effect_handler("destroy_attached_permanent")
 def destroy_attached_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"When enchanted land becomes tapped, destroy it." (Blight.)

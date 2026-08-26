@@ -307,6 +307,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # land type in combat_restrictions.py and the threshold in round 14.
     ("creature_blocks_or_blocked_by",
      r"whenever this creature blocks or becomes blocked by (?P<block_pair_subject>(?:a|another) [^,]+)"),
+    # "Whenever **enchanted creature** attacks or blocks" (Imprison). One kind
+    # with the source's own spelling below it: it is the same event about the
+    # same creature, and which permanent's ability watches it is the narrowing
+    # — payload, exactly as `tapped_attached` is. The two combat fire sites read
+    # the key and scan the attachments beside the combatant's own abilities.
+    ("creature_attacks_or_blocks",
+     r"whenever enchanted (?P<combatant_attached>[a-z]+) attacks or blocks"),
     ("creature_attacks_or_blocks",  r"whenever this creature attacks or blocks"),
     # A trigger whose *subject* is a set of objects rather than the source:
     # "whenever a creature you control with deathtouch attacks" (Hooded
@@ -431,6 +438,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # Before the quantified row: "enchanted artifact" is not "an artifact", but
     # keeping the specific subject ahead of the general one is what this table
     # does everywhere.
+    # "Whenever a player activates an ability of enchanted creature **with**
+    # {T} in its activation cost that isn't a mana ability" (Imprison). Not a
+    # wording of the compound row below it: that one is a *tap* event with an
+    # activation clause joined onto it, and this is the activation alone — so a
+    # card printing it must not fire when the creature is tapped by attacking.
+    #
+    # Both printed narrowings are payload, the way every narrowing in this
+    # table is: which side of {T} the cost falls on is one word, and the noun
+    # after "enchanted" is the type the attached permanent has to be.
+    ("nonmana_ability_activated",
+     r"whenever (?:a player|an opponent) activates an ability of"
+     r" enchanted (?P<activated_attached>[a-z]+)"
+     r" (?P<activated_requires_tap>with|without) \{t\} in its activation cost"
+     r" that isn't a mana ability"),
     ("permanent_tapped_or_ability_activated",
      r"whenever enchanted (?P<tapped_attached>[a-z]+) becomes tapped"
      r" or (?:a player|an opponent) activates an ability of enchanted [a-z]+"

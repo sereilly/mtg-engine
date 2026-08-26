@@ -1018,6 +1018,26 @@ class AbilityActivationMixin:
             )
         )
         self.log.append(f"{permanent.card.name} ability added to stack")
+        # "Whenever a player activates an ability of enchanted creature with
+        # {T} in its activation cost that isn't a mana ability" (Imprison).
+        #
+        # Announced **after** the push, and that is the whole of why it is a
+        # separate site from the tap event above: CR 603.3 puts the trigger on
+        # the stack over the ability it fired on, and a card that counters
+        # "that ability" needs the object to be there to be found. The item is
+        # carried on the event so the counter resolves the one activation that
+        # fired it rather than whatever is on top by then.
+        #
+        # Everything reaching this line is an ability that uses the stack —
+        # this engine resolves its mana abilities inline above, which is
+        # CR 605.3a — so the printed "that isn't a mana ability" is satisfied
+        # by the site rather than by a second reading of the ability.
+        emit(
+            self, "nonmana_ability_activated",
+            subject=permanent, seat=controller_index,
+            requires_tap=bool(requires_tap),
+            activated_ability_item=self.stack[-1] if self.stack else None,
+        )
         return SimulationResult(permanent.card.name, True, ability.effect_kind, "queued")
     def activate_from_hand(
         self,

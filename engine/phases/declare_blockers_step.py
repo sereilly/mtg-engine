@@ -791,6 +791,7 @@ class DeclareBlockersStepMixin:
         firing — CR 509.3c/509.3d draw exactly that line, and the filter's
         presence is what tells the two apart.
         """
+        from ..auras import attached_subject_triggers
         from ..events import trigger_subject_matches
         from ..game_types import StackItem
 
@@ -851,6 +852,33 @@ class DeclareBlockersStepMixin:
                         )
                     )
                     self.log.append(f"{blocker.card.name} triggered on block (added to stack)")
+            # "Whenever **enchanted creature** attacks or blocks" (Imprison) —
+            # the block half of the union whose attack half fires in
+            # declare_attackers_step. Something attached to the blocker, not
+            # the blocker itself: an Aura's ability is the Aura's (CR 113.7a),
+            # so it is on no `effective_card` the scan above reads.
+            for seat, attachment, trig in attached_subject_triggers(
+                self, blocker, {"creature_attacks_or_blocks"}, "combatant_attached",
+            ):
+                self._stack_push(
+                    StackItem(
+                        card=attachment.card,
+                        # CR 603.3a: the attachment's controller controls the
+                        # ability, and is the "you" its cost is offered to.
+                        caster_index=seat,
+                        target_player_index=seat,
+                        target_permanent_index=None,
+                        x_value=None,
+                        ability_instruction=trig.instruction,
+                        ability_effect_kind=trig.effect_kind,
+                        source_permanent=attachment,
+                        ability_text=trig.source_line,
+                    )
+                )
+                self.log.append(
+                    f"{attachment.card.name} triggered on "
+                    f"{blocker.card.name}'s block (added to stack)"
+                )
 
     def _resolved_block_pairs(
         self, controller_index: int, assignments: dict[int, list[int]]

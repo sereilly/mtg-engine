@@ -572,6 +572,7 @@ class DeclareAttackersStepMixin:
         the stack (e.g. Mijae Djinn's coin flip) — one per attacking creature
         that has the trigger, unlike _fire_attack_triggers' once-per-declaration
         team-wide version."""
+        from ..auras import attached_subject_triggers
         from ..game_types import StackItem
 
         controller = self.players[controller_index]
@@ -609,6 +610,35 @@ class DeclareAttackersStepMixin:
                     )
                 )
                 self.log.append(f"{permanent.card.name} triggered on attack (added to stack)")
+            # "Whenever **enchanted creature** attacks or blocks" (Imprison).
+            # The same event, watched by something attached to the attacker
+            # rather than by the attacker itself — invisible to the scan above,
+            # because an Aura's ability is the Aura's and not a granted ability
+            # of its host (CR 113.7a). The attack half; the blocker-side twin
+            # is in declare_blockers_step.
+            for seat, attachment, trig in attached_subject_triggers(
+                self, permanent, {"creature_attacks_or_blocks"}, "combatant_attached",
+            ):
+                self._stack_push(
+                    StackItem(
+                        card=attachment.card,
+                        # CR 603.3a: the ability's controller is the
+                        # attachment's controller, which is who "you may pay
+                        # {1}" is offered to — never the attacking creature's.
+                        caster_index=seat,
+                        target_player_index=seat,
+                        target_permanent_index=None,
+                        x_value=None,
+                        ability_instruction=trig.instruction,
+                        ability_effect_kind=trig.effect_kind,
+                        source_permanent=attachment,
+                        ability_text=trig.source_line,
+                    )
+                )
+                self.log.append(
+                    f"{attachment.card.name} triggered on "
+                    f"{permanent.card.name}'s attack (added to stack)"
+                )
 
     def _announce_attack_declaration(
         self, controller_index: int, declared: list[Permanent]

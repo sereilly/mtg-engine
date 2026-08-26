@@ -109,6 +109,13 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever an artifact becomes tapped or a player activates an "
         "artifact's ability without {t} in its activation cost"
     ),
+    # The activation event on its own, with no tap event joined to it
+    # (Imprison) — a different condition from the compound row above, and the
+    # printed "with {t}" is the whole difference.
+    "nonmana_ability_activated": (
+        "whenever a player activates an ability of enchanted creature with "
+        "{t} in its activation cost that isn't a mana ability"
+    ),
     "land_tapped_for_mana": "whenever a player taps a land for mana",
     "spell_cast": "whenever a player casts a spell",
     "opponent_casts_spell": "whenever an opponent casts a spell",
