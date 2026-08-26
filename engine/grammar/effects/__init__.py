@@ -33,6 +33,7 @@ from .damage import (
     _parse_prevent_all,
     _parse_source_of_choice_effect,
     _parse_damage_redirect,
+    _parse_bound_targeting_prevention,
 )
 from .characteristics import (
     _parse_double,
@@ -115,6 +116,7 @@ __all__ = [
     "_parse_prevent_all",
     "_parse_source_of_choice_effect",
     "_parse_damage_redirect",
+    "_parse_bound_targeting_prevention",
     "_parse_gets",
     "_parse_gains",
     "_parse_loses",

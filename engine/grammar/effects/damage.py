@@ -555,3 +555,48 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
         duration=duration,
         chooser=chooser,
     )
+
+
+def _parse_bound_targeting_prevention(stream: TokenStream) -> "ast.PreventDamage | None":
+    """"If a spell or ability that targets <bound object> would cause a source
+    to deal damage to <bound object> this turn, prevent that damage."
+    (Silhouette — the second sentence of a spell whose first one chose the
+    object both halves name.)
+
+    Every word is read, because each one is a way the card could mean less than
+    the sentence says: "or ability" is half of what it shields against,
+    "a source" is any source rather than the spell itself, and the two bound
+    references have to name the *same* object — a sentence shielding one
+    creature from spells aimed at another is a different card, and dropping the
+    difference would shield against every targeted spell in the game.
+
+    Non-consuming on refusal, so every other sentence opening "If …" keeps the
+    ordinary conditional reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "if", "a", "spell", "or", "ability", "that", "targets"
+    ):
+        stream.reset(mark)
+        return None
+    protected = parse_bound_subject(stream)
+    if protected is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "would", "cause", "a", "source", "to", "deal", "damage", "to"
+    ):
+        stream.reset(mark)
+        return None
+    damaged = parse_bound_subject(stream)
+    if damaged != protected:
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    stream.accept_punct(",")
+    if not stream.accept_phrase("prevent", "that", "damage"):
+        stream.reset(mark)
+        return None
+    return ast.PreventDamage(
+        ast.AllOf(), to=protected, duration=duration, from_targeting_source=True
+    )

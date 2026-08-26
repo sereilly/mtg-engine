@@ -44,6 +44,7 @@ from .effects import (
     _parse_change_text,
     _parse_source_of_choice_effect,
     _parse_damage_redirect,
+    _parse_bound_targeting_prevention,
     _parse_counter,
     _parse_create_token,
     _parse_damage,
@@ -580,6 +581,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             pass
         stream.reset(mark)
 
+    # "If a spell or ability that targets that creature would cause a source to
+    # deal damage to that creature this turn, prevent that damage."
+    # (Silhouette.) A *replacement* condition — what would happen, not what is
+    # true — so the generic conditional below cannot read it; tried first and
+    # refusing without consuming, so every other "If …" is untouched.
+    bound_shield = _parse_bound_targeting_prevention(stream)
+    if bound_shield is not None:
+        return bound_shield
+
     # "if <condition>, <statement>"
     if stream.at_word("if"):
         mark = stream.mark()
@@ -958,8 +968,15 @@ def _parse_choose_target(stream: TokenStream) -> "ast.ChooseTarget | None":
         stream.reset(mark)
         return None
     delayed = _parse_create_delayed_trigger(stream)
+    binds = delayed is not None and delayed.binds_target
+    if not binds:
+        # …or a shield the following sentence hangs on what was chosen
+        # (Silhouette). The probe asks the same question either way — does the
+        # next sentence bind this choice — and a second binder is a second
+        # answer to it, not a second production of this one.
+        binds = _parse_bound_targeting_prevention(stream) is not None
     stream.reset(after_filter)
-    if delayed is None or not delayed.binds_target:
+    if not binds:
         stream.reset(mark)
         return None
     return ast.ChooseTarget(ast.TargetSpec("target", filt, targeted=True))

@@ -138,3 +138,11 @@ class PreventDamage:
     # been taught the conjunction refuses it by name instead of shielding only
     # the first source, which is the silent half of the card.
     dealt_by_others: tuple[Recipient, ...] = ()
+    # "If **a spell or ability that targets that creature** would cause a source
+    # to deal damage to that creature this turn, prevent that damage."
+    # (Silhouette.) Not a `from_filter`, and the difference is the card: the
+    # source may be anything the spell causes to deal the damage, and what is
+    # narrowed is the *resolving object* that caused it. A filter written over
+    # the source would shield the creature from every spell of that description
+    # instead of from the ones aimed at it.
+    from_targeting_source: bool = False

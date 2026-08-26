@@ -195,6 +195,30 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
     * a duration other than this turn — the flag is cleared in the cleanup step,
       so it *is* "this turn" and nothing else.
     """
+    if node.from_targeting_source:
+        # Silhouette. The shield hangs on the object the spell's first sentence
+        # chose, so the recipient must be that bound reference and nothing else:
+        # a shield armed on "you" or on a second target would be a different
+        # card, and the handler has only the spell's own target to arm on.
+        if (
+            not isinstance(node.to, ast.TargetSpec)
+            or node.to.quantifier != "that"
+            or node.dealt_by is not None
+            or node.combat_only
+        ):
+            raise LoweringError(
+                "the targeting shield is armed on the object the spell chose",
+                node=node,
+            )
+        if node.duration.kind not in _REST_OF_TURN:
+            raise LoweringError(
+                "the targeting shield lasts exactly this turn", node=node
+            )
+        return (
+            OracleInstruction(
+                "prevent_damage_from_targeting_sources_until_eot", "", {}
+            ),
+        )
     if node.dealt_by is not None:
         # "…dealt **by** target creature this turn" (Horn of Deafening, Lady
         # Evangela, Kry Shield). A shield on the damage's *source*, which is why

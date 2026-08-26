@@ -74,6 +74,12 @@ PREVENT_FROM_COLOR = "prevent_from_color"
 #: damage time like every other recorded property (CR 615.9). Which phrase is
 #: payload: a card printed "by creatures with flying" needs no code here.
 PREVENT_FROM_SUBJECT = "prevent_from_subject"
+#: "If a spell or ability that targets that creature would cause a source to
+#: deal damage to that creature this turn, prevent that damage." (Silhouette.)
+#: A blanket like the one above, but the property it records is not a property
+#: of the *source* at all: it is a relation between the resolving object and the
+#: recipient, which is why it is a flag rather than another source filter.
+PREVENT_FROM_TARGETING_SOURCE = "prevent_from_targeting_source"
 
 
 @dataclass
@@ -117,6 +123,12 @@ class Shield:
     #: needs, captured when the shield was armed (CR 109.5).
     source_filter: dict | None = None
     filter_seat: int | None = None
+    #: "…a spell or ability **that targets that creature**" (Silhouette). Not a
+    #: description of the source — the source may be anything the spell causes
+    #: to deal the damage — but of what the *resolving object* chose, which
+    #: ``Game.resolving_targets`` is the seam for. Rechecked when the damage
+    #: would be dealt, like every other recorded property (CR 615.9).
+    targets_recipient: bool = False
     lifetime: str = END_OF_TURN
     source_name: str | None = None
 
@@ -447,6 +459,24 @@ def make_subject_shield(
         uses=None,
         source_filter=dict(source_filter),
         filter_seat=seat,
+        source_name=source_name,
+    )
+
+
+def make_targeting_source_shield(source_name: str | None = None) -> Shield:
+    """Silhouette's shield: every damage a spell or ability that targets this
+    creature causes, for the rest of the turn.
+
+    ``amount`` and ``uses`` are both None for the same reason
+    :func:`make_subject_shield`'s are — "prevent that damage" is printed once
+    but the condition can be met any number of times this turn, so the shield
+    is never used up and the cleanup sweep is what ends it.
+    """
+    return Shield(
+        kind=PREVENT_FROM_TARGETING_SOURCE,
+        amount=None,
+        uses=None,
+        targets_recipient=True,
         source_name=source_name,
     )
 

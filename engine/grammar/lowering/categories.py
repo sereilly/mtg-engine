@@ -191,6 +191,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "prevent_damage_by_target_until_eot": "prevention",
     "prevent_damage_to_target_until_eot": "prevention",
     "grant_source_class_prevention_shield": "prevention",
+    "prevent_damage_from_targeting_sources_until_eot": "prevention",
     # A redirect is *not* a prevention (CR 614.9): the damage is still
     # dealt, by the same source, to somebody else. Categorised with the
     # damage it moves rather than with the shields it sits beside in the

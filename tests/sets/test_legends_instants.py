@@ -1717,3 +1717,121 @@ def test_blood_lust_targets_a_creature(set_pool):
 
     assert program.supported, program.reason
     assert derive_cast_spec(card, program) == {"kind": "creature"}
+
+
+# ---------------------------------------------------------------------------
+# Silhouette (round 26) — a shield against what *aimed* at the creature
+# ---------------------------------------------------------------------------
+
+
+def _silhouette_board(set_pool):
+    """The chosen creature, a second one beside it, and an opponent holding two
+    Bolts and a Rod — a spell and an ability, which is both halves of "a spell
+    or ability"."""
+    from tests.helpers import _mk_creature_card
+
+    lea = set_pool("LEA")
+    victim = Permanent(card=_mk_creature_card("Victim", 2, 5))
+    other = Permanent(card=_mk_creature_card("Other", 2, 5))
+    p1 = PlayerState(
+        name="P1", battlefield=[victim, other], hand=[set_pool("LEG")["Silhouette"]]
+    )
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=lea["Rod of Ruin"])],
+        hand=[lea["Lightning Bolt"], lea["Lightning Bolt"]],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    result = game.cast_from_hand(
+        0, "Silhouette", target_player_index=0, target_permanent_index=0
+    )
+    assert result.supported, result
+    game._settle()
+    return game, victim, other
+
+
+def test_silhouette_compiles_supported(set_pool):
+    """Two sentences, and the first one is the targeting: "Choose target
+    creature" only reads as a sentence when what follows binds what it chose,
+    and this shield is the second thing that does."""
+    from engine.targeting import derive_cast_spec
+
+    card = set_pool("LEG")["Silhouette"]
+    program = compile_card_oracle(card)
+
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == [
+        "choose_target_permanent", "prevent_damage_from_targeting_sources_until_eot"
+    ]
+    assert derive_cast_spec(card, program) == {"kind": "creature"}
+
+
+def test_silhouette_prevents_a_spell_that_targets_the_creature(set_pool):
+    game, victim, _other = _silhouette_board(set_pool)
+
+    game.cast_from_hand(
+        1, "Lightning Bolt", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert victim.damage_marked == 0
+
+
+def test_silhouette_prevents_an_ability_that_targets_the_creature(set_pool):
+    """"a spell **or ability**". Bronze Horse's static says "spells that target
+    it" and is the same seam asked with the narrowing; this card asks it
+    without."""
+    game, victim, _other = _silhouette_board(set_pool)
+    game.players[1].mana_pool.update({"generic": 3})
+
+    result = game.activate_permanent_ability(
+        1, "Rod of Ruin", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported, result
+    assert victim.damage_marked == 0
+
+
+def test_silhouette_shields_only_the_creature_it_chose(set_pool):
+    """The relation is between the spell and *this* creature. A Bolt aimed at
+    the creature standing next to it is not prevented, which is what says the
+    shield reads the target rather than the card type of whatever is
+    resolving."""
+    game, _victim, other = _silhouette_board(set_pool)
+
+    game.cast_from_hand(
+        1, "Lightning Bolt", target_player_index=0, target_permanent_index=1
+    )
+    game._settle()
+
+    assert other.damage_marked == 3
+
+
+def test_silhouette_does_not_prevent_combat_damage(set_pool):
+    """Combat damage is caused by no spell or ability at all, so the condition
+    is simply not met — and it is not met by construction rather than by a flag
+    somebody remembered to set."""
+    game, victim, other = _silhouette_board(set_pool)
+
+    game._mark_damage_on_permanent(victim, 2, source=other, combat=True)
+
+    assert victim.damage_marked == 2
+
+
+def test_silhouette_shield_expires_with_the_turn(set_pool):
+    """"…this turn." The shield carries its own lifetime, so the cleanup sweep
+    ends it without a turn step naming this card."""
+    game, victim, _other = _silhouette_board(set_pool)
+    game.resolve_cleanup_step(0)
+
+    game.cast_from_hand(
+        1, "Lightning Bolt", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert victim.damage_marked == 3
