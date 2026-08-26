@@ -313,6 +313,48 @@ def _accept_number(stream: TokenStream) -> int | None:
     return NUMBER_WORDS[word]
 
 
+#: The two positions a printed *pair* of bound objects is named by. A trigger
+#: that bound one object is referred to as "that creature"; one that bound two
+#: — the halves of a block — names them by order, and the ordinal is the
+#: quantifier rather than a word to skip. Each keeps its own, for the reason
+#: "that" and "those" do: a lowering written for one must fail by name rather
+#: than silently receive the other.
+PAIR_ORDINALS = ("other", "first")
+
+
+def _accept_pair_ordinal(stream: TokenStream) -> str | None:
+    """``other`` / ``first`` at the cursor, consumed, or None."""
+    word = stream.peek_word()
+    if word in PAIR_ORDINALS:
+        stream.advance()
+        return word
+    return None
+
+
+def parse_pair_ordinal_subject(stream: TokenStream) -> "ast.TargetSpec | None":
+    """``the other <card type>`` / ``the first <card type>``, or None.
+
+    The ordinal half of :func:`parse_bound_subject`, reachable on its own
+    because the productions that read a bound object do **not** share one
+    reader: ``effects/board._parse_that_object`` is deliberately local to the
+    destroy production, so that "that creature" cannot leak into the shared
+    noun parser. The ordinals are named in two families all the same (Infinite
+    Authority destroys one member of the pair and puts a counter on the other),
+    and a second spelling of them is how the two halves of one printed sentence
+    would come to disagree about which creature they meant.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("the"):
+        return None
+    ordinal = _accept_pair_ordinal(stream)
+    noun = stream.peek_word()
+    if ordinal is None or noun is None or noun not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.TargetSpec(ordinal, ast.ObjectFilter(card_types=(noun,)))
+
+
 def parse_bound_subject(stream: TokenStream) -> "ast.TargetSpec | None":
     """``that <card type>`` / ``those <card type>s``, or None if that is not
     what is at the cursor.
@@ -351,12 +393,21 @@ def parse_bound_subject(stream: TokenStream) -> "ast.TargetSpec | None":
     # it could mean: an effect that acts on "a creature" says so.
     if not stream.accept_word("that", "the"):
         return None
+    # "…destroy **the other** creature … put a +1/+1 counter on **the first**
+    # creature." (Infinite Authority.) A sentence under a trigger that bound a
+    # *pair* of objects has two back-references rather than one, and English
+    # names them by position — so the ordinal is the quantifier, not a word to
+    # skip. Each gets its own, for the reason "that" and "those" have separate
+    # ones: a lowering written for one of them must fail by name rather than
+    # receive the other. Nothing accepts either unless it says so, and today
+    # only the block-pair lowerings do.
+    ordinal = _accept_pair_ordinal(stream)
     noun = stream.peek_word()
     if noun is None or noun not in CARD_TYPES:
         stream.reset(mark)
         return None
     stream.advance()
-    return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
+    return ast.TargetSpec(ordinal or "that", ast.ObjectFilter(card_types=(noun,)))
 
 
 def _parse_duration(stream: TokenStream) -> ast.Duration:

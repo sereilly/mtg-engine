@@ -314,7 +314,12 @@ def _lower_delayed_destroy(
             node=node,
         )
     spec = node.subject
-    if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "that":
+    # "that creature" (Thicket Basilisk) and "**the other** creature" (Infinite
+    # Authority) are one referent under this event: the pair has two members,
+    # the ability's own creature is one of them, and both spellings name the
+    # one `block_pair_permanents` returns. The ordinal is admitted only here,
+    # where a pair is what the trigger bound.
+    if not isinstance(spec, ast.TargetSpec) or spec.quantifier not in ("that", "other"):
         raise LoweringError(
             "the end-of-combat destroy acts on the creature the trigger bound", node=node
         )

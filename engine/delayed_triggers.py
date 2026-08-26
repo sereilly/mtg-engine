@@ -79,6 +79,10 @@ DELAYED_EVENTS: dict[str, str] = {
     "controllers_next_main_phase": "the main phase entry",
     # "At this turn's next end of combat, …" (Glyph of Doom).
     "next_end_of_combat": "the end of combat step",
+    # "At the beginning of the next end step, …" (Infinite Authority). CR 513.1:
+    # one end step per turn, and the next one is whoever's turn it falls in — so
+    # the site announces it for every seat rather than for the creator's.
+    "next_end_step": "the end step",
     # "At the beginning of your next upkeep, …" (Hazezon Tamar, Giant Slug).
     # The controller's own upkeep, however many turns away it is — so unlike
     # the "this turn" rows it survives the turn and is removed only by firing.

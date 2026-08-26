@@ -150,6 +150,15 @@ class EndOfCombatStepMixin:
         for player in self.players:
             def _on_destroy(permanent: Permanent, player=player) -> None:
                 self._trigger_aura_death_effects(permanent, player)
+                # "…**if that creature was destroyed this way**" (Infinite
+                # Authority) is asked at the next end step, by which time the
+                # creature is a card in a graveyard. Recorded here, where the
+                # destruction actually happens, rather than inferred later from
+                # absence — a creature that regenerated or left in between is
+                # not one this sweep destroyed.
+                self.destroyed_at_end_of_combat_this_turn.append(
+                    permanent.permanent_id
+                )
                 self.log.append(f"{permanent.card.name} was destroyed at end of combat")
 
             destroyed = self._destroy_swept_permanents(

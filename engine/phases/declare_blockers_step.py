@@ -800,17 +800,36 @@ class DeclareBlockersStepMixin:
         ):
             # "attacks or blocks" (Elder Gargaroth): the block half of the
             # union — the attack half fires in declare_attackers_step.
-            for trig in matching_triggers(
-                blocker.effective_card,
-                condition_kinds={
-                    "creature_blocks",
-                    "creature_attacks_or_blocks",
-                    # The joined sentence's *blocks* half. Its noun phrase lands
-                    # under `blocked_filter` like a card that prints this half on
-                    # its own, so nothing below has to know it was joined.
-                    "creature_blocks_or_blocked_by",
-                },
-            ):
+            # The blocker's own abilities, and then the joined block-pair
+            # sentence printed on something *attached* to it (Infinite
+            # Authority). One body, because the firing is identical: the same
+            # noun phrase decides how many times it fires and the same pair
+            # rides the context. What differs is only which permanent is the
+            # ability's source, and which seat controls it (CR 113.7a) — so
+            # those two travel beside the trigger rather than being re-derived
+            # below.
+            watchers = [
+                (blocker, controller_index, trig)
+                for trig in matching_triggers(
+                    blocker.effective_card,
+                    condition_kinds={
+                        "creature_blocks",
+                        "creature_attacks_or_blocks",
+                        # The joined sentence's *blocks* half. Its noun phrase
+                        # lands under `blocked_filter` like a card that prints
+                        # this half on its own, so nothing below has to know it
+                        # was joined.
+                        "creature_blocks_or_blocked_by",
+                    },
+                )
+            ] + [
+                (attachment, seat, trig)
+                for seat, attachment, trig in attached_subject_triggers(
+                    self, blocker, {"creature_blocks_or_blocked_by"},
+                    "combatant_attached",
+                )
+            ]
+            for source, source_seat, trig in watchers:
                 # Each firing records which blocked creature(s) it is *about*
                 # (by stable id, CR 509.3f fixes the set at declaration), so an
                 # effect saying "that creature" (Wall of Dust) resolves the
@@ -830,14 +849,14 @@ class DeclareBlockersStepMixin:
                         for _, attacker in blocked
                         if trigger_subject_matches(
                             self, trig, "blocked", attacker,
-                            observer=controller_index, source=blocker,
+                            observer=source_seat, source=blocker,
                         )
                     ]
                 for firing_context in firing_contexts:
                     self._stack_push(
                         StackItem(
-                            card=blocker.card,
-                            caster_index=controller_index,
+                            card=source.card,
+                            caster_index=source_seat,
                             # The blocker's own controller/index, so the coin-flip
                             # handler can remove IT from combat without re-deriving
                             # who owns it.
@@ -846,12 +865,12 @@ class DeclareBlockersStepMixin:
                             x_value=None,
                             ability_instruction=trig.instruction,
                             ability_effect_kind=trig.effect_kind,
-                            source_permanent=blocker,
+                            source_permanent=source,
                             ability_text=trig.source_line,
                             trigger_context=firing_context,
                         )
                     )
-                    self.log.append(f"{blocker.card.name} triggered on block (added to stack)")
+                    self.log.append(f"{source.card.name} triggered on block (added to stack)")
             # "Whenever **enchanted creature** attacks or blocks" (Imprison) —
             # the block half of the union whose attack half fires in
             # declare_attackers_step. Something attached to the blocker, not
@@ -997,6 +1016,7 @@ class DeclareBlockersStepMixin:
         """
         if not (0 <= self.active_player_index < len(self.players)):
             return
+        from ..auras import attached_subject_triggers
         from ..events import trigger_subject_matches
         from ..game_types import StackItem
 
@@ -1008,21 +1028,38 @@ class DeclareBlockersStepMixin:
                 blockers_of.setdefault(attacker_idx, (attacker, []))[1].append(blocker)
         for attacker_idx, (attacker, blockers) in blockers_of.items():
             seat = self.active_player_index
-            for trig in matching_triggers(
-                attacker.effective_card,
-                condition_kinds={
-                    "creature_becomes_blocked",
-                    # …and its *becomes blocked by* half, under `blocker_filter`.
-                    "creature_blocks_or_blocked_by",
-                },
-            ):
+            # The attacker's own abilities, then the joined block-pair sentence
+            # printed on something attached to it (Infinite Authority, whichever
+            # side of the block its host is on). The mirror of the scan in
+            # `_fire_creature_blocks_triggers`, and one body for the same
+            # reason: only the ability's source and its controlling seat differ.
+            watchers = [
+                (attacker, seat, trig)
+                for trig in matching_triggers(
+                    attacker.effective_card,
+                    condition_kinds={
+                        "creature_becomes_blocked",
+                        # …and its *becomes blocked by* half, under
+                        # `blocker_filter`.
+                        "creature_blocks_or_blocked_by",
+                    },
+                )
+            ] + [
+                (attachment, aura_seat, trig)
+                for aura_seat, attachment, trig in attached_subject_triggers(
+                    self, attacker, {"creature_blocks_or_blocked_by"},
+                    "combatant_attached",
+                )
+            ]
+            for source, source_seat, trig in watchers:
                 if not trig.condition.payload.get("blocker_filter"):
                     matched = blockers[:1]
                 else:
                     matched = [
                         b for b in blockers
                         if trigger_subject_matches(
-                            self, trig, "blocker", b, observer=seat, source=attacker
+                            self, trig, "blocker", b, observer=source_seat,
+                            source=attacker,
                         )
                     ]
                 for blocker in matched:
@@ -1036,8 +1073,8 @@ class DeclareBlockersStepMixin:
                     blocker_slot = self.battlefield_index_of(blocker)
                     self._stack_push(
                         StackItem(
-                            card=attacker.card,
-                            caster_index=seat,
+                            card=source.card,
+                            caster_index=source_seat,
                             target_player_index=(
                                 blocker_seat if blocker_seat is not None else seat
                             ),
@@ -1046,7 +1083,7 @@ class DeclareBlockersStepMixin:
                             x_value=None,
                             ability_instruction=trig.instruction,
                             ability_effect_kind=trig.effect_kind,
-                            source_permanent=attacker,
+                            source_permanent=source,
                             ability_text=trig.source_line,
                             # "That creature's controller" is the blocker's, and
                             # a blocker can leave before this resolves — so the
@@ -1054,11 +1091,19 @@ class DeclareBlockersStepMixin:
                             # death triggers freeze theirs.
                             trigger_context={
                                 "event_subject_controller": blocker_seat,
+                                # The pair this firing is about, by stable id
+                                # and under the key the *blocks* half already
+                                # writes. `block_pair_permanents` prefers it to
+                                # the item's target, which is the same blocker
+                                # here — but an ability whose source is an Aura
+                                # attached to the attacker has no reason to
+                                # carry the blocker as its target at all.
+                                "blocked_permanent_ids": [blocker.permanent_id],
                             },
                         )
                     )
                     self.log.append(
-                        f"{attacker.card.name} triggered on becoming blocked (added to stack)"
+                        f"{source.card.name} triggered on becoming blocked (added to stack)"
                     )
 
     def _apply_temporary_buff(self, permanent: Permanent, power: int, toughness: int) -> None:

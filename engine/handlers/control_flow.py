@@ -390,6 +390,18 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             any(name in card.type_line.lower() for name in wanted) for card in cards
         )
 
+    if kind == "destroyed_this_way":
+        # "…**if that creature was destroyed this way**" (Infinite Authority).
+        # Two records meet here and neither can answer alone: the scratchpad the
+        # creating effect froze (CR 608.2h) says which creature the earlier step
+        # marked, and the game's end-of-combat sweep says which permanents it
+        # actually destroyed. Absence from the second is regeneration, a
+        # creature that left first, or a mark that was never set — all of which
+        # the card treats the same way.
+        marked = (context.trigger_context or {}).get(payload.get("key")) or {}
+        victim_ids = marked.get("victim_ids") or ()
+        destroyed = set(game.destroyed_at_end_of_combat_this_turn)
+        return any(victim_id in destroyed for victim_id in victim_ids)
     if kind == "died_this_turn":
         return int(getattr(game, "creatures_died_this_turn", 0) or 0) > 0
 

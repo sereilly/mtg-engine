@@ -2391,3 +2391,159 @@ def test_removing_the_enchanted_blocker_leaves_its_attacker_unblocked(
     assert blocker.tapped
     assert game.combat_blockers == {}
     assert not attacker.blocked, "its only blocker left combat"
+
+
+# ===========================================================================
+# Infinite Authority — round 35
+#
+# "Whenever enchanted creature blocks or becomes blocked by a creature with
+#  toughness 3 or less, destroy the other creature at end of combat. At the
+#  beginning of the next end step, if that creature was destroyed this way, put
+#  a +1/+1 counter on the first creature."
+#
+# One trigger, two sentences, and every piece of it is about a *pair*: the
+# creature the Aura enchants and the one on the other side of the block. The
+# first sentence marks the other one for the end of combat; the second asks, a
+# step later, whether that mark actually killed it.
+# ===========================================================================
+
+def _r35_authority_combat(set_pool, *, attacker_pt, blocker_pt, on_blocker):
+    """A declared block with Infinite Authority attached to one side.
+
+    ``on_blocker`` picks which half of the joined condition is under test: the
+    Aura on the blocking creature fires the *blocks* half, the Aura on the
+    attacking creature fires the *becomes blocked by* half. Returns
+    ``(game, attacker, blocker, aura)`` with the trigger already resolved.
+    """
+    attacker = Permanent(card=_creature("Attacker", *attacker_pt))
+    blocker = Permanent(card=_creature("Blocker", *blocker_pt))
+    aura = Permanent(card=set_pool("LEG")["Infinite Authority"])
+    host = blocker if on_blocker else attacker
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=[attacker] + ([] if on_blocker else [aura])),
+        PlayerState(name="P1", battlefield=[blocker] + ([aura] if on_blocker else [])),
+    ])
+    game.enforce_mana_costs = False
+    attach_aura(aura, host)
+    for permanent in (attacker, blocker):
+        permanent.metadata["summoning_sickness_turn"] = -99
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()   # declare blockers
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.resolve_stack(pause_for_choices=True)
+    return game, attacker, blocker, aura
+
+
+def _r35_past_end_of_combat(game):
+    """Advance from the declare blockers step out the far side of combat, so
+    the combat damage step and the CR 511.2 end-of-combat sweep have both
+    run."""
+    while game.current_phase == "combat":
+        game.advance_combat_phase()
+        game.resolve_stack(pause_for_choices=True)
+
+
+def test_infinite_authority_compiles_both_sentences_as_one_trigger(set_pool):
+    """Two printed sentences, one triggered ability — so they lower into one
+    ``sequence`` under one condition, and the narrowing travels with it."""
+    program = compile_card_oracle(set_pool("LEG")["Infinite Authority"])
+    assert program.supported, program.reason
+
+    trigger = next(
+        trig for trig in program.triggered_abilities
+        if trig.condition.kind == "creature_blocks_or_blocked_by"
+    )
+    # The Aura watches the creature it enchants, not itself — the narrowing the
+    # two combat dispatchers read to find it.
+    assert trigger.condition.payload["combatant_attached"] == "creature"
+    # One printed noun phrase, distributed over both verbs (CR 509.3c/509.3d).
+    threshold = {"type_filter": "creature", "toughness": {"op": "le", "value": 3}}
+    assert trigger.condition.payload["blocked_filter"] == threshold
+    assert trigger.condition.payload["blocker_filter"] == threshold
+    assert trigger.instruction.kind == "sequence"
+    assert [step.kind for step in trigger.instruction.payload["steps"]] == [
+        "delayed_destroy_blocked_or_blocker", "create_delayed_trigger",
+    ]
+
+
+def test_infinite_authority_destroys_the_blocked_attacker_and_pays_the_counter(
+    set_pool,
+):
+    """The whole card, in the order it is printed: the attacker is marked when
+    the block is declared, destroyed at end of combat, and the counter lands on
+    the enchanted creature at the next end step."""
+    game, attacker, blocker, _aura = _r35_authority_combat(
+        set_pool, attacker_pt=(1, 2), blocker_pt=(1, 5), on_blocker=True
+    )
+    assert attacker.metadata.get("destroy_at_end_of_combat") is True
+    assert [entry.event for entry in game.delayed_triggers] == ["next_end_step"]
+
+    _r35_past_end_of_combat(game)
+    assert attacker.permanent_id in game.destroyed_at_end_of_combat_this_turn
+    assert attacker not in game.players[0].battlefield
+    # Nothing yet: the counter waits for the end step the second sentence names.
+    assert blocker.effective_toughness == 5
+
+    game.resolve_end_step(0)
+    game.resolve_stack(pause_for_choices=True)
+    assert (blocker.effective_power, blocker.effective_toughness) == (2, 6)
+
+
+def test_infinite_authority_ignores_a_creature_too_tough_for_it(set_pool):
+    """"…by a creature **with toughness 3 or less**" is the whole condition. A
+    threshold read as decoration is a card that destroys anything it blocks."""
+    game, attacker, blocker, _aura = _r35_authority_combat(
+        set_pool, attacker_pt=(1, 4), blocker_pt=(1, 5), on_blocker=True
+    )
+    assert not attacker.metadata.get("destroy_at_end_of_combat")
+    assert game.delayed_triggers == []
+
+    _r35_past_end_of_combat(game)
+    game.resolve_end_step(0)
+    game.resolve_stack(pause_for_choices=True)
+    assert attacker in game.players[0].battlefield
+    assert (blocker.effective_power, blocker.effective_toughness) == (1, 5)
+
+
+def test_infinite_authority_pays_no_counter_for_a_creature_that_died_otherwise(
+    set_pool,
+):
+    """"…if that creature **was destroyed this way**."
+
+    Combat damage kills the attacker before the end of combat step, so the mark
+    destroys nothing and the second sentence's condition is false. Read as "did
+    that creature die" the card would pay the counter anyway.
+    """
+    game, attacker, blocker, _aura = _r35_authority_combat(
+        set_pool, attacker_pt=(1, 2), blocker_pt=(4, 5), on_blocker=True
+    )
+    assert attacker.metadata.get("destroy_at_end_of_combat") is True
+
+    _r35_past_end_of_combat(game)
+    assert attacker not in game.players[0].battlefield
+    assert game.destroyed_at_end_of_combat_this_turn == []
+
+    game.resolve_end_step(0)
+    game.resolve_stack(pause_for_choices=True)
+    assert (blocker.effective_power, blocker.effective_toughness) == (4, 5)
+
+
+def test_infinite_authority_fires_on_the_becomes_blocked_half_too(set_pool):
+    """The Aura on the *attacking* creature. One printed sentence joins the two
+    events, so the same trigger has to be found by the other dispatcher — and
+    "the other creature" is then the blocker."""
+    game, attacker, blocker, _aura = _r35_authority_combat(
+        set_pool, attacker_pt=(1, 5), blocker_pt=(1, 2), on_blocker=False
+    )
+    assert blocker.metadata.get("destroy_at_end_of_combat") is True
+
+    _r35_past_end_of_combat(game)
+    assert blocker not in game.players[1].battlefield
+
+    game.resolve_end_step(0)
+    game.resolve_stack(pause_for_choices=True)
+    assert (attacker.effective_power, attacker.effective_toughness) == (2, 6)

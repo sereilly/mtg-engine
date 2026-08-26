@@ -264,6 +264,15 @@ class Game(
     # per-seat one beside it is: a reader that wants one and gets the other is
     # wrong by however many tokens died, silently.
     nontoken_creatures_died_this_turn: int = 0
+    # Which permanents the end-of-combat sweep destroyed this turn, by stable
+    # id. "…destroy the other creature at end of combat. … **if that creature
+    # was destroyed this way**" (Infinite Authority) is a question asked a step
+    # later, when the creature is a card in a graveyard and nothing on the board
+    # can answer it — and "this way" is exactly this sweep, because
+    # `destroy_at_end_of_combat` is the one mark that feeds it. Regeneration and
+    # a creature that left in between are both answered by absence from this
+    # list, which is what the card says.
+    destroyed_at_end_of_combat_this_turn: list[int] = field(default_factory=list)
     # How many turns each seat has *begun*, incremented by
     # ``begin_turn_bookkeeping`` (both the headless flow and the web flow run
     # through it exactly once per turn). The per-seat ordinal is what "your
@@ -293,11 +302,6 @@ class Game(
     # the ON_LEAVE_BATTLEFIELD card hook and drained in resolve_upkeep.
     mire_cleanup_obligations: list = field(default_factory=list)
     # Delayed token creation from a "dies" trigger whose token appears at the
-    # beginning of the next end step (Rukh Egg), by which time the source
-    # permanent is long gone — each entry is {"controller_index", "name",
-    # "power", "toughness", "type_line", "colors", "keywords"}. Populated in
-    # _permanent_to_graveyard, drained in resolve_end_step.
-    pending_end_step_tokens: list = field(default_factory=list)
     # CR 601.2i / 603.3b: triggers that fired while a spell was being cast or an
     # ability activated, waiting for that object to finish being put on the
     # stack so they can go on the stack *above* it. None means "not casting" —

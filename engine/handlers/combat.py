@@ -86,6 +86,17 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
         for perm in block_pair_permanents(game, context)
         if not subtype or perm.has_type(str(subtype))
     ]
+    # The pair, recorded before anything is marked. The sentence after this one
+    # names *both* halves — "if **that creature** was destroyed this way, put a
+    # +1/+1 counter on **the first creature**" (Infinite Authority) — and by the
+    # time it is asked, a step later, the victim is a card in a graveyard and
+    # combat is over. The scratchpad is where an effect's later steps read what
+    # its earlier ones knew (CR 608.2h), and `_PRODUCES` is what lets the
+    # grammar refuse the sentence when no step wrote it.
+    context.results[END_OF_COMBAT_DESTRUCTION_RESULT_KEY] = {
+        "own_id": _block_pair_own_creature_id(game, context),
+        "victim_ids": [victim.permanent_id for victim in victims],
+    }
     if not victims:
         game.log.append(f"{context.card.name} block trigger had no valid target")
         return True, "no target"
@@ -95,6 +106,32 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
             f"{context.card.name} will destroy {victim.card.name} at end of combat"
         )
     return True, "resolved"
+
+
+#: Where the delayed destroy above writes the pair it bound, and the one name
+#: the grammar's ``_PRODUCES`` declares for it. One spelling, because a second
+#: would make the grammar's refusal vacuous while the reader found nothing.
+END_OF_COMBAT_DESTRUCTION_RESULT_KEY = "end_of_combat_destruction"
+
+
+def _block_pair_own_creature_id(game: Game, context: OracleExecutionContext) -> int | None:
+    """The creature a block trigger is *about* — the other half of the pair
+    ``block_pair_permanents`` returns.
+
+    Two spellings, one question. A creature watching its own block is the
+    ability's source; an Aura watching the creature it enchants is not on that
+    creature's ``effective_card`` at all (CR 113.7a), so the source is the Aura
+    and the creature is what it is attached to. Derived here rather than
+    stamped by the fire sites, because both of them already record the *other*
+    half and this is the same pair read from the other end.
+    """
+    source = context.source_permanent
+    if source is None:
+        return None
+    host = source.metadata.get("attached_to")
+    if host is not None and game.is_on_battlefield(host):
+        return host.permanent_id
+    return source.permanent_id
 
 
 @effect_handler("cant_attack_during_controllers_next_turn")

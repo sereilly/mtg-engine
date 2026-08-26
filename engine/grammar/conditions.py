@@ -26,7 +26,7 @@ from .amounts import parse_comparison
 from .nouns import parse_object_filter
 from .readers import accept_source_reference
 from .references import parse_player_ref, parse_target_spec
-from .phrases import _parse_duration, _parse_keywords
+from .phrases import _parse_duration, _parse_keywords, parse_bound_subject
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
 
@@ -307,6 +307,16 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         if revealed_filter is not None and revealed_filter.card_types:
             return ast.RevealedCardIs(revealed_filter)
     stream.reset(it_mark)
+
+    # "if **that creature was destroyed this way**" (Infinite Authority). The
+    # bound object is read through the shared reader rather than skipped: the
+    # sentence is checked at the next end step, long after the destruction it
+    # asks about, and which creature it names is the whole question.
+    this_way = stream.mark()
+    bound = parse_bound_subject(stream)
+    if bound is not None and stream.accept_phrase("was", "destroyed", "this", "way"):
+        return ast.DestroyedThisWay(bound.filter)
+    stream.reset(this_way)
 
     if stream.accept_phrase("a", "creature", "died"):
         _parse_duration(stream)

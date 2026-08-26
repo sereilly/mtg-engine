@@ -3555,14 +3555,22 @@ def test_delayed_destroy_needs_the_trigger_that_binds_the_blocking_pair():
 
 def test_a_destroy_delayed_to_the_end_step_is_not_claimed():
     """Stone Giant and Nettling Imp defer to the next end step, which is a
-    different handler. Leaving those tokens unconsumed is what keeps them from
-    being destroyed a combat early."""
+    different handler. Refusing the line is what keeps them from being
+    destroyed a combat early.
+
+    The refusal moved a layer down when Infinite Authority taught the delay
+    table "at the beginning of the next end step": the opener is read now, so
+    the sentence *parses* — and then refuses to lower, because "that creature"
+    under a delay that binds no object names nothing at all. Which layer says
+    no does not matter; that one does is the whole property.
+    """
     result = compile_line(
         "Destroy that creature at the beginning of the next end step.",
         card_name="Test",
     )
 
-    assert not result.parsed
+    assert not result.usable
+    assert result.lowering_error
 
 
 # ---------------------------------------------------------------------------
