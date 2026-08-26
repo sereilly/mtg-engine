@@ -65,6 +65,7 @@ from .lowering import (
     _fused_exile_then_controller_life,
     _lower_add_mana,
     _lower_add_mana_for_tapped_land,
+    _amount_payload,
     _lower_produces_mana_instead,
     _lower_spend_mana_as_though,
     _lower_become_color,
@@ -412,6 +413,28 @@ def lower_statement(
                         "toughness": statement.token_toughness,
                         "colors": list(statement.token_colors),
                         "subtypes": list(statement.token_subtypes),
+                    },
+                },
+            ),
+        )
+
+    if isinstance(statement, ast.NameAndRandomReveal):
+        # "Target opponent" is the only seat this paragraph names, and every
+        # sentence after the first is about that same seat — "that player" is
+        # the revealer. A description is emitted so the picker chooses the
+        # opponent at activation (CR 601.2c), and the count rides as the
+        # announced amount rather than a number, because X is not known until
+        # the ability is activated.
+        return (
+            OracleInstruction(
+                "name_and_random_reveal", "",
+                {
+                    "count": _amount_payload(statement.count),
+                    "zone": statement.zone,
+                    "targets": {
+                        "quantifier": "target",
+                        "kind": "player",
+                        "opponents_only": True,
                     },
                 },
             ),

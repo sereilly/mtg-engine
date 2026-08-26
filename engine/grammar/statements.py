@@ -20,6 +20,7 @@ from .paragraphs import (
     _parse_exile_graveyard_until_leaves,
     _parse_exile_until_leaves_or_untaps,
     _parse_name_and_strip,
+    _parse_name_then_random_reveal,
     _parse_name_then_reveal_top,
     _parse_transmute_by_sacrifice,
 )
@@ -278,6 +279,13 @@ def _parse_subject_verb(
         chosen_number = _parse_choose_number(stream)
         if chosen_number is not None:
             return chosen_number
+        # Nebuchadnezzar's naming paragraph. Tried before Necromentia's, which
+        # is the last resort here and raises rather than refusing — the two
+        # differ from the fifth word on, and this one declines without
+        # consuming so nothing else loses a reading.
+        random_reveal = _parse_name_then_random_reveal(stream)
+        if random_reveal is not None:
+            return random_reveal
         return _parse_name_and_strip(stream)
     if stream.at_word("draw"):
         return _parse_draw(stream, ast.PlayerRef("you"))

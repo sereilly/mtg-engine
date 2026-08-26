@@ -23,10 +23,11 @@ its own words to the end, which is what lets this module sit below
 from __future__ import annotations
 
 from . import ast
-from .amounts import expect_pt
+from .amounts import expect_pt, parse_amount
 from .errors import GrammarError
 from .lexer import (MANA, SELF)
 from .nouns import parse_object_filter
+from .references import parse_player_ref
 from .stream import TokenStream
 from .vocabulary import COLOR_WORDS, CREATURE_TYPES
 
@@ -390,6 +391,68 @@ def _parse_name_and_strip(stream: TokenStream) -> ast.Statement:
 #: these is a zone the mover below actually knows how to reach; a word outside
 #: it refuses the line rather than lowering onto a destination nothing moves to.
 _REVEAL_DESTINATIONS: tuple[str, ...] = ("hand", "graveyard")
+
+#: The hidden zones a "reveals N cards at random from their <zone>" clause may
+#: name. A *list* rather than the word "hand" spelled into the production: the
+#: randomness is only meaningful over a zone whose contents are hidden, and the
+#: two of those are what this names.
+_RANDOM_REVEAL_ZONES: tuple[str, ...] = ("hand", "library")
+
+
+def _parse_name_then_random_reveal(stream: TokenStream) -> "ast.Statement | None":
+    """Nebuchadnezzar's whole three-sentence effect.
+
+    ``Choose a card name. Target opponent reveals X cards at random from their
+    hand. Then that player discards all cards with that name revealed this
+    way.``
+
+    Refuses without consuming, so every other sentence opening with "choose"
+    keeps the reading it has — Necromentia's naming paragraph is tried after
+    this one and its first sentence differs from the fourth word on.
+
+    "**revealed this way**" is read and is the whole reason the three sentences
+    are one production: it narrows the discard to the cards the random reveal
+    turned up, where a discard of "all cards with that name" would take every
+    copy in the hand and make the randomness decoration.
+    """
+    mark = stream.mark()
+    for word in ("choose", "a", "card", "name"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    who = parse_player_ref(stream)
+    if who is None or who.kind != "target_opponent":
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("reveals"):
+        stream.reset(mark)
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    for word in ("cards", "at", "random", "from", "their"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    zone = stream.peek_word()
+    if zone not in _RANDOM_REVEAL_ZONES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    for word in ("then", "that", "player", "discards", "all", "cards", "with",
+                 "that", "name", "revealed", "this", "way"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    return ast.NameAndRandomReveal(who, count, zone)
 
 
 def _parse_name_then_reveal_top(

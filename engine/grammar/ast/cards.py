@@ -387,6 +387,30 @@ class NameAndStrip:
 
 
 @dataclass(frozen=True)
+class NameAndRandomReveal:
+    """``Choose a card name. Target opponent reveals X cards at random from
+    their hand. Then that player discards all cards with that name revealed
+    this way.`` (Nebuchadnezzar.)
+
+    One node for the whole three-sentence effect, for the reason
+    :class:`NameAndStrip` is one: the sentences share a choice and a pile.
+    "That name" is what the first sentence chose, and "all cards with that name
+    **revealed this way**" is a strict subset of the hand — the cards the
+    random reveal happened to turn up, not every copy in it. Parsed apart, the
+    third sentence would discard the whole hand's worth of that name and the
+    randomness would mean nothing.
+
+    ``count`` is an :class:`Amount` because the number is the announced X, and
+    ``zone`` is read where it is printed: the same effect over a graveyard is
+    the same template with one word changed.
+    """
+
+    player: PlayerRef
+    count: Amount
+    zone: str
+
+
+@dataclass(frozen=True)
 class NameThenRevealTop:
     """``Target player chooses a card name, then reveals the top card of their
     library. If that card has the chosen name, that player puts it into their

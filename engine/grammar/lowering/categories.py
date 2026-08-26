@@ -285,6 +285,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "reveal_top_of_library": "zones",
     "reveal_until_match": "zones",
     "name_and_strip": "zones",
+    # "Choose a card name. Target opponent reveals X cards at random from their
+    # hand. Then that player discards all cards with that name revealed this
+    # way." (Nebuchadnezzar.) The same category as the naming paragraph above:
+    # what it does is move cards out of a hidden zone.
+    "name_and_random_reveal": "zones",
     # Petra Sphinx's guess. "zones" like the reveals above it: what the card
     # does is look at the top of a library and move that card somewhere, and
     # the name is only what decides which somewhere.
