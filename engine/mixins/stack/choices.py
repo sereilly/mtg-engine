@@ -67,15 +67,38 @@ class PendingChoicesMixin:
             and "_stack_item" not in choice.data
         ):
             choice.data["_stack_item"] = self.resolving_stack_item
+        # A queued choice of a ``suspends`` kind is itself the suspension: the
+        # steps behind it in this resolution have not run, and running them now
+        # would let them see a board the answer has not shaped yet (Opt drawing
+        # the card its own scry has not arranged). ``effect_suspended`` reads the
+        # queue, so appending here is what stops the loop and nothing sets a
+        # flag. Nothing is waiting on a default taken inline above — that already
+        # happened.
         self.pending_choices.append(choice)
-        if spec.suspends:
-            # Nothing is waiting on a default taken inline above — it already
-            # happened. A queued choice is different: the steps behind it in this
-            # resolution have not run, and running them now would let them see a
-            # board the answer has not shaped yet (Opt drawing the card its own
-            # scry has not arranged). Stop the loop; answering resumes it.
-            self.effect_suspended = True
         return choice
+
+    # -- Whether a loop has to stop ----------------------------------------
+
+    @property
+    def effect_suspended(self) -> bool:
+        """Whether some loop mid-event has to stop and wait (engine/resumption.py).
+
+        Derived from the queue rather than stored, because a stored boolean can
+        only say *that* something is owed, not *how many*. "Each opponent
+        discards two cards" arms one prompt per opponent; the first answer
+        cleared the flag and the resolution ran on past opponents who had not
+        discarded yet. Every queued choice of a ``suspends`` kind that has not
+        been answered holds the suspension, so the last answer is what lifts it.
+
+        ``_answered`` is stamped by the answer paths below for the span of the
+        resolver: the choice stays *queued* while its answer is applied — the
+        stack object it holds is still resolving (CR 608.2), and a resolver may
+        still read its payload — but it no longer suspends, because applying the
+        answer is exactly the work the suspension was waiting for."""
+        return any(
+            spec_for(choice.kind).suspends and not choice.data.get("_answered")
+            for choice in self.pending_choices
+        )
 
     def pending_choices_of(self, kind: str, player_index: int | None = None) -> list[PendingChoice]:
         """Queued choices of *kind*, oldest first, optionally for one seat."""
@@ -197,12 +220,18 @@ class PendingChoicesMixin:
         spec = spec_for(choice.kind)
         if not spec.suspends:
             return bool(spec.resolve(self, choice, response))
-        # The suspension ends *before* the answer is applied, never after:
-        # applying it can arm the next prompt, and clearing afterwards would
-        # resume straight through that one.
-        self.effect_suspended = False
-        if not spec.resolve(self, choice, response):
-            self.effect_suspended = True  # rejected — still owed, still waiting
+        # This choice stops suspending *before* the answer is applied, never
+        # after: applying it can arm the next prompt, and lifting afterwards
+        # would resume straight through that one.
+        choice.data["_answered"] = True
+        try:
+            accepted = bool(spec.resolve(self, choice, response))
+        except Exception:
+            choice.data.pop("_answered", None)
+            raise
+        if not accepted:
+            # Rejected — the prompt is owed exactly as it was, suspension and all.
+            choice.data.pop("_answered", None)
             return False
         resume_after_answer(self)
         self._settle_resumed_resolution()
@@ -217,8 +246,12 @@ class PendingChoicesMixin:
         if not spec.suspends:
             spec.default(self, choice)
             return True
-        self.effect_suspended = False
-        spec.default(self, choice)
+        choice.data["_answered"] = True
+        try:
+            spec.default(self, choice)
+        except Exception:
+            choice.data.pop("_answered", None)
+            raise
         resume_after_answer(self)
         self._settle_resumed_resolution()
         return True

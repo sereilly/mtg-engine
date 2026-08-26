@@ -216,10 +216,12 @@ class Game(
     # effect. Popped once the event gets through, so a later contention asks
     # afresh rather than inheriting a stale answer.
     effect_order_answers: dict = field(default_factory=dict)
-    # Set while an event is waiting on a decision, so the loop that was running
-    # it stops instead of carrying on past a step that has not happened. Cleared
-    # when the answer arrives. See engine/resumption.py.
-    effect_suspended: bool = False
+    # ``effect_suspended`` — whether a loop that was running an event has to stop
+    # because a decision is owed — is *not* a field. It is derived from
+    # ``pending_choices`` (engine/mixins/stack/choices.py), because a boolean
+    # cannot say that two seats owe a decision at once: "each opponent discards
+    # two cards" arms one prompt per opponent, and the first answer lifted a
+    # suspension the rest of them were still holding. See engine/resumption.py.
     # The stack object currently resolving, on the interactive path only. Every
     # prompt armed while it is set records it (``_stack_item``), and the object
     # stays on the stack until nothing it armed is queued any more — CR 608.2:

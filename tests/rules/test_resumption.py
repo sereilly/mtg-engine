@@ -563,3 +563,64 @@ def test_a_discard_stops_the_steps_queued_behind_it(set_pool):
     # the discard had just filled.
     assert [c.kind for c in game.pending_choices] == ["search_library"]
     assert sorted(c.name for c in p1.graveyard) == ["Black Lotus", "Giant Growth"]
+
+
+# ---------------------------------------------------------------------------
+# Several seats can owe a decision at once (round 31)
+# ---------------------------------------------------------------------------
+#
+# CR 608.2 and CR 117.3b are about the whole resolution, not about one prompt of
+# it. "Each opponent discards two cards" arms one prompt per opponent, and every
+# one of them is a step of the same resolution that has not happened yet — so
+# the steps behind them wait for the *last* answer, not the first.
+#
+# The suspension used to be a single boolean on ``Game``, which cannot say that.
+# The first opponent's answer cleared it, the resolution resumed, and "each
+# player loses 2 life" was applied while the second opponent still had their
+# hand. It is derived from the queue now (``PendingChoicesMixin`` —
+# every queued choice of a ``suspends`` kind holds it), so the last answer is
+# what lifts it.
+
+
+@pytest.mark.cr("608.2", "117.3b")
+def test_two_seats_owing_a_discard_both_hold_the_resolution(catalog_by_name):
+    """Bad Deal's life loss waits for both opponents, not just the first."""
+    filler = [_mk_creature_card(f"Filler{i}", 1, 1) for i in range(6)]
+    caster = PlayerState(name="P0", hand=[catalog_by_name["Bad Deal"]],
+                         library=list(filler))
+    left = PlayerState(name="P1", hand=[CARDS_BY_NAME["Giant Growth"],
+                                        CARDS_BY_NAME["Black Lotus"]])
+    right = PlayerState(name="P2", hand=[CARDS_BY_NAME["Giant Growth"],
+                                         CARDS_BY_NAME["Black Lotus"]])
+    game = Game(players=[caster, left, right])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1, 2}
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+
+    assert game._cast_onto_stack(0, "Bad Deal").supported
+    game.priority_player_index = 0
+    for seat in (0, 1, 2):
+        game.pass_priority(seat)
+
+    owed = [c.player_index for c in game.pending_choices if c.kind == "discard"]
+    assert owed == [1, 2], "each opponent was asked in turn order"
+    assert game.effect_suspended is True
+    assert [p.life for p in game.players] == [20, 20, 20]
+
+    game.resolve_pending_choice("discard", 1, hand_indices=[0, 1], to_library=False)
+
+    assert game.effect_suspended is True, (
+        "seat 2 still owes a discard, so the resolution is still suspended"
+    )
+    assert [p.life for p in game.players] == [20, 20, 20], (
+        "the sentence behind the discards must not run while one is still owed"
+    )
+    assert game.waiting_prompt() is not None
+
+    game.resolve_pending_choice("discard", 2, hand_indices=[0, 1], to_library=False)
+
+    assert not game.effect_suspended and game.resume_stack == []
+    assert [p.life for p in game.players] == [18, 18, 18]
+    assert len(caster.hand) == 2 and left.hand == [] and right.hand == []

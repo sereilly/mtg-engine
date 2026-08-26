@@ -16,6 +16,17 @@ from __future__ import annotations
 from engine import Game, PlayerState
 from engine.resumption import run_resumable
 
+
+def _r31_suspend(game: Game) -> None:
+    """Make the game suspended the way the engine does: owe somebody a decision
+    of a kind registered ``suspends``. ``effect_suspended`` is derived from the
+    queue, so there is no flag to poke."""
+    game.arm_pending_choice("number_choice", 0, minimum=0, maximum=0)
+
+
+def _r31_unsuspend(game: Game) -> None:
+    game.clear_pending_choices("number_choice")
+
 def test_a_loop_records_only_what_is_still_owed():
     game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
     seen: list[int] = []
@@ -36,14 +47,14 @@ def test_a_suspended_step_stops_the_loop_and_records_the_rest():
     def step(item: int) -> None:
         seen.append(item)
         if item == 2:
-            game.effect_suspended = True
+            _r31_suspend(game)
 
     run_resumable(game, [1, 2, 3], step)
 
     assert seen == [1, 2], "step 3 did not run against a step 2 that has not happened"
     assert len(game.resume_stack) == 1
 
-    game.effect_suspended = False
+    _r31_unsuspend(game)
     game.resume_stack.pop()()
     assert seen == [1, 2, 3]
 
@@ -64,12 +75,12 @@ def test_nested_loops_resume_innermost_first():
     def inner(item: str) -> None:
         seen.append(item)
         if item == "b1":
-            game.effect_suspended = True
+            _r31_suspend(game)
 
     run_resumable(game, ["a", "b", "c"], outer)
     assert seen == ["a", "b1"]
 
-    game.effect_suspended = False
+    _r31_unsuspend(game)
     while game.resume_stack:
         game.resume_stack.pop()()
 
