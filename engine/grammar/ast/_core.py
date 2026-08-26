@@ -668,16 +668,32 @@ class Duration:
 
 
 @dataclass(frozen=True)
-class ManaValueOfSubject:
-    """"…, where X is **its** mana value." (Great Defender, Subdue, Kry Shield,
-    In the Eye of Chaos.)
+class CharacteristicOfSubject:
+    """"…, where X is **its** mana value" (Great Defender, Subdue, Kry Shield,
+    In the Eye of Chaos), "…, where X is **its toughness minus 1**" (Blood
+    Lust).
 
     The other kind of where-clause: `CountOf` counts a set of objects, this one
     reads a characteristic off the single object the sentence already named —
-    the creature it pumps, the spell it counters. So it carries nothing at all;
-    "its" is the sentence's own subject and the lowering is what knows which
-    object that is.
+    the creature it pumps, the spell it counters. It carries no subject; "its"
+    is the sentence's own subject and the lowering is what knows which object
+    that is.
+
+    *characteristic* is a field rather than half the class name because the
+    three words reach three accessors through one resolution: a
+    ``ToughnessOfSubject`` beside a ``ManaValueOfSubject`` would be two copies
+    of one production, and every card printing the third word would need a
+    third.
+
+    *offset* is the printed constant the clause adds or subtracts, and it is
+    payload for exactly the reason :class:`BoardCount`'s ``base`` is: "its
+    toughness minus 1" and "its mana value plus 2" are one arithmetic with one
+    number changed. Dropping it would leave Blood Lust giving -X where X is the
+    whole toughness — a creature killed outright by the arm that is printed
+    specifically not to kill it.
     """
+    characteristic: str          # mana_value | power | toughness
+    offset: int = 0
 
 
 @dataclass(frozen=True)

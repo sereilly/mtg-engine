@@ -226,18 +226,37 @@ def _lower_condition(
                 )
             payload["shared_name"] = True
         return payload
-    if isinstance(condition, ast.SubjectPowerIs):
+    if isinstance(condition, ast.SubjectCharacteristicIs):
         # The bound must be a printed number: the evaluator compares an integer,
         # and an X or a board count would be compared against a node. Refused
         # rather than coerced, so the day a card prints one the gate is visibly
         # missing instead of silently answering about the wrong quantity.
         if not isinstance(condition.comparison.value, ast.Fixed):
             raise LoweringError(
-                "the power gate compares against a printed number",
+                "a characteristic gate compares against a printed number",
+                node=condition,
+            )
+        # Which object is asked is payload, and only two answers exist because
+        # only two objects a resolution can name without a second choice: the
+        # ability's own source (Lesser Werewolf) and the target the clause
+        # itself announced (Blood Lust). A subject that is neither describes a
+        # permanent nothing looks up, so it refuses rather than being answered
+        # about whichever object the resolver happened to hold.
+        subject = condition.subject
+        if isinstance(subject, ast.TargetSpec) and subject.targeted:
+            asked = "target"
+        elif isinstance(subject, ast.TargetSpec) and subject.filter.is_source:
+            asked = "source"
+        else:
+            raise LoweringError(
+                "a characteristic gate asks about the source or about its own "
+                "target",
                 node=condition,
             )
         return {
-            "kind": "source_power_is",
+            "kind": "subject_characteristic_is",
+            "subject": asked,
+            "characteristic": condition.characteristic,
             "op": condition.comparison.op,
             "count": condition.comparison.value.value,
         }

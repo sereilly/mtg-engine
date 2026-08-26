@@ -25,7 +25,7 @@ from .lexer import PT
 from .amounts import parse_comparison
 from .nouns import parse_object_filter
 from .readers import accept_source_reference
-from .references import parse_player_ref
+from .references import parse_player_ref, parse_target_spec
 from .phrases import _parse_duration, _parse_keywords
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
@@ -35,6 +35,13 @@ from .vocabulary import NUMBER_WORDS
 #: The subject is fixed because the evaluator reads ``context.source_permanent``
 #: — a spec naming anything else would describe a permanent nothing looks up.
 _SOURCE_SPEC = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
+
+#: The characteristics a "…'s <X> is N or greater" / "…has <X> N or greater"
+#: clause may ask about. A table rather than a literal in the production for the
+#: usual reason: the two words reach the same accessor pair through the same
+#: comparison, so a card printing the other one is data, not a second branch.
+CHARACTERISTIC_WORDS: tuple[str, ...] = ("power", "toughness")
+
 
 #: Whom a damage *history* clause names, longest phrase first — the same set
 #: `triggers._DAMAGE_RECIPIENTS` reads on the event side, because one printed
@@ -354,9 +361,36 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     if accept_source_reference(stream) and (
         stream.accept_word("'s") or stream.accept_word("is")
     ):
-        if stream.accept_phrase("power", "is"):
-            return ast.SubjectPowerIs(_SOURCE_SPEC, parse_comparison(stream))
+        for word in CHARACTERISTIC_WORDS:
+            if stream.accept_phrase(word, "is"):
+                return ast.SubjectCharacteristicIs(
+                    _SOURCE_SPEC, word, parse_comparison(stream)
+                )
     stream.reset(power_mark)
+
+    # "if **target creature has toughness 5 or greater**" (Blood Lust). The same
+    # question about the same accessor, asked of an object the clause *names*
+    # rather than of the ability's source — so the subject is parsed as an
+    # ordinary noun phrase and travels on the node.
+    #
+    # This is the one condition that may introduce a target (CR 601.2c): the
+    # spell's whole effect is the branch, so the creature is chosen here and the
+    # arms refer back to it. The printed word "target" is therefore **required**
+    # — "if a creature has toughness 5 or greater" is a question about a *set*,
+    # which this node cannot ask and which would silently become a question
+    # about whichever creature the resolver happened to hand back.
+    has_mark = stream.mark()
+    try:
+        spec = parse_target_spec(stream)
+    except GrammarError:
+        spec = None
+    if spec is not None and spec.targeted and stream.accept_word("has"):
+        for word in CHARACTERISTIC_WORDS:
+            if stream.accept_word(word):
+                return ast.SubjectCharacteristicIs(
+                    spec, word, parse_comparison(stream)
+                )
+    stream.reset(has_mark)
 
     state_mark = stream.mark()
     if accept_source_reference(stream) and (

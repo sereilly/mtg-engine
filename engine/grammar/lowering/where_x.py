@@ -47,8 +47,8 @@ def lower_where_x(
     """
     if isinstance(node.definition, ast.CountOfDeaths):
         return _lower_where_x_deaths(node, inner, produced)
-    if isinstance(node.definition, ast.ManaValueOfSubject):
-        return _lower_where_x_mana_value(node, inner, produced)
+    if isinstance(node.definition, ast.CharacteristicOfSubject):
+        return _lower_where_x_characteristic(node, inner, produced)
     if isinstance(node.definition, ast.CountOfDeathsThisWay):
         return _lower_where_x_this_way(node, inner, produced)
     # "…where X is **twice** the number of …" (Jovial Evil). The factor is
@@ -146,7 +146,7 @@ def _lower_where_x_deaths(
     return _stamp_x_from_count(inner, {"history": "creatures_died_under_your_control"})
 
 
-def _lower_where_x_mana_value(
+def _lower_where_x_characteristic(
     node: ast.WhereX,
     inner: tuple[OracleInstruction, ...],
     produced: frozenset[str],
@@ -169,9 +169,23 @@ def _lower_where_x_mana_value(
     # hand, rather than by a resolution-time fallback order that would have to
     # guess when a sentence has both.
     names_a_spell = any(i.payload.get("bound_to_trigger") for i in inner)
+    if names_a_spell and node.definition.characteristic != "mana_value":
+        # A spell on the stack has no power or toughness to read (CR 208.1), so
+        # a clause asking for one about a bound spell is a misreading of one
+        # half or the other. Refused rather than answered with a zero the card
+        # never printed.
+        raise LoweringError(
+            "a spell has no power or toughness to read", node=node
+        )
     return _stamp_x_from_count(
         inner,
-        {"object_mana_value": "triggering_spell" if names_a_spell else "target"},
+        {
+            "object_characteristic": {
+                "object": "triggering_spell" if names_a_spell else "target",
+                "characteristic": node.definition.characteristic,
+                "offset": node.definition.offset,
+            }
+        },
     )
 
 

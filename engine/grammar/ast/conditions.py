@@ -64,22 +64,29 @@ class IsState:
 
 
 @dataclass(frozen=True)
-class SubjectPowerIs:
-    """"if this creature's power is 1 or more" (Lesser Werewolf).
+class SubjectCharacteristicIs:
+    """"if this creature's power is 1 or more" (Lesser Werewolf), "if target
+    creature has toughness 5 or greater" (Blood Lust).
 
     A comparison against a *computed* characteristic (CR 613 layer 7), which is
-    why it is a condition node rather than a narrowing on the subject: the
-    ability the clause gates is the source's own, so there is no set of objects
-    to filter — there is one object, and a question about it.
+    why it is a condition node rather than a narrowing on the subject: there is
+    one object in hand and a question about it, not a set to filter.
 
-    The printed number and the printed comparison both travel on the node. A
-    card printing "2 or greater" or "1 or less" is this production with a
-    different payload, which is the whole reason the bound is not baked in: the
-    gate this clause exists for is Lesser Werewolf's own shrinking, and a
-    hardcoded 1 would stop being the card's number the moment a second card
-    printed one.
+    All three of *which* object, *which* characteristic and *what bound* travel
+    on the node. The characteristic is a field rather than half the class name
+    because "power" and "toughness" ask the identical question of the identical
+    accessor pair — a `SubjectToughnessIs` beside a `SubjectPowerIs` would be
+    two copies of one production, and the day a card prints "mana value 3 or
+    less" it would be three.
+
+    The subject is a full :class:`TargetSpec` so the clause can name the
+    *spell's own target*. Lesser Werewolf asks about the ability's source and
+    Blood Lust asks about the creature it targets; the difference is entirely
+    which object the spec resolves to, and the comparison underneath does not
+    change.
     """
     subject: "TargetSpec"
+    characteristic: str      # power | toughness
     comparison: "Comparison"
 
 
@@ -313,5 +320,5 @@ Condition = Union[
     HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
-    DealtDamageThisTurn, SubjectPowerIs,
+    DealtDamageThisTurn, SubjectCharacteristicIs,
 ]

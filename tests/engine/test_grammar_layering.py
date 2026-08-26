@@ -73,6 +73,11 @@ PARSE_LAYERS = [
     # cards pushed that file past the guard below.
     "paragraphs",
     "phrases",
+    # Which object a bare "it" in an effect names. Under `triggers` because
+    # only one of its two rebinders is about a trigger and neither needs a
+    # production: the walk is about the shape of the AST, so it imports `ast`
+    # and nothing else.
+    "rebinding",
     # The trigger tables and the productions that read them. Split out of
     # `phrases` when Antiquities' trigger work pushed that module past the
     # thousand-line guard below — above `phrases`, whose shared fragments it

@@ -26,6 +26,7 @@ from .references import parse_recipient
 from .vocabulary import CARD_TYPES
 from .stream import TokenStream
 from .conditions import _parse_condition
+from .rebinding import rebind_pronoun_to_condition_target
 from .phrases import (
     parse_bound_subject,
     _parse_can_attack_as_though,
@@ -571,7 +572,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             condition = _parse_condition(stream)
             stream.accept_punct(",")
             then = parse_statement(stream, top_level=False)
-            return ast.Conditional(condition, then)
+            # "If **target creature** has toughness 5 or greater, **it** gets
+            # +4/-4…" (Blood Lust). The condition announced the spell's target
+            # (CR 601.2c), so the pronoun in the arm names that choice — without
+            # this the arm reads "it" as the spell itself and lowers to a pump
+            # of a card on the stack, which is a supported card that does
+            # nothing.
+            return ast.Conditional(
+                condition, rebind_pronoun_to_condition_target(condition, then)
+            )
         except GrammarError:
             stream.reset(mark)
 

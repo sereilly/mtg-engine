@@ -918,7 +918,11 @@ def test_invoke_prejudice_compiles_its_colour_comparison_as_a_board(set_pool):
     }
     assert trigger.instruction.payload["bound_to_trigger"] is True
     assert trigger.instruction.payload["x_from_count"] == {
-        "object_mana_value": "triggering_spell"
+        "object_characteristic": {
+            "object": "triggering_spell",
+            "characteristic": "mana_value",
+            "offset": 0,
+        }
     }
 
 
