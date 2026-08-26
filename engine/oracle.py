@@ -50,6 +50,7 @@ from .auras import unclaimed_aura_lines
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .cast_costs import cast_cost_claims_line
 from .combat_restrictions import combat_restriction_for
+from .enter_effects import enter_effect_line
 from .target_immunity import immunity_claims_line
 from .effect_labels import activated_label, triggered_label
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
@@ -2502,6 +2503,41 @@ def _parse_creature_program(
     )
 
 
+
+def _unread_land_text(oracle_text: str, card_name: str | None) -> str | None:
+    """A land's first printed line that nothing in the engine reads, or None.
+
+    Reminder text (CR 305.6) is dropped first: a basic's whole "ability" is a
+    parenthetical, and a dual's is too. What remains is rules text, and a land
+    printing rules text no reader claims is a land that taps for mana and does
+    nothing else while reporting supported.
+
+    Asked only of a land with **no** parsed ability, because a land that has one
+    is degraded by an unreadable *bonus* line rather than broken by it — the
+    distinction the gate above already draws.
+    """
+    for raw in (oracle_text or "").splitlines():
+        line = re.sub(r"\([^)]*\)", "", raw).strip()
+        if not line:
+            continue
+        # Through the same collapse every other static reader uses: a land that
+        # names itself ("Tapped Land enters tapped") is saying "this permanent",
+        # and a reader anchored on the self-reference sees nothing otherwise.
+        # That mismatch between a gate and a runtime reader is the bug round 18
+        # found on Bartel Runeaxe, and this is the same one line lower.
+        collapsed = _restriction_line(line, card_name)
+        if _is_supported_static_creature_line(line, card_name):
+            continue
+        if enter_effect_line(collapsed) is not None:
+            continue
+        if _derived_static_claims(collapsed, collapsed, card_name):
+            continue
+        if any(pattern in collapsed for pattern in SUPPORTED_SPELL_PATTERNS):
+            continue
+        return line
+    return None
+
+
 def _parse_noncreature_abilities(
     oracle_text: str, card_name: str | None = None
 ) -> tuple[ParsedActivatedAbility, ...]:
@@ -2984,6 +3020,28 @@ def _compile_card_oracle(
                 f"no ability of this land is implemented: {abilities[0].source_line}",
                 normalized_text,
             )
+
+        # **A land can be hollow without printing an ability**, which the
+        # `abilities` check above cannot see. Legends' five "…creatures you
+        # control have \"bands with other …\"" lands and The Tabernacle at
+        # Pendrell Vale print a *static* line: no activated ability, no
+        # triggered ability, and nothing claimed it — so all six reported
+        # supported, tapped for mana, and did nothing else. The comment above
+        # says a land with no printed ability "has nothing to fail on", and
+        # that is true only of reminder text; a static grant is text the engine
+        # either implements or does not.
+        #
+        # Parenthetical spans are dropped first, because CR 305.6 reminder text
+        # is exactly what a basic and a dual print and is not an ability.
+        if not any((activated_abilities, triggered_abilities)):
+            unread = _unread_land_text(oracle_text, name)
+            if unread is not None:
+                return OracleProgram(
+                    False,
+                    "unsupported",
+                    f"no static ability of this land is implemented: {unread}",
+                    normalized_text,
+                )
 
         return OracleProgram(
             True, "land_mana", "basic land support", normalized_text,
