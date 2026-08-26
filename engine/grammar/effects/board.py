@@ -154,11 +154,24 @@ def _parse_return(stream: TokenStream) -> ast.Statement:
     if destination.name == "battlefield" and stream.accept_word("tapped"):
         entering_tapped = True
 
+    # "…to the battlefield **under the control of that creature's owner**."
+    # (Reincarnation.) CR 110.2 makes the spell's controller the default, so
+    # the phrase is only ever read here — consumed, because a dropped "under
+    # the control of" is a permanent entering under the wrong player.
+    under_control_of: ast.PlayerRef | None = None
+    if destination.name == "battlefield" and stream.accept_phrase(
+        "under", "the", "control", "of"
+    ):
+        under_control_of = parse_player_ref(stream)
+        if under_control_of is None:
+            raise stream.error("expected a player after 'under the control of'")
+
     from_zone: ast.Zone | None = None
     if isinstance(subject, ast.TargetSpec) and subject.filter.zone != "battlefield":
         from_zone = ast.Zone(subject.filter.zone, subject.filter.zone_owner)
     return ast.ReturnToZone(
-        subject, destination, from_zone, entering_tapped=entering_tapped
+        subject, destination, from_zone, entering_tapped=entering_tapped,
+        under_control_of=under_control_of,
     )
 
 

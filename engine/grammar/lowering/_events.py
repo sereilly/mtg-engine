@@ -79,6 +79,23 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     "draws_card",
 })
 
+#: Delayed-trigger events (CR 603.7) whose fire site freezes the **owner** of
+#: the object the event was about, under `EVENT_SUBJECT_OWNER` below.
+#:
+#: Its own table beside `_EVENT_SUBJECT_CONTROLLERS` rather than more entries in
+#: it, and for that table's own stated reason: ownership is CR 108.3 and never
+#: changes, control is CR 613 layer 2 and does. Reincarnation returns the card
+#: under the *owner's* control, so reading the controller instead would hand the
+#: creature to whoever had stolen the one that died.
+_EVENT_SUBJECT_OWNERS: frozenset[str] = frozenset({
+    "bound_permanent_dies",              # Reincarnation
+})
+
+#: The payload key those fire sites stamp it under. One constant for the same
+#: reason `EVENT_SUBJECT_PLAYER` is one: the fire site writes it and the handler
+#: reads it, and three copies of a string is how they come apart.
+EVENT_SUBJECT_OWNER = "event_subject_owner"
+
 #: The payload spelling both a recipient and a condition subject use for that
 #: seat. One constant, because the fire site writes it, the life handler reads
 #: it and `evaluate_condition` reads it — three copies of a string is how they

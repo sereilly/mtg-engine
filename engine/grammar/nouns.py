@@ -679,6 +679,13 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # a second answer every count lowering had to learn.
             elif stream.accept_word("their") or stream.accept_phrase("that", "player", "'s"):
                 owner = ast.PlayerRef("owner")
+            # "from **its owner's** graveyard" (Reincarnation). The same
+            # referent `_parse_zone` already reads on the destination side, and
+            # the same kind: "the owner of the object this sentence is about".
+            # Which object that is depends on the sentence, and is the
+            # lowering's question rather than the noun parser's.
+            elif stream.accept_phrase("its", "owner", "'s"):
+                owner = ast.PlayerRef("owner")
             # "from **target player's** graveyard" (Drafna's Restoration): a
             # chosen player rather than a fixed one, and a *second* target on the
             # same line — the cards are targets too.

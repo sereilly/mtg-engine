@@ -274,8 +274,29 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
     # the web layer offers them. Defaulting to the library alone keeps a
     # payload written before the graveyard existed meaning what it meant.
     zones = tuple(instruction.payload.get("zones", ("library",)))
+    # "…from **its owner's** graveyard … under the control of **that
+    # creature's owner**." (Reincarnation.) Whose zone is looked in and whose
+    # battlefield receives are two questions, and neither is "the seat that
+    # chooses" — CR 608.2c makes the chooser the ability's controller. Both
+    # ride as seats so the picker, the AI and the resolver read one answer;
+    # absent, they default to the chooser, which is every other card.
+    seats: dict[str, int] = {}
+    for key, payload_key in (
+        ("zone_seat", "zone_owner"), ("battlefield_seat", "battlefield_owner"),
+    ):
+        named = instruction.payload.get(payload_key)
+        if named is None:
+            continue
+        seat = (context.trigger_context or {}).get(str(named))
+        if seat is None:
+            # The trigger that would have recorded it did not: CR 603.10's
+            # last-known information is simply absent, so the effect falls back
+            # to its controller rather than guessing a seat.
+            continue
+        seats[key] = int(seat)
     game.arm_pending_choice(
         "search_library", caster_index,
+        **seats,
         count=instruction.payload.get("count", 1),
         card_type=instruction.payload.get("card_type", "any"),
         zones=zones,
@@ -303,7 +324,13 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # the search ends. A search that does not print the word shows nothing.
         reveal=bool(instruction.payload.get("reveal")),
     )
-    game.log.append(f"{caster.name} is searching their " + " and ".join(zones))
+    # Whose zone, not the chooser's, because they are not always the same seat.
+    searched = game.players[seats.get("zone_seat", caster_index)]
+    game.log.append(
+        f"{caster.name} is searching "
+        + ("their " if searched is caster else f"{searched.name}'s ")
+        + " and ".join(zones)
+    )
     return True, "pending_search_library"
 
 

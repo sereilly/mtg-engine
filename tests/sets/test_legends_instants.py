@@ -790,3 +790,126 @@ def test_mana_drain_adds_the_countered_spells_mana_value_once(set_pool):
     game._enter_main_phase(precombat=False)
     game._settle()
     assert p2.mana_pool["C"] == 6
+
+
+# ---------------------------------------------------------------------------
+# Reincarnation — the delayed ability's *other* seat: its controller chooses
+# (CR 608.2c) out of a graveyard that may be somebody else's.
+# ---------------------------------------------------------------------------
+
+
+def _reincarnation_board(set_pool, graveyard):
+    """P1 casts Reincarnation on P2's creature; *graveyard* is P2's."""
+    victim = Permanent(card=_creature("Victim"))
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Reincarnation"]],
+                     graveyard=[set_pool("LEA")["Grizzly Bears"]])
+    p2 = PlayerState(name="P2", battlefield=[victim], graveyard=list(graveyard))
+    game = Game(players=[p1, p2])
+    game.cast_from_hand(
+        0, "Reincarnation", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    return game, p1, p2, victim
+
+
+def _kill(game, permanent):
+    seat = game.controller_index_of(permanent)
+    game._destroy_swept_permanents(
+        game.players[seat], lambda perm: perm is permanent
+    )
+    game._settle()
+
+
+def test_reincarnation_arms_a_one_shot_death_watch(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Reincarnation"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [i.kind for i in steps] == [
+        "choose_target_permanent", "create_delayed_trigger",
+    ]
+    payload = steps[1].payload
+    assert payload["event"] == "bound_permanent_dies"
+    # "When", not "whenever": CR 603.7b's default.
+    assert payload["once"] is True
+    inner = payload["instruction"]
+    # Both possessives name the dead creature's owner, and both travel as
+    # seats rather than as a hard-coded "the chooser".
+    assert inner.payload["zone_owner"] == "event_subject_owner"
+    assert inner.payload["battlefield_owner"] == "event_subject_owner"
+
+
+def test_reincarnation_offers_the_dead_creatures_owners_graveyard(set_pool):
+    """The spell's controller chooses (CR 608.2c); the graveyard is the dead
+    creature's owner's."""
+    game, _p1, _p2, victim = _reincarnation_board(
+        set_pool, [set_pool("LEA")["Shivan Dragon"]]
+    )
+
+    _kill(game, victim)
+
+    prompt, = game.pending_choices
+    assert prompt.kind == "search_library"
+    assert prompt.player_index == 0
+    assert prompt.data["zone_seat"] == 1
+    assert prompt.data["battlefield_seat"] == 1
+
+
+def test_reincarnation_returns_the_card_under_its_owners_control(set_pool):
+    """CR 110.2's default is the spell's controller; "under the control of that
+    creature's owner" is the effect saying otherwise."""
+    game, _p1, p2, victim = _reincarnation_board(
+        set_pool, [set_pool("LEA")["Shivan Dragon"]]
+    )
+    _kill(game, victim)
+
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="graveyard"
+    )
+
+    assert [p.card.name for p in game.controlled_by(1)] == ["Shivan Dragon"]
+    assert [p.card.name for p in game.controlled_by(0)] == []
+    assert "Shivan Dragon" not in [card.name for card in p2.graveyard]
+
+
+def test_reincarnation_refuses_a_card_that_is_not_a_creature(set_pool):
+    """The printed noun is re-checked against the answer: a payload is a hint
+    to the picker and never a permission."""
+    game, _p1, _p2, victim = _reincarnation_board(
+        set_pool, [set_pool("LEA")["Lightning Bolt"], set_pool("LEA")["Grizzly Bears"]]
+    )
+    _kill(game, victim)
+
+    assert not game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="graveyard"
+    )
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=1, zone="graveyard"
+    )
+    assert [p.card.name for p in game.controlled_by(1)] == ["Grizzly Bears"]
+
+
+def test_a_non_interactive_seat_reads_the_same_graveyard(set_pool):
+    """The AI answers out of the zone the choice names, not out of its own —
+    an index into the wrong graveyard is an answer the resolver refuses, which
+    would silently become a fail-to-find."""
+    game, _p1, _p2, victim = _reincarnation_board(
+        set_pool, [set_pool("LEA")["Shivan Dragon"]]
+    )
+    _kill(game, victim)
+
+    game._default_search_library(game.pending_choices[0])
+
+    assert [p.card.name for p in game.controlled_by(1)] == ["Shivan Dragon"]
+
+
+def test_reincarnation_does_not_watch_a_creature_it_never_named(set_pool):
+    game, p1, p2, _victim = _reincarnation_board(
+        set_pool, [set_pool("LEA")["Shivan Dragon"]]
+    )
+    bystander = Permanent(card=_creature("Bystander"))
+    p2.battlefield.append(bystander)
+
+    _kill(game, bystander)
+
+    assert game.pending_choices == []
+    assert len(game.delayed_triggers) == 1

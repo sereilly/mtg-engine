@@ -318,7 +318,7 @@ def lower_statement(
         return _lower_discard(statement, event)
 
     if isinstance(statement, ast.ReturnToZone):
-        return _lower_return_to_zone(statement)
+        return _lower_return_to_zone(statement, event)
 
     if isinstance(statement, ast.PhaseOut):
         return _lower_phase_out(statement)

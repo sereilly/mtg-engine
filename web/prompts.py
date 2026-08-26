@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from engine.pending_choices import CHOICE_SPECS, public_data
-from engine.search_filters import search_matches
+from engine.search_filters import search_matches, searched_seat
 
 
 @dataclass(frozen=True)
@@ -183,7 +183,11 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
     because this payload is a hint and not a permission.
     """
     choice = choices[0]
-    caster = ctx.game.players[choice.player_index]
+    # The searched zone's owner, which is the chooser for every card but
+    # Reincarnation — see `engine.search_filters.searched_seat`. Offering the
+    # chooser's own graveyard there would show a picker full of cards the
+    # engine then refuses.
+    caster = ctx.game.players[searched_seat(choice.data, choice.player_index)]
     zones = tuple(choice.data.get("zones", ("library",)))
     destinations = list(choice.data.get("destinations") or ())
     payload = {
