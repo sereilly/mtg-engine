@@ -39,6 +39,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from engine import Game
+from engine.hand_locks import locked_hand_indices
 from engine.cast_permissions import playable_from_zones
 from engine.classifier import classify_card
 from engine.models import PlayerState
@@ -312,10 +313,15 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
     window = _casting_window(session, player_index)
     if window is None:
         return []
+    # A card that is in hand and may not be played at all (Firestorm Phoenix's
+    # rider) is not highlighted, for the same reason the engine refuses the
+    # cast: the restriction is about *how many* copies may be played, so it is
+    # read as a set of positions rather than as a fact about the card.
+    locked = locked_hand_indices(session.game, player_index)
     return [
         i
         for i, card in enumerate(session.game.players[player_index].hand)
-        if _card_castable_now(session, player_index, card, window)
+        if i not in locked and _card_castable_now(session, player_index, card, window)
     ]
 
 

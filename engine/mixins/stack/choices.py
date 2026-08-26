@@ -1202,11 +1202,25 @@ class PendingChoicesMixin:
         number the player has not given yet. Discarding nothing draws nothing,
         which is what "that many" says.
         """
-        if not choice.data.get("draw_that_many") or discarded <= 0:
-            return
         player = self.players[choice.player_index]
-        drawn = self._draw_with_replacements(player, discarded)
-        self.log.append(f"{player.name} drew {drawn} card(s) for the cards discarded")
+        if choice.data.get("draw_that_many") and discarded > 0:
+            # CR 614.5: a draw a replacement effect *created* is not replaced
+            # again by that same effect. The prompt carries which sources have
+            # already had their opportunity (Chains of Mephistopheles), and an
+            # ordinary "discard, then draw that many" carries none.
+            drawn = self._draw_with_replacements(
+                player,
+                discarded,
+                exclude_sources=tuple(choice.data.get("draw_exclude_sources") or ()),
+            )
+            self.log.append(f"{player.name} drew {drawn} card(s) for the cards discarded")
+        # The draws that were queued *behind* the one this prompt replaced.
+        # CR 121.2 makes "draw three cards" three individual draws; a
+        # replacement takes one of them and the rest have to wait for the
+        # answer, because they are later steps of the same instruction.
+        queued = int(choice.data.get("queued_draws", 0) or 0)
+        if queued > 0:
+            self._draw_with_replacements(player, queued)
 
     def confirm_revealed_hand_pick(self, player_index: int, hand_index: int) -> bool:
         return self.resolve_pending_choice(

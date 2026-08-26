@@ -368,3 +368,42 @@ def test_personal_incarnation_style_one_point_redirect():
     assert dealt == 2                      # 1 of the 3 was redirected
     assert p1.life == before - 1           # ...to the owner
     assert perm.metadata["redirect_one_damage_to_owner_until_eot"] == 0
+
+
+@pytest.mark.cr("614.5")
+def test_a_draw_replacement_can_decline_the_draw_it_created():
+    """CR 614.5: "a replacement effect doesn\'t invoke itself repeatedly; it
+    gets only one opportunity to affect an event or any modified events that
+    may replace that event."
+
+    The draw seam carries the exclusion on the event, so an effect that answers
+    a draw *with* a draw (Chains of Mephistopheles) names itself and its own
+    creation comes back past it. Without that the second draw would reach the
+    same predicate and the effect would apply forever.
+    """
+    seen = []
+
+    def applies(game, payload):
+        return 99 not in (payload.get("exclude_sources") or ())
+
+    @replacement_effect("draw", 9001, applies=applies)
+    def _probe_draw_again(game, payload):
+        seen.append(tuple(payload.get("exclude_sources") or ()))
+        game._draw_with_replacements(payload["player"], 1, exclude_sources=(99,))
+        payload["drawn"] = 1
+        return ReplacementOutcome(replaced=True)
+
+    try:
+        game, p1, _ = _two_player_game()
+        p1.library = [_mk_creature_card(f"C{i}", 1, 1) for i in range(5)]
+
+        game._draw_with_replacements(p1, 1)
+
+        assert seen == [()], "the created draw came back through the same effect"
+        assert [card.name for card in p1.hand] == ["C0"]
+    finally:
+        REPLACEMENTS["draw"] = [
+            candidate
+            for candidate in REPLACEMENTS["draw"]
+            if candidate.key != "_probe_draw_again"
+        ]

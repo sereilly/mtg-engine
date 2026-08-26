@@ -694,7 +694,12 @@ class EffectsMixin:
         return count
 
     def _draw_with_replacements(
-        self, player: PlayerState, count: int, *, turn_based: bool = False
+        self,
+        player: PlayerState,
+        count: int,
+        *,
+        turn_based: bool = False,
+        exclude_sources: tuple[int, ...] = (),
     ) -> int:
         """Draw ``count`` cards for *player*, letting an armed draw replacement
         take the first of them (CR 614) — Aladdin's Lamp, Ring of Ma'rûf — or
@@ -719,19 +724,36 @@ class EffectsMixin:
         The engine cannot derive it: any later draw in the same step is also
         made by the active player during their draw step, and it is not the
         first one.
+
+        ``exclude_sources`` is CR 614.5 — "a replacement effect gets only one
+        opportunity to affect an event or any modified events resulting from
+        that event". A replacement that *creates* a draw (Chains of
+        Mephistopheles' "if the player discards a card this way, they draw a
+        card") passes the ``permanent_id`` of the source that created it, so
+        that source does not replace its own replacement into a loop. It is a
+        set of ids rather than a boolean because a *second* copy of the same
+        card is a different effect and does apply (CR 614.5 is about one
+        effect, not one wording), and it is carried on the payload so the
+        exclusion survives the restart CR 616.1e's prompt re-runs.
         """
         if count <= 0:
             return player.draw(count)
         consumed, payload = apply_replacements(
             self,
             "draw",
-            {"player": player, "count": count, "drawn": 0, "turn_based": turn_based},
+            {
+                "player": player,
+                "count": count,
+                "drawn": 0,
+                "turn_based": turn_based,
+                "exclude_sources": tuple(exclude_sources),
+            },
             # A draw can suspend: "the replacement took it, the cards arrive
             # when you answer" is already this method's contract, so CR 616.1e's
             # choice can be put to the player here. Re-running this call is what
             # the answer resumes, which is why the thunk is the call itself.
             restart=lambda: self._draw_with_replacements(
-                player, count, turn_based=turn_based
+                player, count, turn_based=turn_based, exclude_sources=exclude_sources
             ),
         )
         if consumed:

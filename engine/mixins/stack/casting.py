@@ -21,6 +21,7 @@ from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
 from ...cast_costs import AdditionalCost, additional_costs
 from ...cast_restrictions import check_cast_timing
+from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
 from ...cost_modifiers import (
     CostReduction, cost_reduction_for_cast, reduce_cost, spell_cost_tax,
@@ -258,10 +259,22 @@ class SpellCastingMixin:
         permission = None
         if from_zone == "hand":
             source_zone = caster.hand
-            try:
-                hand_index = next(i for i, card in enumerate(caster.hand) if card.name == card_name)
-            except StopIteration as exc:
-                raise ValueError(f"Card not in hand: {card_name}") from exc
+            # A card in hand can be *held* and not playable — Firestorm Phoenix
+            # returns itself "revealed in their hand and can't play it" until
+            # its owner's next turn. The lookup asks for the first copy that may
+            # be played rather than the first copy at all, the same preference
+            # the permission lookup below makes and for the same reason: two
+            # copies of one card are indistinguishable, so a restriction on one
+            # of them is a restriction on how *many* may be played.
+            hand_index = playable_hand_index(self, caster_index, card_name)
+            if hand_index is None:
+                if not any(card.name == card_name for card in caster.hand):
+                    raise ValueError(f"Card not in hand: {card_name}")
+                denial = hand_lock_reason(self, caster_index, card_name) or (
+                    f"{card_name} can't be played"
+                )
+                self.log.append(denial)
+                return SimulationResult(card_name, False, None, denial)
         elif from_zone == "command":
             # CR 903.8 is a *rule*, not an effect: "a player may cast a
             # commander they own from the command zone". So it needs no

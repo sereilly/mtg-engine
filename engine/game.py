@@ -335,6 +335,12 @@ class Game(
     outside_game_draw_replacements: set = field(default_factory=set)
     # Both of the above are *armed state*, like a prevention shield. The
     # suspended draw itself waits on pending_replacement_choices.
+    # Firestorm Phoenix: cards in a hand that are revealed and can't be played
+    # until their holder's next turn. Here rather than on the card because a
+    # CardDefinition is the card as printed and is shared between copies —
+    # see engine/hand_locks.py, which owns every read of this list. Expiry is
+    # derived from seat_turn_counts, so nothing has to sweep it.
+    hand_locks: list = field(default_factory=list)
     # Seats whose "whenever you draw your second card each turn" triggers have
     # fired this turn (Mystic Skyfish) — the condition fires once per turn, so
     # the sweep that watches ``cards_drawn_this_turn`` needs to remember who it

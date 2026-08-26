@@ -1201,3 +1201,213 @@ def test_greater_realm_offers_only_sources_of_the_printed_colours(set_pool):
         0, pool["Greater Realm of Preservation"], spec, for_cast=False
     )
     assert sorted(t["name"] for t in offered) == ["Black Source", "Red Source"]
+
+
+# ---------------------------------------------------------------------------
+# The CR 614 replacements (round 24) - a draw and an entry, each with a rider
+# the printed sentence spends more words on than the replacement itself.
+# ---------------------------------------------------------------------------
+
+
+def _spell(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Sorcery",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Sorcery"},
+    )
+
+
+def _plain_land(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Land",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Land"},
+    )
+
+
+def _chains_game(set_pool, *, hand: int = 2, library: int = 8):
+    """Chains of Mephistopheles on P1's board, with a stocked hand and library
+    for both seats. Returns (game, p1, p2)."""
+    chains = Permanent(card=set_pool("LEG")["Chains of Mephistopheles"])
+    p1 = PlayerState(
+        name="P1", battlefield=[chains],
+        hand=[_spell(f"H{i}") for i in range(hand)],
+        library=[_spell(f"L{i}") for i in range(library)],
+    )
+    p2 = PlayerState(
+        name="P2",
+        hand=[_spell(f"h{i}") for i in range(hand)],
+        library=[_spell(f"l{i}") for i in range(library)],
+    )
+    return Game(players=[p1, p2]), p1, p2
+
+
+def _settle_discards(game) -> None:
+    """Answer every discard the replacement armed, in order - each answer can
+    arm the next, which is the shape of "draw three" under Chains."""
+    for _ in range(10):
+        if not game.pending_choices:
+            return
+        game.auto_resolve_pending_choices(kinds=("discard",))
+
+
+def test_chains_of_mephistopheles_turns_a_draw_into_discard_then_draw(set_pool):
+    """"That player discards a card instead. If the player discards a card this
+    way, they draw a card." Both halves, in that order - the hand ends the same
+    size and one card of it has been traded for the top of the library."""
+    game, p1, _p2 = _chains_game(set_pool)
+
+    game._draw_with_replacements(p1, 1)
+    _settle_discards(game)
+
+    assert [card.name for card in p1.graveyard] == ["H0"]
+    assert [card.name for card in p1.hand] == ["H1", "L0"]
+    assert len(p1.library) == 7
+
+
+def test_chains_of_mephistopheles_mills_when_there_is_nothing_to_discard(set_pool):
+    """"If the player doesn't discard a card this way, they mill a card." The
+    only way not to discard is to hold nothing (CR 701.9a) - and then no card
+    is drawn either, which is the branch that makes the card a lock."""
+    game, p1, _p2 = _chains_game(set_pool, hand=0)
+
+    assert game._draw_with_replacements(p1, 1) == 0
+    assert [card.name for card in p1.graveyard] == ["L0"]
+    assert p1.hand == []
+    assert len(p1.library) == 7
+
+
+def test_chains_of_mephistopheles_exempts_the_first_draw_step_draw(set_pool):
+    """"...except the first one they draw in each of their draw steps." The
+    turn-based draw is untouched, and nothing is even queued."""
+    game, p1, _p2 = _chains_game(set_pool)
+
+    assert game._draw_with_replacements(p1, 1, turn_based=True) == 1
+    assert game.pending_choices == []
+    assert [card.name for card in p1.hand] == ["H0", "H1", "L0"]
+    assert p1.graveyard == []
+
+
+def test_chains_of_mephistopheles_exempts_one_draw_not_one_event(set_pool):
+    """A draw step with a Howling Mine out is 1 + 1 individual draws (CR 121.2),
+    and only the first of the two is the one drawn first in the step."""
+    game, p1, _p2 = _chains_game(set_pool)
+
+    game._draw_with_replacements(p1, 2, turn_based=True)
+    _settle_discards(game)
+
+    assert [card.name for card in p1.graveyard] == ["H0"], "the second draw only"
+    assert [card.name for card in p1.hand] == ["H1", "L0", "L1"]
+
+
+def test_chains_of_mephistopheles_replaces_its_controllers_draws_too(set_pool):
+    """"If **a player** would draw a card" - the enchantment is symmetrical, and
+    reading it off the controller's board alone would have made it one-sided."""
+    game, _p1, p2 = _chains_game(set_pool)
+
+    game._draw_with_replacements(p2, 1)
+
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 1)]
+
+
+def test_chains_of_mephistopheles_does_not_replace_the_draw_it_created(set_pool):
+    """CR 614.5: an effect gets one opportunity at an event and at the events
+    that result from it. Without that the replacement draw would be replaced
+    again and again until the hand was empty."""
+    game, p1, _p2 = _chains_game(set_pool, hand=3)
+
+    game._draw_with_replacements(p1, 1)
+    _settle_discards(game)
+
+    assert len(p1.hand) == 3, "one card traded, not the whole hand"
+    assert [card.name for card in p1.graveyard] == ["H0"]
+
+
+def test_chains_of_mephistopheles_leaves_a_board_without_it_alone(set_pool):
+    """The event outside the sentence: with the enchantment gone, a draw is a
+    draw."""
+    game, p1, _p2 = _chains_game(set_pool)
+    game.remove_all_from_battlefield(list(game.controlled_by(0)))
+
+    assert game._draw_with_replacements(p1, 2) == 2
+    assert game.pending_choices == []
+    assert p1.graveyard == []
+
+
+def _equilibrium_game(set_pool, mine: int, theirs: int):
+    """Land Equilibrium on P1's board, with *mine* other lands for P1 and
+    *theirs* for P2."""
+    equilibrium = Permanent(card=set_pool("LEG")["Land Equilibrium"])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[equilibrium] + [Permanent(card=_plain_land(f"F{i}")) for i in range(mine)],
+    )
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=_plain_land(f"G{i}")) for i in range(theirs)]
+    )
+    return Game(players=[p1, p2]), p1, p2
+
+
+def _put_land(game, seat: int, name: str = "NewLand") -> Permanent:
+    permanent = Permanent(card=_plain_land(name))
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    return permanent
+
+
+def _lands_controlled(game, seat: int) -> int:
+    return sum(1 for perm in game.controlled_by(seat) if perm.has_type("land"))
+
+
+def test_land_equilibrium_taxes_an_opponent_who_has_caught_up(set_pool):
+    """"...who controls **at least as many** lands as you do": equal counts, so
+    the land arrives and one goes."""
+    game, _p1, p2 = _equilibrium_game(set_pool, mine=3, theirs=3)
+
+    _put_land(game, 1)
+
+    assert _lands_controlled(game, 1) == 3
+    assert len(p2.graveyard) == 1
+
+
+def test_land_equilibrium_leaves_an_opponent_who_is_behind_alone(set_pool):
+    """Two lands against five is not "at least as many", so nothing is owed and
+    the land simply enters."""
+    game, _p1, p2 = _equilibrium_game(set_pool, mine=5, theirs=2)
+
+    _put_land(game, 1)
+
+    assert _lands_controlled(game, 1) == 3
+    assert p2.graveyard == []
+
+
+def test_land_equilibrium_never_taxes_its_own_controller(set_pool):
+    """"If an **opponent** ... would put a land onto the battlefield." The word
+    is a clause of the applicability, not a decoration."""
+    game, p1, _p2 = _equilibrium_game(set_pool, mine=3, theirs=3)
+
+    _put_land(game, 0)
+
+    assert p1.graveyard == []
+    assert _lands_controlled(game, 0) == 4
+
+
+def test_land_equilibrium_counts_lands_before_the_new_one_arrives(set_pool):
+    """A replacement is asked about the event that *would* happen (CR 614.1).
+    With two lands against three the opponent is behind at that moment, even
+    though the land they are playing would tie the count."""
+    game, _p1, p2 = _equilibrium_game(set_pool, mine=3, theirs=2)
+
+    _put_land(game, 1)
+
+    assert p2.graveyard == []
+
+
+def test_land_equilibrium_ignores_a_permanent_that_is_not_a_land(set_pool):
+    """The event outside the sentence: a creature entering under the same board
+    is not "a land onto the battlefield"."""
+    game, _p1, p2 = _equilibrium_game(set_pool, mine=3, theirs=3)
+    creature = Permanent(card=_creature("Bear", 2, 2))
+    game._put_permanent_onto_battlefield(1, creature, None)
+
+    assert p2.graveyard == []
+    assert game.pending_choices == []

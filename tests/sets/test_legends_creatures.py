@@ -2211,3 +2211,115 @@ def test_nicol_bolas_empties_the_hand_of_the_player_it_damaged(set_pool, cards):
     assert p2.life == 13
     assert p2.hand == [], "the damaged player discarded their hand"
     assert p1.hand == [], "and not the ability's controller"
+
+
+# ---------------------------------------------------------------------------
+# Firestorm Phoenix (round 24) - CR 614 over a death, and the rider that costs
+# the card more printed words than the replacement does.
+# ---------------------------------------------------------------------------
+
+
+def _phoenix_board(set_pool, *, extra_hand: list | None = None):
+    """A Firestorm Phoenix on P1's board with a source that can kill it.
+    Returns (game, phoenix, p1, p2)."""
+    phoenix = Permanent(card=set_pool("LEG")["Firestorm Phoenix"])
+    source = Permanent(card=_vanilla("Zap", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[phoenix], hand=list(extra_hand or []))
+    p2 = PlayerState(name="P2", battlefield=[source])
+    game = Game(players=[p1, p2])
+    # A seat ordinal to compare "that player's next turn" against; nothing has
+    # begun a turn in a hand-built game.
+    game.seat_turn_counts = {0: 1, 1: 0}
+    game.active_player_index = 0
+    game.enforce_mana_costs = False
+    return game, phoenix, p1, p2
+
+
+def _kill(game, permanent) -> None:
+    game._mark_damage_on_permanent(permanent, 9, source=None, combat=False)
+    game.check_state_based_actions()
+
+
+def test_firestorm_phoenix_goes_to_hand_instead_of_the_graveyard(set_pool):
+    """"If this creature would die, return it to its owner's hand instead." The
+    graveyard never sees it, which is the whole difference between a CR 614
+    replacement and a dies-trigger."""
+    game, phoenix, p1, _p2 = _phoenix_board(set_pool)
+
+    _kill(game, phoenix)
+
+    assert list(game.controlled_by(0)) == []
+    assert p1.graveyard == []
+    assert [card.name for card in p1.hand] == ["Firestorm Phoenix"]
+
+
+def test_firestorm_phoenix_cannot_be_played_until_its_owners_next_turn(set_pool):
+    """The rider, executed rather than parsed: "that player ... can't play it"."""
+    from engine.hand_locks import locked_hand_indices
+
+    game, phoenix, p1, _p2 = _phoenix_board(set_pool)
+    _kill(game, phoenix)
+
+    assert locked_hand_indices(game, 0) == frozenset({0})
+    refused = game.cast_from_hand(0, "Firestorm Phoenix")
+    assert not refused.supported
+    assert "can't be played" in refused.details
+    assert [card.name for card in p1.hand] == ["Firestorm Phoenix"], "still held"
+
+
+def test_firestorm_phoenixs_lock_survives_the_opponents_turn(set_pool):
+    """"Until **that player's** next turn" - an opponent's turn passing is not
+    that player's next turn."""
+    from engine.hand_locks import locked_hand_indices
+
+    game, phoenix, _p1, _p2 = _phoenix_board(set_pool)
+    _kill(game, phoenix)
+
+    game.begin_turn_bookkeeping(1)
+    assert locked_hand_indices(game, 0) == frozenset({0})
+
+    game.begin_turn_bookkeeping(0)
+    assert locked_hand_indices(game, 0) == frozenset()
+
+
+def test_firestorm_phoenix_can_be_cast_once_the_lock_expires(set_pool):
+    """And the restriction really lifts - a lock that never ended would be a
+    card removed from the game rather than returned to a hand."""
+    game, phoenix, p1, _p2 = _phoenix_board(set_pool)
+    _kill(game, phoenix)
+    game.begin_turn_bookkeeping(1)
+    game.begin_turn_bookkeeping(0)
+
+    assert game.cast_from_hand(0, "Firestorm Phoenix").supported
+    assert [perm.card.name for perm in game.controlled_by(0)] == ["Firestorm Phoenix"]
+    assert p1.hand == []
+
+
+def test_firestorm_phoenix_locks_one_copy_not_the_card(set_pool):
+    """Two copies in a hand are the same CardDefinition object, so the record
+    has to be a count: with one locked the player may still play the other."""
+    from engine.hand_locks import locked_hand_indices
+
+    pool = set_pool("LEG")
+    game, phoenix, p1, _p2 = _phoenix_board(
+        set_pool, extra_hand=[pool["Firestorm Phoenix"]]
+    )
+    _kill(game, phoenix)
+
+    assert len(p1.hand) == 2
+    assert locked_hand_indices(game, 0) == frozenset({0}), "one of the two"
+    assert game.cast_from_hand(0, "Firestorm Phoenix").supported
+    assert [card.name for card in p1.hand] == ["Firestorm Phoenix"], "the locked one"
+
+
+def test_firestorm_phoenix_leaves_another_creatures_death_alone(set_pool):
+    """The event outside the sentence: "**this creature**" is the Phoenix, and a
+    bear dying beside it still goes to the graveyard."""
+    game, _phoenix, _p1, p2 = _phoenix_board(set_pool)
+    bear = Permanent(card=_vanilla("Bear", 2, 2))
+    p2.battlefield.append(bear)
+
+    _kill(game, bear)
+
+    assert [card.name for card in p2.graveyard] == ["Bear"]
+    assert p2.hand == []
