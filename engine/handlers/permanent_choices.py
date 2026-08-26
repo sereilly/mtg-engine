@@ -129,6 +129,15 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
             # phrase names nothing rather than everything.
             if host is None or not shares_a_card_type(perm, host):
                 continue
+        if payload.get("controlled_by"):
+            # "the <type> **you each** control" (Juxtapose): whose battlefield
+            # this side of the choice is drawn from. A seat question, which
+            # `subject_matches` deliberately does not answer for a named
+            # *other* player — "you" it can, the spell's chosen player it
+            # cannot, and both sides of one exchange need the same rule.
+            wanted = _controlled_by_seat(game, payload["controlled_by"], context)
+            if wanted is None or not game.controls(wanted, perm):
+                continue
         if payload.get("legal_host_for_relative"):
             # CR 303.4j, asked before the move so an illegal pick is never
             # offered — the same predicate the attach itself re-asks.
@@ -137,7 +146,36 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
             if anchor is None or aura_attach_refusal(game, anchor, perm) is not None:
                 continue
         out.append(perm)
+    if payload.get("greatest_mana_value") and out:
+        # "…with the **greatest** mana value" (CR 202.3, read off the printed
+        # cost like every other mana-value question in the engine). A
+        # superlative over the narrowed set rather than a filter key, because
+        # it is a fact about the *set*: no permanent can answer it alone, which
+        # is exactly why the card then has to say who breaks a tie.
+        best = max(int(getattr(perm.card, "cmc", 0) or 0) for perm in out)
+        out = [
+            perm for perm in out
+            if int(getattr(perm.card, "cmc", 0) or 0) == best
+        ]
     return out
+
+
+def _controlled_by_seat(game, word: str, context) -> int | None:
+    """The seat a ``controlled_by`` word names.
+
+    "you" is the effect's controller and "target" is the player the spell
+    chose (CR 115.10b). Anything else names nobody rather than defaulting: a
+    side of an exchange drawn from the wrong battlefield is a different card.
+    """
+    if word == "you":
+        return game.players.index(context.caster)
+    if word == "target":
+        return (
+            game.players.index(context.target)
+            if context.target in game.players
+            else None
+        )
+    return None
 
 
 def _chooser_seat(game, payload: dict, context) -> int | None:
@@ -155,7 +193,14 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
     choose.
     """
     caster_seat = game.players.index(context.caster)
-    if payload.get("chooser") != "opponent":
+    chooser = payload.get("chooser")
+    if chooser == "target":
+        # "**their** controller chooses one of them" (Juxtapose): the seat the
+        # candidates were drawn from, which for this side is the spell's chosen
+        # player. Payload, like every other chooser, so the picking seat and
+        # the picked-from seat stay one decision.
+        return _controlled_by_seat(game, "target", context)
+    if chooser != "opponent":
         return caster_seat
     return next(
         (
@@ -190,6 +235,14 @@ def choose_permanent(
     card_name = getattr(context.card, "name", "")
     if not candidates:
         game.log.append(f"{card_name}: there is no permanent it could choose")
+        return True, "resolved"
+    if payload.get("only_on_tie") and len(candidates) == 1:
+        # "**If two or more** permanents a player controls are tied for
+        # greatest, their controller chooses one of them." (Juxtapose.) With
+        # one candidate the card names it outright, so recording it is the
+        # whole of the step — prompting anyway would ask a player a question
+        # with one answer, four times per cast.
+        context.results[result_key] = candidates[0].permanent_id
         return True, "resolved"
     game.arm_permanent_choice(
         seat,

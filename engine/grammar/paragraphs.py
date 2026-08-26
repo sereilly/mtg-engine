@@ -29,7 +29,7 @@ from .lexer import (MANA, SELF)
 from .nouns import parse_object_filter
 from .references import parse_player_ref
 from .stream import TokenStream
-from .vocabulary import COLOR_WORDS, CREATURE_TYPES
+from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES
 
 
 def _parse_ownership_exchange_unless_paid(stream: TokenStream) -> ast.Statement | None:
@@ -503,3 +503,143 @@ def _parse_name_then_reveal_top(
         raise stream.error("expected the zone a non-matching card goes to")
     stream.advance()
     return ast.NameThenRevealTop(who, match_zone, miss_zone)
+
+
+def _parse_exchange_greatest_mana_value(stream: TokenStream) -> ast.Statement | None:
+    """Juxtapose's whole three-sentence effect, as one statement.
+
+    ``You and target player exchange control of the <type> you each control
+    with the greatest mana value. Then exchange control of <type>s the same way.
+    If two or more permanents a player controls are tied for greatest, their
+    controller chooses one of them.``
+
+    Every sentence is required and none of them can be read alone: "the same
+    way" is an exchange only the first sentence describes, and the tie-break
+    names permanents only the first two have picked out. The types are read
+    rather than fixed, so the two words this card happens to print are payload.
+
+    Refuses without consuming, like every production here — a line that merely
+    opens with "You" is untouched.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "you", "and", "target", "player", "exchange", "control", "of", "the"
+    ):
+        stream.reset(mark)
+        return None
+    first_token = stream.peek()
+    if first_token is None or first_token.text not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    first = str(first_token.text)
+    if not stream.accept_phrase(
+        "you", "each", "control", "with", "the", "greatest", "mana", "value"
+    ):
+        stream.reset(mark)
+        return None
+    types = [first]
+    stream.accept_punct(".")
+    # "Then exchange control of <type>s the same way." Repeatable: a card
+    # printing a third sentence gets a third type with no code.
+    while True:
+        loop = stream.mark()
+        if not stream.accept_phrase("then", "exchange", "control", "of"):
+            stream.reset(loop)
+            break
+        again = stream.peek()
+        singular = (
+            str(again.text).rstrip("s") if again is not None else ""
+        )
+        if singular not in CARD_TYPES:
+            stream.reset(loop)
+            break
+        stream.advance()
+        if not stream.accept_phrase("the", "same", "way"):
+            stream.reset(loop)
+            break
+        types.append(singular)
+        stream.accept_punct(".")
+    if not stream.accept_phrase(
+        "if", "two", "or", "more", "permanents", "a", "player", "controls",
+        "are", "tied", "for", "greatest",
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "their", "controller", "chooses", "one", "of", "them"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ExchangeGreatestManaValue(tuple(types))
+
+
+def _parse_random_reveal_ownership_exchange(
+    stream: TokenStream,
+) -> ast.Statement | None:
+    """Tempest Efreet's whole ability, as one statement.
+
+    ``Target opponent may pay <N> life. If that player doesn't, they reveal a
+    card at random from their hand. Exchange ownership of the revealed card and
+    this creature. Put the revealed card into your hand and this creature from
+    anywhere into that player's graveyard. This change in ownership is
+    permanent.``
+
+    Every sentence is required. Without the payment the exchange is
+    unconditional; without the reveal there is no card to exchange; without the
+    two moves the exchange has no effect this engine can see, since ownership
+    *is* which player's zone a card is in; and without the last sentence the
+    change would be an ordinary until-end-of-turn one. The life total is
+    payload.
+
+    Refuses without consuming, so every other sentence opening "Target
+    opponent …" keeps the reading it has today.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("target", "opponent", "may", "pay"):
+        stream.reset(mark)
+        return None
+    token = stream.peek()
+    if token is None or not str(token.text).isdigit():
+        stream.reset(mark)
+        return None
+    life = int(token.text)
+    stream.advance()
+    if not stream.accept_word("life"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("if", "that", "player", "doesn't"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "they", "reveal", "a", "card", "at", "random", "from", "their", "hand"
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase(
+        "exchange", "ownership", "of", "the", "revealed", "card", "and"
+    ) or stream.accept_kind(SELF) is None:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase(
+        "put", "the", "revealed", "card", "into", "your", "hand", "and"
+    ) or stream.accept_kind(SELF) is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "from", "anywhere", "into", "that", "player", "'s", "graveyard"
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase(
+        "this", "change", "in", "ownership", "is", "permanent"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.RandomRevealOwnershipExchange(life)

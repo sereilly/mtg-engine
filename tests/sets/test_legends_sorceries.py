@@ -6,7 +6,7 @@ See tests/sets/README.md for the convention.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.models import CardDefinition
+from engine.models import CardDefinition, Permanent
 
 
 # ---------------------------------------------------------------------------
@@ -910,3 +910,139 @@ def test_falling_star_on_an_empty_board_resolves_and_does_nothing(set_pool):
 
     assert result.supported, result.details
     assert all(p.life == 20 for p in players), game.log
+
+
+# ---------------------------------------------------------------------------
+# Juxtapose (round 31) — an exchange whose two sides are chosen, not targeted
+# ---------------------------------------------------------------------------
+
+
+def _r31_jx_game(set_pool, catalog_by_name, first_board, second_board, copies=1):
+    """A two-seat board with Juxtapose in hand and the named permanents in play.
+
+    The permanents go on through ``_put_permanent_onto_battlefield`` rather than
+    onto the list, so each one records the ``base_controller_index`` a layer-2
+    contribution is measured against.
+    """
+    players = [PlayerState(name="P1"), PlayerState(name="P2")]
+    players[0].hand = [set_pool("LEG")["Juxtapose"]] * copies
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    for seat, names in ((0, first_board), (1, second_board)):
+        for name in names:
+            game._put_permanent_onto_battlefield(
+                seat, Permanent(card=catalog_by_name[name]), None
+            )
+    return game, players
+
+
+def _r31_jx_names(game):
+    return [[perm.card.name for perm in player.battlefield] for player in game.players]
+
+
+def test_juxtapose_exchanges_the_greatest_creature_and_then_the_greatest_artifact(
+    set_pool, catalog_by_name
+):
+    """Both halves happen, and each picks the greatest mana value on its own
+    side. Hill Giant (4) is P1's greatest creature even though it is not their
+    only one, and Mox Pearl is their only artifact."""
+    game, _ = _r31_jx_game(
+        set_pool, catalog_by_name,
+        ["Grizzly Bears", "Hill Giant", "Mox Pearl"],
+        ["Scryb Sprites", "Craw Wurm", "Black Lotus", "Icy Manipulator"],
+    )
+
+    result = game.cast_from_hand(0, "Juxtapose", target_player_index=1)
+
+    assert result.supported, result.details
+    first, second = _r31_jx_names(game)
+    assert sorted(first) == sorted(["Grizzly Bears", "Craw Wurm", "Icy Manipulator"])
+    assert sorted(second) == sorted(
+        ["Scryb Sprites", "Black Lotus", "Hill Giant", "Mox Pearl"]
+    ), game.log
+
+
+def test_a_second_juxtapose_is_unaffected_by_the_first(set_pool, catalog_by_name):
+    """The layer-2 contributions are keyed on the *instruction*, not on the
+    card, and one cast makes two of them. Keyed on the shared
+    ``CardDefinition`` the second exchange of a cast would drop the first
+    (``change_control`` keeps one contribution per source), and a second cast
+    would then read a board the first had half-recorded. Cast twice, the boards
+    swap back and forth exactly."""
+    game, _ = _r31_jx_game(
+        set_pool, catalog_by_name,
+        ["Grizzly Bears", "Hill Giant", "Mox Pearl"],
+        ["Scryb Sprites", "Craw Wurm", "Black Lotus", "Icy Manipulator"],
+        copies=2,
+    )
+    game.cast_from_hand(0, "Juxtapose", target_player_index=1)
+
+    game.cast_from_hand(0, "Juxtapose", target_player_index=1)
+
+    first, second = _r31_jx_names(game)
+    # Hill Giant is home again; the artifacts traded the other way this time,
+    # because the greatest artifact on each side changed hands in the first cast.
+    assert "Hill Giant" in first and "Craw Wurm" in second, game.log
+    assert "Black Lotus" in first and "Icy Manipulator" in second, game.log
+
+
+def test_a_side_with_no_permanent_of_that_type_exchanges_nothing_of_it(
+    set_pool, catalog_by_name
+):
+    """CR 701.12a: an exchange one side cannot supply does not happen at all —
+    and the *other* type's exchange still does. Half an exchange is a gift."""
+    game, _ = _r31_jx_game(
+        set_pool, catalog_by_name, ["Grizzly Bears"], ["Craw Wurm", "Black Lotus"]
+    )
+
+    game.cast_from_hand(0, "Juxtapose", target_player_index=1)
+
+    first, second = _r31_jx_names(game)
+    assert first == ["Craw Wurm"], game.log
+    assert sorted(second) == sorted(["Black Lotus", "Grizzly Bears"]), game.log
+
+
+def test_a_tie_for_greatest_is_broken_by_that_permanents_controller(
+    set_pool, catalog_by_name
+):
+    """"If two or more permanents a player controls are tied for greatest,
+    their controller chooses one of them." Black Lotus and Mox Pearl are both
+    mana value 0, so the seat holding them picks — a ``permanent_choice``,
+    whose non-interactive default is the first live candidate."""
+    game, _ = _r31_jx_game(
+        set_pool, catalog_by_name,
+        ["Icy Manipulator"], ["Black Lotus", "Mox Pearl"],
+    )
+
+    game.cast_from_hand(0, "Juxtapose", target_player_index=1)
+
+    first, second = _r31_jx_names(game)
+    assert first == ["Black Lotus"], game.log
+    assert sorted(second) == sorted(["Mox Pearl", "Icy Manipulator"]), game.log
+    assert any("chose Black Lotus" in line for line in game.log), game.log
+
+
+def test_one_permanent_greatest_in_both_halves_is_exchanged_twice(
+    set_pool, catalog_by_name
+):
+    """An artifact creature is the greatest of both types, so it is exchanged
+    and then exchanged back — which is only right if *both* contributions
+    survive. One dropped by the other would leave it on the wrong side."""
+    game, _ = _r31_jx_game(
+        set_pool, catalog_by_name, ["Clockwork Avian"], ["Clay Statue"]
+    )
+
+    game.cast_from_hand(0, "Juxtapose", target_player_index=1)
+
+    assert _r31_jx_names(game) == [["Clockwork Avian"], ["Clay Statue"]], game.log
+
+
+def test_juxtapose_on_an_empty_board_resolves_and_does_nothing(
+    set_pool, catalog_by_name
+):
+    game, players = _r31_jx_game(set_pool, catalog_by_name, [], [])
+
+    result = game.cast_from_hand(0, "Juxtapose", target_player_index=1)
+
+    assert result.supported, result.details
+    assert _r31_jx_names(game) == [[], []], game.log

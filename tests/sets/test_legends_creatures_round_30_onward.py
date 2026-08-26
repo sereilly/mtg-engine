@@ -525,3 +525,130 @@ def test_the_price_grows_with_the_creature(set_pool):
     game._settle()
     assert ooze.metadata["plus_counters"] == 2
     assert game.pending_optional_pays[0]["cost"] == {"generic": 2}
+
+# Tempest Efreet (round 31) — an exchange of *ownership*, and a random reveal
+# ---------------------------------------------------------------------------
+
+
+def _r31_te_game(set_pool, catalog_by_name, victim_hand, *, ante=True, copies=1):
+    """A board with *copies* untapped Tempest Efreets and a hand to reveal from."""
+    players = [PlayerState(name="P1"), PlayerState(name="P2", life=30)]
+    players[1].hand = [catalog_by_name[name] for name in victim_hand]
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.playing_for_ante = ante
+    for _ in range(copies):
+        perm = Permanent(card=set_pool("LEG")["Tempest Efreet"])
+        game._put_permanent_onto_battlefield(0, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+    return game, players
+
+
+def _r31_te_zones(players):
+    return {
+        "life": [player.life for player in players],
+        "p1_hand": sorted(card.name for card in players[0].hand),
+        "p2_hand": sorted(card.name for card in players[1].hand),
+        "p1_graveyard": sorted(card.name for card in players[0].graveyard),
+        "p2_graveyard": sorted(card.name for card in players[1].graveyard),
+    }
+
+
+def test_tempest_efreet_exchanges_ownership_when_the_opponent_declines(
+    set_pool, catalog_by_name
+):
+    """The revealed card ends up in the activator's hand and the Efreet in the
+    opponent's graveyard — which in this engine *is* the ownership change, since
+    ownership is which player's zone a card sits in (CR 108.3's ante
+    exception)."""
+    game, players = _r31_te_game(set_pool, catalog_by_name, ["Black Lotus"])
+    game.activate_permanent_ability(
+        0, "Tempest Efreet", permanent_index=0, target_player_index=1
+    )
+
+    assert game.confirm_optional_pay(1, accept=False)
+
+    zones = _r31_te_zones(players)
+    assert zones["p1_hand"] == ["Black Lotus"], game.log
+    assert zones["p2_hand"] == [], game.log
+    assert zones["p2_graveyard"] == ["Tempest Efreet"], game.log
+    assert zones["p1_graveyard"] == [], game.log
+
+
+def test_paying_the_life_keeps_both_cards_where_they_were(set_pool, catalog_by_name):
+    """The payment is the whole of the opponent's out, and it is a real cost:
+    the Efreet is still sacrificed (it was the activation cost) and stays in its
+    own owner's graveyard."""
+    game, players = _r31_te_game(set_pool, catalog_by_name, ["Black Lotus"])
+    game.activate_permanent_ability(
+        0, "Tempest Efreet", permanent_index=0, target_player_index=1
+    )
+
+    assert game.confirm_optional_pay(1, accept=True)
+
+    zones = _r31_te_zones(players)
+    assert zones["life"] == [20, 20], game.log
+    assert zones["p2_hand"] == ["Black Lotus"], game.log
+    assert zones["p1_graveyard"] == ["Tempest Efreet"], game.log
+
+
+def test_the_exchange_is_inert_outside_a_game_played_for_ante(
+    set_pool, catalog_by_name
+):
+    """CR 108.3 fixes ownership and CR 407.1 makes the exception opt-in, so
+    nothing is even offered — no prompt is queued and no card moves."""
+    game, players = _r31_te_game(set_pool, catalog_by_name, ["Black Lotus"], ante=False)
+
+    game.activate_permanent_ability(
+        0, "Tempest Efreet", permanent_index=0, target_player_index=1
+    )
+
+    assert not game.pending_choices, game.log
+    zones = _r31_te_zones(players)
+    assert zones["p2_hand"] == ["Black Lotus"], game.log
+    assert zones["p1_graveyard"] == ["Tempest Efreet"], game.log
+
+
+def test_a_second_efreet_takes_its_own_card_not_the_first_ones(
+    set_pool, catalog_by_name
+):
+    """Two copies share one ``CardDefinition``, so "this creature from
+    anywhere" cannot be told apart by identity. The card the *second*
+    activation gives away has to be the one it sacrificed — searched from the
+    activator's own zones first — and not the copy already sitting in the
+    opponent's graveyard from the first."""
+    game, players = _r31_te_game(
+        set_pool, catalog_by_name, ["Black Lotus", "Craw Wurm"], copies=2
+    )
+    game.activate_permanent_ability(
+        0, "Tempest Efreet", permanent_index=0, target_player_index=1
+    )
+    game.confirm_optional_pay(1, accept=False)
+
+    game.activate_permanent_ability(
+        0, "Tempest Efreet", permanent_index=0, target_player_index=1
+    )
+    game.confirm_optional_pay(1, accept=False)
+
+    zones = _r31_te_zones(players)
+    assert zones["p1_hand"] == ["Black Lotus", "Craw Wurm"], game.log
+    assert zones["p2_hand"] == [], game.log
+    assert zones["p2_graveyard"] == ["Tempest Efreet", "Tempest Efreet"], game.log
+    assert zones["p1_graveyard"] == [], game.log
+
+
+def test_an_empty_hand_reveals_nothing_and_exchanges_nothing(
+    set_pool, catalog_by_name
+):
+    """With no card to reveal there is nothing to exchange the Efreet for, so
+    it stays in its own owner's graveyard."""
+    game, players = _r31_te_game(set_pool, catalog_by_name, [])
+    game.activate_permanent_ability(
+        0, "Tempest Efreet", permanent_index=0, target_player_index=1
+    )
+
+    game.confirm_optional_pay(1, accept=False)
+
+    zones = _r31_te_zones(players)
+    assert zones["p1_hand"] == [], game.log
+    assert zones["p1_graveyard"] == ["Tempest Efreet"], game.log

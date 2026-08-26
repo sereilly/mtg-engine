@@ -372,3 +372,55 @@ def exchange_control_of_targets(game: Game, instruction: OracleInstruction, cont
             ):
                 game.log.append(f"{card.name} destroyed {destroyed.card.name}")
     return True, "resolved"
+
+
+@effect_handler("exchange_control_of_bound")
+def exchange_control_of_bound(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Exchange control of two permanents *earlier steps of this resolution
+    chose* (Juxtapose, CR 701.12b).
+
+    The difference from ``exchange_control_of_targets`` beside it is only where
+    the two permanents come from: nothing was targeted here, so each side was
+    recorded by a ``choose_permanent`` step and is read back by its stable id
+    (CR 400.7 — an index would name whichever permanent slid into the slot).
+    Everything else is that handler's rules and for its reasons: CR 701.12a
+    makes the exchange atomic, so a side that has left the battlefield or that
+    both seats turn out to share means **no part** of it happens.
+
+    The layer-2 contribution is keyed on the *instruction*, not on the card.
+    One cast of Juxtapose makes two exchanges, and a permanent can be in both
+    (an artifact creature) — keyed on the card, recording the second would drop
+    the first, because ``change_control`` keeps one contribution per source.
+    Two exchanges are two instruction objects, so they are two sources.
+    """
+    from ..control import change_control
+
+    card = context.card
+    first = game.permanent_by_id(context.results.get(instruction.payload["first_from"]))
+    second = game.permanent_by_id(context.results.get(instruction.payload["second_from"]))
+    if first is None or second is None or first is second:
+        game.log.append(
+            f"{card.name}: nothing to exchange on one side, so nothing happens"
+        )
+        return True, "resolved"
+    if not game.is_on_battlefield(first) or not game.is_on_battlefield(second):
+        game.log.append(
+            f"{card.name}: a chosen permanent has left, so the exchange does not happen"
+        )
+        return True, "resolved"
+    seat_of_first = game.controller_index_of(first)
+    seat_of_second = game.controller_index_of(second)
+    if seat_of_first is None or seat_of_second is None or seat_of_first == seat_of_second:
+        game.log.append(
+            f"{card.name}: both permanents have one controller, so nothing happens"
+        )
+        return True, "resolved"
+    change_control(first, seat_of_second, source=instruction)
+    change_control(second, seat_of_first, source=instruction)
+    game._sync_control()
+    game.log.append(
+        f"{card.name}: {game.players[seat_of_first].name} and "
+        f"{game.players[seat_of_second].name} exchanged control of "
+        f"{first.card.name} and {second.card.name}"
+    )
+    return True, "resolved"

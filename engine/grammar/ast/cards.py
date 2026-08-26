@@ -314,6 +314,30 @@ class OwnershipExchangeUnlessPaid:
 
 
 @dataclass(frozen=True)
+class RandomRevealOwnershipExchange:
+    """Tempest Efreet's whole five-sentence ability.
+
+    "Target opponent may pay <N> life. If that player doesn't, they reveal a
+    card at random from their hand. Exchange ownership of the revealed card and
+    this creature. Put the revealed card into your hand and this creature from
+    anywhere into that player's graveyard. This change in ownership is
+    permanent."
+
+    One node, in `paragraphs.py`'s family and for its reason: sentence three
+    names "the revealed card", which only sentence two produced, and sentence
+    four is *how* sentence three's exchange is carried out — this engine's
+    ownership is which player's zone a card sits in, so the two moves are the
+    exchange rather than a consequence of it. Sentence five says the exchange
+    outlasts the game (CR 108.3's ante exception, CR 407), which is what makes
+    the moves permanent instead of an until-end-of-turn loan.
+
+    The life total is the only payload; every other word was required by the
+    production that read it.
+    """
+
+    life: int
+
+@dataclass(frozen=True)
 class CastPermission:
     """A sentence whose effect is permission to cast or play from somewhere
     the rules alone would not allow (CR 601.3):

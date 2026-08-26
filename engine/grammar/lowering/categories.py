@@ -219,6 +219,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "recolor_target_chosen_color": "recolor",
     # CR 701.12b, an atomic swap of two layer-2 contributions.
     "exchange_control_of_targets": "control",
+    "exchange_control_of_bound": "control",
     # A printed text change (CR 612). Its own category rather than "recolor":
     # the Lace cycle makes an object a colour, while this replaces a *word*
     # wherever the object's text uses it, and one of the two modes does not
@@ -277,6 +278,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exile_graveyard_until_leaves": "zones",
     "exile_until_leaves_or_untaps": "zones",
     "exchange_ownership_unless_paid": "zones",
+    "random_reveal_ownership_exchange": "zones",
     "take_ownership_of_exiled": "zones",
     "return_exiled_source_to_graveyard": "zones",
     "transmute_by_sacrifice": "zones",

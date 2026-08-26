@@ -799,3 +799,52 @@ def _lower_delayed_self_action(
             | ({"subject": node.subject} if node.subject != "source" else {}),
         ),
     )
+
+
+def _lower_exchange_greatest_mana_value(
+    node: ast.ExchangeGreatestManaValue,
+) -> tuple[OracleInstruction, ...]:
+    """Juxtapose's paragraph → a ``sequence`` of ordinary instructions.
+
+    Three steps per printed type, and none of them is new machinery: each side
+    of the exchange is a ``choose_permanent`` narrowed to "the <type> that seat
+    controls with the greatest mana value", and the exchange itself reads the
+    two ids those steps recorded. Writing it as one fused kind would have hidden
+    the tie-break sentence inside a handler; written this way the sentence *is*
+    the prompt, and ``only_on_tie`` is the printed condition under which it is
+    asked — with one candidate there is nothing to choose and no prompt is made.
+
+    The two seats are the spell's controller and its chosen player, which is why
+    the second choice's ``chooser`` is ``target``: CR 701.12 leaves the pick to
+    each permanent's own controller, and the card says so.
+    """
+    steps: list[OracleInstruction] = []
+    for card_type in node.card_types:
+        keys = []
+        for side, chooser in (("you", "you"), ("target", "target")):
+            key = f"exchanged_{card_type}_{side}"
+            keys.append(key)
+            steps.append(
+                OracleInstruction(
+                    "choose_permanent", "",
+                    {
+                        "result_key": key,
+                        "filter": {"type_filter": card_type},
+                        "controlled_by": chooser,
+                        "greatest_mana_value": True,
+                        "only_on_tie": True,
+                        "chooser": chooser,
+                        "prompt": (
+                            f"Choose which {card_type} with the greatest mana "
+                            "value to exchange."
+                        ),
+                    },
+                )
+            )
+        steps.append(
+            OracleInstruction(
+                "exchange_control_of_bound", "",
+                {"first_from": keys[0], "second_from": keys[1]},
+            )
+        )
+    return (OracleInstruction("sequence", "", {"steps": tuple(steps)}),)

@@ -145,6 +145,27 @@ class ExchangeControl:
 
 
 @dataclass(frozen=True)
+class ExchangeGreatestManaValue:
+    """``You and target player exchange control of the <type> you each control
+    with the greatest mana value. Then exchange control of <type>s the same
+    way. If two or more permanents a player controls are tied for greatest,
+    their controller chooses one of them.`` (Juxtapose.)
+
+    A whole paragraph as one node, for the reason `paragraphs.py` states: "the
+    same way" names an exchange the sentence before it described, and the
+    tie-break sentence names permanents no sentence of its own has chosen. Read
+    apart, the second sentence exchanges nothing and the third is about nobody.
+
+    ``card_types`` is the printed list in printed order, so a card exchanging
+    lands or enchantments the same way is this node with different words. Each
+    exchange is separate and atomic (CR 701.12a): a player controlling no
+    permanent of one type simply exchanges nothing *of that type*, and the
+    other types still happen.
+    """
+
+    card_types: tuple[str, ...]
+
+@dataclass(frozen=True)
 class Tap:
     subject: Recipient
 
