@@ -75,3 +75,23 @@ def deny_regeneration_to_target(game: Game, instruction: OracleInstruction, cont
     target.metadata["cant_be_regenerated_this_turn"] = True
     game.log.append(f"{target.card.name} can't be regenerated this turn")
     return True, "resolved"
+
+
+@effect_handler("deny_regeneration_to_self")
+def deny_regeneration_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{1}: This creature can't be regenerated this turn." (Clergy of the Holy
+    Nimbus.)
+
+    The untargeted twin of ``deny_regeneration_to_target``: the source itself,
+    read off the context rather than chosen, and the same flag both destruction
+    paths already consult (CR 701.19c). It is the *counter* to the Clergy's own
+    static regeneration, so the flag has to be one both sides read — which is
+    why the static side asks ``engine/regeneration.py`` rather than carrying a
+    second notion of "shielded".
+    """
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    source_permanent.metadata["cant_be_regenerated_this_turn"] = True
+    game.log.append(f"{source_permanent.card.name} can't be regenerated this turn")
+    return True, "resolved"

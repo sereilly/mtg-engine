@@ -13,6 +13,7 @@ from ..events import Event, collect, emit
 from ..land_play_allowance import LandPlayAllowance, land_play_allowance_for
 from ..models import CardDefinition, Permanent, PlayerState
 from ..pt import add_plus1_counters, add_pt_counters
+from ..regeneration import regeneration_replaces_destruction
 from ..replacement_choices import pending_choices_for, resolve_choice
 from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
 from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
@@ -282,18 +283,11 @@ class EffectsMixin:
             if self._is_indestructible(perm):
                 self.log.append(f"{perm.card.name} can't be destroyed (indestructible)")
                 return None  # type: ignore[return-value]
-            if (
-                not bypass_regeneration
-                and perm.regeneration_shield > 0
-                # Disintegrate / Hurr Jackal: the shield is still on the creature
-                # but does nothing while the "can't be regenerated" rider is up
-                # (CR 701.19c), same as the combat-damage path.
-                and not perm.metadata.get("cant_be_regenerated_this_turn")
-            ):
-                perm.regeneration_shield -= 1
-                self.become_tapped(perm)
-                perm.damage_marked = 0
-                self.log.append(f"{perm.card.name} regenerated")
+            # One decision, in `engine/regeneration.py`: the shield (CR 701.19a),
+            # the static form (CR 701.19b) and the "can't be regenerated" rider
+            # (CR 701.19c) are the same question asked at the same moment, and
+            # this was one of the two places asking half of it.
+            if not bypass_regeneration and regeneration_replaces_destruction(self, perm):
                 return None  # type: ignore[return-value]
             self.remove_from_battlefield(perm)
             self._permanent_to_graveyard(target, perm)

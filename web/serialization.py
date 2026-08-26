@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 
 from engine import Game
+from engine.activation_permissions import card_widens_activation
 from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
 from engine.library_top import top_is_public
@@ -219,6 +220,13 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # Word-level edits from a text-changing spell (Sleight of Mind / Magical
         # Hack) so the UI can strike the old word and show the new word in gold.
         "text_changes": _text_change_replacements(perm),
+        # CR 602.1a's exceptions: True when some seat other than the controller
+        # may activate one of this permanent's abilities ("Any player may
+        # activate this ability", "Only your opponents may activate this
+        # ability"). Served rather than re-derived in the client, which tested
+        # for one of the spellings as a substring of the oracle text and so did
+        # not know about the others.
+        "activatable_by_other_seats": card_widens_activation(perm.effective_card),
         "keywords": _effective_keywords(perm, game),
         # True when this creature may block more than one attacker at once
         # (Two-Headed Giant of Foriys, or Blaze of Glory's "block any number"),

@@ -144,6 +144,12 @@ def _lower_cant_be(node: ast.CantBe) -> tuple[OracleInstruction, ...]:
     # ``context.source_permanent`` share nothing beyond the flag they set.
     if _is_source(node.subject) and node.action == "blocked":
         return (OracleInstruction("grant_unblockable_to_self", "", {}),)
+    # "{1}: This creature can't be regenerated this turn." (Clergy of the Holy
+    # Nimbus.) The same split one line up, for the other action: the targeted
+    # printing picks a creature and this one names the ability's own source, so
+    # there is no picker, no legality check and no filter to honour.
+    if _is_source(node.subject) and node.action == "regenerated":
+        return (OracleInstruction("deny_regeneration_to_self", "", {}),)
     if not _is_target(node.subject):
         raise LoweringError("no handler for restricting a non-targeted subject", node=node)
     assert isinstance(node.subject, ast.TargetSpec)

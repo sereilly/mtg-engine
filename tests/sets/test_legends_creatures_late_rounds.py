@@ -2095,3 +2095,120 @@ def test_rasputin_prevents_one_damage_for_a_counter(set_pool):
     )
 
     assert outcome.dealt == 2, "the shield absorbs exactly the next 1 damage"
+
+
+# ---------------------------------------------------------------------------
+# Round 29 — Clergy of the Holy Nimbus: a static regeneration (CR 701.19b) and
+# a permission that names who may activate (CR 602.1a)
+# ---------------------------------------------------------------------------
+
+
+def _r29_clergy(set_pool):
+    """Clergy of the Holy Nimbus on seat 0's battlefield, opposite an empty
+    seat 1 that the permission clause is about."""
+    pool = set_pool("LEG")
+    p1 = PlayerState(name="P1")
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    clergy = Permanent(card=pool["Clergy of the Holy Nimbus"])
+    game._put_permanent_onto_battlefield(0, clergy, None)
+    game._settle()
+    return game, p1, p2, clergy
+
+
+def _r29_destroy(game, clergy):
+    """Destroy it the way a removal spell does — the path that asks whether the
+    destruction is replaced."""
+    seat = game.controller_index_of(clergy)
+    game._destroy_target_permanent(
+        game.players[seat], target_permanent_index=game.battlefield_index_of(clergy)
+    )
+    game._settle()
+
+
+def _r29_deny_regeneration(game, seat: int, clergy):
+    """Activate the {1} ability from *seat*, as the web layer would."""
+    index = game.battlefield_index_of(clergy)
+    game.players[seat].mana_pool["C"] = game.players[seat].mana_pool.get("C", 0) + 1
+    result = game.activate_permanent_ability(
+        seat, clergy.card.name, permanent_index=index, ability_index=0,
+        source_controller_index=0,
+    )
+    game._settle()
+    return result
+
+
+def test_clergy_of_the_holy_nimbus_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Clergy of the Holy Nimbus"])
+    assert program.supported, program.reason
+
+
+def test_clergy_regenerates_instead_of_being_destroyed(set_pool):
+    """CR 701.19b: the static form applies *each time*, so there is no shield to
+    spend and a second destruction is replaced too."""
+    game, p1, _p2, clergy = _r29_clergy(set_pool)
+
+    _r29_destroy(game, clergy)
+    game._settle()
+
+    assert clergy in p1.battlefield, "the destruction was replaced"
+    assert clergy.tapped, "701.19b taps it"
+
+    clergy.tapped = False
+    _r29_destroy(game, clergy)
+    game._settle()
+
+    assert clergy in p1.battlefield, "and again — nothing was consumed"
+
+
+def test_clergy_regeneration_clears_the_damage_that_would_kill_it(set_pool):
+    """The state-based sweep is the destruction that matters in a real game:
+    without removing the marked damage (CR 701.19b) the very next check would
+    destroy it again."""
+    game, p1, _p2, clergy = _r29_clergy(set_pool)
+    clergy.damage_marked = clergy.effective_toughness
+
+    game.check_state_based_actions()
+    game._settle()
+
+    assert clergy in p1.battlefield
+    assert clergy.damage_marked == 0
+    assert clergy.tapped
+
+
+def test_clergy_ability_cannot_be_activated_by_its_own_controller(set_pool):
+    """"Only your opponents may activate this ability." A permission that only
+    ever widened would leave this working for the one player the card forbids."""
+    game, _p1, _p2, clergy = _r29_clergy(set_pool)
+
+    result = _r29_deny_regeneration(game, 0, clergy)
+
+    assert not result.supported
+    assert not clergy.metadata.get("cant_be_regenerated_this_turn")
+
+
+def test_an_opponent_may_activate_the_clergys_ability_and_then_kill_it(set_pool):
+    game, p1, _p2, clergy = _r29_clergy(set_pool)
+
+    result = _r29_deny_regeneration(game, 1, clergy)
+    assert result.supported, result.details
+    assert clergy.metadata.get("cant_be_regenerated_this_turn")
+
+    _r29_destroy(game, clergy)
+    game._settle()
+
+    assert clergy not in p1.battlefield, "701.19c makes the regeneration inert"
+    assert any(card.name == "Clergy of the Holy Nimbus" for card in p1.graveyard)
+
+
+def test_the_clergys_denial_expires_with_the_turn(set_pool):
+    game, p1, _p2, clergy = _r29_clergy(set_pool)
+    _r29_deny_regeneration(game, 1, clergy)
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    _r29_destroy(game, clergy)
+    game._settle()
+
+    assert clergy in p1.battlefield

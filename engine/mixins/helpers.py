@@ -20,6 +20,7 @@ from ..models import Permanent, PlayerState, next_permanent_id
 from ..game_types import GraveyardTarget
 from ..oracle import compile_card_oracle
 from ..replacements import apply_entry_riders, apply_replacements
+from ..regeneration import regeneration_replaces_destruction
 from ..targeting import graveyard_target_spec
 from ..tokens import is_token_card
 from ..trigger_utils import make_trigger_event, matching_triggers
@@ -1575,16 +1576,19 @@ class GameHelpersMixin:
                 continue
             if respect_indestructible and self._is_indestructible(permanent):
                 continue
+            # The same one decision the other destruction path asks
+            # (`engine/regeneration.py`): shield, static form and the "can't be
+            # regenerated" rider together. It clears the marked damage CR
+            # 701.19a-b require, which this copy did not — a creature the
+            # lethal-damage sweep regenerated kept its damage and survived only
+            # because the caller happened to pass an ``on_regenerate`` that
+            # cleared it, so a sweeper without one re-destroyed it on the next
+            # pass.
             if (
                 allow_regeneration
                 and permanent.is_creature
-                and permanent.regeneration_shield > 0
-                # A "can't be regenerated this turn" rider makes the shield inert
-                # (CR 701.19c) — it doesn't save the creature from a sweeper.
-                and not permanent.metadata.get("cant_be_regenerated_this_turn")
+                and regeneration_replaces_destruction(self, permanent)
             ):
-                permanent.regeneration_shield -= 1
-                self.become_tapped(permanent)
                 if on_regenerate is not None:
                     on_regenerate(permanent)
                 continue
