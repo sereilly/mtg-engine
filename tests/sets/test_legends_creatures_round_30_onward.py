@@ -166,3 +166,111 @@ def test_time_elemental_never_offers_an_enchanted_permanent_as_a_bounce_target(s
 
     keys = {entry["key"] for entry in offered}
     assert keys == {"0-0", "1-0", "1-2"}, offered
+
+
+# ---------------------------------------------------------------------------
+# Round 31 — Wood Elemental: a variable sacrifice as it enters, counted back
+# ---------------------------------------------------------------------------
+#
+# "As this creature enters, sacrifice any number of untapped Forests." plus
+# "Wood Elemental's power and toughness are each equal to the number of Forests
+# sacrificed as it entered."
+#
+# Two mechanisms meet here. The sacrifice prompt learned a **ceiling** ("any
+# number", none included) and learned to record how many were given up onto the
+# permanent that asked. The CDA table learned a row that reads that number back
+# — the Forests are cards in a graveyard by then (CR 400.7), so there is nothing
+# on any battlefield left to count.
+
+
+def _r31_forest(name: str = "Forest") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Basic Land - Forest",
+        oracle_text="", colors=(), color_identity=("G",), keywords=(),
+        produced_mana=("G",),
+        raw={"name": name, "type_line": "Basic Land - Forest"},
+    )
+
+
+def _r31_wood_elemental(set_pool, *, forests=3, tapped=0, interactive=True):
+    """Seat 0 with *forests* Forests, of which *tapped* are tapped, casting it."""
+    lands = []
+    for i in range(forests):
+        perm = Permanent(card=_r31_forest())
+        perm.tapped = i < tapped
+        lands.append(perm)
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Wood Elemental"]],
+                     battlefield=lands)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    if interactive:
+        game.interactive_seats = {0}
+    game.cast_from_hand(0, "Wood Elemental")
+    return game, p1
+
+
+def test_wood_elemental_offers_its_forests_as_it_enters(set_pool):
+    """CR 614.1c: the sacrifice is part of entering, and the offer is a ceiling
+    — a tapped Forest is not among what the card names."""
+    game, p1 = _r31_wood_elemental(set_pool, forests=3, tapped=1)
+
+    prompt = game.pending_sacrifice_state()
+    assert prompt is not None and prompt["player_index"] == 0
+    assert prompt["count"] == 2, "only the untapped Forests are offered"
+    assert prompt["up_to"] is True, "any number, not exactly two"
+    elemental = next(p for p in p1.battlefield if p.card.name == "Wood Elemental")
+    assert (elemental.effective_power, elemental.effective_toughness) == (0, 0)
+
+
+def test_wood_elementals_body_is_the_number_of_forests_it_ate(set_pool):
+    game, p1 = _r31_wood_elemental(set_pool, forests=3)
+    prompt = game.pending_sacrifice_state()
+
+    assert game.confirm_sacrifice(0, prompt["valid_indices"][:2])
+
+    elemental = next(p for p in p1.battlefield if p.card.name == "Wood Elemental")
+    assert (elemental.effective_power, elemental.effective_toughness) == (2, 2)
+    assert [p.card.name for p in p1.battlefield if p.card.name == "Forest"] == ["Forest"]
+    assert len(p1.graveyard) == 2
+
+
+def test_a_different_number_of_forests_is_a_different_body(set_pool):
+    """The control on the test above: nothing about the card is 2/2."""
+    game, p1 = _r31_wood_elemental(set_pool, forests=4)
+    prompt = game.pending_sacrifice_state()
+
+    assert game.confirm_sacrifice(0, prompt["valid_indices"])
+
+    elemental = next(p for p in p1.battlefield if p.card.name == "Wood Elemental")
+    assert (elemental.effective_power, elemental.effective_toughness) == (4, 4)
+
+
+def test_sacrificing_none_is_a_legal_answer_and_kills_it(set_pool):
+    """"Any number" includes none, and a 0/0 dies to CR 704.5f. Refusing the
+    empty answer would force a player to give up lands the card offered them
+    the choice of keeping."""
+    game, p1 = _r31_wood_elemental(set_pool, forests=3)
+
+    assert game.confirm_sacrifice(0, [])
+
+    assert [p.card.name for p in p1.battlefield] == ["Forest"] * 3
+    assert [c.name for c in p1.graveyard] == ["Wood Elemental"]
+
+
+def test_a_non_interactive_seat_gives_up_nothing(set_pool):
+    """The stated policy, not a heuristic: a seat that is merely offered the
+    chance to pay a cost pays none of it, and the card does what it does when
+    its controller declines. Nothing is left queued either — a suspending prompt
+    an AI seat never answers would be a hang, not a weak play."""
+    game, p1 = _r31_wood_elemental(set_pool, forests=3, interactive=False)
+
+    assert game.pending_choices == []
+    assert [p.card.name for p in p1.battlefield] == ["Forest"] * 3
+    assert [c.name for c in p1.graveyard] == ["Wood Elemental"]
+
+
+def test_with_no_forests_at_all_it_asks_nothing(set_pool):
+    game, p1 = _r31_wood_elemental(set_pool, forests=0)
+
+    assert game.pending_choices == []
+    assert [c.name for c in p1.graveyard] == ["Wood Elemental"]

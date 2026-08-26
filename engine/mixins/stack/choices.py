@@ -100,6 +100,21 @@ class PendingChoicesMixin:
             for choice in self.pending_choices
         )
 
+    def permanent_is_entering(self, permanent) -> bool:
+        """Whether *permanent* still owes somebody a choice that is part of it
+        entering the battlefield (CR 614.1c).
+
+        Stamped by ``_initialize_permanent_state``, read by the state-based
+        sweep: a permanent that has not finished entering has no settled
+        characteristics, so CR 704.5f has nothing to test yet. Identity, not
+        equality — two look-alike permanents entering together are two
+        permanents (CR 400.7)."""
+        return any(
+            choice.data.get("_entering_permanent") is permanent
+            and spec_for(choice.kind).open_for(self, choice)
+            for choice in self.pending_choices
+        )
+
     def pending_choices_of(self, kind: str, player_index: int | None = None) -> list[PendingChoice]:
         """Queued choices of *kind*, oldest first, optionally for one seat."""
         return [
@@ -2749,10 +2764,20 @@ class PendingChoicesMixin:
                 ),
             )
 
-    def _resolve_sacrifice_inline(self, player_index: int, count: int, filter: dict | None, exclude, reason: str, on_short, record: dict | None = None) -> None:
+    def _resolve_sacrifice_inline(self, player_index: int, count: int, filter: dict | None, exclude, reason: str, on_short, record: dict | None = None, up_to: bool = False, count_onto=None) -> None:
         """Sacrifice ``count`` of the player's permanents with the deterministic
-        heuristic (permanents whose death loses the game are kept for last)."""
+        heuristic (permanents whose death loses the game are kept for last).
+
+        ``up_to`` is a **stated policy**, not a heuristic: a seat merely
+        *offered* the chance to give permanents up gives up none. Sacrificing is
+        a cost, and a non-interactive seat paying an optional cost nobody asked
+        it for is the engine playing that seat's game. Wood Elemental therefore
+        enters as a 0/0 and dies to CR 704.5f, which is what the card does when
+        its controller declines."""
         player = self.players[player_index]
+        if up_to:
+            self._record_sacrifice_count(count_onto, 0)
+            return
         for _ in range(count):
             valid = self._sacrifice_candidate_indices(player, filter, exclude)
             if not valid:
@@ -2782,6 +2807,8 @@ class PendingChoicesMixin:
         reason: str = "Sacrifice",
         on_short=None,
         record: dict | None = None,
+        up_to: bool = False,
+        count_onto=None,
     ) -> None:
         """Force a player to sacrifice ``count`` permanents matching the filter
         payload ``filter``. A human seat is prompted to choose which; AI /
@@ -2798,27 +2825,66 @@ class PendingChoicesMixin:
         to under ``sacrificed_cards``. A later step of the same effect may be
         about what went (Transmute Artifact reads its mana value), and by then
         the permanent is in a graveyard and is a different object (CR 400.7) —
-        so it is recorded as it happens, which is CR 608.2h's rule."""
+        so it is recorded as it happens, which is CR 608.2h's rule.
+
+        ``up_to`` makes ``count`` a **ceiling** rather than an amount: "sacrifice
+        any number of untapped Forests" (Wood Elemental) is answered by any
+        subset, none included. A flag on the same prompt rather than a second
+        kind for the reason ``discard``'s ``up_to`` is one: what differs is how
+        many answers are legal, not what the answer means.
+
+        ``count_onto`` is a permanent that wants to know **how many** were given
+        up: the number goes in its ``sacrificed_as_entered`` metadata, which is
+        what a characteristic-defining P/T reading "equal to the number of
+        <things> sacrificed as it entered" counts (CR 604.3). It is recorded
+        where the sacrifice happens because nothing downstream can recover it —
+        the permanents are gone, and are different objects (CR 400.7)."""
         player = self.players[player_index]
         if not self._sacrifice_candidate_indices(player, filter, exclude):
+            # Nothing matches, so nothing can be given up. An "any number"
+            # sacrifice is *answered* by that — zero is a legal answer — so the
+            # count it owes is recorded rather than left unset.
+            self._record_sacrifice_count(count_onto, 0)
             self._apply_sacrifice_shortfall(player_index, count, on_short, reason)
             return
         queued = self.pending_choice_of("sacrifice", player_index)
         if queued is not None:
-            if queued.data["filter"] == filter and queued.data["exclude"] is exclude:
+            if (
+                queued.data["filter"] == filter
+                and queued.data["exclude"] is exclude
+                # A ceiling and an amount are different questions, so they do not
+                # add up: folding "any number of Forests" into "sacrifice two
+                # Forests" would let one answer discharge both, at whichever of
+                # the two readings the merged prompt happened to keep.
+                and bool(queued.data.get("up_to")) == bool(up_to)
+                and queued.data.get("_count_onto") is count_onto
+            ):
                 queued.data["count"] += count
             else:
                 # A differently-shaped sacrifice is already owed; this one can't be
                 # folded into that prompt, so it resolves inline.
                 self._resolve_sacrifice_inline(
-                    player_index, count, filter, exclude, reason, on_short, record
+                    player_index, count, filter, exclude, reason, on_short, record,
+                    up_to=up_to, count_onto=count_onto,
                 )
             return
         self.arm_pending_choice(
             "sacrifice", player_index,
             count=count, filter=filter, exclude=exclude, reason=reason,
-            on_short=on_short, record=record,
+            on_short=on_short, record=record, up_to=up_to, _count_onto=count_onto,
         )
+
+    def _record_sacrifice_count(self, count_onto, given_up: int) -> None:
+        """Stamp how many permanents were sacrificed onto the permanent that
+        asked for them (CR 604.3's "…sacrificed as it entered").
+
+        A no-op for every sacrifice nobody is counting, which is all of them but
+        one shape — so the three answer paths record unconditionally rather than
+        each remembering to ask."""
+        if count_onto is None:
+            return
+        count_onto.metadata["sacrificed_as_entered"] = int(given_up)
+        self._refresh_dynamic_creatures()
 
     def pending_sacrifice_state(self) -> dict | None:
         """The active sacrifice prompt as valid battlefield indices + count, or
@@ -2837,6 +2903,10 @@ class PendingChoicesMixin:
             "player_index": choice.player_index,
             "valid_indices": valid,
             "count": min(int(choice.data["count"]), len(valid)),
+            # Whether that count is an amount owed or a ceiling offered. The
+            # picker needs the difference: one enables its confirm at exactly
+            # that many, the other at any number up to it, none included.
+            "up_to": bool(choice.data.get("up_to")),
             "reason": choice.data["reason"],
         }
 
@@ -2855,7 +2925,13 @@ class PendingChoicesMixin:
         count = int(data["count"])
         need = min(count, len(valid))
         chosen = list(dict.fromkeys(indices or []))
-        if len(chosen) != need or any(i not in valid for i in chosen):
+        # "Sacrifice **any number** of untapped Forests" (Wood Elemental): the
+        # printed count is a ceiling, and none is a legal answer. Reading a
+        # ceiling as an exact count would force a player to give up permanents
+        # the card offered them the choice of keeping — the mirror of the same
+        # word on `discard`.
+        enough = len(chosen) <= need if data.get("up_to") else len(chosen) == need
+        if not enough or any(i not in valid for i in chosen):
             return False
         reason = data["reason"]
         # Resolved before any removal, so no index is held across one.
@@ -2869,7 +2945,9 @@ class PendingChoicesMixin:
         for name in reversed(removed):
             self.log.append(f"{player.name} sacrificed {name} ({reason})")
         self.discard_pending_choice(choice)
-        if count > len(valid):
+        self._record_sacrifice_count(data.get("_count_onto"), len(chosen))
+        # A ceiling nobody filled is not a shortfall: "any number" was answered.
+        if count > len(valid) and not data.get("up_to"):
             self._apply_sacrifice_shortfall(player_index, count - len(valid), data["on_short"], reason)
         self.check_state_based_actions()
         return True
@@ -2880,6 +2958,7 @@ class PendingChoicesMixin:
         self._resolve_sacrifice_inline(
             choice.player_index, int(data["count"]), data["filter"],
             data["exclude"], data["reason"], data["on_short"], data.get("record"),
+            up_to=bool(data.get("up_to")), count_onto=data.get("_count_onto"),
         )
 
     # Upper bound on resolve/SBA cycles in one _settle() call. A genuine infinite

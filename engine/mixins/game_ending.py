@@ -346,6 +346,13 @@ class GameEndingMixin:
                 # artifact animated by Animate Artifact, or a land animated by
                 # Kormus Bell, is a creature and CR 704.5f applies to it. Reading
                 # the printed type meant an animated Mox sat at 0/0 forever.
+                # A permanent that has not finished entering has no settled
+                # characteristics to test (CR 614.1c): Wood Elemental's P/T is
+                # the number of Forests sacrificed *as it entered*, and the
+                # answer to that is still queued. Sweeping it here binned the
+                # creature between raising the prompt and the player seeing it.
+                if self.permanent_is_entering(perm):
+                    return False
                 return perm.is_creature and not has_dynamic_toughness and perm.effective_toughness <= 0
 
             for player in self.players:
