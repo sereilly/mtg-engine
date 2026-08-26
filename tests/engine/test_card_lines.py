@@ -38,6 +38,7 @@ import engine.oracle as oracle
 from engine.card_hooks import CARD_LINE_INSTRUCTIONS
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.grammar import compile_line
+from engine.self_reference import expand_short_self_references
 
 
 @pytest.fixture(scope="module")
@@ -61,8 +62,17 @@ def _entries():
 
 
 def _printed_lines(card) -> list[str]:
-    """The card's lines as the compiler sees them, modal bullets expanded."""
-    text = oracle.expand_modal_activated_lines(card.oracle_text or "")
+    """The card's lines as the compiler sees them: modal bullets expanded, and a
+    legendary card's shortened self-reference written out in full.
+
+    The second rewrite is here because a hook key is compared against the line
+    the compiler *looks up*, and that line has already been through it — a key
+    written the way the card prints it would match nothing, which is the shape
+    this guard exists to catch and would then report against itself."""
+    text = expand_short_self_references(
+        card.oracle_text or "", card.name, legendary=card.is_legendary
+    )
+    text = oracle.expand_modal_activated_lines(text)
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 

@@ -1824,3 +1824,274 @@ def test_johans_grant_and_exemption_both_end_with_the_combat(set_pool):
     assert game.attack_tap_exemptions == []
     assert johan.metadata.get("granted_ability_lines") is None
     assert game.can_attack(johan, 0) is True
+
+# ---------------------------------------------------------------------------
+# Round 28 — an "unless" printed before its penalty, and a colour a blocker
+# cannot be
+# ---------------------------------------------------------------------------
+
+
+def _r28_island() -> CardDefinition:
+    """An Island built here for the reason `_swamp` above is: Legends printed
+    no basic lands, and a per-set test reads its own set's cards."""
+    return CardDefinition(
+        name="Island", mana_cost="", cmc=0.0, type_line="Basic Land - Island",
+        oracle_text="", colors=(), color_identity=("U",), keywords=(),
+        produced_mana=("U",),
+        raw={"name": "Island", "type_line": "Basic Land - Island"},
+    )
+
+
+def _r28_colored_creature(name: str, colors: tuple[str, ...]) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=colors, color_identity=colors, keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": "3", "toughness": "3"},
+    )
+
+
+def _r28_elder_spawn_upkeep(set_pool, islands: int):
+    """Elder Spawn's controller at the beginning of their upkeep, holding
+    *islands* Islands, with the trigger on the stack awaiting its answer."""
+    pool = set_pool("LEG")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=_r28_island()) for _ in range(islands)],
+    )
+    spawn = Permanent(card=pool["Elder Spawn"])
+    p1.battlefield.append(spawn)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.start_turn(0)
+    game._settle()
+    return game, p1, spawn
+
+
+def test_elder_spawn_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Elder Spawn"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "upkeep_self"
+    # An "unless" is an offer with a penalty however it is printed, so the
+    # leading spelling lowers to the same `may` the trailing one does — never a
+    # second fused kind.
+    assert trigger.instruction.kind == "may"
+    (action,) = trigger.instruction.payload["action"]
+    assert action.kind == "sacrifice_matching_permanent"
+    assert action.payload["filter"] == {"subtype_filter": "island"}
+    # The penalty is a whole statement, which is what the leading spelling buys:
+    # the trailing one can only ever punish with the verb it follows.
+    assert [step.kind for step in trigger.instruction.payload["otherwise"]] == [
+        "sacrifice_self", "deal_damage",
+    ]
+
+
+def test_elder_spawn_paying_the_alternative_sacrifices_an_island(set_pool):
+    game, p1, spawn = _r28_elder_spawn_upkeep(set_pool, islands=2)
+
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert game.is_on_battlefield(spawn)
+    assert [card.name for card in p1.graveyard] == ["Island"]
+    assert p1.life == 20
+
+
+def test_elder_spawn_declining_sacrifices_itself_and_deals_six(set_pool):
+    game, p1, spawn = _r28_elder_spawn_upkeep(set_pool, islands=2)
+
+    game.confirm_optional_pay(0, accept=False)
+    game._settle()
+
+    assert not game.is_on_battlefield(spawn)
+    assert [card.name for card in p1.graveyard] == ["Elder Spawn"]
+    assert p1.life == 14
+    assert _names(p1) == ["Island", "Island"]
+
+
+def test_elder_spawn_with_no_island_takes_the_penalty_unasked(set_pool):
+    """An offer nobody can afford is not an offer: the penalty applies with no
+    prompt at all, which is the reading that makes "unless" a `may`."""
+    game, p1, spawn = _r28_elder_spawn_upkeep(set_pool, islands=0)
+
+    assert not game.is_on_battlefield(spawn)
+    assert p1.life == 14
+
+
+def _r28_elder_spawn_blocked_by(set_pool, colors: tuple[str, ...]):
+    """Elder Spawn attacking into one blocker of *colors*. It pays its own
+    upkeep first, because a trigger owed an answer holds the turn where it is."""
+    pool = set_pool("LEG")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=_r28_island()),
+                     Permanent(card=pool["Elder Spawn"])],
+    )
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=_r28_colored_creature("Blocker", colors))],
+    )
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._settle()
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    attacker = next(
+        i for i, perm in enumerate(p1.battlefield) if perm.card.name == "Elder Spawn"
+    )
+    ok, msg = game.declare_attackers(0, [attacker])
+    assert ok, msg
+    game.advance_combat_phase()   # declare_blockers
+    return game.declare_blockers(1, {0: attacker})
+
+
+def test_elder_spawn_cannot_be_blocked_by_a_red_creature(set_pool):
+    ok, msg = _r28_elder_spawn_blocked_by(set_pool, ("R",))
+    assert not ok
+    assert "cannot block" in msg
+
+
+def test_elder_spawn_can_be_blocked_by_any_other_colour(set_pool):
+    """The colour is payload: the restriction reads the blocker's colour, and a
+    green one is not caught by it."""
+    ok, msg = _r28_elder_spawn_blocked_by(set_pool, ("G",))
+    assert ok, msg
+
+
+# ---------------------------------------------------------------------------
+# Round 28 — one named counter, five printed lines
+# ---------------------------------------------------------------------------
+
+
+def _r28_rasputin(set_pool):
+    """Rasputin Dreamweaver on the battlefield, entry state applied."""
+    pool = set_pool("LEG")
+    p1 = PlayerState(name="P1")
+    game = Game(players=[p1, PlayerState(name="P2")])
+    rasputin = Permanent(card=pool["Rasputin Dreamweaver"])
+    game._put_permanent_onto_battlefield(0, rasputin, None)
+    game._settle()
+    return game, p1, rasputin
+
+
+def _r28_dream_counters(permanent) -> int:
+    from engine.named_counters import counters_on
+
+    return counters_on(permanent, "dream")
+
+
+def _r28_spend_a_dream_counter(game, player, rasputin, ability_index: int = 0):
+    index = next(
+        i for i, perm in enumerate(player.battlefield) if perm is rasputin
+    )
+    result = game.activate_permanent_ability(
+        0, rasputin.card.name, permanent_index=index, ability_index=ability_index
+    )
+    game._settle()
+    return result
+
+
+def test_rasputin_compiles_supported(set_pool):
+    """Five printed lines, all about one counter the card invents (CR 122.1)."""
+    program = compile_card_oracle(set_pool("LEG")["Rasputin Dreamweaver"])
+    assert program.supported, program.reason
+
+    # Both activated abilities spend a counter, and the counter's *name* is
+    # payload on the cost — never part of an instruction kind.
+    assert [ability.cost.remove_counter for ability in program.activated_abilities] == [
+        "dream", "dream",
+    ]
+    (trigger,) = program.triggered_abilities
+    assert trigger.instruction.kind == "add_named_counter_to_self"
+    assert trigger.instruction.payload["counter"] == "dream"
+    assert trigger.instruction.payload["intervening_if"] == {
+        "kind": "started_turn_state", "state": "tapped", "negated": True,
+    }
+
+
+def test_rasputin_enters_with_seven_dream_counters(set_pool):
+    _game, _p1, rasputin = _r28_rasputin(set_pool)
+    assert _r28_dream_counters(rasputin) == 7
+
+
+def test_rasputin_spends_a_counter_for_colorless_mana(set_pool):
+    game, p1, rasputin = _r28_rasputin(set_pool)
+
+    result = _r28_spend_a_dream_counter(game, p1, rasputin)
+
+    assert result.supported, result.details
+    assert _r28_dream_counters(rasputin) == 6
+    assert p1.mana_pool["C"] == 1
+
+
+def test_rasputin_cannot_activate_with_no_counters_left(set_pool):
+    """The cost is a counter, so an empty store is an ability nobody can pay —
+    not one that resolves for free."""
+    game, p1, rasputin = _r28_rasputin(set_pool)
+    for _ in range(7):
+        _r28_spend_a_dream_counter(game, p1, rasputin)
+    assert _r28_dream_counters(rasputin) == 0
+
+    result = _r28_spend_a_dream_counter(game, p1, rasputin)
+
+    assert not result.supported
+    assert _r28_dream_counters(rasputin) == 0
+
+
+def test_rasputin_regrows_a_counter_at_upkeep_when_it_started_untapped(set_pool):
+    game, p1, rasputin = _r28_rasputin(set_pool)
+    _r28_spend_a_dream_counter(game, p1, rasputin)
+    assert _r28_dream_counters(rasputin) == 6
+
+    game.start_turn(0)
+    game._settle()
+
+    assert _r28_dream_counters(rasputin) == 7
+
+
+def test_rasputin_regrows_nothing_when_it_started_the_turn_tapped(set_pool):
+    """The board cannot answer this at the upkeep — the untap step has already
+    run — so it is the record taken before untapping that decides."""
+    game, p1, rasputin = _r28_rasputin(set_pool)
+    _r28_spend_a_dream_counter(game, p1, rasputin)
+    rasputin.tapped = True
+
+    game.start_turn(0)
+    game._settle()
+
+    assert not rasputin.tapped, "the untap step still untaps it"
+    assert _r28_dream_counters(rasputin) == 6
+
+
+def test_rasputin_never_exceeds_seven_dream_counters(set_pool):
+    """"…can't have more than seven dream counters on it" is a maximum on the
+    store, so it holds however the counter was arriving."""
+    game, _p1, rasputin = _r28_rasputin(set_pool)
+    assert _r28_dream_counters(rasputin) == 7
+
+    game.start_turn(0)
+    game._settle()
+
+    assert _r28_dream_counters(rasputin) == 7
+
+
+def test_rasputin_prevents_one_damage_for_a_counter(set_pool):
+    game, p1, rasputin = _r28_rasputin(set_pool)
+
+    result = _r28_spend_a_dream_counter(game, p1, rasputin, ability_index=1)
+    assert result.supported, result.details
+    assert _r28_dream_counters(rasputin) == 6
+
+    from engine.damage_events import deal_damage
+
+    outcome = deal_damage(
+        game,
+        {"recipient": rasputin, "amount": 3, "source": rasputin, "combat": False},
+    )
+
+    assert outcome.dealt == 2, "the shield absorbs exactly the next 1 damage"

@@ -237,6 +237,7 @@ def test_unsupported_cards_stay_out_of_the_denominators():
         oracle_text = "Zzyzx blargh, then blargh zzyzx."
         keywords = ()
         layout = "normal"
+        is_legendary = False
 
     card = _Unsupported()
     assert not hook_reliance.oracle.compile_card_oracle(card).supported, (

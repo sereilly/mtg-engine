@@ -69,9 +69,12 @@ _ACTIVATED_LINE_RE = re.compile(
 
 def _oracle_lines(card: CardDefinition) -> list[str]:
     # The same rewrites the compiler applies (Pyramids' modal bullets, the
-    # CR 702.6a expansion of an equip line), so the resulting effects classify
+    # CR 702.6a expansion of an equip line, a legendary card's shortened
+    # self-reference written out in full), so the resulting effects classify
     # as activated-ability lines, not cast effects.
-    return expand_ability_lines(card.oracle_text or "").split("\n")
+    return expand_ability_lines(
+        card.oracle_text or "", card_name=card.name, legendary=card.is_legendary
+    ).split("\n")
 
 
 def _cast_lines(card: CardDefinition) -> list[str]:

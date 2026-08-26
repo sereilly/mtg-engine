@@ -32,6 +32,7 @@ from ..cast_restrictions import CAST_RESTRICTIONS
 from ..cost_modifiers import cost_modifier_claims_line
 from ..draw_step_modifiers import draw_step_bonus_for
 from ..enter_effects import enter_effect_line
+from ..named_counters import CAP_CLAIM, counter_cap_line
 from ..extra_triggers import extra_trigger_line
 from ..land_play_allowance import land_play_line
 from ..prevention import prevention_claims_line
@@ -188,8 +189,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # that is an entry effect *plus* something else stays unclaimed. Vesuvan
     # Doppelganger is the case that matters: its copy clause fires, but the
     # granted upkeep ability trailing it does not live here.
-    if enter_effect_line(line) is not None:
+    if enter_effect_line(line, card_name) is not None:
         return "enter_effects"
+
+    # engine/named_counters.py — "Rasputin can't have more than seven dream
+    # counters on it." A maximum on the store, enforced at the one write that
+    # store has, so there is no instruction to lower and the claim asks the
+    # implementing module's own matcher.
+    if counter_cap_line(line, card_name) is not None:
+        return CAP_CLAIM
 
     return None
 

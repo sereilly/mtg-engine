@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..oracle_types import OracleInstruction
+from ..turn_state import started_the_turn
 from ..resumption import run_resumable
 from ._common import flip_coin, permanent_matches_filter
 from .registry import effect_handler
@@ -318,6 +319,23 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return False
         state = payload.get("state")
         value = bool(getattr(source, state, False)) if state else False
+        return (not value) if payload.get("negated") else value
+
+    if kind == "started_turn_state":
+        # "If this creature started the turn untapped" (Rasputin Dreamweaver).
+        # The board cannot answer this at an upkeep — the untap step has already
+        # run — so the untap step records it before untapping anything
+        # (`phases/untap_step.py`), and this reads that record. A permanent with
+        # no record for the current turn did not start it: it entered part-way
+        # through, which is False either way round and never a guess.
+        source = context.source_permanent
+        if source is None:
+            return False
+        value = started_the_turn(source, payload.get("state") or "", game.turn)
+        if value is None:
+            # It was not on the battlefield when the turn began, so it started
+            # the turn neither way and both spellings of the clause are false.
+            return False
         return (not value) if payload.get("negated") else value
 
     if kind == "exiled_card_was":

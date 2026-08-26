@@ -527,9 +527,13 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         # pile to an opponent — no second card, real or plausibly printable,
         # shares the shape. The *name* it taps is payload, read through the same
         # subject filter every "named" phrase resolves by.
+        # Keyed on the card's *full* name where the card prints the short one:
+        # a legendary card's shortened self-reference is written out before any
+        # line is classified (`engine/self_reference.py`), so this is the line
+        # the compiler looks up.
         "at the beginning of your upkeep, you may pay {r}{r}{r}. if you don't, "
-        'tap rohgahh and all creatures named kobolds of kher keep, then an '
-        'opponent gains control of them':
+        'tap rohgahh of kher keep and all creatures named kobolds of kher keep, '
+        'then an opponent gains control of them':
             _line(
                 'upkeep_pay_or_cede_named_creatures', 'upkeep_effect',
                 mana={"W": 0, "U": 0, "B": 0, "R": 3, "G": 0, "C": 0, "generic": 0},

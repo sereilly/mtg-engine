@@ -753,7 +753,9 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         for sentence in sents:
             claim_sentence(sentence, activated, trigger_prefix=trigger_prefix)
 
-    text = expand_ability_lines(card.oracle_text or "")
+    text = expand_ability_lines(
+        card.oracle_text or "", card_name=card.name, legendary=card.is_legendary
+    )
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:

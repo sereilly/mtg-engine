@@ -455,14 +455,20 @@ def _parse_counted_sacrifice(
     one noun phrase, so "an Island" and "two Swamps" are one production with
     the count as data.
     """
-    count = _accept_number(stream)
-    if count is None:
-        raise stream.error("expected how many to sacrifice")
-    described = parse_subject_filter_at(stream, plural=count != 1)
+    # "**an** Island" (Elder Spawn) prints its count as the article, and
+    # `NUMBER_WORDS` reads an article as one — so `_accept_number` would consume
+    # it and leave a bare noun behind, which `parse_subject_filter_at`
+    # quantifies as the sweep "all" and then refuses against the singular it was
+    # asked for. The article is left where it is instead: a singular subject is
+    # a reading that parser already has. This docstring always claimed both
+    # spellings were one production; until Elder Spawn no card printed the
+    # singular, so nothing showed that they were two.
+    count = None if stream.peek_word() in ("a", "an") else _accept_number(stream)
+    described = parse_subject_filter_at(stream, plural=(count or 1) != 1)
     if described is None:
         raise stream.error("expected what to sacrifice")
     return ast.Sacrifice(
-        player, ast.TargetSpec("a", described, count=count)
+        player, ast.TargetSpec("a", described, count=count or 1)
     )
 
 

@@ -85,6 +85,7 @@ from .effects import (
     _parse_return,
     _parse_reveal_top,
     _parse_sacrifice,
+    _parse_counted_sacrifice,
     _parse_sacrifice_expansion_permanents,
     _parse_delayed_self_action,
     _parse_shuffle_graveyard_into_library,
@@ -654,6 +655,36 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
                 condition, rebind_pronoun_to_condition_target(condition, then)
             )
         except GrammarError:
+            stream.reset(mark)
+
+    # "**Unless you sacrifice an Island**, sacrifice this creature and it deals
+    # 6 damage to you." (Elder Spawn.) The same offer-with-a-penalty
+    # `_parse_sacrifice` already reads in the trailing spelling ("Sacrifice this
+    # creature **unless you sacrifice two Swamps**", Mold Demon), printed with
+    # the alternative first — so it is one production reusing that clause
+    # parser, and lowers to the same `May`, not a second fused node.
+    #
+    # The penalty is a whole statement rather than a bare sacrifice, which is
+    # the reason the leading spelling needs its own reading at all: the trailing
+    # one attaches to the verb it follows and can only ever punish with that
+    # verb, while Elder Spawn's penalty is a sacrifice *and* a damage rider.
+    if stream.at_word("unless"):
+        mark = stream.mark()
+        stream.advance()
+        if stream.accept_phrase("you", "sacrifice"):
+            try:
+                alternative = _parse_counted_sacrifice(stream, ast.PlayerRef("you"))
+                if not stream.accept_punct(","):
+                    raise stream.error("expected the penalty after an 'unless' clause")
+                penalty = parse_statement(stream, top_level=False)
+                return ast.May(
+                    actor=ast.PlayerRef("you"),
+                    action=alternative,
+                    otherwise=penalty,
+                )
+            except GrammarError:
+                stream.reset(mark)
+        else:
             stream.reset(mark)
 
     # "you may <pay a cost | take an action>"

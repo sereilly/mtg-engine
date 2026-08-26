@@ -73,7 +73,7 @@ ENTERS_WITH_PT_COUNTERS = re.compile(
 )
 
 
-def enters_with_pt_counters(line: str) -> tuple[int, str] | None:
+def enters_with_pt_counters(line: str, card_name: str | None = None) -> tuple[int, str] | None:
     """``(count, counter kind)`` the line places, or None.
 
     Read by the entry state and by the support gate, so what is placed and what
@@ -83,7 +83,7 @@ def enters_with_pt_counters(line: str) -> tuple[int, str] | None:
     """
     from .grammar.vocabulary import NUMBER_WORDS
 
-    match = ENTERS_WITH_PT_COUNTERS.match((line or "").strip().lower().rstrip("."))
+    match = ENTERS_WITH_PT_COUNTERS.match(_self_normalized(line, card_name))
     if match is None:
         return None
     count = NUMBER_WORDS.get(match.group("count"))
@@ -92,22 +92,48 @@ def enters_with_pt_counters(line: str) -> tuple[int, str] | None:
     return count, match.group("counter")
 
 
-#: "This Equipment enters with a soul counter on it." (Malefic Scythe.) A
-#: **named** counter (CR 122.1) rather than a P/T one, so it is matched by shape
-#: and the word is data: a card printing a differently-named counter needs no
-#: entry. Anchored on "this <noun> enters with a <word> counter on it", which is
-#: the whole sentence — a phrase that matched a prefix would place a counter for
-#: a card that says something else afterwards.
+#: "This Equipment enters with a soul counter on it." (Malefic Scythe) /
+#: "Rasputin enters with **seven dream** counters on it." (Rasputin
+#: Dreamweaver.) A **named** counter (CR 122.1) rather than a P/T one, so it is
+#: matched by shape and both the word and the number are data: a card printing a
+#: differently-named counter, or a different many of them, needs no entry.
+#: Anchored on the whole sentence — a phrase that matched a prefix would place a
+#: counter for a card that says something else afterwards.
+#:
+#: The count is optional in the printed text and never in the answer: an article
+#: is the number one, which is the reading `ENTERS_WITH_PT_COUNTERS` beside this
+#: one already gives its own spelled-out number.
 ENTERS_WITH_NAMED_COUNTER = re.compile(
-    r"^this [a-z]+ enters with a (?P<counter>[a-z]+) counter on it$"
+    r"^this [a-z]+ enters with (?P<count>a|[a-z]+) (?P<counter>[a-z]+) "
+    r"counters? on it$"
 )
 
 
-def enters_with_named_counter(line: str) -> str | None:
-    """The counter word that line places, or None. Read by the entry state and
-    by the support gate, so what is placed and what is claimed cannot drift."""
-    match = ENTERS_WITH_NAMED_COUNTER.match((line or "").strip().lower().rstrip("."))
-    return match.group("counter") if match is not None else None
+def enters_with_named_counter(line: str, card_name: str | None = None) -> tuple[int, str] | None:
+    """``(count, counter word)`` the line places, or None.
+
+    Read by the entry state and by the support gate, so what is placed and what
+    is claimed cannot drift.
+
+    *card_name* collapses a card that names itself ("**Rasputin** enters with
+    …") onto the self-reference the pattern is anchored on, through the same
+    collapser the restriction tables use — a second one here is how a card
+    compiles supported and then enters with nothing.
+    """
+    match = ENTERS_WITH_NAMED_COUNTER.match(_self_normalized(line, card_name))
+    if match is None:
+        return None
+    printed = match.group("count")
+    if printed in ("a", "an"):
+        return 1, match.group("counter")
+    from .grammar.vocabulary import NUMBER_WORDS
+
+    count = NUMBER_WORDS.get(printed)
+    # A number word the table does not know refuses the line rather than
+    # defaulting to one, for the reason `enters_with_pt_counters` gives: a
+    # permanent entering with one counter where the card prints seven is a
+    # strictly smaller card, silently.
+    return None if count is None else (count, match.group("counter"))
 
 #: "As this creature enters, choose a number between 0 and 7." (Shapeshifter.)
 #: The bounds are data, like every other parameter in this file: a card printed
@@ -196,6 +222,24 @@ _ENTRY_LINES: tuple[tuple[str, str], ...] = (
 )
 
 
+def _self_normalized(line: str, card_name: str | None = None) -> str:
+    """:func:`_normalized`, with a card that names itself collapsed first.
+
+    Pre-modern and legendary templating writes the subject as the card's name
+    ("**Rasputin** enters with seven dream counters on it") where the patterns
+    here are anchored on "this <noun>". Through ``oracle._restriction_line``
+    rather than a collapser of its own, for the reason ``target_immunity``
+    gives at the same seam: the *gate* already reads a line that way, and a
+    runtime reader normalizing differently is exactly how a card compiles
+    supported and then does nothing.
+    """
+    if not card_name:
+        return _normalized(line)
+    from .oracle import _restriction_line
+
+    return _normalized(_restriction_line(line, card_name))
+
+
 def _normalized(line: str) -> str:
     """The line as ``_initialize_permanent_state`` sees it.
 
@@ -230,14 +274,14 @@ def copy_on_enter_type(normalized_text: str) -> str | None:
     return None
 
 
-def enter_effect_line(line: str) -> str | None:
+def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     """The entry-state phrase *line* consists of in full, or ``None``.
 
     The return value is the phrase itself, used only to label the AST node —
     nothing dispatches on it, because there is nothing to dispatch: the mixin
     has already applied the effect from the permanent's own text.
     """
-    normalized = _normalized(line)
+    normalized = _self_normalized(line, card_name)
     for phrase, tail in _ENTRY_LINES:
         for subject in _SELF_SUBJECTS:
             if normalized == subject + phrase + tail:
@@ -249,7 +293,7 @@ def enter_effect_line(line: str) -> str | None:
     # Equipment's effect lines, so the omission cost nothing until the
     # Equipment gate (engine/oracle.py) started asking.
     if enters_with_named_counter(normalized) is not None:
-        return "enters with a named counter"
+        return "enters with named counters"
     if enters_with_pt_counters(normalized) is not None:
         return "enters with P/T counters"
     if choose_number_on_enter(normalized) is not None:
