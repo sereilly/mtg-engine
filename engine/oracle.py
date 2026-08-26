@@ -108,9 +108,15 @@ UNSUPPORTED_KEYWORDS = {
     "Phasing",
 }
 
-UNSUPPORTED_PATTERNS = (
-    "exchange control",
-)
+# Substrings that veto a card before any line is read. Empty, and kept empty
+# deliberately: a blanket refusal on a *phrase* is the pre-grammar shape — it
+# reports the whole card unsupported without naming a clause, and it goes on
+# doing so after the clause is implemented. "exchange control" sat here until
+# CR 701.12b's production arrived, at which point Gauntlets of Chaos compiled
+# cleanly and was still refused by this line. A line the grammar cannot read
+# already refuses itself, naming what it could not read; that is the refusal
+# this table is not needed for.
+UNSUPPORTED_PATTERNS: tuple[str, ...] = ()
 
 
 SUPPORTED_SPELL_PATTERNS = (

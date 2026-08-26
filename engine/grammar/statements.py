@@ -83,6 +83,7 @@ from .effects import (
     _parse_doesnt_untap_next_step,
     _parse_tap_untap,
     _parse_attach,
+    _parse_exchange_control,
     _parse_wins,
 )
 
@@ -172,6 +173,8 @@ def _parse_subject_verb(
         return _parse_tap_untap(stream)
     if stream.at_word("attach"):
         return _parse_attach(stream)
+    if stream.at_word("exchange"):
+        return _parse_exchange_control(stream)
     if stream.at_word("put"):
         return _parse_put_counter(stream)
     if stream.at_word("double"):

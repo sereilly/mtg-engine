@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import permanent_matches_filter, resolve_target_permanent
+from ._common import (permanent_matches_filter, resolve_target_permanent,
+                      resolve_target_slots)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -258,4 +259,116 @@ def steal_blockers_of_source(game: Game, instruction: OracleInstruction, context
             stolen += 1
     if not stolen:
         game.log.append(f"{context.card.name}: nothing was blocking it")
+    return True, "resolved"
+
+
+@effect_handler("exchange_control_of_targets")
+def exchange_control_of_targets(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exchange control of target artifact, creature, or land you control and
+    target permanent an opponent controls that shares one of those types with
+    it." (Gauntlets of Chaos, CR 701.12b.)
+
+    Two layer-2 *contributions*, one per permanent, recorded through
+    ``engine/control.py`` — never a move. Each permanent keeps its own
+    ``base_controller_index``, so an effect that later ends one half reverts
+    that permanent to the seat it entered under rather than to whichever seat
+    the swap left holding it, and destroying one half leaves the other exactly
+    where the exchange put it.
+
+    CR 701.12a is the reason every check happens before either contribution is
+    recorded: an exchange is atomic, so a slot that is gone, that no longer
+    matches its printed noun phrase, or that fails the cross-slot type test
+    means **no part** of the exchange occurs. Half an exchange is a gift.
+
+    CR 701.12b is the other early exit: two permanents one player already
+    controls exchange to nothing, and recording two contributions for it would
+    stamp a layer-2 effect that says what was already true — visible the moment
+    something else ends one of them.
+    """
+    from ..auras import auras_attached_to
+    from ..control import change_control
+
+    card = context.card
+    payload = instruction.payload
+    targets = payload.get("targets") or {}
+    slot_filters = list(targets.get("filters") or [targets.get("filter") or {}] * 2)
+    chosen = resolve_target_slots(game, context, 2)
+    caster_index = game.players.index(context.caster)
+
+    legal: list[Permanent] = []
+    for index, permanent in enumerate(chosen):
+        wanted = slot_filters[index] if index < len(slot_filters) else {}
+        if permanent is None or not game.is_on_battlefield(permanent):
+            break
+        if not permanent_matches_filter(permanent, wanted):
+            break
+        # "you control" / "an opponent controls" are seat questions, which
+        # `permanent_matches_filter` deliberately does not answer.
+        controller = wanted.get("controller")
+        controlled_by_caster = game.controls(caster_index, permanent)
+        if controller == "you" and not controlled_by_caster:
+            break
+        if controller in ("opponent", "not_you") and controlled_by_caster:
+            break
+        legal.append(permanent)
+
+    if len(legal) != 2 or legal[0] is legal[1]:
+        game.log.append(f"{card.name}: the exchange could not be completed, so nothing happens")
+        return True, "resolved"
+    first, second = legal
+
+    if payload.get("shares_a_type"):
+        # "…that shares one of **those** types with it" — those types being the
+        # first slot's printed list. Read off that filter rather than named
+        # here, so a card exchanging two permanents from a different list gets
+        # the test for free.
+        printed = slot_filters[0].get("type_filter") or ()
+        if isinstance(printed, str):
+            printed = [printed]
+        if not any(
+            first.has_type(card_type) and second.has_type(card_type)
+            for card_type in printed
+        ):
+            game.log.append(
+                f"{card.name}: {second.card.name} shares none of "
+                f"{first.card.name}'s printed types, so nothing happens"
+            )
+            return True, "resolved"
+
+    seat_of_first = game.controller_index_of(first)
+    seat_of_second = game.controller_index_of(second)
+    if seat_of_first is None or seat_of_second is None or seat_of_first == seat_of_second:
+        game.log.append(f"{card.name}: both permanents have one controller, so nothing happens")
+        return True, "resolved"
+
+    change_control(first, seat_of_second, source=card)
+    change_control(second, seat_of_first, source=card)
+    game._sync_control()
+    context.results["exchanged_permanents"] = [first.permanent_id, second.permanent_id]
+    game.log.append(
+        f"{card.name}: {game.players[seat_of_first].name} and "
+        f"{game.players[seat_of_second].name} exchanged control of "
+        f"{first.card.name} and {second.card.name}"
+    )
+
+    if payload.get("destroy_attached_auras"):
+        # "If those permanents are exchanged this way, destroy all Auras
+        # attached to them." Reached only from below the exchange, which is the
+        # printed condition: nothing was exchanged on any path that returned
+        # above. The Auras are grouped by *their* controller, which need not be
+        # either of the two seats above — the sweep destroys a permanent on the
+        # battlefield it is actually on.
+        doomed = [aura for host in (first, second) for aura in auras_attached_to(host)]
+        for seat, player in enumerate(game.players):
+            on_this_board = {
+                aura.permanent_id
+                for aura in doomed
+                if game.controller_index_of(aura) == seat
+            }
+            if not on_this_board:
+                continue
+            for destroyed in game._destroy_swept_permanents(
+                player, lambda perm: perm.permanent_id in on_this_board
+            ):
+                game.log.append(f"{card.name} destroyed {destroyed.card.name}")
     return True, "resolved"

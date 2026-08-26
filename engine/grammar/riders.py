@@ -635,6 +635,37 @@ def _attach_destroyed_this_way(stream: TokenStream, steps: list[ast.Statement]) 
     return True
 
 
+def _attach_exchanged_this_way(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """Fold "If those permanents are exchanged this way, destroy all Auras
+    attached to them." into the :class:`~engine.grammar.ast.ExchangeControl`
+    before it (Gauntlets of Chaos).
+
+    The same argument as ``_attach_destroyed_this_way`` beside it: "exchanged
+    **this way**" is a question about what the previous sentence did, and
+    "them" names the two permanents it named. Parsed as its own step the
+    sentence would have no permanents at all and would destroy every Aura on
+    the board — which is exactly the sweep-lost-its-narrowing shape, so the
+    near-miss rewinds and the line refuses rather than being consumed.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.ExchangeControl):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "if", "those", "permanents", "are", "exchanged", "this", "way"
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "destroy", "all", "auras", "attached", "to", "them"
+    ):
+        stream.reset(mark)
+        return False
+    steps[-1] = dataclasses.replace(last, destroy_attached_auras=True)
+    return True
+
+
 def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.Statement:
     """Fold damage riders into the most recent DealDamage of *statement*."""
     if isinstance(statement, ast.DealDamage):

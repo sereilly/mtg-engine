@@ -708,6 +708,27 @@ def _lower_become_color(
     and layer 5 reads both (`engine/layer_bridge.py`). One handler covers one
     target or several, since a single chosen slot is a list of one.
     """
+    if node.color == ast.CHOSEN_COLOR:
+        # "Target permanent you control becomes the color of your choice."
+        # (Alchor's Tomb.) Its own kind rather than a flag on the lace kind,
+        # because the two describe different pickers: a lace targets a spell or
+        # a permanent and names its colour in the text, while this one targets
+        # whatever its printed noun phrase says and reads the colour back off
+        # the choice made when the ability was activated. The noun phrase is
+        # described here, so "you control" is enforced by the picker rather
+        # than dropped — the lace kind's fixed `spell_or_permanent` spec would
+        # have offered every permanent on the board.
+        if not isinstance(node.subject, ast.TargetSpec) or not node.subject.targeted:
+            raise LoweringError(
+                "no handler recolours an object nobody targeted", node=node
+            )
+        if node.duration.kind is not None:
+            raise LoweringError(
+                f"no handler recolours for {node.duration.kind!r}", node=node
+            )
+        payload = {}
+        _describe_targets(payload, node.subject)
+        return (OracleInstruction("recolor_target_chosen_color", "", payload),)
     if node.duration.kind in ("until_end_of_turn", "this_turn"):
         if not isinstance(node.subject, ast.TargetSpec) or not node.subject.targeted:
             raise LoweringError(

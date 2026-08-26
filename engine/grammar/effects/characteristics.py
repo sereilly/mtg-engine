@@ -632,6 +632,13 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     # have" wrapper has taken its subject; English changes the inflection and
     # the card does not change what it does.
     stream.expect_word("becomes", "become")
+    # "…becomes **the color of your choice**" (Alchor's Tomb). CR 609.3 makes
+    # the choice part of the resolution, so the sentence names no colour and the
+    # node carries the sentinel instead. Read before the colour-word branch,
+    # which would see "the" and refuse — and read here rather than as a separate
+    # production, because it is the same verb with the same duration tail.
+    if stream.accept_phrase("the", "color", "of", "your", "choice"):
+        return ast.BecomeColor(subject, ast.CHOSEN_COLOR, _parse_duration(stream))
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
     if word in COLOR_WORDS:

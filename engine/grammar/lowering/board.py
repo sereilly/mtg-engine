@@ -289,6 +289,51 @@ def _lower_attach(node: ast.Attach) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("attach_source_to_target", "", payload),)
 
 
+def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstruction, ...]:
+    """"Exchange control of target artifact, creature, or land you control and
+    target permanent an opponent controls…" (Gauntlets of Chaos, CR 701.12b.)
+
+    Two chosen slots, described the way the two-target pump describes its pair:
+    ``filters`` carries one filter per slot so the picker can enumerate both
+    halves and the handler can re-check each at resolution (CR 608.2b), while
+    ``filter`` stays the shape every one-slot reader already expects.
+
+    ``shares_type`` and the printed type list travel as payload rather than as
+    part of the kind, because a card exchanging (say) two enchantments would be
+    this same effect with a different noun phrase.
+    """
+    if not isinstance(node.first, ast.TargetSpec) or not _is_target(node.first):
+        raise LoweringError(
+            "an exchange of control needs a chosen permanent on each side", node=node
+        )
+    if not isinstance(node.second, ast.TargetSpec) or not _is_target(node.second):
+        raise LoweringError(
+            "an exchange of control needs a chosen permanent on each side", node=node
+        )
+    first = _filter_payload(node.first.filter)
+    second = _filter_payload(node.second.filter)
+    payload: dict[str, object] = {
+        "targets": {
+            "quantifier": "target",
+            "kind": "object",
+            "filter": first,
+            "filters": [first, second],
+            "count": 2,
+            # Two permanents on two battlefields are distinct by construction,
+            # but saying so is what stops one player's own permanent filling
+            # both slots if a later card drops the controller words.
+            "distinct": True,
+        },
+        # The relation between the slots (see the node's docstring), and the
+        # types it is measured over — "one of **those** types" is the first
+        # slot's printed list, so it is read off that filter rather than
+        # spelled out again here.
+        "shares_a_type": bool(node.shares_a_type),
+        "destroy_attached_auras": bool(node.destroy_attached_auras),
+    }
+    return (OracleInstruction("exchange_control_of_targets", "", payload),)
+
+
 def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
     if not isinstance(node.subject, ast.TargetSpec):
         raise LoweringError("tap/untap needs an object target", node=node)

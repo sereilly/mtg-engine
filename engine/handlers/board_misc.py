@@ -269,6 +269,49 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+@effect_handler("recolor_target_chosen_color")
+def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target permanent you control becomes the color of your choice."
+    (Alchor's Tomb.)
+
+    A colour *replacement* like the lace kind beside it, and indefinite like
+    Aisling Leprechaun's — the difference is only where the colour comes from.
+    CR 609.3 makes the choice part of the effect, so nothing in the text names
+    it and the answer arrives on ``context.choices["new_color"]``, the same
+    channel Feat of Resistance's "protection from the color of your choice"
+    reads. An unanswered choice recolours nothing rather than defaulting to a
+    colour: a permanent that became a colour nobody picked is the wrong colour,
+    and doing nothing is the honest failure.
+
+    The printed noun phrase is enforced here, not assumed. The filter travels on
+    the payload and is asked through ``subject_matches`` because "you control" is
+    a seat rather than a property of the card — dropping it would let the ability
+    recolour an opponent's permanent, which is a restriction the picker showed
+    and the resolution ignored.
+    """
+    from ..subject_filters import subject_matches
+
+    symbol = game._normalize_mana_color((context.choices or {}).get("new_color"))
+    if symbol is None:
+        game.log.append(
+            f"{context.card.name}: no colour was chosen, so nothing is recoloured"
+        )
+        return True, "resolved"
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(context.caster)
+    target = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(game, perm, filters, observer=observer),
+        fallback_on_invalid_choice=False,
+    )
+    if target is None:
+        game.log.append(f"{context.card.name}: no valid permanent to recolour")
+        return True, "resolved"
+    target.metadata["color_override"] = symbol
+    game.log.append(f"{target.card.name} became {symbol} ({context.card.name})")
+    return True, "resolved"
+
+
 @effect_handler("recolor_targets_until_eot")
 def recolor_targets_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"One or more target creatures become <colour> until end of turn."

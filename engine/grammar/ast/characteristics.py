@@ -215,9 +215,21 @@ class BecomeCreature:
     card_types: tuple[str, ...] = ()
 
 
+#: The colour an effect does not name because CR 609.3 makes the choice part of
+#: resolving it — "becomes **the color of your choice**" (Alchor's Tomb). It
+#: rides :attr:`BecomeColor.color` rather than a second boolean field, for the
+#: reason ``PROTECTION_FROM_CHOSEN_COLOR`` rides the keyword string beside it: a
+#: node with both a colour and a "no, ask" flag has a state where the two
+#: disagree, and nothing to say which one the handler should believe.
+CHOSEN_COLOR = "chosen_color"
+
+
 @dataclass(frozen=True)
 class BecomeColor:
     """"Target spell or permanent becomes red." (the Lace cycle, CR 105.)
+
+    ``color`` is a mana symbol, or :data:`CHOSEN_COLOR` when the card prints
+    "the color of your choice" and the word is not known until resolution.
 
     A colour *replacement*, not an addition — the object becomes that colour
     instead of its own. Mana symbols are unaffected, which is reminder text the
