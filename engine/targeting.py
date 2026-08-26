@@ -913,6 +913,30 @@ def _from_targets_payload(targets) -> dict | None:
     return {"kind": derived, **flags} if derived is not None else None
 
 
+def bounce_subject_filter(payload: dict) -> dict:
+    """What "Return target <noun> to its owner's hand" named, as a filter.
+
+    One reading for the cast gate, because the payload spells the subject two
+    ways and neither is the whole answer on its own: a several-target bounce
+    ("up to two target creatures") describes its slots under ``targets``, while
+    a one-target narrowed bounce carries ``filter``. A bare payload is
+    Unsummon's, whose noun was "creature" — the default every other reader of
+    this instruction kind already assumes.
+
+    Read by the cast-time target gate and by the AI's "is this worth casting?"
+    check, so neither of them re-reads the printed noun: it was ``is_creature``
+    in one and ``primary_type == "creature"`` in the other, which is Unsummon's
+    noun standing in for Boomerang's and Flash Flood's.
+    """
+    targets = payload.get("targets")
+    if isinstance(targets, dict) and isinstance(targets.get("filter"), dict):
+        return targets["filter"]
+    described = payload.get("filter")
+    if isinstance(described, dict):
+        return described
+    return {"type_filter": "creature"}
+
+
 # The one spec kind whose chosen index is *not* a battlefield slot. Named
 # rather than spelled out at each reader, because "is this index a graveyard
 # index?" is asked in five places and a sixth that forgets is a spell reading a

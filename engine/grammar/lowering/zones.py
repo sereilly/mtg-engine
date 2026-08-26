@@ -15,13 +15,14 @@ the object and refuse the shapes none of them implement. A near-empty
 
 from __future__ import annotations
 
-import dataclasses
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
 from ._events import EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS
 from ._common import (
+    _PAYLOAD_HONOURED_FILTER_FIELDS,
     _describe_targets,
     _filter_payload,
     _is_source,
@@ -284,22 +285,13 @@ def _lower_return_to_zone(
     assert isinstance(subject, ast.TargetSpec)
     filt = subject.filter
 
-    # The narrowings the *bounce* path enforces at resolution (the payload
-    # filter reaches the handler's predicate): "non-Spirit creature" (Roaming
-    # Ghostlight), "other target creature or planeswalker" (Barrin, Tolarian
-    # Archmage). Stripped before the blanket refusal below so only these two —
-    # not every adjective — pass; the graveyard handlers still see the full
-    # filter and keep their own gates.
-    bounce_extras = (
-        filt.excluded_subtypes, filt.other_than_source, filt.controller,
-        filt.excluded_types,
-    )
-    bare_for_gate = dataclasses.replace(
-        filt, excluded_subtypes=(), other_than_source=False, controller=None,
-        excluded_types=(),
-    )
-    if node.from_zone is None and _reads_no_return_restriction(bare_for_gate):
-        raise LoweringError("no return handler honours this restriction", node=node)
+    # The blanket refusal is the *graveyard* returns' gate, and only theirs:
+    # each of those takes a fixed payload and reads at most a card type, so any
+    # adjective beyond it would be invisible to them. The bounce path below
+    # gates itself instead, against what ``subject_matches`` can test — a
+    # stronger question than a hand-kept list of exceptions to this one, which
+    # is what it used to be (``excluded_subtypes``, ``other_than_source``,
+    # ``controller``, ``excluded_types``, stripped before asking).
     if node.from_zone is not None and _reads_no_return_restriction(filt):
         raise LoweringError("no return handler honours this restriction", node=node)
 
@@ -364,36 +356,53 @@ def _lower_return_to_zone(
                 )
         if filt.is_card:
             raise LoweringError("no handler bounces a card that is not in play", node=node)
-        # "target **nonland** permanent" (Sublime Epiphany) names no card type
-        # at all — the phrase is an exclusion. The handler's filter path already
-        # answers it through ``subject_matches``, so what has to hold is that
-        # the phrase leaves *something* behind for that path to test: a bare
-        # "target permanent" would be admitted here and then bounce a land,
-        # which is the case this refusal was written for.
-        widened = set(filt.card_types) in ({"creature"}, {"creature", "planeswalker"})
-        # "target permanent **you both own and control**" (Obelisk of Undoing)
-        # names no card type either, and leaves an ownership narrowing behind
-        # instead of an exclusion — which `subject_matches` answers, so the
-        # handler's filter path has something to test. The card really does
-        # bounce a land, and that is the card.
-        narrowed = bool(filt.excluded_types) or filt.owner is not None
-        if not widened and not narrowed:
-            raise LoweringError("the bounce handler only returns creatures", node=node)
-        if any(bounce_extras) or filt.card_types != ("creature",):
-            # A narrowed or widened bounce carries what the handler's
-            # predicate and the picker must both honour; the bare Unsummon
-            # payload stays byte-identical on the branch below.
-            payload: dict[str, object] = {"filter": {
-                key: value
-                for key, value in _filter_payload(filt).items()
-                if key in (
-                    "type_filter", "exclude_types", "exclude_subtypes",
-                    "exclude_self", "controller", "owner",
-                )
-            }}
-            _describe_targets(payload, subject)
-            return (OracleInstruction("bounce_target_creature", "", payload),)
-        return (OracleInstruction("bounce_target_creature", "", {}),)
+        # **The printed noun is payload, not a kind.** A bounce returns whatever
+        # the phrase named to its owner's hand — a creature (Unsummon), any
+        # permanent (Boomerang), an Island (Flash Flood), a nonland permanent
+        # (Sublime Epiphany) — and the effect per object is the same one. So
+        # what the line has to clear is not "does it say creature?" but "can the
+        # narrowing it *does* say be tested?", asked in the two places a filter
+        # can go missing:
+        #
+        # * ``_filter_payload`` refuses a narrowing with no payload form at all,
+        #   so it cannot be dropped between the AST and the dispatcher;
+        # * ``TESTABLE_SUBJECT_FILTER_KEYS`` refuses one that has a form
+        #   ``subject_matches`` cannot answer, so it cannot be dropped between
+        #   the dispatcher and the permanent.
+        #
+        # Everything surviving both is honoured by the same ``subject_matches``
+        # the picker, the cast gate and the handler's predicate each ask, which
+        # is what lets a phrase nobody wrote a branch for still bounce exactly
+        # what it printed. This replaced a hand-kept list of the four narrowings
+        # the branch below carried, under which "target permanent" refused for
+        # want of an adjective and "target artifact" refused for being the wrong
+        # noun.
+        # The first half, over the AST: a field ``to_payload`` does not read at
+        # all leaves no key for the second half to inspect, so "target
+        # **enchanted** creature" would reduce to "target creature" and bounce
+        # one that was never enchanted.
+        unread = _restrictions_beyond(filt, _PAYLOAD_HONOURED_FILTER_FIELDS)
+        if unread:
+            raise LoweringError(
+                "the bounce handler cannot read " + ", ".join(sorted(unread)),
+                node=node,
+            )
+        bounce_filter = _filter_payload(filt)
+        untestable = set(bounce_filter) - TESTABLE_SUBJECT_FILTER_KEYS
+        if untestable:
+            raise LoweringError(
+                "the bounce handler cannot test "
+                + ", ".join(sorted(untestable)),
+                node=node,
+            )
+        if bounce_filter == {"type_filter": "creature"}:
+            # Unsummon's payload, byte-identical: the bare bounce carries no
+            # filter because "creature" is what every reader of this kind
+            # already defaults to.
+            return (OracleInstruction("bounce_target_creature", "", {}),)
+        payload: dict[str, object] = {"filter": bounce_filter}
+        _describe_targets(payload, subject)
+        return (OracleInstruction("bounce_target_creature", "", payload),)
 
     raise LoweringError("no handler for this zone change", node=node)
 
@@ -585,7 +594,7 @@ def _lower_ownership_exchange_unless_paid(
     every other word was required by the production that read it."""
     from ...subject_filters import object_only_filter
 
-    described = _filter_payload(node.target)
+    described = _filter_payload(node.target, carried_separately=frozenset({"owner"}))
     described.pop("owner", None)
     if object_only_filter(described) is None:
         raise LoweringError(
@@ -599,7 +608,11 @@ def _lower_ownership_exchange_unless_paid(
         "owner": node.target.owner,
         "filter": described,
     }
-    _describe_targets(payload, ast.TargetSpec("target", node.target, targeted=True))
+    _describe_targets(
+        payload,
+        ast.TargetSpec("target", node.target, targeted=True),
+        carried_separately=frozenset({"owner"}),
+    )
     return (OracleInstruction("exchange_ownership_unless_paid", "", payload),)
 
 

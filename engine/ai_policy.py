@@ -26,7 +26,8 @@ from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import x_spend_color_from_text
 from .search_filters import search_matches, searched_seat
-from .targeting import derive_activation_spec, derive_cast_spec
+from .subject_filters import subject_matches
+from .targeting import bounce_subject_filter, derive_activation_spec, derive_cast_spec
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
@@ -804,8 +805,15 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
         kind = instruction.kind
 
         if kind == "bounce_target_creature":
+            # What the bounce named is payload, not the word "creature":
+            # Boomerang names any permanent and Flash Flood names a Mountain,
+            # and a check keyed to one card's noun would have the AI hold a
+            # Boomerang while the opponent's board was all lands. The same
+            # reading the cast gate uses, tested with the same matcher.
+            wanted = bounce_subject_filter(instruction.payload)
             return any(
-                perm.card.primary_type == "creature" for perm in game.controlled_by(opponent)
+                subject_matches(game, perm, wanted, observer=caster_index)
+                for perm in game.controlled_by(opponent)
             )
 
         if kind == "destroy_target_permanent":

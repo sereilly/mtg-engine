@@ -20,7 +20,8 @@ from engine.library_top import top_is_public
 from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
-from engine.targeting import usable_activated_abilities
+from engine.subject_filters import filter_head_noun
+from engine.targeting import bounce_subject_filter, usable_activated_abilities
 from engine.text_changes import changed_words
 
 from .runtime import CARD_BY_NAME
@@ -348,6 +349,14 @@ def _mode_target_kind(instruction) -> str:
         if type_filter == "artifact":
             return "artifact"
         return "permanent"
+    if kind == "bounce_target_creature":
+        # "…or return target Island to its owner's hand" (Active Volcano,
+        # Flash Flood). The printed noun is payload, so the picker's kind is
+        # read off the filter the lowering carried rather than off the
+        # instruction's name — which says "creature" and would have sent a
+        # Mountain-bouncing mode to the fall-through below and offered the
+        # caster a *player*.
+        return filter_head_noun(bounce_subject_filter(instruction.payload))
     if kind == "grant_prevention_shield":
         # "...dealt to you this turn" goes to the controller (no target choice);
         # "...dealt to any target" lets the caster shield a creature or a player.
@@ -365,6 +374,15 @@ def _mode_target_flags(instruction) -> dict:
         color_filter = instruction.payload.get("color_filter")
         if color_filter:
             return {"color_filter": color_filter}
+    if instruction is not None and instruction.kind == "bounce_target_creature":
+        # Everything the noun said past its head word — "Island", "nonland" —
+        # travels as the enumerator's own ``filter``, which it tests with the
+        # same ``subject_matches`` the cast gate and the handler ask. Without it
+        # the mode would highlight every permanent and then refuse the cast on
+        # all but one of them.
+        described = bounce_subject_filter(instruction.payload)
+        if described:
+            return {"filter": described}
     return {}
 
 

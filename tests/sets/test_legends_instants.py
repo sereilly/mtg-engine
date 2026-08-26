@@ -1933,3 +1933,170 @@ def test_reverberation_named_spell_gone_arms_nothing(set_pool):
     assert stale not in game.stack
     assert p1.life == 15, "the later sorcery was never the one it named"
     assert p2.life == 20
+
+
+# ---------------------------------------------------------------------------
+# Bounce (round 27) — "Return target <noun> to its owner's hand." One
+# instruction for every noun the sentence can print: Unsummon's creature,
+# Boomerang's permanent, and the Island / Mountain the two modal mirrors name.
+# CR 400.3 (the card goes to its *owner's* hand), CR 601.2c (an illegal choice
+# makes the cast illegal rather than ineffective).
+# ---------------------------------------------------------------------------
+
+
+def _r27_land(set_pool, name: str) -> CardDefinition:
+    """A basic land card, by printed name — Island and Mountain are what the
+    two modal bounces narrow to, and the narrowing is a *subtype* (CR 205.3i)
+    rather than a card type, so it has to be tested on real land cards."""
+    return set_pool("LEA")[name]
+
+
+def test_boomerang_returns_a_land_its_narrower_cousin_could_not(set_pool):
+    """"Return target **permanent**" names no card type at all. The bounce used
+    to refuse the line for want of an adjective, on the reasoning that a phrase
+    with nothing left to test would bounce a land — which is exactly what this
+    card prints."""
+    boomerang = set_pool("LEG")["Boomerang"]
+    p1 = PlayerState(name="P1", hand=[boomerang])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[
+            Permanent(card=_creature("Bear")),
+            Permanent(card=_r27_land(set_pool, "Mountain")),
+        ],
+    )
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(
+        0, "Boomerang", target_player_index=1, target_permanent_index=1
+    )
+
+    assert result.supported, result.details
+    assert [p.card.name for p in p2.battlefield] == ["Bear"]
+    assert [c.name for c in p2.hand] == ["Mountain"]
+
+
+def test_boomerang_offers_every_permanent_to_the_picker(set_pool):
+    """The picker and the resolution have to agree about what "permanent"
+    means, or the caster is offered a target the cast then refuses."""
+    boomerang = set_pool("LEG")["Boomerang"]
+    p1 = PlayerState(name="P1", hand=[boomerang])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[
+            Permanent(card=_r27_land(set_pool, "Island")),
+            Permanent(card=_creature("Bear")),
+        ],
+    )
+    game = Game(players=[p1, p2])
+
+    spec = game.cast_target_spec(0, boomerang)
+
+    assert spec["kind"] == "permanent"
+    assert sorted(t["name"] for t in spec["valid_targets"]) == ["Bear", "Island"]
+
+
+def test_unsummon_still_refuses_a_land(set_pool):
+    """The generalisation is of the *subject*, not of the effect: a card that
+    printed "creature" still names only creatures."""
+    unsummon = set_pool("LEA")["Unsummon"]
+    p1 = PlayerState(name="P1", hand=[unsummon])
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=_r27_land(set_pool, "Mountain"))]
+    )
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(
+        0, "Unsummon", target_player_index=1, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert [p.card.name for p in p2.battlefield] == ["Mountain"]
+
+
+_R27_MODAL_BOUNCES = {
+    # card -> (the land its bounce mode names, a land outside the narrowing)
+    "Active Volcano": ("Island", "Mountain"),
+    "Flash Flood": ("Mountain", "Island"),
+}
+
+
+@pytest.mark.parametrize(
+    "name,named,other", [(k, *v) for k, v in sorted(_R27_MODAL_BOUNCES.items())]
+)
+def test_the_modal_bounce_returns_the_land_type_it_names(
+    name, named, other, set_pool
+):
+    """Two cards, one sentence with the land type swapped — so the type is
+    payload and neither card needs a line of its own."""
+    card = set_pool("LEG")[name]
+    p1 = PlayerState(name="P1", hand=[card])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[
+            Permanent(card=_r27_land(set_pool, other)),
+            Permanent(card=_r27_land(set_pool, named)),
+        ],
+    )
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(
+        0, name, target_player_index=1, target_permanent_index=1, mode_index=1
+    )
+
+    assert result.supported, result.details
+    assert [p.card.name for p in p2.battlefield] == [other]
+    assert [c.name for c in p2.hand] == [named]
+
+
+@pytest.mark.parametrize(
+    "name,named,other", [(k, *v) for k, v in sorted(_R27_MODAL_BOUNCES.items())]
+)
+def test_the_modal_bounce_refuses_the_other_land_type(
+    name, named, other, set_pool
+):
+    """The half of the narrowing a dropped rider would lose: a permanent
+    *outside* the printed noun is untouched, and the cast never happens."""
+    card = set_pool("LEG")[name]
+    p1 = PlayerState(name="P1", hand=[card])
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=_r27_land(set_pool, other))]
+    )
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(
+        0, name, target_player_index=1, target_permanent_index=0, mode_index=1
+    )
+
+    assert not result.supported
+    assert [p.card.name for p in p2.battlefield] == [other]
+    assert not p2.hand
+
+
+@pytest.mark.parametrize(
+    "name,named,other", [(k, *v) for k, v in sorted(_R27_MODAL_BOUNCES.items())]
+)
+def test_the_modal_bounce_offers_only_the_land_it_names(
+    name, named, other, set_pool
+):
+    """The mode's own picker. Its instruction is named ``bounce_target_creature``
+    and the mode kind used to be read off that name, which sent every noun but
+    "creature" to the fall-through and offered the caster a *player*."""
+    from web.serialization import _serialize_modes
+
+    card = set_pool("LEG")[name]
+    p1 = PlayerState(name="P1", hand=[card])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[
+            Permanent(card=_r27_land(set_pool, other)),
+            Permanent(card=_r27_land(set_pool, named)),
+            Permanent(card=_creature("Bear")),
+        ],
+    )
+    game = Game(players=[p1, p2])
+
+    mode = _serialize_modes(card, game, 0)[1]
+
+    assert mode["target_kind"] == "permanent"
+    assert [t["name"] for t in mode["valid_targets"]] == [named]

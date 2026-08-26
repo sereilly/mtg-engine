@@ -34,7 +34,7 @@ from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ...oracle_types import x_spend_color_from_text
 from ...target_restrictions import forbidden_target
-from ...targeting import graveyard_target_spec
+from ...targeting import bounce_subject_filter, graveyard_target_spec
 from ...subject_filters import filter_head_noun, subject_matches
 from ...targeting import derive_cast_spec, targets_mana_value_x
 
@@ -1144,17 +1144,30 @@ class SpellCastingMixin:
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "bounce_target_creature":
-            # "Return target creature to its owner's hand" (Unsummon) can target a
-            # creature controlled by ANY player. When a specific target is chosen it
-            # must itself be a creature; otherwise any creature on any battlefield
-            # makes the cast legal.
+            # "Return target <noun> to its owner's hand" can name a permanent
+            # controlled by ANY player. **The noun is payload**: Unsummon prints
+            # "creature", Boomerang "permanent", Flash Flood "Mountain", and the
+            # instruction is the same one for all three — so what makes a chosen
+            # slot legal is the filter the lowering carried, asked through the
+            # same ``subject_matches`` the picker enumerates with and the handler
+            # resolves with. Reading ``is_creature`` here was one card's printed
+            # noun standing in for every card printing the sentence, and it is
+            # the gate that would have refused Boomerang on a land the spell
+            # legally targeted.
+            bounce_filter = bounce_subject_filter(primary.payload)
+
+            def _legal_bounce_target(perm) -> bool:
+                return subject_matches(
+                    self, perm, bounce_filter, observer=caster_index
+                )
+
             if isinstance(target_permanent_index, int):
-                battlefield = target.battlefield
-                if not (0 <= target_permanent_index < len(battlefield)) or (
-                    not battlefield[target_permanent_index].is_creature
-                ):
+                chosen = self.permanent_at(target_idx, target_permanent_index)
+                if chosen is None or not _legal_bounce_target(chosen):
                     return False, f"no valid target for {card.name}"
-            elif not any(p.is_creature for p in self.all_permanents()):
+            elif not any(
+                _legal_bounce_target(p) for p in self.all_permanents()
+            ):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind in (

@@ -28,8 +28,19 @@ from ..errors import LoweringError
 from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
 
-def _filter_payload(filt: ast.ObjectFilter) -> dict[str, object]:
-    """A filter's payload, refusing shapes no handler implements."""
+def _filter_payload(
+    filt: ast.ObjectFilter, *, carried_separately: frozenset[str] = frozenset()
+) -> dict[str, object]:
+    """A filter's payload, refusing shapes no handler implements.
+
+    *carried_separately* names ``ObjectFilter`` fields the caller performs
+    itself and therefore excuses from the dropped-narrowing check below — the
+    same claim, in the same words, that ``subject_filters.object_only_filter``
+    takes. Bronze Tablet's ownership half is the one such site: it lifts
+    ``owner`` out of the payload into its own key, because the handler needs the
+    ability's controller to answer "an opponent owns" at all. Naming the field
+    at the call site is what keeps that from reading as a field nobody honours.
+    """
     payload = filt.to_payload()
     # `to_payload` cannot express a zone, so every handler reached through here
     # searches the battlefield. Emitting a graveyard-scoped filter as a plain
@@ -40,7 +51,10 @@ def _filter_payload(filt: ast.ObjectFilter) -> dict[str, object]:
         raise LoweringError(
             f"no handler reads a filter scoped to the {filt.zone}", node=filt
         )
-    dropped = dropped_narrowings(filt, payload)
+    dropped = tuple(
+        field for field in dropped_narrowings(filt, payload)
+        if field not in carried_separately
+    )
     if dropped:
         raise LoweringError(
             f"{', '.join(dropped)} has no payload form here", node=filt
@@ -63,6 +77,11 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
     "colored", "with_plus1_counter", "supertypes",
     "attached_to_types",
+    # "target permanent you both **own** and control" (Obelisk of Undoing).
+    # ``to_payload`` reads it — but only alongside ``controller``, so it is in
+    # the conditional table below as well, and the pair is what makes "a
+    # permanent you own" refuse instead of reducing to "a permanent".
+    "owner",
 })
 
 
@@ -84,6 +103,11 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
 #: by all three gates, is why the next such field cannot repeat it.
 CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     "mana_value": "mana_value",
+    # Emitted only when ``controller`` is set beside it, because the one phrase
+    # that prints it names both ("you both own and control"). A card printing
+    # ownership alone would otherwise have it dropped, which for an *owner*
+    # narrowing means an effect reaching the opponent's copy of the same card.
+    "owner": "owner",
     "power": "power",
     "toughness": "toughness",
     "supertypes": "supertypes",
@@ -232,9 +256,20 @@ def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:
 GRAMMAR_ONLY_PAYLOAD_KEYS = frozenset({"targets"})
 
 
-def _describe_targets(payload: dict[str, object], recipient: ast.Recipient) -> None:
-    """Record what *recipient* refers to on *payload*, if it names a target."""
-    described = _targets_payload(recipient)
+def _describe_targets(
+    payload: dict[str, object],
+    recipient: ast.Recipient,
+    *,
+    carried_separately: frozenset[str] = frozenset(),
+) -> None:
+    """Record what *recipient* refers to on *payload*, if it names a target.
+
+    *carried_separately* travels through to ``_filter_payload``: a lowering that
+    lifts a narrowing out of the filter into its own key has to say so **here**
+    too, or the description it builds of the same noun phrase refuses the phrase
+    the instruction beside it accepts.
+    """
+    described = _targets_payload(recipient, carried_separately=carried_separately)
     if described is not None:
         payload["targets"] = described
 
@@ -323,7 +358,11 @@ def _describe_several_card_targets(
     }
 
 
-def _targets_payload(recipient: ast.Recipient) -> dict[str, object] | None:
+def _targets_payload(
+    recipient: ast.Recipient,
+    *,
+    carried_separately: frozenset[str] = frozenset(),
+) -> dict[str, object] | None:
     """A description of what *recipient* refers to, for engine/targeting.py.
 
     Only the shapes that name a cast-time target are described. "You" and
@@ -378,7 +417,7 @@ def _targets_payload(recipient: ast.Recipient) -> dict[str, object] | None:
     return {
         "quantifier": recipient.quantifier,
         "kind": "object",
-        "filter": _filter_payload(filt),
+        "filter": _filter_payload(filt, carried_separately=carried_separately),
     }
 
 

@@ -988,8 +988,13 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     # Barrin) carries its filter. Resolved strictly — no fallback scan, since
     # "up to one" legally names nothing — and enforced here so a stale or
     # illegal choice bounces nothing rather than the wrong thing.
-    bounce_filter = instruction.payload.get("filter")
-    if bounce_filter:
+    # ``in``, not truthiness: "Return target **permanent** to its owner's hand"
+    # (Boomerang) narrows nothing, so its filter is an empty dict — and an empty
+    # dict read as "no filter" would drop through to the creature-only fallback
+    # below and refuse to bounce the land the spell legally targeted. The key's
+    # *presence* is what says the lowering described this bounce's subject.
+    if "filter" in instruction.payload:
+        bounce_filter = instruction.payload["filter"]
         source = context.source_permanent
 
         # "another target creature **you control**" (Niambi, Esteemed Speaker).
