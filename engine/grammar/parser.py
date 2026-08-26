@@ -44,7 +44,7 @@ from .errors import GrammarError
 from .lexer import (BULLET, PUNCT, QUOTE, tokenize)
 from .costs import _parse_costs
 from .registries import registry_for_line
-from .riders import (_RIDER_FOLDED, _attach_destroyed_this_way, _attach_exchanged_this_way, _attach_if_you_cant, _attach_if_you_do, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
+from .riders import (_RIDER_FOLDED, _attach_destroyed_this_way, _attach_exchanged_this_way, _attach_if_you_cant, _attach_if_you_do, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_conditional_pronoun_grant_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .phrases import accept_member_state_clause
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
@@ -300,6 +300,10 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if pronoun_grant is not None:
                 if pronoun_grant is not _RIDER_FOLDED:
                     steps.append(pronoun_grant)
+                continue
+            conditional_grant = _parse_conditional_pronoun_grant_rider(stream, steps)
+            if conditional_grant is not None:
+                steps.append(conditional_grant)
                 continue
             who_cant = _parse_who_cant_rider(stream, steps)
             if who_cant is not None:

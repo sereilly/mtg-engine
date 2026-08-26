@@ -160,6 +160,26 @@ class ItWas:
 
 
 @dataclass(frozen=True)
+class ObjectHasKeyword:
+    """"If **it doesn't have rampage**, …" (Rapid Fire).
+
+    A question about the object the sentence's *other* clause named — for a
+    spell, the creature it targeted, which is the same referent "that creature"
+    binds to in the clause behind it. Carries no subject field for the reason
+    :class:`ItHappened` carries none: the parser cannot see the sentence in
+    front of it, so which object "it" is belongs to lowering, and lowering
+    refuses where the referent is not the target.
+
+    ``keywords`` is a tuple because the keyword list production reads one; a
+    card printing "doesn't have flying or trample" would be answered by the
+    same node rather than by a second one.
+    """
+
+    keywords: tuple[str, ...]
+    negated: bool = False
+
+
+@dataclass(frozen=True)
 class DiscardedCardWas:
     """"If **the discarded card** was a land card" (Land's Edge).
 
@@ -269,6 +289,7 @@ class ItHappened:
 
 Condition = Union[
     EveryOf, CoinFlipResult, Controls, DiscardedCardWas, IsState, DiedThisTurn,
+    ObjectHasKeyword,
     HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,

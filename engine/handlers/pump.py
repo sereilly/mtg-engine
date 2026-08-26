@@ -354,7 +354,9 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
         if not every_permanent and not perm.is_creature:
             continue
         for keyword in keywords:
-            grant_keyword(perm, keyword, until_eot=True)
+            # Through the one seam, so a team grant puts a keyword where its
+            # reader looks for the same reasons a single-target grant does.
+            _grant_one_keyword(game, perm, keyword, context)
         granted += 1
     noun = "permanent(s)" if every_permanent else "creature(s)"
     game.log.append(
@@ -814,7 +816,19 @@ def _grant_one_keyword(game, permanent, keyword: str, context) -> None:
     protection from the wrong things, and doing nothing is the honest failure.
     """
     from ..grammar.phrases import PROTECTION_FROM_CHOSEN_COLOR
+    from ..keywords import (LINE_DERIVED_KEYWORDS, grant_ability_line,
+                            keyword_ability_name)
 
+    # …and layer 6's word-set is not where a *line-derived* ability's reader
+    # looks either. CR 702.23a defines "Rampage N" as a triggered ability, so
+    # `engine/rampage.py` builds it out of the printed line at compile time —
+    # a word in layer 6 would be a grant of nothing. Granting the line is what
+    # the permanent now says, and the compiler makes the ability from there.
+    # Capitalised because it is folded into the permanent's *printed* rules
+    # text, which the UI shows; the compiler lowercases it again.
+    if keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS:
+        grant_ability_line(permanent, keyword.capitalize(), until_eot=True)
+        return
     if not keyword.startswith("protection from "):
         grant_keyword(permanent, keyword, until_eot=True)
         return

@@ -91,6 +91,17 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
 })
 
 
+#: Keywords whose argument is a **number** (CR 702.23a's "Rampage N"), as
+#: opposed to protection's quality or landwalk's land type. The set is here and
+#: the number is not: which keywords take one is vocabulary, the value they take
+#: is payload — a card printing "rampage 4" needs no code.
+#:
+#: A set rather than "consume any digit after any keyword", because a digit
+#: sitting behind a keyword that does not take one belongs to whatever comes
+#: next, and consuming it would be a silent misparse rather than a refusal.
+NUMERIC_ARGUMENT_KEYWORDS: frozenset[str] = frozenset({"rampage"})
+
+
 def _index_by_first_word(words: frozenset[str]) -> dict[str, tuple[tuple[str, ...], ...]]:
     """Map each first word to the multiword entries starting with it, longest
     first, so the noun parser can greedily match "time lord" before "time"."""
@@ -137,7 +148,8 @@ __all__ = [
     "ABILITY_WORDS", "ALL_SUBTYPES", "ARTIFACT_TYPES", "CARD_TYPES",
     "COLOR_WORDS", "CREATURE_TYPES", "ENCHANTMENT_TYPES", "IMPLEMENTED_KEYWORDS",
     "KEYWORD_ABILITIES", "KEYWORD_ACTIONS", "KEYWORD_INDEX", "LAND_TYPES",
-    "NUMBER_WORDS", "ORDINAL_WORDS", "PLANESWALKER_TYPES", "SPELL_TYPES",
+    "NUMBER_WORDS", "NUMERIC_ARGUMENT_KEYWORDS", "ORDINAL_WORDS",
+    "PLANESWALKER_TYPES", "SPELL_TYPES",
     "SUBTYPE_INDEX",
     "SUPERTYPES", "TYPE_LINE_SUPERTYPES", "manifest", "match_longest",
 ]

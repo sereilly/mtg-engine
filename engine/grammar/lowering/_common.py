@@ -705,6 +705,25 @@ def _lower_condition(
             "kind": "exiled_card_was",
             "card_types": list(condition.filter.card_types),
         }
+    if isinstance(condition, ast.ObjectHasKeyword):
+        # "If **it** doesn't have rampage" (Rapid Fire). The pronoun names the
+        # object the sentence in front of it chose — which for a spell or an
+        # activated ability is its target, and that is the referent the rider
+        # that admitted this clause already bound the *grant* half to.
+        #
+        # Under a trigger it is not: "it" there most often names the event's
+        # subject, and nothing here can tell the two apart — so the clause
+        # refuses rather than asking the question of the wrong permanent, which
+        # is a branch that would take silently.
+        if event is not None:
+            raise LoweringError(
+                "'it' names no chosen target under this trigger", node=condition
+            )
+        return {
+            "kind": "target_has_keyword",
+            "keywords": list(condition.keywords),
+            "negated": condition.negated,
+        }
     if isinstance(condition, ast.DiscardedCardWas):
         # Same discipline as the two back-references above, with the producer
         # named in the printed words: an ability that discarded nothing has no

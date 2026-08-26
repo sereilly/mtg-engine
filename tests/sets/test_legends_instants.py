@@ -1326,3 +1326,104 @@ def test_enchantment_alteration_takes_a_default_for_a_non_interactive_seat(set_p
 
     assert game.pending_choices == []
     assert aura.metadata["attached_to"] is other
+
+
+# ---------------------------------------------------------------------------
+# Rapid Fire — "Target creature gains first strike until end of turn. If it
+# doesn't have rampage, that creature gains rampage 2 until end of turn."
+# ---------------------------------------------------------------------------
+
+
+def _plain(name: str, power: int = 3, toughness: int = 3, **kwargs) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text=kwargs.get("oracle_text", ""), colors=(), color_identity=(),
+        keywords=kwargs.get("keywords", ()), produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _rapid_fire_game(set_pool, attacker: CardDefinition):
+    """*attacker* with Rapid Fire in its controller's hand and two 1/1s to be
+    blocked by — two, because rampage pays "for each creature blocking it
+    beyond the first"."""
+    perm = Permanent(card=attacker)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[perm],
+                    hand=[set_pool("LEG")["Rapid Fire"]]),
+        PlayerState(name="P2", battlefield=[
+            Permanent(card=_plain("B1", 1, 1)), Permanent(card=_plain("B2", 1, 1)),
+        ]),
+    ])
+    game.enforce_mana_costs = False
+    return game, perm
+
+
+def _cast_rapid_fire(game):
+    result = game.cast_from_hand(
+        0, "Rapid Fire", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+    assert result.supported, result.details
+
+
+def _attack_into_two_blockers(game):
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()   # declare_blockers
+    assert game.declare_blockers(1, {0: 0, 1: 0})[0]
+
+
+def test_rapid_fire_grants_first_strike(set_pool):
+    game, creature = _rapid_fire_game(set_pool, _plain("Vanilla"))
+    _cast_rapid_fire(game)
+
+    assert game._has_keyword(creature, "first strike")
+
+
+def test_rapid_fire_grants_rampage_that_actually_triggers(set_pool):
+    """CR 702.23a *defines* rampage as a triggered ability, so a grant of it has
+    to produce one: the creature is blocked by two 1/1s and gets +2/+2 for the
+    blocker beyond the first. A grant that only wrote the word somewhere would
+    leave this at 3 power."""
+    game, creature = _rapid_fire_game(set_pool, _plain("Vanilla"))
+    _cast_rapid_fire(game)
+    assert game._has_keyword(creature, "rampage")
+
+    _attack_into_two_blockers(game)
+    assert [item.ability_instruction.kind for item in game.stack] == ["rampage_pump"]
+
+    game._settle()
+    assert game.players[0].battlefield[0].effective_power == 5
+
+
+def test_rapid_fire_leaves_a_creature_that_already_has_rampage_alone(set_pool):
+    """"**If it doesn't have rampage**": the condition is the whole difference
+    between this card and one that stacks a second instance on (CR 702.23c —
+    each instance triggers separately, so a dropped condition would be worth a
+    whole extra trigger). The printed Rampage 1 fires, and only it."""
+    game, _creature = _rapid_fire_game(
+        set_pool,
+        _plain("Rampager", oracle_text="Rampage 1", keywords=("Rampage 1",)),
+    )
+    _cast_rapid_fire(game)
+
+    _attack_into_two_blockers(game)
+    assert [item.ability_instruction.kind for item in game.stack] == ["rampage_pump"]
+
+    game._settle()
+    assert game.players[0].battlefield[0].effective_power == 4
+
+
+def test_rapid_fires_rampage_ends_with_the_turn(set_pool):
+    game, creature = _rapid_fire_game(set_pool, _plain("Vanilla"))
+    _cast_rapid_fire(game)
+
+    game.resolve_cleanup_step(0)
+
+    assert not game._has_keyword(creature, "rampage")
+    assert not game._has_keyword(creature, "first strike")

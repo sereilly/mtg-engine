@@ -245,6 +245,25 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             any(name in card.type_line.lower() for name in wanted) for card in cards
         )
 
+    if kind == "target_has_keyword":
+        # "If it doesn't have rampage" (Rapid Fire). Asked of the same target
+        # the grant beside it resolves against, and through the same resolver,
+        # so the branch and the effect cannot disagree about which creature the
+        # pronoun meant. Layer 6 is what answers (CR 613.1f): a creature *given*
+        # rampage has it, exactly as a printed one does.
+        from ._common import resolve_target_permanent
+
+        target = resolve_target_permanent(
+            game, context, fallback_on_invalid_choice=False
+        )
+        if target is None:
+            # No object to ask about — False either way, rather than letting the
+            # negated reading answer yes about a creature that is not there.
+            return False
+        wanted = tuple(payload.get("keywords") or ())
+        has = bool(wanted) and all(target.has_keyword(word) for word in wanted)
+        return (not has) if payload.get("negated") else has
+
     if kind == "discarded_card_was":
         # "If the discarded card was a land card" (Land's Edge). The card is in
         # a graveyard by the time this is asked and CR 400.7 makes that a new

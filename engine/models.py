@@ -314,6 +314,16 @@ class Permanent:
             for static in global_statics_applying_to(self)
             if static.grants_ability
         ]
+        # …and an ability granted to *this permanent alone* (Rapid Fire's
+        # rampage), on the same channel and for the same reason: CR 702.23a
+        # defines rampage as a triggered ability, so what a grant of it grants
+        # is the line, and the compiler is what turns a line into an ability.
+        # Appended after the board-wide ones so the fold order matches the order
+        # the two were recorded in — a static applies from the board, a grant
+        # from the moment it resolved.
+        from .keywords import granted_ability_lines
+
+        granted.extend(granted_ability_lines(self))
         if granted:
             base = _with_granted_abilities(base, tuple(granted))
         return base

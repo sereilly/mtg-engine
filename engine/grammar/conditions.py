@@ -24,7 +24,7 @@ from .errors import GrammarError
 from .lexer import PT
 from .nouns import accept_source_reference, parse_object_filter
 from .references import parse_player_ref
-from .phrases import _parse_duration
+from .phrases import _parse_duration, _parse_keywords
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
 
@@ -223,6 +223,21 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             ):
                 return ast.LifeGainedThisTurn(player, amount.value)
         stream.reset(mark)
+
+    # "if **it doesn't have rampage**" (Rapid Fire). Read before the two
+    # back-references below, which open with the same pronoun: this branch is
+    # pinned by the verb that follows it, and it resets when no keyword does.
+    keyword_mark = stream.mark()
+    if stream.accept_word("it"):
+        negated = bool(stream.accept_word("doesn't") or stream.accept_phrase("does", "not"))
+        if stream.accept_word("has") or stream.accept_word("have"):
+            try:
+                keywords = _parse_keywords(stream)
+            except GrammarError:
+                keywords = None
+            if keywords:
+                return ast.ObjectHasKeyword(keywords, negated=negated)
+    stream.reset(keyword_mark)
 
     # "if it was a creature card" (Scavenging Ooze). A back-reference, like the
     # flip above and unlike everything below it: no read of the board can answer

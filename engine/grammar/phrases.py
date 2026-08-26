@@ -25,7 +25,8 @@ from .lexer import (MANA, NUMBER, PUNCT, tokenize)
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
 from .references import parse_target_spec
 from .stream import TokenStream
-from .vocabulary import (CARD_TYPES, KEYWORD_INDEX, NUMBER_WORDS, match_longest)
+from .vocabulary import (CARD_TYPES, KEYWORD_INDEX, NUMBER_WORDS,
+                         NUMERIC_ARGUMENT_KEYWORDS, match_longest)
 _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # "for as long as this artifact remains tapped" (Ashnod's Battle Gear,
     # Tawnos's Weaponry). A *linked* duration: it ends when the source untaps
@@ -396,6 +397,22 @@ def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
                 if colour is not None:
                     stream.advance()
                     name = f"protection from {colour}"
+        # "rampage 2" — CR 702.23a's "Rampage N". The number is the whole of
+        # this keyword's argument, exactly as a colour word is protection's, so
+        # it is read here and carried on the keyword string; which keywords take
+        # one is `NUMERIC_ARGUMENT_KEYWORDS`, and the value is payload.
+        #
+        # Optional here, because the two readers of a keyword word want
+        # different things: a *test* asks whether the creature has rampage at
+        # all ("if it doesn't have rampage") and the number would be no part of
+        # the question, while a *grant* has to name the N it grants. So the
+        # parser reads what is printed and `_lower_gain_keyword` is what refuses
+        # a grant with no number — the refusal belongs where the number is
+        # needed, not where the word is read.
+        if name in NUMERIC_ARGUMENT_KEYWORDS:
+            amount = stream.accept_kind(NUMBER)
+            if amount is not None:
+                name = f"{name} {amount.text}"
         keywords.append(name)
         # "deathtouch or lifelink" (two items) and "banding, flying, first
         # strike, or trample" (four) — English punctuates a list of four
