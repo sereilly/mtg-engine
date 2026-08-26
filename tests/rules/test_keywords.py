@@ -1523,3 +1523,197 @@ def test_702_111b_the_ai_declines_a_lone_block_on_a_menace_attacker():
 
     assert choose_combat_blockers(game, 1) == {}
 
+
+# ---------------------------------------------------------------------------
+# 702.22b — "bands with other [quality]"
+#
+# Deliberately invented cards rather than Legends' five lands and Master of the
+# Hunt: the quality is *payload*, so a test naming a real card would pass over
+# an engine that had read one printed phrase and hardcoded it. What is asserted
+# here is that a sentence nobody has printed works, and that the quality really
+# narrows.
+# ---------------------------------------------------------------------------
+
+
+def _mk_granting_land(name: str, sentence: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Land",
+        oracle_text=sentence, colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Land"},
+    )
+
+
+_ZOMBIE_HALL = _mk_granting_land(
+    "Zombie Hall", 'Zombies you control have "bands with other Zombies."'
+)
+
+
+def _mk_zombie(name: str) -> CardDefinition:
+    return _mk_creature(name, 2, 2, type_line="Creature - Zombie")
+
+
+@pytest.mark.cr("702.22b")
+def test_702_22b_a_granted_band_is_a_layer_six_ability_on_the_named_quality():
+    """The grant reaches the quality the sentence names and stops there.
+
+    An invented tribe, an invented land: nothing in the engine has seen this
+    sentence, which is the point — the phrase is read by the noun parser and
+    the ability carries it as payload.
+    """
+    zombie = Permanent(card=_mk_zombie("Shambler"))
+    bear = Permanent(card=_mk_creature("Bear", 2, 2))
+    game, _, _ = _game([Permanent(card=_ZOMBIE_HALL), zombie, bear], [])
+    game._recalculate_lord_buffs()
+
+    assert zombie.has_keyword("bands with other zombies")
+    assert not bear.has_keyword("bands with other zombies")
+    # It is *not* banding: CR 702.22c's plain form counts a creature with
+    # "bands with other" as a creature without banding.
+    assert not game._creature_has_banding(zombie)
+
+
+@pytest.mark.cr("702.22c")
+def test_702_22c_quality_creatures_band_without_any_of_them_having_banding():
+    """The second band form: no member has banding, and the band is legal."""
+    z1, z2, z3 = (Permanent(card=_mk_zombie(n)) for n in ("Z1", "Z2", "Z3"))
+    game, _, _ = _game([Permanent(card=_ZOMBIE_HALL), z1, z2, z3], [])
+    game._recalculate_lord_buffs()
+    _to_declare_attackers(game)
+
+    ok, msg = game.declare_attackers(0, [1, 2, 3], bands=[[1, 2, 3]])
+    assert ok, msg
+    assert game.combat_bands == [[1, 2, 3]]
+
+
+@pytest.mark.cr("702.22c")
+def test_702_22c_a_creature_outside_the_quality_cannot_join_the_band():
+    """"…and any number of **other [quality] creatures**": every member has to
+    be one. The plain form's one-non-bander allowance is a different rule and
+    must not leak into this one."""
+    z1, z2 = (Permanent(card=_mk_zombie(n)) for n in ("Z1", "Z2"))
+    bear = Permanent(card=_mk_creature("Bear", 2, 2))
+    game, _, _ = _game([Permanent(card=_ZOMBIE_HALL), z1, z2, bear], [])
+    game._recalculate_lord_buffs()
+    _to_declare_attackers(game)
+
+    ok, _ = game.declare_attackers(0, [1, 2, 3], bands=[[1, 2, 3]])
+    assert not ok
+
+
+@pytest.mark.cr("702.22c")
+def test_702_22c_without_the_grant_the_same_creatures_cannot_band():
+    """The land is what makes the band legal — the tribe alone is not."""
+    z1, z2 = (Permanent(card=_mk_zombie(n)) for n in ("Z1", "Z2"))
+    game, _, _ = _game([z1, z2], [])
+    _to_declare_attackers(game)
+
+    ok, _ = game.declare_attackers(0, [0, 1], bands=[[0, 1]])
+    assert not ok
+
+
+@pytest.mark.cr("702.22j")
+def test_702_22j_a_quality_pair_moves_the_division_to_the_defending_player():
+    """"…or by both a [quality] creature with 'bands with other [quality]' and
+    another [quality] creature." Neither blocker has banding; the defender
+    still divides, and dumps the whole attack onto one of them."""
+    ogre = Permanent(card=_mk_creature("Ogre", 3, 3))
+    z1 = Permanent(card=_mk_zombie("Z1"))
+    z2 = Permanent(card=_mk_zombie("Z2"))
+    game, p1, p2 = _game([ogre], [Permanent(card=_ZOMBIE_HALL), z1, z2])
+    game._recalculate_lord_buffs()
+    _to_declare_blockers(game, [0])
+    ok, msg = game.declare_blockers(1, {1: 0, 2: 0})
+    assert ok, msg
+    game.advance_combat_phase()
+
+    assert game._attacker_blocked_by_banding(0)
+    ok, msg = game.assign_banding_combat_damage(1, {0: {1: 0, 2: 3}})
+    assert ok, msg
+    ok, msg = game.resolve_combat_damage(0)
+    assert ok, msg
+
+    survivors = [p.card.name for p in p2.battlefield]
+    assert "Z1" in survivors and "Z2" not in survivors
+    # 2 + 2 from the two blockers kills the 3/3.
+    assert all(p.card.name != "Ogre" for p in p1.battlefield)
+
+
+@pytest.mark.cr("702.22j")
+def test_702_22j_two_blockers_outside_the_quality_do_not_move_the_division():
+    """The pair the rule names is two *[quality]* creatures. Two vanilla
+    blockers beside a quality creature's grant leave the division where
+    CR 510.1c puts it."""
+    ogre = Permanent(card=_mk_creature("Ogre", 3, 3))
+    v1 = Permanent(card=_mk_creature("V1", 2, 2))
+    v2 = Permanent(card=_mk_creature("V2", 2, 2))
+    game, _, _ = _game([ogre], [Permanent(card=_ZOMBIE_HALL), v1, v2])
+    game._recalculate_lord_buffs()
+    _to_declare_blockers(game, [0])
+    game.declare_blockers(1, {1: 0, 2: 0})
+    game.advance_combat_phase()
+
+    assert not game._attacker_blocked_by_banding(0)
+    ok, _ = game.assign_banding_combat_damage(1, {0: {1: 3}})
+    assert not ok
+
+
+@pytest.mark.cr("702.22j")
+def test_702_22j_a_lone_quality_blocker_is_not_a_pair():
+    """"…and **another** [quality] creature." One is not two."""
+    ogre = Permanent(card=_mk_creature("Ogre", 3, 3))
+    z1 = Permanent(card=_mk_zombie("Z1"))
+    v1 = Permanent(card=_mk_creature("V1", 2, 2))
+    game, _, _ = _game([ogre], [Permanent(card=_ZOMBIE_HALL), z1, v1])
+    game._recalculate_lord_buffs()
+    _to_declare_blockers(game, [0])
+    game.declare_blockers(1, {1: 0, 2: 0})
+    game.advance_combat_phase()
+
+    assert not game._attacker_blocked_by_banding(0)
+
+
+@pytest.mark.cr("702.22b")
+def test_702_22b_losing_banding_loses_every_bands_with_other_ability():
+    """"If an effect causes a permanent to lose banding, the permanent loses all
+    'bands with other' abilities as well." One rule, one place — Tolaria prints
+    both halves and Shelkin Brownie prints only the second, so neither card is
+    evidence for where it lives."""
+    zombie = Permanent(card=_mk_zombie("Shambler"))
+    game, _, _ = _game([Permanent(card=_ZOMBIE_HALL), zombie], [])
+    game._recalculate_lord_buffs()
+    grant_keyword(zombie, "banding")
+    assert zombie.has_keyword("banding")
+    assert zombie.has_keyword("bands with other zombies")
+
+    remove_keyword(zombie, "banding", until_eot=True)
+    assert not zombie.has_keyword("banding")
+    assert not zombie.has_keyword("bands with other zombies")
+
+
+@pytest.mark.cr("702.22b")
+def test_702_22b_removing_the_family_leaves_plain_banding_alone():
+    """The other direction is not symmetric: Shelkin Brownie takes the bands
+    away and leaves banding, because CR 702.22b runs one way only."""
+    zombie = Permanent(card=_mk_zombie("Shambler"))
+    game, _, _ = _game([Permanent(card=_ZOMBIE_HALL), zombie], [])
+    game._recalculate_lord_buffs()
+    grant_keyword(zombie, "banding")
+
+    remove_keyword(zombie, "bands with other", until_eot=True)
+    assert zombie.has_keyword("banding")
+    assert not zombie.has_keyword("bands with other zombies")
+
+
+@pytest.mark.cr("702.22c")
+def test_702_22c_a_removed_band_can_no_longer_be_declared():
+    """The removal is not cosmetic: with the ability gone the band is illegal."""
+    z1, z2 = (Permanent(card=_mk_zombie(n)) for n in ("Z1", "Z2"))
+    game, _, _ = _game([Permanent(card=_ZOMBIE_HALL), z1, z2], [])
+    game._recalculate_lord_buffs()
+    remove_keyword(z1, "bands with other", until_eot=True)
+    remove_keyword(z2, "bands with other", until_eot=True)
+    _to_declare_attackers(game)
+
+    ok, _ = game.declare_attackers(0, [1, 2], bands=[[1, 2]])
+    assert not ok

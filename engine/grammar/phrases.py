@@ -21,7 +21,7 @@ from dataclasses import replace
 from ..pt import pt_counter_deltas
 from . import ast
 from .errors import GrammarError
-from .lexer import (MANA, NUMBER, PUNCT, tokenize)
+from .lexer import (MANA, NUMBER, PUNCT, QUOTE, WORD, tokenize)
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
 from .references import parse_target_spec
 from .stream import TokenStream
@@ -375,9 +375,70 @@ def _parse_where_x_is(stream: TokenStream) -> ast.BoardCount | None:
 PROTECTION_FROM_CHOSEN_COLOR = "protection from the color of your choice"
 
 
+def _accept_bands_with_other(stream: TokenStream) -> str | None:
+    """One "bands with other [quality]" item of a keyword list, or None.
+
+    Its own reader rather than a ``KEYWORD_INDEX`` entry because the ability's
+    name is not a word: CR 702.22b's keyword carries a printed **noun phrase**
+    ("legendary creatures", "creatures named Wolves of the Hunt"), and the
+    vocabulary index matches fixed word sequences. Magic prints it in quotes for
+    exactly that reason — the quotes are where the quality ends.
+
+    Two printed shapes, and they mean different things:
+
+    * ``"bands with other <quality>"`` — one ability, granted or held.
+    * ``all "bands with other" abilities`` — the **family**, which is what a
+      removal names (Shelkin Brownie, Tolaria). It is not an ability anything
+      has; :func:`engine.banding.expand_ability_removal` is what turns it into
+      the ones a permanent actually has, and lowering is what refuses it as a
+      *grant*.
+
+    A quality the engine cannot test raises rather than returning None: the
+    phrase *is* a bands-with-other ability, so falling back to another
+    production would read the card as something else. Loud, with the clause
+    named, is the answer this parser gives everywhere else.
+    """
+    from ..banding import BANDS_WITH_OTHER, is_implemented
+
+    mark = stream.mark()
+    stream.accept_word("all")
+    if stream.accept_kind(QUOTE) is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("bands", "with", "other"):
+        stream.reset(mark)
+        return None
+    words: list[str] = []
+    while not stream.exhausted and not stream.at_kind(QUOTE):
+        token = stream.next()
+        # The sentence-ending period Magic prints *inside* the quotes is
+        # punctuation of the quoted ability, not part of the quality.
+        if token.kind == WORD:
+            words.append(token.text)
+    if stream.accept_kind(QUOTE) is None:
+        raise stream.error("unterminated quoted banding ability")
+    # "all \"bands with other\" **abilities**" — the plural head noun belongs to
+    # the family form and is consumed here, or the caller would be left a word
+    # no production reads and would refuse the whole line.
+    stream.accept_word("abilities", "ability")
+    if not words:
+        return BANDS_WITH_OTHER
+    name = f"{BANDS_WITH_OTHER} " + " ".join(words)
+    if not is_implemented(name):
+        raise stream.error(f"unimplemented banding quality {' '.join(words)!r}")
+    return name
+
+
 def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
     keywords: list[str] = []
     while True:
+        banded = _accept_bands_with_other(stream)
+        if banded is not None:
+            name = banded
+            keywords.append(name)
+            if stream.accept_word("and") or stream.accept_word("or"):
+                continue
+            break
         matched = match_longest(stream.words_from(), 0, KEYWORD_INDEX)
         if matched is None:
             break

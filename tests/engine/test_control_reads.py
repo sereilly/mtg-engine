@@ -331,7 +331,7 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # became a registry: the cast plumbing's one and the turn handlers' three.
     "web/action_helpers.py": 1,
     "web/action_turn.py": 2,
-    "web/combat_prompts.py": 4,
+    "web/combat_prompts.py": 3,
     "web/debug_actions.py": 3,
     "web/game_flow.py": 4,
     "web/prompts.py": 1,

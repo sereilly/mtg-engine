@@ -669,6 +669,24 @@ class DeclareAttackersStepMixin:
             return True
         return self._has_keyword(permanent, "banding")
 
+    def _creature_band_qualities(self, permanent: Permanent) -> tuple[str, ...]:
+        """The "bands with other [quality]" abilities *permanent* currently has.
+
+        Through the layer system like plain banding above, because a band can be
+        granted (Legends' five lands grant one to a colour of legendary
+        creatures) and taken away (Shelkin Brownie) — so the printed line is not
+        the answer at either end of a combat.
+        """
+        from ..banding import abilities_of, computed_abilities_of
+
+        return abilities_of(computed_abilities_of(permanent))
+
+    def _bands_with_other_band(self, creatures: list[Permanent]) -> bool:
+        """CR 702.22c's second form: may *creatures* attack as one band?"""
+        from ..banding import bands_with_other_band
+
+        return bands_with_other_band(self, creatures)
+
     def _validate_attacking_bands(
         self,
         bands: list[list[int]] | None,
@@ -691,19 +709,37 @@ class DeclareAttackersStepMixin:
                 return [], "a band must contain at least two creatures"
             banding_count = 0
             nonbanding_count = 0
+            member_perms: list[Permanent] = []
             for idx in members:
                 if idx not in attacker_set:
                     return [], "every band member must be a declared attacker"
                 if idx in seen:
                     return [], "a creature may belong to only one band"
                 seen.add(idx)
-                if self._creature_has_banding(controller.battlefield[idx]):
+                member = controller.battlefield[idx]
+                member_perms.append(member)
+                if self._creature_has_banding(member):
                     banding_count += 1
                 else:
                     nonbanding_count += 1
-            if banding_count < 1:
-                return [], "a band needs at least one creature with banding"
-            if nonbanding_count > 1:
+            # CR 702.22c has **two** band forms, and the second is not a
+            # relaxation of the first. The plain form is "one or more attacking
+            # creatures with banding and up to one attacking creature without
+            # banding"; the "bands with other" form is "one or more attacking
+            # [quality] creatures with 'bands with other [quality]' and any
+            # number of other [quality] creatures" — no cap on the members, and
+            # in exchange every member must be a [quality] creature. Checked as
+            # an alternative rather than by loosening the counts, because
+            # loosening them would let a legendary band recruit a Grizzly Bear.
+            #
+            # Note what the plain form's parenthetical says and what this does
+            # not do: a creature with "bands with other" and no banding is a
+            # creature *without* banding for the plain form's count, which is
+            # why `_creature_has_banding` stays a question about the word.
+            plain = banding_count >= 1 and nonbanding_count <= 1
+            if not plain and not self._bands_with_other_band(member_perms):
+                if banding_count < 1:
+                    return [], "a band needs at least one creature with banding"
                 return [], "a band may include at most one creature without banding"
             validated.append(members)
         return validated, None

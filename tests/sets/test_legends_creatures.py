@@ -2445,3 +2445,153 @@ def test_lesser_werewolf_stops_when_its_own_power_reaches_zero(set_pool):
     game._settle()
     assert werewolf.effective_power == 0
     assert blocked.effective_toughness == 1
+
+
+# ---------------------------------------------------------------------------
+# Round 25 — "bands with other" (CR 702.22b). Master of the Hunt's token
+# carries the ability; Shelkin Brownie takes it away.
+# ---------------------------------------------------------------------------
+
+
+_WOLF_BAND = "bands with other creatures named wolves of the hunt"
+
+
+def _legendary(name: str, colors: tuple[str, ...] = ("G",)):
+    type_line = "Legendary Creature - Test"
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=colors, color_identity=colors, keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "power": "2", "toughness": "2"},
+    )
+
+
+def _wolves(set_pool, count: int = 2):
+    """Activate Master of the Hunt *count* times and hand back the tokens."""
+    from tests.helpers import _nosick
+
+    master = Permanent(card=set_pool("LEG")["Master of the Hunt"])
+    p1 = PlayerState(name="P1", battlefield=[master])
+    p1.mana_pool.update({"G": 20, "C": 20})
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    for _ in range(count):
+        result = game.activate_permanent_ability(0, "Master of the Hunt")
+        assert result.supported, result
+        game._settle()
+    wolves = [p for p in p1.battlefield if p.card.name == "Wolves Of The Hunt"]
+    assert len(wolves) == count, [p.card.name for p in p1.battlefield]
+    # The tokens were created this turn; the band is about what they may be
+    # declared as, not about CR 302.6.
+    for wolf in wolves:
+        _nosick(wolf)
+    return game, p1, wolves
+
+
+def test_master_of_the_hunt_makes_wolves_that_carry_the_band(set_pool):
+    """The quoted ability on the token is read by the compiler as the token's
+    printed text, so the band arrives with the token rather than being stamped
+    on by a handler that knows the card."""
+    _game, _p1, pack = _wolves(set_pool)
+
+    assert all(w.has_keyword(_WOLF_BAND) for w in pack)
+    # It is not banding: the parenthetical in CR 702.22c is explicit.
+    assert not any(w.has_keyword("banding") for w in pack)
+
+
+def test_two_wolves_attack_as_a_band(set_pool):
+    game, _p1, _pack = _wolves(set_pool)
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+
+    ok, msg = game.declare_attackers(0, [1, 2], bands=[[1, 2]])
+    assert ok, msg
+    assert game.combat_bands == [[1, 2]]
+
+
+def test_a_creature_not_named_wolves_of_the_hunt_cannot_join(set_pool):
+    """The quality is a *name*, and it is the only thing that admits a member.
+    A colour dropped from the filter would let anything green in; a name
+    dropped would let anything in at all."""
+    game, p1, _pack = _wolves(set_pool)
+    p1.battlefield.append(Permanent(card=_vanilla("Timber Wolf", 1, 1)))
+    game._sync_control()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    ok, _ = game.declare_attackers(0, [1, 2, 3], bands=[[1, 2, 3]])
+    assert not ok
+
+
+def test_shelkin_brownie_strips_a_granted_band(set_pool):
+    """"Target creature loses all "bands with other" abilities until end of
+    turn." The *family*, not one quality — the printed clause names no quality
+    at all, so a removal that took the word literally would take nothing."""
+    pool = set_pool("LEG")
+    brownie = Permanent(card=pool["Shelkin Brownie"])
+    guildhouse = Permanent(card=pool["Adventurers' Guildhouse"])
+    legend = Permanent(card=_legendary("Green Legend"))
+    p1 = PlayerState(name="P1", battlefield=[guildhouse, legend])
+    p2 = PlayerState(name="P2", battlefield=[brownie])
+    game = Game(players=[p1, p2])
+    game._recalculate_lord_buffs()
+    assert legend.has_keyword("bands with other legendary creatures")
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    result = game.activate_permanent_ability(
+        1, "Shelkin Brownie", target_player_index=0, target_permanent_index=1
+    )
+    game._settle()
+
+    assert result.supported, result
+    assert not legend.has_keyword("bands with other legendary creatures")
+
+
+def test_shelkin_brownie_leaves_plain_banding_alone(set_pool):
+    """CR 702.22b runs one way: losing banding loses the bands, but losing the
+    bands is not losing banding. Shelkin Brownie prints only the second half."""
+    from engine.keywords import grant_keyword
+
+    pool = set_pool("LEG")
+    brownie = Permanent(card=pool["Shelkin Brownie"])
+    bander = Permanent(card=_vanilla("Bander", 2, 2))
+    grant_keyword(bander, "banding")
+    p1 = PlayerState(name="P1", battlefield=[bander])
+    p2 = PlayerState(name="P2", battlefield=[brownie])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    result = game.activate_permanent_ability(
+        1, "Shelkin Brownie", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported, result
+    assert bander.has_keyword("banding")
+
+
+def test_shelkin_brownie_breaks_up_the_wolf_band(set_pool):
+    """End to end: with the ability gone the band is no longer declarable."""
+    pool = set_pool("LEG")
+    game, p1, _pack = _wolves(set_pool)
+    # Two Brownies, because the ability's cost is {T}: one creature can strip
+    # one wolf, and a band needs both members to lose the ability.
+    for _ in range(2):
+        p1.battlefield.append(Permanent(card=pool["Shelkin Brownie"]))
+    game._sync_control()
+    for offset, wolf_index in enumerate((1, 2)):
+        result = game.activate_permanent_ability(
+            0, "Shelkin Brownie", target_player_index=0,
+            target_permanent_index=wolf_index,
+            permanent_index=3 + offset,
+        )
+        game._settle()
+        assert result.supported, result
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    ok, _ = game.declare_attackers(0, [1, 2], bands=[[1, 2]])
+    assert not ok

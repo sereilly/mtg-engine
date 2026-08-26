@@ -48,14 +48,22 @@ def _ai_declare_attackers(session: Session) -> None:
 
 
 def _banding_blocked_attackers(game) -> list[int]:
-    """Attackers blocked by two or more creatures where at least one blocker has
-    banding (controlled by the defending player). CR 702.22j: the defending player,
-    not the active player, chooses how each such attacker's damage is split."""
+    """Attackers blocked by two or more creatures whose blocking set moves the
+    damage division to the defending player (CR 702.22j).
+
+    *Which* blocking sets those are is the engine's question, asked through the
+    same predicate the combat damage step consumes the answer with — a blocker
+    with banding, or a [quality] creature with "bands with other [quality]"
+    alongside another [quality] creature. Re-deriving it here from the wire
+    payload is how the prompt and the step come to disagree about who divides:
+    this file used to test one blocker for the word "banding", so a legendary
+    band's division was owed by the rules, never offered, and then resolved by
+    the active player's default.
+    """
     combat = game.get_combat_state()
     defender_index = combat.get("defending_player_index")
     if not isinstance(defender_index, int) or not (0 <= defender_index < len(game.players)):
         return []
-    defender = game.players[defender_index]
     by_attacker: dict[int, list[int]] = {}
     for pair in combat.get("blockers", []):
         by_attacker.setdefault(int(pair["attacker_index"]), []).append(int(pair["blocker_index"]))
@@ -63,10 +71,7 @@ def _banding_blocked_attackers(game) -> list[int]:
     for attacker_idx, blockers in by_attacker.items():
         if len(blockers) < 2:
             continue
-        if any(
-            0 <= b < len(defender.battlefield) and game._creature_has_banding(defender.battlefield[b])
-            for b in blockers
-        ):
+        if game._attacker_blocked_by_banding(attacker_idx):
             result.append(attacker_idx)
     return sorted(result)
 

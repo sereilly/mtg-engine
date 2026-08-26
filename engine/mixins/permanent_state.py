@@ -39,7 +39,7 @@ from ..land_types import (
     clear_derived_land_types,
     static_source_timestamp,
 )
-from ..layer_bridge import QUALIFIED_BUFFS
+from ..layer_bridge import QUALIFIED_BUFFS, printed_supertypes
 from ..lord_buffs import (
     GRANTED_ACTIVATED_ABILITIES,
     LORD_BUFF_KIND,
@@ -1055,6 +1055,17 @@ class PermanentStateMixin:
             return False
         if any(not target_perm.has_type(subtype) for subtype in filt.subtypes):
             return False
+        # "**Legendary** creatures you control have …" (Legends' five banding
+        # lands). A supertype is not a type: ``has_type`` answers about card
+        # types and creature types and would say no to every legend, so this
+        # reads the type line through the same helper
+        # ``permanent_matches_filter`` uses for the ``supertypes`` payload key.
+        # ``effective_card``, so a copy answers with the line it copied
+        # (CR 707.2) and a text change is folded in.
+        if filt.supertypes:
+            held = printed_supertypes(target_perm.effective_card.type_line)
+            if not all(word in held for word in filt.supertypes):
+                return False
         # "…with a +1/+1 counter on it" (Pridemalkin): the counter record, not
         # the P/T bonus — a pump writes power_bonus and places no counter, so
         # reading the bonus would buff the wrong creatures.
