@@ -1651,3 +1651,111 @@ def test_angelic_voices_ignores_an_artifact_creature(set_pool):
     game._refresh_dynamic_creatures()
 
     assert angel.effective_power == 3
+
+
+# ---------------------------------------------------------------------------
+# Round 27 — two Auras whose effect the engine could already carry out and
+# whose *claim* was the thing missing.
+#
+# The Brute: "{R}{R}{R}: Regenerate enchanted creature." The claim pattern read
+# a one-symbol activation cost, so the card was unsupported for the width of
+# its mana cost.
+#
+# Spectral Cloak: "Enchanted creature has shroud as long as it's untapped."
+# Shroud is the first question `_can_be_targeted` asks and has been for a long
+# time; the word was simply outside the keyword registry, so no card could
+# grant it.
+# ---------------------------------------------------------------------------
+
+
+def _r27_aura_on_a_bear(set_pool, aura_name: str):
+    host = Permanent(card=_creature("Host", 2, 2))
+    aura = Permanent(card=set_pool("LEG")[aura_name])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host, aura]),
+        PlayerState(name="P2"),
+    ])
+    attach_aura(aura, host)
+    return game, host, aura
+
+
+def test_the_brute_compiles_its_three_symbol_activation(set_pool):
+    """The cost is read whole. Charging {R} for a {R}{R}{R} ability would be a
+    worse failure than the refusal this replaces, so the parsed cost is asserted
+    rather than just the card's support."""
+    program = compile_card_oracle(set_pool("LEG")["The Brute"])
+    assert program.supported, program.reason
+    ability = program.activated_abilities[0]
+    assert ability.cost.mana["R"] == 3
+    assert ability.instruction.kind == "grant_regeneration_to_enchanted_creature"
+
+
+def test_the_brute_regenerates_the_creature_it_enchants(set_pool):
+    """CR 614.8 — the shield replaces the destroy, taps the creature and is
+    spent. The Aura's ability reaches its *host*, not itself."""
+    game, host, aura = _r27_aura_on_a_bear(set_pool, "The Brute")
+    game.players[0].mana_pool["R"] = 3
+
+    assert game.activate_permanent_ability(0, "The Brute").supported
+    game.resolve_top_of_stack()
+    assert host.regeneration_shield == 1
+
+    game.players[1].hand.append(CardDefinition(
+        name="Terror", mana_cost="{B}", cmc=1.0, type_line="Instant",
+        oracle_text="Destroy target creature.", colors=("B",), color_identity=("B",),
+        keywords=(), produced_mana=(), raw={"name": "Terror", "type_line": "Instant"},
+    ))
+    game.cast_from_hand(1, "Terror", target_player_index=0, target_permanent_index=0)
+
+    assert host in game.players[0].battlefield
+    assert (host.tapped, host.regeneration_shield) == (True, 0)
+
+
+def test_the_brute_still_grants_its_printed_bonus(set_pool):
+    """The activated ability is a second line, not a replacement for the first —
+    a claim that swallowed the whole card would have lost the +1/+0."""
+    game, host, aura = _r27_aura_on_a_bear(set_pool, "The Brute")
+    game._refresh_dynamic_creatures()
+
+    assert (host.effective_power, host.effective_toughness) == (3, 2)
+
+
+def test_spectral_cloak_grants_shroud_only_while_untapped(set_pool):
+    """The condition is asked on every recompute (CR 611.3a), so tapping takes
+    the word away at once — a grant recorded when the Aura attached could not
+    do that."""
+    game, host, aura = _r27_aura_on_a_bear(set_pool, "Spectral Cloak")
+
+    assert host.has_keyword("shroud")
+    host.tapped = True
+    assert not host.has_keyword("shroud")
+    host.tapped = False
+    assert host.has_keyword("shroud")
+
+
+def test_spectral_cloak_shroud_actually_stops_a_spell(set_pool):
+    """CR 702.18 — and seat-blind: the check is asked of the object, so the
+    grant buys the creature real protection rather than a word nothing reads."""
+    game, host, aura = _r27_aura_on_a_bear(set_pool, "Spectral Cloak")
+    terror = CardDefinition(
+        name="Terror", mana_cost="{B}", cmc=1.0, type_line="Instant",
+        oracle_text="Destroy target creature.", colors=("B",), color_identity=("B",),
+        keywords=(), produced_mana=(), raw={"name": "Terror", "type_line": "Instant"},
+    )
+
+    assert not game._can_be_targeted(host, terror, caster_index=1)
+    host.tapped = True
+    assert game._can_be_targeted(host, terror, caster_index=1)
+
+
+def test_spectral_cloak_takes_shroud_with_it(set_pool):
+    """Removal is the Aura ceasing to be attached; there is no remembered
+    delta, which is why nothing has to undo the grant."""
+    from engine.auras import detach_aura
+
+    game, host, aura = _r27_aura_on_a_bear(set_pool, "Spectral Cloak")
+    assert host.has_keyword("shroud")
+
+    detach_aura(aura, host)
+
+    assert not host.has_keyword("shroud")

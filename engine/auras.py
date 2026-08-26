@@ -269,7 +269,16 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     # --- activated abilities granted by the Aura itself ----------------------
     (
-        re.compile(r"^\{[^}]*\}: .+$"),
+        # "{R}{R}{R}: Regenerate enchanted creature." (The Brute.) **Every**
+        # symbol of the cost, not one: the pattern used to be `\{[^}]*\}: `,
+        # which reads a one-symbol cost and refuses the moment a card prints
+        # two — so an Aura whose activated ability the compiler parses and the
+        # activation path charges perfectly well was reported unsupported for
+        # the width of its mana cost. The cost is not what decides whether the
+        # ability is implemented; the claim asks for the *shape* of an
+        # activation line and lets `_parse_noncreature_abilities` and the
+        # grammar answer for the effect.
+        re.compile(r"^\{[^}]*\}(?:\s*\{[^}]*\})*(?:, [^:]+)?: .+$"),
         "the Aura's own activated ability — _parse_noncreature_abilities",
     ),
 )
@@ -734,7 +743,7 @@ def _line_text(raw_line: str) -> str:
 # rather than the raw `has_<walk>` flag the imperative path used to stamp.
 _GRANTABLE_KEYWORDS = (
     "flying", "fear", "first strike", "double strike", "trample", "vigilance",
-    "haste", "reach", "banding", "defender", "shadow",
+    "haste", "reach", "banding", "defender", "shadow", "shroud",
     "swampwalk", "forestwalk", "islandwalk", "mountainwalk", "plainswalk",
     "desertwalk",
 )
@@ -748,6 +757,46 @@ _KEYWORD_GRANT = re.compile(
 _COMPOUND_INDESTRUCTIBLE = re.compile(
     rf"^enchanted {_NOUN} has indestructible and can't be enchanted by other auras$"
 )
+
+# "Enchanted creature has shroud as long as it's untapped." (Spectral Cloak.)
+# The same layer-6 grant one line up with a condition on the attached
+# permanent's own state — so the keyword is data, as it already was, and the
+# state is data too: a card printing "…as long as it's tapped" is this rule read
+# the other way and needs no code.
+#
+# "It" is the enchanted permanent, not the Aura. That is what the sentence
+# means, and it is also the only reading with a consumer: the grant is derived
+# on the *host* every recompute (`layer_bridge.collect_ability_effects`), which
+# is where the state is known.
+_CONDITIONAL_KEYWORD_GRANT = re.compile(
+    rf"^{_ATTACHED} {_NOUN} has "
+    rf"(?P<keyword>{'|'.join(_GRANTABLE_KEYWORDS)}) "
+    r"as long as it's (?P<state>untapped|tapped)$"
+)
+
+
+def aura_conditional_keyword_grants(oracle_text: str) -> tuple[tuple[str, str], ...]:
+    """``(keyword, state)`` pairs an Aura grants *while its host is in state*.
+
+    Kept apart from :func:`aura_keyword_grants` rather than folded in with an
+    optional condition, because the callers are different: the unconditional
+    grant is a contribution the layer bridge always makes, and this one has to
+    be asked of the host before it is made. A single list returning both would
+    have the bridge granting a conditional keyword unconditionally the moment a
+    caller forgot the second element.
+    """
+    grants: list[tuple[str, str]] = []
+    for raw_line in (oracle_text or "").splitlines():
+        match = _CONDITIONAL_KEYWORD_GRANT.match(_line_text(raw_line))
+        if match is not None:
+            grants.append((match.group("keyword"), match.group("state")))
+    return tuple(grants)
+
+
+def aura_conditional_grant_holds(permanent, state: str) -> bool:
+    """Whether *permanent* is in *state* right now (CR 611.3a — asked on every
+    recompute, never locked in when the Aura attached)."""
+    return permanent.tapped if state == "tapped" else not permanent.tapped
 
 
 def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
@@ -1288,6 +1337,11 @@ def aura_continuous_claim(line: str) -> str | None:
         return "per-counter P/T grant (layer 7c) — auras.aura_pt_grant_per_counter"
     if aura_keyword_grants(normalized):
         return "keyword grant (layer 6) — auras.aura_keyword_grants"
+    if aura_conditional_keyword_grants(normalized):
+        return (
+            "state-conditioned keyword grant (layer 6) — "
+            "auras.aura_conditional_keyword_grants"
+        )
     if aura_restrictions(normalized):
         return "combat/untap restriction — auras.aura_restriction_active"
     if aura_counter_untap_condition(normalized) is not None:
