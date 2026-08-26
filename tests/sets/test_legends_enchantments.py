@@ -867,3 +867,41 @@ def test_underworld_dreams_damages_the_seat_that_drew_not_the_first_opponent(set
     assert p3.life == 19
     assert p2.life == 20
     assert p1.life == 20
+
+
+# ---------------------------------------------------------------------------
+# Round 21 — the CR 613 statics
+# ---------------------------------------------------------------------------
+
+
+def _basic_land(subtype: str) -> CardDefinition:
+    line = f"Basic Land - {subtype}"
+    return CardDefinition(
+        name=subtype, mana_cost="", cmc=0.0, type_line=line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": subtype, "type_line": line},
+    )
+
+
+def test_living_plane_animates_lands_of_every_type_on_both_sides(set_pool):
+    """"All lands are 1/1 creatures that are still lands." The head noun is the
+    card type, so nothing is narrowed — including the opponent's lands, which
+    the sentence never scoped to a controller."""
+    plane = Permanent(card=set_pool("LEG")["Living Plane"])
+    mine = Permanent(card=_basic_land("Swamp"))
+    theirs = Permanent(card=_basic_land("Plains"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[plane, mine]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game._refresh_dynamic_creatures()
+
+    for land in (mine, theirs):
+        assert land.is_creature
+        assert land.has_type("land")
+        assert (land.effective_power, land.effective_toughness) == (1, 1)
+
+    game.remove_from_battlefield(plane)
+    game._refresh_dynamic_creatures()
+    assert not mine.is_creature
+    assert not theirs.is_creature

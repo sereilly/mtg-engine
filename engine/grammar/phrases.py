@@ -22,7 +22,7 @@ from ..pt import pt_counter_deltas
 from . import ast
 from .errors import GrammarError
 from .lexer import (MANA, NUMBER, PUNCT, tokenize)
-from .nouns import parse_object_filter
+from .nouns import _STATE_ADJECTIVES, parse_object_filter
 from .references import parse_target_spec
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, NUMBER_WORDS, match_longest)
@@ -590,3 +590,43 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
         _parse_duration(stream)
         return ast.CountOfDeaths(filt)
     return ast.CountOf(filt)
+
+
+def accept_member_state_clause(stream: TokenStream) -> tuple[str, bool] | None:
+    """``it's [not] <state>`` — the ``(ObjectFilter field, value)`` it names.
+
+    The trailing half of "Each untapped creature you control gets +0/+2 **as
+    long as it's not attacking**" (Arcades Sabboth). "It" is a member of the set
+    the sentence already described, so what the clause states is one more
+    adjective on that noun phrase — which is why this returns a filter field
+    rather than an :class:`ast.Condition`. Read as a condition it would ask the
+    question of the ability's *source*, and Arcades would hand its whole team
+    +0/+2 whenever Arcades itself stayed home.
+
+    The state vocabulary is ``nouns._STATE_ADJECTIVES``, the same table the
+    *leading* adjectives are read from, so "attacking" cannot mean one field
+    here and another in front of the noun. The negation is a word read in front
+    of the adjective rather than rows of its own, because Magic prints "not
+    <adjective>" for every one of them.
+
+    Returns None with the cursor where it was when the clause is not this.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("it"):
+        stream.reset(mark)
+        return None
+    # The lexer splits the contraction, so "it's" and "it is" are the same two
+    # tokens with a different second one — both copulas are accepted here for
+    # the reason `conditions._parse_single_condition` accepts both.
+    if not (stream.accept_word("'s") or stream.accept_word("is")):
+        stream.reset(mark)
+        return None
+    negated = bool(stream.accept_word("not"))
+    word = stream.peek_word()
+    state = _STATE_ADJECTIVES.get(word) if word else None
+    if state is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    field_name, value = state
+    return field_name, (not value) if negated else value

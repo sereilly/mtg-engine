@@ -52,7 +52,7 @@ def _reference_pt(perm: Permanent) -> tuple[int, int]:
 
     def _qualified(stat: str) -> int:
         index = 0 if stat == "power" else 1
-        return int((meta.get("lord_buff_while") or {}).get("attacking", (0, 0))[index])
+        return int((meta.get("lord_buff_while") or {}).get(("attacking",), (0, 0))[index])
 
     def _base(key: str) -> int:
         card = perm.card
@@ -164,7 +164,7 @@ def test_attacking_only_buffs_agree_in_both_states():
     for attacking in (False, True):
         perm = Permanent(card=_creature())
         perm.attacking = attacking
-        perm.metadata["lord_buff_while"] = {"attacking": (2, 1)}
+        perm.metadata["lord_buff_while"] = {("attacking",): (2, 1)}
         current, layered = _both(perm)
         assert current == layered, f"disagreed while attacking={attacking}"
 
@@ -177,7 +177,7 @@ def test_an_untapped_only_buff_is_evaluated_when_pt_is_read():
     to be contributed unconditionally at recompute time, which left an attacking
     creature holding +0/+2 until the next state-based-action check."""
     perm = Permanent(card=_creature())
-    perm.metadata["lord_buff_while"] = {"untapped": (0, 2)}
+    perm.metadata["lord_buff_while"] = {("untapped",): (0, 2)}
     assert computed_pt(perm) == (2, 4)
 
     perm.tapped = True
@@ -230,7 +230,7 @@ def test_switching_carries_the_attacking_buff_across():
     """
     perm = Permanent(card=_creature("1", "4"))
     perm.attacking = True
-    perm.metadata["lord_buff_while"] = {"attacking": (2, 0)}
+    perm.metadata["lord_buff_while"] = {("attacking",): (2, 0)}
     perm.metadata["pt_switched"] = True
 
     reference = _reference_pt(perm)

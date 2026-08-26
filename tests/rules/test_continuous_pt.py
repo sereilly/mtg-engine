@@ -178,7 +178,7 @@ def test_a_qualified_lord_buff_does_not_accumulate_across_recomputes(cards):
     for _ in range(10):
         game._recompute_continuous_effects()
 
-    assert bear.metadata[QUALIFIED_BUFFS] == {"untapped": (0, 2)}
+    assert bear.metadata[QUALIFIED_BUFFS] == {("untapped",): (0, 2)}
 
 
 @pytest.mark.cr("611.3a", "611.3b", "613.1f")

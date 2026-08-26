@@ -36,20 +36,22 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
     exact failure this family already had once, when the consumer read the
     colour and the controller and ignored the rest of the sentence.
     """
-    qualifier = next(
-        (
-            name
-            for name, (field_name, value) in QUALIFIER_FIELDS.items()
-            if getattr(filt, field_name) is value
-        ),
-        None,
+    # Every state the filter names, not the first one found: a filter carrying
+    # two would otherwise round-trip as one and the equality below would refuse
+    # a sentence the table can express perfectly well. ``is`` rather than ``==``
+    # because the unset value is None and ``None == False`` is already False —
+    # but ``is`` says the three-valued field is being read as three-valued.
+    qualifiers = tuple(
+        name
+        for name, (field_name, value) in QUALIFIER_FIELDS.items()
+        if getattr(filt, field_name) is value
     )
     return LordBuffFilter(
         colors=filt.colors,
         subtypes=filt.subtypes,
         controller=filt.controller,
         other_than_source=filt.other_than_source,
-        qualifier=qualifier,
+        qualifiers=qualifiers,
         with_plus1_counter=filt.with_plus1_counter,
         named=filt.named,
     )
@@ -66,8 +68,8 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "with_plus1_counter": lord.with_plus1_counter,
         "named": lord.named,
     }
-    if lord.qualifier is not None:
-        field_name, value = QUALIFIER_FIELDS[lord.qualifier]
+    for qualifier in lord.qualifiers:
+        field_name, value = QUALIFIER_FIELDS[qualifier]
         fields[field_name] = value
     return ast.ObjectFilter(**fields)
 

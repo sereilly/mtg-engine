@@ -109,7 +109,12 @@ def _count_dynamic_pt(
     for battlefield in battlefields:
         for perm in battlefield:
             if what == "land":
-                total += bool(land_type and perm.has_type(str(land_type)))
+                # No ``land_type`` on the payload is the unnarrowed printing —
+                # "the number of lands you control" — so the question is the
+                # card type alone. Asked through ``has_type`` like the subtype
+                # branch beside it, so a permanent that *became* a land counts
+                # and one that stopped being one does not (CR 613 layer 4).
+                total += perm.has_type(str(land_type) if land_type else "land")
             elif what == "creature":
                 if perm.is_creature and not (excluded and perm.has_type(str(excluded))):
                     total += 1
@@ -879,7 +884,14 @@ class PermanentStateMixin:
         for permanent in all_permanents:
             animation = (
                 next(
-                    (a for a in animations if permanent.has_type(a.land_type)),
+                    (
+                        a for a in animations
+                        # ``land_type`` None is the untyped printing — "All
+                        # lands are 1/1 creatures that are still lands" (Living
+                        # Plane) — which restricts nothing beyond being a land,
+                        # already established by the guard below.
+                        if a.land_type is None or permanent.has_type(a.land_type)
+                    ),
                     None,
                 )
                 if permanent.card.primary_type == "land"
@@ -1253,8 +1265,8 @@ class PermanentStateMixin:
         def _add_static_buff(perm: Permanent, buff: LordBuff) -> None:
             if not (buff.power or buff.toughness):
                 return
-            qualifier = buff.filter.qualifier
-            if qualifier is None:
+            qualifiers = buff.filter.qualifiers
+            if not qualifiers:
                 perm.metadata["static_buff_power"] = (
                     int(perm.metadata.get("static_buff_power", 0)) + buff.power
                 )
@@ -1265,9 +1277,13 @@ class PermanentStateMixin:
             # A qualified buff is contributed here but *evaluated* when P/T is
             # read (layer_bridge.qualifier_holds), so it tracks a creature
             # tapping or attacking between recomputes.
+            # Keyed by the whole tuple of states, so two buffs are summed
+            # together only when they answer to the same description. Keying by
+            # one word would merge "untapped" with "untapped and not attacking"
+            # and apply the stricter buff on the looser test.
             qualified = perm.metadata.setdefault(QUALIFIED_BUFFS, {})
-            power, toughness = qualified.get(qualifier, (0, 0))
-            qualified[qualifier] = (power + buff.power, toughness + buff.toughness)
+            power, toughness = qualified.get(qualifiers, (0, 0))
+            qualified[qualifiers] = (power + buff.power, toughness + buff.toughness)
 
         def _grant_ability(perm: Permanent, flag: str) -> None:
             perm.metadata[flag] = True

@@ -220,3 +220,56 @@ def test_604_3_the_attacking_split_counts_the_right_players_lands():
     liege.defending_player_index = 1
     game._refresh_dynamic_creatures()
     assert liege.effective_power == 3          # the defender's three Islands
+
+
+# ---------------------------------------------------------------------------
+# The unnarrowed count: "the number of **lands** you control" (round 21)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("604.3")
+def test_604_3_an_unnarrowed_land_count_names_the_card_type_not_a_subtype():
+    """"…equal to the number of lands you control" (Dakkon Blackblade).
+
+    The head noun is the card type, so the payload carries no ``land_type`` at
+    all — an absent key is the counter's "no restriction", the same reading
+    every other omitted parameter here gets. Read through the basic-type
+    alternation the sentence matched nothing and the card compiled unsupported.
+    """
+    for name in ("dakkon blackblade", "some other warlord"):
+        line = f"{name}'s power and toughness are each equal to the number of lands you control"
+        found = dynamic_pt_for(line)
+
+        assert found is not None, line
+        assert found.payload == {"count": "land", "scope": "you"}
+
+
+@pytest.mark.cr("604.3", "613.1d")
+def test_604_3_an_unnarrowed_land_count_counts_every_land_and_only_lands(catalog_by_name):
+    """Counted through ``has_type`` like the narrowed form beside it, so an
+    artifact land would count and a Mox would not — and the opponent's lands
+    never do, because "you control" is on the payload."""
+    variant = _cda_card(
+        "Invented Blade",
+        "Invented Blade's power and toughness are each equal to "
+        "the number of lands you control.",
+    )
+    blade = Permanent(card=variant)
+    mine = [Permanent(card=catalog_by_name[name]) for name in ("Mountain", "Island", "Swamp")]
+    player = PlayerState(name="P1", battlefield=[blade] + mine)
+    opponent = PlayerState(
+        name="P2", battlefield=[Permanent(card=catalog_by_name["Forest"])],
+    )
+    game = Game(players=[player, opponent])
+    game._refresh_dynamic_creatures()
+    assert (blade.effective_power, blade.effective_toughness) == (3, 3)
+
+    # A non-land permanent contributes nothing…
+    player.battlefield.append(Permanent(card=catalog_by_name["Black Lotus"]))
+    game._refresh_dynamic_creatures()
+    assert blade.effective_power == 3
+
+    # …and the count is recomputed continuously (CR 604.3).
+    game.remove_from_battlefield(mine[0])
+    game._refresh_dynamic_creatures()
+    assert (blade.effective_power, blade.effective_toughness) == (2, 2)

@@ -21,7 +21,9 @@ Payload vocabulary
 ``scope``  whose battlefield: ``"you"`` (controller) | ``"all"`` (every player)
            | ``"defender_when_attacking"`` (the controller's, except while this
            creature is attacking, when it is the defending player's)
-``land_type``     with ``count="land"``, the basic type to match
+``land_type``     with ``count="land"``, the basic type to match — absent when
+                  the sentence names none ("the number of **lands** you
+                  control", Dakkon Blackblade), which counts every land
 ``exclude_type``  with ``count="creature"``, a type that disqualifies (Keldon
                   Warlord's "non-Wall")
 """
@@ -56,7 +58,15 @@ class DynamicPT:
 
 
 def _land_count(match: re.Match) -> dict[str, object]:
-    return {"count": "land", "land_type": match.group("land_type"), "scope": "you"}
+    payload: dict[str, object] = {"count": "land", "scope": "you"}
+    # "…the number of **Swamps** you control" (Nightmare) narrows by subtype;
+    # "…the number of **lands** you control" (Dakkon Blackblade) names the card
+    # type and narrows by nothing. The key is omitted rather than set to None
+    # for the reason every payload here omits what the sentence does not say:
+    # an absent key is the counter's "no restriction".
+    if match.group("land_type"):
+        payload["land_type"] = match.group("land_type")
+    return payload
 
 
 def _creature_count(match: re.Match) -> dict[str, object]:
@@ -141,8 +151,13 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
         _attacking_split_land_count,
     ),
     (
-        # Nightmare.
-        re.compile(rf"^{_SUBJECT} {_PT} (?P<land_type>{_LAND_ALTERNATION})s you control$"),
+        # Nightmare, and — with the subtype absent — Dakkon Blackblade. The
+        # head noun is required either way, so a sentence counting something
+        # this cannot name still leaves the alternation unmatched and refuses.
+        re.compile(
+            rf"^{_SUBJECT} {_PT} "
+            rf"(?:(?P<land_type>{_LAND_ALTERNATION})s|lands) you control$"
+        ),
         _land_count,
     ),
     (

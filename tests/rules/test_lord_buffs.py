@@ -420,3 +420,78 @@ def test_a_spells_board_buff_locks_its_set_in_at_resolution(cards, arn_by_name):
     latecomer.attacking = True
     game._recompute_continuous_effects()
     assert latecomer.effective_power == 3
+
+
+# ---------------------------------------------------------------------------
+# CR 613 — a sentence that names the buffed set twice (round 21)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("611.3a", "613.4c", "508.1a")
+def test_two_state_qualifiers_both_have_to_hold(cards):
+    """"Each untapped creature you control gets +0/+2 as long as it's not
+    attacking." (Arcades Sabboth.)
+
+    One set described twice — once by an adjective in front of the noun and
+    once by a trailing clause — so the derived filter carries **both** states
+    and a creature meeting one of them gets nothing. Written with an invented
+    card whose numbers and states differ from Arcades', because a test naming
+    the real card passes against a version that reads only the first qualifier.
+    """
+    homebody = Permanent(card=cards["Grizzly Bears"])
+    homebody.metadata["summoning_sickness_turn"] = -99
+    charger = Permanent(card=cards["Grizzly Bears"])
+    charger.metadata["summoning_sickness_turn"] = -99
+    tapped = Permanent(card=cards["Grizzly Bears"])
+    tapped.tapped = True
+    vigil = Permanent(card=_card(
+        "Invented Vigil", "Enchantment",
+        "Each untapped creature you control gets +1/+3 as long as it's not attacking.",
+    ))
+    game, _ = _game([homebody, charger, tapped, vigil], [])
+
+    assert (homebody.effective_power, homebody.effective_toughness) == (3, 5)
+    assert (charger.effective_power, charger.effective_toughness) == (3, 5)
+    # Tapped fails the adjective, so the second half of the description alone
+    # buys nothing.
+    assert (tapped.effective_power, tapped.effective_toughness) == (2, 2)
+
+    # Attacking fails the trailing clause. Evaluated when P/T is *read*
+    # (CR 611.3a), so no recompute stands between declaring the attack and
+    # losing the bonus.
+    charger.attacking = True
+    assert (charger.effective_power, charger.effective_toughness) == (2, 2)
+    assert (homebody.effective_power, homebody.effective_toughness) == (3, 5)
+
+
+@pytest.mark.cr("611.3b")
+def test_a_two_qualifier_anthem_ends_with_its_source(cards):
+    bear = Permanent(card=cards["Grizzly Bears"])
+    vigil = Permanent(card=_card(
+        "Invented Vigil", "Enchantment",
+        "Each untapped creature you control gets +1/+3 as long as it's not attacking.",
+    ))
+    game, players = _game([bear, vigil], [])
+    assert bear.effective_toughness == 5
+
+    game.remove_from_battlefield(vigil)
+    game._recompute_continuous_effects()
+    assert bear.effective_toughness == 2
+
+
+@pytest.mark.cr("611.3a")
+def test_a_trailing_state_clause_over_a_singular_subject_is_not_a_set(cards):
+    """"This creature gets +0/+3 as long as it's untapped" (Giant Tortoise) is a
+    bonus on the source, derived by engine/static_bonuses.py — not an anthem
+    with a folded-in qualifier. The fold is keyed on the subject being a
+    described *set*, which is the only reading under which "it" names a member
+    of one."""
+    from engine.grammar.parser import parse_line
+    from engine.grammar import ast
+
+    node = parse_line("This creature gets +0/+3 as long as it's untapped.")
+    assert isinstance(node, ast.StaticAbilityNode)
+    # The condition stays a condition; the subject keeps saying nothing about
+    # being untapped.
+    assert node.condition is not None
+    assert node.effect.subject.filter.tapped is None

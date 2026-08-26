@@ -198,3 +198,60 @@ def test_living_lands_animates_forests(cards):
 
     assert forest.is_creature is True
     assert (forest.effective_power, forest.effective_toughness) == (1, 1)
+
+
+# ---------------------------------------------------------------------------
+# The untyped printing: "All **lands** are …" (round 21)
+# ---------------------------------------------------------------------------
+
+# Invented, and 2/3 rather than Living Plane's 1/1, so nothing below can pass by
+# matching the one printed card's numbers.
+WORLD_QUICKENING = _card(
+    "World Quickening", "Enchantment",
+    "All lands are 2/3 creatures that are still lands.",
+)
+
+
+@pytest.mark.cr("613.1d", "613.1g", "611.3a")
+def test_an_untyped_animator_reaches_every_land_whatever_its_subtype():
+    """The head noun is the *card type*, so the sentence narrows by nothing.
+    Read through the subtype catalog it named no type at all and the card
+    compiled unsupported."""
+    swamp = Permanent(card=_land("Swamp", "swamp"))
+    mountain = Permanent(card=_land("Mountain", "mountain"))
+    wastes = Permanent(card=_card("Nameless Waste", "Land"))
+    game, _ = _game([swamp, mountain, wastes, Permanent(card=WORLD_QUICKENING)])
+
+    for land in (swamp, mountain, wastes):
+        assert land.is_creature, land.card.name
+        assert (land.effective_power, land.effective_toughness) == (2, 3)
+    # Still lands (CR 613.1d): the sentence adds a type, it does not replace one.
+    assert all(land.has_type("land") for land in (swamp, mountain, wastes))
+
+
+@pytest.mark.cr("611.3b")
+def test_an_untyped_animation_ends_when_its_source_leaves():
+    swamp = Permanent(card=_land("Swamp", "swamp"))
+    quickening = Permanent(card=WORLD_QUICKENING)
+    game, players = _game([swamp, quickening])
+    assert swamp.is_creature
+
+    game.remove_from_battlefield(quickening)
+    game._refresh_dynamic_creatures()
+    assert not swamp.is_creature
+
+
+@pytest.mark.cr("613.1d")
+def test_an_unreadable_subtype_still_refuses_rather_than_animating_everything():
+    """"All lands" and "all Frobnicates" both leave ``land_type`` unset on the
+    dataclass, so the refusal has to be decided before that — otherwise a
+    subtype the catalog has never heard of widens into every land on the
+    board."""
+    from engine.land_animation import land_animation_for
+
+    assert land_animation_for(
+        "all lands are 2/3 creatures that are still lands"
+    ).land_type is None
+    assert land_animation_for(
+        "all frobnicates are 2/3 creatures that are still lands"
+    ) is None
