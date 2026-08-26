@@ -12,6 +12,7 @@ life" is two instructions in a sequence rather than a fused kind.
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from ...oracle_types import X_FROM_COUNT
 from ._common import (
     _REST_OF_TURN,
@@ -700,7 +701,11 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         # colourless Circle of Protection.
         colours = node.from_filter.colors
         card_types = node.from_filter.card_types
-        if len(colours) + len(card_types) != 1:
+        # Exactly one *axis* — a shield records one property and CR 615.9
+        # rechecks that property — but the colour axis may name several values
+        # ("a black **or red** source of your choice", Greater Realm of
+        # Preservation), which is one shield a source of either colour spends.
+        if len(card_types) > 1 or bool(colours) == bool(card_types):
             raise LoweringError("no handler for this source-scoped shield", node=node)
         if not _is_you(recipient):
             raise LoweringError("colour-scoped shields only protect their controller", node=node)
@@ -719,12 +724,17 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
                     },
                 ),
             )
-        return (
-            OracleInstruction(
-                "grant_prevention_shield", "",
-                {"amount": 1, "protection_kind": "color", "prevention_color": colours[0]},
-            ),
-        )
+        payload: dict[str, object] = {"amount": 1, "protection_kind": "color"}
+        if len(colours) == 1:
+            payload["prevention_color"] = colours[0]
+        else:
+            # Its own key rather than a list under the singular name, for the
+            # reason ``ObjectFilter``'s ``any_colors`` is its own key: three
+            # readers already take ``prevention_color`` to be one colour
+            # symbol, and a second type under one name is how two readers come
+            # to disagree.
+            payload["prevention_colors"] = list(colours)
+        return (OracleInstruction("grant_prevention_shield", "", payload),)
 
     payload: dict[str, object] = {
         "amount": _amount_payload(node.amount),
@@ -751,6 +761,60 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
     return (OracleInstruction("grant_prevention_shield", "", payload),)
 
 
+def _lower_prevent_from_subject(
+    node: ast.PreventDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"Prevent all damage that would be dealt to you this turn by <noun
+    phrase>." (Al-abara's Carpet.)
+
+    Four refusals, each a way this sentence could otherwise mean more than it
+    says:
+
+    * the recipient must be **you**. The shield hangs off the ability's
+      controller; a shield printed for one creature or for a chosen player
+      would be armed on the wrong object.
+    * the source must be a *described class*, not a chosen target. A quantifier
+      that picks one object is the marker ``prevent_damage_by_target_until_eot``
+      leaves, and re-matching a phrase against every source is a different
+      shield.
+    * every key of the phrase must be one ``subject_matches`` can test. A
+      narrowing the matcher cannot answer would be dropped when the damage is
+      dealt, which is a shield strictly wider than the card prints.
+    * the duration must be this turn, because that is what the sweep gives it.
+    """
+    if not _is_you(node.to):
+        raise LoweringError(
+            "the source-class shield is armed on its controller, not on a "
+            "chosen recipient",
+            node=node,
+        )
+    spec = node.dealt_by
+    if (
+        not isinstance(spec, ast.TargetSpec)
+        or spec.targeted
+        or spec.quantifier not in ("all", "each")
+    ):
+        raise LoweringError(
+            "the source-class shield describes its sources rather than choosing "
+            "one",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "the source-class shield lasts exactly this turn", node=node
+        )
+    described = _filter_payload(spec.filter)
+    if not described or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+        raise LoweringError(
+            "the source-class shield cannot test this noun phrase", node=node
+        )
+    return (
+        OracleInstruction(
+            "grant_source_class_prevention_shield", "", {"filter": described}
+        ),
+    )
+
+
 def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
     """"Prevent all combat damage that would be dealt this turn." (Fog.)
 
@@ -770,31 +834,50 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
     * a duration other than this turn — the flag is cleared in the cleanup step,
       so it *is* "this turn" and nothing else.
     """
-    if not node.combat_only:
-        raise LoweringError("no handler prevents all damage of every kind", node=node)
     if node.dealt_by is not None:
         # "…dealt **by** target creature this turn" (Horn of Deafening, Lady
-        # Evangela). A shield on the damage's *source*, which is why it is a
-        # different instruction from every branch below: those protect a
+        # Evangela, Kry Shield). A shield on the damage's *source*, which is why
+        # it is a different instruction from every branch below: those protect a
         # recipient, and a creature whose damage is prevented is still perfectly
         # able to be dealt damage itself.
+        #
+        # Read **before** the combat-only gate below, not after: this branch is
+        # the one shield whose width is payload, so "prevent all damage that
+        # would be dealt this turn by target creature you control" is the same
+        # instruction with the flag off rather than a refusal.
         if node.to is not None:
-            raise LoweringError(
-                "no handler shields a recipient and a source at once", node=node
-            )
+            # "…dealt **to you** this turn **by attacking creatures without
+            # flying**" (Al-abara's Carpet). Both ends named, which is a
+            # narrower shield than either half — one on the protected player
+            # that answers only to sources the printed noun phrase describes.
+            return _lower_prevent_from_subject(node)
         if node.duration.kind not in _REST_OF_TURN:
             raise LoweringError(
                 "the directional combat shield lasts exactly this turn", node=node
             )
-        if not isinstance(node.dealt_by, ast.TargetSpec) or node.dealt_by.quantifier != "target":
+        spec = node.dealt_by
+        if not isinstance(spec, ast.TargetSpec) or spec.quantifier not in ("target", "that"):
             raise LoweringError(
                 "no handler prevents the damage of an untargeted source", node=node
             )
-        payload: dict[str, object] = {}
-        _describe_targets(payload, node.dealt_by)
+        payload: dict[str, object] = {"combat_only": bool(node.combat_only)}
+        if spec.quantifier == "target":
+            _describe_targets(payload, spec)
+        # "…dealt by **that creature** this turn" (Telekinesis): the object the
+        # sentence in front of it already targeted, not a second choice — so no
+        # ``targets`` description is emitted and the handler shields the
+        # ability's one target. A bound object carries no narrowing to honour,
+        # which is why a restated adjective refuses rather than being dropped.
+        elif _restrictions_beyond(spec.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound object carries no narrowing the shield could honour",
+                node=node,
+            )
         return (
-            OracleInstruction("prevent_combat_damage_by_target_until_eot", "", payload),
+            OracleInstruction("prevent_damage_by_target_until_eot", "", payload),
         )
+    if not node.combat_only:
+        raise LoweringError("no handler prevents all damage of every kind", node=node)
     if node.to is not None:
         # "…to Dogs you control" (Pack Leader). A *set* named by a printed noun
         # phrase, which the scoped record can carry and re-match when damage

@@ -96,7 +96,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # out of the same module the second time it reached the guard, on the same
 # reasoning: CR 208 is what a creature's P/T *is* (layer 7), CR 702 is an
 # ability it *has* (layer 6), and the two families shared no helper.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "mana", "counters", "keywords"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "mana", "counters", "keywords", "tapping"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 

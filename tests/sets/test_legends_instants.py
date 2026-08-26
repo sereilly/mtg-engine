@@ -614,3 +614,87 @@ def test_storm_seeker_deals_nothing_to_an_empty_hand(set_pool):
     game._settle()
 
     assert p2.life == 20, game.log
+
+
+# ---------------------------------------------------------------------------
+# Telekinesis (round 22) — three sentences about one chosen creature
+# ---------------------------------------------------------------------------
+
+
+def _telekinesis_game(set_pool):
+    victim = Permanent(card=_creature("Victim"))
+    other = Permanent(card=_creature("Other"))
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Telekinesis"]])
+    p2 = PlayerState(name="P2", battlefield=[victim, other])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, victim, other, p1, p2
+
+
+def _cast_telekinesis(game):
+    result = game.cast_from_hand(
+        0, "Telekinesis", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    assert result.supported, result.reason
+
+
+def _dealt(game, recipient, amount, source, *, combat=True) -> int:
+    from engine.damage_events import deal_damage
+
+    return deal_damage(game, {
+        "recipient": recipient, "amount": amount, "source": source, "combat": combat,
+    }).dealt
+
+
+def test_telekinesis_carries_out_all_three_of_its_sentences(set_pool):
+    """"Tap target creature. Prevent all combat damage that would be dealt by
+    that creature this turn. It doesn't untap during its controller's next two
+    untap steps." Each sentence acts on the one creature the first chose, and a
+    rider that were dropped would leave the card doing less than it prints."""
+    game, victim, other, _p1, p2 = _telekinesis_game(set_pool)
+    _cast_telekinesis(game)
+
+    assert victim.tapped, "sentence one"
+    assert _dealt(game, p2, 2, victim) == 0, "sentence two"
+    assert victim.metadata.get("skip_next_untap") == 2, "sentence three"
+    assert _dealt(game, p2, 2, other) == 2, "and only that creature"
+
+
+def test_telekinesis_leaves_the_creature_able_to_be_damaged(set_pool):
+    """"…dealt **by** that creature". The direction is the whole difference
+    between a silenced creature and an invulnerable one."""
+    game, victim, other, _p1, _p2 = _telekinesis_game(set_pool)
+    _cast_telekinesis(game)
+
+    assert _dealt(game, victim, 2, other) == 2
+
+
+def test_telekinesis_leaves_a_ping_of_that_creature_alone(set_pool):
+    """"Prevent all **combat** damage": the word is payload on one shield, and
+    a shield that ignored it would stop an ability's damage as well — which is
+    the strictly larger effect Kry Shield prints and this card does not."""
+    game, victim, _other, _p1, p2 = _telekinesis_game(set_pool)
+    _cast_telekinesis(game)
+
+    assert _dealt(game, p2, 2, victim, combat=False) == 2
+
+
+def test_telekinesis_holds_the_creature_down_for_two_untap_steps(set_pool):
+    """"…next **two** untap steps." The marker is a count, so the first untap
+    step spends one and the creature is still held for the second — a flag
+    would give it back a turn early."""
+    game, victim, _other, _p1, _p2 = _telekinesis_game(set_pool)
+    _cast_telekinesis(game)
+
+    game.start_turn(1)
+    assert victim.tapped, "the first of its controller's untap steps"
+    assert victim.metadata.get("skip_next_untap") == 1
+
+    game.start_turn(1)
+    assert victim.tapped, "the second"
+    assert "skip_next_untap" not in victim.metadata
+
+    game.start_turn(1)
+    assert not victim.tapped, "and then it untaps"

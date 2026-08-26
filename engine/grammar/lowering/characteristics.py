@@ -188,7 +188,19 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         # reason the base-P/T pair is two kinds: one asks a picker which
         # permanent and the other asks the context for the source.
         on_source = _is_source(node.subject)
-        if not on_source and not _is_target(node.subject):
+        # "…**That creature** gets +0/+X until end of turn, where X is its mana
+        # value." (Kry Shield.) The bound object the sentence in front of it
+        # already targeted, not a second choice — so no ``targets`` description
+        # is emitted and the handler acts on the ability's one target, the way
+        # ``gain_type`` reads the same pronoun. A bound object carries no
+        # narrowing to honour, so a restated adjective refuses rather than being
+        # dropped.
+        bound = (
+            isinstance(node.subject, ast.TargetSpec)
+            and node.subject.quantifier == "that"
+            and not _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
+        )
+        if not on_source and not bound and not _is_target(node.subject):
             raise LoweringError("a where-clause pump needs a single target", node=node)
         # Whichever definition the clause carried — a count, a maximum, or a
         # characteristic of the object the sentence named. Through the one spec
@@ -221,7 +233,8 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
             # different road.
             return (OracleInstruction("pump_self", "", payload),)
         assert isinstance(node.subject, ast.TargetSpec)
-        _describe_targets(payload, node.subject)
+        if not bound:
+            _describe_targets(payload, node.subject)
         return (OracleInstruction("pump_target_creature_until_eot", "", payload),)
 
     power = _signed(node.power, node.power_negative)

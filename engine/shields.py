@@ -68,6 +68,12 @@ PREVENT_AND_GAIN_LIFE = "prevent_and_gain_life"
 #: "The next time a <colour> source of your choice would deal damage to you this
 #: turn, prevent that damage" (CR 615.9's rechecked property).
 PREVENT_FROM_COLOR = "prevent_from_color"
+#: "Prevent all damage that would be dealt to you this turn by <a printed noun
+#: phrase>" (Al-abara's Carpet). A blanket shield — no point pool and no
+#: charges — that answers only to sources the phrase describes, rechecked at
+#: damage time like every other recorded property (CR 615.9). Which phrase is
+#: payload: a card printed "by creatures with flying" needs no code here.
+PREVENT_FROM_SUBJECT = "prevent_from_subject"
 
 
 @dataclass
@@ -80,7 +86,12 @@ class Shield:
     uses        -- instances it can still apply to; None when only ``amount``
                    governs expiry
     source      -- the chosen damage source it waits for; None = any source
-    color       -- the colour the source must have; None = no colour recorded
+    colors      -- the colours the source may have; empty = no colour recorded.
+                   A tuple rather than one symbol because "a black **or red**
+                   source of your choice" (Greater Realm of Preservation) is one
+                   recorded property with several admissible values, not two
+                   shields — CR 615.9 rechecks the property, and a source is a
+                   match when it has any of them.
     lifetime    -- END_OF_COMBAT or END_OF_TURN
     source_name -- the card that granted it, for the UI's shield badge
     """
@@ -90,15 +101,37 @@ class Shield:
     leave: int = 0
     uses: int | None = 1
     source: Any | None = None
-    color: str | None = None
+    colors: tuple[str, ...] = ()
     #: "an **artifact** source of your choice" (Circle of Protection:
     #: Artifacts). The card-type twin of `color`, checked the same way and at
     #: the same moment — CR 615.9 rechecks a shield's recorded property against
     #: the source when the damage would be dealt, and which property it is does
     #: not change when.
     source_type: str | None = None
+    #: "…by **attacking creatures without flying**" (Al-abara's Carpet). The
+    #: printed noun phrase as a filter payload, tested against the damage's
+    #: source through ``engine/subject_filters.subject_matches`` — the same one
+    #: answer every other reader of a noun phrase asks, so a phrase this cannot
+    #: test refuses at the compiler rather than being dropped here.
+    #: ``filter_seat`` is the observer a relative narrowing ("you control")
+    #: needs, captured when the shield was armed (CR 109.5).
+    source_filter: dict | None = None
+    filter_seat: int | None = None
     lifetime: str = END_OF_TURN
     source_name: str | None = None
+
+    @property
+    def color(self) -> str | None:
+        """The single colour this shield answers to, or None.
+
+        A read-only view over ``colors`` kept for the legacy
+        ``color_prevention_shields`` list and the log line. It is deliberately
+        None for a shield naming several colours: there is no one colour such a
+        shield is "the" shield of, and answering with the first would let a
+        caller that only understands one colour report a narrower shield than
+        the card prints.
+        """
+        return self.colors[0] if len(self.colors) == 1 else None
 
     @property
     def spent(self) -> bool:
@@ -382,8 +415,40 @@ def make_life_gain_charge(source_name: str | None = None) -> Shield:
     return Shield(kind=PREVENT_AND_GAIN_LIFE, uses=1, source_name=source_name)
 
 
-def make_color_shield(color: str, source_name: str | None = None) -> Shield:
-    return Shield(kind=PREVENT_FROM_COLOR, uses=1, color=color, source_name=source_name)
+def make_color_shield(colors, source_name: str | None = None) -> Shield:
+    """A Circle of Protection's shield, against one colour or several.
+
+    *colors* is a colour symbol or an iterable of them. "a black **or red**
+    source of your choice" (Greater Realm of Preservation) records one property
+    with two admissible values, so it is one shield spent by one damage event —
+    two shields would let a red source and a black source each be prevented off
+    a single activation.
+    """
+    if isinstance(colors, str):
+        colors = (colors,)
+    return Shield(
+        kind=PREVENT_FROM_COLOR, uses=1, colors=tuple(colors), source_name=source_name
+    )
+
+
+def make_subject_shield(
+    source_filter: dict, seat: int | None = None, source_name: str | None = None
+) -> Shield:
+    """A blanket shield against every source a printed noun phrase describes.
+
+    ``amount`` and ``uses`` are both None, which is what makes it a blanket:
+    :meth:`Shield.spent` can never become true, so it lasts until its
+    ``lifetime`` sweeps it and a second attacker this turn is prevented exactly
+    like the first — "prevent **all** damage", not "the next damage".
+    """
+    return Shield(
+        kind=PREVENT_FROM_SUBJECT,
+        amount=None,
+        uses=None,
+        source_filter=dict(source_filter),
+        filter_seat=seat,
+        source_name=source_name,
+    )
 
 
 def make_source_type_shield(card_type: str, source_name: str | None = None) -> Shield:

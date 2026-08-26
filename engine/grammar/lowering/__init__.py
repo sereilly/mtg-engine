@@ -117,18 +117,13 @@ from .zones import (
     _fused_exile_then_controller_life,
 )
 from .board import (
-    _fused_upkeep_pay_to_untap,
     _lower_phase_out,
     _lower_put_on_library_bottom,
     _DESTROY_ALL_KINDS,
     _BASIC_LAND_TYPES,
     _lower_destroy,
     _lower_delayed_destroy,
-    _lower_doesnt_untap_next_step,
     _lower_delayed_self_action,
-    _lower_doesnt_untap_while_source_tapped,
-    _lower_tap,
-    _lower_tap_or_untap,
     _lower_attach,
     _lower_exchange_control,
     _lower_regenerate,
@@ -138,6 +133,13 @@ from .board import (
     _lower_gain_control,
     _lower_sacrifice,
     _lower_sacrifice_expansion_permanents,
+)
+from .tapping import (
+    _lower_tap,
+    _lower_doesnt_untap_next_step,
+    _lower_tap_or_untap,
+    _fused_upkeep_pay_to_untap,
+    _lower_doesnt_untap_while_source_tapped,
 )
 from .cards import (
     _lower_discard,

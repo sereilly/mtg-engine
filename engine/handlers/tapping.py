@@ -129,7 +129,15 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
     untapped = game._tap_or_untap_target(
         target, make_tapped=False, target_permanent_index=context.target_permanent_index
     )
-    game.log.append("Untapped target permanent" if untapped else "No valid permanent to untap")
+    game.log.append(
+        "Untapped target permanent" if untapped is not None else "No valid permanent to untap"
+    )
+    # The same record the filtered branch above keeps, for the same reason: a
+    # producer `_PRODUCES` names has to write on every path it takes, or the
+    # sentence after it silently acts on nothing.
+    context.results["untapped_permanents"] = (
+        (untapped.permanent_id,) if untapped is not None else ()
+    )
     return True, "resolved"
 
 
@@ -272,12 +280,32 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
             game.log.append(f"Tapped {perm.card.name}")
         else:
             game.log.append("No valid permanent to tap")
+        _record_tapped(context, [perm] if perm is not None else [])
         return True, "resolved"
     tapped = game._tap_or_untap_target(
         target, make_tapped=True, target_permanent_index=context.target_permanent_index
     )
-    game.log.append("Tapped target permanent" if tapped else "No valid permanent to tap")
+    game.log.append(
+        "Tapped target permanent" if tapped is not None else "No valid permanent to tap"
+    )
+    _record_tapped(context, [tapped])
     return True, "resolved"
+
+
+def _record_tapped(context: OracleExecutionContext, chosen) -> None:
+    """Record what this instruction tapped, for the sentence after it.
+
+    ``_PRODUCES`` names ``tap_target_permanent`` as the producer of
+    ``tapped_permanents``, but only the several-target branch ever wrote it —
+    so "Tap target creature. **It** doesn't untap …" (Telekinesis) had a
+    producer the table promised and the scratchpad did not hold, and the second
+    sentence marked nothing while the card compiled clean. By id, never by
+    object or slot: the next instruction runs after this one, and a permanent
+    may have left in between (CR 400.7).
+    """
+    context.results["tapped_permanents"] = tuple(
+        perm.permanent_id for perm in chosen if perm is not None
+    )
 
 
 def _tap_several_targets(
@@ -364,6 +392,11 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     """
     key = instruction.payload.get("permanents_from")
     recorded = context.results.get(key) or ()
+    # "…next **two** untap steps" (Telekinesis). The marker is a count of steps
+    # rather than a flag, because how many of the same turn-based action the
+    # restriction survives is the only thing that differs between the two
+    # printings — and a flag would let the creature untap a turn early.
+    steps = max(1, int(instruction.payload.get("untap_steps") or 1))
     marked = 0
     for permanent_id in recorded:
         permanent = game.permanent_by_id(permanent_id)
@@ -371,9 +404,15 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
             # It left the battlefield between the two steps. A new object comes
             # back (CR 400.7), and this effect never applied to it.
             continue
-        permanent.metadata["skip_next_untap"] = True
+        # The larger of the two, never the sum: two effects each holding a
+        # permanent down for one step both expire during the same untap step
+        # (CR 701.43b, said of exert — the keyworded form of this effect).
+        held = int(permanent.metadata.get("skip_next_untap") or 0)
+        permanent.metadata["skip_next_untap"] = max(held, steps)
+        plural = "" if steps == 1 else f" {steps}"
         game.log.append(
-            f"{permanent.card.name} won't untap during its controller's next untap step"
+            f"{permanent.card.name} won't untap during its controller's next"
+            f"{plural} untap step" + ("" if steps == 1 else "s")
         )
         marked += 1
     if not marked:

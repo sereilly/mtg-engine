@@ -18,7 +18,9 @@ from ..errors import GrammarError
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS)
-from ..phrases import _parse_duration, _parse_mana_payment, _parse_where_x_is
+from ..phrases import (
+    _parse_duration, _parse_mana_payment, _parse_where_x_is, parse_bound_subject,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +342,13 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
         # "…that would be dealt **by** target creature this turn." The word is
         # the whole difference between a creature that cannot be hurt and one
         # that cannot hurt anything, so it is read rather than skipped.
-        dealt_by = parse_recipient(stream)
+        #
+        # ``parse_recipient`` first and the bound reader second, the order
+        # ``statements.py`` uses for the same pair: "that creature**'s
+        # controller**" is a player reference the first already reads, and a
+        # bound reader that got there first would eat the noun and strand the
+        # possessive.
+        dealt_by = parse_recipient(stream) or parse_bound_subject(stream)
         if dealt_by is None:
             raise stream.error("expected whose damage to prevent")
     duration = _parse_duration(stream)
@@ -353,6 +361,17 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
         recipient = parse_recipient(stream)
         if recipient is None:
             raise stream.error("expected something to shield")
+    # "…that would be dealt **this turn by target creature you control**" (Kry
+    # Shield), and "…dealt **to you this turn by attacking creatures without
+    # flying**" (Al-abara's Carpet). The same word-order swap as the recipient
+    # above, on the other end of the event — read on either side rather than the
+    # card failing on the order its printing happens to use. Both ends may
+    # appear: a shield naming who is protected *and* whose damage is stopped is
+    # a narrower effect than either half, and dropping one would widen it.
+    if dealt_by is None and stream.accept_word("by"):
+        dealt_by = parse_recipient(stream) or parse_bound_subject(stream)
+        if dealt_by is None:
+            raise stream.error("expected whose damage to prevent")
     return ast.PreventDamage(
         ast.AllOf(), to=recipient, duration=duration, combat_only=combat_only,
         dealt_by=dealt_by,
@@ -376,13 +395,27 @@ def _parse_colour_source_prevention(stream: TokenStream) -> ast.PreventDamage | 
     if not (stream.accept_word("a") or stream.accept_word("an")):
         stream.reset(mark)
         return None
-    colour = None
+    colours: list[str] = []
     card_type = None
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
     if word in COLOR_WORDS:
-        colour = COLOR_WORDS[word]
+        # "a **black or red** source of your choice" (Greater Realm of
+        # Preservation). A list rather than one word, because the printed
+        # sentence records one property with several admissible values — one
+        # shield the next matching source spends, not one shield per colour.
+        # Read as a loop rather than as a two-colour special case: a card
+        # printing three needs no code.
+        colours.append(COLOR_WORDS[word])
         stream.advance()
+        while stream.accept_word("or"):
+            token = stream.peek()
+            word = str(token.text).lower() if token is not None else ""
+            if word not in COLOR_WORDS:
+                stream.reset(mark)
+                return None
+            colours.append(COLOR_WORDS[word])
+            stream.advance()
     elif word in CARD_TYPES:
         # "an **artifact** source of your choice" (Circle of Protection:
         # Artifacts). The same Circle keyed on a card type instead of a colour
@@ -405,8 +438,8 @@ def _parse_colour_source_prevention(stream: TokenStream) -> ast.PreventDamage | 
     if not stream.accept_phrase("prevent", "that", "damage"):
         stream.reset(mark)
         return None
-    if colour:
-        filt = ast.ObjectFilter(colors=(colour,))
+    if colours:
+        filt = ast.ObjectFilter(colors=tuple(colours))
     elif card_type:
         filt = ast.ObjectFilter(card_types=(card_type,))
     else:

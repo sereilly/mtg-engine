@@ -67,10 +67,24 @@ class OracleInstructionsMixin:
         # each have to remember it. Idiom 3: a list of sites is only ever as
         # complete as the last card that touched it.
         self.resolving_seats.append(self.players.index(context.caster))
+        # And what it chose (CR 115.1). Beside the seat because it is the same
+        # kind of fact and unknowable for the same reason: a spell reaches the
+        # damage paths as a bare `CardDefinition`, which records neither its
+        # controller nor its targets. "Prevent all damage that would be dealt to
+        # this creature by spells that target it" (Bronze Horse) reads it.
+        recorded = getattr(context, "target_permanent_id", None)
+        self.resolving_targets.append(
+            tuple(
+                identity
+                for identity in (recorded if isinstance(recorded, list) else [recorded])
+                if identity is not None
+            )
+        )
         try:
             return handler(self, instruction, context)
         finally:
             self.resolving_seats.pop()
+            self.resolving_targets.pop()
 
     def _apply_spell_text(
         self,

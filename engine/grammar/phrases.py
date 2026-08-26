@@ -25,7 +25,7 @@ from .lexer import (MANA, NUMBER, PUNCT, tokenize)
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
 from .references import parse_target_spec
 from .stream import TokenStream
-from .vocabulary import (KEYWORD_INDEX, NUMBER_WORDS, match_longest)
+from .vocabulary import (CARD_TYPES, KEYWORD_INDEX, NUMBER_WORDS, match_longest)
 _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # "for as long as this artifact remains tapped" (Ashnod's Battle Gear,
     # Tawnos's Weaponry). A *linked* duration: it ends when the source untaps
@@ -229,6 +229,46 @@ def _accept_number(stream: TokenStream) -> int | None:
         return None
     stream.advance()
     return NUMBER_WORDS[word]
+
+
+def parse_bound_subject(stream: TokenStream) -> "ast.TargetSpec | None":
+    """``that <card type>`` / ``those <card type>s``, or None if that is not
+    what is at the cursor.
+
+    The plural is a *different quantifier*, not the singular with a count: "that
+    creature" is the one object the previous sentence chose and "those creatures"
+    is however many it chose — which for an "up to N" may be two, one or none.
+    Keeping them apart is what stops a lowering written for one bound object
+    receiving a list.
+
+    Both are refused by default everywhere, which is what makes reading them
+    safe: no lowering accepts "that" or "those" unless it says so
+    (``_is_target`` and ``_names_several_targets`` both answer False), so a
+    sentence reaching one fails **by name** rather than failing to parse. A
+    parse error would blame the subject for a missing production.
+
+    Here rather than in ``statements.py``, where it began, because two families
+    read it now: the sentence subject position, and the *object* position of
+    "prevent all combat damage that would be dealt by **that creature** this
+    turn" (Telekinesis). A fragment two families need is not an effect.
+    """
+    mark = stream.mark()
+    if stream.accept_word("those"):
+        noun = stream.peek_word()
+        singular = noun[:-1] if noun and noun.endswith("s") else noun
+        if singular is None or singular not in CARD_TYPES:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        return ast.TargetSpec("those", ast.ObjectFilter(card_types=(singular,)))
+    if not stream.accept_word("that"):
+        return None
+    noun = stream.peek_word()
+    if noun is None or noun not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
 
 
 def _parse_duration(stream: TokenStream) -> ast.Duration:

@@ -14,7 +14,7 @@ import dataclasses
 from .. import ast
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
-from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, SUBTYPE_INDEX, match_longest)
+from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDEX, match_longest)
 from ..phrases import (
     _accept_number, _parse_mana_payment, _parse_zone, parse_subject_filter_at,
 )
@@ -283,9 +283,23 @@ def _parse_doesnt_untap_next_step(
             return ast.DoesntUntapWhileSourceTapped(subject)
     stream.reset(linked)
     stream.expect_word("next")
+    # "…next **two** untap steps" (Telekinesis). The number is read rather than
+    # skipped: a restriction that survived one untap step where the card says
+    # two is the creature back a turn early, and one that skipped the word would
+    # report supported while doing it.
+    count = 1
+    counted = stream.mark()
+    word = stream.peek_word()
+    if word in NUMBER_WORDS:
+        count = NUMBER_WORDS[word]
+        stream.advance()
+        if not (stream.at_word("untap") and stream.peek_word(1) == "steps"):
+            # A number with the singular noun after it is not this sentence.
+            stream.reset(counted)
+            count = 1
     stream.expect_word("untap")
-    stream.expect_word("step")
-    return ast.DoesntUntapNextStep(subject)
+    stream.expect_word("step", "steps")
+    return ast.DoesntUntapNextStep(subject, count=count)
 
 
 def _parse_attach(stream: TokenStream) -> ast.Statement:

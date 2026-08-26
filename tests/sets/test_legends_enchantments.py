@@ -136,7 +136,7 @@ def test_lady_evangela_carries_the_same_ability(set_pool):
     program = compile_card_oracle(set_pool("LEG")["Lady Evangela"])
     assert program.supported, program.reason
     assert [a.instruction.kind for a in program.activated_abilities] == [
-        "prevent_combat_damage_by_target_until_eot"
+        "prevent_damage_by_target_until_eot"
     ]
 
 
@@ -1111,3 +1111,93 @@ def test_kismet_taps_the_three_types_it_names_on_the_opponents_side(set_pool):
         assert not _enters(0, type_line).tapped, type_line
     # An enchantment is not one of the three types the card names.
     assert not _enters(1, "Enchantment").tapped
+
+
+# ---------------------------------------------------------------------------
+# Greater Realm of Preservation (round 22) — a Circle over two colours
+# ---------------------------------------------------------------------------
+
+
+def _coloured(name: str, colors: tuple[str, ...]) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=colors, color_identity=colors, keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _realm_game(set_pool):
+    realm = Permanent(card=set_pool("LEG")["Greater Realm of Preservation"])
+    goblin = Permanent(card=_coloured("Red Source", ("R",)))
+    zombie = Permanent(card=_coloured("Black Source", ("B",)))
+    elf = Permanent(card=_coloured("Green Source", ("G",)))
+    p1 = PlayerState(name="P1", battlefield=[realm])
+    p2 = PlayerState(name="P2", battlefield=[goblin, zombie, elf])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    p1.mana_pool["W"] = 4
+    p1.mana_pool["C"] = 4
+    return game, goblin, zombie, elf, p1, p2
+
+
+def _arm(game):
+    result = game.activate_permanent_ability(
+        0, "Greater Realm of Preservation", permanent_index=0
+    )
+    game._settle()
+    assert result.supported, result.reason
+
+
+def test_greater_realm_answers_to_either_printed_colour(set_pool):
+    """"The next time a **black or red** source of your choice would deal damage
+    to you this turn, prevent that damage." One shield recording one property
+    with two admissible values (CR 615.9), so either colour spends it."""
+    game, goblin, zombie, _elf, p1, _p2 = _realm_game(set_pool)
+
+    _arm(game)
+    assert _damage(game, p1, 4, zombie, combat=False) == 0
+
+    _arm(game)
+    assert _damage(game, p1, 4, goblin, combat=False) == 0
+
+
+def test_greater_realm_leaves_a_third_colour_alone(set_pool):
+    """CR 615.9 rechecks the recorded property against the source: a green
+    source matches neither value, so the damage lands and the shield is not
+    used up — the narrowing has to be enforced or the card is a Circle of
+    Protection: Everything."""
+    game, _goblin, zombie, elf, p1, _p2 = _realm_game(set_pool)
+    _arm(game)
+
+    assert _damage(game, p1, 3, elf, combat=False) == 3
+    assert _damage(game, p1, 3, zombie, combat=False) == 0, "the shield was still armed"
+
+
+def test_greater_realms_shield_is_spent_by_one_event(set_pool):
+    """"The **next time**": one activation, one instance prevented. Two colours
+    is not two shields — a second black source after the first is prevented gets
+    through."""
+    game, goblin, zombie, _elf, p1, _p2 = _realm_game(set_pool)
+    _arm(game)
+
+    assert _damage(game, p1, 2, zombie, combat=False) == 0
+    assert _damage(game, p1, 2, goblin, combat=False) == 2
+
+
+def test_greater_realm_offers_only_sources_of_the_printed_colours(set_pool):
+    """The picker narrows to exactly what the shield will answer to, so the
+    source a player chooses and the recheck at damage time agree."""
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("LEG")
+    program = compile_card_oracle(pool["Greater Realm of Preservation"])
+    spec = derive_activation_spec(program.activated_abilities[0])
+    assert spec["any_colors"] == ["B", "R"]
+
+    game, _goblin, _zombie, _elf, _p1, _p2 = _realm_game(set_pool)
+    offered = game._enumerate_targets(
+        0, pool["Greater Realm of Preservation"], spec, for_cast=False
+    )
+    assert sorted(t["name"] for t in offered) == ["Black Source", "Red Source"]

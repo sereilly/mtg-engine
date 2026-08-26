@@ -481,3 +481,203 @@ def test_gauntlets_of_chaos_leaves_no_aura_destruction_when_nothing_is_exchanged
 
     assert game.controller_index_of(mine) == 0
     assert game.is_on_battlefield(on_mine)
+
+# ---------------------------------------------------------------------------
+# Kry Shield (round 22) — the directional shield without the word "combat"
+# ---------------------------------------------------------------------------
+
+
+def _kry_game(set_pool, mana_cost: str = "{2}{G}"):
+    """Kry Shield beside a creature of a known mana value, and an opposing one."""
+    from engine.models import CardDefinition
+
+    guard = CardDefinition(
+        name="Guard", mana_cost=mana_cost, cmc=3.0, type_line="Creature - Test",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": "Guard", "type_line": "Creature - Test",
+             "power": "2", "toughness": "2"},
+    )
+    other = CardDefinition(
+        name="Other", mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Other", "type_line": "Creature - Test",
+             "power": "2", "toughness": "2"},
+    )
+    shield = Permanent(card=set_pool("LEG")["Kry Shield"])
+    mine = Permanent(card=guard)
+    theirs = Permanent(card=other)
+    p1 = PlayerState(name="P1", battlefield=[shield, mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    p1.mana_pool["C"] = 6
+    return game, shield, mine, theirs, p1, p2
+
+
+def _dealt(game, recipient, amount, source, *, combat=True) -> int:
+    from engine.damage_events import deal_damage
+
+    return deal_damage(game, {
+        "recipient": recipient, "amount": amount, "source": source, "combat": combat,
+    }).dealt
+
+
+def test_kry_shield_stops_every_kind_of_damage_the_creature_deals(set_pool):
+    """"Prevent all damage that would be dealt this turn by target creature you
+    control." Horn of Deafening's sentence with the word "combat" deleted, so
+    the shield has to cover a ping as well as combat damage — the word is
+    payload on one instruction, not a second one."""
+    game, _shield, mine, theirs, _p1, p2 = _kry_game(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Kry Shield", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game._settle()
+
+    assert result.supported, result.reason
+    assert _dealt(game, theirs, 2, mine) == 0, "combat damage it deals is prevented"
+    assert _dealt(game, p2, 2, mine, combat=False) == 0, "so is a ping"
+    assert _dealt(game, mine, 2, theirs) == 2, "the shield is on what it deals"
+
+
+def test_kry_shields_rider_is_carried_out(set_pool):
+    """"That creature gets +0/+X until end of turn, where X is its mana value."
+    The bound pronoun is the creature the first sentence targeted, so the
+    toughness rises by that creature's own mana value and nothing is chosen
+    twice."""
+    game, _shield, mine, _theirs, _p1, _p2 = _kry_game(set_pool)
+    assert (mine.effective_power, mine.effective_toughness) == (2, 2)
+
+    game.activate_permanent_ability(
+        0, "Kry Shield", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game._settle()
+
+    assert (mine.effective_power, mine.effective_toughness) == (2, 5), (
+        "+0/+X where X is the creature's mana value (3)"
+    )
+
+
+def test_kry_shields_shield_wears_off_at_cleanup(set_pool):
+    """"…this turn." The record is swept with every other turn-long marker, so
+    the duration is real rather than printed."""
+    game, _shield, mine, theirs, _p1, p2 = _kry_game(set_pool)
+    game.activate_permanent_ability(
+        0, "Kry Shield", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game._settle()
+    assert _dealt(game, p2, 2, mine, combat=False) == 0
+
+    game.resolve_cleanup_step(0)
+    assert _dealt(game, p2, 2, mine, combat=False) == 2
+
+
+def test_kry_shield_only_offers_creatures_you_control(set_pool):
+    """"target creature **you control**". The narrowing rides the payload the
+    picker reads, so the offer and the effect agree on which creatures the card
+    reaches."""
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("LEG")
+    program = compile_card_oracle(pool["Kry Shield"])
+    spec = derive_activation_spec(program.activated_abilities[0])
+    game, _shield, _mine, _theirs, _p1, _p2 = _kry_game(set_pool)
+    offered = game._enumerate_targets(0, pool["Kry Shield"], spec, for_cast=False)
+    assert [t["name"] for t in offered] == ["Guard"], (
+        "the opponent's creature is not a creature you control"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Al-abara's Carpet (round 22) — a blanket shield keyed on a printed noun phrase
+# ---------------------------------------------------------------------------
+
+
+def _carpet_game(set_pool):
+    """The Carpet on my side; a ground attacker, a flying attacker and a
+    creature that stayed home on the opponent's."""
+    from engine.models import CardDefinition
+
+    def creature(name: str, keywords: tuple[str, ...] = ()) -> CardDefinition:
+        return CardDefinition(
+            name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+            oracle_text="Flying" if keywords else "", colors=(), color_identity=(),
+            keywords=keywords, produced_mana=(),
+            raw={"name": name, "type_line": "Creature - Test",
+                 "power": "3", "toughness": "3"},
+        )
+
+    carpet = Permanent(card=set_pool("LEG")["Al-abara's Carpet"])
+    ground = Permanent(card=creature("Ground"))
+    flyer = Permanent(card=creature("Flyer", ("Flying",)))
+    homebody = Permanent(card=creature("Homebody"))
+    ground.attacking = True
+    flyer.attacking = True
+    p1 = PlayerState(name="P1", battlefield=[carpet])
+    p2 = PlayerState(name="P2", battlefield=[ground, flyer, homebody])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    p1.mana_pool["C"] = 9
+    return game, ground, flyer, homebody, p1
+
+
+def _arm_carpet(game):
+    result = game.activate_permanent_ability(0, "Al-abara's Carpet", permanent_index=0)
+    game._settle()
+    assert result.supported, result.reason
+
+
+def test_al_abaras_carpet_stops_the_creatures_its_phrase_names(set_pool):
+    """"Prevent all damage that would be dealt to you this turn by attacking
+    creatures without flying." A blanket, not a charge: every matching source
+    this turn is prevented, so a second ground attacker after the first is
+    stopped too."""
+    game, ground, _flyer, _homebody, p1 = _carpet_game(set_pool)
+    _arm_carpet(game)
+
+    assert _dealt(game, p1, 3, ground) == 0
+    assert _dealt(game, p1, 3, ground) == 0, "a blanket is not used up"
+
+
+def test_al_abaras_carpet_honours_every_word_of_its_phrase(set_pool):
+    """Each adjective is enforced, because a shield admitting the phrase and
+    then ignoring half of it is damage prevented the card does not prevent.
+
+    A flyer is excluded by "without flying"; a creature that is not attacking is
+    excluded by "attacking"; and a spell is no creature at all.
+    """
+    game, _ground, flyer, homebody, p1 = _carpet_game(set_pool)
+    _arm_carpet(game)
+
+    assert _dealt(game, p1, 3, flyer) == 3, "'without flying'"
+    assert _dealt(game, p1, 3, homebody, combat=False) == 3, "'attacking'"
+    assert _dealt(game, p1, 3, set_pool("LEG")["Al-abara's Carpet"], combat=False) == 3, (
+        "a spell's card is not a permanent the phrase describes"
+    )
+
+
+def test_al_abaras_carpet_rechecks_the_phrase_when_damage_is_dealt(set_pool):
+    """CR 615.9: the shield records the phrase, not the set. A creature that
+    leaves combat stops being described by it, with nothing having to be
+    updated when it does."""
+    game, ground, _flyer, _homebody, p1 = _carpet_game(set_pool)
+    _arm_carpet(game)
+    assert _dealt(game, p1, 3, ground) == 0
+
+    ground.attacking = False
+    assert _dealt(game, p1, 3, ground) == 3
+
+
+def test_al_abaras_carpet_shield_expires_with_the_turn(set_pool):
+    """"…this turn." The shield carries its own lifetime, so the cleanup sweep
+    ends it and no turn step needs a line naming this card."""
+    game, ground, _flyer, _homebody, p1 = _carpet_game(set_pool)
+    _arm_carpet(game)
+    assert _dealt(game, p1, 3, ground) == 0
+
+    game.resolve_cleanup_step(0)
+    assert _dealt(game, p1, 3, ground) == 3
