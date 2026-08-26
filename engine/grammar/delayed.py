@@ -55,7 +55,35 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # "At this turn's next end of combat, …" (Glyph of Doom).
     (("at", "this", "turn", "'s", "next", "end", "of", "combat"),
      "next_end_of_combat", True, "end_of_turn", True),
+    # "At the beginning of your next upkeep, …" (Giant Slug, Hazezon Tamar).
+    # The controller's own upkeep, however many turns away — so it waits for
+    # the step rather than expiring with the turn.
+    (("at", "the", "beginning", "of", "your", "next", "upkeep"),
+     "controllers_next_upkeep", True, "until_it_triggers", False),
 )
+
+
+def parse_trailing_delay(stream: TokenStream) -> tuple[str, bool, str, bool] | None:
+    """The **trailing** spelling of a delay: ``<effect> at the beginning of your
+    next upkeep``.
+
+    Hazezon Tamar prints its delay after the effect rather than in front of it —
+    "create X … tokens that are red, green, and white **at the beginning of your
+    next upkeep**, where X is …". Same delay, same table, other word order, so
+    it reads the same rows :data:`_DELAYED_OPENERS` already holds; a second list
+    would be a second answer to "which delays does this engine arm".
+
+    Returns the row's ``(event, once, duration, binds)`` or None. The caller
+    builds the node, because the effect it wraps is the sentence the caller
+    already has in hand — and because the clause that defines the sentence's X
+    belongs *inside* the delay (see ``statements.parse_statement``).
+    """
+    for phrase, kind, once, duration, binds in _DELAYED_OPENERS:
+        mark = stream.mark()
+        if stream.accept_phrase(*phrase):
+            return kind, once, duration, binds
+        stream.reset(mark)
+    return None
 
 
 def _delayed_bound_subject(stream: TokenStream) -> "ast.ObjectFilter | None":

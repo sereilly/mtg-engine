@@ -73,6 +73,10 @@ DELAYED_EVENTS: dict[str, str] = {
     "controllers_next_main_phase": "the main phase entry",
     # "At this turn's next end of combat, …" (Glyph of Doom).
     "next_end_of_combat": "the end of combat step",
+    # "At the beginning of your next upkeep, …" (Hazezon Tamar, Giant Slug).
+    # The controller's own upkeep, however many turns away it is — so unlike
+    # the "this turn" rows it survives the turn and is removed only by firing.
+    "controllers_next_upkeep": "the upkeep step",
 }
 
 

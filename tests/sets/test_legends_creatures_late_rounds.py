@@ -2095,3 +2095,148 @@ def test_rasputin_prevents_one_damage_for_a_counter(set_pool):
     )
 
     assert outcome.dealt == 2, "the shield absorbs exactly the next 1 damage"
+
+
+# ---------------------------------------------------------------------------
+# Round 29 — Hazezon Tamar: a delay that reaches a later turn, and a count
+# taken when it gets there.
+# ---------------------------------------------------------------------------
+
+
+def _r29_hazezon(set_pool, lands: int = 3):
+    """Hazezon Tamar resolved onto a board of *lands* Forests."""
+    pool = set_pool("LEG")
+    p1 = PlayerState(name="P1", hand=[pool["Hazezon Tamar"]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    for _ in range(lands):
+        p1.battlefield.append(Permanent(card=set_pool("LEA")["Forest"]))
+    game.queue_from_hand(0, "Hazezon Tamar")
+    game.resolve_stack()
+    game._settle()
+    return game, p1, p2
+
+
+def _r29_sand_warriors(player):
+    return [
+        perm for perm in player.battlefield
+        if perm.card.name == "Sand Warrior Token"
+    ]
+
+
+def test_hazezon_compiles_both_of_its_triggers(set_pool):
+    """The card's two abilities, and the reason the support gate had to be
+    tightened to see the second: a creature carrying one working trigger and
+    one that never lowered used to report itself supported."""
+    program = compile_card_oracle(set_pool("LEG")["Hazezon Tamar"])
+
+    assert program.supported, program.reason
+    kinds = [trig.condition.kind for trig in program.triggered_abilities]
+    assert kinds == ["enters_battlefield", "leaves_battlefield"]
+    assert all(trig.supported for trig in program.triggered_abilities)
+
+
+def test_hazezon_makes_no_tokens_when_it_enters(set_pool):
+    """The whole sentence is delayed: nothing is created until the upkeep."""
+    _game, p1, _p2 = _r29_hazezon(set_pool)
+
+    assert _r29_sand_warriors(p1) == []
+
+
+def test_hazezon_arms_one_ability_for_the_controllers_next_upkeep(set_pool):
+    game, _p1, _p2 = _r29_hazezon(set_pool)
+
+    entry, = game.delayed_triggers
+    assert entry.event == "controllers_next_upkeep"
+    assert entry.controller_index == 0
+
+
+def test_hazezon_counts_the_lands_at_the_upkeep_not_at_the_trigger(set_pool):
+    """"…where X is the number of lands you control **at that time**" — the
+    clause that decides which card this is. Three lands when it entered, five
+    when the upkeep arrives, and five is the answer."""
+    game, p1, _p2 = _r29_hazezon(set_pool, lands=3)
+    for _ in range(2):
+        p1.battlefield.append(Permanent(card=set_pool("LEA")["Forest"]))
+
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert len(_r29_sand_warriors(p1)) == 5
+
+
+def test_hazezon_tokens_are_one_one_red_green_and_white_sand_warriors(set_pool):
+    """The colours are printed *after* the subtypes ("tokens that are red,
+    green, and white"), which is the same colour run in the other word order."""
+    game, p1, _p2 = _r29_hazezon(set_pool, lands=2)
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+    game._settle()
+
+    token, _other = _r29_sand_warriors(p1)
+    assert token.effective_power == 1 and token.effective_toughness == 1
+    assert set(token.card.colors) == {"R", "G", "W"}
+    assert token.has_type("sand") and token.has_type("warrior")
+
+
+def test_hazezon_does_not_fire_on_the_opponents_upkeep(set_pool):
+    """"**Your** next upkeep" — an upkeep belongs to one player."""
+    game, p1, _p2 = _r29_hazezon(set_pool)
+
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    game._settle()
+
+    assert _r29_sand_warriors(p1) == []
+    assert len(game.delayed_triggers) == 1
+
+
+def test_hazezon_survives_the_turn_it_entered_on(set_pool):
+    """The delay names a future step rather than a duration, so the cleanup
+    sweep must not take it (CR 603.7b)."""
+    game, _p1, _p2 = _r29_hazezon(set_pool)
+
+    game.resolve_cleanup_step(0)
+
+    assert len(game.delayed_triggers) == 1
+
+
+def test_hazezon_exiles_its_sand_warriors_when_it_leaves(set_pool):
+    """"Exile all Sand Warriors" — two adjacent subtypes, which is a
+    conjunction: the sweep used to stop reading after "Sand"."""
+    game, p1, _p2 = _r29_hazezon(set_pool, lands=3)
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+    game._settle()
+    assert len(_r29_sand_warriors(p1)) == 3
+
+    hazezon = next(p for p in p1.battlefield if p.card.name == "Hazezon Tamar")
+    game.remove_from_battlefield(hazezon)
+    p1.graveyard.append(hazezon.card)
+    game._settle()
+    game.resolve_stack()
+    game._settle()
+
+    assert _r29_sand_warriors(p1) == []
+
+
+def test_hazezon_leaves_a_bystander_creature_alone(set_pool):
+    """The sweep is narrowed by the printed noun phrase, so a creature that is
+    not a Sand Warrior is not exiled."""
+    game, p1, _p2 = _r29_hazezon(set_pool, lands=1)
+    bystander = Permanent(card=_vanilla("Bystander", 2, 2))
+    p1.battlefield.append(bystander)
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+    game._settle()
+
+    hazezon = next(p for p in p1.battlefield if p.card.name == "Hazezon Tamar")
+    game.remove_from_battlefield(hazezon)
+    p1.graveyard.append(hazezon.card)
+    game._settle()
+    game.resolve_stack()
+    game._settle()
+
+    assert [perm.card.name for perm in p1.battlefield].count("Bystander") == 1
+    assert _r29_sand_warriors(p1) == []

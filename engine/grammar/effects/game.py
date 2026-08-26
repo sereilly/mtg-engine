@@ -140,6 +140,36 @@ def _parse_token_keywords(stream: TokenStream) -> tuple[str, ...]:
     return tuple(keywords)
 
 
+def _parse_token_colors(stream: TokenStream, colors: list[str]) -> bool:
+    """The run of colour words in a token spec, appended to *colors*.
+
+    Returns whether the spec *stated* a colour at all — "colorless" states one
+    without adding to the list, and an empty list already means colourless, so
+    the two answers cannot be the same value.
+
+    Its own function because the pool prints the run in two places: in front of
+    the subtypes ("a 1/1 **white** Soldier creature token") and after the head
+    noun ("1/1 Sand Warrior creature tokens **that are red, green, and
+    white**"). One reader, called twice.
+    """
+    stated = False
+    while True:
+        word = stream.peek_word()
+        if word in COLOR_WORDS:
+            colors.append(COLOR_WORDS[word])
+            stated = True
+            stream.advance()
+            stream.accept_punct(",")
+            stream.accept_word("and")
+            continue
+        if word == "colorless":
+            stated = True
+            stream.advance()
+            continue
+        break
+    return stated
+
+
 def _parse_create_token(stream: TokenStream) -> ast.Statement:
     """``Create <N> <P/T> <colours> <subtypes> <types> token(s) [with …] [named …]``.
 
@@ -213,30 +243,7 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
         power = toughness = None
 
     colors: list[str] = []
-    stated_colour = False
-    while True:
-        word = stream.peek_word()
-        if word in COLOR_WORDS:
-            colors.append(COLOR_WORDS[word])
-            stated_colour = True
-            stream.advance()
-            stream.accept_punct(",")
-            stream.accept_word("and")
-            continue
-        if word == "colorless":
-            stated_colour = True
-            stream.advance()
-            continue
-        break
-    if not stated_colour:
-        # Every token spec the pool prints states a colour, "colorless"
-        # included, and the word has to stay load-bearing: an empty ``colors``
-        # tuple already means colourless, so a production that let the word be
-        # absent would also let it be *deleted* with no change to the payload —
-        # which is precisely what the parse-coverage deletion probe flags as a
-        # dropped rider. Refusing keeps the failure loud and keeps the grammar
-        # off wordings no card in the pool carries.
-        raise stream.error("expected the token's colour, or 'colorless'")
+    stated_colour = _parse_token_colors(stream, colors)
 
     subtypes: list[str] = []
     card_types: list[str] = []
@@ -255,6 +262,28 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
         subtypes.append(name)
         stream.advance(consumed)
     stream.expect_word("token", "tokens")
+
+    # "…1/1 Sand Warrior creature tokens **that are red, green, and white**"
+    # (Hazezon Tamar). The same colours, printed after the head noun instead of
+    # in front of the subtypes — so it is the same reader, called a second
+    # time, rather than a second production. Read before the "that are tapped
+    # and attacking" entry state below, which opens with the same two words and
+    # would otherwise never see a colour word to decline on.
+    if not stated_colour:
+        mark_trailing_colour = stream.mark()
+        if stream.accept_phrase("that", "are") and _parse_token_colors(stream, colors):
+            stated_colour = True
+        else:
+            stream.reset(mark_trailing_colour)
+    if not stated_colour:
+        # Every token spec the pool prints states a colour, "colorless"
+        # included, and the word has to stay load-bearing: an empty ``colors``
+        # tuple already means colourless, so a production that let the word be
+        # absent would also let it be *deleted* with no change to the payload —
+        # which is precisely what the parse-coverage deletion probe flags as a
+        # dropped rider. Refusing keeps the failure loud and keeps the grammar
+        # off wordings no card in the pool carries.
+        raise stream.error("expected the token's colour, or 'colorless'")
 
     keywords: tuple[str, ...] = ()
     granted_lines: tuple[str, ...] = ()

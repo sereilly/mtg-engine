@@ -71,7 +71,16 @@ def _filter_payload(
 #: *trigger* side, where the consequence is a condition that announces itself on
 #: a strictly larger set than the card prints.
 _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
-    "card_types", "type_match", "subtypes", "colors", "excluded_colors",
+    "card_types", "type_match", "subtypes",
+    # "all **Sand Warriors**" (Hazezon Tamar) — the conjunction two adjacent
+    # subtypes make, which ``to_payload`` emits as ``subtype_filter_all``. It
+    # was missing from this set while its two neighbours ``subtypes`` and
+    # ``type_match`` were both here, so every lowering that asked
+    # ``_restrictions_beyond`` refused a two-subtype noun phrase as an
+    # unhonoured field — a false refusal rather than a silent drop, but a
+    # refusal of a phrase the payload carries perfectly well.
+    "subtype_match",
+    "colors", "excluded_colors",
     "excluded_types", "excluded_subtypes", "with_keywords", "without_keywords",
     "controller", "tapped", "attacking", "blocking", "other_than_source",
     "nontoken", "named", "their_choice", "mana_value", "power", "toughness",

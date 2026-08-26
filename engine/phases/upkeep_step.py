@@ -14,6 +14,7 @@ dispatches. A new upkeep card is an entry there, never a branch here.
 import re
 
 from ..auras import aura_enchants
+from ..delayed_triggers import fire_delayed_triggers
 from ..copies import RECOPY_EACH_UPKEEP, grants_ability
 from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..layer_bridge import GAINED_TYPES
@@ -760,6 +761,14 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             self._apply_copy(perm, source)
             self.log.append(f"{perm.card.name} becomes a copy of {source.card.name}")
             self._refresh_dynamic_creatures()
+
+        # "At the beginning of your next upkeep, …" (Hazezon Tamar, Giant
+        # Slug). CR 603.7's delayed abilities trigger at the same moment as the
+        # battlefield's own upkeep triggers, so they are announced here rather
+        # than at the step's entry — and scoped to the entry's own controller,
+        # which is what "your" says: an upkeep belongs to one player, so an
+        # ability an opponent created is not waiting for this one.
+        fire_delayed_triggers(self, "controllers_next_upkeep", seat=player_index)
 
         # Put the collected non-interactive upkeep triggers on the stack in APNAP
         # order; they resolve through the upkeep priority window opened below.

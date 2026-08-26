@@ -1723,9 +1723,18 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     bound = payload.get("mana_value")
     x_value = int(context.x_value or 0)
 
+    # Every narrowing the noun phrase printed except the two the lowering
+    # lifted off it. They are separated *here*, once, rather than inside the
+    # loop: `mana_value` may be the spell's X, which is not a number until this
+    # resolution, and `colored_only` asks about the computed colours rather
+    # than about a named one — neither is a question the pure matcher answers.
+    narrowings = {
+        key: value for key, value in payload.items()
+        if key not in ("mana_value", "colored_only")
+    }
+
     def matches(perm: Permanent) -> bool:
-        type_filter = payload.get("type_filter")
-        if type_filter and not permanent_matches_filter(perm, {"type_filter": type_filter}):
+        if narrowings and not permanent_matches_filter(perm, narrowings):
             return False
         if payload.get("colored_only") and not perm.effective_colors:
             return False
