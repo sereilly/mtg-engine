@@ -165,6 +165,17 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     _describe_targets(payload, node.subject)
     return (OracleInstruction("grant_target_keyword_until_eot", "", payload),)
 
+#: The printed durations a quoted grant has a sweep for, mapped to the
+#: `keywords.GRANTED_ABILITY_DURATIONS` key that names it. Everything absent
+#: refuses: a duration the engine cannot *end* is a grant that outlives what the
+#: card said, which is worse than an unsupported card.
+_GRANT_DURATIONS: dict[str, str] = {
+    "until_end_of_turn": "end_of_turn",
+    "this_turn": "end_of_turn",
+    "until_end_of_combat": "end_of_combat",
+}
+
+
 def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstruction, ...]:
     """"…gains "<ability>"." (Life Matrix.) CR 113.3 / CR 611.2c.
 
@@ -187,13 +198,25 @@ def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstructi
 
     if not node.abilities:
         raise LoweringError("a quoted grant needs an ability", node=node)
+    if node.self_name is not None and not _is_source(node.subject):
+        # "Johan can't attack" is an ability on Johan and a proper noun on
+        # anything else. The grant is recorded as text and recompiled on
+        # whatever permanent holds it, so handing this sentence to another
+        # creature would record a line that stops compiling on arrival — a
+        # grant of nothing, which is exactly what the probe below exists to
+        # refuse. Caught here because the probe cannot see who receives it.
+        raise LoweringError(
+            f"the granted ability {node.abilities[0]!r} names its own source, "
+            "so it can only be granted to that source",
+            node=node,
+        )
     for text in node.abilities:
-        if not granted_ability_supported(text):
+        if not granted_ability_supported(text, node.self_name):
             raise LoweringError(
                 f"the granted ability {text!r} is not one the engine compiles",
                 node=node,
             )
-    if node.duration.kind not in (None, "until_end_of_turn", "this_turn"):
+    if node.duration.kind is not None and node.duration.kind not in _GRANT_DURATIONS:
         raise LoweringError(
             f"no granted-ability channel expires {node.duration.kind!r}", node=node
         )
@@ -201,9 +224,9 @@ def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstructi
         "abilities": tuple(node.abilities),
         # A grant with no printed duration lasts as long as the object
         # (CR 611.2c's last bullet) — the same reading the durationless keyword
-        # grant above takes, and the reason the channel takes a flag rather
-        # than assuming one answer.
-        "until_eot": node.duration.kind in ("until_end_of_turn", "this_turn"),
+        # grant above takes, and the reason the channel takes the sweep's name
+        # rather than assuming one answer.
+        "duration": _GRANT_DURATIONS.get(node.duration.kind),
     }
     if _is_source(node.subject):
         return (OracleInstruction("grant_self_ability_text", "", payload),)

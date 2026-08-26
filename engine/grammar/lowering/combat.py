@@ -6,6 +6,7 @@ lowering can check it rather than assume it.
 """
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -258,3 +259,70 @@ def _lower_attack_as_though(node: ast.AttackAsThough) -> tuple[OracleInstruction
             "no handler grants an attack permission to this subject", node=node
         )
     return (OracleInstruction("attack_as_though_no_defender_until_eot", "", {}),)
+
+
+def _lower_attacking_doesnt_tap(
+    node: ast.AttackingDoesntTap,
+) -> tuple[OracleInstruction, ...]:
+    """"Attacking doesn't cause creatures you control to tap this combat if
+    Johan is untapped." (Johan; CR 508.1f.)
+
+    Two noun phrases, both payload. **Which creatures** the exemption reaches is
+    the sentence's subject; **what must stay true** for it to apply is the
+    trailing "if …", which is read as a noun phrase about the effect's own
+    source rather than as a condition evaluated once. That difference is the
+    card: Johan's creatures attack untapped only while Johan himself is
+    untapped, so a condition tested at resolution and then forgotten would keep
+    the exemption running after he attacked.
+
+    Both are held to ``TESTABLE_SUBJECT_FILTER_KEYS``, the same gate every other
+    printed noun phrase passes: a narrowing the matcher cannot test is one the
+    declare-attackers step would silently ignore, and an exemption that reaches
+    a *wider* set than the card prints is the one failure a combat rule must
+    never have.
+    """
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier not in ("all", "each"):
+        raise LoweringError(
+            "an attack-tap exemption names a set of creatures, not one of them",
+            node=node,
+        )
+    if subject.targeted:
+        raise LoweringError("an attack-tap exemption does not target", node=node)
+    described = subject.filter.to_payload()
+    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
+    if leftover:
+        raise LoweringError(
+            "the attack-tap exemption cannot narrow by: " + ", ".join(sorted(leftover)),
+            node=node,
+        )
+    payload: dict[str, object] = {"filter": described}
+    if node.gate_state is not None:
+        payload["gate_filter"] = _attack_tap_gate_filter(node)
+    return (OracleInstruction("exempt_from_attack_tapping", "", payload),)
+
+
+def _attack_tap_gate_filter(node: ast.AttackingDoesntTap) -> dict[str, object]:
+    """The trailing "if …" as a noun phrase tested against the effect's source.
+
+    "If Johan is untapped" says the same thing as the adjective in "untapped
+    creature you control", so it lowers to the same filter key and is answered
+    by the same matcher — which is what lets the declare-attackers step ask it
+    again at every declaration instead of once at resolution. A state the filter
+    has no field for refuses by name rather than being dropped.
+    """
+    try:
+        probe = ast.ObjectFilter(**{node.gate_state: not node.gate_negated})
+    except TypeError:
+        raise LoweringError(
+            f"no permanent filter describes {node.gate_state!r}", node=node
+        ) from None
+    described = probe.to_payload()
+    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
+    if not described or leftover:
+        raise LoweringError(
+            f"no testable filter says {'not ' if node.gate_negated else ''}"
+            f"{node.gate_state!r} of a permanent",
+            node=node,
+        )
+    return described

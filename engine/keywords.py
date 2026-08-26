@@ -156,15 +156,35 @@ def clear_derived_grants(perm: Permanent) -> None:
     perm.metadata.pop(DERIVED_REMOVALS, None)
 
 
-def grant_ability_line(perm: Permanent, line: str, *, until_eot: bool = False) -> None:
+#: The durations a granted ability line can be given, each naming the sweep that
+#: ends it. The same shape as `pt.TEMPORARY_PT_CHANNELS` and for the same
+#: reason: a duration is implemented by *having a sweep*, not by having a word,
+#: so the lowering can refuse a printed duration by asking this table instead of
+#: by carrying a list of its own. ``None`` — no printed duration — lasts as long
+#: as the object (CR 611.2c) and appears in no sweep.
+GRANTED_ABILITY_DURATIONS: frozenset[str] = frozenset({"end_of_turn", "end_of_combat"})
+
+
+def grant_ability_line(
+    perm: Permanent, line: str, *, duration: str | None = None
+) -> None:
     """Layer 6: give *perm* a printed ability *line* (see GRANTED_ABILITY_LINES).
 
     Recorded rather than applied, and read back in grant order, because the
     compiler is what turns the line into an ability — this channel only has to
     say what the permanent now says.
+
+    *duration* names the sweep that will take it away again, a key of
+    :data:`GRANTED_ABILITY_DURATIONS`. It was a ``until_eot`` boolean, which is
+    a duration table with exactly two rows and no room for the third: Johan
+    grants "Johan can't attack" **until end of combat**, and a boolean would
+    have recorded that as end of turn and left the grant running through the
+    second main phase and the whole of the opponent's turn.
     """
+    if duration is not None and duration not in GRANTED_ABILITY_DURATIONS:
+        raise ValueError(f"no sweep ends a granted ability at {duration!r}")
     lines = perm.metadata.setdefault(GRANTED_ABILITY_LINES, [])
-    lines.append({"line": line, "until_eot": until_eot})
+    lines.append({"line": line, "duration": duration})
 
 
 def granted_ability_lines(perm: Permanent) -> tuple[str, ...]:
@@ -172,17 +192,19 @@ def granted_ability_lines(perm: Permanent) -> tuple[str, ...]:
     return tuple(entry["line"] for entry in perm.metadata.get(GRANTED_ABILITY_LINES) or ())
 
 
-def clear_until_eot_granted_ability_lines(perm: Permanent) -> None:
-    """Drop the until-end-of-turn granted lines during cleanup.
+def clear_granted_ability_lines(perm: Permanent, duration: str) -> None:
+    """Drop the granted lines whose duration is *duration*, at that sweep.
 
-    The twin of :func:`clear_until_eot_keywords`, called beside it: a grant that
-    outlived the turn would leave the permanent compiling an ability it no
-    longer has.
+    The twin of :func:`clear_until_eot_keywords`, called beside it at cleanup
+    and again at the end of combat step: a grant that outlived its duration
+    would leave the permanent compiling an ability it no longer has.
     """
     lines = perm.metadata.get(GRANTED_ABILITY_LINES)
     if not lines:
         return
-    remaining = [entry for entry in lines if not entry.get("until_eot")]
+    remaining = [entry for entry in lines if entry.get("duration") != duration]
+    if len(remaining) == len(lines):
+        return
     if remaining:
         perm.metadata[GRANTED_ABILITY_LINES] = remaining
     else:
@@ -221,7 +243,8 @@ __all__ = [
     "GRANTED_ABILITY_LINES",
     "LINE_DERIVED_KEYWORDS", "ability_effects", "add_derived_grant",
     "add_derived_removal", "derived_removals",
-    "clear_derived_grants", "clear_until_eot_granted_ability_lines",
+    "GRANTED_ABILITY_DURATIONS",
+    "clear_derived_grants", "clear_granted_ability_lines",
     "clear_until_eot_keywords", "derived_grants", "grant_ability_line",
     "keyword_ability_name",
     "granted_ability_lines", "grant_keyword", "remove_keyword",

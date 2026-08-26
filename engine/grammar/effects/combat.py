@@ -133,3 +133,59 @@ def _parse_remove_from_combat(stream: TokenStream) -> ast.RemoveFromCombat | Non
         stream.reset(mark)
         return None
     return ast.RemoveFromCombat(subject)
+
+
+def _parse_attacking_doesnt_tap(
+    stream: TokenStream, parse_condition
+) -> "ast.AttackingDoesntTap | None":
+    """``Attacking doesn't cause <subject> to tap this combat[ if <condition>].``
+    (Johan.)
+
+    CR 508.1f's tap, switched off for the creatures the sentence names.
+    Returns None — cursor untouched — for anything else opening with
+    "attacking", so no other reading of the word is taken away.
+
+    *parse_condition* arrives as a parameter rather than as an import: the
+    condition parser sits in this module's own layer, and a family that reached
+    up for it would be the coupling `test_grammar_layering.py` exists to
+    refuse. The same shape `lowering/where_x.py` and `delayed.py` already use
+    for their recursion.
+
+    The duration is read here rather than through the shared duration table.
+    "This combat" is a duration exactly one printed sentence in the pool takes,
+    and putting it in that table would offer it to every production that reads
+    a duration — including the several that would then accept a word no sweep
+    of theirs ends.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("attacking"):
+        return None
+    if not (stream.accept_word("doesn't") and stream.accept_word("cause")):
+        stream.reset(mark)
+        return None
+    subject = parse_recipient(stream)
+    if subject is None or not stream.accept_phrase("to", "tap", "this", "combat"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("if"):
+        return ast.AttackingDoesntTap(subject)
+    condition = parse_condition(stream)
+    # Reduced to the state word here rather than stored whole. The gate is a
+    # *standing* test — "for as long as Johan is untapped" — and the only shape
+    # the declare-attackers step can keep asking is a state of the effect's own
+    # source, which is the same question an adjective in a noun phrase asks. A
+    # condition about anything else is refused rather than consumed and dropped.
+    if not isinstance(condition, ast.IsState) or not _is_self_reference(condition.subject):
+        raise stream.error(
+            "an attack-tap exemption's gate asks about a state of its own source"
+        )
+    return ast.AttackingDoesntTap(subject, condition.state, condition.negated)
+
+
+def _is_self_reference(recipient: ast.Recipient) -> bool:
+    """Whether *recipient* is the printed "this creature" / the card's own name."""
+    return (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.filter.is_source
+        and not recipient.targeted
+    )

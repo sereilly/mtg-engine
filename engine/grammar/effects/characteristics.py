@@ -12,7 +12,7 @@ change a characteristic; where it sits is incidental.
 from .. import ast
 from ..amounts import expect_pt, parse_amount, parse_equal_to
 from ..errors import GrammarError
-from ..lexer import (GToken, PT, PUNCT, QUOTE, WORD, tokenize)
+from ..lexer import (GToken, PT, PUNCT, QUOTE, SELF, WORD, tokenize)
 from ..nouns import parse_object_filter
 from ..references import parse_recipient
 from ..stream import TokenStream
@@ -166,8 +166,10 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     # module up. Checked before the keyword list because a quote is not a word:
     # `_parse_keywords` would refuse it and take the whole line down with it.
     if stream.at_kind(QUOTE):
-        abilities = _parse_quoted_abilities(stream)
-        return ast.GainAbilityText(subject, abilities, _parse_duration(stream))
+        abilities, self_name = _parse_quoted_abilities(stream)
+        return ast.GainAbilityText(
+            subject, abilities, _parse_duration(stream), self_name=self_name
+        )
 
     # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift).
     # CR 609.3: the choice is made as the effect resolves, and the keyword list
@@ -193,8 +195,18 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     return grant
 
 
-def _parse_quoted_abilities(stream: TokenStream) -> tuple[str, ...]:
-    """The quoted abilities a grant hands over, ``"A" [and "B"]``, as printed.
+def _parse_quoted_abilities(stream: TokenStream) -> tuple[tuple[str, ...], str | None]:
+    """The quoted abilities a grant hands over, ``"A" [and "B"]``, as printed,
+    and the name the quoted text calls itself by.
+
+    The second half is what Johan needs and Life Matrix does not. Life Matrix
+    grants "Remove a matrix counter from **this creature**: …", which reads the
+    same on whatever permanent ends up holding it; Johan grants "**Johan** can't
+    attack", and that sentence is only an ability at all on a card called Johan.
+    The lexer has already answered which words those are — it collapsed them
+    into a SELF token when it was given the granting card's name — so the name
+    is read back off that token rather than plumbed down from the compiler as a
+    second opinion about what the card is called.
 
     Recovered from the *source line* through the tokens' own offsets rather than
     rebuilt from the tokens, because the payload is text the compiler will read
@@ -208,6 +220,7 @@ def _parse_quoted_abilities(stream: TokenStream) -> tuple[str, ...]:
     — so the mismatch raises here instead.
     """
     abilities: list[str] = []
+    self_name: str | None = None
     while True:
         if stream.accept_kind(QUOTE) is None:
             break
@@ -223,6 +236,9 @@ def _parse_quoted_abilities(stream: TokenStream) -> tuple[str, ...]:
         if _token_shape(tokenize(text).tokens) != _token_shape(stream.tokens[start:end]):
             raise stream.error("granted ability text could not be read as printed")
         abilities.append(text)
+        for token in stream.tokens[start:end]:
+            if token.kind == SELF:
+                self_name = self_name or token.text
         mark = stream.mark()
         # "gains "A" and "B"" (Glyph of Delusion) — two whole abilities, not a
         # conjunction inside one. The "and" is only this list's when a second
@@ -233,7 +249,7 @@ def _parse_quoted_abilities(stream: TokenStream) -> tuple[str, ...]:
         break
     if not abilities:
         raise stream.error("a quoted grant needs an ability in quotes")
-    return tuple(abilities)
+    return tuple(abilities), self_name
 
 
 def _token_shape(tokens) -> tuple[str, ...]:

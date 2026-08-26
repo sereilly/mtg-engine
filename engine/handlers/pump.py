@@ -876,22 +876,31 @@ def _grant_ability_texts(game, permanent, instruction, context) -> None:
     """
     from ..keywords import grant_ability_line
 
-    until_eot = bool(instruction.payload.get("until_eot"))
+    duration = instruction.payload.get("duration")
     texts = tuple(instruction.payload.get("abilities") or ())
     for text in texts:
         line = text.strip()
         if not line:
             continue
         grant_ability_line(
-            permanent, line[:1].upper() + line[1:], until_eot=until_eot
+            permanent, line[:1].upper() + line[1:], duration=duration
         )
     if texts:
-        lasting = " until end of turn" if until_eot else ""
+        lasting = _GRANT_DURATION_WORDS.get(duration, "")
         game.log.append(
             f"{permanent.card.name} gains "
             + " and ".join(f'"{text}"' for text in texts)
             + f"{lasting} ({context.card.name})"
         )
+
+
+#: How each granted-ability duration reads in the log. The keys are
+#: `keywords.GRANTED_ABILITY_DURATIONS`; the missing key is the durationless
+#: grant, which lasts as long as the object and so says nothing.
+_GRANT_DURATION_WORDS = {
+    "end_of_turn": " until end of turn",
+    "end_of_combat": " until end of combat",
+}
 
 
 def _target_grant_predicate(game, instruction, context):
@@ -945,7 +954,7 @@ def _grant_one_keyword(game, permanent, keyword: str, context) -> None:
     # Capitalised because it is folded into the permanent's *printed* rules
     # text, which the UI shows; the compiler lowercases it again.
     if keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS:
-        grant_ability_line(permanent, keyword.capitalize(), until_eot=True)
+        grant_ability_line(permanent, keyword.capitalize(), duration="end_of_turn")
         return
     if not keyword.startswith("protection from "):
         grant_keyword(permanent, keyword, until_eot=True)

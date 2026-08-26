@@ -3,12 +3,13 @@ from __future__ import annotations
 """Declare attackers step (CR 508).
 
 The active player declares attackers (and any attacking bands) as a turn-based
-action, taps non-vigilance attackers, puts any attack triggers on the stack
+action, taps the attackers CR 508.1f taps, puts any attack triggers on the stack
 (CR 508.2), then receives priority (CR 508.4) so the triggers resolve as players
 pass. Also holds the attack-legality query (``can_attack``),
 "must attack if able" enforcement, and the banding-declaration validation.
 """
 
+from ..attack_tapping import attacking_causes_tap
 from ..auras import aura_restriction_active
 from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
 from ..combat_restrictions import participation_cap
@@ -172,8 +173,10 @@ class DeclareAttackersStepMixin:
         for idx in unique_indices:
             attacker = controller.battlefield[idx]
             declared.append(attacker)
-            # CR 702.20b: attacking doesn't cause a creature with vigilance to tap.
-            if not self._has_keyword(attacker, "vigilance"):
+            # CR 508.1f, and the one place the question is asked: vigilance
+            # (CR 702.20b) and an effect that prints the same exemption the long
+            # way round (Johan) are both `attacking_causes_tap`'s business.
+            if attacking_causes_tap(self, attacker):
                 self.become_tapped(attacker)
                 self._turn_face_up(attacker)
             attacker.metadata["attacked_this_turn"] = True

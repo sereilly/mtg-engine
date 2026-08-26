@@ -353,6 +353,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "…and remove it from combat" (Disharmony, CR 506.4c). A one-shot combat
     # action rather than a restriction, filed with the family whose steps
     # dispatch it.
+    # "Attacking doesn't cause creatures you control to tap this combat…"
+    # (Johan.) A restriction on what declaring an attacker does, so it files
+    # with the other CR 506/508 clauses and GRAMMAR_CATEGORIES is unchanged.
+    "exempt_from_attack_tapping": "combat_restrictions",
     "remove_from_combat": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     # "Choose target creature." — a sentence whose whole content is CR 601.2c's

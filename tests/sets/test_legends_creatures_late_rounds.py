@@ -1714,3 +1714,113 @@ def test_beasts_of_bogardan_loses_the_bonus_when_the_board_changes(set_pool):
     theirs.battlefield.remove(white)
 
     assert _r27_power(game, beast) == 3
+
+
+# --- round 28: Johan ---------------------------------------------------------
+
+
+def _r28_johan_board(set_pool, *, accept: bool, tap_johan: bool = False):
+    """Johan and a Bear on the battlefield, through the beginning of combat.
+
+    Returns the game, Johan and the Bear with the beginning-of-combat trigger
+    already answered *accept*-ways. The prompt only exists once the trigger has
+    resolved, which is why the settle comes first — answering before it is
+    armed silently declines, and that is what made the first run of this card
+    look inert while every compile-time assertion passed.
+    """
+    johan = Permanent(card=set_pool("LEG")["Johan"])
+    bear = Permanent(card=_vanilla("Bear", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[johan, bear])
+    p2 = PlayerState(name="P2", battlefield=[])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game._settle()
+    assert [choice.kind for choice in game.pending_choices] == ["optional_pay"]
+    game.confirm_optional_pay(0, accept=accept)
+    game._settle()
+    if tap_johan:
+        game.become_tapped(johan)
+    game.advance_combat_phase()   # declare_attackers
+    return game, johan, bear
+
+
+def test_johan_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Johan"])
+    assert program.supported, program.reason
+
+    (ability,) = program.triggered_abilities
+    assert ability.instruction.kind == "may"
+    grant, = ability.instruction.payload["action"]
+    assert grant.kind == "grant_self_ability_text"
+    # The quoted ability rides as printed text and the duration names the sweep
+    # that ends it — end of combat, not end of turn.
+    assert grant.payload["abilities"] == ("Johan can't attack",)
+    assert grant.payload["duration"] == "end_of_combat"
+    rider, = ability.instruction.payload["then"]
+    assert rider.kind == "exempt_from_attack_tapping"
+    # Both noun phrases are payload: which creatures, and what must stay true.
+    assert rider.payload["filter"] == {"type_filter": "creature", "controller": "you"}
+    assert rider.payload["gate_filter"] == {"untapped_only": True}
+
+
+def test_johan_lets_your_creatures_attack_without_tapping(set_pool):
+    """The rider, executed: CR 508.1f's tap is switched off while Johan is
+    untapped, so the Bear attacks and stays untapped."""
+    game, _johan, bear = _r28_johan_board(set_pool, accept=True)
+
+    ok, message = game.declare_attackers(0, [1])
+
+    assert ok, message
+    assert bear.tapped is False
+
+
+def test_johan_grants_himself_the_quoted_ability(set_pool):
+    """The grant is the printed line, and the ordinary compiler reads it back
+    off the permanent — so "Johan can't attack" is a real restriction rather
+    than a recorded string (CR 113.3)."""
+    game, johan, _bear = _r28_johan_board(set_pool, accept=True)
+
+    assert game.can_attack(johan, 0) is False
+
+
+def test_johan_taps_your_creatures_again_once_he_is_tapped(set_pool):
+    """The "if Johan is untapped" clause is a *standing* test. Tested once at
+    resolution and forgotten, the exemption would outlive the condition — which
+    is the whole reason it lowers to a filter rather than to a condition."""
+    game, _johan, bear = _r28_johan_board(set_pool, accept=True, tap_johan=True)
+
+    ok, message = game.declare_attackers(0, [1])
+
+    assert ok, message
+    assert bear.tapped is True
+
+
+def test_johan_declined_leaves_combat_alone(set_pool):
+    """"You may" — declining grants nothing and arms nothing."""
+    game, johan, bear = _r28_johan_board(set_pool, accept=False)
+
+    ok, message = game.declare_attackers(0, [1])
+
+    assert ok, message
+    assert bear.tapped is True
+    assert game.can_attack(johan, 0) is True
+
+
+def test_johans_grant_and_exemption_both_end_with_the_combat(set_pool):
+    """"Until end of combat" / "this combat". Both halves are swept at the end
+    of combat step; a grant kept to end of turn would silently stop Johan
+    attacking in the postcombat main phase's combat that never comes, and the
+    exemption would still be running next turn."""
+    game, johan, _bear = _r28_johan_board(set_pool, accept=True)
+    game.declare_attackers(0, [1])
+
+    game.advance_combat_phase()   # declare_blockers
+    game.advance_combat_phase()   # combat_damage
+    game.advance_combat_phase()   # end_of_combat
+    game._settle()
+
+    assert game.attack_tap_exemptions == []
+    assert johan.metadata.get("granted_ability_lines") is None
+    assert game.can_attack(johan, 0) is True

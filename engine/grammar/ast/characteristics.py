@@ -121,6 +121,15 @@ class GainAbilityText:
     subject: Recipient
     abilities: tuple[str, ...]
     duration: Duration = field(default_factory=Duration)
+    #: The name the quoted text calls itself by, when it calls itself anything —
+    #: "**Johan** can't attack". Read off the SELF token the lexer already made
+    #: of it, and used for one thing: the support probe has to compile the
+    #: sentence on a card by that name or the self-reference is an unknown noun.
+    #: None for the ordinary spelling ("this creature"), which reads the same
+    #: whoever holds it — and the difference is a lowering gate, because a
+    #: self-naming ability granted to some *other* permanent is a sentence that
+    #: stops compiling the moment it arrives.
+    self_name: str | None = None
 
 
 @dataclass(frozen=True)

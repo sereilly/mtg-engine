@@ -33,7 +33,7 @@ _PROBE_TYPE_LINE = "Creature"
 
 
 @lru_cache(maxsize=None)
-def granted_ability_supported(text: str) -> bool:
+def granted_ability_supported(text: str, self_name: str | None = None) -> bool:
     """Whether the engine compiles *text* into the ability it prints.
 
     Asked the way the game will ask it — the line is compiled **on a card that
@@ -53,7 +53,13 @@ def granted_ability_supported(text: str) -> bool:
     from .oracle import compile_card_oracle
 
     probe = CardDefinition(
-        name="Granted Ability",
+        # The name the *quoted sentence* calls itself by, when it names itself
+        # at all. "Johan can't attack" is only an ability on a card called
+        # Johan: compiled under any other name the self-reference is a proper
+        # noun the grammar has never heard of, and the probe would report the
+        # grant unreadable when the game will read it perfectly. Everything
+        # else is granted to "this creature" and compiles under the placeholder.
+        name=self_name or "Granted Ability",
         mana_cost="",
         cmc=0.0,
         type_line=_PROBE_TYPE_LINE,

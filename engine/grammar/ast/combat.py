@@ -98,3 +98,38 @@ class AttackAsThough:
     subject: Recipient
     ignored_keyword: str
     duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
+class AttackingDoesntTap:
+    """``Attacking doesn't cause <subject> to tap this combat[ if <condition>].``
+    (Johan.)
+
+    CR 508.1f's tap, turned off for a set of creatures the sentence names. Not
+    a :class:`~ast.GainKeyword` of vigilance however alike the two behave: the
+    card grants no ability, so nothing that reads abilities — "creatures with
+    vigilance", a removal of all abilities, a copy effect — can see it. Keeping
+    them apart in the AST is what stops the difference being lost at the one
+    place it is still recoverable.
+
+    The trailing "if …" is a *standing* test rather than one made as the effect
+    resolves: Johan's exemption applies for as long as Johan is untapped and
+    stops the moment he taps. So it is carried on the node rather than read as
+    the enclosing sentence's intervening-if, which would test it once and
+    forget it.
+
+    It arrives already reduced to the state word it asks about, because the one
+    thing this node's gate can be is a state of the effect's own source — the
+    same question "untapped creature you control" asks with an adjective. The
+    production refuses any other condition rather than storing it: a
+    :class:`~ast.conditions.Condition` here would make this family import the
+    conditions module, which is the sideways reach `ast/` is held against, and
+    it would be storing a shape that has no reader.
+    """
+
+    subject: Recipient
+    #: An ``ObjectFilter`` field name — "tapped", "attacking" — or None for an
+    #: ungated exemption.
+    gate_state: str | None = None
+    #: Whether the printed clause negated it ("is **un**tapped").
+    gate_negated: bool = False

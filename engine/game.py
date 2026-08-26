@@ -314,6 +314,12 @@ class Game(
     # without_keywords}, "source_name"}. Read by _can_block_attacker (which is
     # also what the legality enumerator asks), swept at cleanup.
     blocking_restrictions_until_eot: list = field(default_factory=list)
+    # "attacking doesn't cause creatures you control to tap this combat if
+    # Johan is untapped" (Johan) — standing exemptions from CR 508.1f's tap,
+    # each an ``attack_tapping.AttackTapExemption``. That module holds what a
+    # printed exemption narrows, the one question the declare-attackers step
+    # asks and the end-of-combat sweep that ends them.
+    attack_tap_exemptions: list = field(default_factory=list)
     # How many permanents each seat has had put into their hand from the
     # battlefield this turn — the history Barrin, Tolarian Archmage's end-step
     # intervening-if reads. Keyed by owner seat (the hand the card landed in),

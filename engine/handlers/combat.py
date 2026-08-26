@@ -494,3 +494,43 @@ def attack_as_though_no_defender_until_eot(
         f"{source.card.name} can attack this turn as though it didn't have defender"
     )
     return True, "resolved"
+
+
+@effect_handler("exempt_from_attack_tapping")
+def exempt_from_attack_tapping(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Attacking doesn't cause creatures you control to tap this combat if
+    Johan is untapped." (Johan; CR 508.1f.)
+
+    Arms a standing exemption rather than doing anything now — nothing is
+    tapped or untapped when this resolves, and the creatures it is about have
+    not been declared yet. ``engine/attack_tapping.py`` holds it, the declare
+    attackers step asks it, and the end of combat step ends it.
+
+    The gate is bound to the **source permanent by id**: "if Johan is untapped"
+    is about this Johan (CR 400.7), so a Johan that leaves and returns does not
+    inherit the exemption his earlier self armed. With no source on the
+    battlefield there is nothing for the gate to be about, and the effect
+    refuses rather than arming an exemption that could never apply — or, worse,
+    one whose gate is silently dropped.
+    """
+    from ..attack_tapping import AttackTapExemption, arm_attack_tap_exemption
+
+    gate_filter = dict(instruction.payload.get("gate_filter") or {})
+    source = context.source_permanent
+    if gate_filter and source is None:
+        return False, "ability not implemented"
+    seat = game.players.index(context.caster)
+    arm_attack_tap_exemption(game, AttackTapExemption(
+        controller_index=seat,
+        subject_filter=dict(instruction.payload.get("filter") or {}),
+        gate_permanent_id=source.permanent_id if gate_filter else None,
+        gate_filter=gate_filter,
+        source_name=context.card.name if context.card is not None else "an effect",
+    ))
+    game.log.append(
+        f"attacking doesn't cause those creatures to tap this combat "
+        f"({context.card.name if context.card is not None else 'an effect'})"
+    )
+    return True, "resolved"

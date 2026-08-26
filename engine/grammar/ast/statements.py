@@ -121,6 +121,7 @@ from .stack import (
     ModalNode,
 )
 from .combat import (
+    AttackingDoesntTap,
     CantBe,
     AttackAsThough,
     CombatRestriction,
@@ -162,7 +163,7 @@ Effect = Union[
     RevealHandAndChoose,
     Shuffle, ExtraTurn, EndTheTurn, ChooseNumber, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
     SacrificeUnlessPay, DestroyUnlessPay, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
-    CantBe, AttackAsThough, CombatRestriction,
+    CantBe, AttackAsThough, CombatRestriction, AttackingDoesntTap,
     RemoveFromCombat,
     ChangeText, GainControl, RawEffect,
 ]

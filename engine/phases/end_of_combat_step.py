@@ -7,7 +7,9 @@ Cockatrice/Thicket Basilisk delayed destruction) while "attacked or blocked this
 combat" is still known, then clears until-end-of-combat effects and combat state.
 """
 
+from ..attack_tapping import clear_attack_tap_exemptions
 from ..delayed_triggers import fire_delayed_triggers
+from ..keywords import clear_granted_ability_lines
 from ..models import Permanent
 from ..pt import remove_temporary_pt
 from ..oracle import compile_card_oracle
@@ -36,11 +38,20 @@ class EndOfCombatStepMixin:
             # same channel table so a duration is implemented by having a sweep
             # rather than by having a word.
             remove_temporary_pt(permanent, "end_of_combat")
+            # Layer 6's twin of the same sweep: "…gain "Johan can't attack"
+            # **until end of combat**" (Johan). Beside the P/T channel rather
+            # than in a step of its own, because both are the same duration
+            # ending and a second sweep site is a second place to forget one.
+            clear_granted_ability_lines(permanent, "end_of_combat")
             if permanent.metadata.get("animate_until_end_of_combat"):
                 permanent.metadata.pop("animate_until_end_of_combat", None)
                 permanent.metadata.pop("absolute_power", None)
                 permanent.metadata.pop("absolute_toughness", None)
             permanent.metadata.pop("blocked_this_combat", None)
+        # "…this combat" (Johan). The exemptions are scoped to the combat
+        # phase, so they end where every other until-end-of-combat effect above
+        # does rather than waiting for cleanup.
+        clear_attack_tap_exemptions(self)
         self.combat_damage_prevented_until_eot = False
         self.combat_damage_prevented_for = []
         for player in self.players:

@@ -146,3 +146,36 @@ def test_the_unimplemented_names_are_real_keywords():
             f"{keyword!r} is not a keyword ability in data/vocabulary/; "
             "a typo here would make the refusal test vacuous"
         )
+
+
+def test_every_granted_ability_duration_the_grammar_emits_has_a_sweep():
+    """A printed duration is implemented by *having a sweep*, not by having a
+    word — so the lowering's table of printed durations may only name channels
+    `engine/keywords.py` actually ends.
+
+    Two tables, because the two sides answer different questions: one maps a
+    printed phrase to a channel, the other says which channels are swept. What
+    must not happen is the first naming a channel the second does not have,
+    which is a grant that is recorded and then never taken away.
+    """
+    from engine.grammar.lowering.keywords import _GRANT_DURATIONS
+    from engine.keywords import GRANTED_ABILITY_DURATIONS
+
+    assert set(_GRANT_DURATIONS.values()) <= GRANTED_ABILITY_DURATIONS
+
+
+def test_granting_an_ability_for_a_duration_nothing_sweeps_is_refused():
+    """The other direction of the same rule, asked of the write API itself: a
+    caller reaching past the grammar cannot record a duration no sweep ends."""
+    import pytest
+
+    from engine.keywords import grant_ability_line
+    from engine.models import CardDefinition, Permanent
+
+    card = CardDefinition(
+        name="Probe", mana_cost="", cmc=0.0, type_line="Creature",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={},
+    )
+    with pytest.raises(ValueError):
+        grant_ability_line(Permanent(card=card), "Flying", duration="until_i_say_so")

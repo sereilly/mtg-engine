@@ -716,8 +716,8 @@ def test_life_matrix_compiles_supported(set_pool):
         "Remove a matrix counter from this creature: Regenerate this creature",
     )
     # No printed duration, so the grant lasts as long as the creature does
-    # (CR 611.2c).
-    assert steps[1].payload["until_eot"] is False
+    # (CR 611.2c) and no sweep is named.
+    assert steps[1].payload["duration"] is None
 
 
 def test_life_matrix_grants_an_ability_that_can_then_be_activated(set_pool):

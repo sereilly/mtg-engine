@@ -12,7 +12,7 @@ from ..delayed_triggers import expire_delayed_triggers
 from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissions
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
-from ..keywords import (clear_until_eot_granted_ability_lines,
+from ..keywords import (clear_granted_ability_lines,
                         clear_until_eot_keywords)
 from ..control import end_until_eot_control_changes
 from ..layer_bridge import GAINED_TYPES
@@ -149,7 +149,7 @@ class CleanupStepMixin:
                 # together, in one place, rather than needing a metadata key per
                 # keyword listed in _EOT_METADATA_KEYS.
                 clear_until_eot_keywords(permanent)
-                clear_until_eot_granted_ability_lines(permanent)
+                clear_granted_ability_lines(permanent, "end_of_turn")
                 # CR 611.2c: an until-end-of-turn control change ends here too.
                 # Dropping the contribution *is* the reversion — the permanent
                 # never moved, so whatever contributions remain simply decide

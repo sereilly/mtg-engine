@@ -46,6 +46,7 @@ from .effects import (
     _parse_change_text,
     _parse_source_of_choice_effect,
     _parse_damage_redirect,
+    _parse_attacking_doesnt_tap,
     _parse_bound_targeting_prevention,
     _parse_counter,
     _parse_create_token,
@@ -601,6 +602,17 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         as_though = _parse_spend_mana_as_though(stream)
         if as_though is not None:
             return as_though
+
+    # "Attacking doesn't cause creatures you control to tap this combat if
+    # Johan is untapped." (Johan.) A sentence whose subject is a gerund, which
+    # the subject-verb reader below has no noun for — so it is read here, and
+    # it declines without consuming, leaving every other word the same reading
+    # it had. `_parse_condition` is handed down rather than imported up: this
+    # module is the condition parser's layer, `effects/` is below it.
+    if stream.at_word("attacking"):
+        no_tap = _parse_attacking_doesnt_tap(stream, _parse_condition)
+        if no_tap is not None:
+            return no_tap
 
     # "If target Plains is tapped for mana, it produces colorless mana instead
     # of white mana." (Quarum Trench Gnomes.) The printed shape opens like an
