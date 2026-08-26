@@ -4470,6 +4470,37 @@ function applyLoyaltyRecipientPrompt(info) {
     "<div>Action: click one of the highlighted planeswalkers on the battlefield.</div>";
 }
 
+// Enchantment Alteration / Takklemaggot: the permanent a resolving effect asks a
+// seat to pick. The candidates glow on the board (getPromptBoardTargeting); the
+// panel names the effect and, when the card printed a "If they don't" branch,
+// offers the decline the engine will accept.
+function applyPermanentChoicePrompt(info) {
+  const panel = q("activationPanel");
+  panel.classList.remove("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  q("promptCustomOkBtn").disabled = true;
+  q("promptTitle").textContent = "Choose a permanent";
+  q("promptBody").textContent =
+    `${info.card_name || "The effect"}: ${info.prompt || "Choose a permanent."}`;
+  q("promptSteps").innerHTML =
+    "<div>Action: click one of the highlighted permanents on the battlefield.</div>";
+  const okBtn = q("promptOkBtn");
+  if (info.optional) {
+    okBtn.classList.remove("hidden");
+    // Enabled explicitly: the panel's shared buttons come in disabled, which is
+    // right for every prompt answered by clicking the board and wrong for the
+    // one branch of this one that is answered by clicking nothing.
+    okBtn.disabled = false;
+    okBtn.textContent = "Choose none";
+    okBtn.onclick = () =>
+      submitPromptAction({ seat, action: "permanent_choice_confirm" });
+  } else {
+    okBtn.classList.add("hidden");
+  }
+}
+
 // Tolarian Kraken: "When you do, you may tap or untap target creature." The
 // candidates glow on the board (getPromptBoardTargeting); the panel just says so.
 function applyReflexiveTargetPrompt(info) {
@@ -6748,6 +6779,12 @@ function renderActivationPrompt() {
   const loyaltyRecipientInfo = getLoyaltyRecipientInfo();
   if (loyaltyRecipientInfo) {
     applyLoyaltyRecipientPrompt(loyaltyRecipientInfo);
+    return;
+  }
+
+  const permanentChoicePrompt = getPermanentChoiceInfo();
+  if (permanentChoicePrompt) {
+    applyPermanentChoicePrompt(permanentChoicePrompt);
     return;
   }
 

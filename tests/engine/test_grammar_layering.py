@@ -108,6 +108,13 @@ PARSE_LAYERS = [
     # than being imported back, the same inversion `delayed` makes.
     "subject_verb",
     "statements",
+    # A sentence whose subject is a pronoun pointing at the sentence before it
+    # ("It gains …", "Untap that creature", "It loses \"enchant creature\""). Split
+    # out of `riders` at the guard below, along the boundary that module already
+    # drew: these answer "what does this pronoun name?", the rest of `riders`
+    # answers "which branch does this clause belong to". Below `riders`, which
+    # imports the binding and is never imported back.
+    "pronouns",
     # The trailing clauses that attach to a sentence already parsed ("if you
     # do", "…, then …"). Above `statements` because reading one means reading
     # the statement it modifies.
@@ -140,7 +147,12 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # two-source shield landed. The parse side keeps prevention with damage because
 # the two read the same recipient and duration vocabulary; the lowering halves
 # share not one helper, which is the same asymmetry the families above record.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "where_x", "control_flow"]
+# `attachments` split out of `lowering/board.py` at 1,008 lines, the round
+# Takklemaggot's reattachment landed. An attachment is a *relation between two
+# permanents* — every production in it lowers a legality measured across a pair
+# (CR 303.4j) — where the rest of `board.py` lowers effects on one permanent at
+# a time; the two shared one name, and that already lived in `_events.py`.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "where_x", "control_flow", "attachments"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 

@@ -1034,3 +1034,74 @@ def test_a_duration_with_no_sweep_is_refused_outright():
 
     with pytest.raises(ValueError):
         grant_keyword(bear, "flying", duration="until_the_heat_death")
+
+
+# ---------------------------------------------------------------------------
+# 613.1f — the removing half of layer 6, over a whole printed ability line
+# ---------------------------------------------------------------------------
+
+
+def _r36_aura_board():
+    """An Aura permanent with an enchant line and one other printed ability."""
+    aura = Permanent(card=replace(
+        _mk_card(
+            "Test Aura", "Enchantment - Aura",
+            oracle_text=(
+                "Enchant creature\n"
+                "Enchanted creature gets +1/+1."
+            ),
+        ),
+        keywords=("Enchant",),
+    ))
+    game = Game(players=[PlayerState(name="P1", battlefield=[aura]),
+                         PlayerState(name="P2")])
+    return game, aura
+
+
+@pytest.mark.cr("613.1f")
+def test_613_1f_a_removed_ability_line_leaves_the_permanents_text():
+    """An ability an effect takes away is gone from what the object says, and
+    the compiler reads the object. `DERIVED_REMOVALS` names a *keyword*, which
+    cannot answer for an ability the compiler builds out of a whole sentence —
+    nothing anywhere flags "has an enchant ability"."""
+    from engine.keywords import remove_ability_line
+
+    _game, aura = _r36_aura_board()
+    assert "Enchant creature" in aura.effective_card.oracle_text
+
+    remove_ability_line(aura, "enchant creature")
+
+    assert "Enchant creature" not in aura.effective_card.oracle_text
+    assert "Enchanted creature gets +1/+1." in aura.effective_card.oracle_text
+
+
+@pytest.mark.cr("613.1f")
+def test_613_1f_removing_a_keyword_ability_line_drops_the_keyword_too():
+    """"Enchant creature" is a keyword ability (CR 702.5). A permanent that
+    still answers `Enchant` in `keywords` after losing the line is one fact
+    with two representations, which is the bug this channel exists to avoid."""
+    from engine.keywords import remove_ability_line
+
+    _game, aura = _r36_aura_board()
+
+    remove_ability_line(aura, "enchant creature")
+
+    assert "Enchant" not in aura.effective_card.keywords
+
+
+@pytest.mark.cr("613.1d", "205.1b")
+def test_613_1d_a_removed_subtype_leaves_the_other_types_alone():
+    """"…as a **non-Aura** enchantment": one subtype off the printed line and
+    nothing else. Read through layer 4 rather than off `card.type_line`, so the
+    CR 704.5m sweep and every other reader get the same answer."""
+    from engine.layer_bridge import LOST_TYPES
+
+    _game, aura = _r36_aura_board()
+    assert aura.has_type("aura")
+
+    aura.metadata.setdefault(LOST_TYPES, []).append(
+        {"subtypes": ("aura",), "source": "test"}
+    )
+
+    assert not aura.has_type("aura")
+    assert aura.has_type("enchantment")

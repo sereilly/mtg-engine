@@ -254,6 +254,50 @@ class ReturnToZone:
     # not printing it are different cards; lowering refuses any shape it cannot
     # repeat, so the clause is never parsed and then dropped.
     repetitions: Amount | None = None
+    # "…to the battlefield under your control **attached to that creature**."
+    # (Takklemaggot.) CR 303.4f: an effect that puts an Aura onto the
+    # battlefield says what it attaches to, because an Aura that entered
+    # attached to nothing would be swept away by CR 704.5m before anyone could
+    # attach it. The value names *which earlier step of this sentence* chose
+    # the host — the scratchpad key, not a board read — so the same field
+    # serves any card that picks a host and then puts something on it.
+    attached_to: str | None = None
+    # "…as a **non-Aura** enchantment." (Takklemaggot.) A CR 613 layer 4
+    # type change applied to the permanent this move creates, carried on the
+    # move because there is no other way to name an object a sentence has just
+    # made: it is a new object (CR 400.7), so no earlier reference reaches it.
+    losing_subtypes: tuple[str, ...] = ()
+    # "**It loses "enchant creature" and gains "…"**." (Takklemaggot.) Layer 6,
+    # and on this node for the reason above — the trailing sentence's "it" is
+    # the permanent the return created. Each entry is a printed ability line.
+    losing_abilities: tuple[str, ...] = ()
+    gaining_abilities: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ChoosePermanent:
+    """"That creature's controller **chooses a creature that this card could
+    enchant**." (Takklemaggot.)
+
+    A permanent picked as the effect resolves, by a seat the sentence names
+    (CR 601.2c does not make that the controller). Nothing is targeted — no
+    target was declared when the ability went on the stack — so the pick is a
+    *value* the sentences behind it read, which is exactly what
+    ``engine/handlers/permanent_choices.py`` already provides.
+
+    ``optional`` is what makes "If the player does … If they don't …" a real
+    pair of branches: without it the sentence would always have an answer and
+    the second branch would be unreachable text.
+    """
+    chooser: PlayerRef
+    spec: "TargetSpec"
+    optional: bool = False
+    #: "…a creature **that this card could enchant**." CR 303.4j's legality,
+    #: read as a relative clause rather than as an ``ObjectFilter`` key: the
+    #: shared noun parser would then hand the phrase to every line printing it,
+    #: and what makes a host legal is a question about a *pair* of permanents,
+    #: which the filter matcher answers about one.
+    host_for_source: bool = False
 
 
 @dataclass(frozen=True)

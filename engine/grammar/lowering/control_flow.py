@@ -291,6 +291,15 @@ def _lower_steps(
             branch = lower_statement(
                 step.then, produced, event=event, event_subject=event_subject, whole_effect=False
             )
+            # "**If the player does**, <A>. **If they don't**, <B>."
+            # (Takklemaggot.) One record, read twice — the second rider folded
+            # itself onto the first's node rather than becoming a step, because
+            # by then ``last_produced`` names the choice and nothing else could
+            # say what "don't" is the complement of.
+            otherwise = lower_statement(
+                step.otherwise, produced, event=event,
+                event_subject=event_subject, whole_effect=False,
+            ) if step.otherwise is not None else ()
             condition: dict[str, object] = {
                 "kind": "it_happened", "key": last_produced,
             }
@@ -299,13 +308,13 @@ def _lower_steps(
             # two riders cannot drift apart in what they read.
             if could_not:
                 condition["negated"] = True
-            instructions += (
-                OracleInstruction(
-                    "if_then", "",
-                    {"condition": condition, "then": branch},
-                ),
-            )
-            last_produced = None
+            payload: dict[str, object] = {"condition": condition, "then": branch}
+            if otherwise:
+                payload["else"] = otherwise
+            instructions += (OracleInstruction("if_then", "", payload),)
+            # Deliberately *not* cleared: a second rider on the same step is the
+            # printed pair above, and clearing the record here is what used to
+            # make "If they don't" a branch with no condition to test.
             continue
         lowered = lower_statement(step, produced, event=event, event_subject=event_subject, whole_effect=False)
         # A step reading a record only an earlier offer's branch writes belongs

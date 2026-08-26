@@ -23,191 +23,12 @@ from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import PT
 from .nouns import parse_object_filter
-from .effects import _parse_create_token, _parse_gains
+from .effects import _parse_create_token
+from .pronouns import _RIDER_FOLDED, _statement_bound_target
 from .phrases import _accept_number
 from .statements import _parse_condition, parse_statement
 from .rebinding import rebind_pronoun_to_condition_target
-from .effects import _parse_loses
 from .stream import TokenStream
-
-
-_RIDER_FOLDED = ast.RawEffect("rider-folded")
-
-
-def _statement_bound_target(statement: ast.Statement) -> ast.TargetSpec | None:
-    """The chosen target a following pronoun sentence refers back to, or None.
-
-    "Put a +1/+1 counter on up to one target creature. **It** gains
-    indestructible until end of turn." — the pronoun names the previous
-    sentence's target, not the ability's source. Walks a Sequence or
-    Conjunction from its last step, because the pronoun binds to the nearest
-    preceding choice.
-    """
-    if isinstance(statement, (ast.Sequence,)):
-        for step in reversed(statement.steps):
-            found = _statement_bound_target(step)
-            if found is not None:
-                return found
-        return None
-    if isinstance(statement, ast.Conjunction):
-        for step in reversed(statement.effects):
-            found = _statement_bound_target(step)
-            if found is not None:
-                return found
-        return None
-    # "Soul Sear deals 5 damage to target creature or planeswalker. It loses
-    # indestructible…" — the damage sentence's chosen recipient is what the
-    # pronoun names. Recipients live in their own tuple on DealDamage, which
-    # the field scan below cannot see.
-    if isinstance(statement, ast.DealDamage):
-        for recipient in reversed(statement.recipients):
-            if isinstance(recipient, ast.TargetSpec) and recipient.quantifier in ("target", "up_to"):
-                return recipient
-        return None
-    for field_name in ("subject", "target"):
-        candidate = getattr(statement, field_name, None)
-        if isinstance(candidate, ast.TargetSpec) and candidate.quantifier in ("target", "up_to"):
-            return candidate
-    return None
-
-
-def _parse_pronoun_verb_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``Untap that creature.`` after a sentence that chose one.
-
-    The sibling of :func:`_parse_pronoun_grant_rider`: that one binds the
-    previous target to a *grant*, this one to a plain imperative verb. "Untap
-    that creature" (Traitorous Greed) has no target of its own — the spell chose
-    one sentence ago, and re-parsing it as a fresh target would raise a second
-    picker for a choice CR 601.2c says was made once.
-
-    Only "untap" today, and one verb at a time deliberately: each imperative has
-    to be checked against the shape its handler implements, and a table of verbs
-    admitted wholesale would claim sentences nothing performs.
-    """
-    target = _statement_bound_target(steps[-1]) if steps else None
-    if target is None:
-        return None
-    mark = stream.mark()
-    if not stream.accept_word("untap"):
-        return None
-    if not (
-        stream.accept_phrase("that", "creature")
-        or stream.accept_phrase("that", "permanent")
-        or stream.accept_word("it")
-    ):
-        stream.reset(mark)
-        return None
-    return ast.Untap(target)
-
-
-def _parse_pronoun_grant_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``It gains <keywords> [duration].`` after a sentence that chose a target.
-
-    Re-uses the previous sentence's own :class:`ast.TargetSpec` as the grant's
-    subject, so both instructions describe — and resolve — the same choice.
-    Without this the sentence parses on its own with "it" read as the source,
-    which is the trigger-remainder reading and grants the ability's *source*
-    the keyword (Basri Ket +1 would make Basri indestructible, not the
-    creature).
-    """
-    target = _statement_bound_target(steps[-1]) if steps else None
-    if target is None:
-        return None
-    mark = stream.mark()
-    # "It gains …" / "That permanent loses …" (Soul Sear) — two spellings of
-    # the same back-reference. The noun spelling is only claimed when a
-    # grant/loss verb follows, so "that creature's controller …" (a different
-    # referent) keeps its own reading.
-    if not stream.accept_word("it"):
-        if not stream.accept_word("that"):
-            return None
-        if not stream.accept_word("creature", "permanent", "planeswalker"):
-            stream.reset(mark)
-            return None
-        if not stream.at_word("gains", "gain", "loses", "lose"):
-            stream.reset(mark)
-            return None
-    # "It loses indestructible until end of turn." (Soul Sear) — the negative
-    # half of the same pronoun binding: the previous sentence's target loses a
-    # keyword, not the ability's source.
-    if stream.at_word("loses", "lose"):
-        try:
-            loss = _parse_loses(stream, target)
-        except GrammarError:
-            stream.reset(mark)
-            return None
-        if not isinstance(loss, ast.LoseKeyword):
-            # "It loses 2 life" would be a pronoun for a player, which this
-            # binding cannot mean — leave the sentence to fail loudly.
-            stream.reset(mark)
-            return None
-        return loss
-    if not stream.at_word("gains", "gain"):
-        stream.reset(mark)
-        return None
-    try:
-        grant = _parse_gains(stream, target)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    # "Put target creature card from a graveyard onto the battlefield under
-    # your control. It gains haste." (Liliana, Waker of the Dead's emblem.)
-    # A durationless grant to a reanimated card folds into the reanimation —
-    # the permanent does not exist until that step runs, so a separate grant
-    # instruction would have nothing to grant to.
-    if (
-        isinstance(grant, ast.GainKeyword)
-        and grant.duration.kind is None
-        and isinstance(steps[-1], ast.PutOntoBattlefield)
-    ):
-        steps[-1] = replace(steps[-1], gains=steps[-1].gains + grant.keywords)
-        return _RIDER_FOLDED
-    return grant
-
-
-def _parse_conditional_pronoun_grant_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``If <condition>, it gains <keywords> [duration].`` after a sentence that
-    chose a target.
-
-    "Target creature gains first strike until end of turn. **If it doesn't have
-    rampage, that creature gains rampage 2 until end of turn.**" (Rapid Fire.)
-
-    Its own rider rather than a branch of the sentence parser, for the reason
-    :func:`_parse_pronoun_grant_rider` exists at all: the pronoun names the
-    sentence *before* this one, and nothing inside a single sentence's parse can
-    see back that far. Read without the binding, "that creature" is a subject
-    nobody chose and the whole line refuses.
-
-    The grant half is delegated to that function rather than re-implemented, so
-    the two spellings of the pronoun, the loss half and the reanimation fold all
-    stay in one place. Only the condition is read here.
-    """
-    if not steps or _statement_bound_target(steps[-1]) is None:
-        return None
-    mark = stream.mark()
-    if not stream.accept_word("if"):
-        return None
-    try:
-        condition = _parse_condition(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct(","):
-        stream.reset(mark)
-        return None
-    grant = _parse_pronoun_grant_rider(stream, steps)
-    # `_RIDER_FOLDED` means the grant merged into the previous step, which a
-    # conditional cannot do — the merge would run the grant unconditionally.
-    if grant is None or grant is _RIDER_FOLDED:
-        stream.reset(mark)
-        return None
-    return ast.Conditional(condition, grant)
 
 
 # Sentinel: the rider was folded into the previous step, nothing to append.
@@ -435,6 +256,29 @@ def _parse_who_cant_rider(
     return ast.LoseLife(ast.PlayerRef("each_opponent"), amount, who_could_not="discard")
 
 
+def _choice_step_index(steps: list[ast.Statement]) -> int | None:
+    """Where the choice a following "If the player does/don't" refers back to is.
+
+    The chooser is a seat the sentence *asked something of*, and one step in
+    this grammar does that without being an offer: ``ChoosePermanent``. Located
+    by walking back past the branch already folded onto it, so the second rider
+    of a pair finds the same step the first one did.
+
+    Returns None when no such step precedes, which is what keeps the pronoun
+    from being read as "you" on a line that never asked anybody anything.
+    """
+    for index in range(len(steps) - 1, -1, -1):
+        step = steps[index]
+        if isinstance(step, ast.ChoosePermanent):
+            return index
+        if isinstance(step, ast.Conditional) and isinstance(
+            step.condition, ast.ItHappened
+        ):
+            continue
+        return None
+    return None
+
+
 def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """Fold "If you do, …" / "If you don't, …" into the preceding ``May``.
 
@@ -472,25 +316,42 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     # production — and it is admitted only over a ``May`` whose actor is not
     # "you", where the words have somebody to refer to.
     third_person = False
+    # "If **the player** does, … If **they** don't, …" (Takklemaggot). The seat
+    # is the one the sentence before it named — the chooser — so the pronoun
+    # refers back exactly as "a player" does under an offer, and it is admitted
+    # only over a step that really asked somebody something (checked below).
+    chooser_person = False
     if stream.accept_word("you"):
         pass
     elif stream.accept_phrase("a", "player"):
         third_person = True
+    elif stream.accept_phrase("the", "player") or stream.accept_word("they"):
+        third_person = True
+        chooser_person = True
     else:
         stream.reset(mark)
         return False
 
-    if stream.accept_word("does" if third_person else "do"):
+    # Which verb form the subject takes. "They" is plural however many players
+    # it names ("If **they don't**", Takklemaggot), so the person of the subject
+    # is not the person of the verb — reading one off the other is what made the
+    # pronoun spelling refuse a sentence it had already read the subject of.
+    singular = third_person and not stream.at_word("do", "don't")
+    if stream.accept_word("does" if singular else "do"):
         declined = False
     elif (
-        stream.accept_word("doesn't" if third_person else "don't")
-        or stream.accept_phrase("does" if third_person else "do", "not")
+        stream.accept_word("doesn't" if singular else "don't")
+        or stream.accept_phrase("does" if singular else "do", "not")
     ):
         declined = True
     else:
         stream.reset(mark)
         return False
-    if third_person and not (
+    if chooser_person and _choice_step_index(steps) is not None:
+        # A choice the card offers, not a payment: both branches are real, and
+        # which one runs is whether anything was chosen. Handled below.
+        pass
+    elif third_person and not (
         isinstance(target, ast.May)
         and target.actor.kind not in ("you", "that_player")
     ):
@@ -506,6 +367,27 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     except GrammarError:
         stream.reset(mark)
         return False
+
+    if chooser_person and (choice_at := _choice_step_index(steps)) is not None:
+        # "…chooses a creature …. **If the player does**, <A>. **If they
+        # don't**, <B>." (Takklemaggot.) One offer with two consequences, so the
+        # second rider folds into the conditional the first one built rather
+        # than becoming a step whose condition nothing records — and the choice
+        # itself is marked optional here, because printing a "don't" branch is
+        # the card saying the seat may decline.
+        steps[choice_at] = replace(steps[choice_at], optional=True)
+        if declined:
+            if not (
+                isinstance(steps[-1], ast.Conditional)
+                and isinstance(steps[-1].condition, ast.ItHappened)
+                and steps[-1].otherwise is None
+            ):
+                stream.reset(mark)
+                return False
+            steps[-1] = replace(steps[-1], otherwise=branch)
+            return True
+        steps.append(ast.Conditional(ast.ItHappened(), branch))
+        return True
 
     if not isinstance(target, ast.May):
         if conditional is not None:

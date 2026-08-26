@@ -431,6 +431,36 @@ def add_types(
     )
 
 
+def remove_types(
+    target: Callable[[int, State], bool],
+    *,
+    card_types: Iterable[str] = (),
+    subtypes: Iterable[str] = (),
+    timestamp: int,
+    label: str = "",
+) -> ContinuousEffect:
+    """Layer 4's other half: a type an effect takes away.
+
+    "…return this card to the battlefield under your control as a **non-Aura**
+    enchantment" (Takklemaggot). CR 205.1b: the printed type line is what a
+    permanent has until an effect says otherwise, and this is the effect saying
+    otherwise about one word of it. Applied in the same layer as
+    :func:`add_types` and after it in timestamp order, so a later effect that
+    adds the subtype back wins — which is what CR 613.7 says and what a
+    ``replace_subtypes`` spelling of the same idea could not express.
+    """
+    card_types, subtypes = tuple(card_types), tuple(subtypes)
+
+    def modify(char: Characteristics) -> None:
+        char.card_types.difference_update(card_types)
+        char.subtypes.difference_update(subtypes)
+
+    return ContinuousEffect(
+        layer=LAYER_TYPE, modify=modify, applies_to=target,
+        timestamp=timestamp, label=label,
+    )
+
+
 def set_colors(
     target: Callable[[int, State], bool],
     colors: Iterable[str],
@@ -523,6 +553,6 @@ __all__ = [
     "Characteristics", "ContinuousEffect", "LAYER_ABILITY", "LAYER_COLOR",
     "LAYER_CONTROL", "LAYER_COPY", "LAYER_PT", "LAYER_TEXT", "LAYER_TYPE",
     "PT_SUBLAYERS", "State", "add_types", "apply_layers", "change_control",
-    "grant_abilities", "modify_pt", "remove_abilities", "scope_only",
+    "grant_abilities", "modify_pt", "remove_abilities", "remove_types", "scope_only",
     "set_colors", "set_pt", "switch_pt",
 ]

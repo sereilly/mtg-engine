@@ -184,6 +184,44 @@ def _with_granted_abilities(
 _GRANTED_CARDS: dict[tuple, "CardDefinition"] = {}
 
 
+def _without_ability_lines(
+    card: "CardDefinition", removed: tuple[str, ...]
+) -> "CardDefinition":
+    """*card* with the printed lines an effect has taken away struck out.
+
+    The keyword list is filtered alongside the text: "Enchant creature" is a
+    keyword ability (CR 702.5), so a card that keeps ``Enchant`` in
+    ``keywords`` after losing the line still answers yes to a keyword read,
+    which is the two-representations-one-reader bug this engine keeps finding.
+    """
+    from .keywords import normalized_ability_line
+
+    key = (id(card), removed)
+    cached = _REMOVED_CARDS.get(key)
+    if cached is None:
+        kept = [
+            line for line in (card.oracle_text or "").split(chr(10))
+            if normalized_ability_line(line) not in removed
+        ]
+        gone = {
+            normalized_ability_line(line)
+            for line in (card.oracle_text or "").split(chr(10))
+            if normalized_ability_line(line) in removed
+        }
+        keywords = tuple(
+            word for word in card.keywords
+            if not any(phrase.startswith(word.lower()) for phrase in gone)
+        )
+        cached = dataclasses.replace(
+            card, oracle_text=chr(10).join(kept), keywords=keywords
+        )
+        _REMOVED_CARDS[key] = cached
+    return cached
+
+
+_REMOVED_CARDS: dict[tuple, "CardDefinition"] = {}
+
+
 # CR 400.7: a permanent that leaves the battlefield and comes back is a *new
 # object*. A stable identity therefore only has to be unique and monotonic —
 # the same requirement CR 613.7's timestamps have — so a monotonic counter is
@@ -355,9 +393,16 @@ class Permanent:
         # Appended after the board-wide ones so the fold order matches the order
         # the two were recorded in — a static applies from the board, a grant
         # from the moment it resolved.
-        from .keywords import granted_ability_lines
+        from .keywords import granted_ability_lines, removed_ability_lines
 
         granted.extend(granted_ability_lines(self))
+        # …and layer 6's other half (CR 613.1f): an ability an effect has taken
+        # away. Dropped *before* the grants are appended, so a card that loses a
+        # line and is then granted one keeps the granted one — and so a grant of
+        # the same words is not silently removed with the printed line.
+        removed = removed_ability_lines(self)
+        if removed:
+            base = _without_ability_lines(base, removed)
         if granted:
             base = _with_granted_abilities(base, tuple(granted))
         return base

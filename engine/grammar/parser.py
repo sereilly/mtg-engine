@@ -44,7 +44,10 @@ from .errors import GrammarError
 from .lexer import (BULLET, PUNCT, QUOTE, tokenize)
 from .costs import _parse_costs
 from .registries import registry_for_line
-from .riders import (_RIDER_FOLDED, _attach_destroyed_this_way, _attach_exchanged_this_way, _attach_if_that_card_was_returned, _attach_if_you_cant, _attach_if_you_do, _attach_otherwise, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_conditional_pronoun_grant_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
+from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
+                       _parse_conditional_pronoun_grant_rider,
+                       _parse_pronoun_grant_rider, _parse_pronoun_verb_rider)
+from .riders import (_attach_destroyed_this_way, _attach_exchanged_this_way, _attach_if_that_card_was_returned, _attach_if_you_cant, _attach_if_you_do, _attach_otherwise, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .phrases import accept_member_state_clause
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
@@ -404,6 +407,12 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             pronoun_verb = _parse_pronoun_verb_rider(stream, steps)
             if pronoun_verb is not None:
                 steps.append(pronoun_verb)
+                continue
+            # "It loses "enchant creature" and gains "…"." (Takklemaggot.) The
+            # quoted half, read before the keyword rider below, whose "It
+            # loses …" reading is about a keyword and would refuse a quote.
+            if _attach_returned_text_change(stream, steps):
+                stream.accept_punct(".")
                 continue
             pronoun_grant = _parse_pronoun_grant_rider(stream, steps)
             if pronoun_grant is not None:

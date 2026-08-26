@@ -45,7 +45,7 @@ from .effects import (
     _parse_prevent, _parse_put_iterated_card_on_library,
     _parse_put_counter, _parse_put_exiled_with_source, _parse_remove_counter,
     _parse_remove_from_combat, _parse_return, _parse_reveal_top, _parse_sacrifice,
-    _parse_scry, _parse_search_library, _parse_source_of_choice_effect,
+    _parse_scry, _parse_search_library, _parse_source_of_choice_effect, parse_player_chooses_permanent,
     _parse_switch_pt, _parse_tap_untap, _parse_wins,
 )
 
@@ -416,6 +416,13 @@ def parse_subject_verb(
         # Dispatched on the verb like every other player action; the production
         # reads its own words to the end.
         if token.text in ("chooses", "choose") and isinstance(source_spec, ast.PlayerRef):
+            # "That creature's controller **chooses a creature that this card
+            # could enchant**." (Takklemaggot.) Read first because it declines
+            # without consuming, where the paragraph below expects "a card
+            # name" from its second word and fails the line on anything else.
+            chosen = parse_player_chooses_permanent(stream, source_spec)
+            if chosen is not None:
+                return chosen
             return _parse_name_then_reveal_top(stream, source_spec)
         # "Each opponent sacrifices a creature" (Goremand). The AST node has
         # carried its player since it was written; only the *bare* imperative

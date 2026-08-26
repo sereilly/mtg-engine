@@ -456,7 +456,12 @@ class GameEndingMixin:
 
             # 704.5m: Aura/Role not attached to a legal object → graveyard
             def _illegally_attached(perm: Permanent) -> bool:
-                if "Aura" not in perm.card.type_line and "Role" not in perm.card.type_line:
+                # Asked of CR 613 layer 4, not of the printed line: an effect
+                # can return an Aura "as a **non-Aura** enchantment"
+                # (Takklemaggot), and a sweep reading `card.type_line` would
+                # bin the very permanent that sentence created. The printed
+                # line is still the answer for everything nothing has changed.
+                if not perm.has_type("aura") and not perm.has_type("role"):
                     return False
                 if "attached_to" not in perm.metadata:
                     # Manually placed without tracking — skip 704.5m
@@ -491,7 +496,7 @@ class GameEndingMixin:
             for player in self.players:
                 departing_immune = []
                 for perm in list(self.controlled_by(player)):
-                    if "Aura" not in perm.card.type_line:
+                    if not perm.has_type("aura"):
                         continue
                     host = perm.metadata.get("attached_to")
                     if host is None or not self.is_on_battlefield(host):

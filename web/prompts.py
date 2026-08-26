@@ -950,6 +950,11 @@ def _permanent_choice(ctx: PromptContext, choices: list) -> dict:
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
         "prompt": choice.data.get("prompt", ""),
+        # Whether the seat may answer with nothing. The client needs it to know
+        # whether to offer a decline, and the engine re-checks it — a client
+        # that declined a mandatory choice would otherwise skip a branch the
+        # card does not have.
+        "optional": bool(choice.data.get("optional")),
         "candidates": [
             {
                 "seat": seat,

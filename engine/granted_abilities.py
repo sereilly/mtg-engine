@@ -73,4 +73,43 @@ def granted_ability_supported(text: str, self_name: str | None = None) -> bool:
     return bool(compile_card_oracle(probe).supported)
 
 
-__all__ = ["granted_ability_supported"]
+#: The possessive pronoun a granted ability opens with when the granting
+#: sentence, not the quote, is what named the player.
+_THAT_PLAYERS = "that player's"
+_CHOSEN_PLAYERS = "the chosen player's"
+
+
+def bind_chosen_player(text: str) -> str:
+    """*text* with an unbound "that player's" read as the player this effect
+    chose.
+
+    "…gains "At the beginning of **that player's** upkeep, this enchantment
+    deals 1 damage to that player."" (Takklemaggot.) CR 611.2c fixes what a
+    granted ability means when it is granted, and here the pronoun points at a
+    player the *granting* sentence named — the seat it asked to choose. The
+    quote is compiled on its own (see :func:`granted_ability_supported`) and
+    read again off the permanent's text, so inside it the words have no
+    antecedent at all; left as printed they name nobody.
+
+    The engine already has one spelling for "a player this permanent's effect
+    bound", and it is "the chosen player" — the seat
+    ``chosen_player_index`` holds. So the pronoun is translated into that
+    vocabulary at grant time, which is the same move
+    ``oracle.expand_ability_lines`` makes for equip: rewrite the sentence once,
+    into words every reader downstream already knows, rather than teaching every
+    reader a second pronoun.
+
+    Only the **possessive** is rewritten. A bare "that player" later in the same
+    quote does have an antecedent — the trigger this quote prints — and reading
+    it as the chosen player too would be right by accident here and wrong on the
+    first card whose granted trigger names somebody else.
+    """
+    line = text or ""
+    lowered = line.lower()
+    index = lowered.find(_THAT_PLAYERS)
+    if index < 0:
+        return line
+    return line[:index] + _CHOSEN_PLAYERS + line[index + len(_THAT_PLAYERS):]
+
+
+__all__ = ["bind_chosen_player", "granted_ability_supported"]
