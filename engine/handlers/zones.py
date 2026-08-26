@@ -1218,6 +1218,60 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("return_all_matching")
+def return_all_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Return to your hand all enchantments you both own and control…"
+    (Remove Enchantments.)
+
+    The sweep twin of ``bounce_target_creature``: no pick, every permanent the
+    noun phrase names, each to *its owner's* hand (CR 400.3). One handler for
+    every such phrase, because what a bounce does per object does not depend on
+    which noun was printed — the noun is the payload.
+
+    The filter is asked through ``subject_matches`` with CR 109.5's observer:
+    "you control", "you own" and the host phrase inside "attached to permanents
+    you control" are all seat comparisons, and the lowering admitted the line
+    only because this is where they are answered.
+
+    The matched list is taken **before** anything moves. A permanent leaving
+    detaches its Auras, so a sweep that re-read the board between removals
+    would stop matching Auras it had already named — and "attached to" is
+    exactly what half of this card's phrases ask about.
+    """
+    from ..subject_filters import subject_matches
+
+    swept = instruction.payload.get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    matched = [
+        perm for perm in game.all_permanents()
+        if subject_matches(
+            game, perm, swept, observer=observer, source=context.source_permanent,
+        )
+    ]
+    returned: list[str] = []
+    for perm in matched:
+        if not game.is_on_battlefield(perm):
+            # It went with something else this same sweep removed — a token
+            # ceasing to exist, an Aura falling off. Nothing left to return.
+            continue
+        owner_idx = game.owner_index_of(perm)
+        owner = game.players[owner_idx] if owner_idx is not None else context.caster
+        game.put_card_into_hand(owner, perm.card)
+        if owner_idx is not None:
+            game.permanents_to_hand_this_turn[owner_idx] = (
+                game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
+            )
+        game.remove_from_battlefield(perm)
+        returned.append(perm.card.name)
+    game.log.append(
+        f"{context.card.name} returned {', '.join(returned)} to hand"
+        if returned else f"{context.card.name}: nothing to return"
+    )
+    return True, "resolved"
+
+
 @effect_handler("exile_target_creature_until_eot")
 def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target

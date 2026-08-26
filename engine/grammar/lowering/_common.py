@@ -85,11 +85,14 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "controller", "tapped", "attacking", "blocking", "other_than_source",
     "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
     "colored", "with_plus1_counter", "supertypes", "not_enchanted",
-    "attached_to_types",
-    # "target permanent you both **own** and control" (Obelisk of Undoing).
-    # ``to_payload`` reads it — but only alongside ``controller``, so it is in
-    # the conditional table below as well, and the pair is what makes "a
-    # permanent you own" refuse instead of reducing to "a permanent".
+    "attached_to_filter",
+    # "target permanent you both **own** and control" (Obelisk of Undoing) /
+    # "all Auras **you own** attached to permanents you control" (Remove
+    # Enchantments). ``to_payload`` reads it unconditionally. It used to emit
+    # only alongside ``controller`` — the one card printing ownership printed
+    # both words — and so needed a row in the conditional table below; the
+    # second card prints ownership *without* control, and under that pairing
+    # its narrowing was dropped rather than refused.
     "owner",
 })
 
@@ -112,11 +115,6 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
 #: by all three gates, is why the next such field cannot repeat it.
 CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     "mana_value": "mana_value",
-    # Emitted only when ``controller`` is set beside it, because the one phrase
-    # that prints it names both ("you both own and control"). A card printing
-    # ownership alone would otherwise have it dropped, which for an *owner*
-    # narrowing means an effect reaching the opponent's copy of the same card.
-    "owner": "owner",
     "power": "power",
     "toughness": "toughness",
     "supertypes": "supertypes",

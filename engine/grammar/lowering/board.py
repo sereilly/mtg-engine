@@ -11,7 +11,9 @@ owner.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter
+from ...subject_filters import (
+    TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter, untestable_filter_keys,
+)
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -98,7 +100,7 @@ def _lower_destroy(
             # Slag.) A sweep over a *narrowed* set rather than a card type, so
             # it carries the filter instead of naming a per-scope handler.
             described = _filter_payload(filt)
-            if object_only_filter(described) is None:
+            if untestable_filter_keys(described):
                 raise LoweringError("no sweep handler for this subtype", node=node)
             if filt.attached_to is not None:
                 described["attached_to"] = filt.attached_to
@@ -137,7 +139,7 @@ def _lower_destroy(
             blocked_payload = _filter_payload(
                 filt, carried_separately=frozenset({"blocked_by_bound_object"})
             )
-            if object_only_filter(blocked_payload) is None:
+            if untestable_filter_keys(blocked_payload):
                 raise LoweringError("no sweep handler for this narrowing", node=node)
             blocked_payload["blocked_by_bound_object"] = True
             if node.no_regen:
@@ -162,7 +164,7 @@ def _lower_destroy(
             blocked_payload = _filter_payload(
                 filt, carried_separately=frozenset({"blocked_by_target_object"})
             )
-            if object_only_filter(blocked_payload) is None:
+            if untestable_filter_keys(blocked_payload):
                 raise LoweringError("no sweep handler for this narrowing", node=node)
             blocker_payload = _filter_payload(blocker)
             if object_only_filter(blocker_payload) is None:
@@ -198,7 +200,7 @@ def _lower_destroy(
             if key not in ("type_filter", "type_filter_all")
         }
         if narrowing:
-            if object_only_filter(described) is None:
+            if untestable_filter_keys(described):
                 raise LoweringError("no sweep handler for this narrowing", node=node)
             narrowed_payload = dict(described)
             if node.no_regen:

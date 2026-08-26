@@ -183,7 +183,7 @@ class _FilterDraft:
     their_choice: bool = False
     named: str | None = None
     attached_to: str | None = None
-    attached_to_types: tuple[str, ...] = field(default_factory=tuple)
+    attached_to_filter: ast.ObjectFilter | None = None
     of_bound_type: bool = False
     zone: str = "battlefield"
     zone_owner: ast.PlayerRef | None = None
@@ -580,7 +580,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         is_enchanted=d.is_enchanted,
         not_enchanted=d.not_enchanted,
         attached_to=d.attached_to,
-        attached_to_types=tuple(d.attached_to_types),
+        attached_to_filter=d.attached_to_filter,
         of_bound_type=d.of_bound_type,
         in_combat_with_source=d.in_combat_with_source,
         dealt_damage_to_source_this_turn=d.dealt_damage_to_source_this_turn,

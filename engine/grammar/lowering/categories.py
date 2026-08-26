@@ -445,6 +445,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "return_bound_card_to_owners_hand": "zones",
     "return_source_card_to_owners_hand": "zones",
     "bounce_target_creature": "zones",
+    # "Return to your hand all enchantments you both own and control" (Remove
+    # Enchantments) — the sweep twin of the bounce above.
+    "return_all_matching": "zones",
     "add_mana_from_text": "mana",
     # "Add an amount of {B} equal to the sacrificed artifact's mana value"
     # (Priest of Yawgmoth). The handler predates the grammar reading this

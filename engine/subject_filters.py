@@ -68,6 +68,14 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # again: whether an Aura is attached is readable off the permanent alone,
     # so it belongs to the pure half like every other state word.
     "not_enchanted",
+    # "Auras you own **attached to permanents you control**" (Remove
+    # Enchantments). A nested noun phrase describing the host, answered by
+    # asking this same function of the host — so what it can test is exactly
+    # what this set says, one level down. :func:`filter_testability` is what
+    # makes that recursion part of the gate rather than a hope: a nested phrase
+    # naming something untestable refuses the whole line, because a dropped
+    # host narrowing is an Aura sweep taking every Aura on the board.
+    "attached_to_filter",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -78,6 +86,30 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
 #: payload it hands over must stay inside this set or the narrowing would be
 #: quietly ignored.
 OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {"controller", "owner", "exclude_self"}
+
+
+def untestable_filter_keys(
+    payload: dict, *, allowed: frozenset[str] = TESTABLE_SUBJECT_FILTER_KEYS
+) -> set[str]:
+    """The keys of *payload* that *allowed* does not cover, **nested phrases
+    included**.
+
+    A filter used to be one flat dict, so "are all these keys testable?" was one
+    set difference. ``attached_to_filter`` carries a whole noun phrase inside a
+    key, and a set difference over the outer dict answers yes for it whatever
+    the phrase says — which would admit "Auras attached to permanents you
+    control" into a sweep with no observer, drop the seat, and destroy every
+    Aura on the table. So the question recurses exactly as the matcher does.
+
+    A nested phrase is reported under its own key, because that is the word the
+    refusal has to name: ``attached_to_filter`` is what the line printed, and
+    the reader chasing the refusal wants the host phrase, not one of its parts.
+    """
+    unknown = set(payload) - allowed
+    nested = payload.get("attached_to_filter")
+    if isinstance(nested, dict) and untestable_filter_keys(nested, allowed=allowed):
+        unknown.add("attached_to_filter")
+    return unknown
 
 #: The keys ``_card_matches_filter`` answers about a **card** — an object in a
 #: hand, a graveyard or a library. A far smaller set than the two above, and
@@ -126,7 +158,7 @@ def object_only_filter(
     caller really does carry it out, and an unnamed key is a refusal.
     """
     remaining = {k: v for k, v in payload.items() if k not in carried_separately}
-    if set(remaining) - OBJECT_ONLY_FILTER_KEYS:
+    if untestable_filter_keys(remaining, allowed=OBJECT_ONLY_FILTER_KEYS):
         return None
     return remaining
 
@@ -190,6 +222,21 @@ def subject_matches(
         return True
     if obj is None:
         return False
+    # "…**attached to permanents you control**" (Remove Enchantments). Asked
+    # here rather than left to the pure matcher for the reason `controller` is:
+    # the host phrase may carry a seat, and the pure matcher has no observer to
+    # compare one against. Recursion with the *same* observer and source, so a
+    # host phrase means what it would mean written on its own — and the nested
+    # key is stripped before the pure matcher runs, so it cannot be answered
+    # twice with two different observers.
+    nested_host = described.get("attached_to_filter")
+    if nested_host:
+        described = {k: v for k, v in described.items() if k != "attached_to_filter"}
+        host = obj.metadata.get("attached_to")
+        if not subject_matches(
+            game, host, nested_host, observer=observer, source=source
+        ):
+            return False
     if not permanent_matches_filter(obj, described):
         return False
     controller = described.get("controller")
@@ -251,6 +298,7 @@ def subject_matches(
 
 __all__ = [
     "CARD_ONLY_FILTER_KEYS",
+    "untestable_filter_keys",
     "OBJECT_ONLY_FILTER_KEYS",
     "TESTABLE_SUBJECT_FILTER_KEYS",
     "card_matches_any",

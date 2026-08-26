@@ -120,6 +120,17 @@ def _parse_return(stream: TokenStream) -> ast.Statement:
     # creature" for the destroy production and for the same reason: teaching
     # the shared noun parser the phrase would hand it to every line printing
     # those words. The lowering checks a binder exists.
+    # "Return **to your hand** all enchantments you both own and control, …"
+    # (Remove Enchantments). The destination is printed first when the subject
+    # is too long to sit between the verb and it — English, not a different
+    # effect — so it is read here and the rest of the production is the same
+    # production. Refusing it would cost the card its whole first sentence over
+    # a word order.
+    destination_first: ast.Zone | None = None
+    if stream.at_word("to"):
+        stream.advance()
+        destination_first = _parse_zone(stream)
+
     bound = stream.mark()
     subject: ast.Recipient | None
     if stream.accept_phrase("that", "card"):
@@ -129,9 +140,13 @@ def _parse_return(stream: TokenStream) -> ast.Statement:
         subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected something to return")
-    if not stream.accept_word("to"):
-        raise stream.error("expected a destination zone after 'return'")
-    destination = _parse_zone(stream)
+    further = _parse_further_subjects(stream)
+    if destination_first is not None:
+        destination = destination_first
+    else:
+        if not stream.accept_word("to"):
+            raise stream.error("expected a destination zone after 'return'")
+        destination = _parse_zone(stream)
 
     # "...to the battlefield **tapped**." (Silversmote Ghoul.) CR 110.5b: a
     # permanent enters untapped unless a spell or ability says otherwise, and
@@ -166,10 +181,70 @@ def _parse_return(stream: TokenStream) -> ast.Statement:
     # the node; lowering refuses a shape it cannot repeat rather than dropping
     # the words.
     repetitions = _parse_for_each_this_way(stream)
-    return ast.ReturnToZone(
-        subject, destination, from_zone, entering_tapped=entering_tapped,
-        under_control_of=under_control_of, repetitions=repetitions,
-    )
+
+    def _one(each: ast.Recipient) -> ast.ReturnToZone:
+        each_from = from_zone
+        if isinstance(each, ast.TargetSpec) and each.filter.zone != "battlefield":
+            each_from = ast.Zone(each.filter.zone, each.filter.zone_owner)
+        return ast.ReturnToZone(
+            each, destination, each_from, entering_tapped=entering_tapped,
+            under_control_of=under_control_of, repetitions=repetitions,
+        )
+
+    if further:
+        return ast.Conjunction(tuple(_one(each) for each in (subject, *further)))
+    return _one(subject)
+
+
+def _parse_further_subjects(stream: TokenStream) -> list[ast.Recipient]:
+    """The rest of ``<noun phrase>, <noun phrase>, and <noun phrase>``.
+
+    "Return to your hand all enchantments you both own and control, all Auras
+    you own attached to permanents you control, and all Auras you own attached
+    to attacking creatures your opponents control." (Remove Enchantments.) One
+    verb over a union of three noun phrases, which no single ``ObjectFilter``
+    says: its keys are AND'd, so the three folded into one would name an
+    enchantment that is simultaneously an Aura on your own permanent and an
+    Aura on an attacking creature of an opponent's — nothing at all.
+
+    So the union lives in the *shape*: the caller builds one statement per
+    phrase and joins them with :class:`ast.Conjunction`, which lowering already
+    turns into a sequence. Two sweeps over overlapping sets are the same
+    outcome as one sweep over their union, because both are idempotent — a
+    permanent already returned is no longer there to return again.
+
+    Returns an empty list with the cursor untouched unless a separator really
+    is followed by another noun phrase, so "destroy target creature **and** you
+    gain 2 life" still reads as two effects rather than failing here.
+    """
+    extra: list[ast.Recipient] = []
+    while True:
+        mark = stream.mark()
+        # A separator is required. Without one, two adjacent noun phrases would
+        # be joined by nothing but the parser's willingness to keep reading.
+        separated = stream.accept_punct(",")
+        separated = stream.accept_word("and") or separated
+        nxt = (
+            parse_recipient(stream)
+            if separated and not stream.at_word("to")
+            else None
+        )
+        # Every phrase in the union must be a *sweep*, which is the shape this
+        # production exists for and the shape it can be sure of. "and" is the
+        # commonest word on a Magic card and most of its uses join two effects,
+        # not two objects: "destroy this artifact **and** it deals damage to
+        # you" (Voodoo Doll) has a perfectly good noun phrase after the "and",
+        # and reading it as a second thing to destroy destroyed the artifact
+        # and dropped the damage. A quantifier is the one signal available
+        # before the verb arrives, so the union takes only "all …, all …, and
+        # all …" and hands every other "and" back to the statement parser.
+        if (
+            not isinstance(nxt, ast.TargetSpec)
+            or nxt.quantifier not in ("all", "each")
+        ):
+            stream.reset(mark)
+            return extra
+        extra.append(nxt)
 
 
 def _parse_destroy(stream: TokenStream) -> ast.Statement:
@@ -185,6 +260,12 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     subject = _parse_that_object(stream) or parse_recipient(stream)
     if subject is None:
         raise stream.error("expected something to destroy")
+    # "…all other enchantments you control, all other Auras attached to
+    # permanents you control, and all other Auras attached to attacking
+    # creatures your opponents control" (Remove Enchantments). One verb, three
+    # noun phrases; see `_parse_further_subjects` for why the union is a shape
+    # and not a filter.
+    further = _parse_further_subjects(stream)
 
     # "…at end of combat" (CR 603.7). Only this one delay: a destruction
     # deferred to the next end step is a different handler, so leaving those
@@ -197,7 +278,7 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     # alternative to the destruction, not a second sentence, so a line that
     # left it unconsumed would be destroyed unconditionally.
     mark = stream.mark()
-    if stream.accept_phrase("unless", "you", "pay"):
+    if stream.accept_phrase("unless", "you", "pay") and not further:
         return ast.DestroyUnlessPay(subject, _parse_mana_payment(stream))
     stream.reset(mark)
 
@@ -210,6 +291,11 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
         no_regen = True
     else:
         stream.reset(mark)
+    if further:
+        return ast.Conjunction(tuple(
+            ast.Destroy(each, no_regen=no_regen, delay=delay)
+            for each in (subject, *further)
+        ))
     return ast.Destroy(subject, no_regen=no_regen, delay=delay)
 
 

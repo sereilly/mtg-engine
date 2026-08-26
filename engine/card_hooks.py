@@ -489,7 +489,7 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
     },
     # One bullet of a two-bullet modal activated ability. The destroy half used
     # to be hooked beside it, because "Aura attached to a land" was a
-    # restriction the filter had no field for; ``attached_to_types`` gave it one
+    # restriction the filter had no field for; ``attached_to_filter`` gave it one
     # (round 23, for Enchantment Alteration's "attached to a creature or land"),
     # so the production reads the line and the entry would be dead.
     'Pyramids': {

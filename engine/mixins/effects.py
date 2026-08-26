@@ -268,7 +268,7 @@ class EffectsMixin:
         bypass_regeneration: bool = False,
         subtype_filter: str | None = None,
         tapped_only: bool = False,
-        attached_to_types: tuple[str, ...] = (),
+        attached_to_filter: dict | None = None,
     ) -> CardDefinition | None:
         target_player_index = next(
             (i for i, p in enumerate(self.players) if p is target), None
@@ -284,7 +284,7 @@ class EffectsMixin:
             "color_filter": color_filter,
             "exclude_colors": exclude_colors,
             "exclude_types": exclude_types,
-            "attached_to_types": tuple(attached_to_types),
+            "attached_to_filter": attached_to_filter,
         }
 
         def _is_legal_target(perm) -> bool:

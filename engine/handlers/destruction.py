@@ -265,9 +265,30 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
                 f"{context.card.name}: nothing is attached to a permanent that is gone"
             )
             return True, "resolved"
+    # Through ``subject_matches`` rather than the pure matcher, for the reason
+    # the bounce handler asks it: "all enchantments **you control**" (Remove
+    # Enchantments) is a seat comparison no read of the enchantment alone can
+    # make, and so is the host phrase inside "Auras attached to permanents you
+    # control". The observer is CR 109.5's — the controller of the spell or
+    # ability doing the destroying, never whoever controls what it hits.
+    #
+    # The lowering's gate is the same key set this answers, which is what stops
+    # a phrase arriving here that would be dropped: a dropped narrowing on a
+    # sweep is not a card that does less, it is one that takes the board.
+    # Late import: ``subject_filters`` imports this package's ``_common``, so
+    # the edge is taken at call time rather than at module load — the same
+    # reason ``bounce_target_creature`` takes it late.
+    from ..subject_filters import subject_matches
+
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
     matched = [
         perm for perm in game.all_permanents()
-        if permanent_matches_filter(perm, filters)
+        if subject_matches(
+            game, perm, filters,
+            observer=observer, source=context.source_permanent,
+        )
         and (host is None or perm.metadata.get("attached_to") is host)
         and (blocked_ids is None or perm.permanent_id in blocked_ids)
     ]
@@ -366,7 +387,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         bypass_regeneration=instruction.payload.get("bypass_regeneration", False),
         subtype_filter=instruction.payload.get("subtype_filter"),
         tapped_only=instruction.payload.get("tapped_only", False),
-        attached_to_types=instruction.payload.get("attached_to_types") or (),
+        attached_to_filter=instruction.payload.get("attached_to_filter"),
     )
     if destroyed:
         if source_permanent is not None:

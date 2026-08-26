@@ -137,6 +137,16 @@ def _parse_postmodifiers(
         if stream.accept_phrase("you", "control"):
             d.controller = "you"
             continue
+        # "all Auras **you own** attached to permanents you control" (Remove
+        # Enchantments). Ownership alone, with no word about control: the card
+        # is deliberately naming a different seat for the Aura than for its
+        # host, so reading this as "you control" would return an Aura you own
+        # that an opponent has taken — and dropping it would return theirs.
+        # Read *after* the "both own and control" branch above, which this is a
+        # suffix of.
+        if stream.accept_phrase("you", "own"):
+            d.owned_by = "you"
+            continue
         # "you don't control" (Teferi, Master of Time's −3). The lexer keeps
         # "don't" as one word.
         if stream.accept_phrase("you", "don't", "control"):
@@ -507,22 +517,33 @@ def _parse_postmodifiers(
                     d.attached_to = matched[1]
                     continue
                 # "target Aura **attached to a creature or land**" (Enchantment
-                # Alteration). Not a back-reference but a type: what the
-                # attachment is on, asked of the attachment itself. Read
-                # through the same noun-phrase parser rather than by a word
-                # list here, and admitted only when the phrase is *nothing but*
-                # card types — anything else in it would be a restriction the
-                # matcher drops, which on an Aura-mover is the wrong Aura moved.
+                # Alteration) / "…Auras you own **attached to permanents you
+                # control**" (Remove Enchantments). Not a back-reference but a
+                # noun phrase: what the attachment is on, asked of the
+                # attachment itself. Read through the same noun-phrase parser
+                # rather than by a word list here, and carried whole rather
+                # than reduced to its card types — the seat in "permanents you
+                # control" has nowhere to live in a tuple of types, and a
+                # dropped seat on an Aura sweep is every Aura on the board.
+                #
+                # It is *carried* whole; whether it can be *tested* whole is
+                # the lowering's question, asked of the nested payload by the
+                # same key set that gates the outer one.
                 nested = stream.mark()
                 stream.accept_word("a", "an")
                 try:
                     host = parse_filter(stream)
                 except GrammarError:
                     host = None
-                if host is not None and host.card_types and host == ast.ObjectFilter(
-                    card_types=host.card_types, type_match=host.type_match
-                ):
-                    d.attached_to_types = host.card_types
+                # Any narrowing at all is a host phrase; none at all is not.
+                # "attached to a permanent" says only "attached", which the
+                # filter already has a word for (``is_enchanted``) — and an
+                # empty nested filter would read as "attached to anything",
+                # widening the sweep to every Aura rather than narrowing it. So
+                # the phrase has to have said *something*: "permanents you
+                # control" says a seat, "a creature or land" says two types.
+                if host is not None and host != ast.ObjectFilter():
+                    d.attached_to_filter = host
                     continue
                 stream.reset(nested)
             stream.reset(probe)

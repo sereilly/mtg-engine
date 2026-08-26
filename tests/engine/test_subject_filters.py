@@ -25,7 +25,9 @@ from engine.oracle import compile_card_oracle
 from engine.subject_filters import (
     OBJECT_ONLY_FILTER_KEYS,
     TESTABLE_SUBJECT_FILTER_KEYS,
+    object_only_filter,
     subject_matches,
+    untestable_filter_keys,
 )
 
 
@@ -245,6 +247,7 @@ _COVERED_ELSEWHERE = {
     "owner": "test_ownership_is_asked_separately_from_control",
     "exclude_self": "test_the_relative_keys_refuse_without_the_context_they_need",
     "not_enchanted": "test_not_enchanted_rejects_a_permanent_carrying_an_aura",
+    "attached_to_filter": "test_a_host_phrase_is_asked_of_the_host",
 }
 
 
@@ -487,3 +490,58 @@ def test_a_supertype_rides_the_payload_all_the_way_to_the_dispatcher():
     assert narrowed.payload != plain.payload
     assert narrowed.payload["supertypes"] == ["legendary"]
     assert narrowed.payload["targets"]["filter"]["supertypes"] == ["legendary"]
+
+
+def test_a_host_phrase_is_asked_of_the_host(pool):
+    """"Auras you own **attached to permanents you control**" (Remove
+    Enchantments). The narrowing is not about the Aura at all — it is the same
+    question asked one object along — so the key carries a whole nested payload
+    and the matcher recurses into it.
+
+    Its own demonstration rather than a row in ``_REJECTIONS``: every row there
+    rejects a *bare* permanent, and a bare permanent is not attached to
+    anything, so it would fail the key for the wrong reason. The three
+    permanents below separate the three answers — attached to a matching host,
+    attached to a host that does not match, attached to nothing.
+    """
+    mine = Permanent(card=pool["Grizzly Bears"])
+    theirs = Permanent(card=pool["Grizzly Bears"])
+    on_mine = Permanent(card=pool["Holy Strength"])
+    on_theirs = Permanent(card=pool["Holy Strength"])
+    loose = Permanent(card=pool["Holy Strength"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine, on_mine, on_theirs, loose]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    _r30_attach(on_mine, mine)
+    _r30_attach(on_theirs, theirs)
+    host_you_control = {"attached_to_filter": {"controller": "you"}}
+
+    assert subject_matches(game, on_mine, host_you_control, observer=0)
+    assert not subject_matches(game, on_theirs, host_you_control, observer=0)
+    assert not subject_matches(game, loose, host_you_control, observer=0)
+    # And the seat really is the observer's, not "whoever controls the Aura":
+    # seat 1 owns neither Aura but controls the other host.
+    assert subject_matches(game, on_theirs, host_you_control, observer=1)
+
+
+def test_a_nested_host_phrase_is_gated_by_the_same_key_set():
+    """The recursion is in the *gate* as well as in the matcher.
+
+    A flat set difference over the outer payload answers "testable" for
+    ``attached_to_filter`` whatever the phrase inside says, which would admit a
+    sweep with no observer, drop the seat, and take every Aura on the table.
+    ``untestable_filter_keys`` names the outer key, because that is the phrase
+    the refusal has to point at.
+    """
+    plain = {"subtype_filter": "aura", "attached_to_filter": {"type_filter": "creature"}}
+    seated = {"subtype_filter": "aura", "attached_to_filter": {"controller": "you"}}
+    invented = {"subtype_filter": "aura", "attached_to_filter": {"no_such_key": True}}
+
+    assert not untestable_filter_keys(plain)
+    assert not untestable_filter_keys(seated)
+    assert untestable_filter_keys(invented) == {"attached_to_filter"}
+    # An observerless caller may take the first and not the second: a seat one
+    # level down is still a seat.
+    assert object_only_filter(plain) == plain
+    assert object_only_filter(seated) is None

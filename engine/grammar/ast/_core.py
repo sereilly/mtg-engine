@@ -405,9 +405,19 @@ class ObjectFilter:
     # that has the context resolves it, the split the ``controls`` condition
     # already makes for "another".
     attached_to: str | None = None
-    # "attached to a creature or land" (Enchantment Alteration) — the host by
-    # card type, which a read of the attachment alone *can* answer.
-    attached_to_types: tuple[str, ...] = ()
+    # "attached to a creature or land" (Enchantment Alteration) / "Auras you own
+    # **attached to permanents you control**" (Remove Enchantments) — the host
+    # as a noun phrase of its own, which a read of the attachment *can* answer
+    # by asking the same question of the host that is being asked of this
+    # object. A nested filter rather than the tuple of card types this was:
+    # "permanents you control" is a host phrase with a seat in it, and a tuple
+    # of types had nowhere to put the seat, so a card printing one would have
+    # had it dropped — an Aura-sweep reaching every Aura on the board.
+    #
+    # The nesting is what keeps that from being a new rule: the host is tested
+    # through the very matcher testing the attachment, so whatever a noun phrase
+    # can say about a permanent it can say about a host, once.
+    attached_to_filter: "ObjectFilter | None" = None
     # "another permanent **of that type**" — shares a card type with what the
     # sentence's other clause named. Only a lowering knowing that object can
     # resolve it; one that does not must refuse.
@@ -548,8 +558,8 @@ class ObjectFilter:
             payload["exclude_colors"] = list(self.excluded_colors)
         if self.excluded_types:
             payload["exclude_types"] = list(self.excluded_types)
-        if self.attached_to_types:
-            payload["attached_to_types"] = list(self.attached_to_types)
+        if self.attached_to_filter is not None:
+            payload["attached_to_filter"] = self.attached_to_filter.to_payload()
         # Additive keys — handlers read these with .get() defaults.
         if self.with_keywords:
             payload["with_keywords"] = list(self.with_keywords)
@@ -557,8 +567,16 @@ class ObjectFilter:
             payload["without_keywords"] = list(self.without_keywords)
         if self.controller:
             payload["controller"] = self.controller
-            if self.owner is not None:
-                payload["owner"] = self.owner
+        # Emitted on its own, not only beside a controller. It used to hang off
+        # the branch above because the one card printing ownership printed both
+        # words ("you both own and control", Obelisk of Undoing) — but "all
+        # Auras **you own** attached to permanents you control" (Remove
+        # Enchantments) narrows by ownership and by the *host's* controller,
+        # which is a different seat question about a different object. Nested
+        # under the controller test, that Aura's ownership was dropped and the
+        # sweep took the opponent's Auras too.
+        if self.owner is not None:
+            payload["owner"] = self.owner
         if self.attacking:
             payload["attacking_only"] = True
         if self.blocking:

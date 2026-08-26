@@ -557,18 +557,21 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         return False
 
     # "target Aura attached to a **land**" (Pyramids) / "…to a **creature or
-    # land**" (Enchantment Alteration). Which card types the host may have, as a
-    # list rather than the single boolean this was: the printed type is payload
-    # data, and a second card naming a second type would otherwise have needed a
-    # second key. The relation is readable off the attachment alone, which is why
-    # it lives in the pure matcher at all.
-    attached_types = payload.get("attached_to_types")
-    if attached_types:
+    # land**" (Enchantment Alteration). *What* the host is, as a nested noun
+    # phrase rather than the tuple of card types this was: the printed host is
+    # payload data, and a card narrowing its host any other way would otherwise
+    # have needed a second key. Recursion, not a second rule — a host is a
+    # permanent, so the question asked of it is this same question.
+    #
+    # The pure half answers only what a host can answer alone; a nested phrase
+    # with a seat in it ("permanents **you control**") is
+    # ``subject_filters.subject_matches``'s, which recurses with the observer it
+    # has. This function never sees one, because the lowering that admits such a
+    # phrase routes its sweep through the observed matcher.
+    attached_host = payload.get("attached_to_filter")
+    if attached_host:
         attached = perm.metadata.get("attached_to")
-        if attached is None or not any(
-            attached.is_creature if name == "creature" else attached.has_type(name)
-            for name in attached_types
-        ):
+        if attached is None or not permanent_matches_filter(attached, attached_host):
             return False
 
     # "target permanent **that isn't enchanted**" (Time Elemental) — CR 303.4a.

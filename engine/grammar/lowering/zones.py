@@ -21,7 +21,8 @@ import dataclasses
 from ...oracle_types import OracleInstruction
 from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS,
                                 TESTABLE_SUBJECT_FILTER_KEYS,
-                                card_only_filter)
+                                card_only_filter,
+                                untestable_filter_keys)
 from .. import ast
 from ..errors import LoweringError
 from ._events import (CREATED_TOKEN, EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS,
@@ -375,6 +376,54 @@ def _lower_return_to_zone(
                 },
             ),
         )
+    # "Return to your hand all enchantments you both own and control" (Remove
+    # Enchantments). A *sweep* bounce: not one chosen object but every
+    # permanent a noun phrase names, which is the bounce path below with the
+    # picker taken out — same destination, same CR 400.3 owner's hand, same
+    # question about whether the narrowing can be tested.
+    #
+    # Held to the two gates the targeted bounce is held to, and for the reason
+    # a sweep makes louder: a narrowing dropped from a pick returns the wrong
+    # permanent, and a narrowing dropped from a sweep returns the table.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("all", "each")
+        and not subject.targeted
+        and node.to.name == "hand"
+        and node.from_zone is None
+        and not subject.filter.is_card
+        and subject.filter.zone == "battlefield"
+    ):
+        if node.entering_tapped or node.under_control_of or node.repetitions:
+            raise LoweringError("the sweep bounce reads no rider", node=node)
+        filt = subject.filter
+        unread = _restrictions_beyond(filt, _PAYLOAD_HONOURED_FILTER_FIELDS)
+        if unread:
+            raise LoweringError(
+                "the sweep bounce cannot read " + ", ".join(sorted(unread)), node=node
+            )
+        swept = _filter_payload(filt)
+        untestable = untestable_filter_keys(swept)
+        if untestable:
+            raise LoweringError(
+                "the sweep bounce cannot test " + ", ".join(sorted(untestable)),
+                node=node,
+            )
+        # Every permanent goes to *its owner's* hand (CR 400.3), which is what
+        # the handler does whatever the card printed. "…to your hand" is
+        # therefore only the same sentence when the noun phrase says you own
+        # them — the distinction Obelisk of Undoing already makes for the
+        # targeted bounce, and the one that matters the moment a permanent has
+        # been stolen.
+        owner_ref = node.to.owner
+        if owner_ref is None or owner_ref.kind not in ("owner", "you"):
+            raise LoweringError("the sweep bounce returns a permanent to its owner", node=node)
+        if owner_ref.kind == "you" and filt.owner != "you":
+            raise LoweringError(
+                "\"to your hand\" is not \"to its owner's hand\" unless the "
+                "phrase says you own it", node=node,
+            )
+        return (OracleInstruction("return_all_matching", "", {"filter": swept}),)
     if not _is_target(subject):
         # "target" and "up to one target" (Liliana, Death Mage's +1) both
         # resolve one chosen object; anything wider has no handler.
