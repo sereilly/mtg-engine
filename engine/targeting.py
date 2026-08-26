@@ -994,6 +994,35 @@ def _from_targets_payload(targets) -> dict | None:
     return {"kind": derived, **flags} if derived is not None else None
 
 
+def spec_only_subtype(spec: dict | None) -> str | None:
+    """The one permanent subtype *spec* restricts its targets to, or None.
+
+    "Can this spell target **only** Walls?" — the question Wall of Shadows asks
+    of whatever is aiming at it (CR 115.6). It is a question about the *target
+    description*, not about the source, so it is answered here, where the
+    description was derived, rather than by a second reading of the source's
+    oracle text.
+
+    ``wall_only`` is ``_narrowing_flags``' own name for a Wall subtype filter,
+    so this reads that flag rather than the payload it came from: a caller
+    holding a spec holds the flag and not the filter, and inventing a second
+    route to the same fact is how the picker and the restriction come to
+    disagree. The generic ``filter`` branch is what a spec carrying its whole
+    narrowing (``_from_instructions``' line-502 form) answers from, so a subtype
+    that later grows a flag of its own needs nothing here.
+    """
+    if not spec:
+        return None
+    if spec.get("wall_only"):
+        return "wall"
+    described = spec.get("filter")
+    if isinstance(described, dict):
+        subtype = described.get("subtype_filter")
+        if isinstance(subtype, str):
+            return subtype
+    return None
+
+
 def bounce_subject_filter(payload: dict) -> dict:
     """What "Return target <noun> to its owner's hand" named, as a filter.
 

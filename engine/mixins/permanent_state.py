@@ -1242,6 +1242,7 @@ class PermanentStateMixin:
         *,
         caster_index: int | None = None,
         ability_source=None,
+        source_spec: dict | None = None,
     ) -> bool:
         """Whether *target* is a legal target for *source_card*
         (CR 702.16b/702.18/702.11).
@@ -1265,6 +1266,16 @@ class PermanentStateMixin:
         sources of that colour; it is a different keyword from bare hexproof
         (a colour word in the abilities set, seeded from the ingested keywords
         field), which is why both spellings are consulted.
+
+        *source_spec* is the **target description** the chooser announced, for
+        the one restriction that is about the description rather than about the
+        source: "can't be the target of spells that can target only Walls"
+        (Wall of Shadows). A spell's is derived here from its own card, so the
+        three casting callers need pass nothing; an ability's cannot be — a
+        permanent may carry several abilities that target differently, and
+        ``ability_source`` names the object, not which of its abilities is
+        choosing — so the enumerator, which is holding the spec it is
+        enumerating, hands it over.
         """
         if self._has_keyword(target, "shroud"):
             return False
@@ -1294,6 +1305,42 @@ class PermanentStateMixin:
                 for source_type in ability_target_immunity_classes(target)
             ):
                 return False
+        # "…can't be the target of spells that can target only Walls or of
+        # abilities that can target only Walls" (Wall of Shadows). A narrowed
+        # shroud again, but narrowed along the *other* axis: the two clauses
+        # above ask what the source **is**, this one asks what the source's own
+        # target description **admits**. Tunnel ("Destroy target Wall") is
+        # stopped; Terror ("Destroy target creature") is not, however plainly it
+        # could kill the same Wall.
+        #
+        # Asked per source kind, because CR 115.6 lets a card stop one and not
+        # the other, and the two answers come from different places: a spell's
+        # description is derived from its card right here, while an ability's
+        # must be handed in — ``ability_source`` names the permanent, and a
+        # permanent may carry several abilities that target differently.
+        if source_card is not None or source_spec is not None:
+            from ..target_immunity import (
+                ABILITY_SOURCE,
+                SPELL_SOURCE,
+                narrow_source_immunity_subtypes,
+            )
+
+            forbidden = narrow_source_immunity_subtypes(
+                target, ABILITY_SOURCE if ability_source is not None else SPELL_SOURCE
+            )
+            if forbidden:
+                from ..targeting import derive_cast_spec, spec_only_subtype
+
+                spec = source_spec
+                if spec is None and ability_source is None:
+                    from ..oracle import compile_card_oracle
+
+                    spec = derive_cast_spec(
+                        source_card, compile_card_oracle(source_card)
+                    )
+                only = spec_only_subtype(spec)
+                if only is not None and only in forbidden:
+                    return False
         if source_card is not None and any(
             self._card_has_quality(source_card, quality)
             for quality in self._protection_qualities(target)

@@ -531,3 +531,108 @@ def test_no_mandatory_target_ability_can_be_activated_with_nothing_to_target(sup
         "activated with no legal target — should be refused with nothing paid: "
         f"{offenders}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Round 31 — the printed narrowing the picker used to drop
+# ---------------------------------------------------------------------------
+#
+# `legality._ability_target_legal` was a per-kind if-chain over a bare
+# `return True`, so an instruction kind nobody had listed had its payload
+# filter **dropped at the picker entirely**. That is not a missing feature: the
+# ability then worked more often than the card reads, silently and in the
+# player's favour, which is the failure this repo keeps naming. The chain now
+# ends in the filter itself, and these are the shipped cards it was costing.
+
+
+def _r31_offer(game, source, ability_index=0):
+    """The names the *web payload* offers for `source`'s *ability_index*-th ability.
+
+    Through ``activation_target_spec`` and not ``_enumerate_targets`` directly,
+    because the drop this round fixed happened one step earlier than the check:
+    ``legality._targeting_instruction`` refused to hand the enumerator any
+    instruction whose kind was not in a hand-written set, so the filter never
+    reached the branch that would have applied it. A test that passes the
+    instruction in by hand is green either way and proves nothing about what a
+    player is shown.
+    """
+    seat = game.controller_index_of(source)
+    index = game.battlefield_index_of(source)
+    spec = game.activation_target_spec(seat, index, ability_index=ability_index)
+    return sorted(
+        entry.get("name")
+        for entry in spec["valid_targets"]
+        if entry["kind"] == "permanent"
+    )
+
+
+def _r31_targeting_index(card):
+    """Which of *card*'s usable abilities is the one that chooses a target."""
+    program = compile_card_oracle(card)
+    for index, ability in enumerate(usable_activated_abilities(program)):
+        if derive_activation_spec(ability) is not None:
+            return index
+    raise AssertionError(f"{card.name} has no targeting ability")
+
+
+@pytest.mark.parametrize(
+    "card_name, others, expected",
+    [
+        # "…target **noncreature** artifact becomes an artifact creature…"
+        ("Xenic Poltergeist", ["Black Lotus", "Clockwork Avian"], ["Black Lotus"]),
+        # "…deals 1 damage to target creature **with flying**."
+        ("Grapeshot Catapult", ["Grizzly Bears", "Air Elemental"], ["Air Elemental"]),
+        # "Target **Assembly-Worker** creature gets +1/+1 until end of turn."
+        ("Mishra's Factory", ["Grizzly Bears", "Clockwork Avian"], []),
+    ],
+)
+def test_r31_the_picker_applies_the_abilitys_own_printed_narrowing(
+    catalog_by_name, card_name, others, expected
+):
+    """A narrowing in the instruction's filter reaches the picker (CR 601.2c).
+
+    Each of these is a *shipped* card whose ability names a class of creature
+    and whose picker offered every creature on the board, because its
+    instruction kind — `gain_type`, `deal_damage`,
+    `pump_target_creature_until_eot` — was not one of the thirteen the
+    if-chain listed. Nothing crashed; the ability simply reached targets the
+    card never allowed. (Karakas' "target **legendary** creature" is the same
+    finding in Legends; it is not here only because this fixture is the
+    shipped pool.)
+
+    Mishra's Factory expects an empty list on purpose: it is not an
+    Assembly-Worker until its own animation ability has run, so with only two
+    ordinary creatures on the board there is nothing legal to pump — which the
+    picker previously answered with "both of them".
+    """
+    source = Permanent(card=catalog_by_name[card_name])
+    board = [Permanent(card=catalog_by_name[name]) for name in others]
+    p1 = PlayerState(name="P1", battlefield=[source])
+    p2 = PlayerState(name="P2", battlefield=board)
+    game = _game(p1, p2)
+
+    assert _r31_offer(game, source, _r31_targeting_index(source.card)) == sorted(expected)
+
+
+def test_r31_a_multi_slot_description_offers_what_any_slot_admits(catalog_by_name):
+    """One legal set for several differently-restricted slots (CR 115.3).
+
+    The narrowing above must not be intersected across slots: Garruk, Savage
+    Herald's "target creature you control fights target creature you don't
+    control" restricts slot one to the activator's creatures and slot two to
+    anything, and a picker answering "every slot admits it" would hide every
+    opponent's creature from a bite allowed to name one.
+    """
+    walker = Permanent(
+        card=catalog_by_name["Garruk, Savage Herald"],
+        metadata={"loyalty_counters": 5},
+    )
+    mine = Permanent(card=catalog_by_name["Grizzly Bears"])
+    theirs = Permanent(card=catalog_by_name["Air Elemental"])
+    p1 = PlayerState(name="P1", battlefield=[walker, mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = _game(p1, p2)
+
+    assert _r31_offer(
+        game, walker, _r31_targeting_index(walker.card)
+    ) == ["Air Elemental", "Grizzly Bears"]

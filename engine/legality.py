@@ -153,7 +153,26 @@ def _targeting_instruction(instruction):
 
     if instruction is None:
         return None
+    # **What names a target, not which kinds someone listed.** This was a
+    # frozen set of thirteen instruction kinds — the same thirteen
+    # `_ability_target_legal` branched on, written out a second time — so a
+    # kind absent from it returned None here and the filter was dropped one
+    # step *before* the check that would have applied it. That is why Grapeshot
+    # Catapult's "target creature with flying" offered every creature in the
+    # browser even once the check below could answer it: two copies of one
+    # list, and the earlier copy decided.
+    #
+    # An instruction that carries a `targets` description is one that names a
+    # target, whatever its kind — a payload *shape*, not a card list. The set
+    # below stays because five kinds narrow without one (Stone Giant's
+    # "toughness less than this creature's power", Old Man of the Sea's power
+    # comparison, Sorceress Queen's "other than this creature", Nettling Imp's
+    # non-Wall, Dwarven Warriors' power bound): each is a relation to the
+    # source rather than a description of the target, so it has a branch of its
+    # own below and nothing in `targets` to find it by.
     if instruction.kind in _FILTERABLE_ABILITY_KINDS:
+        return instruction
+    if isinstance(instruction.payload.get("targets"), dict):
         return instruction
     for step in _nested_steps(instruction):
         found = _targeting_instruction(step)
@@ -708,9 +727,14 @@ class LegalityMixin:
                         if not ok:
                             continue
                     else:
+                        # The spec goes with the object. ``ability_source``
+                        # says an *ability* is choosing; the spec says what that
+                        # one ability announced, which is what Wall of Shadows'
+                        # "abilities that can target only Walls" asks about and
+                        # which the source object alone cannot answer.
                         if not self._can_be_targeted(
                             perm, card, caster_index=caster_index,
-                            ability_source=ability_source,
+                            ability_source=ability_source, source_spec=spec,
                         ):
                             continue
                         # Apply the activated ability's own target restriction (e.g.
@@ -844,6 +868,53 @@ class LegalityMixin:
                     for other in self.creatures_in_combat_with(source_permanent)
                 )
             return True
+        # **The generic tail, and the reason it is not another branch.**
+        # Every branch above says the same sentence in its own words: "apply the
+        # filter this instruction's payload already carries". A kind absent from
+        # the chain fell through to a bare ``return True``, and that is not a
+        # missing feature — it is the printed narrowing *dropped at the picker*,
+        # silently and in the player's favour. Karakas offered every creature
+        # for "target **legendary** creature", Grapeshot Catapult every creature
+        # for "target creature **with flying**", Mishra's Factory every creature
+        # for "target **Assembly-Worker**"; each of them a shipped card whose
+        # ability worked more often than it reads.
+        #
+        # It is safe as a default rather than as an opt-in list because the
+        # compiler will not admit a narrowed line at all unless every key of its
+        # filter is in ``TESTABLE_SUBJECT_FILTER_KEYS`` (see
+        # ``engine/subject_filters.py``). So a filter that reaches here is one
+        # ``subject_matches`` answers in full — and the branches above survive
+        # only where the restriction is *not* in the filter (an in-combat
+        # relation, the source's own power, the equip legality).
+        #
+        # ``subject_matches`` rather than ``permanent_matches_filter``: the
+        # relative keys are exactly the ones a picker can answer and a pure
+        # matcher cannot — "you control" is the activating seat, "another" is
+        # the source — and both are already in this method's hands.
+        #
+        # A description whose slots are *differently* restricted carries one
+        # filter per slot, and the picker enumerates one legal set for all of
+        # them — so a permanent is offered when **some** slot admits it, never
+        # only when every slot does. Garruk, Savage Herald's -2 is the case:
+        # slot one is "creature you control", slot two is any creature, and
+        # intersecting them would hide every opponent's creature from a bite
+        # that is allowed to name one. Per-slot legality stays the handler's.
+        targets = instruction.payload.get("targets") or {}
+        slot_filters = targets.get("filters")
+        if isinstance(slot_filters, list) and len(slot_filters) > 1:
+            return any(
+                subject_matches(
+                    self, perm, slot or {},
+                    observer=controller_index, source=source_permanent,
+                )
+                for slot in slot_filters
+            )
+        described = targets.get("filter")
+        if described:
+            return subject_matches(
+                self, perm, described,
+                observer=controller_index, source=source_permanent,
+            )
         return True
 
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:

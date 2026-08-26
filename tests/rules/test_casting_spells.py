@@ -1049,3 +1049,52 @@ def test_608_2c_chosen_modes_resolve_in_printed_order():
     gained = next(i for i, line in enumerate(game.log) if "gained 3 life" in line)
     lost = next(i for i, line in enumerate(game.log) if "lost 2 life" in line)
     assert gained < lost
+
+
+# ---------------------------------------------------------------------------
+# Round 31 — the target gate reads whichever way a target was addressed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("601.2c", "702.16b")
+def test_r31_protection_is_enforced_when_the_target_is_named_by_id(catalog_by_name):
+    """A target named by stable id gets the same CR 702.16b check as a slot.
+
+    ``_validate_cast_targets`` read the battlefield **slot** and nothing else,
+    so a caller that addressed its target the way this codebase asks for — by
+    ``Permanent.permanent_id``, because an index renumbers under anything that
+    leaves the battlefield — was not checked at all. Drain Life could be cast at
+    a White Knight with protection from black; the spell went on the stack and
+    resolved, and only the damage step declined to hurt it.
+
+    Both spellings are asserted together on purpose. The bug was not that either
+    check was wrong, it was that two ways of naming one target disagreed, and a
+    test of one spelling alone is what let them.
+    """
+    knight = Permanent(card=catalog_by_name["White Knight"])
+    p1 = PlayerState(name="P1", hand=[catalog_by_name["Drain Life"]])
+    p2 = PlayerState(name="P2", battlefield=[knight])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+
+    drain = catalog_by_name["Drain Life"]
+    by_slot = game._validate_cast_targets(
+        drain, 0, target_player_index=1, target_permanent_index=0,
+    )
+    by_id = game._validate_cast_targets(
+        drain, 0, target_player_index=1,
+        target_permanent_ids=[knight.permanent_id],
+    )
+    assert by_id[0] is False, by_id
+    assert "White Knight" in by_id[1]
+    assert by_slot[0] is False
+
+    result = game.cast_from_hand(
+        0, "Drain Life", target_player_index=1, x_value=2,
+        target_permanent_ids=[knight.permanent_id],
+    )
+    assert not result.supported, result.details
+    assert "White Knight" in result.details

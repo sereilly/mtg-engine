@@ -15,6 +15,17 @@ Two sentences here, one subject:
   spell and every ability; these stop one class of spell, so neither is shroud
   with a filter bolted on. The class is payload, like the land type in
   ``combat_restrictions.py``.
+* "This creature can't be the target of spells that can target only Walls or of
+  abilities that can target only Walls" (Wall of Shadows) — a narrowed shroud
+  again, but narrowed along a **different axis**. The two clauses above name a
+  class the source *belongs to* (an Aura spell, an artifact source), readable
+  off the source object alone. This one names what the source's own target
+  description *admits*: Tunnel is stopped because "target Wall" can be answered
+  by nothing else, while Terror's "target creature" is fine however many Walls
+  it could hit. So it is answered from the source's derived target spec
+  (``targeting.spec_only_subtype``) rather than from the source's own
+  characteristics, and the printed subtype is payload like every other.
+
 * "…and can't be enchanted by other Auras" (Anti-Magic Aura) — a separate rule
   about *attachment* rather than targeting, and it has to be separate: an Aura
   spell targets, so the clause above already stops one being cast at the
@@ -52,6 +63,19 @@ ATTACHED_SUBJECT = "attached"
 #: The class naming *every* spell, where anything else names a subtype.
 ANY_SPELL = "spell"
 
+#: Which of the two things CR 115.6 lets a card be immune to separately. A
+#: printed line may name one, the other, or both, so the answer is asked per
+#: kind and never once for both.
+SPELL_SOURCE = "spell"
+ABILITY_SOURCE = "ability"
+
+#: The printed plural for each, as the "…that can target only X" clause spells
+#: it. Data rather than a branch: the clause reads identically either side.
+_SOURCE_KIND_WORDS: dict[str, str] = {
+    "spells": SPELL_SOURCE,
+    "abilities": ABILITY_SOURCE,
+}
+
 #: The claim string the support gates use.
 CLAIM = "target_immunity"
 
@@ -77,6 +101,19 @@ class TargetImmunity:
 
 
 @dataclass(frozen=True)
+class NarrowSourceImmunity:
+    """One printed "can't be the target of <sources> that can target only <Type>s".
+
+    *only_subtype* is singular ("wall"), because that is what a permanent's
+    subtypes are asked for; the printed plural is the clause's, not the rule's.
+    """
+
+    subject: str
+    source_kind: str
+    only_subtype: str
+
+
+@dataclass(frozen=True)
 class EnchantImmunity:
     """One printed "can't be enchanted by other Auras" clause."""
 
@@ -88,6 +125,18 @@ _TARGET_IMMUNITY = re.compile(
 )
 _ENCHANT_IMMUNITY = re.compile(
     rf"^(?P<who>{_SELF}|{_ATTACHED}) can't be enchanted by other auras$"
+)
+
+#: The head of a narrowed-source clause, and one of the things it conjoins.
+#: Two patterns rather than one alternation because the printed sentence names
+#: the subject once and the source kinds twice — "…of spells that can target
+#: only Walls **or of** abilities that can target only Walls" — and every half
+#: has to be read or the card is a dropped rider away from a silent hole.
+_NARROW_SOURCE_HEAD = re.compile(
+    rf"^(?P<who>{_SELF}|{_ATTACHED}) can't be the target of (?P<body>.+)$"
+)
+_NARROW_SOURCE_PART = re.compile(
+    r"^(?:of )?(?P<kinds>[a-z]+) that can target only (?P<subtype>[a-z-]+)s$"
 )
 
 
@@ -131,6 +180,32 @@ def target_immunities(line: str) -> tuple[TargetImmunity, ...]:
     return tuple(found)
 
 
+def narrow_source_immunities(line: str) -> tuple[NarrowSourceImmunity, ...]:
+    """Every "can't be the target of <sources> that can target only <Type>s" *line* prints.
+
+    **All or nothing.** The clause conjoins one restriction per source kind, and
+    a half this cannot read is a half that would be dropped — so an unreadable
+    conjunct withdraws the whole clause and the card is reported unsupported
+    naming it, rather than admitted with the abilities half silently absent.
+    """
+    match = _NARROW_SOURCE_HEAD.match(line)
+    if match is None:
+        return ()
+    subject = _subject_of(match.group("who"))
+    found = []
+    for part in match.group("body").split(" or "):
+        part_match = _NARROW_SOURCE_PART.match(part.strip())
+        if part_match is None:
+            return ()
+        source_kind = _SOURCE_KIND_WORDS.get(part_match.group("kinds"))
+        if source_kind is None:
+            return ()
+        found.append(
+            NarrowSourceImmunity(subject, source_kind, part_match.group("subtype"))
+        )
+    return tuple(found)
+
+
 def enchant_immunities(line: str) -> tuple[EnchantImmunity, ...]:
     """Every "can't be enchanted by other Auras" clause *line* prints."""
     return tuple(
@@ -152,7 +227,11 @@ def immunity_claims_line(line: str) -> bool:
     if not clauses:
         return False
     return all(
-        bool(target_immunities(clause) or enchant_immunities(clause))
+        bool(
+            target_immunities(clause)
+            or enchant_immunities(clause)
+            or narrow_source_immunities(clause)
+        )
         for clause in clauses
     )
 
@@ -206,6 +285,33 @@ def spell_target_immunity_classes(permanent) -> frozenset[str]:
     return frozenset(classes)
 
 
+def narrow_source_immunity_subtypes(permanent, source_kind: str) -> frozenset[str]:
+    """The subtypes a *source_kind* may not be restricted to when aiming at *permanent*.
+
+    The sibling of :func:`spell_target_immunity_classes`, gathering the
+    permanent's own lines and the Auras attached to it for the same reason: one
+    question, one answer, however the restriction reached the creature. Asked
+    per source kind because CR 115.6 lets a card stop one and not the other, and
+    Wall of Shadows printing both is not permission to answer for both at once.
+    """
+    from .auras import auras_attached_to
+
+    subtypes = {
+        immunity.only_subtype
+        for line in _lines_of(permanent.effective_card)
+        for immunity in narrow_source_immunities(line)
+        if immunity.subject == SELF_SUBJECT and immunity.source_kind == source_kind
+    }
+    subtypes |= {
+        immunity.only_subtype
+        for aura in auras_attached_to(permanent)
+        for line in _lines_of(aura.effective_card)
+        for immunity in narrow_source_immunities(line)
+        if immunity.subject == ATTACHED_SUBJECT and immunity.source_kind == source_kind
+    }
+    return frozenset(subtypes)
+
+
 def cannot_be_enchanted(permanent, *, by_aura=None) -> bool:
     """Whether an Aura may not become attached to *permanent* (CR 303.4).
 
@@ -247,13 +353,17 @@ def spell_is_in_class(card, spell_class: str) -> bool:
 
 
 __all__ = [
+    "ABILITY_SOURCE",
     "ANY_SPELL",
     "ATTACHED_SUBJECT",
     "CLAIM",
     "SELF_SUBJECT",
+    "SPELL_SOURCE",
     "cannot_be_enchanted",
     "enchant_immunities",
     "immunity_claims_line",
+    "narrow_source_immunities",
+    "narrow_source_immunity_subtypes",
     "spell_is_in_class",
     "spell_target_immunity_classes",
     "target_immunities",

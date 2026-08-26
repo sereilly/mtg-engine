@@ -166,3 +166,160 @@ def test_time_elemental_never_offers_an_enchanted_permanent_as_a_bounce_target(s
 
     keys = {entry["key"] for entry in offered}
     assert keys == {"0-0", "1-0", "1-2"}, offered
+
+
+# ---------------------------------------------------------------------------
+# Round 31 — a shroud narrowed by what the *source's own description* admits
+# ---------------------------------------------------------------------------
+
+
+def _r31_wall_board(set_pool, extra=()):
+    """Ali Baba (ARN) under P1; Wall of Shadows and *extra* (LEA) under P2."""
+    ali = Permanent(card=set_pool("ARN")["Ali Baba"])
+    shadows = Permanent(card=set_pool("LEG")["Wall of Shadows"])
+    others = [Permanent(card=set_pool("LEA")[name]) for name in extra]
+    p1 = PlayerState(name="P1", battlefield=[ali])
+    p2 = PlayerState(name="P2", battlefield=[shadows, *others])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, ali, shadows, others
+
+
+def test_wall_of_shadows_is_supported(set_pool):
+    from engine.oracle import compile_card_oracle
+
+    program = compile_card_oracle(set_pool("LEG")["Wall of Shadows"])
+    assert program.supported
+
+
+def test_wall_of_shadows_refuses_a_spell_that_can_target_only_walls(set_pool):
+    """Tunnel ("Destroy target Wall") cannot be aimed at it.
+
+    The restriction is about the *spell's own target description*, not about
+    what class of object the spell is — which is what makes it a different
+    axis from Anti-Magic Aura's "can't be the target of spells". Tunnel is
+    stopped because "target Wall" admits nothing else.
+    """
+    game, _ali, shadows, (stone,) = _r31_wall_board(set_pool, extra=["Wall of Stone"])
+    tunnel = set_pool("LEA")["Tunnel"]
+
+    ok, reason = game._validate_cast_targets(
+        tunnel, 0, target_player_index=1, target_permanent_index=0,
+    )
+    assert not ok and "Wall of Shadows" in reason
+    # …and the picker agrees, which is the half a player sees.
+    assert [entry.get("name") for entry in game._enumerate_targets(
+        0, tunnel, {"kind": "creature", "wall_only": True}, for_cast=True,
+    )] == ["Wall of Stone"]
+    assert stone is not shadows
+
+
+def test_wall_of_shadows_still_answers_a_spell_that_can_target_any_creature(set_pool):
+    """A spell whose description is wider is not stopped, however plainly it
+    could kill the same Wall — "can target only Walls" is a fact about the
+    description, not about the outcome."""
+    game, _ali, shadows, _others = _r31_wall_board(set_pool)
+    bolt = set_pool("LEA")["Lightning Bolt"]
+
+    assert game._can_be_targeted(shadows, bolt, caster_index=0)
+
+
+def test_wall_of_shadows_refuses_an_ability_that_can_target_only_walls(set_pool):
+    """Ali Baba's "{R}: Tap target Wall" cannot pick it (CR 602.2b).
+
+    Asked of the *ability's* spec rather than of Ali Baba, because a permanent
+    may carry several abilities that target differently — the source object
+    alone cannot say which description is choosing.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    game, ali, _shadows, (stone,) = _r31_wall_board(set_pool, extra=["Wall of Stone"])
+    ability, = compile_card_oracle(ali.card).activated_abilities
+    spec = derive_activation_spec(ability)
+
+    offered = game._enumerate_targets(
+        0, ali.card, dict(spec), for_cast=False,
+        ability_instruction=ability.instruction,
+        source_permanent=ali, ability_source=ali,
+    )
+    assert [entry.get("name") for entry in offered] == ["Wall of Stone"]
+    assert stone.card.name == "Wall of Stone"
+
+
+def test_wall_of_shadows_alone_makes_that_ability_unactivatable(set_pool):
+    """No legal target means the ability is refused with nothing paid
+    (CR 602.2b via 601.2c) — the gate reads the same enumerated list."""
+    game, ali, _shadows, _others = _r31_wall_board(set_pool)
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+    ali.summoning_sick = False
+
+    from engine.oracle import compile_card_oracle
+
+    ability, = compile_card_oracle(ali.card).activated_abilities
+    assert game.activation_target_refusal(0, ali, ability) is not None
+
+
+def test_wall_of_shadows_survives_tunnel_in_a_real_cast(set_pool):
+    """Not a compiler answer: the spell is actually cast, resolved and the board
+    read afterwards.
+
+    Aimed at the protected Wall the cast is refused outright (CR 601.2c — an
+    illegal choice makes the spell uncastable, not merely ineffective); aimed at
+    the Wall beside it the same spell destroys it, so the refusal is the
+    restriction and not a broken card.
+
+    Both spellings of a chosen target are cast: the battlefield slot, and the
+    stable id the wire actually carries. The second is not decoration — see
+    `test_r31_the_cast_gate_reads_the_ids_a_caller_names` below.
+    """
+    game, _ali, shadows, (stone,) = _r31_wall_board(set_pool, extra=["Wall of Stone"])
+    tunnel = set_pool("LEA")["Tunnel"]
+    game.players[0].hand.extend([tunnel, tunnel])
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+    shadows_slot = game.battlefield_index_of(shadows)
+    stone_slot = game.battlefield_index_of(stone)
+
+    refused = game.cast_from_hand(
+        0, "Tunnel", target_player_index=1, target_permanent_index=shadows_slot,
+    )
+    assert not refused.supported, refused.details
+    assert game.is_on_battlefield(shadows)
+
+    allowed = game.cast_from_hand(
+        0, "Tunnel", target_player_index=1, target_permanent_index=stone_slot,
+    )
+    assert allowed.supported, allowed.details
+    game._settle()
+    assert not game.is_on_battlefield(stone)
+    assert game.is_on_battlefield(shadows)
+
+
+def test_r31_the_cast_gate_reads_the_ids_a_caller_names(set_pool):
+    """CR 702.16b/601.2c is enforced whichever way the target was addressed.
+
+    The gate read the battlefield *slot* alone, so a caller naming its target by
+    stable id — the addressing this codebase asks for, since an index renumbers
+    under anything that leaves — got no check at all. Tunnel destroyed a Wall of
+    Shadows that can't be its target, and Drain Life was cast at a White Knight
+    it has protection from. The web layer never showed it because
+    `web/actions.py` resolves the ids to indices and sends both, which is what
+    makes this the quiet kind: one caller's spelling enforced, another's not.
+    """
+    game, _ali, shadows, _others = _r31_wall_board(set_pool)
+    game.players[0].hand.append(set_pool("LEA")["Tunnel"])
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+
+    result = game.cast_from_hand(
+        0, "Tunnel", target_player_index=1,
+        target_permanent_ids=[shadows.permanent_id],
+    )
+    assert not result.supported, result.details
+    assert "Wall of Shadows" in result.details
+    assert game.is_on_battlefield(shadows)

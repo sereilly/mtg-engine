@@ -522,6 +522,7 @@ class SpellCastingMixin:
         target_ok, target_reason = self._validate_cast_targets(
             card, caster_index, target_player_index, target_permanent_index, target_stack_item,
             mode_index=mode_index, x_value=x_value,
+            target_permanent_ids=target_permanent_ids,
         )
         if not target_ok:
             self.log.append(target_reason)
@@ -943,6 +944,7 @@ class SpellCastingMixin:
         target_stack_item=None,
         mode_index: int | None = None,
         x_value: int | None = None,
+        target_permanent_ids: list[int | None] | None = None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
@@ -1119,17 +1121,41 @@ class SpellCastingMixin:
         # Dead over a White Knight the spell never named: CR 702.16b is about
         # the spell's own targets, and a card in a graveyard is not a permanent
         # (CR 115.2), so it has no protection to check in the first place.
-        chosen_slots = (
-            ()
-            if graveyard_target_spec(card, program, mode_index=mode_index) is not None
-            else target_permanent_index
-            if isinstance(target_permanent_index, list)
-            else [target_permanent_index]
-        )
-        for slot in chosen_slots:
-            if not isinstance(slot, int) or not (0 <= slot < len(target.battlefield)):
+        #
+        # **The ids are read first, and that is a fix rather than a
+        # convenience.** A caller may name its targets by stable id and leave
+        # the slot out entirely — the addressing CLAUDE.md asks for, since an
+        # index renumbers under anything that leaves — and this gate used to
+        # look only at the slot. So `cast_from_hand(..., target_permanent_ids=
+        # [...])` skipped CR 702.16b altogether: Drain Life was cast at a White
+        # Knight it has protection from, and Tunnel destroyed a Wall of Shadows
+        # that can't be its target. Nothing crashed, and the web layer never
+        # showed it because `web/actions.py` resolves the ids to
+        # `target_permanent_indices` and passes both — which is exactly the
+        # shape of hazard this repo keeps naming: one caller's spelling
+        # enforced, another's silently not.
+        if graveyard_target_spec(card, program, mode_index=mode_index) is not None:
+            chosen_targets: list = []
+        elif target_permanent_ids:
+            chosen_targets = [
+                self.permanent_by_id(permanent_id)
+                for permanent_id in target_permanent_ids
+                if permanent_id is not None
+            ]
+        else:
+            slots = (
+                target_permanent_index
+                if isinstance(target_permanent_index, list)
+                else [target_permanent_index]
+            )
+            chosen_targets = [
+                target.battlefield[slot]
+                for slot in slots
+                if isinstance(slot, int) and 0 <= slot < len(target.battlefield)
+            ]
+        for chosen in chosen_targets:
+            if chosen is None:
                 continue
-            chosen = target.battlefield[slot]
             if chosen.is_creature and not self._can_be_targeted(
                 chosen, card, caster_index=caster_index
             ):
