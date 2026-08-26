@@ -238,7 +238,14 @@ def fire_delayed_triggers(
     ]
     game._enqueue_triggered_batch([
         entry.trigger_event(
-            source_permanent=source_permanent if source_permanent is not None else subject,
+            # CR 603.7d: the source of a delayed ability created by a spell is
+            # *that spell*, not the object the ability watches — so the stack
+            # item gets a source permanent only where a fire site deliberately
+            # names one ("…deals combat damage to a player, <do something to
+            # **it**>"). Defaulting it to the subject would also make the
+            # ability doubled by a Strionic-style effect, which
+            # `engine/extra_triggers.py` says explicitly it must not be.
+            source_permanent=source_permanent,
             trigger_context=trigger_context,
         )
         for entry in fired

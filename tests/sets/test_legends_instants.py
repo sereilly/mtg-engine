@@ -614,3 +614,179 @@ def test_storm_seeker_deals_nothing_to_an_empty_hand(set_pool):
     game._settle()
 
     assert p2.life == 20, game.log
+
+
+# ---------------------------------------------------------------------------
+# Delayed triggered abilities (round 22) — CR 603.7. The effect creates an
+# ability now; it fires later, if it fires at all.
+# ---------------------------------------------------------------------------
+
+
+def _wall() -> CardDefinition:
+    return CardDefinition(
+        name="Test Wall", mana_cost="", cmc=0.0, type_line="Creature - Wall",
+        oracle_text="Defender", colors=(), color_identity=(),
+        keywords=("Defender",), produced_mana=(),
+        raw={"name": "Test Wall", "type_line": "Creature - Wall",
+             "power": "0", "toughness": "6"},
+    )
+
+
+def _glyph_of_life_board(set_pool):
+    """P1's Wall, P2's attacker, and Glyph of Life in P1's hand."""
+    wall = Permanent(card=_wall())
+    attacker = Permanent(card=_creature("Attacker"), attacking=True)
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Glyph of Life"]],
+                     battlefield=[wall], life=20)
+    p2 = PlayerState(name="P2", battlefield=[attacker], life=20)
+    game = Game(players=[p1, p2])
+    game.cast_from_hand(
+        0, "Glyph of Life", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+    return game, p1, wall, attacker
+
+
+def _hit(game, recipient, amount, source, *, combat=True) -> None:
+    from engine.damage_events import deal_damage
+
+    deal_damage(game, {
+        "recipient": recipient, "amount": amount,
+        "source": source, "combat": combat,
+    })
+    game._settle()
+
+
+def test_glyph_of_life_compiles_to_a_targeting_half_and_a_delayed_ability(set_pool):
+    """Two printed sentences, two instructions: the target is chosen as the
+    spell is cast, and the ability that watches it is created on resolution."""
+    program = compile_card_oracle(set_pool("LEG")["Glyph of Life"])
+    assert program.supported, program.reason
+    # Two sentences are one `sequence` (CR 608.2), and the tail carries a
+    # second `spell_pattern` marker the compiler appends to every spell.
+    steps = program.instructions[0].payload["steps"]
+    assert [i.kind for i in steps] == [
+        "choose_target_permanent", "create_delayed_trigger",
+    ]
+    payload = steps[1].payload
+    assert payload["event"] == "bound_permanent_dealt_damage"
+    # "by an attacking creature" is a filter of its own, tested against what
+    # *dealt* the damage — not folded into the subject, which is what took it.
+    assert payload["agent_filter"] == {"type_filter": "creature", "attacking_only": True}
+    assert payload["once"] is False
+
+
+def test_glyph_of_life_gains_the_damage_an_attacker_deals_its_wall(set_pool):
+    game, p1, wall, attacker = _glyph_of_life_board(set_pool)
+
+    _hit(game, wall, 3, attacker)
+
+    assert p1.life == 23
+
+
+def test_glyph_of_life_keeps_gaining_all_turn(set_pool):
+    """"Whenever" is CR 603.7b's stated duration: the ability is not spent by
+    firing once."""
+    game, p1, wall, attacker = _glyph_of_life_board(set_pool)
+
+    _hit(game, wall, 3, attacker)
+    _hit(game, wall, 2, attacker)
+
+    assert p1.life == 25
+
+
+def test_glyph_of_life_ignores_a_source_that_is_not_attacking(set_pool):
+    """The narrowing is the whole card: without it any ping into the Wall
+    would gain life."""
+    game, p1, wall, _attacker = _glyph_of_life_board(set_pool)
+    pinger = Permanent(card=_creature("Pinger"))
+    game.players[1].battlefield.append(pinger)
+
+    _hit(game, wall, 3, pinger, combat=False)
+
+    assert p1.life == 20
+
+
+def test_glyph_of_life_ignores_damage_to_another_creature(set_pool):
+    """The ability is bound to the creature the spell chose, by id — a
+    look-alike beside it is not the object the sentence named."""
+    game, p1, _wall_perm, attacker = _glyph_of_life_board(set_pool)
+    bystander = Permanent(card=_wall())
+    game.players[0].battlefield.append(bystander)
+
+    _hit(game, bystander, 3, attacker)
+
+    assert p1.life == 20
+
+
+def test_glyph_of_life_expires_with_the_turn(set_pool):
+    """"This turn" is how long the ability lives (CR 603.7b); the cleanup
+    sweep is what ends it."""
+    game, p1, wall, attacker = _glyph_of_life_board(set_pool)
+
+    game.resolve_cleanup_step(0)
+    assert game.delayed_triggers == []
+
+    _hit(game, wall, 3, attacker)
+    assert p1.life == 20
+
+
+def _mana_drain_board(set_pool):
+    """P1 casts a six-drop; P2 answers with Mana Drain."""
+    p1 = PlayerState(name="P1", hand=[set_pool("LEA")["Shivan Dragon"]])
+    p2 = PlayerState(name="P2", hand=[set_pool("LEG")["Mana Drain"]])
+    game = Game(players=[p1, p2])
+    game.queue_from_hand(0, "Shivan Dragon")
+    game.queue_from_hand(1, "Mana Drain", target_player_index=0)
+    game.resolve_stack()
+    game._settle()
+    return game, p1, p2
+
+
+def test_mana_drain_counters_and_arms_one_delayed_ability(set_pool):
+    game, p1, _p2 = _mana_drain_board(set_pool)
+
+    assert [card.name for card in p1.graveyard] == ["Shivan Dragon"]
+    entry, = game.delayed_triggers
+    assert entry.event == "controllers_next_main_phase"
+    assert entry.controller_index == 1
+    # CR 608.2h: the mana value was read while the spell was still on the
+    # stack. Nothing later can ask a countered spell what it cost.
+    assert entry.captured["countered_spell_mana_value"] == 6
+
+
+def test_mana_drain_survives_the_turn_it_was_cast_in(set_pool):
+    """"Your next main phase" names no duration, so the ability waits however
+    many turns it takes — the cleanup sweep must not take it."""
+    game, _p1, _p2 = _mana_drain_board(set_pool)
+
+    game.resolve_cleanup_step(0)
+
+    assert len(game.delayed_triggers) == 1
+
+
+def test_mana_drain_does_not_fire_on_the_other_players_main_phase(set_pool):
+    game, p1, _p2 = _mana_drain_board(set_pool)
+
+    game.active_player_index = 0
+    game._enter_main_phase(precombat=True)
+    game._settle()
+
+    assert not any(p1.mana_pool.values())
+    assert len(game.delayed_triggers) == 1
+
+
+def test_mana_drain_adds_the_countered_spells_mana_value_once(set_pool):
+    game, _p1, p2 = _mana_drain_board(set_pool)
+
+    game.active_player_index = 1
+    game._enter_main_phase(precombat=True)
+    game._settle()
+    assert p2.mana_pool["C"] == 6
+    assert game.delayed_triggers == []
+
+    # CR 603.7b: "only once". A second main phase is a second entry into the
+    # same fire site, and the ability is no longer there to answer it.
+    game._enter_main_phase(precombat=False)
+    game._settle()
+    assert p2.mana_pool["C"] == 6

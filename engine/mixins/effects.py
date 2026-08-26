@@ -71,6 +71,11 @@ class EffectsMixin:
         fire_delayed_triggers(
             self, "creature_deals_combat_damage_to_player",
             subject=attacker,
+            # Named rather than defaulted: this event's effects act on the
+            # creature that dealt the damage ("…, <do something to **it**>"),
+            # which is the one shape where the watched object is also the
+            # ability's stack source.
+            source_permanent=attacker,
             trigger_context={
                 "defending_player_index": self.players.index(defending_player),
                 "amount": amount,
