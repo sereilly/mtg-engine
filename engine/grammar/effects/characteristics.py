@@ -432,7 +432,27 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     counter = token.text
     stream.expect_word("counter", "counters")
     stream.expect_word("on")
-    subject = parse_recipient(stream)
+    # "…put a -1/-1 counter on **that creature**." (Unstable Mutation;
+    # Takklemaggot prints the same sentence with a -0/-1 pair.) The bound-object
+    # phrase, read here exactly as :func:`_parse_remove_counter` reads its own
+    # "remove a sleep counter from that creature": "that <noun>" restates an
+    # object the line already bound — its trigger head — so it must not become a
+    # choice, and teaching the shared noun parser the phrase would hand it to
+    # every line that prints those words. The lowering is what checks a binder
+    # actually exists.
+    bound = stream.mark()
+    if stream.accept_word("that"):
+        bound_noun = stream.peek_word()
+        if bound_noun is not None and bound_noun in CARD_TYPES:
+            stream.advance()
+            subject: ast.Recipient | None = ast.TargetSpec(
+                "that", ast.ObjectFilter(card_types=(bound_noun,))
+            )
+        else:
+            stream.reset(bound)
+            subject = parse_recipient(stream)
+    else:
+        subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected a permanent to put counters on")
     # "…, then double the number of +1/+1 counters on that creature."

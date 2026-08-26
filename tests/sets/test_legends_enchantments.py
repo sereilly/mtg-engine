@@ -1932,3 +1932,78 @@ def test_relic_bind_may_only_enchant_an_artifact_an_opponent_controls(set_pool):
         card, 0, target_player_index=0, target_permanent_index=0,
     )
     assert not ok, "the caster's own artifact is not a legal host"
+
+
+# ---------------------------------------------------------------------------
+# Puppet Master (round 32) — the attached-death trigger that returns the dead
+# creature's *card*, and the optional payment that buys the Aura back.
+# ---------------------------------------------------------------------------
+
+
+def _r32_puppet_master(set_pool):
+    """Puppet Master enchanting an opponent's 2/2. Returns (game, host)."""
+    host = Permanent(card=_creature("Host", 2, 2))
+    aura = Permanent(card=set_pool("LEG")["Puppet Master"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[aura]),
+        PlayerState(name="P2", battlefield=[host]),
+    ])
+    attach_aura(aura, host)
+    return game, host
+
+
+def test_puppet_master_returns_the_dead_creatures_card_to_its_owners_hand(set_pool):
+    """"When enchanted creature dies, return **that card** to its owner's hand."
+
+    The bound object: not a target, not the Aura's controller's card, and found
+    in the graveyard by the identity the fire site froze (CR 603.10).
+    """
+    game, host = _r32_puppet_master(set_pool)
+    card = host.card
+
+    game._destroy_target_permanent(game.players[1], type_filter="creature")
+    game.check_state_based_actions()
+    game.resolve_stack()
+
+    assert [held.name for held in game.players[1].hand] == [card.name]
+    assert card not in game.players[1].graveyard
+
+
+def test_puppet_master_does_not_deal_creature_bonds_damage(set_pool):
+    """The regression this round was found by.
+
+    ``_trigger_aura_death_effects`` fired on the ``attached_creature_dies``
+    *condition*, so every Aura printing "when enchanted creature dies" got
+    Creature Bond's "damage equal to that creature's toughness" — a supported
+    card performing a different card's effect. It reads the printed line now.
+    """
+    game, host = _r32_puppet_master(set_pool)
+
+    game._destroy_target_permanent(game.players[1], type_filter="creature")
+    game.check_state_based_actions()
+    game.resolve_stack()
+
+    assert game.players[1].life == 20, "the creature's controller takes no damage"
+
+
+def test_puppet_master_buys_itself_back_for_three_blue(set_pool):
+    """"…you may pay {U}{U}{U}. If you do, return this card to its owner's hand."
+
+    A branch of the offer, not a step of its own: paying returns the Aura from
+    the graveyard CR 704.5m put it in, declining leaves it there with the mana
+    unspent.
+    """
+    for accept, expected_hand, expected_pool in ((True, 1, 0), (False, 0, 3)):
+        game, host = _r32_puppet_master(set_pool)
+        aura_card = game.players[0].battlefield[0].card
+        game.players[0].mana_pool["U"] = 3
+
+        game._destroy_target_permanent(game.players[1], type_filter="creature")
+        game.check_state_based_actions()
+        game.resolve_stack()
+        assert aura_card in game.players[0].graveyard, "CR 704.5m put the Aura here"
+
+        assert game.confirm_optional_pay(0, "Puppet Master", accept=accept)
+
+        assert len(game.players[0].hand) == expected_hand
+        assert game.players[0].mana_pool["U"] == expected_pool

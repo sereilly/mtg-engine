@@ -1788,22 +1788,23 @@ def test_enchanted_land_upkeep_is_dispatched_like_its_peers():
             "At the beginning of the upkeep of enchanted creature's controller, "
             "that player may pay {4}. If the player does, untap the creature.",
         ),
-        (
-            "Unstable Mutation",
-            "At the beginning of the upkeep of enchanted creature's controller, "
-            "put a -1/-1 counter on that creature.",
-        ),
     ],
 )
 def test_the_new_trigger_phrase_does_not_drag_in_effects_it_cannot_read(card, line):
     """Adding a trigger phrase widens what reaches the effect productions, and
-    these three are the cards that reach them and must still be refused.
+    these two are the cards that reach them and must still be refused.
 
     Power Leak's damage is scaled by a payment the grammar has no node for;
     Paralyze's optional untap decomposes into a ``may`` that no upkeep handler
-    is keyed to; Unstable Mutation's "that creature" is a referent bound by the
-    trigger, which the statement grammar cannot see. Each falls back to the
-    legacy rules whole rather than compiling onto a nearby handler.
+    is keyed to. Each falls back to the legacy rules whole rather than compiling
+    onto a nearby handler.
+
+    Unstable Mutation used to be the third. Its "put a -1/-1 counter on **that
+    creature**" is now a production — the bound-object branch the removal side
+    already had, mirrored onto the placement — so the line lowers to
+    ``add_pt_counters_to_attached`` with the CR 122.1a pair as payload, and the
+    card-name hook that spelled out "-1/-1" is gone. It was the entry that kept
+    Takklemaggot's identical sentence, printed with -0/-1, out.
     """
     result = compile_line(line, card_name=card)
 
@@ -2059,14 +2060,19 @@ def test_every_executed_trigger_agrees_with_the_legacy_condition_table(catalog):
 
 
 # Pairs dispatched by an upkeep scan that is not the UPKEEP_EFFECTS registry.
-# Both reach state the registry's UpkeepContext does not carry -- a graveyard
-# position, and a P/T change applied to the enchanted permanent -- so they read
-# their triggers directly in engine/phases/upkeep_step.py. Neither is grammar-
-# executed today; they are listed so this guard describes the real dispatch
-# surface rather than only the part that happens to be exercised.
+# It reaches state the registry's UpkeepContext does not carry -- a graveyard
+# position -- so it reads its triggers directly in engine/phases/upkeep_step.py.
+# It is not grammar-executed today; it is listed so this guard describes the
+# real dispatch surface rather than only the part that happens to be exercised.
+#
+# The Aura decay pair used to be here too: a loop over every enchantment on
+# every battlefield, keyed on one hard-coded instruction kind, reached by a
+# card-name hook whose key spelled out "-1/-1". It is an ordinary
+# ``@upkeep_effect("upkeep_enchanted_controller", "add_pt_counters_to_attached")``
+# now, with the CR 122.1a pair as payload, so it belongs in the registry rather
+# than on this list.
 _UPKEEP_PAIRS_DISPATCHED_OUTSIDE_THE_REGISTRY = frozenset({
     ("upkeep_self", "upkeep_return_self_from_graveyard"),
-    ("upkeep_enchanted_controller", "add_minus1_counter_to_enchanted"),
 })
 
 

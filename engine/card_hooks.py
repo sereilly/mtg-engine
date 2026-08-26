@@ -603,11 +603,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'you may tap or untap target artifact, creature, or land':
             _line('tap_or_untap_target', 'spell_pattern'),
     },
-    'Unstable Mutation': {
-        "at the beginning of the upkeep of enchanted creature's controller, put "
-        'a -1/-1 counter on that creature':
-            _line('add_minus1_counter_to_enchanted', 'upkeep_effect'),
-    },
     'Volcanic Eruption': {
         'destroy x target mountains. volcanic eruption deals damage to each '
         'creature and each player equal to the number of mountains put into a '

@@ -113,7 +113,20 @@ def _parse_return(stream: TokenStream) -> ast.Statement:
                     destination, None, also_stack=True,
                 )
         stream.reset(union_mark)
-    subject = parse_recipient(stream)
+    # "Return **that card** to its owner's hand." (Puppet Master.) The bound
+    # object again — the card of the creature the trigger watched die, which by
+    # resolution is in a graveyard and so is a *card*, not a permanent anything
+    # could target. Read locally, exactly as `_parse_that_object` reads "that
+    # creature" for the destroy production and for the same reason: teaching
+    # the shared noun parser the phrase would hand it to every line printing
+    # those words. The lowering checks a binder exists.
+    bound = stream.mark()
+    subject: ast.Recipient | None
+    if stream.accept_phrase("that", "card"):
+        subject = ast.TargetSpec("that", ast.ObjectFilter(is_card=True))
+    else:
+        stream.reset(bound)
+        subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected something to return")
     if not stream.accept_word("to"):

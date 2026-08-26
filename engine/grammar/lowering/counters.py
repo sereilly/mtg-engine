@@ -43,7 +43,9 @@ def _amount_value(amount) -> int:
     return amount.value if isinstance(amount, ast.Fixed) else 0
 
 
-def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
+def _lower_put_counter(
+    node: ast.PutCounter, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) The source's
     # own loyalty lives on the permanent (metadata["loyalty_counters"],
     # CR 306.5c); a *chosen* permanent's is the same key reached through the
@@ -190,6 +192,48 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
     # `untap_enchanted_creature` and `grant_regeneration_to_enchanted_creature`,
     # and the counter's *name* is payload: CR 122.1a reads the numbers off the
     # name, so a card printing any other pair needs nothing here.
+    # "…put a -1/-1 counter on **that creature**." (Unstable Mutation;
+    # Takklemaggot prints the identical sentence with a -0/-1 pair.) The mirror
+    # of the removal branch far below, and bound the same way: "that creature"
+    # restates an object something earlier in the line bound, and the only
+    # trigger head in the pool that binds one is `upkeep_enchanted_controller`
+    # — its sentence is *about* the enchanted creature, which is exactly what
+    # `add_pt_counters_to_attached` reads off the source's own attachment. Under
+    # any other event the words name a creature nobody recorded, so the line
+    # keeps refusing; and the dispatch registry keys on the ability's whole
+    # instruction, so a nested occurrence (event is None here) refuses too.
+    #
+    # It falls through to the `_is_enchanted` branch below, which is the same
+    # placement under the printed spelling "on enchanted creature" — one
+    # instruction for both wordings, with the CR 122.1a pair as payload. This is
+    # what `add_minus1_counter_to_enchanted` used to be: an instruction kind
+    # with the counter baked into its *name*, reached by a card-name hook that
+    # spelled out "-1/-1", so Takklemaggot's one-word-different sentence had
+    # nowhere to go.
+    if (
+        is_pt_counter(node.counter)
+        and not node.up_to
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and event == "upkeep_enchanted_controller"
+    ):
+        if node.subject.filter != ast.ObjectFilter(card_types=("creature",)):
+            raise LoweringError(
+                "the attached counter placement reads the enchanted creature alone",
+                node=node,
+            )
+        if not isinstance(node.count, ast.Fixed):
+            raise LoweringError(
+                "a counter on the enchanted permanent is placed a fixed "
+                "number at a time",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "add_pt_counters_to_attached", "",
+                {"counter": node.counter, "count": node.count.value},
+            ),
+        )
     if is_pt_counter(node.counter) and not node.up_to and _is_enchanted(node.subject):
         if not isinstance(node.count, ast.Fixed):
             raise LoweringError(
