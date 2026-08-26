@@ -2237,6 +2237,19 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if hand_size_line(normalized):
         return True
+    # "Remove this card from your deck before playing if you're not playing for
+    # ante." (Tempest Efreet.) Not an ability at all — CR 113.6a, an instruction
+    # that functions outside the game — and its enforcement site is deck
+    # construction, which `engine/ante.py` and `web/deck_legality.py` already
+    # implement in full. `SUPPORTED_SPELL_PATTERNS` has claimed it for the spell
+    # path all along; a creature printing the same line was reported "text too
+    # complex" for the one line on it the engine handles completely, which hid
+    # the card's real blocker behind a solved one. Asked of the reader that bars
+    # the card from a deck, so the claim and the enforcement are one constant.
+    from .ante import is_ante_deck_line
+
+    if is_ante_deck_line(normalized):
+        return True
     # "You may play two additional lands on each of your turns." (Azusa, Lost
     # but Seeking.) The land-drop path derives the allowance from every
     # controlled permanent's own text (engine/land_play_allowance.py), creatures

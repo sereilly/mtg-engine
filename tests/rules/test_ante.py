@@ -691,3 +691,33 @@ def _catalog_by_name():
     from web.app import CATALOG_BY_NAME
 
     return CATALOG_BY_NAME
+
+
+@pytest.mark.cr("407.3")
+def test_407_3_the_deck_instruction_is_claimed_on_a_creature_too():
+    """The line is not an ability: it functions at deck construction, where
+    ``is_ante_card`` and the deck validator implement it in full. The spell path
+    has claimed it since ante was built, but the creature path had not — so
+    Tempest Efreet reported "text too complex" for the one line on it the engine
+    handles completely, hiding its real blocker behind a solved one."""
+    from engine.ante import ANTE_DECK_TEXT, is_ante_deck_line
+    from engine.models import CardDefinition
+    from engine.oracle import compile_card_oracle
+
+    assert is_ante_deck_line(ANTE_DECK_TEXT)
+    assert not is_ante_deck_line("remove this card from your deck")
+
+    card = CardDefinition(
+        name="Anted Bear", mana_cost="{1}{G}", cmc=2.0,
+        type_line="Creature — Bear",
+        oracle_text=(
+            "Remove this card from your deck before playing if you're not "
+            "playing for ante."
+        ),
+        colors=("G",), color_identity=("G",), keywords=(), produced_mana=(),
+        raw={"name": "Anted Bear", "type_line": "Creature — Bear",
+             "power": "2", "toughness": "2"},
+    )
+
+    assert compile_card_oracle(card).supported
+    assert is_ante_card(card), "the claim and the deck bar read one constant"
