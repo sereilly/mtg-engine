@@ -54,6 +54,9 @@ from .enter_effects import enter_effect_line
 from .target_immunity import immunity_claims_line
 from .effect_labels import activated_label, triggered_label
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
+from .modal_triggers import (MODAL_INSTRUCTION_KIND,
+                             modal_trigger_mode_is_derivable,
+                             modal_trigger_targeting_refusal)
 from .rampage import rampage_amount, rampage_triggers
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
@@ -1659,13 +1662,19 @@ def _modal_trigger_ability(
         if found is None:
             return f"unsupported mode of a triggered ability: {label!r}"
         instruction = found[0]
-        if "targets" in instruction.payload:
-            # The mode picker resolves at trigger resolution; nothing collects
-            # a target after a mode is chosen, so a targeted mode would run
-            # against a target nobody picked.
-            return f"a targeted mode of a triggered ability has no picker: {label!r}"
-        modes.append({"label": label.rstrip("."), "instruction": instruction})
-    choose = OracleInstruction("choose_one", "", {"modes": tuple(modes)})
+        mode = {"label": label.rstrip("."), "instruction": instruction}
+        if not modal_trigger_mode_is_derivable(mode):
+            # The mode targets, and nothing can say what it targets — so the
+            # picker would offer it with no candidates and CR 700.2b would then
+            # make it permanently unchoosable. A card that prints two modes and
+            # can only ever take one of them is worse than an unsupported one,
+            # which is at least visible in the backlog.
+            return f"a mode of a triggered ability targets undescribably: {label!r}"
+        modes.append(mode)
+    inline_refusal = modal_trigger_targeting_refusal(trig.condition.kind, tuple(modes))
+    if inline_refusal is not None:
+        return inline_refusal
+    choose = OracleInstruction(MODAL_INSTRUCTION_KIND, "", {"modes": tuple(modes)})
     return (
         ParsedTriggeredAbility(
             source_line=" ".join([head] + [f"• {b}" for b in bullets]),
@@ -2639,10 +2648,42 @@ def _parse_noncreature_abilities(
 def _parse_noncreature_triggered(
     oracle_text: str, card_name: str | None = None
 ) -> tuple[ParsedTriggeredAbility, ...]:
-    """Extract triggered abilities from non-creature oracle text."""
+    """Extract triggered abilities from non-creature oracle text.
+
+    A **modal** trigger is a head plus the bullet run below it, consumed
+    together exactly as ``_parse_creature_program`` consumes one. Reading this
+    side line by line was not a missing feature but a disagreement: the Aura
+    support gate asks ``_modal_trigger_ability`` whether the whole run is
+    carried out, and this loop then produced an *unsupported* trigger for the
+    head alone with no instruction behind it — a card admitted by one front end
+    and left inert by the other. Relic Bind is the card that showed it.
+    """
     abilities: list[ParsedTriggeredAbility] = []
-    for raw_line in oracle_text.splitlines():
-        line = raw_line.strip()
+    lines = oracle_text.splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index].strip()
+        modal = _modal_trigger_ability(lines, index, card_name)
+        if isinstance(modal, tuple):
+            trig, consumed = modal
+            abilities.append(trig)
+            index += 1 + consumed
+            continue
+        if isinstance(modal, str):
+            # A recognized modal head the engine cannot carry out. Recorded as
+            # an unsupported ability rather than dropped, so the "every trigger
+            # is unsupported" gate below sees the card the way the Aura gate
+            # does instead of finding no trigger at all.
+            abilities.append(ParsedTriggeredAbility(
+                source_line=line,
+                condition=TriggerCondition(kind="unsupported", trigger="when", raw_text=line),
+                instruction=None,
+                supported=False,
+                effect_kind="unsupported",
+            ))
+            index += 1
+            continue
+        index += 1
         if not line:
             continue
         trig = _parse_triggered_ability(line, card_name)

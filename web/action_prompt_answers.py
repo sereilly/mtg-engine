@@ -452,14 +452,26 @@ def _action_body_choice_confirm(session, req, seat_type):
 
 @action_handler("mode_choice_confirm")
 def _action_mode_choice_confirm(session, req, seat_type):
-    # A modal triggered ability (Trufflesnout, Elder Gargaroth): the
-    # controller picks a mode (hand_index = position in the offered list).
+    # A modal ability (Relic Bind, Trufflesnout, Elder Gargaroth): the
+    # controller picks a mode (hand_index = position in the offered list) and,
+    # for a mode that targets, that mode's target in the same answer - CR
+    # 700.2b and CR 601.2c make them one announcement, so sending them apart
+    # would leave the ability on the stack half-announced.
+    #
+    # The target is named by stable id for an object and by seat for a player,
+    # and the engine matches it against the very list this prompt offered.
     if req.hand_index is None:
         raise HTTPException(status_code=400, detail="hand_index (mode index) is required")
+    target = None
+    if req.target_permanent_id is not None or req.target_seat is not None:
+        target = {"permanent_id": req.target_permanent_id, "seat": req.target_seat}
     if not session.game.resolve_pending_choice(
-        "mode_choice", req.seat, mode_index=req.hand_index
+        "mode_choice", req.seat, mode_index=req.hand_index, target=target
     ):
-        raise HTTPException(status_code=400, detail="no mode choice is pending for you")
+        raise HTTPException(
+            status_code=400,
+            detail="no mode choice is pending for you, or that mode and target are not offered",
+        )
 
 @action_handler("loyalty_recipient_confirm")
 def _action_loyalty_recipient_confirm(session, req, seat_type):

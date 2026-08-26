@@ -19,7 +19,8 @@ from .cost_modifiers import cost_reduction_for_cast, reduce_cost, spell_cost_tax
 from .classifier import classify_card
 from .game import Game
 from .handlers._common import permanent_matches_filter
-from .mixins.stack import aura_enchant_noun, enchant_noun_own_only, permanent_matches_enchant_noun
+from .mixins.stack import (aura_enchant_noun, enchant_noun_seat,
+                           permanent_matches_enchant_noun)
 from .target_restrictions import forbidden_target
 from .auras import aura_restriction_active
 from .models import CardDefinition, Permanent, PlayerState
@@ -868,8 +869,11 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
     # reads, the clause forbids an opponent's permanent — the same gate the
     # cast path applies (CR 601.2c), asked here so the AI never spends a turn
     # on a cast the game then refuses.
-    if enchant_noun_own_only(noun):
+    seat_clause = enchant_noun_seat(noun)
+    if seat_clause == "you":
         target_player_index = caster_index
+    elif seat_clause == "opponent" and target_player_index == caster_index:
+        target_player_index = choose_attack_target(game, caster_index)
     for permanent_index, permanent in enumerate(game.players[target_player_index].battlefield):
         # The spell's own printed targeting restriction (CR 601.2c). Asked here
         # as well as at the cast, and through the same function: a choice only

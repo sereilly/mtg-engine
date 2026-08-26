@@ -23,7 +23,8 @@ from .activation import AbilityActivationMixin
 from .casting import (
     SpellCastingMixin,
     aura_enchant_noun,
-    enchant_noun_own_only,
+    enchant_noun_seat,
+    enchant_seat_satisfied,
     permanent_matches_enchant_noun,
 )
 from .choices import PendingChoicesMixin
@@ -35,6 +36,7 @@ __all__ = [
     "SpellCastingMixin",
     "StackResolutionMixin",
     "aura_enchant_noun",
-    "enchant_noun_own_only",
+    "enchant_noun_seat",
+    "enchant_seat_satisfied",
     "permanent_matches_enchant_noun",
 ]
