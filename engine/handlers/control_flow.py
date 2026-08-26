@@ -66,6 +66,28 @@ def sequence(game: Game, instruction: OracleInstruction, context: OracleExecutio
     return _run(game, _steps(instruction, "steps"), context)
 
 
+
+def _compare_count(count: int, op: str, wanted: int | None) -> bool:
+    """A counted condition's printed comparison, in one place.
+
+    Every condition that counts objects prints the same three operators and the
+    same unwritten fourth: no number at all ("if you control an Island") means
+    "at least one". Two copies of this answered slightly different questions the
+    first time a second counting clause was added, which is the second-copy bug
+    this engine keeps finding — an unknown operator is False in both, but the
+    absent-number default is the half that would have silently disagreed.
+    """
+    if wanted is None:
+        return count > 0
+    if op == "eq":
+        return count == wanted
+    if op == "le":
+        return count <= wanted
+    if op == "ge":
+        return count >= wanted
+    return False
+
+
 def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dict) -> bool:
     """Evaluate a lowered condition payload.
 
@@ -84,6 +106,46 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         return bool(parts) and all(
             evaluate_condition(game, context, part) for part in parts
         )
+
+    if kind == "blockers_of_bound_creature":
+        # "if at least one other Wall creature is blocking that creature"
+        # (Wall of Caltrops). CR 509.1a's relation, asked of the creature the
+        # firing block event named: the fire site stamped its id into the
+        # trigger context, because by resolution the ability's own target
+        # indices name the *blocker* and nothing else could say what it blocked.
+        blocked_ids = (context.trigger_context or {}).get("blocked_permanent_ids") or []
+        blocked = [
+            perm for perm in (game.permanent_by_id(i) for i in blocked_ids)
+            if perm is not None
+        ]
+        if not blocked:
+            # Nothing named, or what was named has left (CR 400.7). Either way
+            # there is no creature for the clause to count the blockers of, and
+            # False is the honest answer — never a scan that would count the
+            # blockers of some other attacker.
+            return False
+        filters = payload.get("filter") or {}
+        # "another Wall" — the asking permanent never satisfies its own
+        # condition. Relative, so outside the matcher's vocabulary; asked here,
+        # the same split the `controls` clause below makes.
+        source = context.source_permanent if filters.get("exclude_self") else None
+        wanted = payload.get("count", 0)
+        op = payload.get("op", "ge")
+
+        def _holds(attacker) -> bool:
+            count = sum(
+                1
+                for blocker in game.creatures_blocking(attacker)
+                if blocker is not source
+                and permanent_matches_filter(blocker, filters)
+            )
+            return _compare_count(count, op, wanted)
+
+        # Every creature the event named must satisfy it. A narrowed block
+        # trigger fires once per blocked creature (CR 509.3d), so this is one
+        # attacker in practice; an unnarrowed one names several, and picking
+        # arbitrarily among them is the reading no printed sentence supports.
+        return all(_holds(attacker) for attacker in blocked)
 
     if kind == "controls":
         who = payload.get("who", "you")
@@ -147,15 +209,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
                 for player in game.players
                 if player is not context.caster and not player.lost
             )
-        if wanted is None:
-            return count > 0
-        if op == "eq":
-            return count == wanted
-        if op == "le":
-            return count <= wanted
-        if op == "ge":
-            return count >= wanted
-        return False
+        return _compare_count(count, op, wanted)
 
     if kind == "revealed_card_is":
         # "If it's a creature or land card" (Track Down). Reads the card an

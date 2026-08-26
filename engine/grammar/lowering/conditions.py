@@ -178,6 +178,26 @@ def _lower_condition(
             "card_types": list(condition.filter.card_types),
             "type_match": condition.filter.type_match,
         }
+    if isinstance(condition, ast.BlockersOfBoundCreature):
+        # "that creature" is the creature the *firing event* named, and only a
+        # block event names one. Under anything else the referent is nothing —
+        # the evaluator would read an absent context key and answer False
+        # forever while the card compiled clean, which is the silent gate this
+        # whole file exists to refuse. `creature_blocks` alone, and deliberately
+        # narrow: the "becomes blocked by" half of the joined sentence records
+        # the *blocker*, not what was blocked, so it cannot answer this clause.
+        if event != "creature_blocks":
+            raise LoweringError(
+                "'that creature' names nothing that was blocked under this "
+                "trigger",
+                node=condition,
+            )
+        return {
+            "kind": "blockers_of_bound_creature",
+            "filter": condition.filter.to_payload(),
+            "op": condition.comparison.op,
+            "count": condition.comparison.value.value,
+        }
     if isinstance(condition, ast.EveryOf):
         # Lowered whole rather than folded into one flattened payload: each part
         # keeps its own kind, so a conjunction of two *different* condition

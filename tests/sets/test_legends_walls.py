@@ -184,3 +184,89 @@ def test_the_shield_is_directional(set_pool):
 def test_wall_of_vapor_compiles_supported(set_pool):
     program = compile_card_oracle(set_pool("LEG")["Wall of Vapor"])
     assert program.supported, program.reason
+
+
+# ---------------------------------------------------------------------------
+# Round 25 — an intervening-if that counts the *other* blockers of what this
+# creature blocked (CR 603.4 over CR 509.1a)
+# ---------------------------------------------------------------------------
+
+
+def _caltrops_combat(set_pool, blockers: list[Permanent]) -> tuple[Game, Permanent]:
+    """One attacker on seat 0, *blockers* on seat 1, all blocking it, with the
+    block triggers resolved."""
+    attacker = Permanent(card=_creature("Berserker", 4, 4))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=list(blockers)),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()  # declare_blockers
+    assert game.declare_blockers(1, {i: 0 for i in range(len(blockers))})[0]
+    game.resolve_stack()
+    return game, attacker
+
+
+def test_wall_of_caltrops_gains_banding_beside_a_second_wall(set_pool):
+    """"…if at least one **other** Wall creature is blocking that creature".
+
+    Two copies of the same card, so "other" can only be answered by identity —
+    a name comparison would let each satisfy its own condition.
+    """
+    first = Permanent(card=set_pool("LEG")["Wall of Caltrops"])
+    second = Permanent(card=set_pool("LEG")["Wall of Caltrops"])
+    _caltrops_combat(set_pool, [first, second])
+
+    assert first.has_keyword("banding") is True
+    assert second.has_keyword("banding") is True
+
+
+def test_wall_of_caltrops_alone_gains_nothing(set_pool):
+    """One Wall is not "at least one *other* Wall" — the source never satisfies
+    its own condition."""
+    only = Permanent(card=set_pool("LEG")["Wall of Caltrops"])
+    _caltrops_combat(set_pool, [only])
+
+    assert not only.has_keyword("banding")
+
+
+def test_wall_of_caltrops_refuses_when_a_non_wall_joins_the_block(set_pool):
+    """"…and **no non-Wall creatures** are blocking that creature". The second
+    half of the conjunction is the one a dropped rider would lose silently: the
+    first half still holds, so the card would band anyway."""
+    first = Permanent(card=set_pool("LEG")["Wall of Caltrops"])
+    second = Permanent(card=set_pool("LEG")["Wall of Caltrops"])
+    interloper = Permanent(card=_creature("Bear", 2, 2))
+    _caltrops_combat(set_pool, [first, second, interloper])
+
+    assert not first.has_keyword("banding")
+    assert not second.has_keyword("banding")
+    assert not interloper.has_keyword("banding")
+
+
+def test_wall_of_caltrops_counts_only_the_creature_it_blocked(set_pool):
+    """"that creature" is the attacker this trigger fired on, not the board at
+    large: a second Wall blocking a *different* attacker does not qualify it."""
+    first = Permanent(card=set_pool("LEG")["Wall of Caltrops"])
+    elsewhere = Permanent(card=set_pool("LEG")["Wall of Caltrops"])
+    left = Permanent(card=_creature("Berserker", 4, 4))
+    right = Permanent(card=_creature("Raider", 4, 4))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[left, right]),
+        PlayerState(name="P2", battlefield=[first, elsewhere]),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0, 1: 1})[0]
+    game.resolve_stack()
+
+    assert not first.has_keyword("banding")
+    assert not elsewhere.has_keyword("banding")

@@ -288,6 +288,30 @@ class CouldNot:
 
 
 @dataclass(frozen=True)
+class BlockersOfBoundCreature:
+    """"if at least one other Wall creature is blocking that creature and no
+    non-Wall creatures are blocking that creature" (Wall of Caltrops).
+
+    CR 603.4's intervening-if over a *relation*, and the relation's far end is
+    not this ability's source: "that creature" is the creature the firing block
+    event named, and the clause counts what else is blocking **it** (CR 509.1a).
+    So no read of any one permanent can answer it and no read of the source can
+    either — which is why it is a condition node of its own rather than more
+    adjectives on an `ObjectFilter`, the same discipline `_core.blocking_target`
+    keeps on the effect side.
+
+    Both halves the card prints are this one production with different payload:
+    "at least one other Wall creature" is ``ge 1`` over a Wall filter carrying
+    ``other_than_source``, and "no non-Wall creatures" is ``eq 0`` over a filter
+    carrying ``excluded_subtypes``. The printed number and the printed noun
+    phrase travel on the node, never in the kind — a card printed "at least two
+    Soldiers" is this production and needs no code.
+    """
+    filter: ObjectFilter
+    comparison: Comparison
+
+
+@dataclass(frozen=True)
 class ItHappened:
     """"…**If you do**, …" after an action that was not optional.
 
@@ -313,5 +337,5 @@ Condition = Union[
     HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
-    DealtDamageThisTurn, SubjectPowerIs,
+    DealtDamageThisTurn, SubjectPowerIs, BlockersOfBoundCreature,
 ]
