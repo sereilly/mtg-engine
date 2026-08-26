@@ -1133,6 +1133,16 @@ class GameHelpersMixin:
         # Here because this is the one transition out: a return wired into any
         # single caller would be a return the other forty forgot, which is the
         # reason this function exists at all.
+        # "Exile that token **when Stangg leaves the battlefield**" (Stangg).
+        # A delayed ability (CR 603.7) belongs to no permanent, so the scan
+        # above cannot reach it, and CR 603.6c's event is any move off the
+        # battlefield rather than a death — so it is announced here, from the
+        # one transition every such move passes through, and not from the
+        # graveyard path beside the dies-triggers.
+        for perm in removed:
+            fire_delayed_triggers(
+                self, "bound_permanent_leaves_battlefield", subject=perm,
+            )
         for perm in removed:
             self.return_linked_exile(perm, "left the battlefield", LEAVES)
         return removed

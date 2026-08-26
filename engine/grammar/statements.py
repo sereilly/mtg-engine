@@ -142,7 +142,7 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
         statement = ast.WhereX(statement, definition)
     if delay is None:
         return statement
-    event, once, duration, binds = delay
+    event, once, duration, binds, watches = delay
     if definition is not None:
         # "…, where X is the number of lands you control **at that time**."
         # The words decide which of two different cards this is. Inside the
@@ -163,6 +163,7 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
         # A permission, not the answer — see ``delay_binds_an_object``.
         binds_target=delay_binds_an_object(binds, statement),
         subject=None, agent=None,
+        watches=watches,
     )
 
 

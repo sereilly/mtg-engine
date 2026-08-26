@@ -16,6 +16,7 @@ from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND
 from ...oracle_types import OracleInstruction
+from ._events import CREATED_TOKEN
 INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage": "damage",
     "earthquake_damage": "damage",
@@ -411,6 +412,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # a second switch would let one of the two be gated off without the other.
     "exile_target_permanent": "zones",
     "exile_self": "zones",
+    # "Exile that token" (Stangg) — the token this same effect created, by the
+    # id the token maker recorded. A zone change like the two beside it.
+    "exile_created_token": "zones",
     "exile_target_graveyard_card": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
     # "…return a card from your graveyard to your hand **for each card
@@ -514,6 +518,12 @@ _PRODUCES: dict[str, str] = {
     # The exile records whose permanent it removed, which is what "Its
     # controller creates a token" reads (Angelic Ascension, Secure the Scene).
     "exile_target_permanent": "exiled_permanent_controller",
+    # "Create Stangg Twin, a … token. Exile **that token** when …" (Stangg).
+    # The token maker records which permanent it made, which is the only place
+    # a later sentence of the same effect can name it from — a token is a new
+    # object with a fresh id (CR 400.7), so there is nothing about it to look
+    # up by.
+    "create_token": CREATED_TOKEN,
     # Both exiles record what they exiled, which is what "you may play cards
     # exiled this way" / "you may cast them this turn" read.
     "exile_top_of_library": "exiled_cards",

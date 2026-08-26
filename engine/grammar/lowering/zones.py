@@ -23,7 +23,7 @@ from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS,
                                 TESTABLE_SUBJECT_FILTER_KEYS)
 from .. import ast
 from ..errors import LoweringError
-from ._events import (EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS,
+from ._events import (CREATED_TOKEN, EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS,
                       _back_reference_payload)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
@@ -31,6 +31,7 @@ from ._common import (
     _describe_targets,
     _filter_payload,
     _is_source,
+    _is_created_token,
     _is_target,
     _restrictions_beyond,
     _describe_several_card_targets,
@@ -504,7 +505,9 @@ def _lower_return_to_zone(
 
     raise LoweringError("no handler for this zone change", node=node)
 
-def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
+def _lower_exile(
+    node: ast.Exile, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """"Exile target creature until end of turn." — and nothing else.
 
     ``exile_target_creature_until_eot`` is the one exile handler that stands on
@@ -642,6 +645,27 @@ def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
                 "a timed exile of the source has no handler", node=node
             )
         return (OracleInstruction("exile_self", "", {}),)
+    # "Exile **that token**…" (Stangg). The token this same effect created,
+    # addressed by the id the token maker wrote to the scratchpad — not a
+    # chosen target and not the source, so it gets its own kind for the reason
+    # ``exile_self`` has one: a handler that reads a recorded id and one that
+    # resolves a target share nothing beyond the move.
+    #
+    # ``produced`` is the whole gate. With no token maker in front of it there
+    # is no id to read, and an exile that silently found nothing would be a
+    # card that reports itself supported and does nothing.
+    if _is_created_token(subject):
+        if node.duration.kind is not None:
+            raise LoweringError(
+                "a timed exile of a created token has no handler", node=node
+            )
+        if CREATED_TOKEN not in produced:
+            raise LoweringError(
+                "back-reference to a created token with no token maker in "
+                "this effect",
+                node=node,
+            )
+        return (OracleInstruction("exile_created_token", "", {}),)
     if (
         not isinstance(subject, ast.TargetSpec)
         or subject.quantifier != "target"

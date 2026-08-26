@@ -64,6 +64,12 @@ DELAYED_EVENTS: dict[str, str] = {
     # permanent is named by `bound_permanent_id`, so the event is the death of
     # *whichever* permanent the creating effect bound.
     "bound_permanent_dies": "the leaves-the-battlefield transition",
+    # "Exile that token **when Stangg leaves the battlefield**" / "Sacrifice
+    # Stangg **when that token leaves the battlefield**" (Stangg). Wider than
+    # the death above and deliberately a separate event: CR 603.6c's
+    # leaves-the-battlefield is any move off the battlefield, so a bounce, a
+    # tuck and an exile all announce it while only one of them is a death.
+    "bound_permanent_leaves_battlefield": "the leaves-the-battlefield transition",
     # "Whenever that creature is dealt damage by an attacking creature this
     # turn, …" (Glyph of Life). Repeating: CR 603.7b's "unless it
     # has a stated duration", and "this turn" is that duration.

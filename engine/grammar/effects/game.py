@@ -13,12 +13,13 @@ from ...tokens import PREDEFINED_TOKENS
 from .. import ast
 from ..amounts import expect_pt, parse_amount
 from ..errors import GrammarError
-from ..lexer import (QUOTE, WORD)
+from ..lexer import (QUOTE, SELF, WORD)
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..phrases import _parse_for_each
 from ..stream import TokenStream
-from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX, match_longest)
+from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX,
+                          TYPE_LINE_SUPERTYPES, match_longest)
 
 
 def _parse_wins(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -171,6 +172,57 @@ def _parse_token_colors(stream: TokenStream, colors: list[str]) -> bool:
     return stated
 
 
+def _parse_token_supertypes(stream: TokenStream, supertypes: list[str]) -> bool:
+    """The run of supertype words in a token spec, appended to *supertypes*.
+
+    CR 205.4a — a supertype is part of the type line, printed in front of the
+    card types, and the legend rule (CR 704.5j) reads it. Dropping the word
+    would let two Stangg Twins sit on one battlefield, so it is recorded rather
+    than skipped.
+
+    ``TYPE_LINE_SUPERTYPES`` rather than the whole catalog: "token" is itself a
+    supertype in Scryfall's data, and the head noun of this very spec.
+
+    Returns whether anything was consumed.
+    """
+    consumed = False
+    while True:
+        word = stream.peek_word()
+        if word is None or word not in TYPE_LINE_SUPERTYPES:
+            break
+        supertypes.append(word)
+        stream.advance()
+        consumed = True
+    return consumed
+
+
+def _parse_token_name_words(stream: TokenStream) -> str | None:
+    """A run of words that spells a token's **name**, or None.
+
+    Two printed word orders put a name here, and both reach this one reader:
+    the trailing ``…token named Wasp`` and the leading ``Create Stangg Twin, a
+    … token`` (Stangg). One reader because the words are the same words — a
+    second would be a second answer to what a token may be called.
+
+    The ``SELF`` token is read as part of the name, and this is the whole
+    reason the run is read token by token rather than by ``at_kind(WORD)``.
+    A token's name may *contain* the creating card's own name, and the lexer
+    has already collapsed that name into one ``SELF`` token (it cannot know the
+    two words are a name rather than a self-reference) — so "Stangg Twin" would
+    otherwise read as the card talking about itself with a stray word after it.
+    The printed spelling is recoverable because the token carries its own text,
+    which is the same recovery ``_parse_quoted_abilities`` makes.
+    """
+    parts: list[str] = []
+    while True:
+        token = stream.peek()
+        if token is None or token.kind not in (WORD, SELF):
+            break
+        parts.append(token.text)
+        stream.advance()
+    return " ".join(parts) if parts else None
+
+
 def _parse_create_token(stream: TokenStream) -> ast.Statement:
     """``Create <N> <P/T> <colours> <subtypes> <types> token(s) [with …] [named …]``.
 
@@ -188,6 +240,26 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     # "creates" is the rider spelling ("Its controller creates …"), consumed
     # by the same production so the token grammar exists exactly once.
     stream.expect_word("create", "creates")
+
+    # "Create **Stangg Twin,** a legendary 3/4 red and green Human Warrior
+    # creature token." (Stangg.) The name printed in front of the spec instead
+    # of behind it in a `named` tail — the same information in the other word
+    # order, so it lands in the same field and the rest of the production is
+    # unchanged. Recognised by the comma with a quantity behind it: every other
+    # token sentence in the pool puts a quantity right after "create", and a
+    # quantity is never a bare run of words followed by a comma.
+    leading_name = ""
+    mark_leading = stream.mark()
+    scanned = _parse_token_name_words(stream)
+    if (
+        scanned is not None
+        and stream.accept_punct(",")
+        and stream.at_word("a", "an")
+    ):
+        leading_name = scanned
+    else:
+        stream.reset(mark_leading)
+
     count = parse_amount(stream)
 
     # "Create a **Treasure** token." (Gadrak.) A token Magic prints by name
@@ -224,6 +296,14 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
             per_death=_parse_for_each(stream),
         )
 
+    # "a **legendary** 3/4 …" (Stangg): a supertype is printed between the
+    # quantity and the P/T, ahead of everything the characteristic loop below
+    # reads. Same reader, called twice, for the reason `_parse_token_colors` is
+    # — the colours print in two places too, and one reader is what keeps the
+    # two spellings meaning the same thing.
+    supertypes: list[str] = []
+    _parse_token_supertypes(stream, supertypes)
+
     power, power_negative, toughness, toughness_negative = expect_pt(stream)
     if power_negative or toughness_negative:
         raise stream.error("a token's printed power/toughness cannot be negative")
@@ -252,6 +332,8 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
         word = stream.peek_word()
         if word is None:
             raise stream.error("expected 'token' after a token's characteristics")
+        if _parse_token_supertypes(stream, supertypes):
+            continue
         if word in CARD_TYPES:
             card_types.append(word)
             stream.advance()
@@ -311,14 +393,14 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     # CR 111.4 — the creating ability may set the token's name. When it does
     # not, the name follows from the subtypes, and lowering (not the parser)
     # decides whether the engine's convention for that is expressible.
-    name = ""
+    name = leading_name
     if stream.accept_word("named"):
-        parts: list[str] = []
-        while stream.peek() is not None and stream.at_kind(WORD):
-            parts.append(stream.next().text)
-        if not parts:
+        if name:
+            raise stream.error("a token spec names the token once")
+        named = _parse_token_name_words(stream)
+        if named is None:
             raise stream.error("expected a token name after 'named'")
-        name = " ".join(parts)
+        name = named
 
     # "…tokens. **They each have flying and "This token can't be enchanted.""**
     # (Tetravus.) The tokens' abilities printed as a following sentence rather
@@ -366,6 +448,7 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
         name=name,
         colors=tuple(colors),
         types=tuple(card_types),
+        supertypes=tuple(supertypes),
         subtypes=tuple(subtypes),
         keywords=keywords,
         tapped=tapped,

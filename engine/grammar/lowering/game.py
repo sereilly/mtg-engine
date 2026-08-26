@@ -234,7 +234,10 @@ def _lower_create_token(
             node=node,
         )
 
-    type_line = " ".join(_title(word) for word in node.types)
+    # CR 205.4a — supertypes first, then the card types. Rendered rather than
+    # dropped because ``CardDefinition.is_legendary`` reads the type line, and
+    # the legend rule (CR 704.5j) reads that.
+    type_line = " ".join(_title(word) for word in node.supertypes + node.types)
     if node.subtypes:
         type_line += " — " + " ".join(_title(word) for word in node.subtypes)
 

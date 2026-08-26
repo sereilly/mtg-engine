@@ -23,6 +23,7 @@ this one beside `_common` in its `shared` tuple.
 
 from __future__ import annotations
 
+from ...tokens import CREATED_TOKEN_RESULT_KEY
 from .. import ast
 from ..errors import LoweringError
 
@@ -115,6 +116,12 @@ _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
 
 #: The payload key the delayed machinery stamps that object's id under.
 BOUND_PERMANENT_ID = "bound_permanent_id"
+
+#: The scratchpad key a token maker writes the created token's ``permanent_id``
+#: under. Imported rather than spelled again: ``engine/tokens.py`` is the one
+#: home for it, because the handler that writes it lives on the other side of
+#: the pipeline from the lowering that gates the phrase on it.
+CREATED_TOKEN = CREATED_TOKEN_RESULT_KEY
 
 #: The payload key those fire sites stamp it under. One constant for the same
 #: reason `EVENT_SUBJECT_PLAYER` is one: the fire site writes it and the handler

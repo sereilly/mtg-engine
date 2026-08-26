@@ -82,6 +82,12 @@ class CreateToken:
     name: str
     colors: tuple[str, ...] = ()
     types: tuple[str, ...] = ()
+    # "a **legendary** 3/4 red and green Human Warrior creature token"
+    # (Stangg). CR 205.4 supertypes, recorded in the order printed and rendered
+    # in front of the card types — a token can be legendary, and the legend
+    # rule (CR 704.5j) reads the type line, so dropping the word would let two
+    # copies coexist.
+    supertypes: tuple[str, ...] = ()
     subtypes: tuple[str, ...] = ()
     keywords: tuple[str, ...] = ()
     # "…that are tapped and attacking" (Basri Ket) — the tokens' entry state.

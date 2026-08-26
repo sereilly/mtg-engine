@@ -30,6 +30,7 @@ from .effects.characteristics import _parse_keywords
 from .phrases import (BASIC_LAND_WORDS, _parse_duration,
                       parse_bound_subject)
 from .references import parse_recipient, parse_target_spec
+from .lexer import SELF
 from .stream import TokenStream
 
 # ---------------------------------------------------------------------------
@@ -121,7 +122,72 @@ def _names_a_bound_object(node) -> bool:
     return False
 
 
-def parse_trailing_delay(stream: TokenStream) -> tuple[str, bool, str, bool] | None:
+#: The two objects a ``when <X> leaves the battlefield`` opener can name, and
+#: what each one is called in the payload. Neither is a chosen target: the card
+#: naming itself is the lexer's SELF token, and "that token" is the token an
+#: earlier sentence of the same effect created — so both are objects the effect
+#: already holds, and the delayed machinery is handed the id rather than a
+#: target to resolve.
+#:
+#: A table because the difference between the two rows is one printed phrase.
+#: Adding a third means adding the phrase and the id the arming handler reads
+#: it back from; there is no branch to widen.
+_WATCHED_OBJECTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("that", "token"), "created_token"),
+)
+
+
+def _parse_watched_object(stream: TokenStream) -> str | None:
+    """Which object a ``leaves the battlefield`` delay watches, or None."""
+    for phrase, name in _WATCHED_OBJECTS:
+        mark = stream.mark()
+        if stream.accept_phrase(*phrase):
+            return name
+        stream.reset(mark)
+    # The card naming itself, which the lexer has already collapsed into one
+    # SELF token — the same referent `references.parse_recipient` reads, so a
+    # card that spells its own name and a card that says "this creature" name
+    # the same object to the delayed machinery.
+    mark = stream.mark()
+    if stream.accept_kind(SELF) is not None or stream.accept_phrase("this", "creature"):
+        return "source"
+    stream.reset(mark)
+    return None
+
+
+def parse_leaves_battlefield_delay(stream: TokenStream) -> tuple[str, bool, str, bool, str] | None:
+    """``when <object> leaves the battlefield`` — the trailing delay whose
+    opener names the object it watches (CR 603.6c, CR 603.7).
+
+    Stangg prints both directions of it in one line: "Exile that token **when
+    Stangg leaves the battlefield**. Sacrifice Stangg **when that token leaves
+    the battlefield**." Which object is watched and which is acted on swap
+    between the two sentences, which is exactly why the watched one is read
+    here and the acted-on one is left to the sentence in front of it.
+
+    Returns the ``(event, once, duration, binds, watches)`` shape
+    :func:`parse_trailing_delay` returns, so the one caller builds one node.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("when"):
+        stream.reset(mark)
+        return None
+    watched = _parse_watched_object(stream)
+    if watched is None or not stream.accept_phrase("leaves", "the", "battlefield"):
+        stream.reset(mark)
+        return None
+    # "When" is CR 603.7b's one-shot, and the object it watches leaves the
+    # battlefield exactly once — a returning permanent is a new object with a
+    # new id (CR 400.7), so there is nothing for a second firing to be about.
+    # It waits however many turns that takes, so it does not expire with the
+    # turn; only firing removes it.
+    return (
+        "bound_permanent_leaves_battlefield", True, "until_it_triggers",
+        False, watched,
+    )
+
+
+def parse_trailing_delay(stream: TokenStream) -> tuple[str, bool, str, bool, str | None] | None:
     """The **trailing** spelling of a delay: ``<effect> at the beginning of your
     next upkeep``.
 
@@ -139,9 +205,9 @@ def parse_trailing_delay(stream: TokenStream) -> tuple[str, bool, str, bool] | N
     for phrase, kind, once, duration, binds in _DELAYED_OPENERS:
         mark = stream.mark()
         if stream.accept_phrase(*phrase):
-            return kind, once, duration, binds
+            return kind, once, duration, binds, None
         stream.reset(mark)
-    return None
+    return parse_leaves_battlefield_delay(stream)
 
 
 def _delayed_bound_subject(stream: TokenStream) -> "ast.ObjectFilter | None":

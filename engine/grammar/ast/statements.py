@@ -327,6 +327,18 @@ class CreateDelayedTrigger:
     #: change to what the card does.
     subject: ObjectFilter | None = None
     agent: ObjectFilter | None = None
+    #: Which object the ability **watches**, when the opener names one that is
+    #: not a chosen target: ``"source"`` for the card naming itself ("when
+    #: Stangg leaves the battlefield") and ``"created_token"`` for the token an
+    #: earlier sentence of the same effect made ("when that token leaves the
+    #: battlefield").
+    #:
+    #: A separate field from ``binds_target`` because it is a separate
+    #: question. ``binds_target`` says the object was *chosen*, and is resolved
+    #: from the spell's targets; these two are objects the effect already has
+    #: in hand and never targeted, so a shared field would send the resolver to
+    #: a target that was never picked.
+    watches: str | None = None
 
 
 Statement = Union[Sequence, Conjunction, Conditional, May, ForEach, WhereX, CreateDelayedTrigger, Effect]

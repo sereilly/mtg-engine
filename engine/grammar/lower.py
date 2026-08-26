@@ -576,7 +576,10 @@ def lower_statement(
         return _lower_for_each(statement)
 
     if isinstance(statement, ast.Exile):
-        return _lower_exile(statement)
+        # `produced` is the gate on "exile **that token**": the phrase names
+        # the token an earlier step of this same effect made, and with no such
+        # step there is no id to read.
+        return _lower_exile(statement, produced)
 
     if isinstance(statement, ast.Sequence):
         for fuse in (

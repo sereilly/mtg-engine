@@ -379,6 +379,14 @@ class ObjectFilter:
     other_than_source: bool = False
     # "this creature" / "this artifact" — the ability's own source.
     is_source: bool = False
+    # "**that token**" — the token an earlier sentence of this same effect
+    # created (Stangg). A referent, like ``is_source`` beside it, and not a
+    # restriction: no read of a permanent alone can say whether *this*
+    # resolution made it, so the id is written to the resolution scratchpad by
+    # the token maker and read back by whatever sentence names it. The lowering
+    # refuses the phrase when no token maker precedes it, exactly as "its
+    # controller creates" refuses with no exile in front of it.
+    is_created_token: bool = False
     # "enchanted creature" — the permanent this Aura is attached to.
     is_enchanted: bool = False
     # "target permanent **that isn't enchanted**" (Time Elemental) — a permanent

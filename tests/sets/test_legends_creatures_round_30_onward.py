@@ -816,3 +816,115 @@ def test_floral_spuzzem_with_no_artifact_to_name_never_goes_on_the_stack(
     _r32_finish_combat(game)
 
     assert p2.life == 18, game.log
+
+
+# ---------------------------------------------------------------------------
+# Round 33 — a token that names its maker, and two delays pointing opposite ways
+# ---------------------------------------------------------------------------
+
+
+def _r33_stangg(set_pool):
+    """Stangg cast and resolved under P1, its enters-trigger settled."""
+    pool = set_pool("LEG")
+    p1 = PlayerState(name="P1", hand=[pool["Stangg"]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.queue_from_hand(0, "Stangg")
+    game.resolve_stack()
+    game._settle()
+    stangg = next(p for p in p1.battlefield if p.card.name == "Stangg")
+    return game, p1, p2, stangg
+
+
+def _r33_twin(player):
+    return next(
+        (p for p in player.battlefield if p.card.name == "Stangg Twin"), None
+    )
+
+
+def test_stangg_creates_a_legendary_three_four_red_and_green_twin(set_pool):
+    """Every printed characteristic of the token, the supertype included: the
+    legend rule (CR 704.5j) reads the type line, so "legendary" is not a word
+    the payload may drop."""
+    _game, p1, _p2, _stangg = _r33_stangg(set_pool)
+
+    twin = _r33_twin(p1)
+    assert twin is not None
+    assert twin.effective_power == 3 and twin.effective_toughness == 4
+    assert set(twin.card.colors) == {"R", "G"}
+    assert twin.has_type("human") and twin.has_type("warrior")
+    assert twin.card.is_legendary
+
+
+def test_stangg_twins_name_survives_the_lexers_self_reference(set_pool):
+    """The token's printed name *contains* the card's own name, which the lexer
+    has already collapsed into one SELF token. The name is recovered from that
+    token's text — read as a name rather than as the card talking about
+    itself."""
+    _game, p1, _p2, _stangg = _r33_stangg(set_pool)
+
+    assert _r33_twin(p1).card.name == "Stangg Twin"
+
+
+def test_stangg_leaving_exiles_the_twin(set_pool):
+    """"Exile that token when Stangg leaves the battlefield." The delay watches
+    Stangg and acts on the token — the binding runs one way."""
+    game, p1, _p2, stangg = _r33_stangg(set_pool)
+    assert _r33_twin(p1) is not None
+
+    game._destroy_swept_permanents(p1, lambda perm: perm is stangg)
+    game._settle()
+
+    assert _r33_twin(p1) is None, game.log
+    # CR 111.7: a token that has left the battlefield ceases to exist, so
+    # nothing named Stangg Twin is sitting in a zone anywhere.
+    assert all(card.name != "Stangg Twin" for card in p1.exile)
+    assert all(card.name != "Stangg Twin" for card in p1.graveyard)
+
+
+def test_the_twin_leaving_sacrifices_stangg(set_pool):
+    """"Sacrifice Stangg when that token leaves the battlefield." The other
+    delay, watching the token and acting on the source — the binding the
+    creating instruction could not have made, because the token did not exist
+    until the instruction in front of it had run."""
+    game, p1, _p2, _stangg = _r33_stangg(set_pool)
+    twin = _r33_twin(p1)
+
+    game._destroy_swept_permanents(p1, lambda perm: perm is twin)
+    game._settle()
+
+    assert all(perm.card.name != "Stangg" for perm in p1.battlefield), game.log
+    assert any(card.name == "Stangg" for card in p1.graveyard), game.log
+
+
+def test_stangg_being_exiled_still_exiles_the_twin(set_pool):
+    """CR 603.6c's event is *any* move off the battlefield, not a death — which
+    is why this is its own delayed event rather than the dies one beside it."""
+    game, p1, _p2, stangg = _r33_stangg(set_pool)
+
+    game.remove_from_battlefield(stangg)
+    p1.exile.append(stangg.card)
+    game._settle()
+
+    assert _r33_twin(p1) is None, game.log
+
+
+def test_the_twin_leaving_sacrifices_only_its_own_stangg(set_pool):
+    """The delay is bound by **id**, not by name or by value. An opponent's
+    Stangg is a different object (CR 400.7) and is untouched when this one's
+    token leaves — the look-alike bug this engine keeps finding, in a delayed
+    entry instead of on a battlefield.
+
+    Under the opponent rather than beside it, because two legendary permanents
+    named Stangg under one player is the legend rule (CR 704.5j) answering the
+    question instead of the binding."""
+    game, p1, p2, _stangg = _r33_stangg(set_pool)
+    other = Permanent(card=set_pool("LEG")["Stangg"])
+    p2.battlefield.append(other)
+
+    twin = _r33_twin(p1)
+    game._destroy_swept_permanents(p1, lambda perm: perm is twin)
+    game._settle()
+
+    assert all(perm.card.name != "Stangg" for perm in p1.battlefield), game.log
+    assert [perm for perm in p2.battlefield if perm.card.name == "Stangg"] == [other]

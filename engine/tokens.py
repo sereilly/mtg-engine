@@ -17,6 +17,18 @@ from .models import CardDefinition
 # card is the only thing that arrives at the zone seam.
 TOKEN_CARD_KEY = "is_token_card"
 
+#: The resolution-scratchpad key a token maker writes the created token's
+#: ``permanent_id`` under, and every "that token" back-reference reads back
+#: ("Create Stangg Twin, a … token. **Exile that token** when …").
+#:
+#: Here rather than beside either reader because it has three: the lowering
+#: gates the phrase on a token maker having produced it, the ``create_token``
+#: handler writes it, and the handlers behind "exile that token" and "when that
+#: token leaves the battlefield" read it. Three copies of a string is how they
+#: come apart, and a token is a new object with a fresh id (CR 400.7), so there
+#: is nothing about the token itself a later sentence could look it up by.
+CREATED_TOKEN_RESULT_KEY = "created_token_permanent_id"
+
 
 def is_token_card(card: CardDefinition) -> bool:
     """Whether *card* is a token's stand-in card (CR 111.7).

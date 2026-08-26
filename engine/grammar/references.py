@@ -326,6 +326,20 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     if stream.at_word("itself"):
         stream.advance()
         return ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
+    # "**that token**" — the token an earlier sentence of this same effect
+    # created ("Exile that token when Stangg leaves the battlefield").
+    #
+    # A referent, like the two pronouns above, and not a noun phrase: no read
+    # of a permanent alone can say whether *this* resolution made it, so the
+    # token maker writes the id to the resolution scratchpad and this reads it
+    # back. Which is also why the lowering refuses the phrase with no token
+    # maker in front of it, exactly as "its controller creates" refuses with no
+    # exile in front of it — a dropped referent here would exile whatever
+    # permanent happened to answer.
+    mark_token = stream.mark()
+    if stream.accept_phrase("that", "token"):
+        return ast.TargetSpec("that", ast.ObjectFilter(is_created_token=True))
+    stream.reset(mark_token)
     # The card naming itself mid-sentence ("put a loyalty counter on Garruk") —
     # the lexer already collapsed the name to one SELF token.
     token = stream.peek()

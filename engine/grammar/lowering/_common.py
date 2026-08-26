@@ -444,6 +444,11 @@ def _is_source(subject: ast.Recipient) -> bool:
     return isinstance(subject, ast.TargetSpec) and subject.filter.is_source
 
 
+def _is_created_token(subject: ast.Recipient) -> bool:
+    """Whether *subject* is "that token" — the one an earlier step made."""
+    return isinstance(subject, ast.TargetSpec) and subject.filter.is_created_token
+
+
 def _is_enchanted(subject: ast.Recipient) -> bool:
     return isinstance(subject, ast.TargetSpec) and subject.filter.is_enchanted
 

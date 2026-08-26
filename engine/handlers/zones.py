@@ -19,6 +19,7 @@ from ._common import (
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..resumption import run_resumable
 from ..search_filters import search_matches
+from ..tokens import CREATED_TOKEN_RESULT_KEY
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -1395,6 +1396,44 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
         owner.exile.append(source.card)
     context.results["exiled_self"] = True
     game.log.append(f"{source.card.name} was exiled")
+    return True, "resolved"
+
+
+@effect_handler("exile_created_token")
+def exile_created_token(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile **that token**…" — the token an earlier step of this same effect
+    created (Stangg).
+
+    Not a target and not the source: the token maker wrote its ``permanent_id``
+    to the resolution scratchpad, and this reads it back. By id rather than by
+    a scan for a matching token, for the reason every bound object in this
+    engine is an id — a second Stangg Twin on another battlefield is a
+    look-alike, and a scan would reach whichever came first.
+
+    The id is read from the firing trigger's context first: this instruction is
+    normally the effect of a *delayed* ability, and by the time that ability
+    fires the resolution that created the token is long over. The delayed entry
+    froze the scratchpad (CR 608.2h), which is where the id then lives.
+
+    A token that is already gone exiles nothing (CR 608.2b, and CR 111.7 —
+    a token that has left the battlefield has ceased to exist).
+    """
+    recorded = (context.trigger_context or {}).get(CREATED_TOKEN_RESULT_KEY)
+    if not isinstance(recorded, int):
+        recorded = context.results.get(CREATED_TOKEN_RESULT_KEY)
+    token = game.permanent_by_id(recorded) if isinstance(recorded, int) else None
+    if token is None:
+        game.log.append(f"{context.card.name}: the token it named is gone")
+        return True, "resolved"
+    owner_index = game.owner_index_of(token)
+    game.remove_from_battlefield(token)
+    if not token.metadata.get("is_token", False) and owner_index is not None:
+        # CR 111.7: a token ceases to exist rather than going to exile. The
+        # check is here rather than assumed because the scratchpad records a
+        # *permanent* id, and nothing stops a later card from recording one
+        # that is not a token.
+        game.players[owner_index].exile.append(token.card)
+    game.log.append(f"{context.card.name} exiled {token.card.name}")
     return True, "resolved"
 
 

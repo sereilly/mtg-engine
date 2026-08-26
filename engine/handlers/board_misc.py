@@ -10,7 +10,7 @@ from ..models import CardDefinition, Permanent
 from ..oracle_types import OracleInstruction
 from ..pt import set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
-from ..tokens import make_token_card
+from ..tokens import CREATED_TOKEN_RESULT_KEY, make_token_card
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       block_pair_permanents, permanent_matches_filter,
                       resolve_amount, resolve_target_permanent,
@@ -81,7 +81,31 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
     # — by resolution time of the *delayed* ability it may be in a graveyard,
     # and an index would by then address whatever slid into its slot.
     bound_id = None
-    if payload.get("binds_target"):
+    # "…when **Stangg** leaves the battlefield" / "…when **that token** leaves
+    # the battlefield" (Stangg). The opener names an object this effect already
+    # holds rather than one it chose, so there is no target to resolve: the
+    # source is on the context, and the token is the id the token maker wrote
+    # to the scratchpad a step ago.
+    #
+    # An id that is not there arms **nothing**. Left unbound the entry would
+    # match the *first* permanent to leave the battlefield, which is the
+    # widening every bound-object payload in this engine exists to prevent.
+    watches = payload.get("watches")
+    if watches is not None:
+        if watches == "source":
+            bound_id = (
+                context.source_permanent.permanent_id
+                if context.source_permanent is not None else None
+            )
+        elif watches == "created_token":
+            recorded = (context.results or {}).get(CREATED_TOKEN_RESULT_KEY)
+            bound_id = recorded if isinstance(recorded, int) else None
+        if bound_id is None:
+            game.log.append(
+                f"{context.card.name} had no permanent to watch"
+            )
+            return True, "no object"
+    elif payload.get("binds_target"):
         bound = resolve_target_permanent(game, context)
         if bound is None:
             # The target is gone (CR 608.2b): there is nothing for the delayed
@@ -655,6 +679,17 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         # attack.
         if payload.get("tapped"):
             token.tapped = True
+        # "Create Stangg Twin, a … token. **Exile that token** when …"
+        # (Stangg.) Which permanent this step made, for the sentences behind it
+        # in the same resolution: a token is a new object with a fresh id
+        # (CR 400.7), so nothing about it can be looked up afterwards.
+        #
+        # Written for every token maker, and deliberately the *last* one when
+        # several are made: the phrase "that token" is singular, and the
+        # lowering admits it only behind a maker — a card printing it after a
+        # plural maker would be a card this engine has not met, and it would
+        # arrive as one token addressed rather than as a silently wider effect.
+        context.results[CREATED_TOKEN_RESULT_KEY] = token.permanent_id
         if payload.get("attacking") and game.current_turn_phase == "combat":
             defending = (context.trigger_context or {}).get("trigger_defending_player_index")
             if not isinstance(defending, int):

@@ -432,6 +432,13 @@ def _lower_create_delayed_trigger(
         "duration": node.duration,
         "binds_target": node.binds_target,
     }
+    # "…when **Stangg** leaves the battlefield" / "…when **that token** leaves
+    # the battlefield". Which object the ability watches, when the opener names
+    # one the effect already holds rather than one it targeted — the arming
+    # handler reads the id from the source permanent or from the scratchpad the
+    # token maker wrote, so nothing is resolved as a target.
+    if node.watches is not None:
+        payload["watches"] = node.watches
     subject = _delayed_filter_payload(node.subject, node)
     if subject:
         payload["subject_filter"] = subject
