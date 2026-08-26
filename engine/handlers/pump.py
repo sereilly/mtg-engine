@@ -818,13 +818,40 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
             return False
         return True
 
+    keywords = tuple(instruction.payload.get("keywords") or ())
+
+    # "**X** target creatures gain islandwalk until end of turn." (Part Water.)
+    # The printed count is a *string* until the spell is cast — X is announced,
+    # not printed — so it is resolved against the context's X rather than tested
+    # with `isinstance(int)`. That test is the exact hole rounds 23 and 27 found
+    # in the tap and bounce handlers: it skipped the "x" spelling, fell through
+    # to the one-target branch, and affected the first chosen creature while the
+    # player watched the rest do nothing.
+    printed_count = (instruction.payload.get("targets") or {}).get("count")
+    maximum = (
+        resolve_amount(printed_count, context.x_value)
+        if printed_count is not None else None
+    )
+    if isinstance(maximum, int) and maximum > 1:
+        chosen = resolve_target_permanents(game, context, predicate=grant_target_legal)
+        if not chosen:
+            game.log.append(f"{card.name}: no valid creature targets")
+            return True, "resolved"
+        for permanent in chosen:
+            for keyword in keywords:
+                _grant_one_keyword(game, permanent, keyword, context)
+        game.log.append(
+            ", ".join(p.card.name for p in chosen)
+            + f" gain {' and '.join(keywords)} until end of turn ({card.name})"
+        )
+        return True, "resolved"
+
     target_creature = resolve_target_permanent(
         game, context, predicate=grant_target_legal
     )
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    keywords = tuple(instruction.payload.get("keywords") or ())
     for keyword in keywords:
         _grant_one_keyword(game, target_creature, keyword, context)
     game.log.append(

@@ -501,3 +501,136 @@ def test_winter_blast_burns_nothing_it_did_not_tap(set_pool):
     assert bear.tapped is True
     assert bird.tapped is False
     assert bird.damage_marked == 0
+
+
+# ---------------------------------------------------------------------------
+# Typhoon (round 28) — a count taken once per recipient
+# ---------------------------------------------------------------------------
+
+
+def _r28_basic(subtype: str) -> CardDefinition:
+    """A basic land of one type, for boards a test builds by hand."""
+    line = f"Basic Land - {subtype}"
+    return CardDefinition(
+        name=subtype, mana_cost="", cmc=0.0, type_line=line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": subtype, "type_line": line},
+    )
+
+
+def _r28_typhoon_game(set_pool, islands: list[int]):
+    """Seat 0 casts Typhoon; every other seat gets *islands[i]* Islands plus a
+    Forest, so a count that ignored the subtype would read one too many."""
+    from engine.models import Permanent
+
+    players = []
+    for seat, count in enumerate(islands):
+        board = [Permanent(card=_r28_basic("Island")) for _ in range(count)]
+        board.append(Permanent(card=_r28_basic("Forest")))
+        players.append(PlayerState(name=f"P{seat + 1}", life=20, battlefield=board))
+    players[0].hand = [set_pool("LEG")["Typhoon"]]
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    return game, players
+
+
+def test_typhoon_counts_each_opponents_own_islands(set_pool):
+    """"…equal to the number of Islands **that player** controls" is one number
+    per seat. A single X would have dealt the caster's count to everybody —
+    here 5 to each, instead of 1 and 3."""
+    game, players = _r28_typhoon_game(set_pool, [5, 1, 3])
+
+    result = game.cast_from_hand(0, "Typhoon")
+
+    assert result.supported, result.details
+    assert [p.life for p in players] == [20, 19, 17], game.log
+
+
+def test_typhoon_never_damages_its_caster(set_pool):
+    """"Each opponent" excludes the controller, whose five Islands would
+    otherwise be the biggest number on the board."""
+    game, players = _r28_typhoon_game(set_pool, [5, 1, 3])
+
+    game.cast_from_hand(0, "Typhoon")
+
+    assert players[0].life == 20
+
+
+def test_typhoon_deals_nothing_to_an_islandless_opponent(set_pool):
+    """CR 120.8: a source that would deal 0 damage deals none at all."""
+    game, players = _r28_typhoon_game(set_pool, [2, 0])
+
+    game.cast_from_hand(0, "Typhoon")
+
+    assert players[1].life == 20
+
+
+# ---------------------------------------------------------------------------
+# Part Water (round 28) — "X target creatures gain islandwalk until end of turn"
+# ---------------------------------------------------------------------------
+
+
+def _r28_vanilla(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="{1}{G}", cmc=2.0, type_line="Creature - Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _r28_part_water_game(set_pool, creatures: int):
+    from engine.models import Permanent
+
+    mine = [Permanent(card=_r28_vanilla(f"Bear{i}")) for i in range(creatures)]
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Part Water"]], battlefield=mine)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    return game, mine
+
+
+def test_part_water_grants_islandwalk_to_every_chosen_creature(set_pool):
+    """X is three, so the **third** creature has to have it too — the count
+    arrives as the string "x" and an `isinstance(int)` test would have granted
+    to the first slot alone (the rounds 23 / 27 bug class)."""
+    game, mine = _r28_part_water_game(set_pool, 3)
+
+    result = game.cast_from_hand(
+        0, "Part Water", x_value=3,
+        target_player_index=0, target_permanent_index=[0, 1, 2],
+    )
+    game._settle()
+
+    assert result.supported is True, result.details
+    assert [game._has_keyword(p, "islandwalk") for p in mine] == [True, True, True], game.log
+
+
+def test_part_water_leaves_the_creatures_it_did_not_name_alone(set_pool):
+    """X is one: the two unchosen creatures gain nothing."""
+    game, mine = _r28_part_water_game(set_pool, 3)
+
+    game.cast_from_hand(
+        0, "Part Water", x_value=1,
+        target_player_index=0, target_permanent_index=[1],
+    )
+    game._settle()
+
+    assert [game._has_keyword(p, "islandwalk") for p in mine] == [False, True, False]
+
+
+def test_part_water_tells_the_picker_its_count_is_the_announced_x(set_pool):
+    """The cast spec has to *say* the count is X, or the browser picker falls
+    back to its one-target default and names a single creature for an announced
+    X of five — which is what Winter Blast did until this flag existed. There is
+    no number to report here (X is announced, not printed), so it is a flag."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    for name in ("Part Water", "Winter Blast"):
+        card = set_pool("LEG")[name]
+        spec = derive_cast_spec(card, compile_card_oracle(card))
+        assert spec == {"kind": "creature", "x_targets": True}, name

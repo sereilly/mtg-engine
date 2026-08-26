@@ -7,9 +7,11 @@ from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
 from ._common import (
-    apply_damage_to_creature, apply_temp_pt_boost, permanent_matches_filter, resolve_amount,
+    apply_damage_to_creature, apply_temp_pt_boost, evaluate_count,
+    permanent_matches_filter, resolve_amount,
     resolve_target_permanent, resolve_target_permanents,
 )
+from ..oracle_types import X_FROM_COUNT_PER_RECIPIENT
 from .registry import effect_handler
 from ..mana_payment import generic_cost
 
@@ -79,6 +81,23 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # a property of the printed quantity and not of where its left half came
     # from.
     damage = max(0, damage + int(instruction.payload.get("amount_bonus", 0) or 0))
+
+    # "…deals damage to each opponent equal to the number of Islands **that
+    # player** controls" (Typhoon). One number per seat, so it cannot have been
+    # folded into `context.x_value` — there is one of those and this phrase has
+    # one answer per recipient. The loops below ask this instead of reading
+    # `damage`; every other branch never sees the key, and the lowering refuses
+    # to emit it anywhere but at a looping recipient.
+    per_recipient_spec = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
+
+    def _amount_for(face) -> int:
+        if per_recipient_spec is None:
+            return damage
+        return max(0, evaluate_count(
+            game, face, per_recipient_spec,
+            exclude=source_permanent, source=source_permanent,
+        ))
+
     def _record_and_log(dealt: int, face) -> None:
         """What a multi-seat damage loop does with each seat's result.
 
@@ -265,7 +284,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         def _hit_player(player_index: int) -> None:
             face = game.players[player_index]
             game._deal_damage_to_player(
-                face, damage, source=source_permanent or card, asks=True,
+                face, _amount_for(face), source=source_permanent or card, asks=True,
                 then=lambda dealt, face=face: _record_and_log(dealt, face),
             )
 
@@ -282,7 +301,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         def _hit_opponent(opponent_index: int) -> None:
             face = game.players[opponent_index]
             game._deal_damage_to_player(
-                face, damage, source=source_permanent or card, asks=True,
+                face, _amount_for(face), source=source_permanent or card, asks=True,
                 then=lambda dealt, face=face: _record_and_log(dealt, face),
             )
 

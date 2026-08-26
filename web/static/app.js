@@ -1697,7 +1697,24 @@ function severalTargetMaximum(card) {
   const max = targetSpecOf(card).max_targets;
   return Number.isInteger(max) && max > 1 ? max : null;
 }
-function cardRequiresSeveralTargets(card) { return severalTargetMaximum(card) !== null; }
+
+// "**X** target creatures" (Part Water, Winter Blast). Deliberately *not*
+// answered by `severalTargetMaximum`: the number is the announced X, which
+// nobody knows until the X prompt has run — and that prompt has to come first,
+// because it is the one that recomputes the affordable maximum as the caster
+// taps mana. So these spells take the ordinary X prompt and *then* the
+// several-target picker, sized to what they announced. Reading them as
+// "several" up front would show a picker with no maximum; reading them as
+// neither (which is what happened until this) showed the one-target picker and
+// named a single creature for an announced X of five.
+function cardNamesXTargets(card) { return !!targetSpecOf(card).x_targets; }
+function cardRequiresSeveralTargets(card) {
+  // "X target creatures" answers yes here too, so it is caught by the *first*
+  // question every cast cascade asks rather than by the five later ones that
+  // would each have had to learn about it — and `startCastSeveralTargetsPrompt`
+  // is then the one place that sends it through the X prompt first.
+  return severalTargetMaximum(card) !== null || cardNamesXTargets(card);
+}
 function cardRequiresTargetStackSpell(card) { return specKind(card) === "stack"; }
 
 // What a graveyard-return prompt is asking the player to click. Regrowth takes
@@ -8200,16 +8217,28 @@ function dividedTargetCount() {
 // divided spell splits *one* quantity across its targets and follows up with an
 // X prompt, while these are N independent targets of one effect.
 
-function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets = null) {
+function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets = null, announced = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
-  const max = severalTargetMaximum(card);
+  if (announced === null && cardNamesXTargets(card)) {
+    // How many targets this names is the announced X, so the X prompt runs
+    // first — it is also the prompt that recomputes the affordable maximum as
+    // the caster taps mana — and `resolvePendingCastX` comes back here with the
+    // answer. One choke point rather than a branch in every cast cascade.
+    startCastXPrompt(card, getDefaultTargetSeat(cardName), null, castAction);
+    return;
+  }
+  // `announced` is the X an "X target creatures" cast already chose: it is both
+  // the size of the picker and the number the wire has to carry, so the two
+  // cannot disagree about a value the player named once.
+  const max = announced === null ? severalTargetMaximum(card) : announced;
   pendingCastTarget = {
     card,
     cardName,
     castAction,
     targetKind: "several",
     maxTargets: max,
+    announcedX: announced,
     severalTargets: [], // [{ seat, idx }] — all on one seat; see confirm below
     ...pendingTargetFields(card, validTargets),
   };
@@ -8222,9 +8251,14 @@ function severalTargetsHint() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "several") return "";
   const n = p.severalTargets.length;
+  // "X target creatures" names exactly X (CR 601.2c), not "up to" — so the
+  // hint does not offer a choice the card refuses.
+  const exact = p.announcedX !== null && p.announcedX !== undefined;
+  const bound = exact ? `${p.maxTargets}` : `up to ${p.maxTargets}`;
   return n === 0
-    ? `Choose up to ${p.maxTargets} targets for ${p.cardName} (click each), then confirm. Choosing none is legal.`
-    : `${n} of up to ${p.maxTargets} chosen.`;
+    ? `Choose ${bound} targets for ${p.cardName} (click each), then confirm.`
+      + (exact ? "" : " Choosing none is legal.")
+    : `${n} of ${bound} chosen.`;
 }
 
 function toggleSeveralTarget(targetSeat, permanentIndex) {
@@ -8270,6 +8304,10 @@ function confirmSeveralTargets() {
     .filter((pid) => Number.isInteger(pid));
   const oneSeat = severalTargets.every((t) => t.seat === targetSeat);
   const body = { seat, action: castAction || "cast", card_name: cardName, target_seat: targetSeat };
+  // "X target creatures": how many were chosen is the announced X. Sent here
+  // rather than asked for separately, so the picker and the cost cannot
+  // disagree about a number the player named once.
+  if (p.announcedX !== null && p.announcedX !== undefined) body.x_value = p.announcedX;
   if (ids.length === severalTargets.length && ids.length > 0) {
     body.target_permanent_ids = ids;
   } else if (severalTargets.length && oneSeat) {
@@ -8842,6 +8880,22 @@ function resolvePendingCastX(xValue) {
   const pending = pendingCastX;
   pendingCastX = null;
   renderActivationPrompt();
+
+  // "X target creatures gain islandwalk" (Part Water) / "Tap X target
+  // creatures" (Winter Blast). The announced X is how many targets the spell
+  // names, so the picker comes *after* the X prompt and is sized by it. X = 0
+  // names nothing and falls straight through to the ordinary cast below.
+  if (
+    pending.castAction !== "activate"
+    && selectedX > 0
+    && cardNamesXTargets(pending.card)
+  ) {
+    startCastSeveralTargetsPrompt(
+      pending.card, pending.castAction || "cast", null, selectedX,
+    );
+    return;
+  }
+
   const verb = pending.castAction === "activate" ? "Activating" : "Casting";
   updateActionHint(`${verb} ${pending.cardName} with X = ${selectedX}...`);
 
