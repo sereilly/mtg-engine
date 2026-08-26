@@ -868,3 +868,24 @@ def _lower_shuffle_hand_into_library(
             {"whose": node.whose.kind, "then_draw": node.then_draw},
         ),
     )
+
+
+def _lower_random_reveal_ownership_exchange(
+    node: "ast.RandomRevealOwnershipExchange",
+) -> tuple[OracleInstruction, ...]:
+    """Tempest Efreet. The life total is payload; the target is the printed
+    "target opponent", described the way every other player target is so the
+    activation picker and the handler ask one question."""
+    return (
+        OracleInstruction(
+            "random_reveal_ownership_exchange", "",
+            {
+                "life": node.life,
+                "targets": {
+                    "quantifier": "target",
+                    "kind": "player",
+                    "opponents_only": True,
+                },
+            },
+        ),
+    )

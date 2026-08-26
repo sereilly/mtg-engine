@@ -141,6 +141,7 @@ from .lowering import (
     _lower_transmute_by_sacrifice,
     _lower_exile_until_leaves_or_untaps,
     _lower_ownership_exchange_unless_paid,
+    _lower_random_reveal_ownership_exchange,
     _lower_exile_top_of_library,
     _lower_put_exiled_with_source,
     _lower_look_top_pick,
@@ -156,6 +157,7 @@ from .lowering import (
     _lower_tap_or_untap,
     _lower_attach,
     _lower_exchange_control,
+    _lower_exchange_greatest_mana_value,
     _lower_win_game,
 )
 
@@ -257,6 +259,9 @@ def lower_statement(
         return _lower_attach(statement)
     if isinstance(statement, ast.ExchangeControl):
         return _lower_exchange_control(statement)
+
+    if isinstance(statement, ast.ExchangeGreatestManaValue):
+        return _lower_exchange_greatest_mana_value(statement)
     if isinstance(statement, ast.Draw):
         return _lower_draw(statement)
     if isinstance(statement, ast.Mill):
@@ -405,6 +410,9 @@ def lower_statement(
 
     if isinstance(statement, ast.OwnershipExchangeUnlessPaid):
         return _lower_ownership_exchange_unless_paid(statement)
+
+    if isinstance(statement, ast.RandomRevealOwnershipExchange):
+        return _lower_random_reveal_ownership_exchange(statement)
 
     if isinstance(statement, ast.ExileUntilLeavesOrUntaps):
         return _lower_exile_until_leaves_or_untaps(statement)

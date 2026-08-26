@@ -2644,3 +2644,133 @@ def name_and_random_reveal(game: Game, instruction: OracleInstruction, context: 
         ),
     )
     return True, "pending_name_and_random_reveal"
+
+
+#: The zones a card whose ownership is changing can be found in. "…from
+#: anywhere" (Tempest Efreet) is printed because the source was sacrificed as a
+#: cost and is therefore already gone from the battlefield — but the words say
+#: anywhere, and a card that has since been exiled or shuffled away is still the
+#: card the ability names. The battlefield is not in the list: a permanent there
+#: is a `Permanent`, not a card, and this exchange is about the card.
+_OWNERSHIP_ZONES = ("graveyard", "hand", "exile", "library", "ante")
+
+
+def _locate_card_for_ownership(
+    game: Game, card, prefer_seat: int = 0
+) -> tuple[int, str, int] | None:
+    """Where *card* is, as ``(owner seat, zone name, index)``, or None.
+
+    Located by **identity** and returned as an index rather than as the object:
+    the catalog hands out one ``CardDefinition`` per card, so two copies in one
+    zone are the same object and only an index can say *which* of them moves.
+    Identity cannot tell two copies apart at all, so *prefer_seat* — the seat
+    the ability was activated from, which is where the card it sacrificed is —
+    is searched first. Without it a *previous* copy already sitting in the
+    victim's graveyard would be found instead, and the exchange would hand that
+    player back their own card.
+    """
+    seats = sorted(range(len(game.players)), key=lambda seat: seat != prefer_seat)
+    for seat in seats:
+        player = game.players[seat]
+        for zone in _OWNERSHIP_ZONES:
+            pile = getattr(player, zone, None) or ()
+            for index, held in enumerate(pile):
+                if held is card:
+                    return seat, zone, index
+    return None
+
+
+@effect_handler("random_reveal_ownership_exchange")
+def random_reveal_ownership_exchange(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Tempest Efreet: "Target opponent may pay 10 life. If that player
+    doesn't, they reveal a card at random from their hand. Exchange ownership
+    of the revealed card and this creature…"
+
+    The payment is the ordinary optional-pay entry and it is owed by the
+    **victim**, exactly as Bronze Tablet's is; what is new is that the *decline*
+    branch has to pick a card first. So the branch is its own instruction rather
+    than work done here — the prompt machinery runs instruction lists, and this
+    handler's whole job is to offer the choice to the right seat.
+
+    Inert outside the ante variant. CR 108.3 fixes ownership for the whole game
+    and CR 407 is the only exception; CR 407.1 makes that variant opt-in, so an
+    ownership change in an ordinary duel is not a rule this engine has.
+    """
+    card_name = getattr(context.card, "name", "")
+    if not getattr(game, "playing_for_ante", False):
+        game.log.append(
+            f"{card_name}: ownership changes only in a game played for ante "
+            "(CR 108.3, CR 407.1)"
+        )
+        return True, "resolved"
+    victim = context.target
+    if victim is None or victim not in game.players or victim is context.caster:
+        game.log.append(f"{card_name}: no opponent to exchange with")
+        return True, "resolved"
+    victim_seat = game.players.index(victim)
+    life = int(instruction.payload.get("life", 0))
+    game.arm_pending_choice(
+        "optional_pay", victim_seat,
+        card_name=card_name,
+        cost={},
+        life_cost=life,
+        life=0,
+        prompt=f"Pay {life} life?",
+        _source_permanent=context.source_permanent,
+        _on_accept=(),
+        _on_decline=(_OracleInstruction("take_revealed_card_in_exchange", "", {}),),
+        _on_reflexive=(),
+        _context=context,
+    )
+    return True, "resolved"
+
+
+@effect_handler("take_revealed_card_in_exchange")
+def take_revealed_card_in_exchange(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """The decline branch of Tempest Efreet: the random reveal and the swap.
+
+    The reveal samples an **index**, never a card object. Two copies of one card
+    in a hand are the same ``CardDefinition``, so sampling the objects would
+    make a hand of two Mountains and a Shivan Dragon a coin flip rather than a
+    one-in-three — and would pick the *first* matching slot to remove either way.
+
+    "Ownership" in this engine is which player's zone a card sits in, so the two
+    printed moves *are* the exchange rather than a consequence of it, and there
+    is nothing further to record. CR 701.12a still applies: with the source card
+    nowhere to be found there is nothing to exchange it *for*, so the revealed
+    card goes back where it came from and no part of the exchange happens.
+    """
+    card_name = getattr(context.card, "name", "")
+    victim = context.target
+    if victim is None or victim not in game.players:
+        return True, "resolved"
+    caster_seat = game.players.index(context.caster)
+    if not victim.hand:
+        game.log.append(f"{card_name}: {victim.name} has no card to reveal")
+        return True, "resolved"
+    index = random.randrange(len(victim.hand))
+    revealed = victim.hand[index]
+    game.log.append(f"{victim.name} reveals {revealed.name} at random")
+    located = _locate_card_for_ownership(game, context.card, caster_seat)
+    if located is None:
+        # A reveal does not move a card, so nothing has to be put back: the
+        # revealed card is still in the hand it was revealed from, and CR
+        # 701.12a's atomicity means no part of the exchange happens.
+        game.log.append(
+            f"{card_name} is nowhere to be found, so no ownership is exchanged"
+        )
+        return True, "resolved"
+    seat, zone, at = located
+    victim.hand.pop(index)
+    getattr(game.players[seat], zone).pop(at)
+    # Through the one seam every "put this card into a hand" goes through, so
+    # CR 903.9b sees it (a commander taken this way is offered its command zone
+    # like any other move to a hand). The hand it goes to is the new owner's,
+    # which is what an ownership exchange *is* in this engine.
+    game.put_card_into_hand(game.players[caster_seat], revealed)
+    victim.graveyard.append(context.card)
+    game.log.append(
+        f"{context.caster.name} now owns {revealed.name} and {victim.name} now "
+        f"owns {card_name} (CR 407)"
+    )
+    return True, "resolved"

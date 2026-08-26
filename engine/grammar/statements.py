@@ -15,6 +15,8 @@ from .errors import GrammarError
 from .lexer import (SELF, WORD)
 from .nouns import parse_object_filter
 from .paragraphs import (
+    _parse_random_reveal_ownership_exchange,
+    _parse_exchange_greatest_mana_value,
     _parse_cast_from_exiled_with,
     _parse_ownership_exchange_unless_paid,
     _parse_exile_graveyard_until_leaves,
@@ -122,6 +124,18 @@ def _parse_subject_verb(
     # "The next time a <colour> source of your choice would deal damage to you
     # this turn, prevent that damage." opens with a noun phrase rather than a
     # verb, so it is tried before the subject-verb shapes below.
+    # "You and target player exchange control of …" (Juxtapose) — a whole
+    # paragraph, and it opens with a noun phrase the subject parser would read
+    # as a player and then choke on the conjunction. Refuses without consuming.
+    juxtaposition = _parse_exchange_greatest_mana_value(stream)
+    if juxtaposition is not None:
+        return juxtaposition
+    # Tempest Efreet's whole ability, which opens "Target opponent may pay …"
+    # — a subject the noun parser reads and then a "may" no production of its
+    # own would finish. Refuses without consuming.
+    efreet = _parse_random_reveal_ownership_exchange(stream)
+    if efreet is not None:
+        return efreet
     colour_shield = _parse_source_of_choice_effect(stream)
     if colour_shield is not None:
         return colour_shield
