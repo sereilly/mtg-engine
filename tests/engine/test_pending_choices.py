@@ -289,6 +289,12 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # interactive seat ever queues it — `default_at_arm` answers for
         # everyone else before the flag is set.
         "permanent_choice",
+        # "Starting with you, each player may put a permanent card from their
+        # hand onto the battlefield. **Repeat this process until no one puts a
+        # card onto the battlefield.**" (Eureka): the answers are what decides
+        # whether the round happens again, so the round has to still be there
+        # to decide it.
+        "put_from_hand_choice",
     }, suspending
 
 

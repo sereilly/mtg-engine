@@ -1897,6 +1897,56 @@ def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruct
     return True, "resolved"
 
 
+def put_from_hand_candidates(game, payload: dict, player) -> list[int]:
+    """The hand slots a "put a … card from your hand onto the battlefield" offer
+    may be answered with.
+
+    Public because two callers need it and one rule has to answer both: the
+    prompt renderer, which shows the seat what it may pick, and the resolver,
+    which checks what came back. A list built twice is a list that can be
+    offered wider than it is checked.
+    """
+    described = payload.get("card_filter") or {}
+    permanents_only = bool(payload.get("permanents_only"))
+    return [
+        index
+        for index, card in enumerate(player.hand)
+        if _card_matches_filter(card, described)
+        and (not permanents_only or card.primary_type in _PERMANENT_TYPES)
+    ]
+
+
+@effect_handler("put_chosen_card_from_hand_onto_battlefield")
+def put_chosen_card_from_hand_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…put **a** permanent card from their hand onto the battlefield."
+    (Eureka.)
+
+    One card, and the seat picks which — so the pick *is* the effect, and it is
+    a prompt rather than a slice off the front of the hand like the "up to N"
+    sweep above. ``optional`` (the sentence said "may") adds declining to the
+    answers; without it the seat must pick, and only an empty candidate list
+    ends it.
+
+    "their hand" is the hand of the seat the offer was made to, which is
+    ``context.target`` once a multi-seat offer has rebound it; "your hand" is
+    the caster's. The payload says which, because the two are different
+    sentences.
+    """
+    payload = instruction.payload
+    player = context.target if payload.get("whose") == "offered" else context.caster
+    seat = game.players.index(player)
+    if not put_from_hand_candidates(game, payload, player):
+        # Nothing to pick. Not an offer declined — an offer never made, which is
+        # the same rule ``handlers/control_flow._offer_to_seat`` states for an
+        # action cost nobody can pay.
+        game.log.append(
+            f"{player.name} has no card {context.card.name} could put onto the battlefield"
+        )
+        return True, "resolved"
+    game.arm_put_from_hand_choice(seat, payload, context)
+    return True, "resolved"
+
+
 @effect_handler("exile_all_matching")
 def exile_all_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile each permanent with mana value X or less that's one or more

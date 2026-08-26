@@ -20,7 +20,8 @@ import dataclasses
 
 from ...oracle_types import OracleInstruction
 from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS,
-                                TESTABLE_SUBJECT_FILTER_KEYS)
+                                TESTABLE_SUBJECT_FILTER_KEYS,
+                                card_only_filter)
 from .. import ast
 from ..errors import LoweringError
 from ._events import (CREATED_TOKEN, EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS,
@@ -834,7 +835,51 @@ def _lower_put_onto_battlefield(node: ast.PutOntoBattlefield) -> tuple[OracleIns
         raise LoweringError("no handler puts that onto the battlefield", node=node)
     filt = target.filter
     if filt.zone == "hand":
-        if filt.zone_owner is None or filt.zone_owner.kind != "you":
+        if filt.zone_owner is None or filt.zone_owner.kind not in ("you", "owner"):
+            raise LoweringError("only your own hand has a handler here", node=node)
+        # "…put **a** permanent card from their hand onto the battlefield."
+        # (Eureka.) One card, chosen — where the sweep below takes a whole
+        # "up to N" slice with nothing to decide. The pick is the effect, so it
+        # is its own instruction rather than a count of one handed to the sweep:
+        # the seat picks a card, and declining is one of the answers whenever
+        # the sentence that carried this said "may".
+        #
+        # "their hand" is the hand of whoever the offer was made to, which is
+        # why the owner spelling is admitted at all; "your hand" is the caster's.
+        if target.quantifier in ("a", "an") and filt.is_card:
+            # The zone and its owner are read on the two lines above, so they
+            # are honoured in the sense this check means; anything *else* the
+            # phrase printed has to survive into the payload, because a
+            # narrowing dropped here is a card the seat may pick that the
+            # sentence never offered.
+            if _restrictions_beyond(
+                filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card", "zone", "zone_owner"}
+            ):
+                raise LoweringError(
+                    "the from-hand pick cannot test that card phrase", node=node
+                )
+            payload = filt.to_payload()
+            payload.pop("zone", None)
+            payload.pop("zone_owner", None)
+            described = card_only_filter(payload)
+            if described is None or dropped_narrowings(filt, payload):
+                raise LoweringError(
+                    "the from-hand pick cannot test that card phrase", node=node
+                )
+            return (
+                OracleInstruction(
+                    "put_chosen_card_from_hand_onto_battlefield",
+                    "",
+                    {
+                        "card_filter": described,
+                        # An empty type list with is_card means "permanent
+                        # cards", the same reading the sweep below takes.
+                        "permanents_only": not filt.card_types,
+                        "whose": "offered" if filt.zone_owner.kind == "owner" else "you",
+                    },
+                ),
+            )
+        if filt.zone_owner.kind != "you":
             raise LoweringError("only your own hand has a handler here", node=node)
         if target.quantifier != "up_to" or not filt.is_card:
             raise LoweringError("the from-hand handler reads 'up to N … cards'", node=node)

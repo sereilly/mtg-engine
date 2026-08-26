@@ -207,6 +207,7 @@ from .combat import (
 from .game import (
     _lower_create_emblem,
     _lower_ante,
+    _lower_repeat_process,
     _lower_set_life_total,
     _lower_gain_life,
     _title,
@@ -370,6 +371,7 @@ __all__ = [
     "_lower_attacking_doesnt_tap",
     "_lower_remove_from_combat",
     "_lower_ante",
+    "_lower_repeat_process",
     "_lower_set_life_total",
     "_lower_gain_life",
     "_title",

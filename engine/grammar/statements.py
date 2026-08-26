@@ -31,7 +31,7 @@ from .delayed import (_parse_choose_target, _parse_choose_then_gain,
                       _parse_create_delayed_trigger, delay_binds_an_object,
                       parse_trailing_delay,
                       resolve_that_turn)
-from .references import parse_recipient
+from .references import parse_player_ref, parse_recipient
 from .vocabulary import CARD_TYPES
 from .stream import TokenStream
 from .conditions import _parse_condition
@@ -205,6 +205,26 @@ def _distribute_duration(
 
 def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     """One sentence's worth of effect, including ``if``/``may`` wrappers."""
+    # "**Starting with you**, each player may …" (Eureka.) Which seat answers a
+    # multi-seat offer first. Read here, in front of the sentence, because that
+    # is where it is printed and because the sentence behind it is an ordinary
+    # one — the phrase names the order, not the effect. Attached only to an
+    # offer: on anything else the words would be describing a turn order nothing
+    # takes, so the line refuses rather than dropping them.
+    if stream.at_word("starting"):
+        mark = stream.mark()
+        stream.advance()
+        if stream.accept_word("with"):
+            first = parse_player_ref(stream)
+            if first is not None and stream.accept_punct(","):
+                inner = _parse_statement_body(stream)
+                if not isinstance(inner, ast.May):
+                    raise stream.error(
+                        "'starting with …' orders an offer made to several "
+                        "seats, and this sentence makes none"
+                    )
+                return dataclasses.replace(inner, starting_with=first)
+        stream.reset(mark)
     # "Target opponent reveals their hand. You choose … from it. That player
     # discards that card." (Duress.) Read before anything else, because it
     # spans three printed sentences: the sentence loop above would hand the

@@ -1104,7 +1104,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2440,6 +2440,14 @@ function getFaceDownCastInfo(state = currentState) {
   return info;
 }
 
+// Eureka: the offered seat picks a card in its hand to put onto the battlefield.
+function getPutFromHandInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.put_from_hand_choice;
+  if (!info || !Array.isArray(info.choices) || info.choices.length === 0) return null;
+  return info;
+}
+
 function getTimeVaultInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.time_vault;
@@ -3050,6 +3058,7 @@ function isAnyPromptActive(state = currentState) {
   if (getMultiblockInfo(state)) return true;
   if (getKudzuReattachInfo(state)) return true;
   if (getFaceDownCastInfo(state)) return true;
+  if (getPutFromHandInfo(state)) return true;
   if (getTimeVaultInfo(state)) return true;
   if (getWordOfCommandInfo(state)) return true;
   if (getRagingRiverInfo(state)) return true;
@@ -3067,7 +3076,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -4871,6 +4880,60 @@ function applyFaceDownCastPrompt(info) {
   }
 }
 
+// Eureka: "each player may put a permanent card from their hand onto the
+// battlefield", repeated until a whole round declines. One panel per offer; the
+// Decline button is drawn only when the sentence said "may", because the engine
+// refuses a decline a mandatory pick never offered.
+function applyPutFromHandPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = `${info.card_name} — put a card onto the battlefield`;
+  body.textContent = info.optional
+    ? "You may put one of these cards from your hand onto the battlefield."
+    : "Choose a card in your hand to put onto the battlefield.";
+  const buttons = info.choices
+    .map(
+      (c) =>
+        `<button type="button" class="prompt-choice-btn" data-pfh-hand="${c.hand_index}">` +
+        `${escapeHtml(c.name)}</button>`
+    )
+    .join("");
+  const decline = info.optional
+    ? '<button type="button" class="prompt-choice-btn" data-pfh-decline="1">Decline</button>'
+    : "";
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}${decline}</div>`;
+
+  steps.querySelectorAll("[data-pfh-hand]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "put_from_hand_confirm",
+        hand_index: Number(btn.dataset.pfhHand),
+      });
+    });
+  });
+  const declineBtn = steps.querySelector("[data-pfh-decline]");
+  if (declineBtn) {
+    declineBtn.addEventListener("click", async () => {
+      await sendAction({ seat, action: "put_from_hand_confirm", accept: false });
+    });
+  }
+}
+
 // Raging River: the defending player divides their non-flying creatures into a
 // "left" and "right" pile; the attacking player then labels each attacker with the
 // pile it can be blocked from. Both are resolved with Left/Right buttons drawn over
@@ -6571,6 +6634,12 @@ function renderActivationPrompt() {
   const faceDownCastInfo = getFaceDownCastInfo();
   if (faceDownCastInfo) {
     applyFaceDownCastPrompt(faceDownCastInfo);
+    return;
+  }
+
+  const putFromHandInfo = getPutFromHandInfo();
+  if (putFromHandInfo) {
+    applyPutFromHandPrompt(putFromHandInfo);
     return;
   }
 

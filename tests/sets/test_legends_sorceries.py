@@ -1149,3 +1149,117 @@ def test_rebirth_holds_the_stack_until_the_last_seat_has_answered(set_pool):
     game.confirm_optional_pay(1, accept=False)
     assert game.stack == []
     assert game.waiting_prompt() is None
+
+
+# ---------------------------------------------------------------------------
+# Eureka (round 33) — a round of offers, repeated until nobody takes one
+# ---------------------------------------------------------------------------
+
+
+def _r33_eureka(set_pool, catalog_by_name, hands: list[list[str]], interactive=()):
+    """Eureka in seat 0's hand, with each seat holding the named cards."""
+    pool = set_pool("LEG")
+    players = []
+    for index, names in enumerate(hands):
+        hand = [catalog_by_name[name] for name in names]
+        if index == 0:
+            hand = [pool["Eureka"], *hand]
+        players.append(
+            PlayerState(name=f"P{index + 1}", hand=hand, library=[_mk_card("Filler", "Sorcery")])
+        )
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.interactive_seats = set(interactive)
+    return game, players
+
+
+def _r33_names(player) -> list[str]:
+    return [permanent.card.name for permanent in player.battlefield]
+
+
+def test_eureka_empties_every_hand_of_permanents_a_round_at_a_time(set_pool, catalog_by_name):
+    """The whole spell against seats that always take the offer.
+
+    Each round is one card per seat, in turn order, and the process repeats
+    while anybody is still putting cards down — so two cards in one hand take
+    two rounds, not one.
+    """
+    game, players = _r33_eureka(
+        set_pool, catalog_by_name,
+        [["Shivan Dragon", "Black Lotus"], ["Serra Angel", "Wall of Stone"]],
+    )
+
+    result = game.cast_from_hand(0, "Eureka")
+
+    assert result.supported, result.details
+    assert _r33_names(players[0]) == ["Shivan Dragon", "Black Lotus"]
+    assert _r33_names(players[1]) == ["Serra Angel", "Wall of Stone"]
+    assert players[0].hand == [] and players[1].hand == []
+    # Turn order, one card each, twice — not one seat's whole hand and then the
+    # other's, which is what a loop per seat rather than a round would give.
+    puts = [line for line in game.log if line.endswith("(Eureka)")]
+    assert [line.split()[0] for line in puts] == ["P1", "P2", "P1", "P2"], game.log
+
+
+def test_eureka_leaves_a_nonpermanent_card_in_hand(set_pool, catalog_by_name):
+    """"A **permanent** card" is the narrowing, and it is tested rather than
+    dropped: a sorcery in hand is never a candidate, so a seat holding nothing
+    else is simply never offered anything."""
+    game, players = _r33_eureka(
+        set_pool, catalog_by_name, [["Shivan Dragon"], ["Lightning Bolt"]],
+    )
+
+    game.cast_from_hand(0, "Eureka")
+
+    assert _r33_names(players[1]) == []
+    assert [card.name for card in players[1].hand] == ["Lightning Bolt"]
+
+
+def test_eureka_waits_on_an_interactive_seat_and_answers_both_ways(set_pool, catalog_by_name):
+    """The round genuinely stops for a human seat, and both answers are real:
+    the first offer is taken, the second declined, and the declining seat keeps
+    its card."""
+    game, players = _r33_eureka(
+        set_pool, catalog_by_name,
+        [["Shivan Dragon"], ["Serra Angel"]], interactive={0, 1},
+    )
+
+    game.cast_from_hand(0, "Eureka")
+    game.resolve_stack()
+
+    first = game.pending_choices[0]
+    assert first.kind == "put_from_hand_choice" and first.player_index == 0
+    assert game.waiting_prompt() is not None, "the resolution has to wait on the offer"
+    game.confirm_put_from_hand_choice(0, game.live_put_from_hand_choices(first)[0])
+
+    # Seat 1 owes the same round's second offer, and the game still waits.
+    second = game.pending_choices[0]
+    assert second.player_index == 1
+    assert game.waiting_prompt() is not None, "a second seat's offer holds the resolution too"
+    assert game.confirm_put_from_hand_choice(1, None)
+
+    # Seat 0 took one, so the process repeats — and this time it has nothing
+    # left, which ends it.
+    while game.pending_choices:
+        choice = game.pending_choices[0]
+        assert game.confirm_put_from_hand_choice(choice.player_index, None)
+
+    assert _r33_names(players[0]) == ["Shivan Dragon"]
+    assert _r33_names(players[1]) == []
+    assert [card.name for card in players[1].hand] == ["Serra Angel"]
+    assert game.waiting_prompt() is None
+
+
+def test_eureka_starts_with_its_caster(set_pool, catalog_by_name):
+    """"Starting with you" names the first seat asked. Three seats, so the order
+    is visible rather than a coincidence of there being two."""
+    game, players = _r33_eureka(
+        set_pool, catalog_by_name,
+        [["Shivan Dragon"], ["Serra Angel"], ["Wall of Stone"]],
+    )
+
+    game.cast_from_hand(0, "Eureka")
+
+    puts = [line.split()[0] for line in game.log if line.endswith("(Eureka)")]
+    assert puts == ["P1", "P2", "P3"], game.log

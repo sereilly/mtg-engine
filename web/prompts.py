@@ -736,6 +736,29 @@ def _face_down_cast(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("put_from_hand_choice")
+def _put_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
+    """Eureka: which card in this seat's hand goes onto the battlefield.
+
+    The candidates come from the engine's own rule, so the list offered and the
+    list an answer is checked against are one rule rather than two copies.
+    ``optional`` is what the sentence said, and it is what decides whether the
+    board draws a Decline button — a seat shown one for a mandatory pick would
+    be offered an answer the engine refuses.
+    """
+    choice = choices[0]
+    owner = ctx.game.players[choice.player_index]
+    live = ctx.game.live_put_from_hand_choices(choice)
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "optional": bool(choice.data.get("optional")),
+        "choices": [
+            {"hand_index": index, "name": owner.hand[index].name} for index in live
+        ],
+    }
+
+
 @prompt_renderer("word_of_command")
 def _word_of_command(ctx: PromptContext, choices: list) -> dict:
     target = ctx.game.players[choices[0].data["target_index"]]
