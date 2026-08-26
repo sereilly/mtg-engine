@@ -24,7 +24,7 @@ from .errors import GrammarError
 from .lexer import PT
 from .nouns import accept_source_reference, parse_comparison, parse_object_filter
 from .references import parse_player_ref
-from .phrases import _parse_duration
+from .phrases import _parse_duration, _parse_keywords
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
 
@@ -224,6 +224,21 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 return ast.LifeGainedThisTurn(player, amount.value)
         stream.reset(mark)
 
+    # "if **it doesn't have rampage**" (Rapid Fire). Read before the two
+    # back-references below, which open with the same pronoun: this branch is
+    # pinned by the verb that follows it, and it resets when no keyword does.
+    keyword_mark = stream.mark()
+    if stream.accept_word("it"):
+        negated = bool(stream.accept_word("doesn't") or stream.accept_phrase("does", "not"))
+        if stream.accept_word("has") or stream.accept_word("have"):
+            try:
+                keywords = _parse_keywords(stream)
+            except GrammarError:
+                keywords = None
+            if keywords:
+                return ast.ObjectHasKeyword(keywords, negated=negated)
+    stream.reset(keyword_mark)
+
     # "if it was a creature card" (Scavenging Ooze). A back-reference, like the
     # flip above and unlike everything below it: no read of the board can answer
     # it, because the card it asks about has already left the zone the effect
@@ -232,6 +247,15 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     if stream.accept_phrase("it", "was"):
         stream.accept_word("a", "an")
         return ast.ItWas(parse_object_filter(stream))
+
+    # "if **the discarded card** was a land card" (Land's Edge). The same
+    # past-tense back-reference as the clause above, naming its producer in
+    # words instead of with a pronoun — which is why it is a separate node: the
+    # sentence says *which* record it means, and reading it as "it" would let
+    # the condition answer off whatever an earlier step happened to write.
+    if stream.accept_phrase("the", "discarded", "card", "was"):
+        stream.accept_word("a", "an")
+        return ast.DiscardedCardWas(parse_object_filter(stream))
 
     # "if it's a creature or land card" (Track Down) — the present-tense twin of
     # the clause above, and a different question: that one asks what an object

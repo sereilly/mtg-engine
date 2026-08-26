@@ -928,7 +928,16 @@ class AbilityActivationMixin:
                     # the stack still had its cost paid, and an effect reading
                     # back what the cost ate must not depend on which of the
                     # two paths it came down.
-                    choices={"sacrificed_for_cost": sacrifice_cost_permanent},
+                    choices={
+                        "sacrificed_for_cost": sacrifice_cost_permanent,
+                        "discarded_for_cost": (
+                            list(discard_cost_cards)
+                            + (
+                                [discard_cost_card]
+                                if discard_cost_card is not None else []
+                            )
+                        ),
+                    },
                 ),
             )
             supported, details = state_machine.run(instruction)
@@ -957,6 +966,16 @@ class AbilityActivationMixin:
                 choices={
                     "chosen_source": chosen_source,
                     "sacrificed_for_cost": sacrifice_cost_permanent,
+                    # …and what its discard cost ate, for the same reason and
+                    # on the same channel: "If the discarded card was a land
+                    # card" (Land's Edge) is asked once the card is already in
+                    # a graveyard. Both spellings of the cost feed it — the
+                    # chosen cards and Jandor's Ring's history-named one — so
+                    # the record does not depend on which clause charged it.
+                    "discarded_for_cost": (
+                        list(discard_cost_cards)
+                        + ([discard_cost_card] if discard_cost_card is not None else [])
+                    ),
                     # "…the color of your choice" (Alchor's Tomb): the colour
                     # arrives with the activation, on the same `mana_color` key
                     # an any-colour mana ability uses, and rides to resolution

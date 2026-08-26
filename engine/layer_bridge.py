@@ -188,6 +188,14 @@ _TEXT_KEYWORDS = (
     "defender", "reach", "banding", "fear", "deathtouch", "islandwalk",
     "mountainwalk", "swampwalk", "forestwalk", "plainswalk", "desertwalk",
     "indestructible", "menace", "prowess", "flash",
+    # "rampage" is the word alone, and the printed line is "Rampage 2" — so the
+    # ingested keywords field seeds "rampage 2" and nothing asking for the
+    # *ability* found it. CR 702.23c counts instances of rampage, which is what
+    # "does it have rampage" means (Rapid Fire's "if it doesn't have rampage"),
+    # and the number is the instance's parameter rather than part of the name.
+    # A substring scan is safe here for the reason it is not for hexproof:
+    # there is no narrower keyword whose name contains this one.
+    "rampage",
     # "hexproof" is deliberately absent: this is a substring scan, and bare
     # hexproof is a *stronger* keyword than "hexproof from <colour>" — matching
     # the word inside the phrase would upgrade Sporeweb Weaver's blue-only

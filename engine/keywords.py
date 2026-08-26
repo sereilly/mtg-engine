@@ -35,6 +35,56 @@ ABILITY_EFFECTS = "ability_effects"
 # per recompute forever, and CR 611.3a means the recompute runs constantly.
 DERIVED_GRANTS = "derived_ability_grants"
 
+# Key under which granted **printed ability lines** live — the third channel in
+# this file, and the one for an ability layer 6's word-set cannot carry.
+#
+# Most keywords are behaviour the engine reads off the word: `has_keyword`
+# answers, and flying, trample and the rest are checked wherever they apply. A
+# few are not, because the CR *defines* them as an ability rather than
+# describing one — CR 702.23a says "Rampage N" **means** "Whenever this creature
+# becomes blocked, …", and `engine/rampage.py` accordingly rewrites the printed
+# line into the trigger it already is. Nothing downstream of the compiler knows
+# the word, which is exactly why granting one as a layer-6 keyword would grant
+# nothing at all: the compiler has already run, over a card that did not say it.
+#
+# So a grant of such an ability grants the *line*, and `Permanent.effective_card`
+# folds it into the rules text — the same channel a board-wide static's granted
+# ability already uses (`engine/global_statics.py`), for the same reason. From
+# there the compiler produces the ability like any printed one and the
+# becomes-blocked dispatcher fires it without knowing a spell granted it.
+GRANTED_ABILITY_LINES = "granted_ability_lines"
+
+#: Which keyword words that applies to. One entry today, and the membership test
+#: is not "does it have a number": it is "does the compiler build this keyword's
+#: behaviour out of the printed line". Prowess and lifelink also have behaviour
+#: the layer system does not store, but `has_keyword` is what reads them, so a
+#: layer-6 grant reaches them. Rampage's reader is `compile_card_oracle`.
+LINE_DERIVED_KEYWORDS = frozenset({"rampage"})
+
+
+def keyword_ability_name(keyword: str) -> str:
+    """*keyword* without its argument — the name of the ability itself.
+
+    "Protection from black" is the keyword *protection* carrying a quality
+    (CR 702.16a) and "rampage 2" is *rampage* carrying its N (CR 702.23a); the
+    registries in this engine list abilities, not every argument one can take.
+
+    Here rather than in the grammar because both sides of the colon need it: the
+    lowering asks whether a grant names an implemented ability, and the handler
+    asks which channel to put it on. Two spellings of "strip the argument" is
+    how those two come to disagree about what a card said.
+
+    Which keywords take a number is the parser's vocabulary — imported here
+    rather than restated, and imported inside the function because this module
+    sits underneath the grammar in the import order.
+    """
+    from .grammar.vocabulary import NUMERIC_ARGUMENT_KEYWORDS
+
+    if keyword.startswith("protection from "):
+        return "protection"
+    head = keyword.split(" ")[0]
+    return head if head in NUMERIC_ARGUMENT_KEYWORDS else keyword
+
 
 def _record(perm: Permanent, keyword: str, *, grant: bool, until_eot: bool) -> None:
     effects = perm.metadata.setdefault(ABILITY_EFFECTS, [])
@@ -85,6 +135,39 @@ def clear_derived_grants(perm: Permanent) -> None:
     perm.metadata.pop(DERIVED_GRANTS, None)
 
 
+def grant_ability_line(perm: Permanent, line: str, *, until_eot: bool = False) -> None:
+    """Layer 6: give *perm* a printed ability *line* (see GRANTED_ABILITY_LINES).
+
+    Recorded rather than applied, and read back in grant order, because the
+    compiler is what turns the line into an ability — this channel only has to
+    say what the permanent now says.
+    """
+    lines = perm.metadata.setdefault(GRANTED_ABILITY_LINES, [])
+    lines.append({"line": line, "until_eot": until_eot})
+
+
+def granted_ability_lines(perm: Permanent) -> tuple[str, ...]:
+    """The printed ability lines *perm* has been granted, oldest first."""
+    return tuple(entry["line"] for entry in perm.metadata.get(GRANTED_ABILITY_LINES) or ())
+
+
+def clear_until_eot_granted_ability_lines(perm: Permanent) -> None:
+    """Drop the until-end-of-turn granted lines during cleanup.
+
+    The twin of :func:`clear_until_eot_keywords`, called beside it: a grant that
+    outlived the turn would leave the permanent compiling an ability it no
+    longer has.
+    """
+    lines = perm.metadata.get(GRANTED_ABILITY_LINES)
+    if not lines:
+        return
+    remaining = [entry for entry in lines if not entry.get("until_eot")]
+    if remaining:
+        perm.metadata[GRANTED_ABILITY_LINES] = remaining
+    else:
+        perm.metadata.pop(GRANTED_ABILITY_LINES, None)
+
+
 def add_derived_grant(perm: Permanent, keyword: str) -> None:
     """Layer 6: *perm* has *keyword* for as long as the source keeps granting it."""
     granted = perm.metadata.setdefault(DERIVED_GRANTS, [])
@@ -99,7 +182,10 @@ def derived_grants(perm: Permanent) -> tuple[str, ...]:
 
 
 __all__ = [
-    "ABILITY_EFFECTS", "DERIVED_GRANTS", "ability_effects", "add_derived_grant",
-    "clear_derived_grants", "clear_until_eot_keywords", "derived_grants",
-    "grant_keyword", "remove_keyword",
+    "ABILITY_EFFECTS", "DERIVED_GRANTS", "GRANTED_ABILITY_LINES",
+    "LINE_DERIVED_KEYWORDS", "ability_effects", "add_derived_grant",
+    "clear_derived_grants", "clear_until_eot_granted_ability_lines",
+    "clear_until_eot_keywords", "derived_grants", "grant_ability_line",
+    "keyword_ability_name",
+    "granted_ability_lines", "grant_keyword", "remove_keyword",
 ]

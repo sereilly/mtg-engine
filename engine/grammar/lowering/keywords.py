@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import dataclasses
 
+from ...keywords import LINE_DERIVED_KEYWORDS, keyword_ability_name
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ..vocabulary import IMPLEMENTED_KEYWORDS
+from ..vocabulary import IMPLEMENTED_KEYWORDS, NUMERIC_ARGUMENT_KEYWORDS
 from ._common import (
     _describe_targets,
     _durationless_reason,
@@ -136,10 +137,7 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
                 node=node,
             )
         for keyword in node.keywords:
-            if keyword not in IMPLEMENTED_KEYWORDS:
-                raise LoweringError(
-                    f"granting {keyword!r} needs the keyword implemented", node=node
-                )
+            _check_grantable(keyword, node)
         team_payload: dict[str, object] = {"keywords": tuple(node.keywords)}
         if not node.subject.filter.card_types:
             team_payload["every_permanent"] = True
@@ -158,10 +156,7 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     # one sentence ("gains hexproof and indestructible") are one instruction
     # carrying them all.
     for keyword in node.keywords:
-        if _granted_keyword_name(keyword) not in IMPLEMENTED_KEYWORDS:
-            raise LoweringError(
-                f"granting {keyword!r} needs the keyword implemented", node=node
-            )
+        _check_grantable(keyword, node)
     payload: dict[str, object] = {"keywords": tuple(node.keywords)}
     if scope == "self":
         return (OracleInstruction("grant_self_keyword_until_eot", "", payload),)
@@ -169,16 +164,27 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     _describe_targets(payload, node.subject)
     return (OracleInstruction("grant_target_keyword_until_eot", "", payload),)
 
-def _granted_keyword_name(keyword: str) -> str:
-    """The registry name of a granted keyword, without its argument.
+def _check_grantable(keyword: str, node) -> None:
+    """Refuse a grant of a keyword the engine cannot actually give.
 
-    "Protection from black" is the keyword *protection* with a quality attached
-    (CR 702.16a); the registry lists the ability, not every quality it can name.
-    The gate compared the whole compound string, so **every** granted protection
-    was refused as an unimplemented keyword — a printed one has worked since the
-    keyword gate was written, which is what made the asymmetry invisible.
+    Two questions, and both have to be asked here: whether the *ability* is
+    implemented at all (`grant_keyword` will put any word into layer 6, and a
+    word with no behaviour behind it is a grant of nothing), and whether the
+    keyword's printed argument came with it. "Rampage 2" grants +2/+2 per extra
+    blocker; a bare "rampage" names no N, so there is nothing to grant — the
+    parser leaves the number optional because a *test* for the ability does not
+    want it (CR 702.23a defines the ability, the number parameterises it).
     """
-    return "protection" if keyword.startswith("protection from ") else keyword
+    name = keyword_ability_name(keyword)
+    if name not in IMPLEMENTED_KEYWORDS:
+        raise LoweringError(
+            f"granting {keyword!r} needs the keyword implemented", node=node
+        )
+    if name in NUMERIC_ARGUMENT_KEYWORDS and keyword == name:
+        raise LoweringError(
+            f"granting {keyword!r} needs the printed number it takes", node=node
+        )
+
 
 def _lower_lose_keyword(
     node: ast.LoseKeyword, event: str | None = None
@@ -195,6 +201,18 @@ def _lower_lose_keyword(
         if keyword not in IMPLEMENTED_KEYWORDS:
             raise LoweringError(
                 f"removing {keyword!r} needs the keyword implemented", node=node
+            )
+        # `remove_keyword` writes into layer 6's word set, and a line-derived
+        # ability is not in it — the compiler built the ability out of the
+        # printed line (CR 702.23a). Removing the word would report a removal
+        # and take nothing away, which is the silent half of the same failure
+        # `_check_grantable` refuses on the granting side. No card in the pool
+        # prints one; the day one does, it needs the removal channel built.
+        if keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS:
+            raise LoweringError(
+                f"removing {keyword!r} needs a channel that takes an ability "
+                "the compiler read off the printed line",
+                node=node,
             )
     if node.duration.kind is None:
         # "When this creature blocks, **it loses defender**." (Elder Land

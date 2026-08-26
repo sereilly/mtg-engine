@@ -180,6 +180,48 @@ class ItWas:
 
 
 @dataclass(frozen=True)
+class ObjectHasKeyword:
+    """"If **it doesn't have rampage**, …" (Rapid Fire).
+
+    A question about the object the sentence's *other* clause named — for a
+    spell, the creature it targeted, which is the same referent "that creature"
+    binds to in the clause behind it. Carries no subject field for the reason
+    :class:`ItHappened` carries none: the parser cannot see the sentence in
+    front of it, so which object "it" is belongs to lowering, and lowering
+    refuses where the referent is not the target.
+
+    ``keywords`` is a tuple because the keyword list production reads one; a
+    card printing "doesn't have flying or trample" would be answered by the
+    same node rather than by a second one.
+    """
+
+    keywords: tuple[str, ...]
+    negated: bool = False
+
+
+@dataclass(frozen=True)
+class DiscardedCardWas:
+    """"If **the discarded card** was a land card" (Land's Edge).
+
+    The same last-known-information question :class:`ItWas` asks, about a
+    different producer: the card is in a graveyard by the time this is read, so
+    what it *was* in the hand is the only answer there is (CR 608.2h).
+
+    Its own node rather than a widening of ``ItWas`` for the reason the lowering
+    keys ``amount_from`` and ``amount_from_trigger`` separately: the phrase names
+    which producer it means — the discard — and one node per named producer is
+    what keeps a back-reference from reading whatever record happens to be
+    lying around.
+
+    Carries no producer field for the same reason ``ItWas`` carries none. Which
+    discard wrote the record is lowering's question, and it refuses when nothing
+    in the ability discarded anything.
+    """
+
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class HadPlus1Counter:
     """"if it had a +1/+1 counter on it" (Basri's Lieutenant, CR 603.4).
 
@@ -266,7 +308,9 @@ class ItHappened:
 
 
 Condition = Union[
-    EveryOf, CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter, ItWas,
+    EveryOf, CoinFlipResult, Controls, DiscardedCardWas, IsState, DiedThisTurn,
+    ObjectHasKeyword,
+    HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
     DealtDamageThisTurn, SubjectPowerIs,

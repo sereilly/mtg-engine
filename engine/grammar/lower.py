@@ -719,9 +719,22 @@ def _lower_steps(
     return instructions
 
 
+#: Which scratchpad key an activation **cost** writes when it is paid. The twin
+#: of ``_PRODUCES`` for the cost side of a colon, and separate from it for the
+#: same reason the two sides are separate: a cost is charged by
+#: ``engine/mixins/stack/activation.py`` rather than by an instruction, so there
+#: is no instruction kind to key it on. Land's Edge's "the discarded card" reads
+#: the record this names; a cost added here needs the activation path to record
+#: it under the same key, or the condition would compile and read nothing.
+_COST_PRODUCES: dict[type, str] = {
+    ast.DiscardCost: "discarded_cards",
+}
+
+
 def _lower_line_statement(
     statement: ast.Statement,
     *,
+    produced: frozenset[str] = frozenset(),
     event: str | None = None,
     event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
@@ -735,7 +748,9 @@ def _lower_line_statement(
     """
     if isinstance(statement, ast.ModalNode):
         return _lower_modal_head(statement)
-    return lower_statement(statement, event=event, event_subject=event_subject)
+    return lower_statement(
+        statement, produced, event=event, event_subject=event_subject
+    )
 
 
 def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
@@ -800,7 +815,18 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
             )
         return instructions
     if isinstance(node, ast.ActivatedAbilityNode):
-        return _lower_line_statement(node.statement)
+        # An activation cost is paid before the ability goes on the stack
+        # (CR 602.2b), so what it ate is a record the *effect* can read back —
+        # "If the discarded card was a land card" (Land's Edge). This is the one
+        # place the cost clause and the effect clause are both in view, which is
+        # why the seeding happens here rather than in a field on the condition:
+        # the same pairing rule `_lower_steps` follows for "if you do".
+        produced = frozenset(
+            _COST_PRODUCES[type(cost)]
+            for cost in node.costs
+            if type(cost) in _COST_PRODUCES
+        )
+        return _lower_line_statement(node.statement, produced=produced)
     if isinstance(node, ast.KeywordLine):
         return ()
     if isinstance(node, ast.RegistryLine):

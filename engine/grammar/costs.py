@@ -75,11 +75,20 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     """
     if filt.is_source:
         return True
-    if not filt.card_types:
-        # A cost with no card type would let the charger eat a land. The
-        # charger's own reader says so too — this is the one narrowing the key
-        # set cannot express, because "which keys are set" and "is a type among
-        # them" are different questions.
+    if not (filt.card_types or filt.subtypes):
+        # An *unnamed* cost — one whose noun phrase pins neither a card type nor
+        # a subtype — would let the charger eat anything on the board, including
+        # a land. This is the one narrowing the key set cannot express, because
+        # "which keys are set" and "does one of them name the object" are
+        # different questions.
+        #
+        # A subtype alone does name it: "Sacrifice a Swamp" (Horror of Horrors)
+        # is a land type (CR 205.3i) with no card type printed beside it, and
+        # the charger's own reader carries it as ``subtype_filter`` — so
+        # demanding a card type here refused a cost the payment path could
+        # already collect, which is the two-readers-disagree failure this
+        # function exists to prevent, in the direction that costs a card its
+        # support rather than its narrowing.
         return False
     return object_only_filter(
         filt.to_payload(), carried_separately=frozenset({"exclude_self"})

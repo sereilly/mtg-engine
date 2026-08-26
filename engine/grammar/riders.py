@@ -168,6 +168,47 @@ def _parse_pronoun_grant_rider(
     return grant
 
 
+def _parse_conditional_pronoun_grant_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``If <condition>, it gains <keywords> [duration].`` after a sentence that
+    chose a target.
+
+    "Target creature gains first strike until end of turn. **If it doesn't have
+    rampage, that creature gains rampage 2 until end of turn.**" (Rapid Fire.)
+
+    Its own rider rather than a branch of the sentence parser, for the reason
+    :func:`_parse_pronoun_grant_rider` exists at all: the pronoun names the
+    sentence *before* this one, and nothing inside a single sentence's parse can
+    see back that far. Read without the binding, "that creature" is a subject
+    nobody chose and the whole line refuses.
+
+    The grant half is delegated to that function rather than re-implemented, so
+    the two spellings of the pronoun, the loss half and the reanimation fold all
+    stay in one place. Only the condition is read here.
+    """
+    if not steps or _statement_bound_target(steps[-1]) is None:
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        return None
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    grant = _parse_pronoun_grant_rider(stream, steps)
+    # `_RIDER_FOLDED` means the grant merged into the previous step, which a
+    # conditional cannot do — the merge would run the grant unconditionally.
+    if grant is None or grant is _RIDER_FOLDED:
+        stream.reset(mark)
+        return None
+    return ast.Conditional(condition, grant)
+
+
 # Sentinel: the rider was folded into the previous step, nothing to append.
 
 

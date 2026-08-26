@@ -346,31 +346,6 @@ class EffectsMixin:
             self._turn_face_up(chosen)
         return chosen
 
-    def _grant_regeneration_shield(
-        self,
-        target: PlayerState,
-        target_permanent_index: int | None = None,
-        subtype_filter: str | None = None,
-    ) -> bool:
-        # Honor an explicitly chosen creature (e.g. Death Ward's "Regenerate target
-        # creature" — the player picks which one; an explicit illegal choice
-        # fizzles). Fall back to the first creature only with no explicit choice.
-        # Elephant Graveyard restricts the pool to a subtype ("target Elephant").
-        def _eligible(perm: Permanent) -> bool:
-            if not perm.is_creature:
-                return False
-            if subtype_filter and subtype_filter not in perm.effective_card.type_line.lower():
-                return False
-            return True
-
-        chosen = pick_target_permanent(
-            target, target_permanent_index, predicate=_eligible, fallback_on_invalid_choice=False
-        )
-        if chosen is None:
-            return False
-        chosen.regeneration_shield += 1
-        return True
-
     def _match_chosen_damage_source(self, chosen_sources, source):
         """The entry of *chosen_sources* matching this damage's source, or None.
         A chosen permanent matches the dealing Permanent by identity; a chosen spell
