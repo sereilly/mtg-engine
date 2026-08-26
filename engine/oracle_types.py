@@ -313,3 +313,23 @@ def strip_ability_word(line: str) -> str:
 
 
 _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
+
+
+#: Seats a resolution records **per object**, keyed by the printed referent that
+#: names one — and by the ``OracleExecutionContext.results`` key the step that
+#: knows the answer writes it under.
+#:
+#: One table with two readers, in the shape this repo keeps arriving at: the
+#: grammar's lowering turns "the player who controlled that creature the last
+#: time it became blocked by that Wall" into a key, and the handler that swept
+#: the board writes the map that key names. Spelling the string out on both
+#: sides would be a rule with two readers free to disagree, and the way it would
+#: fail is silent — a lowering emitting a key nothing writes compiles the card
+#: supported and reanimates out of nobody's graveyard.
+#:
+#: The value under each key is ``{permanent_id: seat}``. A loop over those same
+#: objects (``for_each``) resolves it to the one seat per iteration, which is
+#: what makes the record readable from inside a per-object effect.
+PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
+    "controller_when_blocked": "blocked_controller_seats",
+}

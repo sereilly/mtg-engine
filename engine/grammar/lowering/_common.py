@@ -159,6 +159,17 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # written for it carry the relation as their own payload key.
     "blocking_target": "blocking_target",
     "blocking_bound_target": "blocking_bound_target",
+    # "…that were blocked by that creature this turn" (Glyph of Doom) / "…by
+    # **target Wall** this turn" (Glyph of Reincarnation). The block *history*,
+    # in its two referents. Neither has a ``to_payload`` form — the record lives
+    # on the blocker, not on the creatures being described — and until now both
+    # leaned on the dataclass-wide gates alone, which is the hole this table
+    # exists to close: a lowering that builds a payload from the filter and does
+    # not know the field drops the relation, and a dropped relation on a destroy
+    # sweep is not a card that does less, it is one that takes the board. The
+    # two lowerings written for them name them in ``carried_separately``.
+    "blocked_by_bound_object": "blocked_by_bound_object",
+    "blocked_by_target_object": "blocked_by_target_object",
 }
 
 

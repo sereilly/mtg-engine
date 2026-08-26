@@ -10,7 +10,7 @@ dropped.
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from ...subject_filters import card_only_filter
 from .. import ast
@@ -20,6 +20,7 @@ from ._common import (
     _filter_payload,
     _amount_payload,
     _describe_targets,
+    _is_target,
     _restrictions_beyond,
     _targets_only,
     count_spec,
@@ -656,3 +657,79 @@ def _lower_look_top_pick(
     if node.all_to_hand_if_cast_elsewhere:
         payload["all_to_hand_if_cast_elsewhere"] = True
     return (OracleInstruction("look_top_pick_to_hand", "", payload),)
+
+
+def _lower_graveyard_pick_onto_battlefield(
+    node: ast.PutOntoBattlefield,
+) -> tuple[OracleInstruction, ...] | None:
+    """"Put **a** creature card from the graveyard of <player> onto the
+    battlefield **under its owner's control**." (Glyph of Reincarnation.)
+
+    Here rather than beside the rest of the "put … onto the battlefield" family
+    in ``lowering/zones``, because what it emits decides the family: no
+    ``target`` is printed, so the card is not chosen until the effect resolves
+    (CR 115.1b), and a pick made during resolution out of a named zone is a
+    *search prompt* — the same instruction ``_lower_search_library`` above
+    emits, narrowed to a graveyard. Sending it to the reanimation handler
+    instead would have made it a cast-time target, which is a different card:
+    the graveyard it comes out of is named by a referent nobody can evaluate
+    until the earlier sentence has run.
+
+    Returns None for every other "put onto the battlefield", so ``lower.py``
+    falls through to that family and a line this is not keeps the refusal it
+    already had.
+    """
+    target = node.target
+    if not isinstance(target, ast.TargetSpec) or _is_target(target):
+        return None
+    filt = target.filter
+    if filt.zone != "graveyard" or filt.zone_owner is None:
+        return None
+    record = PER_OBJECT_SEAT_RECORDS.get(filt.zone_owner.kind)
+    if record is None:
+        # Every *other* graveyard referent — "your graveyard", "that player's"
+        # — is a seat the resolving player knows without any earlier step
+        # having recorded it, and none of them is this shape. Handing them back
+        # rather than refusing keeps this production additive.
+        return None
+    if not filt.is_card or filt.card_types != ("creature",):
+        raise LoweringError(
+            "this graveyard pick only moves creature cards", node=node
+        )
+    if _restrictions_beyond(
+        filt, frozenset({"card_types", "is_card", "zone", "zone_owner"})
+    ):
+        raise LoweringError(
+            "no graveyard pick reads a card narrowed this way", node=node
+        )
+    if not node.under_owners_control:
+        # The card enters under whoever owns the graveyard it left, and that is
+        # what the printed rider says. A sentence naming some *other* seat would
+        # need a second reference here rather than this one standing in for it.
+        raise LoweringError(
+            "this graveyard pick only puts the card back under its owner's "
+            "control", node=node,
+        )
+    return (
+        OracleInstruction(
+            "search_library",
+            "",
+            {
+                "count": 1,
+                "card_type": "creature",
+                # A graveyard is an open zone, so nothing is revealed and
+                # nothing is shuffled — the prompt is a pick, and the resolver
+                # already tells the two apart by the zone it was armed with.
+                "zones": ["graveyard"],
+                "restrictions": {},
+                "destination": "battlefield",
+                # Whose graveyard, and whose battlefield. The same seat by
+                # CR 404.1 — a card in a graveyard is in its owner's — but
+                # written twice because the card prints both halves, and a
+                # reader that inferred the second would be inferring it for
+                # every card that names only the first.
+                "zone_owner": record,
+                "battlefield_owner": record,
+            },
+        ),
+    )

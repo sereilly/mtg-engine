@@ -99,6 +99,7 @@ from .lowering import (
     _lower_exile,
     _lower_extra_turn,
     _lower_for_each,
+    _lower_for_each_destroyed,
     _lower_gain_control,
     _lower_gain_ability_text,
     _lower_gain_keyword,
@@ -149,6 +150,7 @@ from .lowering import (
     _lower_put_exiled_with_source,
     _lower_look_top_pick,
     _lower_search_and_exile,
+    _lower_graveyard_pick_onto_battlefield,
     _lower_search_library,
     _lower_change_base_pt,
     _lower_set_base_pt,
@@ -366,6 +368,17 @@ def lower_statement(
         return _lower_put_on_library_bottom(statement)
 
     if isinstance(statement, ast.PutOntoBattlefield):
+        # One node, two families, composed here because composing them is what
+        # this dispatch is for. No printed "target" plus a graveyard named by a
+        # referent is a *pick made during resolution* (CR 115.1b) and belongs to
+        # the search-prompt family; everything else is the zone-change family's.
+        # Asked first because the zone lowering demands a target and would
+        # refuse this line on the more confident-sounding of the two errors, and
+        # it returns None for every shape that is not its own — so it can only
+        # add a reading here, never take one away.
+        picked = _lower_graveyard_pick_onto_battlefield(statement)
+        if picked is not None:
+            return picked
         return _lower_put_onto_battlefield(statement)
 
     if isinstance(statement, ast.RevealTop):
@@ -573,6 +586,21 @@ def lower_statement(
         )
 
     if isinstance(statement, ast.ForEach):
+        # Two iterators, two lowerings, and the split is the *set* rather than
+        # the effect: "that died this turn" is a tally the engine keeps and the
+        # counter lowering reads as a multiplier, while "that died this way" is
+        # the objects an earlier step of this same effect destroyed and has to
+        # be walked one at a time. The inner statement is lowered here, as
+        # `ast.WhereX`'s is — the lowering below only repeats it.
+        if isinstance(statement.iterator, ast.DiedThisWay):
+            return _lower_for_each_destroyed(
+                statement,
+                lower_statement(
+                    statement.effect, produced,
+                    event=event, event_subject=event_subject, whole_effect=False,
+                ),
+                produced,
+            )
         return _lower_for_each(statement)
 
     if isinstance(statement, ast.Exile):

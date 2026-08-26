@@ -21,7 +21,7 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
-from ..oracle_types import OracleInstruction
+from ..oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
 from ..turn_state import started_the_turn
 from ..resumption import run_resumable
 from ._common import flip_coin, permanent_matches_filter
@@ -776,18 +776,66 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
 def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"For each <objects>, <effect>." The matching set is snapshotted before
     the first iteration so an effect that removes objects cannot shorten its own
-    loop."""
+    loop.
+
+    Two kinds of set, and the payload says which. A **filter** names what the
+    board holds right now. ``produced_by`` names what an earlier step of this
+    same resolution recorded — "for each creature that **died this way**"
+    (Glyph of Reincarnation), whose objects are in graveyards by the time this
+    runs and cannot be found by any read of the battlefield.
+
+    Around each iteration the per-object records an earlier step wrote are
+    resolved to *this* object's entry (see
+    ``OracleExecutionContext.iteration_seats``), so an inner effect asking
+    "whose graveyard" asks by name and never has to know either the loop's
+    object or the record's shape.
+    """
     filters = instruction.payload.get("iterator") or {}
     steps = _steps(instruction, "effect")
-    matched = [
-        permanent
-        for player in game.players
-        for permanent in list(player.battlefield)
-        if permanent_matches_filter(game, permanent, filters)
-    ]
+    produced_by = filters.get("produced_by")
+    if produced_by is not None:
+        matched = list(context.results.get(produced_by) or ())
+    else:
+        matched = [
+            permanent
+            for player in game.players
+            for permanent in list(player.battlefield)
+            if permanent_matches_filter(game, permanent, filters)
+        ]
     previous = context.iteration_target
+    previous_seats = context.iteration_seats
     for permanent in matched:
         context.iteration_target = permanent
+        context.iteration_seats = {
+            **previous_seats,
+            **_per_object_seats(context, permanent),
+        }
         _run(game, steps, context)
     context.iteration_target = previous
+    context.iteration_seats = previous_seats
     return True, "resolved"
+
+
+def _per_object_seats(context: OracleExecutionContext, permanent) -> dict:
+    """The seats an earlier step recorded about *permanent*, by record name.
+
+    Read off ``PER_OBJECT_SEAT_RECORDS`` rather than by scanning the scratchpad
+    for anything dict-shaped, because that table is what the grammar's lowering
+    turns a printed referent into: one table, both readers, and no chance of a
+    tally that happens to be keyed by number being read as a seat.
+
+    An object with no entry contributes no binding at all, rather than a
+    default. A seat guessed here is a graveyard nobody named, and the reader
+    that finds nothing already knows what to do with that.
+    """
+    permanent_id = getattr(permanent, "permanent_id", None)
+    if permanent_id is None:
+        return {}
+    seats: dict = {}
+    for name in PER_OBJECT_SEAT_RECORDS.values():
+        record = context.results.get(name)
+        if isinstance(record, dict):
+            seat = record.get(permanent_id)
+            if isinstance(seat, int):
+                seats[name] = seat
+    return seats

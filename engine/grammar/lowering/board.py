@@ -134,10 +134,45 @@ def _lower_destroy(
                     "\"that creature\" names the object a delayed ability was "
                     "bound to, and this event binds none", node=node,
                 )
-            blocked_payload = _filter_payload(filt)
+            blocked_payload = _filter_payload(
+                filt, carried_separately=frozenset({"blocked_by_bound_object"})
+            )
             if object_only_filter(blocked_payload) is None:
                 raise LoweringError("no sweep handler for this narrowing", node=node)
             blocked_payload["blocked_by_bound_object"] = True
+            if node.no_regen:
+                blocked_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_all_matching", "", blocked_payload),
+            )
+        # "Destroy all creatures that were blocked by **target Wall** this
+        # turn." (Glyph of Reincarnation.) The sibling of the branch above, and
+        # a branch for its reason: the relation has no payload form, so falling
+        # through to the generic paths would leave the sweep with card types
+        # alone and destroy every creature on the battlefield.
+        #
+        # What differs is where the blocker comes from. It is this spell's own
+        # target, so the noun phrase the relation carries is hoisted into a
+        # ``targets`` description — that is the evidence
+        # ``engine/targeting.py`` reads to raise a Wall picker, and without it
+        # the spell would be cast with nothing chosen and resolve against no
+        # blocker at all.
+        if filt.blocked_by_target_object is not None:
+            blocker = filt.blocked_by_target_object
+            blocked_payload = _filter_payload(
+                filt, carried_separately=frozenset({"blocked_by_target_object"})
+            )
+            if object_only_filter(blocked_payload) is None:
+                raise LoweringError("no sweep handler for this narrowing", node=node)
+            blocker_payload = _filter_payload(blocker)
+            if object_only_filter(blocker_payload) is None:
+                raise LoweringError(
+                    "no picker offers a blocker narrowed this way", node=node
+                )
+            blocked_payload["blocked_by_target_object"] = True
+            blocked_payload["targets"] = {
+                "kind": "object", "count": 1, "filter": blocker_payload,
+            }
             if node.no_regen:
                 blocked_payload["bypass_regeneration"] = True
             return (
@@ -848,3 +883,53 @@ def _lower_exchange_greatest_mana_value(
             )
         )
     return (OracleInstruction("sequence", "", {"steps": tuple(steps)}),)
+
+
+def _lower_for_each_destroyed(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each creature that died this way,** <effect>." (Glyph of
+    Reincarnation.)
+
+    A loop over the objects an earlier step of *this same effect* destroyed —
+    the set behind ``destroyed_this_way``, which the sweep handlers record
+    because by the time this runs the board no longer holds it. Here rather
+    than beside ``_lower_for_each`` in ``lowering/counters``: that one repeats a
+    counter placement a fixed number of times and never looks at what died,
+    while this is about the destroy family's own record.
+
+    Refused without a producer, as every back-reference in this grammar is:
+    "this way" with no earlier step names nothing at all, and an empty loop is a
+    sentence that reports supported and does not run.
+
+    The inner statement arrives already lowered, the way ``lower_where_x``'s
+    does and for its reason — nothing here cares how it was lowered, only that
+    it is repeated once per object.
+    """
+    if "destroyed_this_way" not in produced:
+        raise LoweringError(
+            "'died this way' with no earlier step in this effect that "
+            "destroyed anything", node=node,
+        )
+    filt = node.iterator.filter
+    if filt.to_payload() != {"type_filter": "creature"} or filt.zone != "battlefield":
+        raise LoweringError(
+            "'died this way' iterates what the earlier step destroyed and "
+            "cannot be narrowed further", node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-object loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {
+                # Named rather than implied: the loop reads the objects an
+                # earlier step recorded under this key, and the key is what
+                # ties the two halves of the sentence together.
+                "iterator": {"produced_by": "destroyed_this_way_objects"},
+                "effect": inner,
+            },
+        ),
+    )

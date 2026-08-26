@@ -166,6 +166,37 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     )
 
 
+def _parse_leading_for_each(stream: TokenStream) -> ast.DiedThisWay | None:
+    """``For each <objects> that died this way,`` — the set a later clause
+    repeats over, in the leading printed position.
+
+    Only the "this way" window, deliberately. "That died **this turn**" is a
+    different set — a window of the turn's history anything may have
+    contributed to — and it already has a reader in ``phrases``, in the
+    trailing position where the pool prints it. Admitting both here would let
+    one clause mean either, and the two differ by every creature the spell had
+    nothing to do with.
+
+    Returns None with the cursor where it found it, so a sentence this is not
+    keeps the refusal it already had rather than gaining a more confident one.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("that", "died", "this", "way"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    return ast.DiedThisWay(filt)
+
+
 def _distribute_duration(
     statement: ast.Statement, duration: ast.Duration, stream: TokenStream
 ) -> ast.Statement:
@@ -227,6 +258,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     graveyard_shuffle = _parse_shuffle_graveyard_into_library(stream)
     if graveyard_shuffle is not None:
         return graveyard_shuffle
+    # "**For each creature that died this way,** put a creature card …" (Glyph
+    # of Reincarnation) — the iteration clause in its *leading* printed
+    # position, where `phrases._parse_for_each` reads the trailing one. Read at
+    # the statement level rather than inside the effect behind it, because it
+    # governs a whole sentence: the same rule the leading duration a few
+    # branches below follows, and for the same reason — an effect that read its
+    # own "for each" would be one production per effect that can carry one.
+    per_death = _parse_leading_for_each(stream)
+    if per_death is not None:
+        return ast.ForEach(per_death, parse_statement(stream, top_level=False))
     # "Each player shuffles the cards from their hand into their library, then
     # draws that many cards." (Winds of Change.) Same position and the same
     # reason: the subject-verb reader below has no "shuffles", and the sentence

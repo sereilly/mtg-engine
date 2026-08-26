@@ -294,7 +294,17 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         named = instruction.payload.get(payload_key)
         if named is None:
             continue
-        seat = (context.trigger_context or {}).get(str(named))
+        # Two places a named seat can come from, asked in the order they are
+        # decided. A loop over the objects an earlier step recorded resolves its
+        # per-object records for the iteration in progress — Glyph of
+        # Reincarnation's "the graveyard of the player who controlled that
+        # creature the last time it became blocked by that Wall". Outside a loop
+        # there is only the trigger's own captured context. One lookup rather
+        # than a payload flag saying which to consult, because the two never
+        # both answer: a loop binding exists only inside its loop.
+        seat = context.iteration_seats.get(str(named))
+        if seat is None:
+            seat = (context.trigger_context or {}).get(str(named))
         if seat is None:
             # The trigger that would have recorded it did not: CR 603.10's
             # last-known information is simply absent, so the effect falls back

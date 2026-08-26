@@ -280,9 +280,25 @@ class DeclareBlockersStepMixin:
             controller_index, assignments
         ):
             record = blocker.metadata.setdefault("blocked_attacker_ids_this_turn", [])
+            # "…the player who controlled that creature **the last time it
+            # became blocked by that Wall**" (Glyph of Reincarnation). Who
+            # controls the attacker is CR 613 layer 2 and moves; by the time
+            # that sentence is read the creature is in a graveyard and has no
+            # controller at all. So the seat is frozen here, beside the id it
+            # keys, at the one moment the block happens — and overwritten on
+            # each later block by the same blocker, which is precisely what
+            # "the last time" says. Kept on the *blocker* rather than on the
+            # attacker because the sentence asks about blocks by one named
+            # Wall, not about every block the creature was in.
+            controllers = blocker.metadata.setdefault(
+                "blocked_attacker_controllers_this_turn", {}
+            )
             for _attacker_idx, attacker in blocked:
                 if attacker.permanent_id not in record:
                     record.append(attacker.permanent_id)
+                seat = self.controller_index_of(attacker)
+                if seat is not None:
+                    controllers[attacker.permanent_id] = seat
         self._prune_combat_state()
         # CR 802.4: blocks lock in only once every defending player has declared
         # (or been auto-skipped) in APNAP order — not after this one defender.

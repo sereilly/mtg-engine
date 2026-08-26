@@ -298,6 +298,14 @@ class PutOntoBattlefield:
     riders are recorded so a wording carrying them cannot shed them."""
     target: Recipient
     under_your_control: bool = False
+    # "…onto the battlefield **under its owner's control**." (Glyph of
+    # Reincarnation.) CR 400.3's exception spelled the other way: the arrival
+    # is not the resolving player's. A separate field from
+    # ``under_your_control`` rather than a tri-state, because the two are
+    # printed independently and a card printing neither means the default —
+    # collapsing them would make "absent" and "the owner's" the same value, and
+    # they name different seats the moment a creature has been stolen.
+    under_owners_control: bool = False
     gains: tuple[str, ...] = ()
 
 

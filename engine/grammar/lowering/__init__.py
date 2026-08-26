@@ -129,6 +129,7 @@ from .board import (
     _DESTROY_ALL_KINDS,
     _BASIC_LAND_TYPES,
     _lower_destroy,
+    _lower_for_each_destroyed,
     _lower_delayed_destroy,
     _lower_delayed_self_action,
     _lower_attach,
@@ -181,6 +182,7 @@ from .library import (
     _lower_search_and_exile,
     _SEARCH_EXILE_HONOURED,
     _SEARCH_HONOURED_FILTER_FIELDS,
+    _lower_graveyard_pick_onto_battlefield,
     _lower_search_library,
 )
 from .stack import (
@@ -287,6 +289,7 @@ __all__ = [
     "_BLOCK_PAIR_EVENTS",
     "binds_block_pair",
     "_lower_destroy",
+    "_lower_for_each_destroyed",
     "_lower_delayed_destroy",
     "_lower_doesnt_untap_next_step",
     "_lower_delayed_self_action",
@@ -337,6 +340,7 @@ __all__ = [
     "_lower_look_at_hand",
     "_lower_look_at_library_top",
     "_SEARCH_HONOURED_FILTER_FIELDS",
+    "_lower_graveyard_pick_onto_battlefield",
     "_lower_search_library",
     "_SEARCH_EXILE_HONOURED",
     "_lower_cast_from_exiled_with",
