@@ -1960,3 +1960,104 @@ Enchantment Alteration and Juxtapose (a permanent chosen on *resolution* with no
 nearest prompt, `kudzu_reattach`, is index-keyed and Kudzu-named through to the
 JS); Glyph of Delusion and Glyph of Reincarnation (the block record this round
 added is there for them now, but each needs machinery beyond it).
+
+## LEG round 23: a prompt is a value, and four dispatchers were narrower than their conditions
+
+*(2026-08-25.)* Fourth parallel round. Eight cards, LEG 232 → 240, and two
+structural splits done serially around the batch rather than inside it.
+
+### Before the batch: lower.py
+`lower.py` was at 995 and the previous round's journal proposed a dict dispatch.
+On inspection that was the wrong fix — 82 of its 94 branches are table-able but
+across **nine call signatures**, so a table would need an arg-spec vocabulary
+and read worse than the if-chain. The real cut was the `where_x` family, which
+that journal had ruled out because it recurses into `lower_statement`.
+
+The recursion inverts. All four productions began with the *identical* call, and
+each then does the same two things to an already-lowered sentence: check it
+reads an X at all, then stamp the definition onto it. None of them cares how the
+sentence was lowered — what differs is only what is counted. So the caller
+lowers it and passes `inner` in, and the family drops a layer legitimately.
+995 → 825, no behaviour change.
+
+### The round
+**Choices:** Enchantment Alteration, on a new general prompt.
+**Triggers:** Whirling Dervish, Axelrod Gunnarson, Ichneumon Druid, Nicol Bolas.
+**Templates:** Teleport, Energy Tap, Winter Blast.
+
+**A permanent chosen at resolution is a *value*.** The new `permanent_choice`
+prompt writes the answer's `permanent_id` into `context.results` under a key the
+payload names — the channel `gain_control_until_eot` already reads a bound
+permanent through. Everything after the choice is ordinary instructions in a
+`sequence` reading that key, so a card that chooses a permanent and then
+destroys it needs no new prompt, handler or `Game` field.
+`permanent_choice_candidates` is one rule with three callers (arming, liveness
+re-check, renderer), so the offered list and the checked list cannot drift.
+
+### Five pre-existing defects
+* **A dispatcher narrowed to the first card that reached it.**
+  `creature_dealt_damage_by_self_dies` was dispatched only for
+  `add_counter_to_self`, so Axelrod Gunnarson's sequence fired nowhere.
+* **The cast record was written between the two cast announcements**, so every
+  opponent-scoped ordinal counted a list missing the spell that fired it —
+  Ichneumon Druid was exempting the *second* instant, not the first.
+* **A false CR 603.4 gate still reached the stack:** `end_step.py` checked the
+  intervening-if, then its catch-all scan enqueued the trigger anyway.
+* **The single-target tap dropped "you control"** — it tested its noun phrase
+  with the *pure* matcher behind a hand-written probe for three type-ish keys,
+  so `controller` rode the payload and was ignored. Energy Tap would have tapped
+  an opponent's creature and made its mana.
+* **`X target creatures` never reached the several-targets branch** — the count
+  was tested with `isinstance(int) and > 1`, but it is the string `"x"` until
+  the spell is cast, so it tapped the first slot and dropped the rest. The
+  `untap` twin beside it reads the same key correctly and never had the hole.
+
+Two hooks also retired themselves: Pyramids' existed only because the filter
+lacked a list-valued field, and once it had one `test_card_lines` failed on the
+dead entry. 88 → 87 entries.
+
+### A card declined for a reason that did not hold
+Shelkin Brownie was left because my brief said "do not touch `effect_labels.py`"
+and the agent read that as "a new activated kind is impossible". It is not: a
+LEG activated card with an unlabelled kind compiles supported and passes every
+guard, because the labels guard reads the **shipped** pool. Ayesha Tanaka landed
+in round 17 as exactly that shape. The wording cost a card; a brief that states
+a constraint should state its scope.
+
+### And one an agent declined correctly, after building it
+Floral Spuzzem was implemented, seen to compile "supported" while the destroy
+found no target and the rider set its flag *after* damage, and then **reverted**.
+Its rider needs the trigger to resolve before the combat damage step's
+turn-based action, and `advance_combat_phase` does not wait on an owed prompt.
+Reverting a working-looking card is the right call and the hardest one to make.
+
+### After the batch: ast/_core.py
+Three branches met at 1,007 lines, and both agents that hit it named it the
+binding constraint — `ObjectFilter` and the `Condition` union both lived there,
+so any new filter field *or* condition node needed the split first, and
+Juxtapose was declined for exactly that.
+
+The cut is the one question `_core` asks that nothing else in `_core` needs the
+answer to. The rest is the vocabulary every node is built *from*; a condition is
+built from all of it while none of it is built from a condition. Verified rather
+than assumed: nothing defined above `Controls` references any of the 18
+condition classes. Amounts would have been the other candidate and **cannot**
+move — `Comparison` takes an `Amount` and `ObjectFilter` takes a `Comparison`,
+so amounts and nouns reference each other. 1,007 → 775.
+
+### Numbers
+LEG 232 → **240** of 310 (74.8% → 77.4%); shipped pool 734/734 and ALL parse
+82.2% → 82.5%. Hook entries 88 → 87. Suite 7,351 → **7,383**, every `--check`
+green.
+
+### Standing debt
+The support gate **admits a card whose trigger is dead** when another trigger on
+it is supported (`if triggered and not any_supported_trigger`). That is how
+Nicol Bolas became "supported" with a trigger that did nothing; the agent made
+the trigger work rather than fix the gate. Worth its own round — it is the same
+shape as `--hollow-lines`, one level down.
+
+`derive_cast_spec` emits no `max_targets` for an X-counted target description,
+so the picker offers one target for "X target creatures". Shared with shipped,
+verified Candelabra of Tawnos, so not a regression — but the web picker
+under-delivers Winter Blast.

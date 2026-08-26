@@ -16,15 +16,15 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 80.4% | 79.6% | 43.3% | 154 |
-| LEB | 292 | 389 | 80.5% | 79.7% | 43.4% | 155 |
-| 2ED | 292 | 389 | 80.5% | 79.7% | 43.4% | 155 |
-| ARN | 78 | 108 | 71.3% | 64.8% | 42.6% | 37 |
+| LEA | 290 | 388 | 80.7% | 79.6% | 43.3% | 154 |
+| LEB | 292 | 389 | 80.7% | 79.7% | 43.4% | 155 |
+| 2ED | 292 | 389 | 80.7% | 79.7% | 43.4% | 155 |
+| ARN | 78 | 108 | 72.2% | 65.7% | 43.5% | 38 |
 | ATQ | 85 | 120 | 89.2% | 89.2% | 61.7% | 67 |
-| 3ED | 296 | 389 | 82.0% | 81.0% | 45.5% | 160 |
+| 3ED | 296 | 389 | 82.3% | 81.0% | 45.5% | 160 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 68.0% | 63.8% | 38.1% | 151 |
-| **All (shipped)** | **1618** | **2286** | **82.2%** | **81.2%** | **48.5%** | **965** |
+| LEG *(measured)* | 310 | 431 | 70.3% | 66.4% | 39.9% | 158 |
+| **All (shipped)** | **1618** | **2286** | **82.5%** | **81.3%** | **48.6%** | **966** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -34,9 +34,9 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 217 | 109 | expected a subject |  |
+| 210 | 102 | expected a subject |  |
 | 121 | 51 | unrecognized effect verb |  |
-| 63 | 37 | unconsumed text |  |
+| 62 | 36 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 10 | 6 | a conditional static bonus is derived by engine/static_bonuses.py |  |
@@ -45,10 +45,10 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 8 | 3 | expected a colour or a creature body after 'becomes' |  |
 | 7 | 4 | expected 'a' |  |
 | 6 | 3 | no lowering for RawEffect |  |
-| 6 | 3 | expected a quantity |  |
 | 5 | 5 | expected 'unless defending player controls' |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 2 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
+| 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 3 | 2 | expected a permanent to put counters on |  |
 | 3 | 2 | expected a destination zone after 'return' |  |
 | 3 | 3 | no return handler honours this restriction |  |
@@ -62,7 +62,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 ## Cards executing through the grammar
 
-965 cards, 1109 lines.
+966 cards, 1110 lines.
 
 - **Abomination**
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
@@ -158,6 +158,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
 - **Avoid Fate**
   - `Counter target instant or Aura spell that targets a permanent you control.`
+- **Axelrod Gunnarson**
+  - `Whenever a creature dealt damage by Axelrod Gunnarson this turn dies, you gain 1 life and Axelrod Gunnarson deals 1 damage to target player or planeswalker.`
 - **Ayesha Tanaka**
   - `{T}: Counter target activated ability from an artifact source unless that ability's controller pays {W}. (Mana abilities can't be targeted.)`
 - **Backfire**
@@ -563,6 +565,10 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Destroy target creature or planeswalker with mana value 3 or less.`
 - **Emerald Dragonfly**
   - `{G}{G}: This creature gains first strike until end of turn.`
+- **Enchantment Alteration**
+  - `Attach target Aura attached to a creature or land to another permanent of that type.`
+- **Energy Tap**
+  - `Tap target untapped creature you control. If you do, add an amount of {C} equal to that creature's mana value.`
 - **Epitaph Golem**
   - `{2}: Put target card from your graveyard on the bottom of your library.`
 - **Experimental Overload**
@@ -815,6 +821,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Destroy target land.`
   - `Destroy target land.`
   - `Destroy target land.`
+- **Ichneumon Druid**
+  - `Whenever an opponent casts an instant spell other than the first instant spell that player casts each turn, this creature deals 4 damage to that player.`
 - **Icy Manipulator**
   - `{1}, {T}: Tap target artifact, creature, or land.`
   - `{1}, {T}: Tap target artifact, creature, or land.`
@@ -1144,6 +1152,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{1}{W}{U}, {T}, Discard a legendary card: Draw two cards.`
 - **Nicol Bolas**
   - `At the beginning of your upkeep, sacrifice Nicol Bolas unless you pay {U}{B}{R}.`
+  - `Whenever Nicol Bolas deals damage to an opponent, that player discards their hand.`
 - **Nine Lives**
   - `When there are nine or more incarnation counters on this enchantment, exile it.`
   - `When this enchantment leaves the battlefield, you lose the game.`
@@ -1290,6 +1299,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
 - **Pursued Whale**
   - `When this creature enters, each opponent creates a 1/1 red Pirate creature token with "This token can't block" and "Creatures you control attack each combat if able."`
+- **Pyramids**
+  - `• Destroy target Aura attached to a land.`
 - **Pyrotechnics**
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
 - **Quirion Dryad**
@@ -1687,6 +1698,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `When this creature enters, you may search your library and/or graveyard for a card named Teferi, Timeless Voyager, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Telekinesis**
   - `Tap target creature. Prevent all combat damage that would be dealt by that creature this turn. It doesn't untap during its controller's next two untap steps.`
+- **Teleport**
+  - `Target creature can't be blocked this turn.`
 - **Tempered Veteran**
   - `{W}, {T}: Put a +1/+1 counter on target creature with a +1/+1 counter on it.`
   - `{4}{W}{W}, {T}: Put a +1/+1 counter on target creature.`
@@ -1939,6 +1952,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever another creature you control with flying enters, this creature gets +1/+1 until end of turn.`
 - **Weakstone**
   - `Attacking creatures get -1/-0.`
+- **Whirling Dervish**
+  - `At the beginning of each end step, if this creature dealt damage to an opponent this turn, put a +1/+1 counter on it.`
 - **White Mana Battery**
   - `{2}, {T}: Put a charge counter on this artifact.`
 - **Wildwood Scourge**
@@ -1955,6 +1970,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Add {R} or {W}.`
 - **Winds of Change**
   - `Each player shuffles the cards from their hand into their library, then draws that many cards.`
+- **Winter Blast**
+  - `Tap X target creatures. Winter Blast deals 2 damage to each of those creatures with flying.`
 - **Witch's Cauldron**
   - `{1}{B}, {T}, Sacrifice a creature: You gain 1 life and draw a card.`
 - **Wooden Sphere**
