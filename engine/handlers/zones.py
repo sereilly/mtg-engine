@@ -1101,26 +1101,33 @@ def name_and_strip(game: Game, instruction: OracleInstruction, context: OracleEx
         zones=list(instruction.payload.get("zones") or ()),
         token_zone=instruction.payload.get("token_zone", "hand"),
         token=dict(instruction.payload.get("token") or {}),
-        default_name=_commonest_visible_name(game, seat, instruction.payload),
+        default_name=_commonest_visible_name(
+            game, seat, instruction.payload.get("zones") or ()
+        ),
     )
     return True, "pending_name_and_strip"
 
 
-def _commonest_visible_name(game, seat: int, payload: dict) -> str:
+def _commonest_visible_name(
+    game, seat: int, zones, *, exclude_basics: bool = True
+) -> str:
     """The name a non-interactive seat picks: the one appearing most often in
-    the zones the search reaches, ties broken by name so a seed replays exactly.
+    *zones* of *seat*'s cards, ties broken by name so a seed replays exactly.
 
-    Basic land names are excluded because the card forbids them — the default
-    has to obey the same restriction the prompt does, or a headless game would
-    make a choice a player could not.
+    Whether basic land names count is the *card's* restriction, not this
+    helper's: Necromentia forbids them and a headless game must obey the same
+    rule its prompt does, while Petra Sphinx's guess may name anything (CR
+    202.1) and excluding them there would refuse a name a player would happily
+    pick. So it is a parameter, and the zone list is passed rather than dug out
+    of a payload key only one caller has.
     """
     from collections import Counter
 
     player = game.players[seat]
     counts: Counter = Counter()
-    for zone in payload.get("zones") or ():
+    for zone in zones or ():
         for card in getattr(player, zone, []):
-            if "basic" in (card.type_line or "").lower():
+            if exclude_basics and "basic" in (card.type_line or "").lower():
                 continue
             counts[card.name] += 1
     if not counts:
@@ -2375,3 +2382,48 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
         f"{player.name} shuffled {moved} card(s) from their graveyard into their library"
     )
     return True, "resolved"
+
+
+@effect_handler("name_then_reveal_top")
+def name_then_reveal_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Petra Sphinx: "Target player chooses a card name, then reveals the top
+    card of their library. If that card has the chosen name, that player puts
+    it into their hand. If it doesn't, the player puts it into their
+    graveyard."
+
+    One handler because the three sentences are one procedure: the name decides
+    where the card goes, and neither the name nor the revealed card exists
+    before this resolution begins (CR 608.2). The choosing seat is the targeted
+    player's, and so is the library, the hand and the graveyard — the card
+    never says "you" anywhere.
+
+    The card is **not** turned over here. It is revealed as part of answering
+    the prompt, because a reveal before the name is chosen would show the
+    chooser what to name.
+    """
+    target = context.target
+    if target is None:
+        game.log.append(f"{context.card.name}: no player to ask")
+        return True, "resolved"
+    seat = game.players.index(target)
+    if not target.library:
+        # CR 701.16a: there is nothing to reveal, so nothing is named either —
+        # the choice would decide the destination of a card that does not
+        # exist. An empty library is not a loss here; the draw step is.
+        game.log.append(f"{context.card.name}: {target.name} has no library to reveal")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "name_then_reveal_top", seat,
+        card_name=context.card.name,
+        match_zone=instruction.payload.get("match_zone", "hand"),
+        miss_zone=instruction.payload.get("miss_zone", "graveyard"),
+        # A player knows what is in their own library, only not its order
+        # (CR 400.2), so naming its commonest remaining card is a choice a
+        # human at the table could make — and it is deterministic, which is
+        # what a seeded replay needs. Basic lands are in: this card prints no
+        # restriction, and CR 202.1 lets a player name any card.
+        default_name=_commonest_visible_name(
+            game, seat, ("library",), exclude_basics=False
+        ),
+    )
+    return True, "pending_name_then_reveal_top"

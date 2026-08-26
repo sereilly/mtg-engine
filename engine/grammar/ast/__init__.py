@@ -84,6 +84,7 @@ from .conditions import (
     DiedThisTurn,
     LifeGainedThisTurn,
     DealtDamageThisTurn,
+    BlockersOfBoundCreature,
     PaidCost,
     RawCondition,
     ReturnedToHandThisTurn,
@@ -172,6 +173,7 @@ from .cards import (
     ExileGraveyardUntilLeaves,
     CastFromExiledWith,
     NameAndStrip,
+    NameThenRevealTop,
     RevealUntil,
     RevealTopToHandOrBottom,
 )
@@ -284,6 +286,7 @@ __all__ = [
     "DiedThisTurn",
     "HadPlus1Counter",
     "DealtDamageThisTurn",
+    "BlockersOfBoundCreature",
     "LifeGainedThisTurn",
     "PaidCost",
     "ReturnedToHandThisTurn",
@@ -355,6 +358,7 @@ __all__ = [
     "ExileGraveyardUntilLeaves",
     "CastFromExiledWith",
     "NameAndStrip",
+    "NameThenRevealTop",
     "RevealUntil",
     "RevealTopToHandOrBottom",
     # stack

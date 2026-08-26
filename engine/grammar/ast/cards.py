@@ -464,6 +464,29 @@ class NameAndStrip:
 
 
 @dataclass(frozen=True)
+class NameThenRevealTop:
+    """``Target player chooses a card name, then reveals the top card of their
+    library. If that card has the chosen name, that player puts it into their
+    hand. If it doesn't, the player puts it into their graveyard.``
+    (Petra Sphinx.)
+
+    One node for the whole three-sentence effect, for the reason
+    :class:`NameAndStrip` is one: the sentences share a choice no board read can
+    recover. "The chosen name" is what the first sentence named and "that card"
+    is what it turned over — parsed apart, the last two sentences would each
+    test a record nobody had written.
+
+    The two destinations are payload rather than part of the node's meaning. A
+    card printing "…puts it on the bottom of their library" otherwise is this
+    same guess with one word changed, and spelling "hand" and "graveyard" into
+    the lowering is what would make that card a second production.
+    """
+    who: PlayerRef
+    match_zone: str
+    miss_zone: str
+
+
+@dataclass(frozen=True)
 class RevealUntil:
     """``…reveals cards from the top of their library until they reveal a
     creature card. That player puts that card onto the battlefield, then

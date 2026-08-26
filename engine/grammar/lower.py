@@ -42,6 +42,7 @@ from .lowering.where_x import lower_where_x
 from .statics import _lower_static_ability
 from .lowering import (
     count_spec,
+    _targets_payload,
     # Re-exported, not used here: callers outside the package import these two
     # from `engine.grammar.lower` (`grammar/__init__.py`,
     # `tests/engine/test_grammar_categories.py`, `test_grammar_lowering.py`).
@@ -406,6 +407,29 @@ def lower_statement(
                         "colors": list(statement.token_colors),
                         "subtypes": list(statement.token_subtypes),
                     },
+                },
+            ),
+        )
+
+    if isinstance(statement, ast.NameThenRevealTop):
+        # "Target player chooses…" is the only subject printed on this
+        # paragraph, and it is the whole shape of the effect: the chooser, the
+        # revealer and the card's destination are all the *same* seat. A
+        # sentence naming anyone else would be a different card, so it refuses
+        # rather than lowering onto a seat the handler would then have to guess
+        # between.
+        if statement.who.kind != "target_player":
+            raise LoweringError(
+                "the guess is made by the player the spell targets",
+                node=statement,
+            )
+        return (
+            OracleInstruction(
+                "name_then_reveal_top", "",
+                {
+                    "match_zone": statement.match_zone,
+                    "miss_zone": statement.miss_zone,
+                    "targets": _targets_payload(statement.who),
                 },
             ),
         )

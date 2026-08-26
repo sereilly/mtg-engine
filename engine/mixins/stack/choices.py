@@ -1524,6 +1524,61 @@ class PendingChoicesMixin:
         if not self._resolve_name_and_strip(choice, choice.data.get("default_name", "")):
             self.discard_pending_choice(choice)
 
+    # -- "Target player chooses a card name, then reveals the top card" -------
+
+    def confirm_name_then_reveal_top(self, player_index: int, card_name: str) -> bool:
+        """Answer Petra Sphinx's "choose a card name" prompt."""
+        return self.resolve_pending_choice(
+            "name_then_reveal_top", player_index, card_name=card_name
+        )
+
+    def _resolve_name_then_reveal_top(
+        self, choice: PendingChoice, card_name: str
+    ) -> bool:
+        """Reveal the top card and send it where the guess says.
+
+        The reveal happens **here**, after the name is fixed: turning the card
+        over while the prompt was open would tell the chooser what to name.
+
+        CR 202.1 lets a player name any card at all and this card prints no
+        restriction, so no name is refused — including one no card in the game
+        bears, which simply misses. The comparison is against the card's own
+        printed name, not an effective one: nothing in a library is a permanent
+        and nothing there can be copying anything (CR 706.2).
+        """
+        data = choice.data
+        player = self.players[choice.player_index]
+        if not player.library:
+            # The library emptied between arming and answering. Nothing to
+            # reveal, so nothing moves.
+            self.discard_pending_choice(choice)
+            self.log.append(f"{player.name} has no card to reveal")
+            return True
+        named = (card_name or "").strip()
+        revealed = player.library.pop(0)
+        hit = bool(named) and revealed.name == named
+        zone_name = data["match_zone"] if hit else data["miss_zone"]
+        # The hand is reached through the CR 614 seam every other "put this card
+        # into a hand" in this engine goes through — a commander on its way to a
+        # hand goes to the command zone instead (CR 903.9b), and thirty fire
+        # sites is twenty-nine places to forget it.
+        if zone_name == "hand":
+            self.put_card_into_hand(player, revealed)
+        else:
+            getattr(player, zone_name).append(revealed)
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{player.name} named {named or 'nothing'} and revealed "
+            f"{revealed.name} — it goes to their {zone_name}"
+        )
+        return True
+
+    def _default_name_then_reveal_top(self, choice: PendingChoice) -> None:
+        if not self._resolve_name_then_reveal_top(
+            choice, choice.data.get("default_name", "")
+        ):
+            self.discard_pending_choice(choice)
+
     def confirm_enter_choice(
         self, player_index: int, opponent_index: int | None = None,
         mana_color: str | None = None, card_name: str | None = None,
@@ -3061,6 +3116,17 @@ register_choice(
     action="name_and_strip_confirm",
     prompt_key="name_and_strip",
     blocked_detail="name a card for the search before other actions",
+)
+
+register_choice(
+    "name_then_reveal_top",
+    resolve=lambda game, choice, r: game._resolve_name_then_reveal_top(
+        choice, r["card_name"]
+    ),
+    default=lambda game, choice: game._default_name_then_reveal_top(choice),
+    action="name_then_reveal_top_confirm",
+    prompt_key="name_then_reveal_top",
+    blocked_detail="name a card before other actions",
 )
 
 register_choice(

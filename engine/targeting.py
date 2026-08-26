@@ -311,6 +311,7 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # all, which is why the kind is a plain player rather than something
     # card-shaped.
     "name_and_strip": {"kind": "player"},
+    "name_then_reveal_top": {"kind": "player"},
     # "Target opponent loses 2 life for each creature card in their graveyard."
     # (Liliana, Death Mage's ultimate.) The recipient is a seat; the per-each
     # count is read at resolution and names nothing.

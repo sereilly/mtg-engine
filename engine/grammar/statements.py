@@ -20,6 +20,7 @@ from .paragraphs import (
     _parse_exile_graveyard_until_leaves,
     _parse_exile_until_leaves_or_untaps,
     _parse_name_and_strip,
+    _parse_name_then_reveal_top,
     _parse_transmute_by_sacrifice,
 )
 from .references import parse_recipient
@@ -361,6 +362,13 @@ def _parse_subject_verb(
             return _parse_discard(stream, source_spec)
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
+        # "Target player **chooses a card name**, then reveals the top card of
+        # their library…" (Petra Sphinx) — a paragraph, because the two
+        # sentences after it test the name and the card this one produced.
+        # Dispatched on the verb like every other player action; the production
+        # reads its own words to the end.
+        if token.text in ("chooses", "choose") and isinstance(source_spec, ast.PlayerRef):
+            return _parse_name_then_reveal_top(stream, source_spec)
         # "Each opponent sacrifices a creature" (Goremand). The AST node has
         # carried its player since it was written; only the *bare* imperative
         # ("Sacrifice a creature", which means you) had a production, so a

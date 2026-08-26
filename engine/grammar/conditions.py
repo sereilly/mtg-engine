@@ -233,6 +233,26 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 return ast.LifeGainedThisTurn(player, amount.value)
         stream.reset(mark)
 
+    # "if at least one other Wall creature is blocking that creature and no
+    # non-Wall creatures are blocking that creature" (Wall of Caltrops). CR
+    # 603.4 over CR 509.1a's relation: the clause counts what else is blocking
+    # the creature the firing block event named, so its far end is neither the
+    # source nor a target and no `ObjectFilter` can carry it — see
+    # `ast.BlockersOfBoundCreature`.
+    #
+    # Read before the source-reference clauses below and after the "you
+    # control" one, because it opens on a quantifier rather than on a pronoun
+    # and so overlaps neither; the mark/reset is what lets a noun phrase that
+    # is *not* followed by "is blocking that creature" fall through unchanged.
+    blockers_mark = stream.mark()
+    try:
+        blocking = _parse_blockers_of_bound_creature(stream)
+    except GrammarError:
+        blocking = None
+    if blocking is not None:
+        return blocking
+    stream.reset(blockers_mark)
+
     # "if **it doesn't have rampage**" (Rapid Fire). Read before the two
     # back-references below, which open with the same pronoun: this branch is
     # pinned by the verb that follows it, and it resets when no keyword does.
@@ -403,3 +423,66 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     stream.reset(state_mark)
 
     raise stream.error("unrecognized condition")
+
+
+def _parse_blockers_of_bound_creature(
+    stream: TokenStream,
+) -> ast.BlockersOfBoundCreature | None:
+    """"<quantifier> <noun phrase> is/are blocking that creature".
+
+    The quantifier is what the clause *counts*, and every spelling the pool
+    prints is read here rather than being split across productions: "no" is a
+    zero, "at least N" and "N or more" are the same minimum written two ways,
+    and a bare "a"/"an" is that minimum with the one left implicit. None of
+    them is baked into a kind — the number rides the comparison, so a card
+    printed "at least two" needs no code.
+
+    Returns None (rather than raising) when the words parse as a noun phrase
+    that is simply not followed by this relation, so the caller's reset hands
+    the sentence back to the productions after it.
+    """
+    negated = bool(stream.accept_word("no"))
+    at_least: int | None = None
+    if not negated:
+        if stream.accept_phrase("at", "least"):
+            amount = parse_amount(stream)
+            if not isinstance(amount, ast.Fixed):
+                # The evaluator compares an integer; an X or a board count
+                # would be compared against a node. Refused rather than
+                # coerced, exactly as `SubjectPowerIs` refuses one.
+                raise stream.error("the blocker count is a printed number")
+            at_least = amount.value
+        else:
+            count_mark = stream.mark()
+            try:
+                amount = parse_amount(stream)
+            except GrammarError:
+                amount = None
+            if isinstance(amount, ast.Fixed) and stream.accept_phrase("or", "more"):
+                at_least = amount.value
+            else:
+                stream.reset(count_mark)
+                # "a Wall is blocking that creature" — the minimum left
+                # implicit. Accepted with the article consumed so the noun
+                # parser below reads the same phrase either way; the article is
+                # not required, because "creatures blocking that creature" is
+                # the same clause with the plural doing the work.
+                stream.accept_word("a", "an")
+                at_least = 1
+    other = bool(stream.accept_word("other"))
+    filt = parse_object_filter(stream)
+    if other:
+        # "at least one **other** Wall creature": the asking permanent never
+        # satisfies its own condition — it is already blocking that creature,
+        # which is why the trigger fired at all.
+        filt = dataclasses.replace(filt, other_than_source=True)
+    if not (stream.accept_word("is") or stream.accept_word("are")):
+        return None
+    if not stream.accept_phrase("blocking", "that", "creature"):
+        return None
+    comparison = (
+        ast.Comparison("eq", ast.Fixed(0))
+        if negated
+        else ast.Comparison("ge", ast.Fixed(at_least or 1))
+    )
+    return ast.BlockersOfBoundCreature(filt, comparison)

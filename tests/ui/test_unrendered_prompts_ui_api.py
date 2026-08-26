@@ -270,3 +270,42 @@ def test_revealed_hand_pick_round_trip(set_pool):
     assert [c.name for c in p2.hand] == ["Alpine Watchdog", "Shock", "Island"]
     assert any(c.name == "Volcanic Salvo" for c in p2.graveyard)
     assert _state(sid)["revealed_hand_pick"] is None
+
+
+# --- name_then_reveal_top: Petra Sphinx --------------------------------------
+
+def test_name_then_reveal_top_round_trip(set_pool):
+    """The prompt belongs to the **targeted** player, not the activating one —
+    the card asks them to guess at their own library. So the seat that sees it
+    and the seat that answers it are seat 1 while seat 0 activated."""
+    leg = set_pool("LEG")
+    m21 = set_pool("M21")
+    sid, session, game = _session()
+    p1, p2 = game.players
+    sphinx = Permanent(card=leg["Petra Sphinx"])
+    p1.battlefield = [_nosick(sphinx)]
+    p2.hand = []
+    p2.graveyard = []
+    p2.library = [m21["Shock"], m21["Island"]]
+    game._sync_control()
+
+    result = game.activate_permanent_ability(0, "Petra Sphinx", target_player_index=1)
+    assert result.supported, result.details
+    game._settle()
+
+    prompt = _state(sid, seat=1)["name_then_reveal_top"]
+    assert prompt is not None
+    assert prompt["player_seat"] == 1
+    assert prompt["card_name"] == "Petra Sphinx"
+    assert prompt["match_zone"] == "hand"
+    assert prompt["miss_zone"] == "graveyard"
+    assert _state(sid, seat=0)["name_then_reveal_top"] is None
+
+    wrong_seat = _act(sid, seat=0, action="name_then_reveal_top_confirm", card_name="Shock")
+    assert wrong_seat.status_code == 400
+
+    answered = _act(sid, seat=1, action="name_then_reveal_top_confirm", card_name="Shock")
+    assert answered.status_code == 200, answered.json()
+    assert [c.name for c in p2.hand] == ["Shock"]
+    assert p2.graveyard == []
+    assert _state(sid, seat=1)["name_then_reveal_top"] is None
