@@ -2061,3 +2061,110 @@ shape as `--hollow-lines`, one level down.
 so the picker offers one target for "X target creatures". Shared with shipped,
 verified Candelabra of Tawnos, so not a regression — but the web picker
 under-delivers Winter Blast.
+
+## LEG round 24: nine cards, six uncounted, and a card is not a copy
+
+*(2026-08-25.)* Fifth parallel round. Nine cards land and **six are taken back**
+— the honest number moved 240 → 243, not 240 → 249.
+
+**Combat:** Feint, Lesser Werewolf, Glyph of Destruction.
+**Replacements:** Chains of Mephistopheles, Land Equilibrium, Firestorm Phoenix.
+**Templates:** Horror of Horrors, Land's Edge, Rapid Fire.
+
+### The mechanism each group needed
+* **A noun phrase can name another object the same sentence names.**
+  `ObjectFilter` carries a nested targeted phrase ("blocking **target attacking
+  creature**") or the pronoun ("blocking **it**"). Both sit in
+  `CONDITIONALLY_EMITTED_FIELDS`, so `to_payload` never emits them and any
+  lowering not written for them refuses *by name* — the old code refused the
+  whole phrase rather than risk carrying a relation nothing could test.
+* **A draw replacement that answers a draw with a draw needs CR 614.5.**
+  Chains of Mephistopheles' own creation reached its own predicate and emptied
+  the hand a card at a time. The exclusion is by **id**, not a flag, because a
+  second Chains is a different effect and does apply — and it rides the payload
+  so it survives CR 616.1e's restart. Its discard goes through the ordinary
+  `discard` prompt with the draw hung on it as a follow-on, so the human path,
+  the AI default and the web UI came free.
+* **A cost produces values too.** `_COST_PRODUCES` is the left-of-the-colon twin
+  of `_PRODUCES`: a cost is charged by the activation path, not by an
+  instruction, so there is no kind to key it on, and `lower_ability` is the one
+  place cost and effect are both in view (Land's Edge).
+
+### A card is not a copy
+Firestorm Phoenix's rider had nowhere to write, and the reason is worth
+recording: **a `CardDefinition` is shared between copies** —
+`build_deck_from_entries` hands the same object out N times, verified. So a
+stamp on the card is a stamp on every copy. The record is a **count** per
+`(seat, card)`, which is not a compromise but the right shape: two identical
+cards in a hand are indistinguishable, so *which* copy is locked is not a
+question the game can ask and *how many* is.
+
+### Seven pre-existing defects
+* **`engine/pt.py` had one temporary channel reached by a boolean**, so every
+  parsed duration but end-of-turn was silently dropped — "until end of combat"
+  lasted the whole turn and Gabriel Angelfire's "until your next upkeep" ended
+  early. A channel table with a sweep per duration now, and a duration with no
+  channel refuses in lowering.
+* **`legality.py` stopped at control-flow wrappers**, so any activated ability
+  whose target sits inside an `if_then` reached the picker with no filter.
+* **Regeneration resolved its target by slot.** Horror of Horrors is the card
+  that shows it: its own cost eats a Swamp, CR 400.7 renumbers every later
+  slot, and the index chosen at CR 601.2c named a different creature by the
+  time CR 601.2h was paid.
+* `has_keyword(perm, "rampage")` was False for a creature printing Rampage 1 —
+  the ingested field seeds `"rampage 1"` and nothing asking for the *ability*
+  found it.
+* `add_counter_to_target` ignored the `power`/`toughness` its own lowering
+  emitted and always placed +1/+1.
+* `_is_chargeable_sacrifice` demanded a card type, so "Sacrifice a Swamp"
+  refused a cost `_chargeable_sacrifice_filter` could already collect.
+* `grant_team_keyword_until_eot` bypassed `_grant_one_keyword`.
+
+### And the six the round gave back
+`Adventurers' Guildhouse` and its four siblings, plus The Tabernacle at
+Pendrell Vale, compiled **supported with zero instructions and zero statics**.
+The land gate refuses a land whose *abilities* are all unreadable and passes
+everything else, on the reasoning that a land "has nothing to fail on" — true
+of CR 305.6 reminder text, false of a static. `--hollow-lines` could not see
+them either: the hollowness is at *card* level and that report walks abilities.
+
+The gate now asks a land with no parsed ability whether its rules text is read
+by anything, with parenthetical spans dropped first so a basic and a dual still
+pass. Karakas and the basics are unmoved; **no shipped land is affected**.
+
+The first attempt refused a fixture land reading "Tapped Land enters tapped" —
+the readers are anchored on the self-reference and the line names the card. It
+goes through `_restriction_line` now, the collapse every other static reader
+uses. That is round 18's Bartel Runeaxe mismatch one line lower, and the third
+time a gate and a runtime reader have normalized differently.
+
+### Correcting last round's journal
+Round 23 recorded "the support gate admits a card whose trigger is dead" as
+debt worth a round. It is **not**. Five cards pool-wide carry a dead trigger
+while reporting supported, all five are carried by a text-keyed registry rather
+than the trigger's own instruction, the three shipped ones have behavioural
+tests including a dedicated `test_no_hollow_support.py` guard, and
+`--hollow-lines` names every one with the right framing. Making the gate strict
+would have broken three working shipped cards to fix something already
+instrumented.
+
+### Not landed
+**Infinite Authority** (a bound "other creature", a destroy delayed to end of
+combat, *and* a second delayed trigger reading "if that creature was destroyed
+this way" — a subsystem). **Reverberation** (the engine has no stable identity
+for a spell reaching a damage event: `payload["source"]` is the shared
+`CardDefinition` and `resolving_stack_item` is deliberately None on the
+headless path; keying on `(card, seat)` would redirect a *second* copy too).
+**Shelkin Brownie**, correctly this time — "bands with other" is not
+implemented at all, which is what the six uncounted lands were hiding.
+**Blazing Effigy** (a per-source-name damage record serving one card).
+
+### Numbers
+LEG 240 → **243** of 310, after taking six back. Shipped pool 734/734
+throughout. LEG parse 70.3% → 72.4%, lowers 66.4% → 68.4%, executes 39.9% →
+41.3% — those rise partly *because* six cards with no instructions left the
+denominator, which is the measure working. Suite 7,383 → **7,430**, every
+`--check` green, no hooks added.
+
+`lowering/damage.py` split its prevention half out at 1,011 lines.
+`nouns.py` (999) and `lowering/_common.py` (992) are next.

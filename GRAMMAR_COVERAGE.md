@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 89.2% | 89.2% | 61.7% | 67 |
 | 3ED | 296 | 389 | 82.3% | 81.0% | 45.5% | 160 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 70.3% | 66.4% | 39.9% | 158 |
+| LEG *(measured)* | 310 | 431 | 72.4% | 68.4% | 41.3% | 164 |
 | **All (shipped)** | **1618** | **2286** | **82.5%** | **81.3%** | **48.6%** | **966** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,9 +34,9 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 210 | 102 | expected a subject |  |
+| 204 | 96 | expected a subject |  |
 | 121 | 51 | unrecognized effect verb |  |
-| 62 | 36 | unconsumed text |  |
+| 60 | 34 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 10 | 6 | a conditional static bonus is derived by engine/static_bonuses.py |  |
@@ -588,6 +588,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
+- **Feint**
+  - `Tap all creatures blocking target attacking creature. Prevent all combat damage that would be dealt this turn by that creature and each creature blocking it.`
 - **Feldon's Cane**
   - `{T}, Exile this artifact: Shuffle your graveyard into your library.`
 - **Feline Sovereign**
@@ -699,6 +701,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever this creature becomes blocked by a creature, that creature's controller loses 2 life and you gain 2 life.`
 - **Glorious Anthem**
   - `Creatures you control get +1/+1.`
+- **Glyph of Destruction**
+  - `Target blocking Wall you control gets +10/+0 until end of combat. Prevent all damage that would be dealt to it this turn. Destroy it at the beginning of the next end step.`
 - **Glyph of Doom**
   - `Choose target Wall creature. At this turn's next end of combat, destroy all creatures that were blocked by that creature this turn.`
 - **Glyph of Life**
@@ -798,6 +802,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever a creature you control with deathtouch deals damage to a planeswalker, destroy that planeswalker.`
 - **Horn of Deafening**
   - `{2}, {T}: Prevent all combat damage that would be dealt by target creature this turn.`
+- **Horror of Horrors**
+  - `Sacrifice a Swamp: Regenerate target black creature. (The next time that creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
 - **Howl from Beyond**
   - `Target creature gets +X/+0 until end of turn.`
   - `Target creature gets +X/+0 until end of turn.`
@@ -957,11 +963,15 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{W}{B}, {T}: Prevent all combat damage that would be dealt by target creature this turn.`
 - **Land Tax**
   - `At the beginning of your upkeep, if an opponent controls more lands than you, you may search your library for up to three basic land cards, reveal them, put them into your hand, then shuffle.`
+- **Land's Edge**
+  - `Discard a card: If the discarded card was a land card, this enchantment deals 2 damage to target player or planeswalker. Any player may activate this ability.`
 - **Leafkin Avenger**
   - `{T}: Add {G} for each creature with power 4 or greater you control.`
   - `{7}{R}: This creature deals damage equal to its power to target player or planeswalker.`
 - **Legion's Judgment**
   - `Destroy target creature with power 4 or greater.`
+- **Lesser Werewolf**
+  - `{B}: If this creature's power is 1 or more, it gets -1/-0 until end of turn and put a -0/-1 counter on target creature blocking or blocked by this creature. Activate only during the declare blockers step.`
 - **Ley Druid**
   - `{T}: Untap target land.`
   - `{T}: Untap target land.`
@@ -1331,6 +1341,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Destroy target enchanted creature.`
 - **Ranger's Guile**
   - `Target creature you control gets +1/+1 and gains hexproof until end of turn. (It can't be the target of spells or abilities your opponents control.)`
+- **Rapid Fire**
+  - `Target creature gains first strike until end of turn. If it doesn't have rampage, that creature gains rampage 2 until end of turn. (Whenever the creature becomes blocked, it gets +2/+2 until end of turn for each creature blocking it beyond the first.)`
 - **Read the Tides**
   - `• Draw three cards.`
   - `• Return up to two target creatures to their owners' hands.`
