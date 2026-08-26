@@ -192,8 +192,33 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     """
     filters = {
         key: value for key, value in instruction.payload.items()
-        if key not in ("attached_to", "bypass_regeneration", "targets")
+        if key not in (
+            "attached_to", "bypass_regeneration", "targets",
+            "blocked_by_bound_object",
+        )
     }
+    # "…all creatures that were blocked by **that creature** this turn."
+    # (Glyph of Doom.) A relation, resolved here for the reason `attached_to`
+    # below is: the record lives on the blocker the delayed ability was bound
+    # to, and `permanent_matches_filter` answers about a permanent alone.
+    #
+    # An unresolvable bound object ends the resolution rather than falling
+    # through — a dropped relation here is not a sweep that does less, it is a
+    # sweep that destroys every creature on the battlefield.
+    blocked_ids: set[int] | None = None
+    if instruction.payload.get("blocked_by_bound_object"):
+        bound = game.permanent_by_id(
+            (context.trigger_context or {}).get("bound_permanent_id")
+        )
+        if bound is None:
+            # CR 603.7c: the creature is no longer where the ability expects
+            # it. Its block record went with it, so nothing was blocked by it
+            # that this effect can name.
+            game.log.append(
+                f"{context.card.name}: the creature whose blocks it names is gone"
+            )
+            return True, "resolved"
+        blocked_ids = set(bound.metadata.get("blocked_attacker_ids_this_turn") or ())
     attached_to = instruction.payload.get("attached_to")
     host = None
     if attached_to is not None:
@@ -215,6 +240,7 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         perm for perm in game.all_permanents()
         if permanent_matches_filter(perm, filters)
         and (host is None or perm.metadata.get("attached_to") is host)
+        and (blocked_ids is None or perm.permanent_id in blocked_ids)
     ]
     if not matched:
         context.results["destroyed_this_way"] = 0

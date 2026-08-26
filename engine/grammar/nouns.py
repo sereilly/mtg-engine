@@ -219,6 +219,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     blocked: bool | None = None
     any_states: tuple[str, ...] = ()
     blocking_source = False
+    blocked_by_bound_object = False
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
     toughness: ast.Comparison | None = None
@@ -784,6 +785,18 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 stream.accept_word("a", "an")
                 targets_object = parse_object_filter(stream)
                 continue
+            # "…that **were blocked by that creature this turn**" (Glyph of
+            # Doom). "That creature" is the object the sentence's delayed
+            # ability was bound to, and "this turn" is what makes the record
+            # outlive the combat the block happened in — both required, for the
+            # reason the damage clause below requires its own.
+            elif stream.accept_phrase("were", "blocked", "by", "that"):
+                noun = stream.peek_word()
+                if noun is not None and _singular(noun) in CARD_TYPES:
+                    stream.advance()
+                    if stream.accept_phrase("this", "turn"):
+                        blocked_by_bound_object = True
+                        continue
             elif stream.accept_phrase("dealt", "damage", "to"):
                 if accept_source_reference(stream) and stream.accept_phrase(
                     "this", "turn"
@@ -906,6 +919,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         blocking=blocking,
         any_states=any_states,
         blocking_source=blocking_source,
+        blocked_by_bound_object=blocked_by_bound_object,
         blocked=blocked,
         power=power,
         toughness=toughness,

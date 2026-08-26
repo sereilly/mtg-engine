@@ -44,6 +44,10 @@ _EOT_METADATA_KEYS = (
     # turn" (Horn of Deafening, Lady Evangela). The direction is the value, so
     # the key is one rather than one per direction.
     "prevent_combat_damage_direction_until_eot",
+    # "…that were blocked by that creature **this turn**" (Glyph of Doom). The
+    # block pairs a blocker was part of, kept per turn because a turn holds
+    # several combats and `blocked_this_combat` is cleared by each one.
+    "blocked_attacker_ids_this_turn",
 )
 
 _TURN_PHASES: tuple[str, ...] = (

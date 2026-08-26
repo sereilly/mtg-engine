@@ -922,6 +922,16 @@ def _parse_create_delayed_trigger(stream: TokenStream) -> "ast.CreateDelayedTrig
     except GrammarError:
         stream.reset(mark)
         return None
+    # The delay governs its whole sentence, so the effect has to run to the end
+    # of one. Without this the production would accept a *prefix* — "destroy
+    # all creatures" out of "destroy all creatures that were blocked by that
+    # creature this turn" — and the words left over would either fail the line
+    # somewhere that says nothing about what happened or, worse, parse as a
+    # sentence of their own and be performed **now** rather than when the
+    # ability fires. Declining instead leaves the refusal the line already had.
+    if not stream.exhausted and not stream.at_punct(".", ";"):
+        stream.reset(mark)
+        return None
     return ast.CreateDelayedTrigger(
         event=event, effect=effect, once=once, duration=duration,
         binds_target=binds, subject=subject, agent=agent,

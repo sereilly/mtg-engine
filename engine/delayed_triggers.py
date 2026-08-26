@@ -144,19 +144,32 @@ class DelayedTrigger:
     ) -> bool:
         """Whether this entry answers to *event* happening to *subject*.
 
-        A bound entry requires the subject to *be* the permanent it bound: a
-        different creature dying is not the event this ability is waiting for,
-        and neither is a new permanent that reused the id's slot — which is why
-        the id is the comparison and never the battlefield index (CR 400.7).
+        **When the event names an object and the entry names one, they must be
+        the same object.** A different creature dying is not the event this
+        ability is waiting for, and neither is a new permanent that reused the
+        id's slot — which is why the id is the comparison and never the
+        battlefield index (CR 400.7).
+
+        An event that names no object never asks. "At this turn's next end of
+        combat, destroy all creatures that were blocked by that creature" binds
+        a Wall and fires at a *step*: the reference is read when the ability
+        resolves, and comparing it here would make the ability wait for an end
+        of combat that was somehow also the Wall. That is why the question is
+        asked of the firing event rather than answered by a flag on the entry —
+        a flag has a default, and its safe value differs per card.
         """
         from .subject_filters import subject_matches
 
         if self.event != event:
             return False
-        if self.bound_permanent_id is not None:
-            if subject is None or subject.permanent_id != self.bound_permanent_id:
+        if self.bound_permanent_id is not None and subject is not None:
+            if subject.permanent_id != self.bound_permanent_id:
                 return False
-        if self.subject_filter and not subject_matches(
+        # Gated on the same question as the id above, and deliberately: the
+        # printed noun re-states what the id already names, and the two arrive
+        # together. Asking it of an event that names no object would make an
+        # ability bound to "that creature" wait for a step it can never match.
+        if subject is not None and self.subject_filter and not subject_matches(
             game, subject, self.subject_filter, observer=self.controller_index
         ):
             return False
@@ -176,6 +189,12 @@ class DelayedTrigger:
         ability. One builder for every site, so a delayed trigger reaches the
         stack the same way wherever it was announced."""
         context = dict(self.captured)
+        # CR 603.7c: an ability that refers to a particular object carries that
+        # object with it. The effect addresses it by id, so a clause reading
+        # "that creature" resolves the same permanent the creating spell chose
+        # however many turns and zone changes later the ability fires.
+        if self.bound_permanent_id is not None:
+            context["bound_permanent_id"] = self.bound_permanent_id
         context.update(trigger_context or {})
         return {
             "controller_index": self.controller_index,

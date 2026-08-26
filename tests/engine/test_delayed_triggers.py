@@ -48,6 +48,17 @@ def test_every_delayed_event_is_named_outside_its_declaration(event):
     )
 
 
+def test_the_bound_object_events_are_real_events():
+    """`lowering/_events._BOUND_OBJECT_DELAYED_EVENTS` gates the clauses that
+    back-refer to "that creature". A row naming an event that no longer exists
+    would be a gate nothing can pass, and the cards behind it would go quietly
+    unsupported."""
+    from engine.grammar.lowering._events import _BOUND_OBJECT_DELAYED_EVENTS
+
+    assert _BOUND_OBJECT_DELAYED_EVENTS <= set(DELAYED_EVENTS)
+    assert _BOUND_OBJECT_DELAYED_EVENTS
+
+
 def test_the_registry_is_not_empty():
     """A vacuous parametrization would pass every row above."""
     assert len(DELAYED_EVENTS) >= 6

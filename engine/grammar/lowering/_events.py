@@ -91,6 +91,25 @@ _EVENT_SUBJECT_OWNERS: frozenset[str] = frozenset({
     "bound_permanent_dies",              # Reincarnation
 })
 
+#: Delayed-trigger events (CR 603.7) whose entry names a **particular object**
+#: — CR 603.7c. `create_delayed_trigger` stamps that permanent's id into the
+#: trigger's context, so a clause back-referring to it ("that creature", "…that
+#: were blocked by that creature this turn") is admitted only under one of
+#: these. Under any other event the words name an object nobody recorded, and a
+#: sweep that dropped the relation would take the whole board.
+#:
+#: Held to `delayed_triggers.DELAYED_EVENTS` by
+#: `tests/engine/test_delayed_triggers.py`, so a renamed event cannot leave a
+#: row here pointing at nothing.
+_BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
+    "bound_permanent_dies",              # Reincarnation
+    "bound_permanent_dealt_damage",      # Glyph of Life
+    "next_end_of_combat",                # Glyph of Doom
+})
+
+#: The payload key the delayed machinery stamps that object's id under.
+BOUND_PERMANENT_ID = "bound_permanent_id"
+
 #: The payload key those fire sites stamp it under. One constant for the same
 #: reason `EVENT_SUBJECT_PLAYER` is one: the fire site writes it and the handler
 #: reads it, and three copies of a string is how they come apart.

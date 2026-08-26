@@ -913,3 +913,87 @@ def test_reincarnation_does_not_watch_a_creature_it_never_named(set_pool):
 
     assert game.pending_choices == []
     assert len(game.delayed_triggers) == 1
+
+
+# ---------------------------------------------------------------------------
+# Glyph of Doom — a delayed ability that fires at a *step* and reads its bound
+# object when it resolves, rather than waiting for something to happen to it.
+# ---------------------------------------------------------------------------
+
+
+def _glyph_of_doom_board(set_pool):
+    """P1 attacks with two; P2's Wall is ready to block one of them."""
+    wall = Permanent(card=CardDefinition(
+        name="Big Wall", mana_cost="", cmc=0.0, type_line="Creature - Wall",
+        oracle_text="Defender", colors=(), color_identity=(),
+        keywords=("Defender",), produced_mana=(),
+        raw={"name": "Big Wall", "type_line": "Creature - Wall",
+             "power": "0", "toughness": "9"},
+    ))
+    first = Permanent(card=_creature("Attacker One"))
+    second = Permanent(card=_creature("Attacker Two"))
+    p1 = PlayerState(name="P1", battlefield=[first, second])
+    p2 = PlayerState(name="P2", battlefield=[wall],
+                     hand=[set_pool("LEG")["Glyph of Doom"]])
+    game = Game(players=[p1, p2])
+    game.cast_from_hand(
+        1, "Glyph of Doom", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    return game, p1, wall, first, second
+
+
+def _one_combat(game, blocks):
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    game.declare_attackers(0, [0, 1])
+    game.advance_combat_phase()   # declare_blockers
+    game.declare_blockers(1, blocks)
+    game.advance_combat_phase()   # combat damage
+    game.end_combat(step_already_started=True)
+    game._settle()
+
+
+def test_glyph_of_doom_arms_a_step_trigger_that_reads_its_wall(set_pool):
+    """The ability fires at a step, not at something happening to the Wall —
+    so the Wall is a *reference* the effect reads, not the event's subject."""
+    program = compile_card_oracle(set_pool("LEG")["Glyph of Doom"])
+    assert program.supported, program.reason
+    payload = program.instructions[0].payload["steps"][1].payload
+    assert payload["event"] == "next_end_of_combat"
+    assert payload["binds_target"] is True
+    assert payload["instruction"].payload["blocked_by_bound_object"] is True
+
+
+def test_glyph_of_doom_destroys_what_its_wall_blocked(set_pool):
+    game, p1, _wall, first, _second = _glyph_of_doom_board(set_pool)
+
+    _one_combat(game, {0: 0})
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Attacker Two"]
+    assert [card.name for card in p1.graveyard] == ["Attacker One"]
+
+
+def test_glyph_of_doom_spares_a_creature_its_wall_never_blocked(set_pool):
+    """The relation is the whole card: dropped, the sweep is "destroy all
+    creatures" and takes the board."""
+    game, p1, _wall, _first, _second = _glyph_of_doom_board(set_pool)
+
+    _one_combat(game, {})
+
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Attacker One", "Attacker Two",
+    ]
+    assert p1.graveyard == []
+
+
+def test_glyph_of_doom_fires_once(set_pool):
+    """"At this turn's next end of combat" — CR 603.7b's default, and a turn
+    can hold a second combat."""
+    game, _p1, _wall, _first, _second = _glyph_of_doom_board(set_pool)
+
+    _one_combat(game, {0: 0})
+
+    assert game.delayed_triggers == []
