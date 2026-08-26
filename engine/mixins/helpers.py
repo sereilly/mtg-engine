@@ -19,7 +19,7 @@ from ..land_types import end_land_type_change
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..game_types import GraveyardTarget
 from ..oracle import compile_card_oracle
-from ..replacements import apply_replacements
+from ..replacements import apply_entry_riders, apply_replacements
 from ..targeting import graveyard_target_spec
 from ..tokens import is_token_card
 from ..trigger_utils import make_trigger_event, matching_triggers
@@ -1839,6 +1839,11 @@ class GameHelpersMixin:
         # lord buffs so the new permanent immediately receives applicable bonuses,
         # and so any new lord immediately buffs existing matching permanents.
         self._recompute_continuous_effects()
+        # The "…**then** X" half of an entry replacement (Land Equilibrium's
+        # "puts that land onto the battlefield then sacrifices a land"). After
+        # the append and after the recompute, because "then" means the new
+        # permanent is on the battlefield and is itself a legal choice.
+        apply_entry_riders(self, permanent, controller_index)
         # "Whenever a creature you control with power 4 or greater enters"
         # (Garruk's Uprising). Every entry path in the engine — a resolving
         # spell, a token, a reanimation, a cleanup return — comes through this

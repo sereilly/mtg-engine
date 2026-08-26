@@ -75,6 +75,7 @@ from .effect_ordering import (
     apply_in_order,
     choose_effect,
 )
+from .hand_locks import lock_card_in_hand
 from .replacement_choices import (
     ReplacementChoice,
     offer_replacement_choice,
@@ -130,6 +131,7 @@ LIFE_FLOOR = 10  # Ali from Cairo
 # to the damage space above.
 LIFE_GAIN_TO_DRAW = 10  # Lich
 EXILE_INSTEAD_OF_DYING = 10  # Disintegrate's "exile it instead"
+RETURN_TO_HAND_INSTEAD_OF_DYING = 20  # Firestorm Phoenix
 DISCARD_DESTINATION = 10  # Library of Leng
 # Before the two draw replacements that *consume* the event, and for the
 # player's benefit: a doubler applied first turns one draw into two, and the
@@ -139,8 +141,19 @@ DISCARD_DESTINATION = 10  # Library of Leng
 DRAW_DOUBLED = 5  # Teferi's Ageless Insight
 DRAW_FROM_OUTSIDE = 10  # Ring of Ma'rûf
 DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
+# Last of the draw replacements, and deliberately so. CR 616.1e gives the choice
+# to the affected player and the lowest order is the default they are taken to
+# make; every effect above this one is something the player armed for their own
+# benefit, and this one takes the draw away. Applying a Ring of Ma'rûf or an
+# Aladdin's Lamp first consumes the draw and this never applies — which is the
+# order the player would pick, and the rule permits.
+DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
 EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
 EXILE_INSTEAD_OF_ENTERING = 10  # Containment Priest
+# After it, and it has to be: the exile replacement means the permanent never
+# enters, and a rider hung on an entry that did not happen is a sacrifice for
+# nothing.
+SACRIFICE_AFTER_ENTERING = 20  # Land Equilibrium
 
 # Set on the event once an interceptor consumes it. It lives on the payload
 # because the payload is the one piece of state the 616.1 loop threads through
@@ -750,6 +763,59 @@ def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     return ReplacementOutcome(replaced=True)
 
 
+RETURN_TO_HAND_INSTEAD_TEXT = (
+    "if this creature would die, return it to its owner's hand instead. until "
+    "that player's next turn, that player plays with that card revealed in "
+    "their hand and can't play it"
+)
+
+
+def _applies_return_to_hand_instead(game, payload: dict) -> bool:
+    permanent = payload["permanent"]
+    # A token returned to a hand ceases to exist (CR 111.7) rather than being
+    # held there, so the sentence has nothing to do — and the rider that
+    # follows it is about a card in a hand, which a token never becomes.
+    if permanent.metadata.get("is_token", False):
+        return False
+    text = (permanent.effective_card.oracle_text or "").lower()
+    return RETURN_TO_HAND_INSTEAD_TEXT in text
+
+
+@replacement_effect(
+    "would_die",
+    RETURN_TO_HAND_INSTEAD_OF_DYING,
+    applies=_applies_return_to_hand_instead,
+)
+def _return_to_hand_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
+    """Firestorm Phoenix: "If this creature would die, return it to its owner's
+    hand instead. Until that player's next turn, that player plays with that
+    card revealed in their hand and can't play it."
+
+    The permanent never reaches the graveyard, so nothing that watches a death
+    sees one (CR 614) — no dies-trigger, and the game-wide "creatures died this
+    turn" record is untouched. It goes to its **owner's** hand, not its
+    controller's (CR 400.3), which is the difference a stolen Phoenix makes.
+
+    The second sentence is not decoration and is not a second effect: it is the
+    same replacement's rider, so it is applied here, in the same breath as the
+    return. ``engine/hand_locks.py`` holds it, and holds it only while the card
+    actually arrived — a card diverted to the command zone (CR 903.9b) is in no
+    hand to be revealed in.
+    """
+    permanent = payload["permanent"]
+    owner_seat = game.owner_index_of(permanent)
+    if owner_seat is None:
+        owner_seat = game.players.index(payload["player"])
+    owner = game.players[owner_seat]
+    if game.put_card_into_hand(owner, permanent.card):
+        lock_card_in_hand(game, owner_seat, permanent.card, permanent.card.name)
+        game.log.append(
+            f"{permanent.card.name} returned to {owner.name}'s hand instead of dying, "
+            f"revealed and unplayable until their next turn"
+        )
+    return ReplacementOutcome(replaced=True)
+
+
 EXILE_UNCAST_CREATURE_TEXT = (
     "if a nontoken creature would enter and it wasn't cast, exile it instead"
 )
@@ -1022,6 +1088,235 @@ def _resolve_lamp_draw(game, choice: ReplacementChoice, option_index: int) -> in
     return drawn
 
 
+LAND_EQUILIBRIUM_TEXT = (
+    "if an opponent who controls at least as many lands as you do would put a "
+    "land onto the battlefield, that player instead puts that land onto the "
+    "battlefield then sacrifices a land of their choice"
+)
+
+#: The metadata key an entry replacement's "then …" half is recorded under,
+#: read once the permanent is actually on the battlefield.
+ENTRY_SACRIFICE_KEY = "sacrifice_land_after_entering"
+
+
+def _land_count(game, seat: int) -> int:
+    """How many lands *seat* controls, through the control seam and layer 4 —
+    so an animated land is still a land and a stolen one counts for whoever
+    controls it now."""
+    return sum(1 for perm in game.controlled_by(seat) if perm.has_type("land"))
+
+
+def _land_equilibrium_watchers(game, payload: dict) -> list:
+    """The permanents whose replacement this entry answers to.
+
+    Every clause of the printed sentence, asked here rather than in the body,
+    because CR 616.1 counts the effects in contention before running any:
+
+    * the entering permanent is a land (layer 4, not the printed line);
+    * the seat it would enter under is an **opponent** of the source's
+      controller — a Land Equilibrium never taxes its own controller;
+    * that opponent controls **at least as many** lands as the source's
+      controller *now*, before the land arrives. A replacement effect is asked
+      about the event that *would* happen (CR 614.1), and the land that would
+      enter is not on the battlefield to be counted yet.
+
+    A list rather than a boolean because two copies are two effects and each
+    charges its own land, the reason ``_damage_multiplier`` counts its sources.
+    """
+    permanent = payload["permanent"]
+    if not permanent.has_type("land"):
+        return []
+    entering_seat = payload["controller_index"]
+    watchers = []
+    for perm in game.all_permanents():
+        if LAND_EQUILIBRIUM_TEXT not in (perm.effective_card.oracle_text or "").lower():
+            continue
+        owner_seat = game.controller_index_of(perm)
+        if owner_seat is None or entering_seat not in game.opponents_of(owner_seat):
+            continue
+        if _land_count(game, entering_seat) >= _land_count(game, owner_seat):
+            watchers.append(perm)
+    return watchers
+
+
+def _applies_land_equilibrium(game, payload: dict) -> bool:
+    return bool(_land_equilibrium_watchers(game, payload))
+
+
+@replacement_effect(
+    "would_enter_battlefield",
+    SACRIFICE_AFTER_ENTERING,
+    applies=_applies_land_equilibrium,
+)
+def _sacrifice_after_entering(game, payload: dict) -> ReplacementOutcome | None:
+    """Land Equilibrium: "If an opponent who controls at least as many lands as
+    you do would put a land onto the battlefield, that player instead puts that
+    land onto the battlefield then sacrifices a land of their choice."
+
+    A *modifying* replacement, not a consuming one — the land still enters, and
+    every enters-the-battlefield trigger and layer contribution happens
+    normally. What the sentence adds is the word "then": the sacrifice comes
+    after the entry, so the land that just arrived is itself a legal choice.
+
+    The event is still in front of the entry here, so the sacrifice is recorded
+    on the permanent and armed by :func:`apply_entry_riders` once the
+    battlefield actually holds it. Arming it from this line would offer a
+    non-interactive seat a board the new land is not on yet.
+    """
+    permanent = payload["permanent"]
+    watchers = _land_equilibrium_watchers(game, payload)
+    permanent.metadata[ENTRY_SACRIFICE_KEY] = (
+        int(permanent.metadata.get(ENTRY_SACRIFICE_KEY, 0)) + len(watchers)
+    )
+    game.log.append(
+        f"{game.players[payload['controller_index']].name} will sacrifice "
+        f"{len(watchers)} land(s) for {permanent.card.name} "
+        f"({watchers[0].card.name})"
+    )
+    return ReplacementOutcome()
+
+
+def apply_entry_riders(game, permanent, controller_index: int) -> None:
+    """The "…**then** X" half of an entry replacement, once the permanent is on
+    the battlefield.
+
+    Called from the one entry path there is, for the same reason the entry
+    replacement itself is asked there: a rider per caller is a rider forgotten
+    by every caller that arrives later. Nothing is recorded for an ordinary
+    entry, so this is a metadata read and a return.
+    """
+    owed = int(permanent.metadata.pop(ENTRY_SACRIFICE_KEY, 0))
+    if owed <= 0:
+        return
+    game.arm_forced_sacrifice(
+        controller_index,
+        owed,
+        filter={"type_filter": "land"},
+        reason="Land Equilibrium",
+    )
+
+
+DISCARD_INSTEAD_OF_DRAW_TEXT = (
+    "if a player would draw a card except the first one they draw in each of "
+    "their draw steps, that player discards a card instead. if the player "
+    "discards a card this way, they draw a card. if the player doesn't discard "
+    "a card this way, they mill a card"
+)
+
+
+def _chains_sources(game, payload: dict) -> list:
+    """Every permanent whose text is this replacement and that has not already
+    had its opportunity on this event (CR 614.5).
+
+    Scanned over the whole board, not one seat's: the sentence says "a player",
+    so the enchantment replaces its own controller's draws as well as their
+    opponents'. Reading ``_player_controls_text`` here would have made it a
+    one-sided card, which is the narrowing this pool keeps producing.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    return [
+        perm
+        for perm in game.all_permanents()
+        if DISCARD_INSTEAD_OF_DRAW_TEXT in (perm.effective_card.oracle_text or "").lower()
+        and perm.permanent_id not in exclude
+    ]
+
+
+def _chains_affected_draws(payload: dict) -> int:
+    """How many of this event's draws the exemption leaves.
+
+    The same arithmetic ``_doubled_draw_count`` sets out: CR 121.2 makes an
+    event of ``count`` draws that many individual draws, and "except the first
+    one they draw in each of their draw steps" exempts **one draw**, not one
+    event — a draw step with a Howling Mine out draws 1 + 1, and only the first
+    of the two is exempt.
+    """
+    exempt = 1 if payload.get("turn_based") else 0
+    return max(0, int(payload.get("count", 0)) - exempt)
+
+
+def _applies_discard_instead_of_draw(game, payload: dict) -> bool:
+    return _chains_affected_draws(payload) > 0 and bool(_chains_sources(game, payload))
+
+
+@replacement_effect(
+    "draw", DRAW_DISCARD_INSTEAD, applies=_applies_discard_instead_of_draw
+)
+def _discard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Chains of Mephistopheles: "If a player would draw a card except the first
+    one they draw in each of their draw steps, that player discards a card
+    instead. If the player discards a card this way, they draw a card. If the
+    player doesn't discard a card this way, they mill a card."
+
+    One draw at a time, because that is what the sentence replaces. The event is
+    consumed; the exempt draw in front of it and the draws queued behind it are
+    made through the seam again, so a second replacement armed alongside still
+    gets its own.
+
+    The three branches are the printed three. Which card is discarded is the
+    player's choice, so it goes through the ordinary ``discard`` prompt with the
+    draw hung on it as the prompt's follow-on — a human picks, an AI takes the
+    default, and either way the draw happens *after* the discard rather than
+    before it. The only way not to discard is to have nothing to discard
+    (CR 701.9a), and that is the branch that mills.
+    """
+    player = payload["player"]
+    seat = game.players.index(player)
+    count = int(payload["count"])
+    exempt = 1 if payload.get("turn_based") else 0
+    drawn = 0
+    if exempt:
+        # Not replaced, and still a draw like any other: it goes back through
+        # the seam so an Aladdin's Lamp armed for the draw step still takes it.
+        drawn += game._draw_with_replacements(player, exempt, turn_based=True)
+    remaining = count - exempt - 1
+    source = min(_chains_sources(game, payload), key=lambda perm: perm.permanent_id)
+    # CR 614.5: the draw this effect creates is not replaced by this effect
+    # again. A *second* copy is a different effect and still applies, which is
+    # why the exclusion names the source rather than the wording.
+    excludes = tuple(payload.get("exclude_sources") or ()) + (source.permanent_id,)
+    if player.hand:
+        game.arm_pending_choice(
+            "discard",
+            seat,
+            count=1,
+            filter={},
+            draw_that_many=True,
+            draw_exclude_sources=excludes,
+            queued_draws=max(0, remaining),
+        )
+        game.log.append(
+            f"{player.name} discards a card instead of drawing ({source.card.name})"
+        )
+    else:
+        milled = _mill_cards(game, player, 1)
+        game.log.append(
+            f"{player.name} had no card to discard and milled {milled} card(s) "
+            f"({source.card.name})"
+        )
+        if remaining > 0:
+            drawn += game._draw_with_replacements(player, remaining)
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+def _mill_cards(game, player, count: int) -> int:
+    """CR 701.13a: put the top *count* cards of *player*'s library into their
+    graveyard, stopping at whatever is there.
+
+    Milling is not a draw and never has been — CR 704.5b's loss is about
+    *attempting to draw* from an empty library — so an empty library mills
+    nothing and costs nothing.
+    """
+    milled = 0
+    for _ in range(count):
+        if not player.library:
+            break
+        player.graveyard.append(player.library.pop(0))
+        milled += 1
+    return milled
+
+
 # ---------------------------------------------------------------------------
 # Which printed lines this registry implements, for the two readers that ask
 # ---------------------------------------------------------------------------
@@ -1074,6 +1369,23 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # line, and every clause of it — nontoken, creature, not cast — is a clause
     # of the applicability predicate rather than an approximation of one.
     (EXILE_UNCAST_CREATURE_TEXT, ""),
+    # _discard_instead_of_drawing (Chains of Mephistopheles): the constant is
+    # all three printed sentences, because the interceptor performs all three —
+    # the discard, the draw behind a discard that happened, and the mill behind
+    # one that could not. A claim stopping at the first sentence would be a
+    # rider claimed and not executed.
+    (DISCARD_INSTEAD_OF_DRAW_TEXT, ""),
+    # _return_to_hand_instead_of_dying (Firestorm Phoenix): the constant is both
+    # printed sentences, because the interceptor performs both — the return and
+    # the reveal-and-lock rider behind it (engine/hand_locks.py). A claim
+    # stopping at the first sentence would admit the card with half its text
+    # doing nothing.
+    (RETURN_TO_HAND_INSTEAD_TEXT, ""),
+    # _sacrifice_after_entering (Land Equilibrium): the constant is the whole
+    # sentence, "then sacrifices a land of their choice" included — the entry
+    # is let through and the sacrifice is armed once the land is on the
+    # battlefield, which is what "then" says.
+    (LAND_EQUILIBRIUM_TEXT, ""),
 )
 
 

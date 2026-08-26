@@ -18,6 +18,7 @@ from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
 from engine.library_top import top_is_public
 from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
+from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
 from engine.targeting import usable_activated_abilities
 from engine.text_changes import changed_words
@@ -726,7 +727,15 @@ def _serialize_player(
         # hand fan renders real card faces instead of card backs.
         hand = [_serialize_card(card) for card in player.hand]
     else:
-        hand = ["<hidden>"] * len(player.hand)
+        # A hidden hand can still hold a face-up card: "that player plays with
+        # that card revealed in their hand" (Firestorm Phoenix, CR 701.20a).
+        # Per position rather than per hand, because the reveal is about one
+        # card — the rest of the hand stays a hidden zone.
+        revealed = locked_hand_indices(game, seat)
+        hand = [
+            _serialize_card(card) if index in revealed else "<hidden>"
+            for index, card in enumerate(player.hand)
+        ]
 
     permanents = list(game.controlled_by(seat))
     battlefield = [_serialize_permanent(perm, game) for perm in permanents]
