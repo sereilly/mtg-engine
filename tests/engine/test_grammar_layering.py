@@ -64,6 +64,10 @@ PARSE_LAYERS = [
     # until Antiquities' token phrases pushed it past the guard below, and the
     # order is what keeps the split from folding back — the filter parser must
     # never need the quantifier one.
+    # The trailing half of a noun phrase. Below `nouns`, which hands it the
+    # recursive parser rather than being imported back — "blocking target
+    # attacking creature" nests a whole phrase.
+    "postmodifiers",
     "nouns",
     "references",
     # Whole printed *paragraphs* that are one effect (Necromentia, Idol of

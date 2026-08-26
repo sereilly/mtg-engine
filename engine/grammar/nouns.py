@@ -18,6 +18,8 @@ unsupported card.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
@@ -25,6 +27,7 @@ from .lexer import PT, SELF, WORD
 from .names import parse_card_name
 from .stream import TokenStream
 from .abilities import _accept_ability_noun, _accept_ability_source
+from .postmodifiers import _parse_postmodifiers
 from .amounts import parse_comparison  # re-exported: a comparison bounds an amount
 from .readers import _SELF_NOUNS, accept_source_reference
 from .vocabulary import GENERIC_NOUNS as _GENERIC_NOUNS
@@ -44,11 +47,6 @@ from .vocabulary import (
 # of them: Fireball's "among any number of targets" uses it as a bare noun.
 
 
-# "…attached to that creature" / "…attached to it" — the trailing clause naming
-# what an Aura or Equipment is on, and the referent each consumer resolves.
-# Every consumer must answer every entry: a referent nothing resolves is a
-# relation dropped, and a dropped relation on a sweep takes the whole board.
-_ATTACHED_TO_REFERENTS = {("that", "creature"): "target", ("it",): "source"}
 
 _STATE_ADJECTIVES = {
     "tapped": ("tapped", True),
@@ -60,12 +58,6 @@ _STATE_ADJECTIVES = {
 }
 
 
-# Zones a noun phrase can be scoped to ("target creature card **from your
-# graveyard**"). The battlefield is deliberately absent: it is already the
-# default, so consuming "from the battlefield" here would leave no trace that
-# the phrase had been read at all — exactly the silent-drop this parser exists
-# to prevent. A production that needs it should say so explicitly.
-_ZONE_NOUNS = frozenset({"graveyard", "hand", "library", "exile"})
 
 
 
@@ -112,33 +104,70 @@ def _accept_card_noun(stream: TokenStream) -> bool:
 
 
 
-def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
-    """Parse one or more keyword names ("flying", "first strike and trample").
 
-    The conjunction is only consumed when a keyword actually follows it:
-    "each creature without flying and each player" continues with a second
-    *recipient*, not a second keyword, and eating that "and" would strand the
-    rest of the clause.
+
+
+
+@dataclass
+class _FilterDraft:
+    """The half-built filter a noun phrase accumulates, one field per
+    restriction the phrase can print.
+
+    Mutable, and a mirror of the frozen `ast.ObjectFilter` it becomes. It
+    exists because `parse_object_filter` reads a phrase in sections — a head
+    noun, then leading adjectives, then trailing postmodifiers — and each
+    section may set any of them. Passing forty-seven locals between those
+    sections is what kept them in one 795-line function; passing one draft
+    is what lets the postmodifiers live in their own module.
+
+    No `build()` here on purpose: the sole caller constructs the
+    `ObjectFilter` itself, because several fields are massaged on the way
+    out (tuples from lists, a zone dropped when it is the default) and a
+    builder would be a second place that knows those rules.
     """
-    keywords: list[str] = []
-    while True:
-        matched = match_longest(stream.words_from(), 0, KEYWORD_INDEX)
-        if matched is None:
-            break
-        name, consumed = matched
-        keywords.append(name)
-        stream.advance(consumed)
-        conjunction = stream.mark()
-        if not (stream.accept_word("and") or stream.accept_word("or")):
-            break
-        if match_longest(stream.words_from(), 0, KEYWORD_INDEX) is None:
-            stream.reset(conjunction)
-            break
-    if not keywords:
-        raise stream.error("expected a keyword ability")
-    return tuple(keywords)
 
-
+    card_types: list[str] = field(default_factory=list)
+    supertypes: list[str] = field(default_factory=list)
+    subtypes: list[str] = field(default_factory=list)
+    colors: list[str] = field(default_factory=list)
+    excluded_colors: list[str] = field(default_factory=list)
+    excluded_types: list[str] = field(default_factory=list)
+    excluded_subtypes: list[str] = field(default_factory=list)
+    with_keywords: list[str] = field(default_factory=list)
+    without_keywords: list[str] = field(default_factory=list)
+    controller: str | None = None
+    owned_by: str | None = None
+    tapped: bool | None = None
+    attacking: bool | None = None
+    blocking: bool | None = None
+    blocked: bool | None = None
+    any_states: tuple[str, ...] = field(default_factory=tuple)
+    blocking_source: bool = False
+    blocking_target: ast.ObjectFilter | None = None
+    blocking_bound_target: bool = False
+    blocked_by_bound_object: bool = False
+    power: ast.Comparison | None = None
+    mana_value: ast.Comparison | None = None
+    toughness: ast.Comparison | None = None
+    other_than_source: bool = False
+    is_source: bool = False
+    is_enchanted: bool = False
+    is_card: bool = False
+    with_plus1_counter: bool = False
+    nontoken: bool = False
+    token_only: bool = False
+    their_choice: bool = False
+    named: str | None = None
+    attached_to: str | None = None
+    attached_to_types: tuple[str, ...] = field(default_factory=tuple)
+    of_bound_type: bool = False
+    zone: str = "battlefield"
+    zone_owner: ast.PlayerRef | None = None
+    saw_head: bool = False
+    type_match: str = "any"
+    subtype_match: str = "any"
+    any_classes: tuple[tuple[str, str], ...] = field(default_factory=tuple)
+    targets_object: ast.ObjectFilter | None = None
 
 
 def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast.ObjectFilter:
@@ -147,48 +176,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     *allow_bare* permits a phrase with no head noun (used by "each creature
     without flying"-style sweeps where the type word doubles as the head).
     """
-    card_types: list[str] = []
-    supertypes: list[str] = []
-    subtypes: list[str] = []
-    colors: list[str] = []
-    excluded_colors: list[str] = []
-    excluded_types: list[str] = []
-    excluded_subtypes: list[str] = []
-    with_keywords: list[str] = []
-    without_keywords: list[str] = []
-    controller: str | None = None
-    owned_by: str | None = None
-    tapped: bool | None = None
-    attacking: bool | None = None
-    blocking: bool | None = None
-    blocked: bool | None = None
-    any_states: tuple[str, ...] = ()
-    blocking_source = False
-    blocking_target: ast.ObjectFilter | None = None
-    blocking_bound_target = False
-    blocked_by_bound_object = False
-    power: ast.Comparison | None = None
-    mana_value: ast.Comparison | None = None
-    toughness: ast.Comparison | None = None
-    other_than_source = False
-    is_source = False
-    is_enchanted = False
-    is_card = False
-    with_plus1_counter = False
-    nontoken = False
-    token_only = False
-    their_choice = False
-    named: str | None = None
-    attached_to: str | None = None
-    attached_to_types: tuple[str, ...] = ()
-    of_bound_type = False
-    zone = "battlefield"
-    zone_owner: ast.PlayerRef | None = None
-    saw_head = False
-    type_match = "any"
-    subtype_match = "any"
-    any_classes: tuple[tuple[str, str], ...] = ()
-    targets_object: ast.ObjectFilter | None = None
+    d = _FilterDraft()
 
     # --- an ability on the stack ----------------------------------------
     # "activated or triggered ability" / "activated ability" / "triggered
@@ -196,11 +184,11 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     # machinery below applies: an ability on the stack has no card, no type
     # line and no permanent behind it (CR 113.7a), so every adjective the loop
     # further down collects would be a question with no object to ask it of.
-    ability_kinds = _accept_ability_noun(stream)
-    if ability_kinds:
+    d.ability_kinds = _accept_ability_noun(stream)
+    if d.ability_kinds:
         return ast.ObjectFilter(
             zone="stack",
-            ability_kinds=ability_kinds,
+            ability_kinds=d.ability_kinds,
             ability_source_types=_accept_ability_source(stream),
         )
 
@@ -211,25 +199,25 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         noun = stream.peek_word()
         if noun is not None and _singular(noun) in _SELF_NOUNS:
             stream.advance()
-            is_source = True
-            saw_head = True
+            d.is_source = True
+            d.saw_head = True
             if _singular(noun) in CARD_TYPES:
-                card_types.append(_singular(noun))
+                d.card_types.append(_singular(noun))
         else:
             stream.reset(probe)
 
-    if not saw_head and stream.accept_word("enchanted"):
+    if not d.saw_head and stream.accept_word("enchanted"):
         noun = stream.peek_word()
         if noun is None:
             raise stream.error("expected a noun after 'enchanted'")
         stream.advance()
-        is_enchanted = True
-        saw_head = True
+        d.is_enchanted = True
+        d.saw_head = True
         if _singular(noun) in CARD_TYPES:
-            card_types.append(_singular(noun))
+            d.card_types.append(_singular(noun))
 
     # --- adjectives ------------------------------------------------------
-    while not saw_head:
+    while not d.saw_head:
         # Adjectives may be comma-separated: "target nonartifact, nonblack
         # creature" (Terror). The comma carries no meaning of its own, but it
         # must be consumed or full-token consumption fails the whole line.
@@ -242,15 +230,15 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         if word.startswith("non") and len(word) > 3:
             body = word[3:].lstrip("-")
             if body in COLOR_WORDS:
-                excluded_colors.append(COLOR_WORDS[body])
+                d.excluded_colors.append(COLOR_WORDS[body])
                 stream.advance()
                 continue
             if body in CARD_TYPES:
-                excluded_types.append(body)
+                d.excluded_types.append(body)
                 stream.advance()
                 continue
             if body in ALL_SUBTYPES:
-                excluded_subtypes.append(body)
+                d.excluded_subtypes.append(body)
                 stream.advance()
                 continue
             # "nontoken" (Lich, Gadrak, Chrome Replicator). CR 111.1: a token is
@@ -259,7 +247,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # read off the permanent the same way the forced-sacrifice prompt has
             # always read it.
             if body == "token":
-                nontoken = True
+                d.nontoken = True
                 stream.advance()
                 continue
 
@@ -274,7 +262,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         # its "other" here would leave "than this creature" to be read as a noun
         # phrase.
         if word == "other" and stream.peek_word(1) != "than":
-            other_than_source = True
+            d.other_than_source = True
             stream.advance()
             continue
 
@@ -284,11 +272,11 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # Taking "green" alone would end the noun phrase at "or", leaving
             # "or white creature" unconsumed and refusing the whole line, which
             # is exactly how Abomination refused.
-            colors.append(COLOR_WORDS[word])
+            d.colors.append(COLOR_WORDS[word])
             stream.advance()
             while stream.at_word("or") and stream.peek_word(1) in COLOR_WORDS:
                 stream.advance()
-                colors.append(COLOR_WORDS[str(stream.peek_word())])
+                d.colors.append(COLOR_WORDS[str(stream.peek_word())])
                 stream.advance()
             continue
 
@@ -314,24 +302,24 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 stream.advance()
                 states.append(str(stream.peek_word()))
                 stream.advance()
-            any_states = tuple(states)
+            d.any_states = tuple(states)
             continue
 
         if word in _STATE_ADJECTIVES:
             attribute, value = _STATE_ADJECTIVES[word]
             if attribute == "tapped":
-                tapped = value
+                d.tapped = value
             elif attribute == "attacking":
-                attacking = value
+                d.attacking = value
             elif attribute == "blocking":
-                blocking = value
+                d.blocking = value
             else:
-                blocked = value
+                d.blocked = value
             stream.advance()
             continue
 
         if word in SUPERTYPES:
-            supertypes.append(word)
+            d.supertypes.append(word)
             stream.advance()
             continue
 
@@ -340,7 +328,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         # while consecutive type words appear.
         singular = _singular(word)
         if singular in CARD_TYPES:
-            card_types.append(singular)
+            d.card_types.append(singular)
             stream.advance()
             # Collect further type words: "artifact creature" stacks two types,
             # "artifact or enchantment" and "artifact, creature, or land" list
@@ -360,12 +348,12 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                     separated = True
                 following = stream.peek_word()
                 if following is not None and _singular(following) in CARD_TYPES:
-                    card_types.append(_singular(following))
+                    d.card_types.append(_singular(following))
                     # No separator means juxtaposition ("artifact creature"),
                     # which names one permanent holding both types rather than
                     # either of two.
                     if not separated:
-                        type_match = "all"
+                        d.type_match = "all"
                     stream.advance()
                     continue
                 # "instant or **Aura** spell" (Avoid Fate, Ring of Immortals).
@@ -385,26 +373,26 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 stream.reset(probe)
                 break
             if cross_axis:
-                if type_match == "all":
+                if d.type_match == "all":
                     # "artifact creature or Aura" — a conjunction and a union in
                     # one phrase. No card prints it and one field cannot hold
                     # both readings, so it refuses rather than picking one.
                     raise stream.error(
                         "a class union cannot also be a conjunction of types"
                     )
-                any_classes = tuple(
-                    [("card_type", name) for name in card_types] + cross_axis
+                d.any_classes = tuple(
+                    [("card_type", name) for name in d.card_types] + cross_axis
                 )
-                card_types = []
-            is_card = _accept_card_noun(stream)
+                d.card_types = []
+            d.is_card = _accept_card_noun(stream)
             # "target instant or sorcery **spell**" (Miscast): the head noun
             # after a type union may be "spell", naming an object on the stack
             # rather than a permanent of those types. Recorded as the zone so
             # a lowering that resolves battlefield objects refuses the line
             # instead of reading it as "target instant or sorcery".
-            if not is_card and stream.accept_word("spell", "spells"):
-                zone = "stack"
-            saw_head = True
+            if not d.is_card and stream.accept_word("spell", "spells"):
+                d.zone = "stack"
+            d.saw_head = True
             break
 
         matched = _match_subtype(stream, 0)
@@ -417,7 +405,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 matched = probe
         if matched is not None:
             name, consumed = matched
-            subtypes.append(name)
+            d.subtypes.append(name)
             stream.advance(consumed)
             # "Djinn or Efreet", and the comma-separated form a longer list is
             # printed in: "Bird, Cat, Dog, Goat, Ox, or Snake" (Animal
@@ -438,7 +426,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 if alternative is None:
                     stream.reset(probe)
                     break
-                subtypes.append(alternative[0])
+                d.subtypes.append(alternative[0])
                 stream.advance(alternative[1])
             # **Adjacent subtypes are a conjunction, not a union.** "Urza's
             # Power-Plant" is two land types on one permanent (CR 205.3i), and
@@ -449,19 +437,19 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             #
             # Only entered when no union was collected, so "Djinn or Efreet"
             # cannot acquire an "all" it would then fail.
-            if len(subtypes) == 1:
+            if len(d.subtypes) == 1:
                 while True:
                     adjacent = _match_subtype(stream, 0)
                     if adjacent is None:
                         break
-                    subtypes.append(adjacent[0])
+                    d.subtypes.append(adjacent[0])
                     stream.advance(adjacent[1])
-                    subtype_match = "all"
+                    d.subtype_match = "all"
             following = stream.peek_word()
             if following is not None and _singular(following) in CARD_TYPES:
                 continue
-            is_card = _accept_card_noun(stream)
-            saw_head = True
+            d.is_card = _accept_card_noun(stream)
+            d.saw_head = True
             break
 
         # "any number of **tokens** created with this creature" (Tetravus). Not
@@ -470,19 +458,19 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         # one, and it must not fall through to a head noun that restricts
         # nothing.
         if word in ("token", "tokens"):
-            token_only = True
+            d.token_only = True
             stream.advance()
-            saw_head = True
+            d.saw_head = True
             break
 
         if singular in _GENERIC_NOUNS:
-            is_card = singular == "card"
+            d.is_card = singular == "card"
             stream.advance()
             # "permanent card(s)" (Ugin, the Spirit Dragon's −10): a card whose
             # type would make it a permanent. The trailing noun is recorded the
             # same way a type word's is — see _accept_card_noun.
-            if not is_card and _accept_card_noun(stream):
-                is_card = True
+            if not d.is_card and _accept_card_noun(stream):
+                d.is_card = True
             # "target spell or permanent" (the Lace cycle) unions two *generic*
             # nouns. Neither contributes a card type, so the union restricts
             # nothing and the filter is unchanged — but the tokens still have to
@@ -497,444 +485,74 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                     stream.reset(probe)
                     break
                 stream.advance()
-            saw_head = True
+            d.saw_head = True
             break
 
         break
 
-    if not saw_head and not allow_bare:
+    if not d.saw_head and not allow_bare:
         raise stream.error("expected an object noun")
 
-    not_ability_targeted_by_same_name = False
-    created_with_source = False
-    in_combat_with_source = False
-    dealt_damage_to_source_this_turn = False
+    d.not_ability_targeted_by_same_name = False
+    d.created_with_source = False
+    d.in_combat_with_source = False
+    d.dealt_damage_to_source_this_turn = False
 
-    # --- postmodifiers ---------------------------------------------------
-    while True:
-        # "you both own and control" (Obelisk of Undoing). Read before the bare
-        # "you control", which is its suffix: matching that first would consume
-        # "control" and strand "own", and — worse — would compile the card as
-        # though it read "any permanent you control", which is exactly the
-        # stolen permanent it is printed to exclude.
-        if stream.accept_phrase("you", "both", "own", "and", "control"):
-            controller = "you"
-            owned_by = "you"
-            continue
-        if stream.accept_phrase("you", "control"):
-            controller = "you"
-            continue
-        # "you don't control" (Teferi, Master of Time's −3). The lexer keeps
-        # "don't" as one word.
-        if stream.accept_phrase("you", "don't", "control"):
-            controller = "not_you"
-            continue
-        if stream.accept_phrase("an", "opponent", "controls"):
-            controller = "opponent"
-            continue
-        # "target nontoken permanent an opponent **owns**" (Bronze Tablet).
-        # Ownership, not control (CR 108.3 against CR 613 layer 2) — a card
-        # printed with "owns" excludes the permanent it stole from that
-        # opponent, and reading one as the other is exactly the mistake round
-        # 13 recorded about Obelisk of Undoing.
-        if stream.accept_phrase("an", "opponent", "owns"):
-            owned_by = "opponent"
-            continue
-        # "creatures **your opponents** control" (Massacre Wurm, Waker of
-        # Waves) — the plural spelling of the same scope: every opponent's
-        # creatures, and none of the controller's own.
-        if stream.accept_phrase("your", "opponents", "control"):
-            controller = "opponent"
-            continue
-        # "each creature target opponent controls" (Teferi, Timeless Voyager's
-        # −8): the controller is a chosen player — the spell targets the
-        # opponent, not the creatures.
-        if stream.accept_phrase("target", "opponent", "controls"):
-            controller = "target_opponent"
-            continue
-        # "that's one or more colors" (Ugin, the Spirit Dragon's −X): the
-        # object is colored — matching reads the effective colors, so a
-        # colorless artifact escapes and a Lace-painted one does not.
-        if stream.accept_phrase("that", "'s", "one", "or", "more", "colors"):
-            colored = True
-            continue
-        if stream.accept_phrase("that", "player", "controls"):
-            controller = "that_player"
-            continue
-        if stream.accept_phrase("they", "control"):
-            controller = "that_player"
-            continue
-        # "creatures **blocking this creature**" (The Wretched) — the set of
-        # blockers declared against the ability's own source (CR 509.1a).
-        # "…blocking **target attacking creature**" and "…blocking **it**"
-        # (Feint) are that relation with the other end on an object this same
-        # sentence names. Which of the three it is decides the field; what the
-        # three fields mean is on `ObjectFilter` itself.
-        # "blocking **or**…" is not this branch: "blocking or blocked by this
-        # creature" (Sentinel) is the two-sided in-combat relation read further
-        # down, and this alternative testing first would probe, fail on "or"
-        # and break the whole postmodifier scan before that one is asked —
-        # the round-11 merge found exactly that.
-        if stream.at_word("blocking") and stream.peek_word(1) != "or":
-            probe = stream.mark()
-            stream.advance()
-            token = stream.peek()
-            if token is not None and token.kind == "self":
-                stream.advance()
-                blocking_source = True
-                continue
-            if stream.accept_word("this"):
-                noun = stream.peek_word()
-                if noun is not None and _singular(noun) in _SELF_NOUNS:
-                    stream.advance()
-                    blocking_source = True
-                    continue
-            # "blocking **target** <noun phrase>": chosen as this spell is cast
-            # (CR 601.2c), so the phrase is read whole by recursing here — which
-            # is what makes it a description rather than a second vocabulary.
-            if stream.accept_word("target"):
-                blocking_target = parse_object_filter(stream)
-                continue
-            # "blocking **it**" / "blocking **that creature**": nothing is parsed
-            # because nothing is printed — the referent is this spell's target.
-            if stream.accept_word("it"):
-                blocking_bound_target = True
-                continue
-            if stream.accept_word("that"):
-                noun = stream.peek_word()
-                if noun is not None and _singular(noun) in _SELF_NOUNS:
-                    stream.advance()
-                    blocking_bound_target = True
-                    continue
-            stream.reset(probe)
-            break
-        if stream.at_word("other"):
-            probe = stream.mark()
-            stream.advance()
-            # "other than this creature" — the noun is required, so that
-            # deleting it changes the parse rather than being quietly ignored.
-            if stream.accept_phrase("than", "this"):
-                noun = stream.peek_word()
-                if noun is not None and _singular(noun) in _SELF_NOUNS:
-                    stream.advance()
-                    other_than_source = True
-                    continue
-            elif stream.accept_word("than"):
-                # "other than Halfdane" — the card excluding itself by name,
-                # which the lexer already collapsed to one SELF token. The same
-                # restriction as "other than this creature", so it sets the
-                # same field rather than minting a second one.
-                token = stream.peek()
-                if token is not None and token.kind == SELF:
-                    stream.advance()
-                    other_than_source = True
-                    continue
-            stream.reset(probe)
-            break
-        if stream.at_word("from", "in"):
-            # "from your graveyard" / "in a graveyard" — which zone the objects
-            # are in, and whose. Both halves are recorded: a handler that only
-            # searches the caster's own graveyard must be able to refuse
-            # "from a graveyard" rather than search the wrong one.
-            probe = stream.mark()
-            stream.advance()
-            owner: ast.PlayerRef | None = None
-            if stream.accept_word("your"):
-                owner = ast.PlayerRef("you")
-            # "their <zone>", and the spelled-out "that player's <zone>" (Storm
-            # Seeker): one node for both, because `parse_player_ref` already reads
-            # "they" as an alias of "that player", and a second kind here would be
-            # a second answer every count lowering had to learn.
-            elif stream.accept_word("their") or stream.accept_phrase("that", "player", "'s"):
-                owner = ast.PlayerRef("owner")
-            # "from **its owner's** graveyard" (Reincarnation). The same
-            # referent `_parse_zone` already reads on the destination side, and
-            # the same kind: "the owner of the object this sentence is about".
-            # Which object that is depends on the sentence, and is the
-            # lowering's question rather than the noun parser's.
-            elif stream.accept_phrase("its", "owner", "'s"):
-                owner = ast.PlayerRef("owner")
-            # "from **target player's** graveyard" (Drafna's Restoration): a
-            # chosen player rather than a fixed one, and a *second* target on the
-            # same line — the cards are targets too.
-            elif stream.accept_phrase("target", "player", "'s"):
-                owner = ast.PlayerRef("target_player")
-            else:
-                stream.accept_word("a", "an", "the")
-            noun = stream.peek_word()
-            if noun in _ZONE_NOUNS:
-                stream.advance()
-                zone = noun
-                zone_owner = owner
-                continue
-            stream.reset(probe)
-            break
-        if stream.at_word("with"):
-            probe = stream.mark()
-            stream.advance()
-            if stream.accept_word("power"):
-                power = parse_comparison(stream)
-                continue
-            if stream.accept_word("toughness"):
-                toughness = parse_comparison(stream)
-                continue
-            # "with a +1/+1 counter on it" (Tempered Veteran). Only the +1/+1
-            # kind is accepted: the counters the engine records under another
-            # name have no matcher, so a phrase naming one fails the line
-            # loudly rather than matching every creature.
-            if stream.at_word("a", "an"):
-                counter_probe = stream.mark()
-                stream.advance()
-                token = stream.peek()
-                if (
-                    token is not None
-                    and token.kind == PT
-                    and token.text == "+1/+1"
-                ):
-                    stream.advance()
-                    if stream.accept_word("counter") and stream.accept_phrase("on", "it"):
-                        with_plus1_counter = True
-                        continue
-                stream.reset(counter_probe)
-            # "with mana value X" (Spell Blast). Two words, so it is tried
-            # before the keyword list — "mana" alone is not a keyword, but
-            # leaving the phrase unmatched would strand "value X" and fail the
-            # whole line rather than restricting the noun phrase.
-            if stream.accept_phrase("mana", "value"):
-                mana_value = parse_comparison(stream)
-                continue
-            try:
-                with_keywords.extend(_parse_keyword_list(stream))
-                continue
-            except Exception:
-                stream.reset(probe)
-                break
-        if stream.at_word("without"):
-            probe = stream.mark()
-            stream.advance()
-            try:
-                without_keywords.extend(_parse_keyword_list(stream))
-                continue
-            except Exception:
-                stream.reset(probe)
-                break
-        if stream.at_word("that"):
-            # "…**that isn't the target of an ability from another creature
-            # named ~**" (Goblin Artisans). A guard against two copies aiming
-            # their abilities at the same spell, printed as a restriction on the
-            # noun phrase. The source is named by the asking card's own name,
-            # which the lexer has already collapsed to one SELF token — so
-            # nothing here knows a card name, and a second card printing the
-            # clause about itself gets it for free.
-            probe = stream.mark()
-            stream.advance()
-            if stream.accept_phrase(
-                "isn't", "the", "target", "of", "an", "ability",
-                "from", "another", "creature", "named",
-            ):
-                token = stream.peek()
-                if token is not None and token.kind == SELF:
-                    stream.advance()
-                    not_ability_targeted_by_same_name = True
-                    continue
-            # "…**that dealt damage to it this turn**" (Brine Hag). A history
-            # relative to the ability's source, answered from the damage record
-            # the victim carries rather than from the object's characteristics
-            # — so it is a flag the one lowering written for it reads, and every
-            # other one refuses (see ``ObjectFilter``). "This turn" is required:
-            # without it the sentence says something the record cannot answer.
-            # "…**that targets a permanent you control**" (Avoid Fate, Ring
-            # of Immortals). What the object *chose*, which is a question only
-            # a spell or an ability on the stack can be asked — so the inner
-            # noun phrase is parsed in full and recorded whole, and every
-            # lowering not written for it refuses the field by name.
-            elif stream.accept_word("targets"):
-                stream.accept_word("a", "an")
-                targets_object = parse_object_filter(stream)
-                continue
-            # "…that **were blocked by that creature this turn**" (Glyph of
-            # Doom). "That creature" is the object the sentence's delayed
-            # ability was bound to, and "this turn" is what makes the record
-            # outlive the combat the block happened in — both required, for the
-            # reason the damage clause below requires its own.
-            elif stream.accept_phrase("were", "blocked", "by", "that"):
-                noun = stream.peek_word()
-                if noun is not None and _singular(noun) in CARD_TYPES:
-                    stream.advance()
-                    if stream.accept_phrase("this", "turn"):
-                        blocked_by_bound_object = True
-                        continue
-            elif stream.accept_phrase("dealt", "damage", "to"):
-                if accept_source_reference(stream) and stream.accept_phrase(
-                    "this", "turn"
-                ):
-                    dealt_damage_to_source_this_turn = True
-                    continue
-            stream.reset(probe)
-            break
-        if stream.at_word("blocking") and stream.peek_word(1) == "or":
-            # "…**blocking or blocked by this creature**" (Sentinel, and the
-            # noun-phrase half of Abu Ja'far's sentence). The object is in
-            # combat with the ability's own source (CR 509) — a relation, not a
-            # characteristic, so the field is never emitted as a payload key;
-            # the lowering written for it carries the relation itself and every
-            # other one refuses the phrase. Both words are required: bare
-            # "blocking" is the state adjective the premodifier run already
-            # reads, and "blocked by" without an "or" would be a different
-            # (one-sided) relation this does not implement.
-            probe = stream.mark()
-            stream.advance()
-            if stream.accept_phrase("or", "blocked", "by") and accept_source_reference(stream):
-                in_combat_with_source = True
-                continue
-            stream.reset(probe)
-            break
-        if stream.at_word("created"):
-            # "…tokens **created with this creature**" (Tetravus). Which
-            # permanent made them — a fact about their history, so it is read
-            # off a record the token maker stamps rather than off the token's
-            # characteristics.
-            probe = stream.mark()
-            stream.advance()
-            if stream.accept_phrase("with", "this"):
-                noun = stream.peek_word()
-                if noun is not None and _singular(noun) in _SELF_NOUNS:
-                    stream.advance()
-                    created_with_source = True
-                    continue
-            stream.reset(probe)
-            break
-        if stream.at_word("named"):
-            # "a card **named** Frantic Inventory" — a restriction on what the
-            # object *is*, so it belongs on the filter beside every other one.
-            # The search production used to read it alone, which is why a count
-            # of cards by name had nowhere to say so.
-            probe = stream.mark()
-            stream.advance()
-            try:
-                named = parse_card_name(stream)
-            except GrammarError:
-                stream.reset(probe)
-                break
-            continue
-        if stream.at_word("attached"):
-            # "all Equipment **attached to that creature**" (Turn to Slag). Only
-            # the referents the table names are admitted: an attachment clause
-            # whose object nothing can resolve would be dropped and the sweep
-            # would take every Equipment on the board.
-            probe = stream.mark()
-            stream.advance()
-            if stream.accept_word("to"):
-                matched = next(
-                    (
-                        (words, key)
-                        for words, key in _ATTACHED_TO_REFERENTS.items()
-                        if stream.accept_phrase(*words)
-                    ),
-                    None,
-                )
-                if matched is not None:
-                    attached_to = matched[1]
-                    continue
-                # "target Aura **attached to a creature or land**" (Enchantment
-                # Alteration). Not a back-reference but a type: what the
-                # attachment is on, asked of the attachment itself. Read
-                # through the same noun-phrase parser rather than by a word
-                # list here, and admitted only when the phrase is *nothing but*
-                # card types — anything else in it would be a restriction the
-                # matcher drops, which on an Aura-mover is the wrong Aura moved.
-                nested = stream.mark()
-                stream.accept_word("a", "an")
-                try:
-                    host = parse_object_filter(stream)
-                except GrammarError:
-                    host = None
-                if host is not None and host.card_types and host == ast.ObjectFilter(
-                    card_types=host.card_types, type_match=host.type_match
-                ):
-                    attached_to_types = host.card_types
-                    continue
-                stream.reset(nested)
-            stream.reset(probe)
-            break
-        if stream.at_word("of"):
-            # "sacrifices a creature **of their choice** with flying" (Run
-            # Afoul) — who picks, printed between the head noun and the rest of
-            # the restrictions, which is why it cannot be handled by the verb's
-            # production: consuming the phrase there would strand "with flying"
-            # outside the noun phrase it narrows.
-            #
-            # Only "their" is read. "of your choice" would be a different card —
-            # the *effect's* controller choosing what someone else sacrifices —
-            # and no production wants that reading by accident.
-            probe = stream.mark()
-            stream.advance()
-            if stream.accept_phrase("their", "choice"):
-                their_choice = True
-                continue
-            # "another permanent **of that type**" (Enchantment Alteration) —
-            # the type of the object the sentence's earlier clause named.
-            # Recorded, never resolved here: the noun phrase cannot know what
-            # that object was, and a lowering with no answer for it refuses.
-            if stream.accept_phrase("that", "type"):
-                of_bound_type = True
-                continue
-            stream.reset(probe)
-            break
-        break
+    _parse_postmodifiers(stream, d, parse_object_filter)
+
 
     # A creature subtype implies the creature type: "destroy target Wall" means
     # a creature. Land/artifact subtypes ("destroy all Plains") must not, so the
     # implication is keyed on the vocabulary the subtype came from.
-    if subtypes and not card_types and all(s in CREATURE_TYPES for s in subtypes):
-        card_types.append("creature")
+    if d.subtypes and not d.card_types and all(s in CREATURE_TYPES for s in d.subtypes):
+        d.card_types.append("creature")
 
     return ast.ObjectFilter(
-        card_types=tuple(card_types),
-        type_match=type_match,
-        subtype_match=subtype_match,
-        supertypes=tuple(supertypes),
-        subtypes=tuple(subtypes),
-        colors=tuple(colors),
-        excluded_colors=tuple(excluded_colors),
-        excluded_types=tuple(excluded_types),
-        excluded_subtypes=tuple(excluded_subtypes),
-        with_keywords=tuple(with_keywords),
-        without_keywords=tuple(without_keywords),
-        not_ability_targeted_by_same_name=not_ability_targeted_by_same_name,
-        any_classes=any_classes,
-        targets_object=targets_object,
-        created_with_source=created_with_source,
-        controller=controller,
-        owner=owned_by,
-        tapped=tapped,
-        attacking=attacking,
-        blocking=blocking,
-        any_states=any_states,
-        blocking_source=blocking_source,
-        blocking_target=blocking_target,
-        blocking_bound_target=blocking_bound_target,
-        blocked_by_bound_object=blocked_by_bound_object,
-        blocked=blocked,
-        power=power,
-        toughness=toughness,
-        mana_value=mana_value,
-        zone=zone,
-        zone_owner=zone_owner,
-        is_card=is_card,
-        with_plus1_counter=with_plus1_counter,
-        nontoken=nontoken,
-        token_only=token_only,
-        their_choice=their_choice,
-        named=named,
-        other_than_source=other_than_source,
-        is_source=is_source,
-        is_enchanted=is_enchanted,
-        attached_to=attached_to,
-        attached_to_types=tuple(attached_to_types),
-        of_bound_type=of_bound_type,
-        in_combat_with_source=in_combat_with_source,
-        dealt_damage_to_source_this_turn=dealt_damage_to_source_this_turn,
+        card_types=tuple(d.card_types),
+        type_match=d.type_match,
+        subtype_match=d.subtype_match,
+        supertypes=tuple(d.supertypes),
+        subtypes=tuple(d.subtypes),
+        colors=tuple(d.colors),
+        excluded_colors=tuple(d.excluded_colors),
+        excluded_types=tuple(d.excluded_types),
+        excluded_subtypes=tuple(d.excluded_subtypes),
+        with_keywords=tuple(d.with_keywords),
+        without_keywords=tuple(d.without_keywords),
+        not_ability_targeted_by_same_name=d.not_ability_targeted_by_same_name,
+        any_classes=d.any_classes,
+        targets_object=d.targets_object,
+        created_with_source=d.created_with_source,
+        controller=d.controller,
+        owner=d.owned_by,
+        tapped=d.tapped,
+        attacking=d.attacking,
+        blocking=d.blocking,
+        any_states=d.any_states,
+        blocking_source=d.blocking_source,
+        blocking_target=d.blocking_target,
+        blocking_bound_target=d.blocking_bound_target,
+        blocked_by_bound_object=d.blocked_by_bound_object,
+        blocked=d.blocked,
+        power=d.power,
+        toughness=d.toughness,
+        mana_value=d.mana_value,
+        zone=d.zone,
+        zone_owner=d.zone_owner,
+        is_card=d.is_card,
+        with_plus1_counter=d.with_plus1_counter,
+        nontoken=d.nontoken,
+        token_only=d.token_only,
+        their_choice=d.their_choice,
+        named=d.named,
+        other_than_source=d.other_than_source,
+        is_source=d.is_source,
+        is_enchanted=d.is_enchanted,
+        attached_to=d.attached_to,
+        attached_to_types=tuple(d.attached_to_types),
+        of_bound_type=d.of_bound_type,
+        in_combat_with_source=d.in_combat_with_source,
+        dealt_damage_to_source_this_turn=d.dealt_damage_to_source_this_turn,
     )
 
 
