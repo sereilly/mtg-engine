@@ -92,7 +92,16 @@ PARSE_LAYERS = [
     # `statements`, which hands it `parse_statement` rather than being
     # imported back — a delayed trigger contains a whole statement.
     "delayed",
-    "statements", "costs", "parser",
+    # The `<subject> <verb> …` opening. Split out of `statements` at the guard
+    # below, and under it: `statements` hands it `parse_optional_action` rather
+    # than being imported back, the same inversion `delayed` makes.
+    "subject_verb",
+    "statements",
+    # The trailing clauses that attach to a sentence already parsed ("if you
+    # do", "…, then …"). Above `statements` because reading one means reading
+    # the statement it modifies.
+    "riders",
+    "costs", "parser",
 ]
 LOWER_LAYERS = ["lowering", "statics", "lower"]
 
@@ -326,4 +335,53 @@ def test_no_module_is_back_to_its_old_size():
     assert not oversized, (
         f"grammar modules back over 1,000 lines: {oversized}. Split along the "
         "family the new work belongs to rather than raising this number."
+    )
+
+
+# Modules deliberately outside the layer order, each with the reason it is not
+# a layer. Named rather than skipped, because an *un-named* module is silently
+# unguarded — which is how `amounts`, `riders` and `subject_verb` sat outside
+# this test's reach, and how the next split would have too.
+UNLAYERED = {
+    # The AST is its own family with its own ordering guard below.
+    "ast",
+    # Infrastructure the whole parser sits on: the token stream, the token
+    # kinds, the error type. Every layer may read them, so ranking them says
+    # nothing.
+    "errors", "lexer", "stream",
+    # Word tables refreshed from Scryfall (`scripts/fetch_vocabulary.py`).
+    # Data, not a production.
+    "vocabulary",
+    # `amounts` and `nouns` are mutually recursive and cannot be ranked against
+    # each other: a `Comparison` takes an `Amount` and an `ObjectFilter` takes a
+    # `Comparison`, so `nouns` imports this at module level and it breaks the
+    # cycle with a call-time import back. Ranking it either way would make the
+    # test above demand a split that the grammar itself forbids — which is what
+    # the first attempt at placing it discovered.
+    "amounts",
+    # Bridges to `engine/` rather than parsers: they import the derivation
+    # tables and the text-keyed registries and no grammar sibling at all, so
+    # they have no position among productions.
+    "derived", "registries",
+}
+
+
+def test_every_grammar_module_is_placed_or_exempt():
+    """A module nobody listed is a module this file does not guard.
+
+    The import-direction test above ranks only what `PARSE_LAYERS` and
+    `LOWER_LAYERS` name, so a new module escapes it entirely by being
+    forgotten — silently, with the suite green. This is the assertion that
+    turns forgetting into a failure.
+    """
+    declared = set(PARSE_LAYERS) | set(LOWER_LAYERS) | UNLAYERED
+    present = {p.stem for p in GRAMMAR.glob("*.py")} | {
+        p.name for p in GRAMMAR.iterdir() if p.is_dir() and not p.name.startswith("__")
+    }
+    present.discard("__init__")
+    missing = sorted(present - declared)
+    assert not missing, (
+        "grammar modules outside the layer order and not exempt: "
+        f"{missing}. Place each in PARSE_LAYERS/LOWER_LAYERS, or add it to "
+        "UNLAYERED with the reason it is not a layer."
     )

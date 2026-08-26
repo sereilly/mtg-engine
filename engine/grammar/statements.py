@@ -1,9 +1,10 @@
 """Statement productions: one whole sentence, assembled from effects.
 
-Three productions and the layer they name. `_parse_subject_verb` reads the
-common `<subject> <verb> …` shape and dispatches into `effects`;
-`parse_statement` is the entry point for one sentence; `_parse_condition` reads
-the condition half of a trigger or an intervening-if.
+`parse_statement` is the entry point for one sentence, and
+`_parse_statement_body` reads the shapes that open with something other than a
+subject. The `<subject> <verb> …` opening moved to `subject_verb` at the
+thousand-line guard, and `_parse_condition` to `conditions` before it; both are
+handed back what they need from here rather than importing upward.
 
 The narrow waist of the parser — below is a fragment, above is a *line*.
 """
@@ -34,6 +35,7 @@ from .references import parse_recipient
 from .vocabulary import CARD_TYPES
 from .stream import TokenStream
 from .conditions import _parse_condition
+from .subject_verb import parse_subject_verb
 from .rebinding import rebind_pronoun_to_condition_target
 from .phrases import (
     parse_bound_subject,
@@ -111,408 +113,6 @@ from .effects import (
 # ---------------------------------------------------------------------------
 # Statement productions
 # ---------------------------------------------------------------------------
-
-
-def _parse_subject_verb(
-    stream: TokenStream, carried_subject: ast.Recipient | None = None
-) -> ast.Statement:
-    """``<subject> <verb> …`` — the common imperative-with-subject shape.
-
-    *carried_subject* supplies the subject instead of reading one, for the tail
-    of a conjunction that shares the subject printed in front of it: "Target
-    player draws a card **and loses 1 life**" names the player once. The subject
-    the sentence actually used is left on ``stream.last_subject`` so the sentence
-    loop can hand it back on the next join.
-    """
-    # "The next time a <colour> source of your choice would deal damage to you
-    # this turn, prevent that damage." opens with a noun phrase rather than a
-    # verb, so it is tried before the subject-verb shapes below.
-    # "You and target player exchange control of …" (Juxtapose) — a whole
-    # paragraph, and it opens with a noun phrase the subject parser would read
-    # as a player and then choke on the conjunction. Refuses without consuming.
-    juxtaposition = _parse_exchange_greatest_mana_value(stream)
-    if juxtaposition is not None:
-        return juxtaposition
-    # Tempest Efreet's whole ability, which opens "Target opponent may pay …"
-    # — a subject the noun parser reads and then a "may" no production of its
-    # own would finish. Refuses without consuming.
-    efreet = _parse_random_reveal_ownership_exchange(stream)
-    if efreet is not None:
-        return efreet
-    colour_shield = _parse_source_of_choice_effect(stream)
-    if colour_shield is not None:
-        return colour_shield
-    # "All damage that would be dealt to you this turn by target attacking
-    # creature is dealt to this creature instead." (Shimian Night Stalker.) A
-    # noun phrase in front of the verb, like the one above, and refusing without
-    # consuming so every other sentence opening "All …" is untouched.
-    redirect = _parse_damage_redirect(stream)
-    if redirect is not None:
-        return redirect
-    # "The game is a draw." — a subjectless sentence, tried before the noun
-    # phrase for the same reason the colour shield is.
-    game_draw = _parse_game_is_a_draw(stream)
-    if game_draw is not None:
-        return game_draw
-    # "Choose one —" (CR 700.2). A *statement* rather than a line shape so the
-    # three places a modal head is printed — bare on a spell, after an
-    # activation cost, after a trigger condition — all read it through the line
-    # layer that already handles those prefixes. It refuses quietly, so every
-    # other "choose …" sentence keeps the backlog reason it had.
-    if stream.at_word("choose"):
-        modal = _parse_modal_head(stream)
-        if modal is not None:
-            return modal
-    # "Flip a coin." (CR 705.1) — a bare imperative like the ones below, and
-    # the only production that reads the word, so any other "flip …" sentence
-    # (Chaos Orb's) falls through untouched.
-    if stream.at_word("flip"):
-        flip = _parse_flip_coin(stream)
-        if flip is not None:
-            return flip
-    # A bare imperative verb has an implied "you"/the source as subject.
-    if stream.at_word("destroy"):
-        return _parse_destroy(stream)
-    if stream.at_word("tap", "untap"):
-        return _parse_tap_untap(stream)
-    if stream.at_word("attach"):
-        return _parse_attach(stream)
-    if stream.at_word("exchange"):
-        return _parse_exchange_control(stream)
-    if stream.at_word("put"):
-        # "Put all cards exiled with this artifact into their owner's hand."
-        # (Knowledge Vault.) Tried first and non-consuming on refusal: the
-        # counter production reads the noun after "put" as a counter kind and
-        # would fail this sentence with "expected 'counter or counters'",
-        # which is a refusal site that names the wrong problem.
-        linked = _parse_put_exiled_with_source(stream)
-        if linked is not None:
-            return linked
-        return _parse_put_counter(stream)
-    if stream.at_word("double"):
-        return _parse_double(stream)
-    if stream.at_word("switch"):
-        return _parse_switch_pt(stream)
-    if stream.at_word("remove"):
-        removal = _parse_remove_counter(stream)
-        if removal is not None:
-            return removal
-        # "…and remove it from combat" (Disharmony). Tried after the counter
-        # removal, and non-consuming on refusal, so every other "remove …"
-        # sentence keeps the refusal it has today.
-        combat_removal = _parse_remove_from_combat(stream)
-        if combat_removal is not None:
-            return combat_removal
-    if stream.at_word("change"):
-        # The base-P/T rewrite is tried first and refuses without consuming
-        # when the sentence is "change the text of …", so the two readings of
-        # the verb cannot shadow each other.
-        base_pt = _parse_change_base_pt(stream)
-        if base_pt is not None:
-            return base_pt
-        return _parse_change_text(stream)
-    if stream.at_word("gain"):
-        control = _parse_gain_control(stream)
-        if control is not None:
-            return control
-    if stream.at_word("create"):
-        return _parse_create_token(stream)
-    if stream.at_word("return"):
-        return _parse_return(stream)
-    if stream.at_word("prevent"):
-        return _parse_prevent(stream)
-    if stream.at_word("sacrifice"):
-        # Transmute Artifact's whole paragraph opens with the same two words a
-        # bare sacrifice does, and that match would leave six sentences
-        # unconsumed — so it is tried first, and refuses without consuming.
-        mark_transmute = stream.mark()
-        transmute = _parse_transmute_by_sacrifice(stream)
-        if transmute is not None:
-            return transmute
-        stream.reset(mark_transmute)
-        stream.advance()
-        return _parse_sacrifice(stream, ast.PlayerRef("you"))
-    if stream.at_word("regenerate"):
-        stream.advance()
-        subject = parse_recipient(stream)
-        if subject is None:
-            raise stream.error("expected something to regenerate")
-        return ast.Regenerate(subject)
-    # "Exile all … from your graveyard **until this artifact leaves the
-    # battlefield**" (Idol of Endurance). Read before the general exile, whose
-    # sweep is over battlefield permanents and whose match would strand the
-    # duration as unconsumed text.
-    mark_idol = stream.mark()
-    idol = _parse_exile_graveyard_until_leaves(stream)
-    if idol is not None:
-        return idol
-    stream.reset(mark_idol)
-    # Tawnos's Coffin's whole four-sentence effect, read before the general
-    # exile for the same reason Idol's is: the sentences behind the first one
-    # are not effects of their own, and a general match would leave them as
-    # unconsumed text.
-    mark_coffin = stream.mark()
-    coffin = _parse_exile_until_leaves_or_untaps(stream)
-    if coffin is not None:
-        return coffin
-    stream.reset(mark_coffin)
-    if stream.at_word("exile"):
-        # Bronze Tablet's whole paragraph opens "Exile this artifact and …", and
-        # the ordinary exile would match its first clause and strand three
-        # sentences. Refuses without consuming.
-        mark_tablet = stream.mark()
-        tablet = _parse_ownership_exchange_unless_paid(stream)
-        if tablet is not None:
-            return tablet
-        stream.reset(mark_tablet)
-        # "Exile the top three cards of your library" moves library cards, not
-        # a permanent — tried first because the recipient parser below refuses
-        # "the top" and would fail the sentence with a misleading reason.
-        from_library = _parse_exile_top_of_library(stream)
-        if from_library is not None:
-            return from_library
-        # "Exile target player's graveyard" is a whole zone, which the
-        # recipient parser below would read as the player alone and then
-        # choke on the possessive.
-        whole_graveyard = _parse_exile_graveyard(stream)
-        if whole_graveyard is not None:
-            return whole_graveyard
-        stream.advance()
-        subject = parse_recipient(stream)
-        if subject is None:
-            raise stream.error("expected something to exile")
-        return ast.Exile(subject, _parse_duration(stream))
-    if stream.at_word("add"):
-        return _parse_add_mana(stream)
-    if stream.at_word("look"):
-        return _parse_look_at_hand(stream)
-    if stream.at_word("search"):
-        return _parse_search_library(stream)
-    # "Scry N" has no subject for the same reason "draw a card" has none: the
-    # effect's controller is implied. It belongs with the other bare
-    # imperatives rather than in the subject-verb table below, which is why
-    # `Scry 1.` used to die on "expected a subject" — and why every scry line
-    # in the pool produced no instruction at all while its card still reported
-    # supported on the strength of its other line.
-    if stream.at_word("scry"):
-        return _parse_scry(stream)
-    if stream.at_word("reveal"):
-        return _parse_reveal_top(stream)
-    if stream.at_word("take"):
-        return _parse_extra_turn(stream)
-    if stream.at_word("end"):
-        return _parse_end_the_turn(stream)
-    if stream.at_word("copy"):
-        return _parse_copy_that_spell(stream)
-    # "**Each opponent** creates a … token" (Pursued Whale). The token maker
-    # with a different recipient, which is payload rather than a second
-    # production — everything else about the sentence is identical.
-    mark_recipient = stream.mark()
-    if stream.accept_phrase("each", "opponent") and stream.at_word("creates"):
-        token = _parse_create_token(stream)
-        assert isinstance(token, ast.CreateToken)
-        return dataclasses.replace(token, recipient_players="each_opponent")
-    stream.reset(mark_recipient)
-    if stream.at_word("choose"):
-        # "Choose a number between 0 and 7." (Shapeshifter.) Tried first and
-        # non-consuming on refusal, so every other "choose" sentence still
-        # reaches the naming production behind it.
-        chosen_number = _parse_choose_number(stream)
-        if chosen_number is not None:
-            return chosen_number
-        # Nebuchadnezzar's naming paragraph. Tried before Necromentia's, which
-        # is the last resort here and raises rather than refusing — the two
-        # differ from the fifth word on, and this one declines without
-        # consuming so nothing else loses a reading.
-        random_reveal = _parse_name_then_random_reveal(stream)
-        if random_reveal is not None:
-            return random_reveal
-        return _parse_name_and_strip(stream)
-    if stream.at_word("draw"):
-        return _parse_draw(stream, ast.PlayerRef("you"))
-    # A bare "discard N cards" is the effect's *controller* discarding, the same
-    # implied subject a bare "draw" already carries. Without it "Draw two cards,
-    # then discard three cards" strands its second clause and the whole line
-    # fails; with it the line parses and lowering decides whether the pair has a
-    # handler.
-    if stream.at_word("discard"):
-        return _parse_discard(stream, ast.PlayerRef("you"))
-    # "Mill four cards." — the same implied controller a bare draw or discard
-    # carries. Without this the line dies on "expected a subject", which is
-    # what the subject-verb table below says about a sentence that has none.
-    if stream.at_word("mill"):
-        return _parse_mill(stream, ast.PlayerRef("you"))
-    # "Ante the top card of your library." — a bare imperative like the draw
-    # and discard above it, and the shape Rebirth prints inside its offer.
-    if stream.at_word("ante"):
-        ante = _parse_ante(stream)
-        if ante is not None:
-            return ante
-    if stream.at_word("counter"):
-        return _parse_counter(stream)
-    if stream.at_word("enchant"):
-        return _parse_enchant(stream)
-
-    # "That player's life total becomes 20." (Rebirth.) The subject is a
-    # possessive **of a player**, which the recipient parser below reads down
-    # to the player and then chokes on the "'s". Refuses without consuming.
-    life_total = _parse_life_total_becomes(stream)
-    if life_total is not None:
-        return life_total
-
-    mark = stream.mark()
-
-    # The self-reference token the lexer emits for the card's own name, plus
-    # the "it" of a trigger's remainder clause, both denote the source.
-    source_spec: ast.Recipient | None = carried_subject
-    if carried_subject is not None:
-        pass
-    elif stream.at_kind(SELF):
-        stream.advance()
-        source_spec = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
-    elif stream.at_word("it"):
-        stream.advance()
-        source_spec = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
-    else:
-        # "**That creature** deals damage equal to its power to …" (Hunter's
-        # Edge): a back-reference to the object the *previous sentence* chose.
-        # Read only in the subject position, and deliberately not taught to the
-        # shared noun parser — `effects/board.py` explains why, and the reason
-        # holds: the phrase turns up all over the pool and a filter naming a
-        # card type nobody bound would lower through every one of them.
-        #
-        # Here it is safe because the quantifier is refused by default: no
-        # lowering accepts "that" (`_is_target` answers False), so a sentence
-        # that reaches one fails *by name* instead of failing to parse at all.
-        # A parse error would blame the subject for a missing production.
-        #
-        # `parse_recipient` runs first, and that order is load-bearing: "that
-        # creature**'s controller**" is a *player* reference it already reads,
-        # and a bound-subject reader that got there first would eat the noun and
-        # strand the possessive — which is exactly what it did to Gloom Sower.
-        source_spec = parse_recipient(stream) or parse_bound_subject(stream)
-
-    if source_spec is None:
-        stream.reset(mark)
-        raise stream.error("expected a subject")
-    stream.last_subject = source_spec
-
-    token = stream.peek()
-    if token is None:
-        stream.reset(mark)
-        raise stream.error("expected a verb")
-
-    if token.kind == WORD:
-        source_target = source_spec if isinstance(source_spec, ast.TargetSpec) else None
-        if token.text in ("deals", "deal"):
-            return _parse_damage(stream, source_target)
-        if token.text in ("fights", "fight"):
-            return _parse_fight(stream, source_spec)
-        if token.text in ("gets", "get"):
-            return _parse_gets(stream, source_spec)
-        if token.text in ("gains", "gain"):
-            return _parse_gains(stream, source_spec)
-        if token.text in ("loses", "lose"):
-            return _parse_loses(stream, source_spec)
-        if token.text in ("wins", "win"):
-            return _parse_wins(stream, source_spec)
-        if token.text in ("has", "have"):
-            return _parse_has(stream, source_spec)
-        if token.text in ("adds", "add") and isinstance(source_spec, ast.PlayerRef):
-            return _parse_player_adds_mana(stream, source_spec)
-        if token.text in ("draws", "draw") and isinstance(source_spec, ast.PlayerRef):
-            return _parse_draw(stream, source_spec)
-        if token.text in ("discards", "discard") and isinstance(source_spec, ast.PlayerRef):
-            return _parse_discard(stream, source_spec)
-        if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
-            return _parse_mill(stream, source_spec)
-        # "Target player **chooses a card name**, then reveals the top card of
-        # their library…" (Petra Sphinx) — a paragraph, because the two
-        # sentences after it test the name and the card this one produced.
-        # Dispatched on the verb like every other player action; the production
-        # reads its own words to the end.
-        if token.text in ("chooses", "choose") and isinstance(source_spec, ast.PlayerRef):
-            return _parse_name_then_reveal_top(stream, source_spec)
-        # "Each opponent sacrifices a creature" (Goremand). The AST node has
-        # carried its player since it was written; only the *bare* imperative
-        # ("Sacrifice a creature", which means you) had a production, so a
-        # printed subject was an unrecognized verb.
-        if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):
-            stream.advance()
-            return _parse_sacrifice(stream, source_spec)
-        # "Each player antes the top card of their library." (Demonic
-        # Attorney.) The subject is who antes (CR 407.4: a card is anted by
-        # its owner), so it is handed to the production rather than read back
-        # off the possessive.
-        if token.text in ("antes", "ante") and isinstance(source_spec, ast.PlayerRef):
-            ante = _parse_ante(stream, source_spec)
-            if ante is not None:
-                return ante
-        # "**Each player may** ante the top card of their library." (Rebirth.)
-        # The offer with a printed subject other than "you", which the bare
-        # "you may" branch in `_parse_statement_body` cannot reach. One offer
-        # node either way; who is offered is the actor field it already has,
-        # and `handlers/control_flow.may` arms one prompt per named seat.
-        if token.text == "may" and isinstance(source_spec, ast.PlayerRef):
-            mark_may = stream.mark()
-            stream.advance()
-            try:
-                return ast.May(source_spec, action=_parse_optional_action(stream))
-            except GrammarError:
-                stream.reset(mark_may)
-        # "This creature **assigns no combat damage** this turn." (Floral
-        # Spuzzem.) Non-consuming on refusal, so any other sentence opening
-        # with the word keeps its own refusal rather than failing on words this
-        # production expected.
-        if token.text in ("assigns", "assign"):
-            no_damage = _parse_assigns_no_combat_damage(stream, source_spec)
-            if no_damage is not None:
-                return no_damage
-        if token.text in ("becomes", "become"):
-            return _parse_becomes(stream, source_spec)
-        if token.text in ("phases", "phase"):
-            # "Target creature you don't control phases out." (Teferi, Master
-            # of Time) / "Each creature target opponent controls phases out.
-            # Until the end of your next turn, they can't phase in." (Teferi,
-            # Timeless Voyager). The rider is read here so its words cannot be
-            # shed — a phase-out that could be answered by phasing straight
-            # back in is a strictly smaller effect.
-            stream.advance()
-            stream.expect_word("out")
-            blocked = False
-            mark2 = stream.mark()
-            if stream.accept_punct("."):
-                if (
-                    stream.accept_phrase("until", "the", "end", "of", "your", "next", "turn")
-                    and (stream.accept_punct(",") or True)
-                    and stream.accept_phrase("they", "can't", "phase", "in")
-                ):
-                    blocked = True
-                else:
-                    stream.reset(mark2)
-            return ast.PhaseOut(source_spec, cant_phase_in_until_your_next_turn=blocked)
-        # "<subject> can attack [this turn] as though it didn't have defender"
-        # (CR 609.4). Tried before nothing else claims the word — "can" opens no
-        # other production — and non-consuming on refusal, so a sentence this
-        # cannot finish keeps the refusal it has today.
-        if token.text == "can":
-            permission = _parse_can_attack_as_though(stream, source_spec)
-            if permission is not None:
-                return permission
-        if token.text in ("can't", "cannot"):
-            return _parse_cant_attack_or_block(stream, source_spec)
-        # "Those creatures **don't untap** during their controller's next untap
-        # step." (Frost Breath.) The verb is checked before dispatching, not
-        # inside the production: "You don't lose the game for having 0 or less
-        # life" (Lich) is the same auxiliary, and a dispatch on the auxiliary
-        # alone replaced its "unrecognized effect verb" with a refusal naming a
-        # word Lich never prints. A line this branch cannot finish keeps the
-        # refusal it already had.
-        if token.text in ("don't", "doesn't") and stream.peek_word(1) == "untap":
-            return _parse_doesnt_untap_next_step(stream, source_spec)
-
-    stream.reset(mark)
-    raise stream.error("unrecognized effect verb")
 
 
 def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.Statement:
@@ -823,7 +423,9 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         else:
             stream.reset(mark)
 
-    statement = _parse_subject_verb(stream)
+    statement = parse_subject_verb(
+        stream, parse_optional_action=_parse_optional_action
+    )
     carried = stream.last_subject
 
     # "<statement>, then <statement>" / "<statement> and <statement>" /
@@ -871,7 +473,11 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             # tests/engine/test_grammar_parser.py and it is right.
             if isinstance(carried, ast.PlayerRef):
                 try:
-                    follow = _parse_subject_verb(stream, carried_subject=carried)
+                    follow = parse_subject_verb(
+                        stream,
+                        carried_subject=carried,
+                        parse_optional_action=_parse_optional_action,
+                    )
                 except GrammarError:
                     stream.reset(mark)
                     break
@@ -951,24 +557,6 @@ def _parse_where_x(stream: TokenStream) -> ast.Amount | None:
     the statement parser has always called it by.
     """
     return parse_where_x_definition(stream)
-
-
-def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:
-    """``Copy that spell. You may choose new targets for the copy.``
-
-    Both sentences, every word. The second is CR 707.10's choice and part of
-    what the card does; consuming it is also what stops this production
-    claiming a bare "copy that spell" no card prints.
-    """
-    for word in ("copy", "that", "spell"):
-        stream.expect_word(word)
-    if not stream.accept_punct("."):
-        raise stream.error("expected the new-targets sentence after the copy")
-    for word in (
-        "you", "may", "choose", "new", "targets", "for", "the", "copy",
-    ):
-        stream.expect_word(word)
-    return ast.CopyThatSpell()
 
 
 def _parse_optional_action(stream: TokenStream) -> ast.Statement:
