@@ -259,6 +259,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # which registry dispatches it.
     "upkeep_pay_or_destroy_self": "upkeep",
     "upkeep_pay_to_untap_self": "upkeep",
+    # The Aura twin (Paralyze): the same offer made to the enchanted
+    # permanent's controller, untapping what the Aura is on. Same family, same
+    # registry, so GRAMMAR_CATEGORIES is unchanged.
+    "upkeep_pay_to_untap_enchanted": "upkeep",
     "discard_target_cards": "zones",
     # The controller's own chosen discard (Jeskai Elder's if-you-do branch).
     "discard_controller_cards": "zones",
@@ -407,6 +411,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Double Vision. Its own category name would be a family of one; copying a
     # spell on the stack is the same family as countering one.
     "copy_triggering_spell": "counterspells",
+    # Chain Lightning. Copying the *resolving* spell rather than one still on
+    # the stack; the same family either way, so GRAMMAR_CATEGORIES is unchanged.
+    "copy_this_spell": "counterspells",
     "tap_or_untap_target": "tapping",
     # "Those creatures don't untap during their controller's next untap step."
     # (Frost Breath.) The same category as the tap that names them: what the

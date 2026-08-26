@@ -461,12 +461,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'this way':
             _line('phase_out_target_creature_until_source_leaves', 'spell_pattern'),
     },
-    'Paralyze': {
-        "at the beginning of the upkeep of enchanted creature's controller, "
-        'that player may pay {4}. if the player does, untap the creature':
-            _line('upkeep_pay_to_untap_enchanted', 'upkeep_effect', mana={'W': 0,
-                'U': 0, 'B': 0, 'R': 0, 'G': 0, 'C': 0, 'generic': 4}),
-    },
     'Personal Incarnation': {
         "{0}: the next 1 damage that would be dealt to this creature this turn is "
         "dealt to its owner instead. only this creatures owner may activate this "

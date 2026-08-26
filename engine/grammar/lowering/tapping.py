@@ -348,14 +348,39 @@ def _fused_upkeep_pay_to_untap(
     so a near miss ("…untap target creature", "…and you gain 1 life") drops back
     to the ordinary lowering and is refused there by name.
     """
-    if node.event.kind != "upkeep_self" or node.intervening_if is not None:
+    # "At the beginning of the upkeep of **enchanted creature's controller**,
+    # **that player** may pay {4}. If the player does, untap the creature."
+    # (Paralyze.) The same sentence with the offer made to somebody else and the
+    # untap landing on the attached permanent, which is a second dispatcher in
+    # the same registry (``upkeep_pay_to_untap_enchanted``) rather than a second
+    # shape — so it is one production with two rows, and the row decides both
+    # who is offered and which kind comes out.
+    #
+    # Fused for a sharper version of the reason above: the decomposed
+    # ``may(pay, untap)`` reads "the creature" as the **source**, which on an
+    # Aura is the Aura, and the upkeep step gathers this trigger by instruction
+    # kind — so the truer-looking reading is a card that compiles clean, is
+    # never gathered, and never offers the payment at all.
+    if node.intervening_if is not None:
+        return None
+    fused_kind = {
+        "upkeep_self": "upkeep_pay_to_untap_self",
+        "upkeep_enchanted_controller": "upkeep_pay_to_untap_enchanted",
+    }.get(node.event.kind)
+    if fused_kind is None:
         return None
     statement = node.statement
     if not isinstance(statement, ast.May):
         return None
     if statement.action is not None or statement.otherwise is not None:
         return None
-    if not isinstance(statement.cost, ast.ManaCost) or not _is_you(statement.actor):
+    if not isinstance(statement.cost, ast.ManaCost):
+        return None
+    offered_to_you = node.event.kind == "upkeep_self"
+    if _is_you(statement.actor) is not offered_to_you:
+        # Whose upkeep it is decides who is offered: "your upkeep" offers you,
+        # the enchanted controller's offers "that player". A row whose actor
+        # does not match its condition is a sentence neither handler implements.
         return None
     # The consequence is untapping the source and nothing else. `untap_self`'s
     # handler is not consulted here — the fused handler untaps `ctx.permanent`
@@ -366,7 +391,7 @@ def _fused_upkeep_pay_to_untap(
         return None
     return (
         OracleInstruction(
-            "upkeep_pay_to_untap_self", "", {"mana": _full_mana_payload(statement.cost)}
+            fused_kind, "", {"mana": _full_mana_payload(statement.cost)}
         ),
     )
 

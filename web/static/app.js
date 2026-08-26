@@ -2428,6 +2428,15 @@ function getReflexiveTargetInfo(state = currentState) {
   return info;
 }
 
+// Chain Lightning: the copy's controller re-aiming it (CR 707.10).
+function getCopySpellTargetInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.copy_spell_target;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.candidates) || info.candidates.length === 0) return null;
+  return info;
+}
+
 // Siege Striker: "You may tap any number of untapped creatures you control."
 function getTapAnyNumberInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -2872,6 +2881,36 @@ function getPromptBoardTargeting(state = currentState) {
           target_permanent_id: byKey.get(`${targetSeat}-${idx}`),
         }),
       invalidHint: "Only a creature the trigger named when it was created can be chosen.",
+    });
+  }
+
+  // Chain Lightning: the copy's new target. "Any target" is a player or a
+  // permanent (CR 115.4), so both faces and cards are clickable here.
+  const copySpellTargetInfo = getCopySpellTargetInfo(state);
+  if (copySpellTargetInfo) {
+    const candidates = copySpellTargetInfo.candidates || [];
+    const byKey = new Map(
+      candidates
+        .filter((c) => c.kind !== "player")
+        .map((c) => [`${c.seat}-${c.index}`, c.id]),
+    );
+    const seats = candidates.filter((c) => c.kind === "player").map((c) => c.seat);
+    return promptTargeting({
+      permanentKeys: [...byKey.keys()],
+      playerSeats: seats,
+      onPermanent: (targetSeat, idx) =>
+        submitPromptAction({
+          seat,
+          action: "copy_spell_target_confirm",
+          target_permanent_id: byKey.get(`${targetSeat}-${idx}`),
+        }),
+      onPlayer: (targetSeat) =>
+        submitPromptAction({
+          seat,
+          action: "copy_spell_target_confirm",
+          target_seat: targetSeat,
+        }),
+      invalidHint: "Only a legal target for the copied spell can be chosen.",
     });
   }
 
@@ -4485,6 +4524,24 @@ function applyReflexiveTargetPrompt(info) {
     `${info.card_name || "The ability"}: its reflexive trigger needs a target.`;
   q("promptSteps").innerHTML =
     "<div>Action: click one of the highlighted creatures on the battlefield.</div>";
+}
+
+// Chain Lightning: the copy's controller may re-aim it (CR 707.10). Keeping the
+// original target is an answer too — clicking it again is how it is given.
+function applyCopySpellTargetPrompt(info) {
+  const panel = q("activationPanel");
+  panel.classList.remove("hidden");
+  q("promptOkBtn").classList.add("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  q("promptCustomOkBtn").disabled = true;
+  q("promptTitle").textContent = "Choose a target for the copy";
+  q("promptBody").textContent =
+    `${info.card_name || "The spell"}: you may choose a new target for the copy.`;
+  q("promptSteps").innerHTML =
+    "<div>Action: click a highlighted permanent or player. Click the copy's " +
+    "current target to leave it where it is.</div>";
 }
 
 // Siege Striker: toggle creatures on the board, read the count back here, confirm.
@@ -6754,6 +6811,12 @@ function renderActivationPrompt() {
   const reflexiveTargetInfo = getReflexiveTargetInfo();
   if (reflexiveTargetInfo) {
     applyReflexiveTargetPrompt(reflexiveTargetInfo);
+    return;
+  }
+
+  const copySpellTargetInfo = getCopySpellTargetInfo();
+  if (copySpellTargetInfo) {
+    applyCopySpellTargetPrompt(copySpellTargetInfo);
     return;
   }
 

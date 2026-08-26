@@ -51,6 +51,7 @@ ActionKind = Literal[
     "tap_any_number_confirm",
     "trigger_target_confirm",
     "reflexive_target_confirm",
+    "copy_spell_target_confirm",
     "permanent_choice_confirm",
     "untap_up_to_confirm",
     "look_top_pick_confirm",

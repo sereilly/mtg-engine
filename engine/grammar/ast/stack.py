@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from ._core import (
     ManaCost,
+    PlayerRef,
     TargetSpec,
 )
 
@@ -104,6 +105,34 @@ class CopyThatSpell:
     choice would be a different card. Consuming it is also what keeps this
     production from claiming a bare "copy that spell" nothing prints.
     """
+
+
+@dataclass(frozen=True)
+class CopySpell:
+    """``Copy this spell. You may choose a new target for that copy.``
+    (Chain Lightning.)
+
+    The **resolving** spell, not the one a trigger fired on: while a spell is
+    resolving this engine has already popped it off ``Game.stack`` (see
+    ``mixins/stack/resolution``), so "this spell" is an object no scan of the
+    stack can reach — it is ``Game.resolving_items[-1]``. That is the whole
+    difference from :class:`CopyThatSpell`, which names an object still up
+    there, and the reason the two are separate nodes rather than one with a
+    flag: they are copies of different things found in different places.
+
+    *controller* is who gets the copy (CR 707.10a). It is printed as the
+    sentence's subject and defaults to the spell's own controller, because
+    "Copy this spell" with no subject means you — but Chain Lightning's copy
+    goes to the player who paid for it, which is a seat the resolving spell's
+    controller may not be.
+
+    *may_choose_new_target* records CR 707.10's offer. Recorded rather than
+    consumed and dropped: a copy that could never be re-aimed is a strictly
+    different card, and Chain Lightning's whole play is aiming it back.
+    """
+
+    controller: PlayerRef
+    may_choose_new_target: bool = False
 
 
 @dataclass(frozen=True)

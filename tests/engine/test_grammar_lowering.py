@@ -1824,32 +1824,52 @@ def test_enchanted_land_upkeep_is_dispatched_like_its_peers():
             "player. Prevent X of that damage, where X is the amount of mana that "
             "player paid this way.",
         ),
-        (
-            "Paralyze",
-            "At the beginning of the upkeep of enchanted creature's controller, "
-            "that player may pay {4}. If the player does, untap the creature.",
-        ),
     ],
 )
 def test_the_new_trigger_phrase_does_not_drag_in_effects_it_cannot_read(card, line):
     """Adding a trigger phrase widens what reaches the effect productions, and
-    these two are the cards that reach them and must still be refused.
+    Power Leak is the card that reaches them and must still be refused: its
+    damage is scaled by a payment the grammar has no node for, so it falls back
+    to the legacy rules whole rather than compiling onto a nearby handler.
 
-    Power Leak's damage is scaled by a payment the grammar has no node for;
-    Paralyze's optional untap decomposes into a ``may`` that no upkeep handler
-    is keyed to. Each falls back to the legacy rules whole rather than compiling
-    onto a nearby handler.
-
-    Unstable Mutation used to be the third. Its "put a -1/-1 counter on **that
-    creature**" is now a production — the bound-object branch the removal side
-    already had, mirrored onto the placement — so the line lowers to
+    Unstable Mutation used to be one of three. Its "put a -1/-1 counter on
+    **that creature**" is now a production — the bound-object branch the removal
+    side already had, mirrored onto the placement — so the line lowers to
     ``add_pt_counters_to_attached`` with the CR 122.1a pair as payload, and the
     card-name hook that spelled out "-1/-1" is gone. It was the entry that kept
     Takklemaggot's identical sentence, printed with -0/-1, out.
+
+    Paralyze was the third, and the test below is what replaced it.
     """
     result = compile_line(line, card_name=card)
 
     assert not result.parsed
+
+
+def test_paralyzes_upkeep_offer_lowers_to_the_kind_its_handler_is_keyed_to():
+    """The refusal above used to cover Paralyze too, and its reason has expired.
+
+    "That player may pay {N}" is a production now (Chain Lightning needs it), so
+    the line no longer refuses — and a decomposed ``may(pay, untap)`` would be
+    the wrong reading twice over: "the creature" lowers to the **source**, which
+    on an Aura is the Aura, and the upkeep step gathers this trigger by
+    instruction kind, so the card would compile clean and never offer anything.
+    The fused kind is what ``engine/phases/upkeep_effects.py`` is keyed to, and
+    it is the one the card-name hook used to supply.
+    """
+    result = compile_line(
+        "At the beginning of the upkeep of enchanted creature's controller, "
+        "that player may pay {4}. If the player does, untap the creature.",
+        card_name="Paralyze",
+    )
+
+    assert result.parsed
+    assert [(i.kind, dict(i.payload)) for i in result.instructions] == [
+        (
+            "upkeep_pay_to_untap_enchanted",
+            {"mana": {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 4}},
+        )
+    ]
 
 
 def test_black_vise_lowers_the_whole_count_including_the_minus_four():

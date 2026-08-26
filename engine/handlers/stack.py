@@ -471,3 +471,87 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
     else:
         game.log.append(f"{card.name} resolved with no spell to counter")
     return True, "resolved"
+
+
+@effect_handler("copy_this_spell")
+def copy_this_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…they may copy this spell and may choose a new target for that copy."
+    (Chain Lightning.)
+
+    Three things separate this from ``copy_top_stack_spell`` next door, and the
+    first is why it cannot reuse it:
+
+    1. **"This spell" is not on the stack.** ``mixins/stack/resolution`` pops a
+       stack object *before* executing it, so while Chain Lightning is
+       resolving the topmost instant or sorcery up there is somebody else's —
+       and a copy-the-top handler would copy that one. The resolving object is
+       ``Game.resolving_items``, which is pushed around exactly this window;
+       matched by card identity so a nested resolution cannot be mistaken for
+       the outer one.
+    2. **The copy is not the caster's.** CR 707.10a: the copy is controlled by
+       whoever the effect says, and here that is the player who paid — read off
+       the payload the sentence's printed subject lowered to, never assumed.
+    3. **The re-aiming is that seat's choice**, offered as a pending choice so
+       an interactive player answers it and a non-interactive one takes the
+       stated default at once (see ``arm_copy_spell_target``).
+    """
+    who = instruction.payload.get("controller", "you")
+    # "you" is the resolving spell's controller (CR 109.5); every other printed
+    # subject this sentence can carry names the seat an earlier step recorded,
+    # which is what `context.target` holds.
+    holder = context.caster if who == "you" else (context.target or context.caster)
+    seat = game.players.index(holder)
+
+    # CR 707.10: the copy starts with the original's characteristics and
+    # choices. They come from the **resolution context**, not from a stack
+    # object, and that is the whole difficulty of "this spell": by the time an
+    # instruction of a spell runs, this engine has popped that spell off
+    # ``Game.stack``, and by the time an *optional* branch of it runs — the
+    # branch a player had to be asked about — the spell may have finished
+    # resolving and be in a graveyard. A scan of either place finds the wrong
+    # object or none. The context is the one thing that outlives both, and it
+    # carries every choice a copy needs.
+    #
+    # ``resolving_items`` is preferred where it still has the object, because it
+    # additionally carries what the context does not (the mode chosen, a spell
+    # this one targeted); it is a refinement of the answer, never the answer.
+    original = next(
+        (
+            item
+            for item in reversed(getattr(game, "resolving_items", None) or ())
+            if item.card is context.card
+        ),
+        None,
+    )
+    copy = StackItem(
+        card=context.card,
+        caster_index=seat,
+        target_player_index=(
+            original.target_player_index if original is not None
+            else game.players.index(context.target) if context.target is not None
+            else None
+        ),
+        target_permanent_index=(
+            original.target_permanent_index if original is not None
+            else context.target_permanent_index
+        ),
+        target_permanent_id=(
+            original.target_permanent_id if original is not None
+            else context.target_permanent_id
+        ),
+        x_value=original.x_value if original is not None else context.x_value,
+        choices=dict(original.choices if original is not None else context.choices),
+        chosen_mode_index=original.chosen_mode_index if original is not None else None,
+        target_stack_item=(
+            original.target_stack_item if original is not None
+            else context.stack_target
+        ),
+        is_copy=True,
+    )
+    game._stack_push(item=copy, targets_already_chosen=True)
+    game.log.append(
+        f"{game.players[seat].name} copied {context.card.name} (copy put on the stack)"
+    )
+    if instruction.payload.get("may_choose_new_target"):
+        game.arm_copy_spell_target(seat, copy)
+    return True, "resolved"

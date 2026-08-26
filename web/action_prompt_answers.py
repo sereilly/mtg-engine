@@ -170,6 +170,35 @@ def _action_reflexive_target_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="invalid target")
 
+@action_handler("copy_spell_target_confirm")
+def _action_copy_spell_target_confirm(session, req, seat_type):
+    """CR 707.10: the copy's controller re-aiming it, by stable id or by seat.
+
+    "Any target" is a player *or* a permanent (CR 115.4), so this answer carries
+    either — and both are checked back against the list the prompt offered, so a
+    client that invents a candidate is refused rather than obeyed.
+    """
+    pending = next(
+        (c for c in session.game.pending_choices_of("copy_spell_target")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no copy target pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.target_permanent_id is None and req.target_seat is None:
+        raise HTTPException(
+            status_code=400, detail="target_permanent_id or target_seat is required"
+        )
+    ok = session.game.confirm_copy_spell_target(
+        req.seat,
+        permanent_id=req.target_permanent_id,
+        target_seat=req.target_seat,
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail="invalid target")
+
+
 @action_handler("permanent_choice_confirm")
 def _action_permanent_choice_confirm(session, req, seat_type):
     # The general "a permanent chosen as the spell resolves" prompt. Answered by

@@ -2726,6 +2726,134 @@ class PendingChoicesMixin:
                 return
         self.discard_pending_choice(choice)
 
+    # -- "You may choose a new target for that copy" (CR 707.10) ------------
+
+    def arm_copy_spell_target(self, player_index: int, copy_item) -> None:
+        """Offer the copy's controller the re-aiming CR 707.10 gives them.
+
+        The candidate list is the *same* one the caster's picker would be shown
+        for the card — ``derive_cast_spec`` plus ``_enumerate_targets`` — so the
+        engine and the picker cannot disagree about what is a legal target; the
+        answer is checked back against this list rather than against the board.
+
+        Nothing is armed when there is nothing to change to: a card with no
+        derivable target spec, or a board offering a single candidate, is a
+        choice with one answer, and a prompt with one answer is a stall rather
+        than a decision.
+        """
+        from ...legality import cast_spec_of
+
+        # The same one question the caster's own picker asks, through the same
+        # helper — so the copy is offered exactly the targets the original was.
+        spec = cast_spec_of(copy_item.card)
+        if spec.get("kind") in (None, "none"):
+            return
+        offered: list[dict] = []
+        for candidate in self._enumerate_targets(
+            player_index, copy_item.card, spec, for_cast=True
+        ):
+            if candidate.get("kind") == "player":
+                seat = candidate.get("seat")
+                offered.append({
+                    "kind": "player",
+                    "seat": seat,
+                    "name": self.players[seat].name,
+                })
+                continue
+            # An index is not an identity (CR 400.7): the offer sits on the
+            # queue across a priority window, so each slot is resolved to a
+            # stable id here and the id is what the answer is checked against.
+            perm = self.permanent_at(candidate.get("seat"), candidate.get("index"))
+            if perm is None:
+                continue
+            offered.append({
+                "kind": "permanent",
+                "seat": candidate.get("seat"),
+                "index": candidate.get("index"),
+                "permanent_id": self.permanent_id_of(perm),
+                "name": perm.card.name,
+            })
+        if len(offered) < 2:
+            return
+        self.arm_pending_choice(
+            "copy_spell_target", player_index,
+            card_name=copy_item.card.name,
+            targets=offered,
+            _copy=copy_item,
+        )
+
+    def confirm_copy_spell_target(
+        self, player_index: int, permanent_id: int | None = None,
+        target_seat: int | None = None,
+    ) -> bool:
+        """Answer the copy's target choice with a permanent's id or a seat."""
+        return self.resolve_pending_choice(
+            "copy_spell_target", player_index,
+            permanent_id=permanent_id, seat=target_seat,
+        )
+
+    def _resolve_copy_spell_target(self, choice: PendingChoice, response: dict) -> bool:
+        """Aim the waiting copy at the answer, if the answer was offered."""
+        match = self._select_trigger_mode_target(
+            {"valid_targets": choice.data.get("targets") or ()}, response
+        )
+        copy_item = choice.data.get("_copy")
+        if match is None or copy_item is None:
+            return False
+        if match.get("kind") == "player":
+            copy_item.target_player_index = match.get("seat")
+            copy_item.target_permanent_index = None
+            copy_item.target_permanent_id = None
+            label = self.players[match["seat"]].name
+        else:
+            perm = self.permanent_by_id(match.get("permanent_id"))
+            if perm is None:
+                return False
+            copy_item.target_player_index = self.controller_index_of(perm)
+            copy_item.target_permanent_index = self.battlefield_index_of(perm)
+            copy_item.target_permanent_id = self.permanent_id_of(perm)
+            label = perm.card.name
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{choice.data.get('card_name', 'Copy')} (copy) targets {label}"
+        )
+        return True
+
+    def _default_copy_spell_target(self, choice: PendingChoice) -> None:
+        """The stated policy: **decline** — keep the original's target.
+
+        Every other picker in this engine defaults to the first candidate
+        offered, and each of those is a target the ability *must* have. This one
+        is CR 707.10's *offer*, so it has a real decline, and declining is the
+        answer that changes nothing. A copy whose original target has since
+        become illegal keeps pointing at it and is countered on resolution
+        (CR 608.2b), which is what declining means there too — re-aiming it at
+        whatever the enumerator happened to list first would be a decision
+        nobody made. A card whose copy should be aimed cleverly needs a
+        valuation in `engine/ai_valuation.py`, not a branch here.
+        """
+        copy_item = choice.data.get("_copy")
+        targets = list(choice.data.get("targets") or ())
+        if copy_item is None or not targets:
+            self.discard_pending_choice(choice)
+            return
+        if copy_item.target_permanent_index is None:
+            current = {"seat": copy_item.target_player_index}
+        else:
+            # The id is what the answer is checked against, and a cast that
+            # never stamped one still has a slot — resolved through the control
+            # seam rather than left as None, which would make "keep the
+            # original" silently fall through to "take the first offered".
+            held = copy_item.target_permanent_id
+            if held is None:
+                perm = self.permanent_at(
+                    copy_item.target_player_index, copy_item.target_permanent_index
+                )
+                held = self.permanent_id_of(perm) if perm is not None else None
+            current = {"permanent_id": held}
+        if not self._resolve_copy_spell_target(choice, current):
+            self.discard_pending_choice(choice)
+
     def _run_optional_branch(self, entry: dict, key: str) -> bool:
         """Execute an optional-pay entry's instruction branch, if it has one.
 
@@ -3655,6 +3783,22 @@ register_choice(
     action="reflexive_target_confirm",
     prompt_key="reflexive_target",
     blocked_detail="choose the reflexive trigger's target before other actions",
+)
+
+register_choice(
+    "copy_spell_target",
+    resolve=lambda game, choice, r: game._resolve_copy_spell_target(choice, r),
+    default=lambda game, choice: game._default_copy_spell_target(choice),
+    action="copy_spell_target_confirm",
+    prompt_key="copy_spell_target",
+    blocked_detail="choose the copy's target before other actions",
+    # CR 707.10: the copy's targets are chosen as the copy is created, which is
+    # part of the resolution that created it — so a non-interactive seat answers
+    # there and then and nothing queues. That is also what keeps the headless
+    # path honest: `_settle()` drains the stack without pausing, and a prompt
+    # left queued here would be answered after the copy it was meant to aim.
+    default_at_arm=True,
+    spectator_visible=True,
 )
 
 register_choice(

@@ -213,6 +213,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     "upkeep_pay_or_sacrifice_enchantment": "upkeep_effect",
     "upkeep_pay_or_sacrifice_self": "upkeep_effect",
     "upkeep_pay_to_untap_self": "upkeep_effect",
+    # Paralyze's Aura twin. The label the card-name hook used to supply: the
+    # kind is unchanged and so is the bucket — what moved is which half of the
+    # engine produces the instruction, and this table is why that move did not
+    # re-bucket a shipped card.
+    "upkeep_pay_to_untap_enchanted": "upkeep_effect",
     # --- M21's triggered abilities, added at its promotion -------------------
     # M21 is the first set whose triggers the grammar reads wholesale, so this
     # is the block where the vocabulary the shipped pool built gets applied to a

@@ -546,6 +546,22 @@ def lower_statement(
     if isinstance(statement, ast.CopyThatSpell):
         return (OracleInstruction("copy_triggering_spell", "", {}),)
 
+    if isinstance(statement, ast.CopySpell):
+        # "Copy **this** spell" — the resolving object, which this engine has
+        # already popped off the stack, so the handler reads
+        # `Game.resolving_items[-1]` rather than scanning. Who gets the copy is
+        # payload (CR 707.10a): the sentence's printed subject, which for Chain
+        # Lightning is the player who paid and not the spell's controller.
+        return (
+            OracleInstruction(
+                "copy_this_spell", "",
+                {
+                    "controller": statement.controller.kind,
+                    "may_choose_new_target": bool(statement.may_choose_new_target),
+                },
+            ),
+        )
+
     if isinstance(statement, ast.ExtraTurn):
         return _lower_extra_turn(statement)
 

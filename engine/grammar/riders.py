@@ -472,10 +472,20 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     # production — and it is admitted only over a ``May`` whose actor is not
     # "you", where the words have somebody to refer to.
     third_person = False
+    # "If **the player** does, …" (Chain Lightning) is the same rider under an
+    # offer made to one seat that is not the caster. The definite article is
+    # what separates it from "a player": "a" asks *of each* seat a multi-seat
+    # offer named, "the" names the single seat the offer already picked — so
+    # the two admit under different conditions rather than being spellings of
+    # one thing.
+    definite = False
     if stream.accept_word("you"):
         pass
     elif stream.accept_phrase("a", "player"):
         third_person = True
+    elif stream.accept_phrase("the", "player"):
+        third_person = True
+        definite = True
     else:
         stream.reset(mark)
         return False
@@ -492,7 +502,11 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         return False
     if third_person and not (
         isinstance(target, ast.May)
-        and target.actor.kind not in ("you", "that_player")
+        and (
+            target.actor.kind != "you"
+            if definite
+            else target.actor.kind not in ("you", "that_player")
+        )
     ):
         # Nothing for "a player" to refer back to: the offer named one seat, or
         # there was no offer at all. Refused rather than read as "you", which
