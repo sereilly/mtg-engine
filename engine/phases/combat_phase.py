@@ -486,6 +486,39 @@ class CombatPhaseMixin:
         )
         return blocking == 1
 
+    def creatures_blocking(self, permanent: Permanent) -> list[Permanent]:
+        """Every creature currently blocking ``permanent`` — the one-way half of
+        :meth:`creatures_in_combat_with` (Feint, The Wretched).
+
+        One reader for the relation, because "blocking it" and "blocking or
+        blocked by it" are the same combat maps asked in different directions;
+        a second walk of ``combat_attackers`` would be a second opinion about
+        who is blocking whom, and band-propagated blocks (CR 702.22h) are
+        exactly the kind of thing one of the two copies would forget.
+
+        Returned as Permanent objects rather than indices: a caller may act on
+        this after something has left the battlefield and renumbered the slots.
+        """
+        blockers: list[Permanent] = []
+        if not self.players:
+            return blockers
+        active = self.players[self.active_player_index]
+        for attacker_idx, defending_idx in self.combat_attackers.items():
+            if not (0 <= attacker_idx < len(active.battlefield)):
+                continue
+            if active.battlefield[attacker_idx] is not permanent:
+                continue
+            if not (0 <= defending_idx < len(self.players)):
+                continue
+            defender = self.players[defending_idx]
+            for blocker_idx in self._attacker_all_blockers(attacker_idx):
+                if not (0 <= blocker_idx < len(defender.battlefield)):
+                    continue
+                blocker = defender.battlefield[blocker_idx]
+                if blocker is not permanent and not any(p is blocker for p in blockers):
+                    blockers.append(blocker)
+        return blockers
+
     def creatures_in_combat_with(self, permanent: Permanent) -> list[Permanent]:
         """Every creature currently *blocking or blocked by* ``permanent``
         (Abu Ja'far's death trigger). Resolved against the live combat maps —
@@ -500,19 +533,10 @@ class CombatPhaseMixin:
                 opponents.append(perm)
 
         active = self.players[self.active_player_index] if self.players else None
-        # As an attacker: every creature blocking it.
-        if active is not None:
-            for attacker_idx, defending_idx in self.combat_attackers.items():
-                if not (0 <= attacker_idx < len(active.battlefield)):
-                    continue
-                if active.battlefield[attacker_idx] is not permanent:
-                    continue
-                if not (0 <= defending_idx < len(self.players)):
-                    continue
-                defender = self.players[defending_idx]
-                for blocker_idx in self._attacker_all_blockers(attacker_idx):
-                    if 0 <= blocker_idx < len(defender.battlefield):
-                        _add(defender.battlefield[blocker_idx])
+        # As an attacker: every creature blocking it — the one-way reader, so
+        # the two questions cannot answer differently.
+        for blocker in self.creatures_blocking(permanent):
+            _add(blocker)
         # As a blocker: every attacker it's blocking.
         for defending_idx, blocker_map in self.combat_blockers.items():
             if not (0 <= defending_idx < len(self.players)):

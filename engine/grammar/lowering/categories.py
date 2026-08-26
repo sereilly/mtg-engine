@@ -179,6 +179,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # control", Reset; "tap all legendary creatures", Arena of the Ancients).
     "tap_enchanted_creature": "tapping",
     "tap_all_matching": "tapping",
+    # "Tap all creatures blocking target attacking creature." (Feint.) A sweep
+    # over a set named by a combat relation to the spell's own target.
+    "tap_creatures_blocking_target": "tapping",
     "untap_all_matching": "tapping",
     "grant_prevention_shield": "prevention",
     "prevent_all_combat_damage": "prevention",
@@ -186,6 +189,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # category: what differs is who it covers, not what kind of effect it is.
     "prevent_all_combat_damage_to_matching": "prevention",
     "prevent_damage_by_target_until_eot": "prevention",
+    "prevent_damage_to_target_until_eot": "prevention",
     "grant_source_class_prevention_shield": "prevention",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets

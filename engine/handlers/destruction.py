@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
-from ._common import permanent_matches_filter
+from ._common import permanent_matches_filter, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -408,6 +408,20 @@ def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction,
     object it was created for, not whatever is standing in its place.
     """
     source = context.source_permanent
+    if str(instruction.payload.get("subject", "source")) == "bound":
+        # "Destroy **it** at the beginning of the next end step." (Glyph of
+        # Destruction.) The object the sentence in front of this one named,
+        # which for a spell is the target it chose. Resolved here rather than at
+        # compile time because the printed pronoun does not say which of the two
+        # it is, and the fallback is the source — the reading every other
+        # printing of this sentence has.
+        chosen = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: True,
+            fallback_on_invalid_choice=False,
+        )
+        if chosen is not None:
+            source = chosen
     if source is None:
         return False, "ability not implemented"
     # Onto the flags the end step's existing delayed-removal sweep already

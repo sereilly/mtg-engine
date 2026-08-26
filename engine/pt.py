@@ -86,19 +86,64 @@ def clear_base_pt(perm: Permanent, *, until_eot: bool = False) -> None:
         perm.metadata.pop(BASE_PT_REVERT_KEY, None)
 
 
-def add_pt_modifier(perm: Permanent, power: int = 0, toughness: int = 0, *, until_eot: bool = False) -> None:
-    """Layer 7c: add a +X/+Y modification. With ``until_eot`` the delta is
-    tracked in metadata so the cleanup step can remove it; both metadata keys
-    are written even for a 0 delta (cleanup relies on their presence)."""
+#: Where a *temporary* layer-7c modification records itself, one metadata pair
+#: per duration, and the whole of what makes a duration implemented: a channel
+#: with no sweep behind it is a pump that never ends.
+#:
+#: There was one channel and a boolean to reach it, so "until end of combat"
+#: (Glyph of Destruction) had nowhere to be recorded and lowered onto the
+#: end-of-turn kind — a pump outliving the combat it was printed for, with
+#: nothing in the payload to show the word had been read. A table is what lets
+#: the sweeps name their own duration instead of owning the only one.
+TEMPORARY_PT_CHANNELS: dict[str, tuple[str, str]] = {
+    "end_of_turn": (
+        "temporary_power_bonus_until_eot",
+        "temporary_toughness_bonus_until_eot",
+    ),
+    "end_of_combat": (
+        "temporary_power_bonus_until_eoc",
+        "temporary_toughness_bonus_until_eoc",
+    ),
+}
+
+
+def add_pt_modifier(
+    perm: Permanent, power: int = 0, toughness: int = 0, *, until: str | None = None
+) -> None:
+    """Layer 7c: add a +X/+Y modification.
+
+    *until* names the duration's channel in :data:`TEMPORARY_PT_CHANNELS`, and
+    the sweep for that duration is what removes it; both metadata keys are
+    written even for a 0 delta (the sweep relies on their presence). ``None`` is
+    a modification with no duration at all — a continuous effect, removed by the
+    thing that contributed it ceasing to.
+    """
     perm.power_bonus += power
     perm.toughness_bonus += toughness
-    if until_eot:
-        perm.metadata["temporary_power_bonus_until_eot"] = int(
-            perm.metadata.get("temporary_power_bonus_until_eot", 0)
-        ) + power
-        perm.metadata["temporary_toughness_bonus_until_eot"] = int(
-            perm.metadata.get("temporary_toughness_bonus_until_eot", 0)
-        ) + toughness
+    if until is None:
+        return
+    if until not in TEMPORARY_PT_CHANNELS:
+        raise ValueError(f"no P/T channel for the duration {until!r}")
+    power_key, toughness_key = TEMPORARY_PT_CHANNELS[until]
+    perm.metadata[power_key] = int(perm.metadata.get(power_key, 0)) + power
+    perm.metadata[toughness_key] = int(perm.metadata.get(toughness_key, 0)) + toughness
+
+
+def remove_temporary_pt(perm: Permanent, until: str) -> None:
+    """End every layer-7c modification recorded on *until*'s channel.
+
+    The read half of :func:`add_pt_modifier`, here rather than open-coded in
+    each sweep so that adding a duration is adding a row above and a call here —
+    the cleanup step's pop-and-subtract was the only copy, and a second sweep
+    written by hand is a second chance to subtract the wrong pair.
+    """
+    power_key, toughness_key = TEMPORARY_PT_CHANNELS[until]
+    power = int(perm.metadata.pop(power_key, 0))
+    toughness = int(perm.metadata.pop(toughness_key, 0))
+    if power:
+        perm.power_bonus -= power
+    if toughness:
+        perm.toughness_bonus -= toughness
 
 
 def switch_pt(perm: Permanent) -> None:

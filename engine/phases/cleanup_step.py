@@ -17,6 +17,7 @@ from ..control import end_until_eot_control_changes
 from ..layer_bridge import GAINED_TYPES
 from ..mixins._constants import _EOT_METADATA_KEYS
 from ..shields import clear_shields
+from ..pt import remove_temporary_pt
 
 
 class CleanupStepMixin:
@@ -110,12 +111,7 @@ class CleanupStepMixin:
                 # 614.8 / 701.19a: an unused regeneration shield lasts only until
                 # the end of the turn it was created.
                 permanent.regeneration_shield = 0
-                temp_power = int(permanent.metadata.pop("temporary_power_bonus_until_eot", 0))
-                temp_toughness = int(permanent.metadata.pop("temporary_toughness_bonus_until_eot", 0))
-                if temp_power:
-                    permanent.power_bonus -= temp_power
-                if temp_toughness:
-                    permanent.toughness_bonus -= temp_toughness
+                remove_temporary_pt(permanent, "end_of_turn")
                 for key in _EOT_METADATA_KEYS:
                     permanent.metadata.pop(key, None)
                 # A gained type whose duration is "until end of turn" ends here,

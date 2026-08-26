@@ -96,7 +96,11 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # out of the same module the second time it reached the guard, on the same
 # reasoning: CR 208 is what a creature's P/T *is* (layer 7), CR 702 is an
 # ability it *has* (layer 6), and the two families shared no helper.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "mana", "counters", "keywords", "tapping", "where_x"]
+# `prevention` split out of `lowering/damage.py` at 1,011 lines, the round a
+# two-source shield landed. The parse side keeps prevention with damage because
+# the two read the same recipient and duration vocabulary; the lowering halves
+# share not one helper, which is the same asymmetry the families above record.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "mana", "counters", "keywords", "tapping", "prevention", "where_x"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 

@@ -338,12 +338,15 @@ def resolve_own_combatant(
     return controller, idx, controller.battlefield[idx]
 
 
-def apply_temp_pt_boost(perm: Permanent, power: int = 0, toughness: int = 0) -> None:
-    """Apply an until-end-of-turn P/T change and track it so the cleanup step
-    can remove it. Thin wrapper over the single P/T write API in engine/pt.py."""
+def apply_temp_pt_boost(
+    perm: Permanent, power: int = 0, toughness: int = 0, *, until: str = "end_of_turn"
+) -> None:
+    """Apply a P/T change that ends at *until* and track it so that duration's
+    sweep can remove it. Thin wrapper over the single P/T write API in
+    engine/pt.py; *until* names a channel in ``pt.TEMPORARY_PT_CHANNELS``."""
     from ..pt import add_pt_modifier
 
-    add_pt_modifier(perm, power, toughness, until_eot=True)
+    add_pt_modifier(perm, power, toughness, until=until)
 
 
 def apply_damage_to_creature(

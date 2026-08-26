@@ -373,3 +373,9 @@ class DelayedSelfAction:
     card says.
     """
     action: str   # destroy | bounce
+    # Which object the delayed ability was created *for*: the ability's own
+    # source ("this artifact", Rocket Launcher) or the object the sentence in
+    # front of it named ("it", Glyph of Destruction). A field rather than a
+    # second node, because the delay — the whole content of this sentence — is
+    # identical either way and only the referent differs.
+    subject: str = "source"   # source | bound

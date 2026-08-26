@@ -195,7 +195,7 @@ class OracleInstructionsMixin:
         if "creature" not in card.type_line.lower():
             for perm in self.controlled_by(self.players[caster_index]):
                 if perm.is_creature and self._has_keyword(perm, "prowess"):
-                    add_pt_modifier(perm, 1, 1, until_eot=True)
+                    add_pt_modifier(perm, 1, 1, until="end_of_turn")
                     self.log.append(
                         f"{perm.card.name} gets +1/+1 until end of turn (prowess)"
                     )

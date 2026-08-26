@@ -118,6 +118,13 @@ def _during_combat(game: "Game", controller_index: int, source) -> bool:
     return game.current_turn_phase == "combat"
 
 
+def _during_declare_blockers(game: "Game", controller_index: int, source) -> bool:
+    """Lesser Werewolf. A window scoped to a *step* and to neither player's
+    turn: blockers are declared on the defending player's behalf during the
+    attacker's turn, so the seat is not part of the question."""
+    return game.current_step == "declare_blockers"
+
+
 def _during_end_of_combat(game: "Game", controller_index: int, source) -> bool:
     """Desert."""
     return game.current_step == "end_of_combat"
@@ -208,6 +215,11 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         re.compile(r"^activate only during the end of combat step$"),
         _during_end_of_combat,
         "only during the end of combat step",
+    ),
+    ActivationRestriction(
+        re.compile(r"^activate only during the declare blockers step$"),
+        _during_declare_blockers,
+        "only during the declare blockers step",
     ),
     ActivationRestriction(
         re.compile(r"^activate only during combat$"),

@@ -158,7 +158,7 @@ def rampage_pump(game: Game, instruction: OracleInstruction, context: OracleExec
     amount = int(instruction.payload.get("amount", 0))
     bonus = rampage_bonus(amount, len(game._attacker_all_blockers(attacker_idx)))
     if bonus:
-        add_pt_modifier(attacker, bonus, bonus, until_eot=True)
+        add_pt_modifier(attacker, bonus, bonus, until="end_of_turn")
         game.log.append(
             f"{attacker.card.name} gets +{bonus}/+{bonus} until end of turn (rampage {amount})"
         )

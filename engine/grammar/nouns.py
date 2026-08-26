@@ -183,7 +183,7 @@ def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
     return tuple(keywords)
 
 
-def _parse_comparison(stream: TokenStream) -> ast.Comparison:
+def parse_comparison(stream: TokenStream) -> ast.Comparison:
     """Parse "N or less" / "N or greater" / "N" following power/toughness."""
     amount = parse_amount(stream)
     if stream.accept_word("or"):
@@ -219,6 +219,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     blocked: bool | None = None
     any_states: tuple[str, ...] = ()
     blocking_source = False
+    blocking_target: ast.ObjectFilter | None = None
+    blocking_bound_target = False
     blocked_by_bound_object = False
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
@@ -618,10 +620,11 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             controller = "that_player"
             continue
         # "creatures **blocking this creature**" (The Wretched) — the set of
-        # blockers declared against the ability's own source (CR 509.1a). Only
-        # a self-reference is admitted after "blocking": "blocking that
-        # creature" would name an object this filter has no way to carry, so
-        # the words stay unconsumed and the line fails loudly instead.
+        # blockers declared against the ability's own source (CR 509.1a).
+        # "…blocking **target attacking creature**" and "…blocking **it**"
+        # (Feint) are that relation with the other end on an object this same
+        # sentence names. Which of the three it is decides the field; what the
+        # three fields mean is on `ObjectFilter` itself.
         # "blocking **or**…" is not this branch: "blocking or blocked by this
         # creature" (Sentinel) is the two-sided in-combat relation read further
         # down, and this alternative testing first would probe, fail on "or"
@@ -640,6 +643,23 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 if noun is not None and _singular(noun) in _SELF_NOUNS:
                     stream.advance()
                     blocking_source = True
+                    continue
+            # "blocking **target** <noun phrase>": chosen as this spell is cast
+            # (CR 601.2c), so the phrase is read whole by recursing here — which
+            # is what makes it a description rather than a second vocabulary.
+            if stream.accept_word("target"):
+                blocking_target = parse_object_filter(stream)
+                continue
+            # "blocking **it**" / "blocking **that creature**": nothing is parsed
+            # because nothing is printed — the referent is this spell's target.
+            if stream.accept_word("it"):
+                blocking_bound_target = True
+                continue
+            if stream.accept_word("that"):
+                noun = stream.peek_word()
+                if noun is not None and _singular(noun) in _SELF_NOUNS:
+                    stream.advance()
+                    blocking_bound_target = True
                     continue
             stream.reset(probe)
             break
@@ -708,10 +728,10 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             probe = stream.mark()
             stream.advance()
             if stream.accept_word("power"):
-                power = _parse_comparison(stream)
+                power = parse_comparison(stream)
                 continue
             if stream.accept_word("toughness"):
-                toughness = _parse_comparison(stream)
+                toughness = parse_comparison(stream)
                 continue
             # "with a +1/+1 counter on it" (Tempered Veteran). Only the +1/+1
             # kind is accepted: the counters the engine records under another
@@ -736,7 +756,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # leaving the phrase unmatched would strand "value X" and fail the
             # whole line rather than restricting the noun phrase.
             if stream.accept_phrase("mana", "value"):
-                mana_value = _parse_comparison(stream)
+                mana_value = parse_comparison(stream)
                 continue
             try:
                 with_keywords.extend(_parse_keyword_list(stream))
@@ -947,6 +967,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         blocking=blocking,
         any_states=any_states,
         blocking_source=blocking_source,
+        blocking_target=blocking_target,
+        blocking_bound_target=blocking_bound_target,
         blocked_by_bound_object=blocked_by_bound_object,
         blocked=blocked,
         power=power,
@@ -972,5 +994,6 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
 
 
 __all__ = [
-    "accept_source_reference", "parse_card_name", "parse_object_filter",
+    "accept_source_reference", "parse_card_name", "parse_comparison",
+    "parse_object_filter",
 ]

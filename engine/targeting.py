@@ -706,7 +706,19 @@ def targets_mana_value_x(instructions) -> bool:
 #: The same two ``_from_instructions`` descends into, and for the same reason
 #: it gives — an effect written as two steps carries its targeting on the step
 #: that targets.
-_WRAPPER_STEP_KEYS = {"sequence": ("steps",), "may": ("action", "then")}
+#: The wrappers a targeting instruction can be *inside*, and where each keeps
+#: its steps. `if_then` carries both arms for the reason `_from_instructions`
+#: reads both: CR 601.2c chooses an ability's targets when it is activated,
+#: whichever way the condition later falls. It was missing here while
+#: `_from_instructions` handled it by hand, so the spec recursed into a
+#: conditional branch and every other reader of this table stopped at the
+#: wrapper — which is how Lesser Werewolf's "target creature blocking or blocked
+#: by this creature" reached `legality.py` as an `if_then` with no filter.
+_WRAPPER_STEP_KEYS = {
+    "sequence": ("steps",),
+    "may": ("action", "then"),
+    "if_then": ("then", "else"),
+}
 
 
 def _nested_steps(instruction) -> tuple:

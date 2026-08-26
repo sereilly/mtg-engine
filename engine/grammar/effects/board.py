@@ -591,14 +591,23 @@ def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
     else:
         stream.reset(mark)
         return None
-    if not stream.accept_word("this"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word(
-        "artifact", "creature", "enchantment", "land", "permanent"
-    ):
-        stream.reset(mark)
-        return None
+    # "Destroy **it** …" (Glyph of Destruction): the object the sentence in
+    # front of this one named. The same sentence with a different referent, so
+    # it is this production with a different subject — and the referent is not
+    # decided here, because the printed pronoun does not say whether the spell
+    # chose a target or the ability is its own subject.
+    subject = "source"
+    if stream.accept_word("it"):
+        subject = "bound"
+    else:
+        if not stream.accept_word("this"):
+            stream.reset(mark)
+            return None
+        if not stream.accept_word(
+            "artifact", "creature", "enchantment", "land", "permanent"
+        ):
+            stream.reset(mark)
+            return None
     if action == "bounce" and not stream.accept_phrase(
         "to", "its", "owner", "'s", "hand"
     ):
@@ -609,4 +618,4 @@ def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
     ):
         stream.reset(mark)
         return None
-    return ast.DelayedSelfAction(action)
+    return ast.DelayedSelfAction(action, subject=subject)

@@ -25,7 +25,7 @@ def test_set_base_pt_until_eot_composes_with_boost():
     # Sorceress Queen shape: target becomes 0/2 until EOT, then Giant Growth.
     perm = _perm(5, 5)
     set_base_pt(perm, 0, 2, until_eot=True)
-    add_pt_modifier(perm, 3, 3, until_eot=True)
+    add_pt_modifier(perm, 3, 3, until="end_of_turn")
     assert (perm.effective_power, perm.effective_toughness) == (3, 5)
 
 
@@ -80,7 +80,7 @@ def test_until_eot_boost_wears_off_at_cleanup():
     game = _game(p1, p2)
     perm = _perm(2, 2)
     p1.battlefield.append(perm)
-    add_pt_modifier(perm, 3, 3, until_eot=True)
+    add_pt_modifier(perm, 3, 3, until="end_of_turn")
     assert (perm.effective_power, perm.effective_toughness) == (5, 5)
     game.resolve_cleanup_step(0)
     assert (perm.effective_power, perm.effective_toughness) == (2, 2)

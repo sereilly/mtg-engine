@@ -319,6 +319,65 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
     return True, "resolved"
 
 
+@effect_handler("tap_creatures_blocking_target")
+def tap_creatures_blocking_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Tap all creatures blocking target attacking creature." (Feint.)
+
+    The set is named by a *relation*, not by a characteristic: the spell chooses
+    one attacking creature and every creature blocking it is affected. So the
+    target is resolved first and ``creatures_blocking`` — the one reader of that
+    combat relation, band-propagated blocks included (CR 702.22h) — supplies the
+    set, rather than any scan of the battlefield.
+
+    Which attacker was chosen is re-checked here as well as at cast time: CR
+    608.2b asks a target's legality again on resolution, and a creature removed
+    from combat in response makes this do nothing rather than tap the blockers
+    of whichever attacker a fallback scan reached first.
+
+    The printed noun phrase of the *blockers* still rides as the filter, because
+    a card printing "tap all Walls blocking …" is this instruction with a
+    different payload. The chosen attacker's id is recorded so a later sentence
+    can say "that creature" — Feint's own second sentence does.
+    """
+    targets = instruction.payload.get("targets") or {}
+    blocked_filter = targets.get("filter") or {}
+
+    def _eligible(perm) -> bool:
+        return perm.is_creature and permanent_matches_filter(perm, blocked_filter)
+
+    attacker = resolve_target_permanent(
+        game, context, predicate=_eligible, fallback_on_invalid_choice=False
+    )
+    if attacker is None:
+        game.log.append(f"{context.card.name}: no valid creature target")
+        return True, "resolved"
+    blocker_filter = {
+        key: value for key, value in instruction.payload.items() if key != "targets"
+    }
+    chosen = [
+        blocker
+        for blocker in game.creatures_blocking(attacker)
+        if permanent_matches_filter(blocker, blocker_filter)
+    ]
+    for blocker in chosen:
+        if not blocker.tapped:
+            game.become_tapped(blocker)
+            game._turn_face_up(blocker)
+        game.log.append(
+            f"{context.card.name} tapped {blocker.card.name} "
+            f"(blocking {attacker.card.name})"
+        )
+    if not chosen:
+        game.log.append(
+            f"{context.card.name}: nothing is blocking {attacker.card.name}"
+        )
+    _record_tapped(context, chosen)
+    # The chosen attacker, for the sentence that says "that creature". By id
+    # rather than by object or slot (CR 400.7).
+    context.results["blocked_target"] = attacker.permanent_id
+    return True, "resolved"
+
+
 def _record_tapped(context: OracleExecutionContext, chosen) -> None:
     """Record what this instruction tapped, for the sentence after it.
 

@@ -135,7 +135,31 @@ def _cant_be_enchanted_by_auras(perm) -> bool:
 # restriction than the kind alone (a tapped/coloured destroy, a non-Wall attack
 # mark). The enumerator gates candidates through these so an ability offers
 # exactly what it could legally affect, matching its resolution.
+def _targeting_instruction(instruction):
+    """The instruction inside *instruction* that actually names a target.
+
+    An ability's own instruction may be a control-flow wrapper — Lesser
+    Werewolf's whole sentence is an ``if_then`` — and the per-kind filter check
+    below reads the *targeting* instruction, so a wrapper handed to it looks
+    like a kind with no filter and every restriction the card printed is
+    dropped. The same recursion ``engine/targeting.py`` already does to derive
+    the spec: the two must agree, or the picker offers what the gate refuses.
+    """
+    from .targeting import _nested_steps
+
+    if instruction is None:
+        return None
+    if instruction.kind in _FILTERABLE_ABILITY_KINDS:
+        return instruction
+    for step in _nested_steps(instruction):
+        found = _targeting_instruction(step)
+        if found is not None:
+            return found
+    return None
+
+
 _FILTERABLE_ABILITY_KINDS = {
+    "add_counter_to_target",
     "destroy_target_permanent",
     "grant_regeneration_to_target_creature",
     "mark_non_wall_target_to_attack",
@@ -401,12 +425,8 @@ class LegalityMixin:
         # Pyramids' "attached to a land". Reading it off the ability that
         # supplied the spec is what keeps a two-ability permanent from narrowing
         # one ability's prompt with the other ability's filter.
-        ability_instruction = (
-            spec_ability.instruction
-            if spec_ability is not None
-            and spec_ability.instruction is not None
-            and spec_ability.instruction.kind in _FILTERABLE_ABILITY_KINDS
-            else None
+        ability_instruction = _targeting_instruction(
+            getattr(spec_ability, "instruction", None)
         )
         spec["requires_target"] = spec["kind"] != "none"
         spec["valid_targets"] = self._enumerate_targets(
@@ -482,11 +502,7 @@ class LegalityMixin:
             # a *named* target still has to be legal, which the per-kind pickers
             # and the resolution already check for these.
             return None
-        ability_instruction = (
-            instruction
-            if instruction is not None and instruction.kind in _FILTERABLE_ABILITY_KINDS
-            else None
-        )
+        ability_instruction = _targeting_instruction(instruction)
         valid = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
             ability_instruction=ability_instruction,
@@ -751,9 +767,21 @@ class LegalityMixin:
             # offers exactly what the ability could affect. Most counter
             # placements carry an empty filter and every creature passes.
             targets = instruction.payload.get("targets") or {}
-            return perm.is_creature and permanent_matches_filter(
+            if not perm.is_creature or not permanent_matches_filter(
                 perm, targets.get("filter") or {}
-            )
+            ):
+                return False
+            # "…on target creature **blocking or blocked by this creature**"
+            # (Lesser Werewolf) — the same in-combat relation Sentinel's rewrite
+            # carries a dozen lines above, asked here so the ability is refused
+            # with nothing paid when no such creature exists (CR 602.2b via
+            # 601.2c) and the picker offers exactly what the effect can reach.
+            if instruction.payload.get("in_combat_with_source"):
+                return source_permanent is not None and any(
+                    perm is other
+                    for other in self.creatures_in_combat_with(source_permanent)
+                )
+            return True
         return True
 
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:

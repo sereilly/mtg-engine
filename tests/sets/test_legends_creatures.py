@@ -2211,3 +2211,124 @@ def test_nicol_bolas_empties_the_hand_of_the_player_it_damaged(set_pool, cards):
     assert p2.life == 13
     assert p2.hand == [], "the damaged player discarded their hand"
     assert p1.hand == [], "and not the ability's controller"
+
+
+# ---------------------------------------------------------------------------
+# Round 24 — Lesser Werewolf: a power gate, a P/T counter that is not +1/+1,
+# and a target named by its combat relation to the ability's own source.
+# ---------------------------------------------------------------------------
+
+
+def _werewolf_in_combat(set_pool):
+    """Lesser Werewolf blocking one of two identically named attackers.
+
+    The bystander shares the blocked creature's name so that a handler locating
+    its victim by value rather than by identity would find the wrong one — and
+    it is *not* in combat with the Werewolf, which is the whole restriction.
+    """
+    werewolf = Permanent(card=set_pool("LEG")["Lesser Werewolf"])
+    blocked = Permanent(card=_vanilla("Ogre", 3, 3))
+    bystander = Permanent(card=_vanilla("Ogre", 3, 3))
+    p1 = PlayerState(name="P1", battlefield=[blocked, bystander])
+    p2 = PlayerState(name="P2", battlefield=[werewolf])
+    p2.mana_pool.update({"B": 3})
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, [0, 1])
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    game._settle()
+    return game, werewolf, blocked, bystander
+
+
+def test_lesser_werewolf_shrinks_the_creature_it_is_in_combat_with(set_pool):
+    game, werewolf, blocked, bystander = _werewolf_in_combat(set_pool)
+
+    result = game.activate_permanent_ability(
+        1, "Lesser Werewolf", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported, result.reason
+    # The printed counter is -0/-1, not +1/+1: a handler that placed the kind
+    # it has always placed would have made the blocker bigger.
+    assert blocked.effective_toughness == 2
+    assert blocked.effective_power == 3
+    # The source shrank itself by the printed -1/-0.
+    assert werewolf.effective_power == 1
+    assert werewolf.effective_toughness == 4
+
+
+def test_lesser_werewolf_offers_only_the_creature_it_is_in_combat_with(set_pool):
+    """"…blocking or blocked by this creature." The bystander is attacking and
+    shares the blocked creature's name — neither fact makes it a legal target,
+    and the picker is derived from the compiled program, so it offers exactly
+    what the resolution will accept."""
+    game, werewolf, blocked, bystander = _werewolf_in_combat(set_pool)
+
+    spec = game.activation_target_spec(1, 0)
+
+    offered = {(t["seat"], t["index"]) for t in spec["valid_targets"]}
+    assert offered == {(0, 0)}, spec["valid_targets"]
+
+
+def test_lesser_werewolf_puts_no_counter_on_a_creature_outside_the_combat(set_pool):
+    """CR 608.2b: the relation is re-checked as the ability resolves, so a
+    creature named outside it takes nothing rather than a counter meant for the
+    blocker with the same printed name."""
+    game, werewolf, blocked, bystander = _werewolf_in_combat(set_pool)
+
+    game.activate_permanent_ability(
+        1, "Lesser Werewolf", target_player_index=0, target_permanent_index=1
+    )
+    game._settle()
+
+    assert bystander.effective_toughness == 3
+    assert blocked.effective_toughness == 3
+
+
+def test_lesser_werewolf_is_refused_outside_the_declare_blockers_step(set_pool):
+    """"Activate only during the declare blockers step." A restriction nothing
+    enforced would be an ability that works more often than the card allows."""
+    werewolf = Permanent(card=set_pool("LEG")["Lesser Werewolf"])
+    foe = Permanent(card=_vanilla("Ogre", 3, 3))
+    p1 = PlayerState(name="P1", battlefield=[foe])
+    p2 = PlayerState(name="P2", battlefield=[werewolf])
+    p2.mana_pool.update({"B": 3})
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    result = game.activate_permanent_ability(
+        1, "Lesser Werewolf", target_player_index=0, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert foe.effective_toughness == 3
+
+
+def test_lesser_werewolf_stops_when_its_own_power_reaches_zero(set_pool):
+    """"If this creature's power is 1 or more" — the gate reads the *computed*
+    power (CR 613 layer 7), so the second activation sees what the first did."""
+    game, werewolf, blocked, bystander = _werewolf_in_combat(set_pool)
+
+    for _ in range(2):
+        game.activate_permanent_ability(
+            1, "Lesser Werewolf", target_player_index=0, target_permanent_index=0
+        )
+        game._settle()
+    assert werewolf.effective_power == 0
+    assert blocked.effective_toughness == 1
+
+    # Power 0: the condition fails, so neither half of the sentence happens.
+    game.activate_permanent_ability(
+        1, "Lesser Werewolf", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+    assert werewolf.effective_power == 0
+    assert blocked.effective_toughness == 1

@@ -1326,3 +1326,193 @@ def test_enchantment_alteration_takes_a_default_for_a_non_interactive_seat(set_p
 
     assert game.pending_choices == []
     assert aura.metadata["attached_to"] is other
+
+
+# ---------------------------------------------------------------------------
+# Round 24 — a noun phrase narrowed by a combat relation to another object the
+# same sentence names: "all creatures blocking target attacking creature".
+# ---------------------------------------------------------------------------
+
+
+def _feint_board(set_pool):
+    """Two identically named attackers, each with its own blocker.
+
+    Same-named on purpose: the whole point of the relation is that only the
+    blockers of the *chosen* attacker are touched, and a handler that located
+    its creatures by value rather than by identity would find the first of the
+    two and be wrong half the time.
+    """
+    chosen = Permanent(card=_creature("Ogre", ("R",)))
+    other = Permanent(card=_creature("Ogre", ("R",)))
+    mine = Permanent(card=_creature("Wall A", ("W",)))
+    bystander = Permanent(card=_creature("Wall B", ("W",)))
+    spell = set_pool("LEG")["Feint"]
+    p1 = PlayerState(name="P1", battlefield=[chosen, other])
+    p2 = PlayerState(name="P2", hand=[spell], battlefield=[mine, bystander])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, [0, 1])
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 1})
+    assert ok, msg
+    game._settle()
+    return game, chosen, other, mine, bystander
+
+
+def test_feint_compiles_to_the_relation_and_the_two_source_shield(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Feint"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == [
+        "tap_creatures_blocking_target",
+        "prevent_damage_by_target_until_eot",
+    ]
+    # The attacking creature is what the spell picks, and the picker is derived
+    # from that description rather than from a second reading of the text.
+    assert steps[0].payload["targets"]["filter"]["attacking_only"] is True
+    # The second printed source ("and each creature blocking it") survived.
+    assert steps[1].payload["also_blocking_target"] is True
+
+
+def test_feint_taps_only_the_blockers_of_the_creature_it_chose(set_pool):
+    game, chosen, other, mine, bystander = _feint_board(set_pool)
+
+    result = game.cast_from_hand(
+        1, "Feint", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported
+    assert mine.tapped, "the blocker of the chosen attacker was not tapped"
+    assert not bystander.tapped, "a blocker of the *other* attacker was tapped"
+
+
+def test_feint_prevents_the_damage_of_the_creature_and_its_blockers(set_pool):
+    """Both printed sources are shielded, and nothing outside the relation is:
+    the other attacker still trades with its own blocker."""
+    game, chosen, other, mine, bystander = _feint_board(set_pool)
+    game.cast_from_hand(1, "Feint", target_player_index=0, target_permanent_index=0)
+    game._settle()
+
+    game.advance_combat_phase()  # combat_damage
+    game._settle()
+
+    assert chosen.damage_marked == 0, "the blocker's damage was not prevented"
+    assert mine.damage_marked == 0, "the chosen attacker's damage was not prevented"
+    assert other.damage_marked == 2, "an unrelated attacker was shielded"
+    assert bystander.damage_marked == 2, "an unrelated blocker was shielded"
+
+
+# ---------------------------------------------------------------------------
+# Round 24 — Glyph of Destruction: three sentences about one chosen Wall, an
+# until-end-of-combat P/T channel, and a delayed destroy on a bound object.
+# ---------------------------------------------------------------------------
+
+
+def _named_wall(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Wall",
+        oracle_text="Defender", colors=("W",), color_identity=("W",),
+        keywords=("Defender",), produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Wall",
+             "power": "0", "toughness": "4"},
+    )
+
+
+def _glyph_board(set_pool):
+    """Two identically named Walls on the defending seat; only one blocks."""
+    attacker = Permanent(card=_creature("Ogre", ("R",)))
+    blocking = Permanent(card=_named_wall("Stone Wall"))
+    idle = Permanent(card=_named_wall("Stone Wall"))
+    spell = set_pool("LEG")["Glyph of Destruction"]
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", hand=[spell], battlefield=[blocking, idle])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    game._settle()
+    return game, attacker, blocking, idle
+
+
+def test_glyph_of_destruction_compiles_all_three_sentences(set_pool):
+    """Two of the three are riders on a pronoun. A lowering that dropped either
+    would leave a Wall that is +10/+0 and neither shielded nor doomed."""
+    program = compile_card_oracle(set_pool("LEG")["Glyph of Destruction"])
+    assert program.supported, program.reason
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == [
+        "pump_target_creature_until_eot",
+        "prevent_damage_to_target_until_eot",
+        "arm_self_action_at_next_end_step",
+    ]
+    # "…until end of combat", not until end of turn: the word rides the payload
+    # and names the sweep that takes the boost back.
+    assert steps[0].payload["duration"] == "end_of_combat"
+    # "Prevent all damage", with no "combat" printed — a shield against a burn
+    # spell too, which is a strictly larger effect than Fog's.
+    assert steps[1].payload["combat_only"] is False
+    # "Destroy **it**" — the Wall the spell chose, not the spell itself.
+    assert steps[2].payload["subject"] == "bound"
+
+
+def test_glyph_of_destruction_kills_the_attacker_and_saves_its_wall(set_pool):
+    game, attacker, blocking, idle = _glyph_board(set_pool)
+
+    result = game.cast_from_hand(
+        1, "Glyph of Destruction", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    assert result.supported
+    assert blocking.effective_power == 10
+
+    game.advance_combat_phase()  # combat_damage
+    game._settle()
+
+    assert attacker not in game.players[0].battlefield
+    # The shield is on the Wall the spell chose, and on nothing else.
+    assert blocking.damage_marked == 0
+    assert idle.effective_power == 0
+
+
+def test_glyph_of_destruction_boost_ends_with_the_combat(set_pool):
+    """"…until end of combat." A pump lowered onto the end-of-turn channel
+    would still be there in the second main phase."""
+    game, attacker, blocking, idle = _glyph_board(set_pool)
+    game.cast_from_hand(
+        1, "Glyph of Destruction", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    game.advance_combat_phase()  # combat_damage
+    game.advance_combat_phase()  # end_of_combat
+    game._settle()
+
+    assert blocking.effective_power == 0
+
+
+def test_glyph_of_destruction_destroys_the_wall_at_the_end_step(set_pool):
+    """"Destroy it at the beginning of the next end step" — the Wall the spell
+    chose, and not the identically named one beside it."""
+    game, attacker, blocking, idle = _glyph_board(set_pool)
+    game.cast_from_hand(
+        1, "Glyph of Destruction", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    survivors = [perm.card.name for perm in game.players[1].battlefield]
+    assert survivors == ["Stone Wall"]
+    assert any(perm is idle for perm in game.players[1].battlefield)

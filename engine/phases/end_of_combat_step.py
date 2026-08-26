@@ -9,6 +9,7 @@ combat" is still known, then clears until-end-of-combat effects and combat state
 
 from ..delayed_triggers import fire_delayed_triggers
 from ..models import Permanent
+from ..pt import remove_temporary_pt
 from ..oracle import compile_card_oracle
 from ..shields import END_OF_COMBAT, clear_shields
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
@@ -29,6 +30,11 @@ class EndOfCombatStepMixin:
         # to the battlefield scan above.
         fire_delayed_triggers(self, "next_end_of_combat")
         for permanent in self.all_permanents():
+            # "…gets +10/+0 until end of combat." (Glyph of Destruction.) The
+            # layer-7c twin of the cleanup step's end-of-turn sweep, reading the
+            # same channel table so a duration is implemented by having a sweep
+            # rather than by having a word.
+            remove_temporary_pt(permanent, "end_of_combat")
             if permanent.metadata.get("animate_until_end_of_combat"):
                 permanent.metadata.pop("animate_until_end_of_combat", None)
                 permanent.metadata.pop("absolute_power", None)

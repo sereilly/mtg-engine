@@ -117,6 +117,15 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # The one admitting lowering strips the field and carries the relation as
     # its own key; every other lowering refuses the phrase by name.
     "of_bound_type": "of_bound_type",
+    # "creatures blocking **target attacking creature**" / "each creature
+    # blocking **it**" (Feint). The blocked object is not the source, so
+    # `blocking_source` above cannot carry it; it is another object *this same
+    # sentence* names, which no read of the blocker alone can answer. Listed
+    # here for the same reason its three siblings are: every lowering that
+    # builds a payload from a filter refuses the phrase by name, and the two
+    # written for it carry the relation as their own payload key.
+    "blocking_target": "blocking_target",
+    "blocking_bound_target": "blocking_bound_target",
 }
 
 
@@ -753,6 +762,21 @@ def _lower_condition(
                 )
             payload["shared_name"] = True
         return payload
+    if isinstance(condition, ast.SubjectPowerIs):
+        # The bound must be a printed number: the evaluator compares an integer,
+        # and an X or a board count would be compared against a node. Refused
+        # rather than coerced, so the day a card prints one the gate is visibly
+        # missing instead of silently answering about the wrong quantity.
+        if not isinstance(condition.comparison.value, ast.Fixed):
+            raise LoweringError(
+                "the power gate compares against a printed number",
+                node=condition,
+            )
+        return {
+            "kind": "source_power_is",
+            "op": condition.comparison.op,
+            "count": condition.comparison.value.value,
+        }
     if isinstance(condition, ast.IsState):
         return {"kind": "is_state", "state": condition.state, "negated": condition.negated}
     if isinstance(condition, ast.DiedThisTurn):

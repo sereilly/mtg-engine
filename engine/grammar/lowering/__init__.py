@@ -73,6 +73,8 @@ from .damage import (
     _lower_damage_unless_pay,
     _lower_damage,
     _lower_damage_conjunction,
+)
+from .prevention import (
     _lower_prevent_damage,
     _lower_prevent_all,
 )
