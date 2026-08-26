@@ -51,6 +51,8 @@ def lower_where_x(
         return _lower_where_x_characteristic(node, inner, produced)
     if isinstance(node.definition, ast.CountOfDeathsThisWay):
         return _lower_where_x_this_way(node, inner, produced)
+    if isinstance(node.definition, ast.CountersOnSource):
+        return _lower_where_x_counters(node, inner)
     # "…where X is **twice** the number of …" (Jovial Evil). The factor is
     # unwrapped here and handed to `count_spec`, so only the definitions this
     # branch can scale accept one: a `Times` over a death history or a mana
@@ -71,6 +73,26 @@ def lower_where_x(
     spec = count_spec(_count_filter_for(definition.filter, inner, node), node,
                       multiplier=factor)
     return _stamp_x_from_count(inner, spec)
+
+
+def _lower_where_x_counters(
+    node: ast.WhereX, inner: tuple[OracleInstruction, ...]
+) -> tuple[OracleInstruction, ...]:
+    """"…, where X is the number of +1/+1 counters on it." (Primordial Ooze.)
+
+    Not a count of a *set*, so it carries no filter: a counter is not an object
+    and ``evaluate_count`` scans zones for objects. What it names is a number
+    sitting on the ability's own source, which only a resolution knows — the
+    same thing ``object_characteristic`` is for one named object's power.
+
+    The kind rides the spec, so a card counting a differently-named counter this
+    way needs no production. It is stamped like every other definition, so the
+    whole sentence — the offer, the payment, and the "if you don't" behind it —
+    reads one X.
+    """
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    return _stamp_x_from_count(inner, {"source_counters": node.definition.kind})
 
 
 def _names_a_player_target(inner: tuple[OracleInstruction, ...]) -> bool:

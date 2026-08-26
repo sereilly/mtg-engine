@@ -792,6 +792,12 @@ def _mentions_x(instructions: tuple[OracleInstruction, ...]) -> bool:
         for key, value in instruction.payload.items():
             if value == "x":
                 return True
+            # A cost is a symbol dict, so its X sits one level down —
+            # "you may pay {X}" lowers to ``{"generic": "x"}``. Read here rather
+            # than by naming the ``cost`` key, because what makes it an X is the
+            # amount, not which key carries it.
+            if isinstance(value, dict) and "x" in value.values():
+                return True
             if isinstance(value, tuple) and value and isinstance(value[0], OracleInstruction):
                 if _mentions_x(value):
                     return True

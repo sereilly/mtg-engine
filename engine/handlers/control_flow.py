@@ -575,6 +575,25 @@ def _narrow_to_takeable_actions(
     return tuple(narrowed), True
 
 
+def _resolved_cost(printed, context: OracleExecutionContext) -> dict:
+    """An offered cost with its variable amount read at resolution.
+
+    "You may pay {X}, where X is the number of +1/+1 counters on it."
+    (Primordial Ooze.) The where-clause has already become ``context.x_value``
+    by the time any handler runs, so the cost is a symbol dict like every other
+    — one of whose amounts is the string "x" until here. Resolved in the
+    handler rather than at lowering because CR 608.2 takes the count when the
+    ability *resolves*: a counter added between the trigger and its resolution
+    changes the number.
+    """
+    resolved = {}
+    for symbol, amount in dict(printed or {}).items():
+        if amount == "x":
+            amount = max(0, int(context.x_value or 0))
+        resolved[symbol] = int(amount)
+    return {symbol: amount for symbol, amount in resolved.items() if amount}
+
+
 @effect_handler("may")
 def may(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"You may pay {N}. If you do, …" / "You may <action>."
@@ -594,7 +613,7 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     # The whole printed cost, symbol by symbol — "you may pay {1}{B}" (Liliana's
     # Devotee) is a dict, not the number 2, because a payment that counted to a
     # number could only ever collect generic mana.
-    cost = dict(instruction.payload.get("cost") or {})
+    cost = _resolved_cost(instruction.payload.get("cost"), context)
     on_accept = _steps(instruction, "action") + _steps(instruction, "then")
     on_decline = _steps(instruction, "otherwise")
     # CR 603.12: a *separate* ability the payment creates, so it is carried

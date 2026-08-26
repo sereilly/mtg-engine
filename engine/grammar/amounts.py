@@ -75,7 +75,7 @@ def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> a
     raise stream.error("expected a quantity")
 
 
-def _accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | None":
+def accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | None":
     """``<word> counters on <the source>`` — the count of a named counter the
     ability's own source is carrying, or None when the words are something else.
 
@@ -86,14 +86,20 @@ def _accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | N
     mixin.
 
     The kind is whatever word the card invented (CR 122.1), matching
-    ``engine/named_counters.py``'s open key space. "+1/+1" cannot arrive here:
-    the lexer reads it as a P/T token rather than a word, so this production
-    admits exactly the counters that have no rules meaning of their own.
+    ``engine/named_counters.py``'s open key space — **or** a P/T counter, which
+    the lexer reads as a ``pt`` token rather than a word ("the number of +1/+1
+    counters on it", Primordial Ooze). Both spellings are one production because
+    the sentence is one sentence: what is being counted is what is sitting on
+    the source, and CR 122.1 makes a +1/+1 counter a counter like any other. The
+    reader that resolves the count is what knows the difference between a store
+    the card invented and the P/T channel.
     """
     mark = stream.mark()
-    kind = stream.peek_word()
+    pt = stream.accept_kind(PT)
+    kind = pt.text if pt is not None else stream.peek_word()
     if kind is not None:
-        stream.advance()
+        if pt is None:
+            stream.advance()
         if stream.accept_word("counter", "counters") and stream.accept_word("on"):
             # Late import for the reason the noun imports below give: nouns
             # depends on this module for comparisons, so the cycle is broken at
@@ -119,7 +125,7 @@ def _parse_counted_amount(
     """
     mark = stream.mark()
     if stream.accept_word("the") and stream.accept_phrase("number", "of"):
-        counters = _accept_counters_on_source(stream)
+        counters = accept_counters_on_source(stream)
         if counters is not None:
             return counters
         # Late import for the reason `parse_equal_to` gives: nouns depends on
@@ -152,7 +158,7 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     stream.accept_word("the")
 
     if stream.accept_phrase("number", "of"):
-        counters = _accept_counters_on_source(stream)
+        counters = accept_counters_on_source(stream)
         if counters is not None:
             return counters
         # Late import: nouns depends on this module for comparisons, so the

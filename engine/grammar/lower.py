@@ -654,6 +654,38 @@ def _lower_one_of(
     return (OracleInstruction("choose_one", "", {"modes": tuple(modes)}),)
 
 
+def _may_cost_payload(node: ast.May) -> dict[str, object]:
+    """The symbol dict an optional payment offers, with ``{X}`` left variable.
+
+    ``{X}`` becomes a **generic** pip whose amount is the string "x", which is
+    the one channel every amount in this engine resolves an X through: by the
+    time the handler runs, ``_execute_oracle_instruction`` has already turned
+    the sentence's where-clause into ``context.x_value``. So "you may pay {X},
+    where X is the number of +1/+1 counters on it" (Primordial Ooze) is the
+    ordinary optional payment with one number read late, not a second prompt.
+
+    A second X pip refuses: "{X}{X}" would mean twice the count, and this
+    carries the amount once. No card in the pool prints it, and guessing which
+    reading was meant is exactly what a refusal is for.
+    """
+    pips = dict(node.cost.pips)
+    variable = pips.pop("X", 0)
+    if variable > 1:
+        raise LoweringError("an optional payment reads one X, not several", node=node)
+    if variable and pips.get("generic"):
+        # "{X}{2}" — a printed constant beside the variable. Nothing prints it,
+        # and folding them together would make the offer a number the card
+        # never named.
+        raise LoweringError(
+            "an optional payment cannot mix X with a printed generic cost",
+            node=node,
+        )
+    payload: dict[str, object] = dict(pips)
+    if variable:
+        payload["generic"] = "x"
+    return payload
+
+
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,
@@ -716,7 +748,7 @@ def _lower_may(
         # *payer* one: the prompt collected its cost by counting to a number, so
         # a {B} had nothing to collect it with. `engine/mana_payment.py` is what
         # made the refusal unnecessary.
-        payload["cost"] = dict(node.cost.pips)
+        payload["cost"] = _may_cost_payload(node)
     if action:
         payload["action"] = action
     if then:
