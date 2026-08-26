@@ -64,6 +64,26 @@ class IsState:
 
 
 @dataclass(frozen=True)
+class StartedTheTurnState:
+    """"if Rasputin started the turn untapped" (Rasputin Dreamweaver).
+
+    The same axis :class:`IsState` reads, asked of a *past* moment — so it is
+    its own node rather than a flag on that one. A reader of ``IsState`` that
+    had not learned the flag would answer the present-tense question, which is
+    a different card: Rasputin tapped for mana on your own turn would still
+    grow a counter. A node nothing recognizes refuses the line instead, which is
+    the loud direction.
+
+    The board cannot answer it — the untap step has already run by the time an
+    upkeep trigger asks — so the untap step records the answer before untapping
+    anything, beside the untapped-land count Power Surge already needed.
+    """
+    subject: TargetSpec
+    state: str          # tapped
+    negated: bool = False
+
+
+@dataclass(frozen=True)
 class SubjectCharacteristicIs:
     """"if this creature's power is 1 or more" (Lesser Werewolf), "if target
     creature has toughness 5 or greater" (Blood Lust).
@@ -339,7 +359,8 @@ class ItHappened:
 
 
 Condition = Union[
-    EveryOf, CoinFlipResult, Controls, DiscardedCardWas, IsState, DiedThisTurn,
+    EveryOf, CoinFlipResult, Controls, DiscardedCardWas, IsState,
+    StartedTheTurnState, DiedThisTurn,
     ObjectHasKeyword,
     HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,

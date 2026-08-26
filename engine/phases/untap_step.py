@@ -14,6 +14,7 @@ from ..handlers._common import permanent_effective_colors
 from ..layer_bridge import printed_supertypes
 from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
 from ..control import LINKED_CONTROL_CONDITIONS
+from ..turn_state import record_turn_start_states
 from ..untap_restrictions import (
     SELF_DOESNT_UNTAP_PHRASE,
     SELF_MAY_KEEP_TAPPED_PHRASE,
@@ -177,6 +178,12 @@ class UntapStepMixin:
         # untap step untaps anything (Power Surge: X = "the number of untapped lands
         # they controlled at the beginning of this turn"). Lands tapped going into
         # the turn don't count, so tapping out before your turn avoids the damage.
+        # What every permanent's state was as the turn began, before this step
+        # changes any of it — "if this creature started the turn untapped"
+        # (Rasputin Dreamweaver) reads it at the upkeep, by which time the board
+        # no longer knows. Over every battlefield, not the active player's: the
+        # turn began for every permanent there is.
+        record_turn_start_states(self.all_permanents(), self.turn)
         self.untapped_lands_at_turn_start[player_index] = sum(
             1 for perm in self.controlled_by(player)
             if perm.card.primary_type == "land" and not perm.tapped

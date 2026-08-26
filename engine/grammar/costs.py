@@ -24,6 +24,7 @@ from .errors import GrammarError
 from .lexer import MANA, SELF
 from .lowering._common import chargeable_tap_filter
 from .nouns import parse_object_filter
+from .readers import accept_source_reference
 from .references import parse_target_spec
 from .stream import TokenStream
 
@@ -109,14 +110,22 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     The subject must be the ability's own source: :class:`ast.RemoveCounterCost`
     has no subject field, so "remove a counter from target creature" would be
     consumed and then read as the source's counter. That refuses instead.
+
+    Asked of ``accept_source_reference`` rather than of the noun parser, because
+    identity is the whole question here — the cost gives up a counter on *this*
+    permanent and nothing about the permanent's characteristics is consulted. It
+    is also the reader that knows a card naming itself is naming the source
+    ("Remove a dream counter from **Rasputin**"), which the noun parser reads
+    only in the "this <noun>" spelling; going through the filter first meant the
+    self-named spelling refused with the noun parser's error rather than being
+    read at all.
     """
     stream.expect_word("remove")
     count = ast.Fixed(1) if stream.accept_word("a", "an") else parse_amount(stream)
     counter = _expect_counter_kind(stream, " to remove").text
     stream.expect_word("counter", "counters")
     stream.expect_word("from")
-    subject = _parse_cost_object(stream, "remove a counter from")
-    if not subject.is_source:
+    if not accept_source_reference(stream):
         raise stream.error("a counter-removal cost only reads the ability's own source")
     return ast.RemoveCounterCost(counter, count)
 

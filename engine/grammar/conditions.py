@@ -412,6 +412,22 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 )
     stream.reset(has_mark)
 
+    # "if this creature **started the turn** untapped" (Rasputin Dreamweaver).
+    # The same tapped/untapped axis the present-tense clause below reads, asked
+    # of the moment the turn began — a different node, so nothing that knows
+    # only the present tense can answer it by accident. Read before that clause
+    # because both open on a source reference and only this one has a verb of
+    # its own; the order decides which error survives, not which card is read.
+    started_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_phrase(
+        "started", "the", "turn"
+    ):
+        if stream.accept_word("tapped"):
+            return ast.StartedTheTurnState(_SOURCE_SPEC, "tapped")
+        if stream.accept_word("untapped"):
+            return ast.StartedTheTurnState(_SOURCE_SPEC, "tapped", negated=True)
+    stream.reset(started_mark)
+
     state_mark = stream.mark()
     if accept_source_reference(stream) and (
         stream.accept_word("is") or stream.accept_word("'s")

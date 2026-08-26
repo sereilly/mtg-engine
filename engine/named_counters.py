@@ -27,6 +27,71 @@ counters, and nothing has to clear them.
 
 from __future__ import annotations
 
+import re
+
+#: The claim string the support gates use for the cap below.
+CAP_CLAIM = "named_counter_cap"
+
+#: "Rasputin can't have more than seven dream counters on it." A **maximum** on
+#: the store, printed as a static ability of the permanent carrying it. Both the
+#: number and the counter word are payload, for the reason every other parameter
+#: in this engine is: a card printing a different many of a differently-named
+#: counter is the same sentence.
+#:
+#: Not the same rule as ``riders._attach_counter_cap``, which reads Clockwork
+#: Beast's "**This ability** can't cause the total number of +1/+0 counters on
+#: this creature to be greater than seven". That one bounds one ability and is
+#: enforced where that ability resolves; this one bounds the permanent and is
+#: enforced at the store, so *every* way a counter could arrive is covered —
+#: which is the only reading of "can't have" that is true.
+_COUNTER_CAP = re.compile(
+    r"^this [a-z]+ can't have more than (?P<count>[a-z]+) "
+    r"(?P<counter>[a-z]+) counters on it$"
+)
+
+
+def counter_cap_line(line: str, card_name: str | None = None) -> tuple[int, str] | None:
+    """``(maximum, counter word)`` *line* imposes, or None.
+
+    Read by the support gate *and* by :func:`add_counters`, so what is claimed
+    and what is enforced cannot drift. *card_name* collapses a card that names
+    itself, through the collapser every other restriction table uses.
+    """
+    from .grammar.vocabulary import NUMBER_WORDS
+    from .oracle import _restriction_line, normalize_creature_line
+
+    text = (
+        _restriction_line(line, card_name)
+        if card_name
+        else normalize_creature_line(line)
+    )
+    match = _COUNTER_CAP.match(text)
+    if match is None:
+        return None
+    count = NUMBER_WORDS.get(match.group("count"))
+    # A number word the table does not know refuses the line rather than
+    # defaulting: a cap of one where the card prints seven is a strictly smaller
+    # card, and a cap of zero would make the permanent's own abilities inert.
+    return None if count is None else (count, match.group("counter"))
+
+
+def counter_cap(permanent, kind: str) -> int | None:
+    """The maximum number of *kind* counters *permanent* may have, or None.
+
+    Read off the **effective** card, so a copied or text-changed permanent is
+    asked what it says now (CR 613 layers 1 and 3) — the same reading
+    ``target_immunity`` gives its own restriction.
+    """
+    from .oracle import expand_card_lines
+
+    card = getattr(permanent, "effective_card", None) or permanent.card
+    for line in expand_card_lines(card):
+        capped = counter_cap_line(line, card.name)
+        if capped is not None and capped[1] == kind:
+            return capped[0]
+    return None
+
+
 def counters_key(kind: str) -> str:
     """The metadata key *kind* counters live under."""
     return f"{kind}_counters"
@@ -48,8 +113,22 @@ def add_counters(permanent, kind: str, count: int = 1) -> int:
     if count <= 0:
         return counters_on(permanent, kind)
     total = counters_on(permanent, kind) + count
+    # "…can't have more than seven dream counters on it." (Rasputin
+    # Dreamweaver.) Enforced here, at the one write, rather than at whichever
+    # path was putting the counter on: a maximum the entry state honoured and a
+    # trigger did not is a maximum that is not one.
+    cap = counter_cap(permanent, kind)
+    if cap is not None:
+        total = min(total, cap)
     permanent.metadata[counters_key(kind)] = total
     return total
 
 
-__all__ = ["add_counters", "counters_on", "counters_key"]
+__all__ = [
+    "CAP_CLAIM",
+    "add_counters",
+    "counter_cap",
+    "counter_cap_line",
+    "counters_key",
+    "counters_on",
+]

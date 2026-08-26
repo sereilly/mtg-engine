@@ -1852,3 +1852,137 @@ def test_elder_spawn_can_be_blocked_by_any_other_colour(set_pool):
     green one is not caught by it."""
     ok, msg = _r28_elder_spawn_blocked_by(set_pool, ("G",))
     assert ok, msg
+
+
+# ---------------------------------------------------------------------------
+# Round 28 — one named counter, five printed lines
+# ---------------------------------------------------------------------------
+
+
+def _r28_rasputin(set_pool):
+    """Rasputin Dreamweaver on the battlefield, entry state applied."""
+    pool = set_pool("LEG")
+    p1 = PlayerState(name="P1")
+    game = Game(players=[p1, PlayerState(name="P2")])
+    rasputin = Permanent(card=pool["Rasputin Dreamweaver"])
+    game._put_permanent_onto_battlefield(0, rasputin, None)
+    game._settle()
+    return game, p1, rasputin
+
+
+def _r28_dream_counters(permanent) -> int:
+    from engine.named_counters import counters_on
+
+    return counters_on(permanent, "dream")
+
+
+def _r28_spend_a_dream_counter(game, player, rasputin, ability_index: int = 0):
+    index = next(
+        i for i, perm in enumerate(player.battlefield) if perm is rasputin
+    )
+    result = game.activate_permanent_ability(
+        0, rasputin.card.name, permanent_index=index, ability_index=ability_index
+    )
+    game._settle()
+    return result
+
+
+def test_rasputin_compiles_supported(set_pool):
+    """Five printed lines, all about one counter the card invents (CR 122.1)."""
+    program = compile_card_oracle(set_pool("LEG")["Rasputin Dreamweaver"])
+    assert program.supported, program.reason
+
+    # Both activated abilities spend a counter, and the counter's *name* is
+    # payload on the cost — never part of an instruction kind.
+    assert [ability.cost.remove_counter for ability in program.activated_abilities] == [
+        "dream", "dream",
+    ]
+    (trigger,) = program.triggered_abilities
+    assert trigger.instruction.kind == "add_named_counter_to_self"
+    assert trigger.instruction.payload["counter"] == "dream"
+    assert trigger.instruction.payload["intervening_if"] == {
+        "kind": "started_turn_state", "state": "tapped", "negated": True,
+    }
+
+
+def test_rasputin_enters_with_seven_dream_counters(set_pool):
+    _game, _p1, rasputin = _r28_rasputin(set_pool)
+    assert _r28_dream_counters(rasputin) == 7
+
+
+def test_rasputin_spends_a_counter_for_colorless_mana(set_pool):
+    game, p1, rasputin = _r28_rasputin(set_pool)
+
+    result = _r28_spend_a_dream_counter(game, p1, rasputin)
+
+    assert result.supported, result.details
+    assert _r28_dream_counters(rasputin) == 6
+    assert p1.mana_pool["C"] == 1
+
+
+def test_rasputin_cannot_activate_with_no_counters_left(set_pool):
+    """The cost is a counter, so an empty store is an ability nobody can pay —
+    not one that resolves for free."""
+    game, p1, rasputin = _r28_rasputin(set_pool)
+    for _ in range(7):
+        _r28_spend_a_dream_counter(game, p1, rasputin)
+    assert _r28_dream_counters(rasputin) == 0
+
+    result = _r28_spend_a_dream_counter(game, p1, rasputin)
+
+    assert not result.supported
+    assert _r28_dream_counters(rasputin) == 0
+
+
+def test_rasputin_regrows_a_counter_at_upkeep_when_it_started_untapped(set_pool):
+    game, p1, rasputin = _r28_rasputin(set_pool)
+    _r28_spend_a_dream_counter(game, p1, rasputin)
+    assert _r28_dream_counters(rasputin) == 6
+
+    game.start_turn(0)
+    game._settle()
+
+    assert _r28_dream_counters(rasputin) == 7
+
+
+def test_rasputin_regrows_nothing_when_it_started_the_turn_tapped(set_pool):
+    """The board cannot answer this at the upkeep — the untap step has already
+    run — so it is the record taken before untapping that decides."""
+    game, p1, rasputin = _r28_rasputin(set_pool)
+    _r28_spend_a_dream_counter(game, p1, rasputin)
+    rasputin.tapped = True
+
+    game.start_turn(0)
+    game._settle()
+
+    assert not rasputin.tapped, "the untap step still untaps it"
+    assert _r28_dream_counters(rasputin) == 6
+
+
+def test_rasputin_never_exceeds_seven_dream_counters(set_pool):
+    """"…can't have more than seven dream counters on it" is a maximum on the
+    store, so it holds however the counter was arriving."""
+    game, _p1, rasputin = _r28_rasputin(set_pool)
+    assert _r28_dream_counters(rasputin) == 7
+
+    game.start_turn(0)
+    game._settle()
+
+    assert _r28_dream_counters(rasputin) == 7
+
+
+def test_rasputin_prevents_one_damage_for_a_counter(set_pool):
+    game, p1, rasputin = _r28_rasputin(set_pool)
+
+    result = _r28_spend_a_dream_counter(game, p1, rasputin, ability_index=1)
+    assert result.supported, result.details
+    assert _r28_dream_counters(rasputin) == 6
+
+    from engine.damage_events import deal_damage
+
+    outcome = deal_damage(
+        game,
+        {"recipient": rasputin, "amount": 3, "source": rasputin, "combat": False},
+    )
+
+    assert outcome.dealt == 2, "the shield absorbs exactly the next 1 damage"

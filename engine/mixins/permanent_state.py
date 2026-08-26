@@ -51,7 +51,7 @@ from ..handlers._common import evaluate_count, resolve_amount
 from ..search_filters import name_key
 from ..subject_filters import subject_matches
 from ..models import CardDefinition, Permanent, PlayerState
-from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
+from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle, expand_card_lines
 from ..pt import clear_base_pt, set_base_pt
 from ..static_bonuses import (
     BASIC_LAND_WORDS,
@@ -326,7 +326,8 @@ class PermanentStateMixin:
         # are a body that cannot fight (0 power) or one that dies to any ping
         # (1 toughness at the top of Shapeshifter's range), and a seat that
         # never answers should not be handed either.
-        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+        entry_lines = expand_card_lines(permanent.effective_card)
+        for raw_line in entry_lines:
             bounds = choose_number_on_enter(raw_line)
             if bounds is None:
                 continue
@@ -342,23 +343,34 @@ class PermanentStateMixin:
 
         # enters with fixed counters (Clockwork Beast). Track the counter count so
         # the end-of-combat trigger and the upkeep activated ability can adjust it.
-        # "This Equipment enters with a soul counter on it." (Malefic Scythe.)
-        # A CR 122.1 counter, so the word is data and the store is the one
-        # engine/named_counters.py owns — what the counter *means* is whatever
-        # the card's other lines say, which here is the P/T grant layer 7c
-        # derives from the same store.
-        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
-            counter = enters_with_named_counter(raw_line)
-            if counter is not None:
-                add_named_counters(permanent, counter, 1)
+        # "This Equipment enters with a soul counter on it." (Malefic Scythe) /
+        # "Rasputin enters with seven dream counters on it." (Rasputin
+        # Dreamweaver.) A CR 122.1 counter, so the word *and the number* are
+        # data and the store is the one engine/named_counters.py owns — what the
+        # counter means is whatever the card's other lines say, which for
+        # Malefic Scythe is the P/T grant layer 7c derives from the same store
+        # and for Rasputin is what two of his activated abilities spend.
+        #
+        # The card's name goes in because a card may write the subject as that
+        # name, and the reader collapses it through the same seam the support
+        # gate does.
+        for raw_line in entry_lines:
+            placed = enters_with_named_counter(
+                raw_line, permanent.effective_card.name
+            )
+            if placed is not None:
+                count, counter = placed
+                add_named_counters(permanent, counter, count)
 
         # "…enters with <N> <kind> counters on it." The count and the kind are
         # read off the line (engine/enter_effects.enters_with_pt_counters), so
         # Clockwork Beast's seven, Clockwork Avian's four and Triskelion's
         # three are one rule. They used to be two literal sentences, which is
         # why the first worked and the others did not.
-        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
-            placement = enters_with_pt_counters(raw_line)
+        for raw_line in entry_lines:
+            placement = enters_with_pt_counters(
+                raw_line, permanent.effective_card.name
+            )
             if placement is None:
                 continue
             count, kind = placement

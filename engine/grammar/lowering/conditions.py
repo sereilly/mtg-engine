@@ -282,6 +282,16 @@ def _lower_condition(
         }
     if isinstance(condition, ast.IsState):
         return {"kind": "is_state", "state": condition.state, "negated": condition.negated}
+    if isinstance(condition, ast.StartedTheTurnState):
+        # Its own kind, not `is_state` with a flag: the evaluator reads a
+        # different thing (the untap step's record, not the board), so a payload
+        # key the present-tense branch could ignore would answer the wrong
+        # question silently.
+        return {
+            "kind": "started_turn_state",
+            "state": condition.state,
+            "negated": condition.negated,
+        }
     if isinstance(condition, ast.DiedThisTurn):
         return {"kind": "died_this_turn", "filter": condition.filter.to_payload()}
     if isinstance(condition, ast.ReturnedToHandThisTurn):

@@ -2282,7 +2282,16 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # for no reason anyone had decided. Asking the table means a card printing
     # any phrase the entry state implements is admitted, and one printing a
     # phrase it does not is still refused by name.
-    if enter_effect_line(normalized) is not None:
+    if enter_effect_line(normalized, card_name) is not None:
+        return True
+    # "Rasputin can't have more than seven dream counters on it." A maximum on
+    # a CR 122.1 counter store, enforced at the single write in
+    # engine/named_counters.py — so like every table above it needs no
+    # instruction, and like every table above the gate asks the implementer
+    # rather than keeping its own copy of the sentence.
+    from .named_counters import counter_cap_line
+
+    if counter_cap_line(normalized, card_name) is not None:
         return True
     # A CR 601.2f cost change the casting path derives from every permanent's
     # own text — "Noncreature spells cost {1} more to cast" (Vryn Wingmare),
@@ -2815,6 +2824,22 @@ def expand_ability_lines(
     )
     return expand_equip_lines(expand_modal_activated_lines(oracle_text))
 
+def expand_card_lines(card) -> list[str]:
+    """*card*'s printed lines after every rewrite :func:`expand_ability_lines`
+    applies, as a list.
+
+    The convenience the rule "every other reader of a card's lines must start
+    from that same function" needs to be cheap to obey. A reader holding the
+    card has no excuse to split ``oracle_text`` itself, and the one that did —
+    the entry state — was reading a legendary card's shortened self-reference
+    that the gate above it had already written out, so the card compiled
+    supported and then entered with nothing on it.
+    """
+    return expand_ability_lines(
+        card.oracle_text or "", card_name=card.name, legendary=card.is_legendary
+    ).splitlines()
+
+
 # Layouts the compiler can read straight from the top-level characteristics.
 # Every other layout (split, flip, transform, modal_dfc, adventure, meld, …)
 # leaves mana_cost and oracle_text empty and puts the real text in card_faces,
@@ -2950,8 +2975,16 @@ def _derived_static_claims(
     # The whole entry-state registry, not two of its constants: every phrase in
     # engine/enter_effects.py is implemented by _initialize_permanent_state, so
     # naming a subset here is the same partial-list mistake one level down.
-    if any(enter_effect_line(line) for line in oracle_text.splitlines()):
+    if any(
+        enter_effect_line(line, card_name) for line in oracle_text.splitlines()
+    ):
         claims.append("enter_effects")
+    from .named_counters import CAP_CLAIM, counter_cap_line
+
+    if any(
+        counter_cap_line(line, card_name) for line in oracle_text.splitlines()
+    ):
+        claims.append(CAP_CLAIM)
     # CR 614 replacement interceptors — **the seventh table, and the one this
     # list did not ask.** An interceptor self-selects off the card's own text at
     # the event it modifies, so like the six above it needs no instruction to
