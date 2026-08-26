@@ -83,6 +83,17 @@ class CardDefinition:
     printings: tuple[str, ...] = ()
 
     @property
+    def is_legendary(self) -> bool:
+        """CR 205.4a — the supertype, read off the printed type line.
+
+        Here rather than at the one caller because it is a characteristic of the
+        card: the compiler asks it to know whether the card's shortened name is
+        a self-reference (``engine/self_reference.py``), and a token or a test
+        fixture with no supertype answers no without anyone remembering to.
+        """
+        return "legendary" in self.type_line.lower()
+
+    @property
     def primary_type(self) -> str:
         lowered = self.type_line.lower()
         for known in ("land", "creature", "artifact", "enchantment", "planeswalker", "instant", "sorcery"):

@@ -2782,7 +2782,9 @@ def _printed_line_for(expanded_line: str | None, printed_text: str) -> str:
     return expanded_line
 
 
-def expand_ability_lines(oracle_text: str) -> str:
+def expand_ability_lines(
+    oracle_text: str, *, card_name: str | None = None, legendary: bool = False
+) -> str:
     """Every rewrite the compiler applies to a card's text before a single line
     is classified — and therefore the text every *other* reader of a card's
     lines must start from (``engine/legality.py``, ``scripts/parse_coverage.py``,
@@ -2797,7 +2799,20 @@ def expand_ability_lines(oracle_text: str) -> str:
       Activate only as a sorcery." (``engine/equipment.py``). From there it is
       an ordinary activated ability to the grammar, the cost parser, the timing
       table and the target picker, none of which know the word.
+
+    And one rewrite that is the *card's* rather than the rules': a legendary
+    card's shortened self-reference written out in full
+    (``engine/self_reference.py``). It belongs in this pass for exactly the
+    reason the other two do — every reader of a card's lines has to see the same
+    sentence, and the readers that see only the compiler's stored text have no
+    name to shorten *with*. A caller that names no card gets the text unchanged,
+    which is what every reader asking about a line rather than a card wants.
     """
+    from .self_reference import expand_short_self_references
+
+    oracle_text = expand_short_self_references(
+        oracle_text, card_name, legendary=legendary
+    )
     return expand_equip_lines(expand_modal_activated_lines(oracle_text))
 
 # Layouts the compiler can read straight from the top-level characteristics.
@@ -2996,6 +3011,7 @@ def _compile_card_oracle(
     oracle_text: str,
     keywords: tuple[str, ...],
     layout: str = "normal",
+    legendary: bool = False,
 ) -> OracleProgram:
     # Pyramids-style "{cost}: Choose one —" + bullets become one activated
     # ability per bullet, and an equip keyword line becomes the activated
@@ -3003,7 +3019,9 @@ def _compile_card_oracle(
     # `printed_text` is kept for the one question that is about the card as
     # printed — does it carry an equip line at all (the Equipment gate below).
     printed_text = oracle_text
-    oracle_text = expand_ability_lines(oracle_text)
+    oracle_text = expand_ability_lines(
+        oracle_text, card_name=name, legendary=legendary
+    )
     normalized_text = _normalize_text(oracle_text)
 
     if layout not in SUPPORTED_LAYOUTS:
@@ -3382,7 +3400,8 @@ def _compile_card_oracle(
 
 def compile_card_oracle(card: CardDefinition) -> OracleProgram:
     return _compile_card_oracle(
-        card.name, card.primary_type, card.oracle_text, card.keywords, card.layout
+        card.name, card.primary_type, card.oracle_text, card.keywords, card.layout,
+        card.is_legendary,
     )
 
 

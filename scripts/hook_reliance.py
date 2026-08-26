@@ -209,7 +209,9 @@ def discover_registries(pool_names: set[str]) -> list[Registry]:
 def _printed_lines(card) -> list[str]:
     """The card's rules lines as the compiler sees them: modal bullets and
     equip keyword lines expanded."""
-    text = oracle.expand_ability_lines(card.oracle_text or "")
+    text = oracle.expand_ability_lines(
+        card.oracle_text or "", card_name=card.name, legendary=card.is_legendary
+    )
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 

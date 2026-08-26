@@ -92,7 +92,10 @@ def refusals_report(cards) -> list[tuple[str, str, str, list[tuple[str, str, str
         if program.supported:
             continue
         lines: list[tuple[str, str, str]] = []
-        for raw in expand_ability_lines(card.oracle_text or "").splitlines():
+        expanded = expand_ability_lines(
+            card.oracle_text or "", card_name=card.name, legendary=card.is_legendary
+        )
+        for raw in expanded.splitlines():
             line = raw.strip()
             if not line:
                 continue
