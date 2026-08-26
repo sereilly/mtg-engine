@@ -33,6 +33,9 @@ from ._common import (
     _targets_payload,
 )
 from ._events import (
+    CHOSEN_CAST_DAMAGE,
+    CHOSEN_PLAYER,
+    _chosen_cast_amount,
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_PLAYER,
@@ -451,11 +454,52 @@ def _lower_fight(
     return (OracleInstruction("source_fights_target", "", payload),)
 
 
+def _lower_chosen_cast_damage(
+    node: ast.DealDamage,
+    chosen: "tuple[ast.DamageDealtByChosenCast, str | None]",
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """Backdraft's second sentence — **two instructions**, because it contains
+    a decision: "one of those" is a pick the resolution makes, and it must
+    happen before the damage that reads it. A step rather than a branch inside
+    the handler, so the pick is visible to ``_PRODUCES``, answerable through the
+    prompt queue, and suspends the resolution as every other mid-resolution
+    choice does. Gated on the earlier sentence having chosen a player.
+    """
+    definition, rounding = chosen
+    if CHOSEN_PLAYER not in produced:
+        raise LoweringError("'one of those spells' with no player chosen", node=node)
+    if not _damaged_player_is(node.recipients, "that_player"):
+        raise LoweringError("this damage reaches the chosen player", node=node)
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("a chosen-cast damage carries no riders", node=node)
+    spec: dict[str, object] = {"back_reference": CHOSEN_CAST_DAMAGE}
+    if rounding is not None:
+        spec["half"] = rounding
+    return (
+        OracleInstruction(
+            "choose_cast_this_turn", "",
+            {"card_type": definition.card_type, "by_result": CHOSEN_PLAYER,
+             "result_key": CHOSEN_CAST_DAMAGE},
+        ),
+        OracleInstruction(
+            "deal_damage", "",
+            {"amount": "x", X_FROM_COUNT: spec, "recipient": CHOSEN_PLAYER},
+        ),
+    )
+
+
 def _lower_damage(
     node: ast.DealDamage,
     event: str | None = None,
     produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
+    # "…equal to half the damage dealt by one of those sorcery spells this
+    # turn" (Backdraft). Read first: the amount carries a *decision*, and every
+    # branch below assumes a quantity computable where it stands.
+    chosen = _chosen_cast_amount(node.amount)
+    if chosen is not None:
+        return _lower_chosen_cast_damage(node, chosen, produced)
     if isinstance(node.amount, ast.CountOf):
         return _lower_counted_damage(node)
     if isinstance(node.amount, ast.BoardCount):

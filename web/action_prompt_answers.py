@@ -555,6 +555,25 @@ def _action_least_power_choice_confirm(session, req, seat_type):
     ):
         raise HTTPException(status_code=400, detail="invalid creature choice")
 
+@action_handler("player_choice_confirm")
+def _action_player_choice_confirm(session, req, seat_type):
+    # Backdraft: "Choose a player who cast one or more sorcery spells this
+    # turn." The engine re-checks the seat against the offered list, so a stale
+    # answer is refused rather than applied to whoever now sits there.
+    if req.chosen_seat is None:
+        raise HTTPException(status_code=400, detail="chosen_seat is required")
+    if not session.game.confirm_player_choice(req.seat, req.chosen_seat):
+        raise HTTPException(status_code=400, detail="invalid player choice")
+
+@action_handler("cast_choice_confirm")
+def _action_cast_choice_confirm(session, req, seat_type):
+    # Backdraft: which of the offered spells "one of those" names, by its
+    # position in the turn's cast ledger.
+    if req.cast_index is None:
+        raise HTTPException(status_code=400, detail="cast_index is required")
+    if not session.game.confirm_cast_choice(req.seat, req.cast_index):
+        raise HTTPException(status_code=400, detail="invalid spell choice")
+
 @action_handler("word_of_command_confirm")
 def _action_word_of_command_confirm(session, req, seat_type):
     # Word of Command: the caster records the card the target must play

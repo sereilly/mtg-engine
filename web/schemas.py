@@ -83,6 +83,8 @@ ActionKind = Literal[
     "enter_choice_confirm",
     "body_choice_confirm",
     "least_power_choice_confirm",
+    "player_choice_confirm",
+    "cast_choice_confirm",
     "loyalty_recipient_confirm",
     "mode_choice_confirm",
     "lamp_draw_confirm",
@@ -382,6 +384,15 @@ class GameActionRequest(BaseModel):
     # (a list only for a creature that can block additional creatures), sent with
     # assign_camouflage_piles. Creatures left out go into no pile.
     camouflage_piles: dict[int, int | list[int]] | None = None
+    # Backdraft: the seat chosen by "Choose a player who cast one or more
+    # sorcery spells this turn", sent with `player_choice_confirm`. Its own
+    # field rather than `target_seat`: a chosen player is not a target
+    # (CR 601.2c declares none), and reusing the target field would let a
+    # picker built for targets answer a prompt that has none.
+    chosen_seat: int | None = Field(default=None, ge=0)
+    # Backdraft: which of the offered spells "one of those sorcery spells" names,
+    # as a position in the turn's cast ledger, sent with `cast_choice_confirm`.
+    cast_index: int | None = Field(default=None, ge=0)
     # Shapeshifter: the number its controller chose, sent with
     # `number_choice_confirm`. Bounded by the card's printed range, which the
     # engine re-checks -- an out-of-range answer is refused rather than clamped.

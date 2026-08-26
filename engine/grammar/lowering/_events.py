@@ -184,6 +184,16 @@ _EVENT_QUANTITIES: dict[str, str] = {
 # an empty record.
 _UNTAPPED_PERMANENTS = "untapped_permanents"
 
+# The seat "Choose a player who cast one or more sorcery spells this turn."
+# records, and the number "the damage dealt by one of those sorcery spells this
+# turn" records once one of them is chosen (Backdraft). Named here beside the
+# two above and for their reason: the `game` and `damage` lowering families and
+# ``categories._PRODUCES`` all write these strings, so a second spelling would
+# make one producer gate vacuous while the handler read an empty record — and
+# on this card that is a spell that reports itself resolved and deals nothing.
+CHOSEN_PLAYER = "chosen_player"
+CHOSEN_CAST_DAMAGE = "damage_dealt_by_chosen_cast"
+
 # The scratchpad keys that are *quantities*. `categories._PRODUCES` also records
 # things no amount can read — a controller's seat, a list of exiled cards — so
 # a bare back-reference resolves against this narrower set. A producer added
@@ -193,6 +203,7 @@ _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
     "damage_dealt",
     # How many cards a discard this effect asked for actually went (Recall).
     "discarded_count",
+    CHOSEN_CAST_DAMAGE,
 })
 
 # The scratchpad keys that hold *permanents*, by id — what an earlier step of
@@ -304,3 +315,21 @@ def binds_block_pair(event: str | None, event_subject: object | None) -> bool:
     sentence cannot reach here bare.
     """
     return event in _BLOCK_PAIR_EVENTS and event_subject is not None
+
+
+def _chosen_cast_amount(
+    amount: ast.Amount,
+) -> "tuple[ast.DamageDealtByChosenCast, str | None] | None":
+    """"[half] the damage dealt by one of those <type> spells this turn", and
+    how the card said to round it — or None when the amount is something else.
+
+    The halving is unwrapped here rather than inside the branch below, for the
+    reason ``lower_where_x`` unwraps ``ast.Times``: the rounding belongs to the
+    printed quantity and rides the count spec every computed amount already
+    travels on (CR 107.2).
+    """
+    rounding = None
+    if isinstance(amount, ast.Half):
+        rounding = amount.rounding
+        amount = amount.of
+    return (amount, rounding) if isinstance(amount, ast.DamageDealtByChosenCast) else None

@@ -928,3 +928,88 @@ def test_the_twin_leaving_sacrifices_only_its_own_stangg(set_pool):
 
     assert all(perm.card.name != "Stangg" for perm in p1.battlefield), game.log
     assert [perm for perm in p2.battlefield if perm.card.name == "Stangg"] == [other]
+
+
+# ---------------------------------------------------------------------------
+# Round 35 — Blazing Effigy, and a record of what each source dealt this turn
+# ---------------------------------------------------------------------------
+
+
+def _r35_effigies(set_pool, count: int):
+    """*count* Blazing Effigies under P1, and a second seat that owns nothing."""
+    effigy = set_pool("LEG")["Blazing Effigy"]
+    mine = [Permanent(card=effigy) for _ in range(count)]
+    p1 = PlayerState(name="P1", battlefield=mine)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    return game, p1, p2, mine
+
+
+def test_blazing_effigy_deals_three_with_nothing_behind_it(set_pool):
+    """"X is 3 plus the amount of damage dealt to this creature this turn."
+    The printed floor, which is what the card does on an empty history — and
+    the number a reader that gave up on a missing record would silently drop."""
+    game, p1, _p2, effigies = _r35_effigies(set_pool, 2)
+
+    game._destroy_swept_permanents(p1, lambda perm: perm is effigies[0])
+    game._settle()
+
+    # 3 damage on a 0/3 is lethal, so the second one dies to the first's trigger.
+    assert p1.battlefield == [], game.log
+    assert any("dealt 3 damage" in line for line in game.log), game.log
+
+
+def test_the_chain_adds_what_the_previous_effigy_dealt(set_pool):
+    """The card's whole point: each Effigy that dies passes on 3 plus what the
+    one before it dealt to the one after. 3, then 6, then 9.
+
+    The 6 is the number this round exists for — the damage that made it is on a
+    creature that is in a graveyard by the time its own trigger asks, with the
+    damage marked on it wiped when it left (CR 400.7). Nothing on a board can
+    answer it; ``engine/damage_ledger.py`` is the record that can."""
+    game, p1, _p2, effigies = _r35_effigies(set_pool, 3)
+
+    game._destroy_swept_permanents(p1, lambda perm: perm is effigies[0])
+    game._settle()
+
+    assert p1.battlefield == [], game.log
+    assert any("dealt 6 damage" in line for line in game.log), game.log
+
+
+def test_damage_from_a_differently_named_source_is_not_counted(set_pool):
+    """"…by other sources **named** Blazing Effigy" (CR 201.2). A ledger that
+    summed every point dealt to the creature would make this Effigy's trigger
+    deal 5, and it would still look like a working card."""
+    from tests.helpers import _damage_dealt
+
+    game, p1, _p2, effigies = _r35_effigies(set_pool, 2)
+    bolt = _vanilla("Not An Effigy", 1, 1)
+    _damage_dealt(game, effigies[0], 2, source=bolt)
+
+    game._destroy_swept_permanents(p1, lambda perm: perm is effigies[0])
+    game._settle()
+
+    assert any("dealt 3 damage" in line for line in game.log), game.log
+    assert not any("dealt 5 damage" in line for line in game.log), game.log
+
+
+def test_the_record_is_per_permanent_and_not_per_card(set_pool):
+    """A ``CardDefinition`` is shared by every copy in every deck, so a record
+    keyed on the card would credit one Effigy with what another one took.
+
+    Asked of the record itself rather than through a trigger, because the
+    difference is invisible on a board small enough to run: the first Effigy is
+    dealt nothing and the second is dealt 3, and a card-keyed ledger would
+    answer 3 for both. Keyed on ``permanent_id``, which CR 400.7 makes one per
+    time on the battlefield."""
+    from engine.damage_ledger import damage_dealt_to_permanent
+
+    game, p1, _p2, effigies = _r35_effigies(set_pool, 3)
+    first, second = effigies[0].permanent_id, effigies[1].permanent_id
+
+    game._destroy_swept_permanents(p1, lambda perm: perm is effigies[0])
+    game._settle()
+
+    assert damage_dealt_to_permanent(game, first, source_name="Blazing Effigy") == 0
+    assert damage_dealt_to_permanent(game, second, source_name="Blazing Effigy") == 3

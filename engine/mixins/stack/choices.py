@@ -1976,6 +1976,146 @@ class PendingChoicesMixin:
         ):
             self._record_permanent_choice(choice, None)
 
+    # -- A player, and one of their casts this turn --------------------------
+
+    def arm_player_choice(
+        self,
+        player_index: int,
+        *,
+        card_name: str,
+        prompt: str,
+        result_key: str,
+        seats,
+        context,
+    ) -> PendingChoice | None:
+        """Queue "choose one of these players" for *player_index*.
+
+        The seats are carried rather than the rule that produced them, unlike
+        ``arm_permanent_choice``: what a seat *is* cannot stop qualifying
+        mid-resolution the way a permanent can leave the battlefield, because
+        "cast one or more sorcery spells this turn" is a fact about a turn that
+        is already over. A seat that has *lost* is the one exception, and it is
+        re-checked when the answer arrives.
+        """
+        return self.arm_pending_choice(
+            "player_choice", player_index,
+            card_name=card_name,
+            prompt=prompt,
+            result_key=result_key,
+            seats=[int(seat) for seat in seats],
+            names=[self.players[int(seat)].name for seat in seats],
+            _context=context,
+        )
+
+    def live_player_choices(self, choice: PendingChoice) -> list[int]:
+        """The offered seats that are still legal answers (CR 800.4a)."""
+        return [
+            seat for seat in choice.data.get("seats") or ()
+            if 0 <= seat < len(self.players) and not self.players[seat].lost
+        ]
+
+    def confirm_player_choice(self, player_index: int, seat) -> bool:
+        return self.resolve_pending_choice("player_choice", player_index, seat=seat)
+
+    def _record_player_choice(self, choice: PendingChoice, value) -> None:
+        choice.data["_context"].results[choice.data["result_key"]] = value
+        self.discard_pending_choice(choice)
+
+    def _resolve_player_choice(self, choice: PendingChoice, seat) -> bool:
+        live = self.live_player_choices(choice)
+        if not live:
+            # Everyone the effect offered has left the game. The sentence
+            # carries on with nobody chosen rather than staying owed a prompt
+            # nobody can answer.
+            self._record_player_choice(choice, None)
+            return True
+        if not isinstance(seat, int) or seat not in live:
+            return False
+        self._record_player_choice(choice, seat)
+        self.log.append(
+            f"{choice.data.get('card_name', 'Effect')}: chose {self.players[seat].name}"
+        )
+        return True
+
+    def _default_player_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** live seat offered.
+
+        Not a valuation — seat order is seed-deterministic, which is what AI and
+        headless play need. A card whose choice should be made cleverly needs a
+        weight in ``engine/ai_valuation.py``, not a branch here.
+        """
+        live = self.live_player_choices(choice)
+        if not live or not self._resolve_player_choice(choice, live[0]):
+            self._record_player_choice(choice, None)
+
+    def arm_cast_choice(
+        self,
+        player_index: int,
+        *,
+        card_name: str,
+        prompt: str,
+        result_key: str,
+        options,
+        context,
+    ) -> PendingChoice | None:
+        """Queue "choose one of those spells" for *player_index*.
+
+        The options are ledger positions (``engine/damage_ledger.py``), because
+        a prompt's answer is JSON and a ``StackItem`` is not — and because the
+        spells being chosen between have already resolved and left the stack,
+        which is the whole reason the ledger exists.
+        """
+        from ...damage_ledger import damage_dealt_by_cast
+
+        return self.arm_pending_choice(
+            "cast_choice", player_index,
+            card_name=card_name,
+            prompt=prompt,
+            result_key=result_key,
+            options=[int(index) for index, _entry in options],
+            names=[getattr(entry.card, "name", "") for _index, entry in options],
+            # What each one dealt, so the picker is a decision rather than a
+            # guess. Public information: damage dealt this turn was dealt in the
+            # open, and the choosing player could count it from the log.
+            damages=[damage_dealt_by_cast(self, entry.item) for _index, entry in options],
+            _context=context,
+        )
+
+    def _record_cast_choice(self, choice: PendingChoice, value: int) -> None:
+        choice.data["_context"].results[choice.data["result_key"]] = int(value)
+        self.discard_pending_choice(choice)
+
+    def confirm_cast_choice(self, player_index: int, cast_index) -> bool:
+        return self.resolve_pending_choice(
+            "cast_choice", player_index, cast_index=cast_index
+        )
+
+    def _resolve_cast_choice(self, choice: PendingChoice, cast_index) -> bool:
+        from ...damage_ledger import cast_by_index, damage_dealt_by_cast
+
+        options = list(choice.data.get("options") or ())
+        if not isinstance(cast_index, int) or cast_index not in options:
+            return False
+        entry = cast_by_index(self, cast_index)
+        if entry is None:  # pragma: no cover - the ledger is not edited mid-turn
+            self._record_cast_choice(choice, 0)
+            return True
+        dealt = damage_dealt_by_cast(self, entry.item)
+        self._record_cast_choice(choice, dealt)
+        self.log.append(
+            f"{choice.data.get('card_name', 'Effect')}: named {entry.card.name}, "
+            f"which dealt {dealt} damage this turn"
+        )
+        return True
+
+    def _default_cast_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** cast offered, in the order they were
+        cast. Deterministic rather than clever, for ``_default_player_choice``'s
+        reason."""
+        options = list(choice.data.get("options") or ())
+        if not options or not self._resolve_cast_choice(choice, options[0]):
+            self._record_cast_choice(choice, 0)
+
     # -- A card put onto the battlefield out of a hand -----------------------
 
     def arm_put_from_hand_choice(self, player_index: int, payload: dict, context) -> None:
@@ -3573,6 +3713,40 @@ register_choice(
     # answer the prompt as much as the confirm does; everything else waits.
     blocked_detail="pay for the spell on the stack before other actions",
     also_answers=("tap", "activate"),
+)
+
+register_choice(
+    "player_choice",
+    resolve=lambda game, choice, r: game._resolve_player_choice(choice, r.get("seat")),
+    default=lambda game, choice: game._default_player_choice(choice),
+    action="player_choice_confirm",
+    prompt_key="player_choice",
+    blocked_detail="choose a player for the resolving spell before other actions",
+    # The steps behind this one in the same sentence read the answer - the pick
+    # of "one of those spells" is narrowed by it, and the damage lands on the
+    # seat it names - so the loop they are part of has to stop until it exists.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # Who cast what this turn is public information (no CR 400.2 hidden zone is
+    # involved), so a seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+register_choice(
+    "cast_choice",
+    resolve=lambda game, choice, r: game._resolve_cast_choice(choice, r.get("cast_index")),
+    default=lambda game, choice: game._default_cast_choice(choice),
+    action="cast_choice_confirm",
+    prompt_key="cast_choice",
+    blocked_detail="choose one of those spells before other actions",
+    # Armed by the *answer* to the player choice above, and read by the damage
+    # step behind it - the chain of decisions that stays one resolution.
+    suspends=True,
+    default_at_arm=True,
+    spectator_visible=True,
 )
 
 register_choice(

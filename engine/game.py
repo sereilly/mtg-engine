@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # Re-exported for backwards compatibility with external importers.
+from .damage_ledger import DamageLedger
 from .game_types import SimulationResult, StackItem
 from .models import CardDefinition, PlayerState
 from .mixins import (
@@ -400,6 +401,14 @@ class Game(
     # waits on a prompt, which is the honest answer both times: nothing is
     # running.
     resolving_items: list = field(default_factory=list)
+    # What every source dealt this turn, and every cast that could have dealt
+    # something — one record, read by "the amount of damage dealt to this
+    # creature this turn by other sources named …" (Blazing Effigy) and by "the
+    # damage dealt by one of those sorcery spells this turn" (Backdraft). Both
+    # ask about an object that is no longer anywhere a board read could find it,
+    # which is why it is a record and not a scan. Written from `deal_damage`,
+    # cleared with the turn. See engine/damage_ledger.py.
+    damage_ledger: DamageLedger = field(default_factory=DamageLedger)
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

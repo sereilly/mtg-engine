@@ -22,6 +22,7 @@ from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
 from ...cast_costs import AdditionalCost, additional_costs
 from ...cast_restrictions import check_cast_timing
+from ...damage_ledger import record_cast
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
 from ...cost_modifiers import (
@@ -655,8 +656,7 @@ class SpellCastingMixin:
                 matching = [it for it in self.stack if not color_filter or color_filter in it.card.colors]
                 if matching:
                     target_stack_item_val = matching[-1]
-            self._stack_push(
-                StackItem(
+            spell_item = StackItem(
                     card=card,
                     caster_index=caster_index,
                     target_player_index=target_player_index,
@@ -682,8 +682,8 @@ class SpellCastingMixin:
                         # second lookup that could not succeed.
                         "sacrificed_for_cost": sacrificed_for_cost,
                     },
-                )
             )
+            self._stack_push(spell_item)
             self.log.append(f"{card.name} added to stack")
             # "Whenever a player casts a [color] spell" triggers (Rod/Cup/Sphere)
             # and "whenever you cast an X spell" triggers (Verduran Enchantress)
@@ -702,6 +702,11 @@ class SpellCastingMixin:
             # one cast late.
             if 0 <= caster_index < len(self.players):
                 self.players[caster_index].spells_cast_this_turn.append(card)
+            # The same record, by the identity that list cannot carry: a
+            # `CardDefinition` is shared by every copy in every deck, so two
+            # casts of one sorcery are one entry there and two here. Backdraft's
+            # "one of those sorcery spells" is a choice **between** them.
+            record_cast(self, spell_item)
             self._apply_spell_cast_any_triggers(caster_index, card, from_zone)
             self._apply_cast_triggers(caster_index, card)
             return SimulationResult(card.name, True, classification.effect_kind, "queued")

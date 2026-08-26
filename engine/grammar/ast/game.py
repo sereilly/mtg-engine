@@ -177,6 +177,25 @@ class ChooseNumber:
 
 
 @dataclass(frozen=True)
+class ChoosePlayerWhoCast:
+    """``Choose a player who cast one or more sorcery spells this turn.``
+    (Backdraft.)
+
+    A choice of a *player*, which this grammar had no node for at all: every
+    other player a sentence names is targeted, is the caster, or is derived
+    from an event. This one is chosen at resolution out of a set the turn's
+    history defines, and the sentence after it says "that player".
+
+    ``card_type`` is payload — a card printed "instant spells" is the same
+    sentence — and so is ``minimum``, the "one or more" the clause spells out.
+    Both are read rather than assumed, because a clause narrowing the set in a
+    way this could not carry must refuse rather than choose from a wider one.
+    """
+    card_type: str
+    minimum: int = 1
+
+
+@dataclass(frozen=True)
 class EndTheTurn:
     """``End the turn.`` (Discontinuity, Time Stop, Sundial of the Infinite.)
 

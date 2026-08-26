@@ -84,7 +84,14 @@ def count_from_payload(
     # is no longer there.
     back_reference = spec.get("back_reference")
     if back_reference is not None:
-        return max(0, int(context.results.get(back_reference, 0) or 0))
+        # Scaled like every other aggregate below. "…equal to **half** the
+        # damage dealt by one of those sorcery spells this turn, rounded down"
+        # (Backdraft) is the first back-reference the pool halves, and a
+        # rounding honoured at five return sites and forgotten at the sixth is
+        # the dropped-rider bug this helper exists to make impossible. Every
+        # earlier producer carries neither key, so `_scaled` is the identity
+        # for all of them.
+        return max(0, _scaled(int(context.results.get(back_reference, 0) or 0), spec))
     # "…where X is the number of **+1/+1 counters on it**" (Primordial Ooze).
     # Counters sitting on the ability's own source: not a set of objects in any
     # zone, so `evaluate_count` has nothing to scan for it. The kind is data,
@@ -98,6 +105,14 @@ def count_from_payload(
         from ..named_counters import counters_on
 
         return counters_on(source, str(counters))
+    # "…where X is 3 plus the amount of damage dealt to this creature this turn
+    # by other sources named ~" (Blazing Effigy). A *history* rather than
+    # anything on a board: `evaluate_count` scans zones, and the creature this
+    # asks about is in a graveyard by the time a dies-trigger asks — with the
+    # damage marked on it wiped when it left (CR 400.7).
+    ledger_query = spec.get("damage_ledger")
+    if isinstance(ledger_query, dict):
+        return _damage_dealt_this_turn(game, context, ledger_query)
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):
         return _characteristic_of_object(game, context, characteristic, instruction)
@@ -106,6 +121,38 @@ def count_from_payload(
         game, owner, spec,
         exclude=context.source_permanent, source=context.source_permanent,
     )
+
+
+def _damage_dealt_this_turn(game, context, query: dict) -> int:
+    """How much damage the turn's ledger recorded, as one clause narrowed it.
+
+    ``base`` is the constant the clause printed in front of the history
+    ("**3 plus** …"), and it is paid whatever the history says — including when
+    the source is gone and the history cannot be read at all. That is the
+    honest reading of the card: Blazing Effigy deals 3 with nothing else on the
+    board, and a reader that returned 0 for a missing source would turn its
+    printed floor into a silent nothing.
+
+    The name compared against is the source's *own* — the SELF token the clause
+    printed — so no card name reaches this file.
+    """
+    from ..damage_ledger import damage_dealt_to_permanent, source_name_of
+
+    base = max(0, int(query.get("base", 0) or 0))
+    source = context.source_permanent
+    if query.get("recipient") != "source" or source is None:
+        return base
+    permanent_id = getattr(source, "permanent_id", None)
+    wanted_name = source_name_of(source) if query.get("source_name") == "self" else None
+    total = damage_dealt_to_permanent(
+        game,
+        permanent_id,
+        source_name=wanted_name,
+        # CR 109.5's "**other** sources": an identity comparison against the
+        # ability's own source, which no property of a damage entry can make.
+        exclude_source_permanent_id=permanent_id if query.get("others_only") else None,
+    )
+    return max(0, base + total)
 
 
 def _characteristic_of_object(

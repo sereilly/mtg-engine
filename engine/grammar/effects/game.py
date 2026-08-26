@@ -19,7 +19,7 @@ from ..references import parse_player_ref, parse_target_spec
 from ..phrases import _parse_for_each
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX,
-                          TYPE_LINE_SUPERTYPES, match_longest)
+                          TYPE_LINE_SUPERTYPES, match_longest, singular)
 
 
 def _parse_wins(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -77,6 +77,40 @@ def _parse_choose_number(stream: TokenStream) -> ast.Statement | None:
                 return ast.ChooseNumber(low.value, high.value)
     stream.reset(mark)
     return None
+
+
+def _parse_choose_player_who_cast(stream: TokenStream) -> "ast.Statement | None":
+    """``Choose a player who cast one or more sorcery spells this turn.``
+    (Backdraft.)
+
+    Returns None without consuming anything for any other "choose" sentence,
+    exactly as the number and hand-pick productions beside it do, so the naming
+    productions behind them keep their readings.
+
+    The type and the minimum are both read off the words. "One or more" is the
+    ordinary way Magic prints "at least one" and a card printing "two or more"
+    is the same sentence with one number changed — so it is a quantity, not a
+    phrase to match. The type must be a real card type: "a player who cast one
+    or more **spells**" is a wider set, and reading it as this one would offer a
+    choice the card never allowed.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("choose", "a", "player", "who", "cast"):
+        stream.reset(mark)
+        return None
+    minimum = parse_amount(stream)
+    if not (isinstance(minimum, ast.Fixed) and stream.accept_phrase("or", "more")):
+        stream.reset(mark)
+        return None
+    card_type = stream.peek_word()
+    if card_type is None or singular(card_type) not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("spells", "this", "turn"):
+        stream.reset(mark)
+        return None
+    return ast.ChoosePlayerWhoCast(singular(card_type), minimum.value)
 
 
 def _parse_token_quoted_lines(stream: TokenStream) -> tuple[str, ...]:

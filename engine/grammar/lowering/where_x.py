@@ -45,6 +45,9 @@ def lower_where_x(
     resolves it into the context's X at the single dispatch point, which is what
     lets one clause serve every effect family instead of one.
     """
+    damage = _damage_dealt_definition(node.definition)
+    if damage is not None:
+        return _lower_where_x_damage_dealt(node, damage, inner)
     if isinstance(node.definition, ast.CountOfDeaths):
         return _lower_where_x_deaths(node, inner, produced)
     if isinstance(node.definition, ast.CharacteristicOfSubject):
@@ -341,3 +344,56 @@ def _lower_where_x_this_way(
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
     return _stamp_x_from_count(inner, {"back_reference": "destroyed_this_way"})
+
+
+def _damage_dealt_definition(definition) -> "tuple[ast.DamageDealtThisTurn, int] | None":
+    """The damage history a where-clause defines, and the constant added to it.
+
+    "…where X is **3 plus** the amount of damage dealt …" (Blazing Effigy). The
+    sum is unwrapped here rather than in the branch below, exactly as
+    ``lower_where_x`` unwraps ``ast.Times``: the base belongs to the clause, not
+    to the history, and a definition that is a sum over anything *else* falls
+    through to the refusals below rather than silently losing its left half.
+    """
+    base = 0
+    if isinstance(definition, ast.Plus) and isinstance(definition.left, ast.Fixed):
+        base = int(definition.left.value)
+        definition = definition.right
+    if isinstance(definition, ast.DamageDealtThisTurn):
+        return definition, base
+    return None
+
+
+def _lower_where_x_damage_dealt(
+    node: ast.WhereX,
+    damage: "tuple[ast.DamageDealtThisTurn, int]",
+    inner: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"…, where X is 3 plus the amount of damage dealt to this creature this
+    turn by other sources named ~." (Blazing Effigy.)
+
+    Stamped like every other where-clause and resolved at the same single
+    dispatch point; what differs is only what is read. The record is
+    ``engine/damage_ledger.py`` — a history, because the creature the clause
+    asks about is in a graveyard by the time a dies-trigger asks, and the damage
+    marked on it went with it (CR 400.7).
+
+    Every narrowing the words printed rides on the spec, ``base`` included, so
+    the reader applies all of them or none: a base honoured at one return site
+    and forgotten at another is the dropped-rider bug with an arithmetic face,
+    and here it is the difference between three damage and none.
+    """
+    definition, base = damage
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    return _stamp_x_from_count(
+        inner,
+        {
+            "damage_ledger": {
+                "recipient": definition.recipient,
+                "source_name": definition.source_name,
+                "others_only": definition.others_only,
+                "base": base,
+            }
+        },
+    )
