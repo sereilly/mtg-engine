@@ -54,6 +54,24 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     if stream.accept_phrase("target", "opponent"):
         return ast.PlayerRef("target_opponent")
     if stream.accept_phrase("that", "player"):
+        # "…**that player or that permanent's controller** may pay {R}{R}."
+        # (Chain Lightning.) One referent printed as a disjunction, because the
+        # sentence in front of it named "any target" (CR 115.4) and the seat it
+        # landed on is a player in one case and a permanent's controller in the
+        # other. Both arms are the seat the previous step already recorded,
+        # which is exactly what `that_player` means to every consumer
+        # downstream — so this is a *spelling*, the way "they" is, and a second
+        # kind would be a second answer to a question with one.
+        #
+        # Consumed only when the second arm really is that same referent; any
+        # other "or" is left for the productions that read a disjunction of
+        # different things.
+        mark_or = stream.mark()
+        if stream.accept_word("or"):
+            other = parse_player_ref(stream)
+            if other is not None and other.kind == "that_player":
+                return ast.PlayerRef("that_player")
+        stream.reset(mark_or)
         return ast.PlayerRef("that_player")
     # "…**they** gain 1 life" (Spiritual Sanctuary). The pronoun back-refers to
     # the player the sentence has already named, which is exactly what

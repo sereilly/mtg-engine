@@ -1416,3 +1416,180 @@ def test_two_copies_in_one_game_keep_their_own_counters(
         {"scream_counters": 1}
     ]
     assert [card.name for card in players[0].exile] == ["All Hallow's Eve"]
+
+# Chain Lightning (round 36) — the copy the *damaged* seat pays for and re-aims
+# ---------------------------------------------------------------------------
+
+
+def _r36_chain(set_pool, catalog_by_name, interactive=None):
+    """P1 holds Chain Lightning and a Serra Angel; P2 has a Grizzly Bears to be
+    shot and two Mountains to pay with.
+
+    The Mountains matter: the offer is made mid-resolution, so its player never
+    gets a priority window to make mana — the payment has to come off the board
+    (``engine/mana_payment.py``), and untapped lands are the only way to tell
+    that it did.
+    """
+    leg = set_pool("LEG")
+    p1 = PlayerState(name="P1", life=20)
+    p2 = PlayerState(name="P2", life=20)
+    p1.hand = [leg["Chain Lightning"]]
+    p1.battlefield = [Permanent(card=catalog_by_name["Serra Angel"])]
+    p2.battlefield = [
+        Permanent(card=catalog_by_name["Grizzly Bears"]),
+        Permanent(card=catalog_by_name["Mountain"]),
+        Permanent(card=catalog_by_name["Mountain"]),
+    ]
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    if interactive is not None:
+        game.interactive_seats = interactive
+    return game, [p1, p2]
+
+
+def _r36_mountains(player):
+    return [perm for perm in player.battlefield if perm.card.name == "Mountain"]
+
+
+def test_chain_lightning_deals_its_three_and_offers_the_damaged_seat_the_copy(
+    set_pool, catalog_by_name
+):
+    """The whole card in one pass: shot at an opponent's creature, that
+    creature's *controller* is the one offered the {R}{R}."""
+    game, players = _r36_chain(set_pool, catalog_by_name, interactive={1})
+
+    result = game.cast_from_hand(
+        0, "Chain Lightning", target_player_index=1, target_permanent_index=0
+    )
+
+    assert result.supported, result.details
+    assert any("dealt 3 damage to Grizzly Bears" in line for line in game.log), game.log
+    offer = game.pending_choice_of("optional_pay", 1)
+    assert offer is not None, "the damaged permanent's controller is the payer"
+    assert offer.data["cost"] == {"R": 2}
+
+
+def test_the_payment_taps_the_payers_lands(set_pool, catalog_by_name):
+    """"You may pay" inside a resolution gives its player no priority window, so
+    an unpaid pool is not the answer — ``plan_payment`` collects from the board.
+    The payer is the *opponent*, so a payment that came off the caster's side
+    would be invisible in a life total and obvious here."""
+    game, players = _r36_chain(set_pool, catalog_by_name, interactive={1})
+    game.cast_from_hand(
+        0, "Chain Lightning", target_player_index=1, target_permanent_index=0
+    )
+
+    assert game.confirm_optional_pay(1, accept=True) is True
+
+    assert [perm.tapped for perm in _r36_mountains(players[1])] == [True, True]
+
+
+def test_the_copy_is_controlled_by_the_payer_and_can_be_aimed_back(
+    set_pool, catalog_by_name
+):
+    """**The test this round exists for.** The copy belongs to the seat that
+    paid — not to the caster — and CR 707.10's re-aiming sends it at the caster's
+    face for the 3 damage the original never threatened."""
+    game, players = _r36_chain(set_pool, catalog_by_name, interactive={1})
+    game.cast_from_hand(
+        0, "Chain Lightning", target_player_index=1, target_permanent_index=0
+    )
+    game.confirm_optional_pay(1, accept=True)
+    assert game.confirm_optional_pay(1, accept=True) is True
+
+    copy = game.stack[-1]
+    assert copy.is_copy and copy.caster_index == 1, "the payer controls the copy"
+
+    assert game.confirm_copy_spell_target(1, target_seat=0) is True
+    game.resolve_top_of_stack()
+
+    assert players[0].life == 17, game.log
+    assert players[1].life == 20, game.log
+
+
+def test_the_copy_can_be_aimed_at_a_permanent_instead(set_pool, catalog_by_name):
+    """"Any target" is a player *or* a permanent (CR 115.4), and both are offered
+    — a picker that could only answer with a face would make half the card
+    unreachable."""
+    game, players = _r36_chain(set_pool, catalog_by_name, interactive={1})
+    game.cast_from_hand(
+        0, "Chain Lightning", target_player_index=1, target_permanent_index=0
+    )
+    game.confirm_optional_pay(1, accept=True)
+    game.confirm_optional_pay(1, accept=True)
+
+    angel = players[0].battlefield[0]
+    assert game.confirm_copy_spell_target(1, permanent_id=angel.permanent_id) is True
+    game.resolve_top_of_stack()
+
+    assert players[0].life == 20
+    assert any("damage to Serra Angel" in line for line in game.log), game.log
+
+
+def test_declining_the_payment_taps_nothing_and_makes_no_copy(
+    set_pool, catalog_by_name
+):
+    """The offer is optional in both directions; a decline has no consequence
+    printed, so nothing at all should have happened to the payer."""
+    game, players = _r36_chain(set_pool, catalog_by_name, interactive={1})
+    game.cast_from_hand(
+        0, "Chain Lightning", target_player_index=1, target_permanent_index=0
+    )
+
+    assert game.confirm_optional_pay(1, accept=False) is True
+
+    assert game.stack == []
+    assert game.pending_choices == []
+    assert [perm.tapped for perm in _r36_mountains(players[1])] == [False, False]
+
+
+def test_a_non_interactive_payer_answers_every_prompt_itself(
+    set_pool, catalog_by_name
+):
+    """A prompt an AI never answers is a hang, not a failing assertion. The
+    stated default for the payment is to spend mana already floating and never
+    tap a land for an optional cost, so a seat with two untapped Mountains and
+    an empty pool declines — and the drain leaves nothing behind.
+    """
+    game, players = _r36_chain(set_pool, catalog_by_name)
+
+    result = game.cast_from_hand(
+        0, "Chain Lightning", target_player_index=1, target_permanent_index=0
+    )
+    game.auto_resolve_pending_choices()
+
+    assert result.supported, result.details
+    assert game.pending_choices == []
+    assert game.stack == []
+    assert players[0].life == 20
+
+
+def test_a_non_interactive_payer_with_floating_mana_keeps_the_original_target(
+    set_pool, catalog_by_name
+):
+    """With the mana already floating the default pays — and the copy's target
+    default is the one answer that changes nothing (CR 707.10's offer is
+    optional, so declining is a real answer and it is this one).
+
+    Aimed at a 4/4 that survives the first 3 damage, so "kept" is observable:
+    the copy lands on the same creature and finishes it.
+    """
+    leg = set_pool("LEG")
+    p1 = PlayerState(name="P1", life=20)
+    p2 = PlayerState(name="P2", life=20)
+    p1.hand = [leg["Chain Lightning"]]
+    p2.battlefield = [Permanent(card=catalog_by_name["Serra Angel"])]
+    p2.mana_pool["R"] = 2
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(
+        0, "Chain Lightning", target_player_index=1, target_permanent_index=0
+    )
+    game.auto_resolve_pending_choices()
+    game.resolve_stack()
+    game.check_state_based_actions()
+
+    assert p2.mana_pool.get("R", 0) == 0, "the floating mana was spent"
+    assert p1.life == 20, "the default is to keep the target, not to re-aim"
+    assert p2.battlefield == [], game.log

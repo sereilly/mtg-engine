@@ -412,6 +412,32 @@ def _reflexive_target(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("copy_spell_target")
+def _copy_spell_target(ctx: PromptContext, choices: list) -> dict:
+    """"…and may choose a new target for that copy." (Chain Lightning.)
+
+    CR 707.10's offer, made to the copy's controller — who is not the player who
+    cast the spell. The candidates were enumerated when the copy was created and
+    are replayed here, players and permanents alike, because "any target" is
+    both (CR 115.4).
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "candidates": [
+            {
+                "kind": target.get("kind"),
+                "seat": target.get("seat"),
+                "index": target.get("index"),
+                "id": target.get("permanent_id"),
+                "name": target.get("name"),
+            }
+            for target in choice.data.get("targets") or ()
+        ],
+    }
+
+
 @prompt_renderer("tap_any_number")
 def _tap_any_number(ctx: PromptContext, choices: list) -> dict:
     """"Tap any number of untapped creatures you control." (Siege Striker.)

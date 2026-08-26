@@ -28,7 +28,8 @@ from .paragraphs import (
 )
 from .references import parse_recipient
 from .stream import TokenStream
-from .phrases import _parse_can_attack_as_though, _parse_duration, parse_bound_subject
+from .phrases import (_parse_can_attack_as_though, _parse_duration,
+                      _parse_mana_payment, parse_bound_subject)
 from .vocabulary import NUMBER_WORDS
 from .effects import (
     _parse_add_mana, _parse_ante, _parse_assigns_no_combat_damage, _parse_attach,
@@ -115,6 +116,55 @@ def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:
     ):
         stream.expect_word(word)
     return ast.CopyThatSpell()
+
+
+def _parse_copy_this_spell(stream: TokenStream) -> ast.Statement | None:
+    """``Copy this spell[.| and] [you] may choose [a] new target[s] for
+    [that|the] copy.`` (Chain Lightning.)
+
+    "This spell" is the one resolving, so the copy is made from
+    ``Game.resolving_items[-1]`` rather than from the stack — see
+    :class:`ast.CopySpell`. The re-aiming clause is consumed here in either
+    printed spelling, and *recorded*: a copy that could not be re-aimed is a
+    smaller card, and the deletion probe is right to call a dropped rider a bug.
+
+    Refuses without consuming, so a "Copy that spell" line still reaches the
+    production behind this one.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("copy", "this", "spell"):
+        stream.reset(mark)
+        return None
+    # "…and may choose a new target for that copy" (Chain Lightning) and
+    # "… . You may choose new targets for the copy" (the modern template) are
+    # the same offer printed two ways. Both are read; neither is optional,
+    # because a bare "copy this spell" is not a line any card prints and
+    # claiming it would let a card with an unread rider report itself supported.
+    retarget = False
+    if stream.accept_word("and"):
+        stream.accept_word("you")
+        retarget = stream.accept_word("may") and stream.accept_word("choose")
+    elif stream.accept_punct(".") and stream.accept_phrase("you", "may"):
+        retarget = stream.accept_word("choose")
+    if not retarget:
+        stream.reset(mark)
+        return None
+    stream.accept_word("a")
+    if not (stream.accept_word("new") and stream.accept_word("target")
+            or stream.accept_word("targets")):
+        stream.reset(mark)
+        return None
+    stream.accept_word("targets")
+    if not stream.accept_word("for"):
+        stream.reset(mark)
+        return None
+    if not (stream.accept_word("that") or stream.accept_word("the")):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("copy"):
+        stream.reset(mark)
+        return None
+    return ast.CopySpell(ast.PlayerRef("you"), may_choose_new_target=True)
 
 
 def parse_subject_verb(
@@ -325,6 +375,11 @@ def parse_subject_verb(
     if stream.at_word("end"):
         return _parse_end_the_turn(stream)
     if stream.at_word("copy"):
+        # "Copy **this** spell …" first and non-consuming on refusal, so
+        # "Copy that spell …" keeps its own production and its own refusal.
+        this_spell = _parse_copy_this_spell(stream)
+        if this_spell is not None:
+            return this_spell
         return _parse_copy_that_spell(stream)
     # "**Each opponent** creates a … token" (Pursued Whale). The token maker
     # with a different recipient, which is payload rather than a second
@@ -508,8 +563,30 @@ def parse_subject_verb(
         if token.text == "may" and isinstance(source_spec, ast.PlayerRef):
             mark_may = stream.mark()
             stream.advance()
+            # "**That player** … may pay {R}{R}." (Chain Lightning.) The offer
+            # of a *cost* with a printed subject other than "you", which the
+            # bare "you may pay" branch in `statements.py` cannot reach. One
+            # `May` node either way; who is offered is the actor field it
+            # already carries, and `handlers/control_flow.may` arms the prompt
+            # for exactly that seat — which is what makes the payment come off
+            # the payer's lands rather than the caster's.
+            if stream.at_word("pay"):
+                mark_pay = stream.mark()
+                stream.advance()
+                try:
+                    cost = _parse_mana_payment(stream, allow_variable=True)
+                    return ast.May(source_spec, cost=cost)
+                except GrammarError:
+                    stream.reset(mark_pay)
             try:
-                return ast.May(source_spec, action=parse_optional_action(stream))
+                action = parse_optional_action(stream)
+                # "…**they** may copy this spell…" — the copy's controller is
+                # the sentence's own subject (CR 707.10a), which is not the
+                # resolving spell's controller here. Bound at the one place
+                # both facts are in hand rather than guessed in the handler.
+                if isinstance(action, ast.CopySpell):
+                    action = dataclasses.replace(action, controller=source_spec)
+                return ast.May(source_spec, action=action)
             except GrammarError:
                 stream.reset(mark_may)
         # "This creature **assigns no combat damage** this turn." (Floral

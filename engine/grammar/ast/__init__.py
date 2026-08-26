@@ -200,6 +200,7 @@ from .cards import (
 )
 from .stack import (
     ChooseTarget,
+    CopySpell,
     CopyThatSpell,
     CounterAbility,
     CounterSpell,
@@ -409,6 +410,7 @@ __all__ = [
     "RevealUntil",
     "RevealTopToHandOrBottom",
     # stack
+    "CopySpell",
     "CopyThatSpell",
     "CounterAbility",
     "ChooseTarget",

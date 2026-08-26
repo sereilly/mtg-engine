@@ -502,3 +502,63 @@ def test_707_10c_leaving_the_targets_unchanged_is_equally_legal():
         game.resolve_top_of_stack()
 
     assert bears.effective_power == 8  # 2 + 3 + 3, both buffs on one creature
+
+
+@pytest.mark.cr("707.10")
+def test_707_10_a_copy_is_controlled_by_whoever_it_was_put_on_the_stack_under(
+    set_pool,
+):
+    """"A copy of a spell is controlled by the player under whose control it was
+    put on the stack."
+
+    Fork's copy is the caster's, which makes the caster and the copy's
+    controller the same seat and hides the rule. Chain Lightning's is not: the
+    copy is offered to whoever the damage landed on, so the copy is put on the
+    stack under an *opponent's* control and resolves as their spell.
+    """
+    catalog = {card.name: card for card in load_catalog()}
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Chain Lightning"]])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=catalog["Mountain"]) for _ in range(2)],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {1}
+
+    game.cast_from_hand(0, "Chain Lightning", target_player_index=1)
+    game.confirm_optional_pay(1, accept=True)   # the {R}{R}
+    game.confirm_optional_pay(1, accept=True)   # "they may copy this spell"
+
+    copy = game.stack[-1]
+    assert copy.is_copy is True
+    assert copy.caster_index == 1
+    assert [c.name for c in p2.spells_cast_this_turn] == []
+
+
+@pytest.mark.cr("707.10c")
+def test_707_10c_the_new_target_may_be_a_player_rather_than_a_permanent(set_pool):
+    """The copy's controller re-aims an "any target" spell at a player face.
+
+    CR 115.4 makes a player a legal answer, so a picker that could only offer
+    permanents would leave half the rule unreachable — and for Chain Lightning
+    it is the half the card is played for.
+    """
+    catalog = {card.name: card for card in load_catalog()}
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Chain Lightning"]])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=catalog["Mountain"]) for _ in range(2)],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {1}
+
+    game.cast_from_hand(0, "Chain Lightning", target_player_index=1)
+    game.confirm_optional_pay(1, accept=True)
+    game.confirm_optional_pay(1, accept=True)
+    assert game.confirm_copy_spell_target(1, target_seat=0) is True
+    game.resolve_top_of_stack()
+
+    assert p2.life == 17   # the original
+    assert p1.life == 17   # the copy, sent back
