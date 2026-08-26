@@ -590,11 +590,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'draws seven cards':
             _line('timetwister', 'spell_pattern'),
     },
-    'Unstable Mutation': {
-        "at the beginning of the upkeep of enchanted creature's controller, put "
-        'a -1/-1 counter on that creature':
-            _line('add_minus1_counter_to_enchanted', 'upkeep_effect'),
-    },
     'Volcanic Eruption': {
         'destroy x target mountains. volcanic eruption deals damage to each '
         'creature and each player equal to the number of mountains put into a '

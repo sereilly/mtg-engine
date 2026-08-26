@@ -448,6 +448,17 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     # the May is one level down — lifted off here and put back on outside the
     # fold, because the definition binds the branch as well as the offer.
     target = steps[-1]
+    # "…If that card is returned to its owner's hand this way, you may pay
+    # {U}{U}{U}. **If you do**, …" (Puppet Master.) The offer is one level down
+    # inside the conditional the previous rider built, and the branch belongs to
+    # the offer, not to the conditional: read as a step of its own it would ask
+    # whether an `if_then` "happened", which records nothing, and read as a
+    # second conditional it would return the Aura whether or not the mana was
+    # paid. Unwrapped here and rewrapped below, exactly as the `WhereX` lift
+    # beneath it does.
+    conditional = target if isinstance(target, ast.Conditional) else None
+    if conditional is not None:
+        target = conditional.then
     definition = target.definition if isinstance(target, ast.WhereX) else None
     if definition is not None:
         target = target.statement
@@ -497,6 +508,13 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         return False
 
     if not isinstance(target, ast.May):
+        if conditional is not None:
+            # The unwrapped step was not an offer, so the branch is not the
+            # offer's — put the words back and let the ordinary readings have
+            # them rather than pairing them with a conditional that records
+            # nothing.
+            stream.reset(mark)
+            return False
         # "Exile it. **If you do**, create a … token." (Archfiend's Vessel.)
         # The preceding action was not optional, so there is no decision to
         # branch on — the branch asks whether the action *took place*, and the
@@ -519,7 +537,10 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         then=branch if not declined else may.then,
         otherwise=branch if declined else may.otherwise,
     )
-    steps[-1] = ast.WhereX(folded, definition) if definition is not None else folded
+    rebuilt = ast.WhereX(folded, definition) if definition is not None else folded
+    if conditional is not None:
+        rebuilt = replace(conditional, then=rebuilt)
+    steps[-1] = rebuilt
     return True
 
 
@@ -561,6 +582,45 @@ def _bind_that_creature_after_enchanted(branch: ast.Statement) -> ast.Statement:
 
     bound, _ = bind(branch, None)
     return bound
+
+
+def _attach_if_that_card_was_returned(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Fold "If that card is returned to its owner's hand this way, …" into the
+    preceding return.
+
+    (Puppet Master.) The long spelling of "If you do" over a mandatory step:
+    the return before it was not a choice, so the branch asks whether it
+    actually *took place* — which for a card that was exiled in response, or
+    whose owner's hand it never reached, it did not (CR 608.2b). So it folds to
+    the same :class:`ast.ItHappened` the short spelling does, and
+    ``_lower_steps`` pairs it with the step in front of it and checks that step
+    records an answer to read.
+
+    Only a ``ReturnToZone`` is folded onto, the way ``_attach_if_you_cant``
+    folds only onto a ``RemoveCounter``: the clause names the return by what it
+    did, and a wider fold would pair the words with a step whose "this way"
+    nobody records.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.ReturnToZone):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "if", "that", "card", "is", "returned", "to", "its", "owner", "'s",
+        "hand", "this", "way",
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    try:
+        branch = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    steps.append(ast.Conditional(ast.ItHappened(), branch))
+    return True
 
 
 def _attach_if_you_cant(stream: TokenStream, steps: list[ast.Statement]) -> bool:

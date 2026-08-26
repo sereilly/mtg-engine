@@ -208,6 +208,57 @@ def _lower_return_to_zone(
                 "return_creature_from_graveyard_to_hand", "", several_cards
             ),
         )
+    # "Return **that card** to its owner's hand." (Puppet Master.) The bound
+    # object: the card of the creature whose death fired the trigger, which by
+    # resolution is in a graveyard. Nothing is chosen and nothing is targeted —
+    # the event named the object — so the handler reads it out of the trigger's
+    # context rather than off a target index.
+    #
+    # Bound to `attached_creature_dies` because that is the only event in the
+    # pool whose fire site records the dead card. Under any other event "that
+    # card" names a card nobody recorded, and the honest answer is a refusal:
+    # the handler would otherwise find nothing and the card would compile
+    # supported and do nothing, which is the whole failure this gate exists for.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and subject.filter.is_card
+    ):
+        if event != "attached_creature_dies":
+            raise LoweringError(
+                "'that card' names the firing event's object, and this event "
+                "records none",
+                node=node,
+            )
+        if node.to.name != "hand" or node.to.owner is None or node.to.owner.kind != "owner":
+            raise LoweringError(
+                "the bound card returns to its owner's hand alone", node=node
+            )
+        leftovers = _restrictions_beyond(subject.filter, frozenset({"is_card", "zone"}))
+        if leftovers:
+            raise LoweringError(
+                f"the bound-card return does not honour {leftovers[0]!r}", node=node
+            )
+        return (OracleInstruction("return_bound_card_to_owners_hand", "", {}),)
+    # "Return **this card** to its owner's hand." (Puppet Master's rider.) The
+    # ability's own source, and by the time this resolves the Aura is in its
+    # owner's graveyard — CR 704.5m put it there the moment the creature it
+    # enchanted left. So the sentence prints no source zone and the handler
+    # looks in the graveyard, which is the one place a returning Aura can be.
+    if (
+        _is_source(subject)
+        and node.from_zone is None
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "owner"
+    ):
+        assert isinstance(subject, ast.TargetSpec)
+        leftovers = _restrictions_beyond(subject.filter, frozenset({"is_source"}))
+        if leftovers:
+            raise LoweringError(
+                f"the self-return does not honour {leftovers[0]!r}", node=node
+            )
+        return (OracleInstruction("return_source_card_to_owners_hand", "", {}),)
     # "Return **this card** from your graveyard to the battlefield [tapped]."
     # (Silversmote Ghoul; CR 113.6m's own example is Reassembling Skeleton.)
     # Nothing is chosen — the ability names the object it is printed on — so this

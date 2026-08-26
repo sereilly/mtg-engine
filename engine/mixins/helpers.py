@@ -1729,6 +1729,12 @@ class GameHelpersMixin:
         dead_seat = self.controller_index_of(dead_permanent)
         died_context = {
             "dead_name": dead_permanent.card.name,
+            # The card itself, for "return **that card** to its owner's hand"
+            # (Puppet Master). The *name* above cannot answer: a graveyard is a
+            # list of `CardDefinition`, two copies of a card are the same
+            # immutable object, and a name match would find whichever entry came
+            # first. The identity is what locates the one that just died.
+            "dead_card": dead_permanent.card,
             "had_plus1_counter": int(dead_permanent.metadata.get("plus_counters", 0)) > 0,
             # Who controlled it, for "that player loses 2 life" (Massacre
             # Wurm): the graveyard card cannot say, and under Control Magic

@@ -419,6 +419,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # not what kind of effect it is — so GRAMMAR_CATEGORIES is unchanged and one
     # switch cannot gate half of "zones" off.
     "return_self_from_graveyard": "zones",
+    "return_bound_card_to_owners_hand": "zones",
+    "return_source_card_to_owners_hand": "zones",
     "bounce_target_creature": "zones",
     "add_mana_from_text": "mana",
     # "Add an amount of {B} equal to the sacrificed artifact's mana value"
@@ -485,6 +487,11 @@ _PRODUCES: dict[str, str] = {
     # it and the conditionals after it read the record, rather than each
     # sentence flipping a coin of its own.
     "flip_coin": "coin_flip",
+    # "Return that card to its owner's hand. **If that card is returned to
+    # its owner's hand this way**, …" (Puppet Master.) The return records
+    # whether it actually took place, which is what the rider after it asks —
+    # the card may have been exiled in response, or diverted (CR 903.9b).
+    "return_bound_card_to_owners_hand": "returned_bound_card",
     # "Discard X cards, **then** return a card from your graveyard to your hand
     # **for each card discarded this way**." (Recall.) The prompt records how
     # many were actually discarded when it is answered, which is the only place

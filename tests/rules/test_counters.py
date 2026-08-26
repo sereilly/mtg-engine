@@ -285,3 +285,62 @@ def test_122_1f_ten_poison_counters_lose_the_game_through_the_pipeline():
 
     assert p2.poison_counters == 10
     assert p2.lost
+
+
+# ---------------------------------------------------------------------------
+# 122.1a — the counter's *name* carries the numbers, so a card printing any
+# CR 122.1a pair needs no code of its own
+# ---------------------------------------------------------------------------
+
+
+def _r32_decay_aura(name: str, counter: str) -> CardDefinition:
+    """An Aura printing Unstable Mutation's upkeep decay with *counter*'s pair.
+
+    Invented on purpose. Unstable Mutation prints -1/-1 and Takklemaggot -0/-1,
+    and the whole point of the production is that neither number is part of what
+    the engine implements — so the demonstration has to be a card whose pair
+    nobody wrote a branch for.
+    """
+    text = (
+        "Enchant creature\n"
+        "At the beginning of the upkeep of enchanted creature's controller, "
+        f"put a {counter} counter on that creature."
+    )
+    return CardDefinition(
+        name=name, mana_cost="{B}", cmc=1.0, type_line="Enchantment — Aura",
+        oracle_text=text, colors=("B",), color_identity=("B",),
+        keywords=("Enchant",), produced_mana=(),
+        raw={"name": name, "type_line": "Enchantment — Aura", "oracle_text": text},
+    )
+
+
+@pytest.mark.cr("122.1a", "503.1a", "613.4c")
+def test_122_1a_the_upkeep_decay_reads_its_pair_off_the_counter_name():
+    """"Put a -0/-2 counter on that creature", on a card nobody wrote.
+
+    The trigger is the enchanted creature's *controller's* upkeep (CR 503.1a
+    puts it on the stack at the beginning of that step), the recipient is the
+    permanent the Aura is attached to, and the deltas come from the counter's
+    name through CR 613.4c. All three are payload — the kind this replaced,
+    ``add_minus1_counter_to_enchanted``, spelled one pair into its own name and
+    was reached by a card-name hook that spelled it again.
+    """
+    from engine.auras import attach_aura
+
+    host = Permanent(card=_mk_creature("Host", 3, 3))
+    aura = Permanent(card=_r32_decay_aura("Test Decay", "-0/-2"))
+    p1 = PlayerState(name="P1", battlefield=[aura])
+    p2 = PlayerState(name="P2", battlefield=[host])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    attach_aura(aura, host)
+
+    # The Aura's controller's upkeep is not the enchanted creature's
+    # controller's, and the printed clause names the latter.
+    game.resolve_upkeep(0)
+    game.resolve_stack()
+    assert (host.effective_power, host.effective_toughness) == (3, 3)
+
+    game.resolve_upkeep(1)
+    game.resolve_stack()
+    assert (host.effective_power, host.effective_toughness) == (3, 1)

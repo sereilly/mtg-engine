@@ -12,23 +12,23 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**80 of 734 supported cards (10.9%)** carry at least one name-keyed entry, across **86 entries** in 7 registries. The pool is 734 cards, 100.0% supported.
+**76 of 734 supported cards (10.4%)** carry at least one name-keyed entry, across **82 entries** in 7 registries. The pool is 734 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **3,060 hand-written entries** covering **2,846 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **2,917 hand-written entries** covering **2,704 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 48 (16.6%) | 388 | 45 (11.6%) | 52 | 17.9 |
-| LEB | 292 | 292 (100.0%) | 48 (16.4%) | 389 | 45 (11.6%) | 52 | 17.8 |
-| 2ED | 292 | 292 (100.0%) | 48 (16.4%) | 389 | 45 (11.6%) | 52 | 17.8 |
-| ARN | 78 | 78 (100.0%) | 28 (35.9%) | 107 | 26 (24.3%) | 30 | 38.5 |
+| LEA | 290 | 290 (100.0%) | 45 (15.5%) | 388 | 42 (10.8%) | 49 | 16.9 |
+| LEB | 292 | 292 (100.0%) | 45 (15.4%) | 389 | 42 (10.8%) | 49 | 16.8 |
+| 2ED | 292 | 292 (100.0%) | 45 (15.4%) | 389 | 42 (10.8%) | 49 | 16.8 |
+| ARN | 78 | 78 (100.0%) | 27 (34.6%) | 107 | 25 (23.4%) | 29 | 37.2 |
 | ATQ | 85 | 85 (100.0%) | 4 (4.7%) | 120 | 4 (3.3%) | 4 | 4.7 |
-| 3ED | 296 | 296 (100.0%) | 44 (14.9%) | 389 | 42 (10.8%) | 47 | 15.9 |
+| 3ED | 296 | 296 (100.0%) | 41 (13.9%) | 389 | 39 (10.0%) | 44 | 14.9 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| LEG *(measured)* | 310 | 290 (93.5%) | 2 (0.7%) | 398 | 2 (0.5%) | 2 | 0.7 |
-| **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **80 (10.9%)** | **1119** | **75 (6.7%)** | **86** | **11.7** |
+| LEG *(measured)* | 310 | 296 (95.5%) | 2 (0.7%) | 410 | 2 (0.5%) | 2 | 0.7 |
+| **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **76 (10.4%)** | **1119** | **71 (6.3%)** | **82** | **11.2** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -38,7 +38,7 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 76 | 77 |
+| `CARD_LINE_INSTRUCTIONS` | 72 | 73 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ENCHANTED_LAND_TAPPED_FOR_MANA` | 1 | 1 |
@@ -60,11 +60,9 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 - **Chaos Orb** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **City in a Bottle** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Consecrate Land** (`ON_LEAVE_BATTLEFIELD`)
-- **Contract from Below** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Cyclone** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Cyclopean Tomb** (`CARD_LINE_INSTRUCTIONS`, `ON_LEAVE_BATTLEFIELD`) — 1 line
 - **Darkpact** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Demonic Attorney** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Demonic Hordes** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Diamond Valley** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Dragon Whelp** (`CARD_LINE_INSTRUCTIONS`) — 1 line
@@ -124,8 +122,6 @@ Held at this rate, supporting the 26,113-card release line would need about **3,
 - **Siren's Call** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Stone Giant** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Timetwister** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Twiddle** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Unstable Mutation** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Volcanic Eruption** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Wheel of Fortune** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Word of Command** (`CARD_LINE_INSTRUCTIONS`) — 1 line

@@ -993,6 +993,80 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("return_bound_card_to_owners_hand")
+def return_bound_card_to_owners_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Return that card to its owner's hand." (Puppet Master.)
+
+    The bound object — the card of the creature whose death fired the trigger,
+    which CR 404.1 put in its *owner's* graveyard. The fire site froze the card
+    itself (CR 603.10); by resolution nothing else could name it, because the
+    permanent is gone and a graveyard holds several copies of a popular card
+    under one name.
+
+    Located by identity and removed with ``pop`` at the found index, for the
+    reason ``return_self_from_graveyard`` records: a name match finds the wrong
+    entry and a rebuild-from-survivors removes every copy.
+
+    Records ``returned_bound_card`` either way — True when the card actually
+    reached a hand, False when it had already left the graveyard (exiled in
+    response) or was diverted (CR 903.9b). "If that card is returned to its
+    owner's hand this way" is exactly that question.
+    """
+    card = (context.trigger_context or {}).get("dead_card")
+    context.results["returned_bound_card"] = False
+    if card is None:
+        return True, "resolved"
+    for player in game.players:
+        for index, held in enumerate(player.graveyard):
+            if held is card:
+                player.graveyard.pop(index)
+                if game.put_card_into_hand(player, card):
+                    context.results["returned_bound_card"] = True
+                    game.log.append(f"{card.name} returned to {player.name}'s hand")
+                return True, "resolved"
+    # CR 603.6: the ability looks for the object in the zone it moves it out of.
+    game.log.append(f"{card.name} was no longer in a graveyard")
+    return True, "resolved"
+
+
+@effect_handler("return_source_card_to_owners_hand")
+def return_source_card_to_owners_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Return this card to its owner's hand." (Puppet Master's paid rider.)
+
+    The ability's own source, printed with **no source zone** — so unlike
+    ``return_self_from_graveyard``, whose sentence names one, this reaches
+    whichever zone the object is actually in (CR 608.2). Usually the graveyard:
+    an Aura whose enchanted creature has left is put there by the CR 704.5m
+    sweep, which runs the next time a player would receive priority and so
+    before this trigger resolves. But the sweep is not guaranteed to have run —
+    a caller that resolves the stack without an intervening priority pass finds
+    the Aura still on the battlefield — and a handler that looked in one zone
+    would silently do nothing in the other.
+
+    By identity, like every other graveyard reach in this module, and across
+    every graveyard rather than the resolving seat's: CR 404.1 puts the card in
+    its *owner's*, and an Aura its controller did not own goes to the other
+    player's.
+    """
+    card = context.card
+    source = context.source_permanent
+    if source is not None and game.is_on_battlefield(source):
+        owner = game.players[source.metadata.get("base_controller_index", 0)]
+        game.remove_from_battlefield(source)
+        if game.put_card_into_hand(owner, card):
+            game.log.append(f"{card.name} returned to {owner.name}'s hand")
+        return True, "resolved"
+    for player in game.players:
+        for index, held in enumerate(player.graveyard):
+            if held is card:
+                player.graveyard.pop(index)
+                if game.put_card_into_hand(player, card):
+                    game.log.append(f"{card.name} returned to {player.name}'s hand")
+                return True, "resolved"
+    game.log.append(f"{card.name} was no longer in a graveyard")
+    return True, "resolved"
+
+
 @effect_handler("return_self_from_graveyard")
 def return_self_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Return this card from your graveyard to the battlefield [tapped]."

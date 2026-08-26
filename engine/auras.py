@@ -205,9 +205,14 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         "the upkeep-damage Aura family — phases/upkeep_effects.py",
     ),
     (
+        # The CR 122.1a pair is a *parameter* of the decay, not part of what the
+        # engine implements: Unstable Mutation prints -1/-1 and Takklemaggot
+        # -0/-1, and `add_pt_counters_to_attached` reads the pair off the
+        # payload. Spelling one pair here is what kept the second card out —
+        # the row claimed a card rather than a template.
         re.compile(
             r"^at the beginning of the upkeep of enchanted creature's controller, "
-            r"put a -1/-1 counter on that creature$"
+            r"put a [+-]\d+/[+-]\d+ counter on that creature$"
         ),
         "Weakness-style decay — phases/upkeep_effects.py",
     ),
@@ -350,6 +355,40 @@ def aura_additional_mana_on_tap(oracle_text: str) -> str | None:
 
 _ATTACHED_TRIGGER = re.compile(rf"^when(?:ever)? {_ATTACHED} .+$")
 
+# "When enchanted creature dies, this Aura deals damage equal to that
+# creature's toughness to the creature's controller." (Creature Bond.)
+#
+# The one attached-death trigger the engine carries out without compiling an
+# instruction: ``mixins/effects.py:_trigger_aura_death_effects`` builds the
+# damage at trigger time, because the toughness has to be read while the
+# creature is still on the battlefield (CR 603.10) and no instruction payload
+# can hold a number nobody has measured yet.
+#
+# It is a *line* pattern rather than a condition kind because that dispatcher
+# used to fire on the condition alone. Every Aura printing "when enchanted
+# creature dies" therefore got Creature Bond's damage: Puppet Master, whose
+# line returns the dead creature's card to its owner's hand, instead dealt its
+# controller damage equal to its toughness — a supported card doing a
+# *different card's* effect, which is worse than doing nothing and is why
+# `attached_trigger_claim` asks this rather than asking whether a trigger
+# condition parsed.
+_ATTACHED_DEATH_DAMAGE = re.compile(
+    rf"^when(?:ever)? {_ATTACHED} creature dies, this (?:aura|enchantment) deals "
+    r"damage equal to that creature's toughness to the creature's controller$"
+)
+
+
+def aura_death_damage_line(line: str) -> bool:
+    """Whether *line* is the death-damage template above.
+
+    One reader for the gate and the dispatcher, so what is claimed and what
+    fires cannot drift — the same pairing every other table in this module
+    keeps.
+    """
+    return _ATTACHED_DEATH_DAMAGE.match(_line_text(line)) is not None
+
+
+
 
 def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | None:
     """Name what carries out an attached trigger line, or None if nothing does.
@@ -368,12 +407,16 @@ def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | N
 
     So the claim asks, in the order the three mechanisms actually run:
 
-    1. **A compiled trigger.** ``_parse_triggered_ability`` recognising the
-       condition is the claim, and deliberately not "…and produced an
-       instruction": Creature Bond compiles ``attached_creature_dies`` with no
-       instruction at all, because its dispatcher (``mixins/effects.py``)
-       builds the effect from the dead creature's toughness at trigger time.
-       Requiring an instruction here would withdraw a card that works.
+    1. **A compiled trigger that produced an instruction.** Recognising the
+       *condition* is not enough, and used to be: ``attached_creature_dies``
+       parses for every Aura printing "when enchanted creature dies", so the
+       claim was satisfied by three cards whose effect clause compiled to
+       nothing — and one dispatcher keyed on that condition kind then gave all
+       three Creature Bond's damage.
+    1b. **The death-damage template**, which is that dispatcher's line and the
+       one attached trigger the engine performs without an instruction: the
+       toughness must be read while the creature is still on the battlefield
+       (CR 603.10), so no payload can carry it.
     2. **A name-keyed hook**, for an attached trigger whose behaviour is
        genuinely bespoke (Kudzu's destroy-and-reattach). Asked of the registry,
        never written out — a card name in a comparison here would be the
@@ -388,8 +431,14 @@ def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | N
 
     if not _ATTACHED_TRIGGER.match(normalized_line):
         return None
-    if _parse_triggered_ability(normalized_line, card_name) is not None:
-        return "attached trigger — compiled condition"
+    parsed = _parse_triggered_ability(normalized_line, card_name)
+    if parsed is not None and parsed.instruction is not None:
+        return "attached trigger — compiled instruction"
+    # The one dispatcher that carries out an attached trigger with no
+    # instruction behind it. Asked by *line*, not by condition kind: see
+    # `aura_death_damage_line` for the card that cost.
+    if aura_death_damage_line(normalized_line):
+        return "attached trigger — death damage, mixins/effects.py"
     if card_name in ENCHANTED_LAND_TAPPED_FOR_MANA:
         return "attached trigger — card_hooks.ENCHANTED_LAND_TAPPED_FOR_MANA"
     if aura_additional_mana_on_tap_line(normalized_line) is not None:

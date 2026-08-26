@@ -183,6 +183,12 @@ TRIGGERED_LABELS: dict[str, str] = {
     "add_named_counter_to_self": "triggered_counter",
     "add_mana_for_tapped_land": "spell_pattern",
     "add_plus1_counters_for_each_creature_died": "triggered_counter",
+    # The upkeep decay an Aura puts on what it enchants (Unstable Mutation).
+    # `upkeep_effect` rather than `triggered_counter`, which is the label the
+    # kind it replaced (`add_minus1_counter_to_enchanted`) reported: the pair's
+    # instruction changed when the card-name hook became a production, and the
+    # bucket the support report puts the card in must not move with it.
+    "add_pt_counters_to_attached": "upkeep_effect",
     "deal_damage": "spell_pattern",
     "deal_damage_equal_to_swamps": "upkeep_effect",
     "delayed_destroy_blocked_or_blocker": "triggered_delayed_destroy",

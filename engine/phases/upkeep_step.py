@@ -675,42 +675,6 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     ))
                     continue
 
-        # Unstable Mutation: enchant-creature auras that decay the enchanted
-        # creature at the beginning of its controller's upkeep. The counters
-        # are real -1/-1 counters, not an aura grant — they stay if the Aura
-        # leaves, and 704.5f/704.5q apply.
-        #
-        # That last clause was a promise this loop broke: it wrote the two P/T
-        # bonuses and no counter record at all, so the 704.5q sweep — which
-        # cancels +1/+1 against -1/-1 by reading `minus_counters` — had nothing
-        # to find, and a creature carrying both kinds kept both. The placement
-        # goes through the counter seam now, which writes the record and the
-        # P/T channel together.
-        mutation_decay_applied = False
-        for permanent in self.all_permanents():
-            if permanent.card.primary_type != "enchantment":
-                continue
-            trig = next(matching_triggers(
-                permanent.effective_card,
-                condition_kinds={"upkeep_enchanted_controller"},
-                instruction_kinds={"add_minus1_counter_to_enchanted"},
-            ), None)
-            if trig is None:
-                continue
-            attached = permanent.metadata.get("attached_to")
-            if attached is None:
-                continue
-            if self.controller_index_of(attached) != player_index:
-                continue
-            self.place_pt_counters(attached, "-1/-1")
-            mutation_decay_applied = True
-            self.log.append(
-                f"{permanent.card.name}: {attached.card.name} gets a -1/-1 counter"
-            )
-        if mutation_decay_applied:
-            # 704.5f: a creature decayed to 0 toughness dies now.
-            self.check_state_based_actions()
-
         # Handle enchant-land auras with optional upkeep life gain (e.g. Farmstead)
         for permanent in self.all_permanents():
             if permanent.card.primary_type != "enchantment":

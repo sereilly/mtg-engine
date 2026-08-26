@@ -17,6 +17,7 @@ from ..regeneration import regeneration_replaces_destruction
 from ..replacement_choices import pending_choices_for, resolve_choice
 from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
 from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
+from ..auras import aura_death_damage_line
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event, matching_triggers
 
 class EffectsMixin:
@@ -38,7 +39,21 @@ class EffectsMixin:
             # the generic `dies` because that was the only kind the trigger
             # table produced for the phrase, and "when enchanted creature dies"
             # is not the Aura's own death.
-            if trig.condition.kind == "attached_creature_dies":
+            #
+            # And the condition alone is **not** what this dispatcher
+            # implements. It implements one printed sentence — "…this Aura
+            # deals damage equal to that creature's toughness to the creature's
+            # controller" — and firing on the kind gave that damage to every
+            # other Aura printing the same trigger word: Puppet Master returned
+            # nothing to its owner's hand and dealt its controller damage
+            # instead, and Takklemaggot would have done the same. The line is
+            # asked through `auras.aura_death_damage_line`, the same reader the
+            # support gate uses, so what fires and what is claimed cannot
+            # disagree.
+            if (
+                trig.condition.kind == "attached_creature_dies"
+                and aura_death_damage_line(trig.source_line or "")
+            ):
                 toughness = dead_permanent.effective_toughness
                 self._enqueue_triggered_ability(
                     controller_index=controller_index,

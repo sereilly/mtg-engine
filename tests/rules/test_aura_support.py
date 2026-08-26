@@ -200,3 +200,49 @@ def test_608_2d_a_permanent_chosen_on_resolution_holds_the_resolution_open(set_p
     assert game.confirm_permanent_choice(0, twin.permanent_id)
     assert game.waiting_prompt() is None
     assert aura.metadata["attached_to"] is twin
+
+
+# ---------------------------------------------------------------------------
+# An attached trigger's *condition* is not a claim (round 32)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("303.4", "603.10")
+def test_303_4_an_attached_death_trigger_needs_more_than_a_parsed_condition():
+    """"When enchanted creature dies, <something nothing implements>."
+
+    ``attached_creature_dies`` parses for *every* Aura printing those words, so
+    claiming the line on the condition alone admitted any effect clause at all —
+    and the one dispatcher keyed on that condition kind then gave every such Aura
+    Creature Bond's "damage equal to that creature's toughness". Puppet Master
+    dealt it instead of returning a card; the claim asks for an instruction, or
+    for the death-damage line itself, now.
+    """
+    invented = _aura(
+        "Enchant creature\n"
+        "When enchanted creature dies, its controller yodels uncontrollably."
+    )
+
+    program = compile_card_oracle(invented)
+
+    assert not program.supported
+    assert "yodels" in program.reason.lower()
+
+
+@pytest.mark.cr("303.4", "603.10")
+def test_303_4_the_death_damage_template_is_still_claimed_and_still_fires():
+    """The one attached trigger the engine performs with no instruction behind
+    it: the toughness has to be read while the creature is still on the
+    battlefield (CR 603.10), so no payload can carry it. It is claimed by its
+    printed *line*, which is what the dispatcher reads too."""
+    from engine.auras import aura_death_damage_line
+
+    line = normalize_creature_line(
+        "When enchanted creature dies, this Aura deals damage equal to that "
+        "creature's toughness to the creature's controller."
+    )
+
+    assert aura_death_damage_line(line)
+    assert compile_card_oracle(
+        _aura("Enchant creature\n" + line, name="Probe Bond")
+    ).supported

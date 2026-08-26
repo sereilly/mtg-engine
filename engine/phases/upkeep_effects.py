@@ -340,6 +340,43 @@ class UpkeepEffectsMixin:
             ),
         )
 
+    @upkeep_effect("upkeep_enchanted_controller", "add_pt_counters_to_attached")
+    def _on__upkeep_enchanted_controller__add_pt_counters_to_attached(
+        self, ctx: UpkeepContext
+    ) -> None:
+        """"At the beginning of the upkeep of enchanted creature's controller,
+        put a -1/-1 counter on that creature." (Unstable Mutation; Takklemaggot
+        prints the same sentence with a -0/-1 pair.)
+
+        The counters are real CR 122.1a counters, not an Aura grant — they stay
+        if the Aura leaves, and CR 704.5f/704.5q apply — so the placement goes
+        through ``place_pt_counters``, which writes the counter record and the
+        P/T channel together.
+
+        The CR 122.1a pair is payload, so a card printing any other one needs
+        nothing here. This replaced a loop over every enchantment on every
+        battlefield that matched one hard-coded instruction kind
+        (``add_minus1_counter_to_enchanted``), reached by a card-name hook whose
+        key spelled out "-1/-1".
+        """
+        permanent = ctx.permanent
+        attached = permanent.metadata.get("attached_to")
+        if attached is None:
+            return
+        if self.controller_index_of(attached) != ctx.player_index:
+            return
+        payload = ctx.trig.instruction.payload
+        kind = str(payload.get("counter", ""))
+        count = int(payload.get("count", 1))
+        placed = self.place_pt_counters(attached, kind, count)
+        if placed:
+            self.log.append(
+                f"{permanent.card.name}: {attached.card.name} gets "
+                + (f"a {kind} counter" if placed == 1 else f"{placed} {kind} counters")
+            )
+            # CR 704.5f: a creature decayed to 0 toughness dies now.
+            self.check_state_based_actions()
+
     @upkeep_effect("upkeep_enchanted_controller", "remove_counter_from_attached")
     def _on__upkeep_enchanted_controller__remove_counter_from_attached(self, ctx: UpkeepContext) -> None:
         """"At the beginning of the upkeep of enchanted creature's controller,
