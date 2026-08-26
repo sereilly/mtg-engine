@@ -12,6 +12,7 @@ convention.
 """
 
 from ...lord_buffs import (LORD_BUFF_KIND)
+from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND
 from ...oracle_types import OracleInstruction
@@ -64,6 +65,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # one switch would tie two migrations together.
     LAND_ANIMATION_KIND: "land_statics",
     STATIC_LAND_TYPE_KIND: "land_statics",
+    # A permanent's board-wide replacement of how *other* permanents enter
+    # (CR 614.1c, Kismet). Its own category rather than either of the two
+    # above: nothing about it is a P/T contribution or a land, and the
+    # consumer is the entry seam rather than a continuous recompute.
+    ENTER_TAPPED_STATIC_KIND: "enter_statics",
     "set_base_pt_target_until_eot": "pump",
     # "…becomes a 3/3 Sphinx creature … until end of turn" (Riddleform).
     # The "pump" family, because what the sentence does is set a P/T — the

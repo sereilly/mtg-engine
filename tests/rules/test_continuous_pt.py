@@ -178,7 +178,7 @@ def test_a_qualified_lord_buff_does_not_accumulate_across_recomputes(cards):
     for _ in range(10):
         game._recompute_continuous_effects()
 
-    assert bear.metadata[QUALIFIED_BUFFS] == {"untapped": (0, 2)}
+    assert bear.metadata[QUALIFIED_BUFFS] == {("untapped",): (0, 2)}
 
 
 @pytest.mark.cr("611.3a", "611.3b", "613.1f")
@@ -206,3 +206,109 @@ def test_a_lord_granted_keyword_does_not_outlive_its_source(cards):
 
     assert not goblin.metadata.get(DERIVED_GRANTS)
     assert not goblin.has_keyword("mountainwalk")
+
+
+# ---------------------------------------------------------------------------
+# CR 613.4c — a bonus whose size is a repetition count (round 21)
+# ---------------------------------------------------------------------------
+
+
+def _plain_aura(name: str):
+    from engine.models import CardDefinition
+
+    return CardDefinition(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Enchantment - Aura",
+        oracle_text="Enchant creature", colors=(), color_identity=(),
+        keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Enchantment - Aura"},
+    )
+
+
+def _per_each_creature(name: str, text: str):
+    from engine.models import CardDefinition
+
+    return CardDefinition(
+        name=name, mana_cost="{3}{G}", cmc=4.0, type_line="Creature - Beast",
+        oracle_text=text, colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Beast",
+             "power": "1", "toughness": "1"},
+    )
+
+
+@pytest.mark.cr("613.4c", "611.3a")
+def test_a_per_each_bonus_is_the_printed_number_times_the_count():
+    """"…gets +2/+2 for each Aura attached to it." (Rabid Wombat.)
+
+    Written with an invented card printed +1/+3 rather than +2/+2, because the
+    two halves are scaled independently — a version folding the multiplier into
+    the shared count spec passes for Rabid Wombat's symmetrical numbers and
+    gets this one wrong in both directions.
+    """
+    from engine.auras import attach_aura, detach_aura
+
+    beast = Permanent(card=_per_each_creature(
+        "Invented Beast", "This creature gets +1/+3 for each Aura attached to it."
+    ))
+    auras = [Permanent(card=_plain_aura(f"Aura {n}")) for n in range(2)]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[beast, *auras], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    game._refresh_dynamic_creatures()
+    assert (beast.effective_power, beast.effective_toughness) == (1, 1)
+
+    attach_aura(auras[0], beast)
+    game._refresh_dynamic_creatures()
+    assert (beast.effective_power, beast.effective_toughness) == (2, 4)
+
+    attach_aura(auras[1], beast)
+    game._refresh_dynamic_creatures()
+    assert (beast.effective_power, beast.effective_toughness) == (3, 7)
+
+    detach_aura(auras[1], beast)
+    game._refresh_dynamic_creatures()
+    assert (beast.effective_power, beast.effective_toughness) == (2, 4)
+
+
+@pytest.mark.cr("613.4c")
+def test_a_per_each_bonus_counts_attachments_whoever_controls_them():
+    """"Each Aura attached to it" names no controller. What is attached to a
+    permanent is recorded on that permanent, which is why the count is not a
+    battlefield scan scoped to one seat — an opponent's Pacifism on your
+    creature is attached to your creature."""
+    from engine.auras import attach_aura
+
+    beast = Permanent(card=_per_each_creature(
+        "Invented Beast", "This creature gets +1/+3 for each Aura attached to it."
+    ))
+    theirs = Permanent(card=_plain_aura("Their Aura"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[beast], life=20),
+        PlayerState(name="P2", battlefield=[theirs], life=20),
+    ])
+    attach_aura(theirs, beast)
+    game._refresh_dynamic_creatures()
+
+    assert (beast.effective_power, beast.effective_toughness) == (2, 4)
+
+
+@pytest.mark.cr("613.4c")
+def test_a_per_each_bonus_counts_only_what_the_noun_phrase_names():
+    """A non-Aura enchantment on the board is not attached to anything, and an
+    Aura attached to something else is not attached to *it*."""
+    from engine.auras import attach_aura
+
+    beast = Permanent(card=_per_each_creature(
+        "Invented Beast", "This creature gets +1/+3 for each Aura attached to it."
+    ))
+    other = Permanent(card=_per_each_creature("Invented Other", ""))
+    elsewhere = Permanent(card=_plain_aura("Elsewhere"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[beast, other, elsewhere], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    attach_aura(elsewhere, other)
+    game._refresh_dynamic_creatures()
+
+    assert (beast.effective_power, beast.effective_toughness) == (1, 1)

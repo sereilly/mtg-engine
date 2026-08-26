@@ -68,6 +68,10 @@ GAINED_TYPES = "gained_types"
 
 _QUALIFIER_HOLDS = {
     "attacking": lambda perm: bool(perm.attacking),
+    # CR 508.1a's negative half. Its own row rather than a "not" the reader
+    # applies, so the import guard below counts it and a qualifier the table can
+    # produce always has something here that checks it.
+    "not attacking": lambda perm: not perm.attacking,
     # CR 509.1a: a creature is blocking once it has been declared as a blocker.
     "blocking": lambda perm: perm.blocking_attacker_index is not None,
     "tapped": lambda perm: bool(perm.tapped),
@@ -273,9 +277,14 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # recomputes stops meeting "untapped" the instant it taps, not when the
     # board next happens to be recalculated. Castle's +0/+2 survived its own
     # creature attacking until this moved.
-    for qualifier, (power, toughness) in sorted((meta.get(QUALIFIED_BUFFS) or {}).items()):
-        if qualifier_holds(perm, qualifier):
-            modifications.append((int(power), int(toughness), f"lord buff while {qualifier}"))
+    # The key is the *whole* set of states the sentence named, and every one of
+    # them has to hold: "each untapped creature … as long as it's not attacking"
+    # (Arcades Sabboth) describes one set, not two overlapping ones, so an `all`
+    # here is what keeps the buff off a creature meeting half the description.
+    for qualifiers, (power, toughness) in sorted((meta.get(QUALIFIED_BUFFS) or {}).items()):
+        if all(qualifier_holds(perm, qualifier) for qualifier in qualifiers):
+            label = " and ".join(qualifiers)
+            modifications.append((int(power), int(toughness), f"lord buff while {label}"))
     for power, toughness, label in modifications:
         if power or toughness:
             effects.append(

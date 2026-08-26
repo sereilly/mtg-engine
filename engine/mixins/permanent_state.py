@@ -25,6 +25,10 @@ from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..tokens import make_token_card
 from ..keywords import add_derived_grant, clear_derived_grants
+from ..enter_tapped_statics import (
+    ENTER_TAPPED_STATIC_KIND,
+    enter_tapped_filter_from_payload,
+)
 from ..land_animation import (
     LAND_ANIMATION_KIND,
     LandAnimation,
@@ -44,6 +48,7 @@ from ..lord_buffs import (
 )
 from ..handlers._common import evaluate_count, resolve_amount
 from ..search_filters import name_key
+from ..subject_filters import subject_matches
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..pt import clear_base_pt, set_base_pt
@@ -109,7 +114,12 @@ def _count_dynamic_pt(
     for battlefield in battlefields:
         for perm in battlefield:
             if what == "land":
-                total += bool(land_type and perm.has_type(str(land_type)))
+                # No ``land_type`` on the payload is the unnarrowed printing —
+                # "the number of lands you control" — so the question is the
+                # card type alone. Asked through ``has_type`` like the subtype
+                # branch beside it, so a permanent that *became* a land counts
+                # and one that stopped being one does not (CR 613 layer 4).
+                total += perm.has_type(str(land_type) if land_type else "land")
             elif what == "creature":
                 if perm.is_creature and not (excluded and perm.has_type(str(excluded))):
                     total += 1
@@ -199,6 +209,16 @@ class PermanentStateMixin:
         if any(line for line in program.static_lines if ENTERS_TAPPED in line) or (
             ENTERS_TAPPED in text and "unless" not in text
         ):
+            permanent.tapped = True
+
+        # CR 614.1c, the *other* sentence: a permanent already on the
+        # battlefield saying how somebody else's permanents enter ("Artifacts,
+        # creatures, and lands your opponents control enter tapped", Kismet).
+        # Asked of the board rather than of the card being read, which is the
+        # whole difference between the two — and asked here, at the one seam an
+        # entry passes through, so a permanent arriving by any road (cast,
+        # token, reanimation) meets it.
+        if self._enters_tapped_by_a_static(permanent):
             permanent.tapped = True
 
         # "As this creature enters, it becomes your choice of <body>, <body>,
@@ -686,7 +706,14 @@ class PermanentStateMixin:
             for bonus in prog.instructions:
                 if bonus.kind != "dynamic_pt_bonus":
                     continue
-                value = evaluate_count(self, player, bonus.payload.get("x_from_count") or {})
+                # The permanent being refreshed *is* the source of its own
+                # static ability, which is what lets a spec name a relation to
+                # it ("Auras attached to it") rather than only a set of
+                # characteristics.
+                value = evaluate_count(
+                    self, player, bonus.payload.get("x_from_count") or {},
+                    source=permanent,
+                )
                 _add_static_pt(
                     permanent,
                     resolve_amount(bonus.payload.get("power", 0), value),
@@ -852,6 +879,35 @@ class PermanentStateMixin:
             )
         return False
 
+    def _enters_tapped_by_a_static(self, permanent: Permanent) -> bool:
+        """Whether a static already on the battlefield taps *permanent* as it
+        enters (CR 614.1c).
+
+        Whose permanents such a static reaches is relative to **its own**
+        controller (CR 109.5), so the observer handed to ``subject_matches`` is
+        the source's seat and never the entering permanent's. Read the other way
+        round, Kismet would tap its controller's permanents and leave the
+        opponent's alone — the card backwards, and right-looking on every board
+        where only one player is doing anything.
+
+        Through ``subject_matches`` rather than a comparison here, so "artifacts,
+        creatures, and lands your opponents control" means on this seam exactly
+        what it means on a trigger's subject or in a sweep. The permanent is
+        already on its controller's battlefield by the time this runs
+        (``Game._enter_battlefield`` appends before initializing), which is what
+        lets the matcher answer a relative key at all.
+        """
+        for source_seat, source in self.permanents_with_controller():
+            for instr in compile_card_oracle(source.effective_card).instructions:
+                if instr.kind != ENTER_TAPPED_STATIC_KIND:
+                    continue
+                described = enter_tapped_filter_from_payload(instr.payload)
+                if subject_matches(
+                    self, permanent, described, observer=source_seat, source=source
+                ):
+                    return True
+        return False
+
     def _refresh_land_animation(
         self, all_permanents: list[Permanent], animations: list[LandAnimation]
     ) -> None:
@@ -879,7 +935,14 @@ class PermanentStateMixin:
         for permanent in all_permanents:
             animation = (
                 next(
-                    (a for a in animations if permanent.has_type(a.land_type)),
+                    (
+                        a for a in animations
+                        # ``land_type`` None is the untyped printing — "All
+                        # lands are 1/1 creatures that are still lands" (Living
+                        # Plane) — which restricts nothing beyond being a land,
+                        # already established by the guard below.
+                        if a.land_type is None or permanent.has_type(a.land_type)
+                    ),
                     None,
                 )
                 if permanent.card.primary_type == "land"
@@ -1253,8 +1316,8 @@ class PermanentStateMixin:
         def _add_static_buff(perm: Permanent, buff: LordBuff) -> None:
             if not (buff.power or buff.toughness):
                 return
-            qualifier = buff.filter.qualifier
-            if qualifier is None:
+            qualifiers = buff.filter.qualifiers
+            if not qualifiers:
                 perm.metadata["static_buff_power"] = (
                     int(perm.metadata.get("static_buff_power", 0)) + buff.power
                 )
@@ -1265,9 +1328,13 @@ class PermanentStateMixin:
             # A qualified buff is contributed here but *evaluated* when P/T is
             # read (layer_bridge.qualifier_holds), so it tracks a creature
             # tapping or attacking between recomputes.
+            # Keyed by the whole tuple of states, so two buffs are summed
+            # together only when they answer to the same description. Keying by
+            # one word would merge "untapped" with "untapped and not attacking"
+            # and apply the stricter buff on the looser test.
             qualified = perm.metadata.setdefault(QUALIFIED_BUFFS, {})
-            power, toughness = qualified.get(qualifier, (0, 0))
-            qualified[qualifier] = (power + buff.power, toughness + buff.toughness)
+            power, toughness = qualified.get(qualifiers, (0, 0))
+            qualified[qualifiers] = (power + buff.power, toughness + buff.toughness)
 
         def _grant_ability(perm: Permanent, flag: str) -> None:
             perm.metadata[flag] = True

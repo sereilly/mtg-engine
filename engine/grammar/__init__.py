@@ -151,6 +151,14 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         # one — so "the grammar agrees with the table" is an identity, not a
         # comparison the differential has to make.
         "land_statics",
+        # A board-wide replacement of how *other* permanents enter the
+        # battlefield (CR 614.1c): "Artifacts, creatures, and lands your
+        # opponents control enter tapped" (Kismet). Arrives through
+        # engine/grammar/derived.py like the land statics above, so the
+        # grammar hands over the table's own instruction rather than building
+        # one. Its own switch because its consumer is the entry seam
+        # (_initialize_permanent_state) rather than a continuous recompute.
+        "enter_statics",
         # Flipping a coin (CR 705). Switched on with the production, because
         # with nothing underneath the grammar a category left off is a card
         # reported unsupported rather than a card read by something else. The

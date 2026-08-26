@@ -1866,3 +1866,96 @@ def test_cosmic_horror_regenerated_takes_no_damage(set_pool, shield):
     assert game.is_on_battlefield(horror)
     assert horror.tapped
     assert p1.life == 20
+
+
+# ---------------------------------------------------------------------------
+# Round 21 — the CR 613 statics
+# ---------------------------------------------------------------------------
+
+
+def _basic(subtype: str) -> CardDefinition:
+    line = f"Basic Land - {subtype}"
+    return CardDefinition(
+        name=subtype, mana_cost="", cmc=0.0, type_line=line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": subtype, "type_line": line},
+    )
+
+
+def test_dakkon_blackblade_counts_every_land_you_control(set_pool):
+    """"…power and toughness are each equal to the number of lands you
+    control." Every land, whatever it is called — and the opponent's do not
+    count."""
+    dakkon = Permanent(card=set_pool("LEG")["Dakkon Blackblade"])
+    mine = [Permanent(card=_basic(name)) for name in ("Swamp", "Island", "Plains")]
+    p1 = PlayerState(name="P1", battlefield=[dakkon] + mine)
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=_basic("Forest"))])
+    game = Game(players=[p1, p2])
+    game._refresh_dynamic_creatures()
+
+    assert (dakkon.effective_power, dakkon.effective_toughness) == (3, 3)
+
+    game.remove_from_battlefield(mine[0])
+    game._refresh_dynamic_creatures()
+    assert (dakkon.effective_power, dakkon.effective_toughness) == (2, 2)
+
+
+def test_arcades_sabboth_buffs_only_untapped_non_attacking_creatures(set_pool):
+    """"Each untapped creature you control gets +0/+2 as long as it's not
+    attacking." Both halves describe the same set, and a creature failing
+    either one gets nothing. Arcades has no "other", so it buffs itself
+    (CR 613)."""
+    arcades = Permanent(card=set_pool("LEG")["Arcades Sabboth"])
+    ready = _vanilla("Ready", 2, 2)
+    resting = Permanent(card=ready)
+    tapped = Permanent(card=ready)
+    tapped.tapped = True
+    charging = Permanent(card=ready)
+    theirs = Permanent(card=ready)
+    p1 = PlayerState(name="P1", battlefield=[arcades, resting, tapped, charging])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game._recompute_continuous_effects()
+
+    assert resting.effective_toughness == 4
+    assert tapped.effective_toughness == 2
+    assert theirs.effective_toughness == 2
+
+    charging.attacking = True
+    assert charging.effective_toughness == 2
+    assert resting.effective_toughness == 4
+
+    game.remove_from_battlefield(arcades)
+    game._recompute_continuous_effects()
+    assert resting.effective_toughness == 2
+
+
+def test_rabid_wombat_grows_with_every_aura_on_it(set_pool):
+    """"This creature gets +2/+2 for each Aura attached to it." Printed 0/1."""
+    from engine.auras import attach_aura, detach_aura
+
+    def _aura(name: str) -> CardDefinition:
+        return CardDefinition(
+            name=name, mana_cost="{1}", cmc=1.0, type_line="Enchantment - Aura",
+            oracle_text="Enchant creature", colors=(), color_identity=(),
+            keywords=(), produced_mana=(),
+            raw={"name": name, "type_line": "Enchantment - Aura"},
+        )
+
+    wombat = Permanent(card=set_pool("LEG")["Rabid Wombat"])
+    auras = [Permanent(card=_aura(f"Aura {n}")) for n in range(2)]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[wombat, *auras]),
+        PlayerState(name="P2"),
+    ])
+    game._refresh_dynamic_creatures()
+    assert (wombat.effective_power, wombat.effective_toughness) == (0, 1)
+
+    for aura in auras:
+        attach_aura(aura, wombat)
+    game._refresh_dynamic_creatures()
+    assert (wombat.effective_power, wombat.effective_toughness) == (4, 5)
+
+    detach_aura(auras[0], wombat)
+    game._refresh_dynamic_creatures()
+    assert (wombat.effective_power, wombat.effective_toughness) == (2, 3)

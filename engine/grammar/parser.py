@@ -45,6 +45,7 @@ from .lexer import (BULLET, PUNCT, QUOTE, tokenize)
 from .costs import _parse_costs
 from .registries import registry_for_line
 from .riders import (_RIDER_FOLDED, _attach_destroyed_this_way, _attach_if_you_cant, _attach_if_you_do, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
+from .phrases import accept_member_state_clause
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
 from .triggers import _parse_trigger_event, rebind_pronoun_to_event_subject
@@ -396,6 +397,21 @@ def _parse_static_condition_line(stream: TokenStream) -> ast.StaticAbilityNode |
     if not stream.accept_phrase("as", "long", "as"):
         stream.reset(mark)
         return None
+    # "…**as long as it's not attacking**" over a distributive subject
+    # (Arcades Sabboth). Tried first, and only for that subject, because the two
+    # readings of "it" differ: over "each creature you control" it is a member
+    # of the set and the clause narrows the noun phrase, while over "this
+    # creature" it is the source and the clause is an ordinary state condition
+    # (Giant Tortoise), which `_parse_condition` below already reads. Folding it
+    # into the filter is what keeps the answer per-creature — as a condition it
+    # would be asked once, of the source.
+    narrowed = _narrow_by_member_state(stream, statement)
+    if narrowed is not None:
+        stream.accept_punct(".")
+        if stream.exhausted and _looks_static(narrowed):
+            return ast.StaticAbilityNode(narrowed, None)
+        stream.reset(mark)
+        return None
     try:
         condition = _parse_condition(stream)
     except GrammarError:
@@ -406,6 +422,52 @@ def _parse_static_condition_line(stream: TokenStream) -> ast.StaticAbilityNode |
         stream.reset(mark)
         return None
     return ast.StaticAbilityNode(statement, condition)
+
+
+def _distributive_subject(statement: ast.Statement) -> ast.TargetSpec | None:
+    """The one ``all``/``each`` subject *statement* is about, or None.
+
+    None for a conjunction whose halves disagree, for a targeted or singular
+    subject, and for anything with no subject at all — every case where "it" in
+    a trailing clause does not name a member of a described set.
+    """
+    effects = statement.effects if isinstance(statement, ast.Conjunction) else (statement,)
+    if not effects:
+        return None
+    subjects = {getattr(effect, "subject", None) for effect in effects}
+    if len(subjects) != 1:
+        return None
+    subject = subjects.pop()
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier not in ("all", "each"):
+        return None
+    return subject
+
+
+def _narrow_by_member_state(
+    stream: TokenStream, statement: ast.Statement
+) -> ast.Statement | None:
+    """*statement* with a trailing ``it's [not] <state>`` folded into its
+    subject, or None when the clause is not there or the subject is not a set.
+
+    Refuses when the noun phrase already states the field — "each attacking
+    creature … as long as it's not attacking" describes nothing, and silently
+    letting the later word win would be a set the card never printed.
+    """
+    subject = _distributive_subject(statement)
+    if subject is None:
+        return None
+    state = accept_member_state_clause(stream)
+    if state is None:
+        return None
+    field_name, value = state
+    if getattr(subject.filter, field_name) is not None:
+        return None
+    narrowed = replace(
+        subject, filter=replace(subject.filter, **{field_name: value})
+    )
+    effects = statement.effects if isinstance(statement, ast.Conjunction) else (statement,)
+    rebuilt = tuple(replace(effect, subject=narrowed) for effect in effects)
+    return ast.Conjunction(rebuilt) if isinstance(statement, ast.Conjunction) else rebuilt[0]
 
 
 _EMBLEM_LINE_RE = re.compile(

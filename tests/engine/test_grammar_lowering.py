@@ -157,7 +157,7 @@ def test_an_anthem_qualifier_is_carried_rather_than_dropped():
         result = compile_line(line, card_name=card)
         assert result.lowered, result.failure_reason
         payload = result.instructions[0].payload
-        assert payload["while"] == qualifier, line
+        assert payload["while"] == [qualifier], line
         assert payload["controller"] == "you", line
 
 

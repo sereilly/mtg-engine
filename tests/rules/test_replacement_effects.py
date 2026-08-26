@@ -888,3 +888,82 @@ def test_616_1_prevention_and_replacement_both_apply_to_one_damage_event():
     assert p1.damage_prevention_pool == 0, "the shield applied"
     assert dealt == 8, "10 damage, 2 prevented, 8 dealt"
     assert p1.life == 1, "of which only 3 could reduce a life total of 4"
+
+
+# ---------------------------------------------------------------------------
+# 614.1c — a permanent on the battlefield saying how *other* permanents enter
+# (round 21). A different sentence from "this permanent enters tapped": the
+# question is asked of the board, not of the card being read.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("614.1d", "109.5")
+def test_614_1c_a_board_wide_enters_tapped_static_reads_whose_from_its_own_source():
+    """"Artifacts, creatures, and lands your opponents control enter tapped."
+    (Kismet.)
+
+    Written with an invented card naming a different set of types, because a
+    version keyed on Kismet's exact phrase passes for Kismet and fails for
+    everything else — and "your opponents" is relative to the *static's*
+    controller (CR 109.5), so read against the entering permanent's seat it
+    would tap exactly the wrong half of the table.
+    """
+    warden = Permanent(card=_mk_card(
+        "Invented Warden", "Enchantment",
+        "Creatures and lands your opponents control enter tapped.",
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[warden]),
+        PlayerState(name="P2"),
+    ])
+
+    theirs = Permanent(card=_mk_card("Their Bear", "Creature — Bear", ""))
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    assert theirs.tapped
+
+    # The static's own controller is untouched…
+    mine = Permanent(card=_mk_card("My Bear", "Creature — Bear", ""))
+    game._put_permanent_onto_battlefield(0, mine, None)
+    assert not mine.tapped
+
+    # …and a type the noun phrase does not name is untouched on either side.
+    artifact = Permanent(card=_mk_card("Their Relic", "Artifact", ""))
+    game._put_permanent_onto_battlefield(1, artifact, None)
+    assert not artifact.tapped
+
+
+@pytest.mark.cr("614.1d", "611.3b")
+def test_614_1c_a_board_wide_enters_tapped_static_stops_when_its_source_leaves():
+    warden = Permanent(card=_mk_card(
+        "Invented Warden", "Enchantment",
+        "Creatures and lands your opponents control enter tapped.",
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[warden]),
+        PlayerState(name="P2"),
+    ])
+    game.remove_from_battlefield(warden)
+
+    theirs = Permanent(card=_mk_card("Their Bear", "Creature — Bear", ""))
+    game._put_permanent_onto_battlefield(1, theirs, None)
+
+    assert not theirs.tapped
+
+
+@pytest.mark.cr("614.1d")
+def test_614_1c_a_rider_the_seam_cannot_perform_refuses_the_whole_line():
+    """"…enter tapped **and don't untap during their controller's next untap
+    step**" is a second effect nothing here carries out. Admitting the prefix
+    would report the card supported with half its text silently dropped."""
+    from engine.enter_tapped_statics import enter_tapped_static_for
+
+    assert enter_tapped_static_for(
+        "creatures your opponents control enter tapped"
+    ) == {"type_filter": "creature", "controller": "opponent"}
+    assert enter_tapped_static_for(
+        "creatures your opponents control enter tapped and don't untap "
+        "during their controller's next untap step"
+    ) is None
+    # "This artifact enters tapped" belongs to engine/enter_effects.py — the
+    # permanent's own entry state, read off its own text.
+    assert enter_tapped_static_for("this artifact enters tapped") is None

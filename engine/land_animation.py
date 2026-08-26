@@ -46,14 +46,19 @@ LAND_ANIMATION_KIND = "animate_all_lands"
 class LandAnimation:
     """Lands of one type become creatures while the source is on the battlefield.
 
-    land_type  -- the land subtype animated, singular and lowercase ("swamp")
+    land_type  -- the land subtype animated, singular and lowercase ("swamp"),
+                  or None when the printed noun phrase is the bare card type
+                  ("All **lands** are 1/1 creatures that are still lands",
+                  Living Plane) and every land is animated whatever its
+                  subtypes. None is "no restriction", not "unrecognized": an
+                  unreadable subtype refuses the line (see below).
     power/toughness -- the base P/T the animated lands take (CR 613 layer 7b)
     color      -- mana symbol the animated lands become, or None when the
                   printed line names no colour (Living Lands says nothing about
                   colour, so its Forests keep theirs)
     """
 
-    land_type: str
+    land_type: str | None
     power: int
     toughness: int
     color: str | None = None
@@ -82,6 +87,13 @@ def _land_subtype(word: str) -> str | None:
     return None
 
 
+# The head noun when the sentence names no subtype at all: "All **lands** are
+# 1/1 creatures that are still lands" (Living Plane). It is the card type, so it
+# is read here rather than looked for in the subtype catalog — where it is
+# absent, and where its absence would look exactly like an unknown subtype and
+# refuse the line.
+_UNTYPED_NOUNS = ("lands", "land")
+
 # Anchored at both ends: a line that says anything more than this carries a
 # rider the refresh would not perform, and admitting it would be the
 # loose-gate/strict-dispatch defect one level down.
@@ -100,9 +112,17 @@ def land_animation_for(normalized_line: str) -> LandAnimation | None:
     match = _PATTERN.match(normalized_line.strip().rstrip("."))
     if match is None:
         return None
-    land_type = _land_subtype(match.group("type"))
-    if land_type is None:
-        return None
+    type_word = match.group("type")
+    if type_word in _UNTYPED_NOUNS:
+        # Every land, whatever it is called. Distinguished from the refusal
+        # below by being checked first: both are spelled ``None`` on the
+        # dataclass, and a subtype the catalog has never heard of must keep
+        # refusing rather than widening into "all lands".
+        land_type = None
+    else:
+        land_type = _land_subtype(type_word)
+        if land_type is None:
+            return None
     color_word = match.group("color")
     color = None
     if color_word is not None:
@@ -124,10 +144,14 @@ def land_animation_for(normalized_line: str) -> LandAnimation | None:
 def land_animation_payload(animation: LandAnimation) -> dict[str, object]:
     """*animation* as an ``OracleInstruction`` payload."""
     payload: dict[str, object] = {
-        "land_type": animation.land_type,
         "power": animation.power,
         "toughness": animation.toughness,
     }
+    # Omitted rather than written as None when the sentence names no subtype:
+    # the payload says what the line restricts, and an absent key is what the
+    # refresh reads as "no restriction".
+    if animation.land_type is not None:
+        payload["land_type"] = animation.land_type
     if animation.color:
         payload["color"] = animation.color
     return payload
@@ -135,8 +159,9 @@ def land_animation_payload(animation: LandAnimation) -> dict[str, object]:
 
 def land_animation_from_payload(payload: dict) -> LandAnimation:
     """Rebuild the derived animation an ``animate_all_lands`` instruction carries."""
+    land_type = payload.get("land_type")
     return LandAnimation(
-        land_type=str(payload.get("land_type", "")),
+        land_type=str(land_type) if land_type is not None else None,
         power=int(payload.get("power", 1)),
         toughness=int(payload.get("toughness", 1)),
         color=payload.get("color"),

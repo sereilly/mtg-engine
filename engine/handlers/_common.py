@@ -41,6 +41,15 @@ def attached_host(game: "Game", source: "Permanent | None") -> "Permanent | None
 def resolve_amount(raw: object, x_value: int | None) -> int:
     """Numeric value of a parsed amount payload; ``"x"`` resolves to the cast's
     X (never negative)."""
+    # ``{"times_x": n}`` — "gets +2/+2 **for each** Aura attached to it" (Rabid
+    # Wombat). The printed number is the size of one repetition, so the amount
+    # is that number times the count. Its own shape rather than a factor on the
+    # count spec, because one spec may feed two halves scaled differently.
+    if isinstance(raw, dict):
+        times = raw.get("times_x")
+        if times is None:
+            raise ValueError(f"unreadable amount payload {raw!r}")
+        return int(times) * max(0, x_value or 0)
     return max(0, x_value or 0) if raw == "x" else int(raw)
 
 
@@ -90,7 +99,10 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
         # anything on the battlefield, so it is read off the printed cost.
         return max(0, int(getattr(perm.card, "cmc", 0) or 0))
     owner = context.caster if spec.get("owner", "you") == "you" else (context.target or context.caster)
-    return evaluate_count(game, owner, spec, exclude=context.source_permanent)
+    return evaluate_count(
+        game, owner, spec,
+        exclude=context.source_permanent, source=context.source_permanent,
+    )
 
 
 def _scaled(total: int, spec: dict) -> int:
@@ -113,7 +125,7 @@ def _scaled(total: int, spec: dict) -> int:
 
 
 def evaluate_count(
-    game: "Game", owner: "PlayerState", spec: dict, *, exclude=None
+    game: "Game", owner: "PlayerState", spec: dict, *, exclude=None, source=None
 ) -> int:
     """How much the amount a card *computes* currently is, for a named owner.
 
@@ -151,6 +163,26 @@ def evaluate_count(
     filt = dict(spec.get("filter") or {})
     aggregate = spec.get("aggregate", "count")
     zone = spec.get("zone", "battlefield")
+    # "the number of Auras **attached to it**" (Rabid Wombat). Not a scan of a
+    # zone: what is attached to a permanent is a record kept on that permanent,
+    # which is also why the owner scope above does not apply — an opponent's
+    # Aura on your creature is attached to your creature and the sentence says
+    # nothing about who controls it. A spec carrying the key with no source to
+    # resolve it counts nothing, and the lowering refuses every referent but
+    # this one so that cannot arrive from a card.
+    attached_to = spec.get("attached_to")
+    if attached_to is not None:
+        if attached_to != "source" or source is None:
+            return 0
+        from ..auras import auras_attached_to
+
+        return _scaled(
+            len([
+                attachment for attachment in auras_attached_to(source)
+                if permanent_matches_filter(attachment, filt)
+            ]),
+            spec,
+        )
     if zone == "battlefield":
         seat = game.players.index(owner)
         # "**Other** …" (CR 109.5) is an identity comparison against the ability's

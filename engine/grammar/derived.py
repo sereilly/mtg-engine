@@ -10,7 +10,7 @@ its phrases into the grammar; they differ only in what that code produces:
   the instruction *and* its payload — the grammar's whole job is to hand that
   over unchanged.
 
-Three tables qualify today, each of them already the single source of truth for
+Four tables qualify today, each of them already the single source of truth for
 its family:
 
 ============================  =======================================
@@ -20,6 +20,9 @@ its family:
 ``engine/lord_buffs.py``      a continuous anthem carrying a condition
                               the grammar's own condition vocabulary does
                               not model (Jihad)
+``engine/enter_tapped_statics.py``
+                              "Artifacts, creatures, and lands your
+                              opponents control enter tapped." (Kismet)
 ============================  =======================================
 
 **Consulted only where the grammar has already refused the line in full.**
@@ -44,6 +47,11 @@ from ..land_animation import (
     LAND_ANIMATION_KIND,
     land_animation_for,
     land_animation_payload,
+)
+from ..enter_tapped_statics import (
+    ENTER_TAPPED_STATIC_KIND,
+    enter_tapped_static_for,
+    enter_tapped_static_payload,
 )
 from ..land_types import (
     STATIC_LAND_TYPE_KIND,
@@ -82,6 +90,12 @@ TABLES: tuple[DerivationTable, ...] = (
         static_land_type_change_payload,
     ),
     DerivationTable("lord_buffs", lord_buff_for, LORD_BUFF_KIND, lord_buff_payload),
+    DerivationTable(
+        "enter_tapped_statics",
+        enter_tapped_static_for,
+        ENTER_TAPPED_STATIC_KIND,
+        enter_tapped_static_payload,
+    ),
 )
 
 

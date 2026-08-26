@@ -1046,3 +1046,68 @@ def test_land_tax_refuses_a_pick_that_is_not_a_basic_land(set_pool, catalog_by_n
     assert not game.confirm_search_library_picks(0, [{"zone": "library", "index": 3}])
     assert p1.hand == []
     assert game.pending_search_library is not None
+
+# ---------------------------------------------------------------------------
+# Round 21 — the CR 613 statics
+# ---------------------------------------------------------------------------
+
+
+def _basic_land(subtype: str) -> CardDefinition:
+    line = f"Basic Land - {subtype}"
+    return CardDefinition(
+        name=subtype, mana_cost="", cmc=0.0, type_line=line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": subtype, "type_line": line},
+    )
+
+
+def test_living_plane_animates_lands_of_every_type_on_both_sides(set_pool):
+    """"All lands are 1/1 creatures that are still lands." The head noun is the
+    card type, so nothing is narrowed — including the opponent's lands, which
+    the sentence never scoped to a controller."""
+    plane = Permanent(card=set_pool("LEG")["Living Plane"])
+    mine = Permanent(card=_basic_land("Swamp"))
+    theirs = Permanent(card=_basic_land("Plains"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[plane, mine]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game._refresh_dynamic_creatures()
+
+    for land in (mine, theirs):
+        assert land.is_creature
+        assert land.has_type("land")
+        assert (land.effective_power, land.effective_toughness) == (1, 1)
+
+    game.remove_from_battlefield(plane)
+    game._refresh_dynamic_creatures()
+    assert not mine.is_creature
+    assert not theirs.is_creature
+
+
+def test_kismet_taps_the_three_types_it_names_on_the_opponents_side(set_pool):
+    """"Artifacts, creatures, and lands your opponents control enter tapped."
+    Three types and one side, both read off the printed noun phrase."""
+    kismet = Permanent(card=set_pool("LEG")["Kismet"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[kismet]),
+        PlayerState(name="P2"),
+    ])
+
+    def _enters(seat: int, type_line: str) -> Permanent:
+        card = CardDefinition(
+            name="Subject", mana_cost="", cmc=0.0, type_line=type_line,
+            oracle_text="", colors=(), color_identity=(), keywords=(),
+            produced_mana=(),
+            raw={"name": "Subject", "type_line": type_line,
+                 "power": "2", "toughness": "2"},
+        )
+        perm = Permanent(card=card)
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        return perm
+
+    for type_line in ("Creature - Bear", "Artifact", "Basic Land - Forest"):
+        assert _enters(1, type_line).tapped, type_line
+        assert not _enters(0, type_line).tapped, type_line
+    # An enchantment is not one of the three types the card names.
+    assert not _enters(1, "Enchantment").tapped

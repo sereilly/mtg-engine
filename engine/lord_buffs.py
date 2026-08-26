@@ -60,8 +60,17 @@ LORD_BUFF_KIND = "lord_buff"
 # compare for equality, so the qualifier vocabulary has exactly one definition
 # and a qualifier added here cannot be silently dropped by a lowering written
 # before it existed.
+#
+# A qualifier is a *field and a value*, not an adjective, which is why "not
+# attacking" is a row like any other. Magic prints the negative half of this
+# vocabulary as a trailing clause rather than as a word in front of the noun
+# ("Each untapped creature you control gets +0/+2 **as long as it's not
+# attacking**", Arcades Sabboth), and reading it as a board condition instead
+# would ask the question of the *source* — Arcades — rather than of each
+# creature the sentence is about.
 QUALIFIER_FIELDS: dict[str, tuple[str, bool]] = {
     "attacking": ("attacking", True),
+    "not attacking": ("attacking", False),
     "blocking": ("blocking", True),
     "tapped": ("tapped", True),
     "untapped": ("tapped", False),
@@ -86,7 +95,11 @@ CONDITIONS: dict[str, str] = {
         "chosen_color_permanent",
 }
 
-_QUALIFIER_WORDS = tuple(QUALIFIER_FIELDS)
+#: The subset of the vocabulary above that is printed as a single adjective in
+#: front of the noun ("**untapped** creatures you control"). Derived rather than
+#: listed, so a row added to QUALIFIER_FIELDS reaches the noun-phrase parser
+#: exactly when it is spellable there and never by being copied.
+_QUALIFIER_WORDS = tuple(word for word in QUALIFIER_FIELDS if " " not in word)
 
 
 # Magic's noun and keyword catalogs are data (``data/vocabulary/``), read
@@ -124,10 +137,16 @@ class LordBuffFilter:
     # "Other Goblins" — CR 613 applies a static ability to its own source unless
     # the card excludes it, so this is a field rather than an assumption.
     other_than_source: bool = False
-    # A state the buffed creature must currently be in. Evaluated when P/T is
-    # *read*, not when the board is recomputed — a creature that taps between
-    # recomputes must lose an untapped-only bonus immediately (CR 611.3a).
-    qualifier: str | None = None
+    # The states the buffed creature must currently be in, every one of them.
+    # Evaluated when P/T is *read*, not when the board is recomputed — a
+    # creature that taps between recomputes must lose an untapped-only bonus
+    # immediately (CR 611.3a).
+    #
+    # A tuple rather than one word because a sentence may name two: Arcades
+    # Sabboth's "each **untapped** creature you control … as long as it's **not
+    # attacking**" is one set described twice, and carrying only the first
+    # would buff a set strictly larger than the card prints.
+    qualifiers: tuple[str, ...] = ()
     # "…with a +1/+1 counter on it" (Pridemalkin). A restriction on the buffed
     # set, read off the ``plus_counters`` record rather than the P/T bonus —
     # the same distinction ``permanent_matches_filter`` makes, and for the same
@@ -243,7 +262,7 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
     """
     index = 0
     other = False
-    qualifier: str | None = None
+    qualifiers: list[str] = []
     colors: list[str] = []
     subtypes: list[str] = []
     with_plus1_counter = False
@@ -257,8 +276,12 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
     if index < len(words) and words[index] == "other":
         other = True
         index += 1
-    if index < len(words) and words[index] in _QUALIFIER_WORDS:
-        qualifier = words[index]
+    while index < len(words) and words[index] in _QUALIFIER_WORDS:
+        # A run rather than one word: nothing stops a sentence stacking two
+        # adjectives, and stopping after the first would leave the second
+        # unconsumed — which refuses the line, the safe direction, but a loop
+        # costs nothing and says what the phrase means.
+        qualifiers.append(words[index])
         index += 1
     color_words = _vocabulary().COLOR_WORDS
     if index < len(words) and words[index] in color_words:
@@ -303,7 +326,7 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
         subtypes=tuple(subtypes),
         controller=controller,
         other_than_source=other,
-        qualifier=qualifier,
+        qualifiers=tuple(qualifiers),
         with_plus1_counter=with_plus1_counter,
     )
 
@@ -400,8 +423,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["controller"] = buff.filter.controller
     if buff.filter.other_than_source:
         payload["other"] = True
-    if buff.filter.qualifier:
-        payload["while"] = buff.filter.qualifier
+    if buff.filter.qualifiers:
+        payload["while"] = list(buff.filter.qualifiers)
     if buff.filter.with_plus1_counter:
         payload["with_plus1_counter"] = True
     if buff.filter.named:
@@ -425,7 +448,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             subtypes=tuple(payload.get("subtypes") or ()),
             controller=payload.get("controller"),
             other_than_source=bool(payload.get("other")),
-            qualifier=payload.get("while"),
+            qualifiers=tuple(payload.get("while") or ()),
             with_plus1_counter=bool(payload.get("with_plus1_counter")),
             named=payload.get("named"),
         ),

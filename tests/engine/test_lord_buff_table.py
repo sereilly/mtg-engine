@@ -71,19 +71,19 @@ def _derive(line: str) -> LordBuff | None:
         ),
         (
             "Attacking creatures you control get +4/+0.",
-            LordBuff(LordBuffFilter(controller="you", qualifier="attacking"), 4, 0),
+            LordBuff(LordBuffFilter(controller="you", qualifiers=("attacking",)), 4, 0),
         ),
         (
             "Untapped creatures you control get +0/+5.",
-            LordBuff(LordBuffFilter(controller="you", qualifier="untapped"), 0, 5),
+            LordBuff(LordBuffFilter(controller="you", qualifiers=("untapped",)), 0, 5),
         ),
         (
             "Blocking creatures you control get +0/+1.",
-            LordBuff(LordBuffFilter(controller="you", qualifier="blocking"), 0, 1),
+            LordBuff(LordBuffFilter(controller="you", qualifiers=("blocking",)), 0, 1),
         ),
         (
             "Tapped creatures get +1/+1.",
-            LordBuff(LordBuffFilter(qualifier="tapped"), 1, 1),
+            LordBuff(LordBuffFilter(qualifiers=("tapped",)), 1, 1),
         ),
         (
             "Creatures you control get +1/+1.",

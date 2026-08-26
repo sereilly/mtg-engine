@@ -56,6 +56,11 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     else:
         stream.reset(tapped_mark)
 
+    # "gets +2/+2 **for each Aura attached to it**" (Rabid Wombat). Read after
+    # the back-reference above, which shares its first two words and is not a
+    # count of anything on the board.
+    per_each = _parse_per_each_objects(stream) if not per_each_tapped else None
+
     # The same clause the statement level reads, through the same parser
     # (`phrases.parse_where_x_definition`). It used to be a second copy here,
     # accepting "the greatest power among" where the other accepted "that died
@@ -66,6 +71,7 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     pump = ast.Pump(
         subject, power, toughness, duration, power_negative, toughness_negative,
         x_definition=x_definition, per_each_tapped_this_way=per_each_tapped,
+        per_each=per_each,
     )
 
     # "gets +3/+3 and gains flying until end of turn" / "get +1/+1 and have
@@ -775,3 +781,34 @@ def _parse_become_creature(
         subject, power.value, toughness.value, tuple(subtypes), tuple(keywords),
         tuple(card_types),
     )
+
+
+def _parse_per_each_objects(stream: TokenStream) -> ast.ObjectFilter | None:
+    """``for each <objects>`` — the set whose size multiplies a printed P/T.
+
+    "This creature gets +2/+2 **for each Aura attached to it**" (Rabid Wombat).
+    Distinct from ``phrases._parse_for_each``, which reads the *history* form
+    ("for each creature that died this turn"): a history is not a set anything
+    can scan, so the two produce different nodes and this one hands the history
+    spelling back rather than reading it as a board count.
+
+    Returns None with the cursor where it was when the clause is not there, so
+    a caller that does not find it still owes the rest of its line to full-token
+    consumption.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        stream.reset(mark)
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    # "…that died this turn" / "…that died this way" belong to the productions
+    # that know what those sets are; a relative clause this cannot read would
+    # otherwise be left as unconsumed text with the count already claimed.
+    if stream.at_word("that"):
+        stream.reset(mark)
+        return None
+    return filt
