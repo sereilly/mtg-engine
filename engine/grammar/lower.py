@@ -171,6 +171,7 @@ from .lowering import (
     _lower_tap,
     _lower_tap_or_untap,
     _lower_attach,
+    _lower_choose_permanent,
     _lower_exchange_control,
     _lower_exchange_greatest_mana_value,
     _lower_win_game,
@@ -294,6 +295,8 @@ def lower_statement(
         return _lower_tap_or_untap(statement)
     if isinstance(statement, ast.Attach):
         return _lower_attach(statement)
+    if isinstance(statement, ast.ChoosePermanent):
+        return _lower_choose_permanent(statement)
     if isinstance(statement, ast.ExchangeControl):
         return _lower_exchange_control(statement)
 

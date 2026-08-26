@@ -1079,6 +1079,90 @@ def return_source_card_to_owners_hand(game: Game, instruction: OracleInstruction
     return True, "resolved"
 
 
+@effect_handler("return_source_card_to_battlefield")
+def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Return this card to the battlefield under your control [attached to
+    that creature] [as a non-Aura enchantment]." (Takklemaggot.)
+
+    The ability's own source, printed with no source zone — the same reach
+    ``return_source_card_to_owners_hand`` makes, and for its reason: by the time
+    an Aura's death trigger resolves the CR 704.5m sweep has usually already put
+    the card in a graveyard, but a caller that resolves the stack without an
+    intervening priority pass finds it still on the battlefield, and a handler
+    that looked in one zone would silently do nothing in the other.
+
+    Every rider is payload, and each is recorded on the permanent as a *layer*
+    contribution rather than applied: the lost subtype is layer 4
+    (``layer_bridge.LOST_TYPES``), the lost and gained ability lines are layer 6
+    (``keywords``), and both are read back by ``Permanent.effective_card`` and
+    ``computed_types``. So the CR 704.5m sweep, the UI and the compiler all get
+    one answer to "what is this permanent now?" — which is the whole reason the
+    non-Aura half is not a flag the sweep checks for itself.
+    """
+    from ..auras import attach_aura, aura_attach_refusal
+    from ..keywords import grant_ability_line, remove_ability_line
+    from ..layer_bridge import LOST_TYPES
+
+    card = context.card
+    source = context.source_permanent
+    seat = game.players.index(context.caster)
+    if source is not None and game.is_on_battlefield(source):
+        game.remove_from_battlefield(source)
+    else:
+        for player in game.players:
+            for index, held in enumerate(player.graveyard):
+                if held is card:
+                    player.graveyard.pop(index)
+                    break
+            else:
+                continue
+            break
+        else:
+            # CR 603.6: the ability looks for the object in the zone it moves it
+            # out of. Gone means the ability does nothing, rather than making a
+            # second copy of the card.
+            game.log.append(f"{card.name} was no longer in a graveyard")
+            return True, "resolved"
+
+    payload = instruction.payload
+    permanent = Permanent(card=card)
+    for subtype in payload.get("losing_subtypes") or ():
+        permanent.metadata.setdefault(LOST_TYPES, []).append(
+            {"subtypes": (str(subtype).lower(),), "source": card.name}
+        )
+    for line in payload.get("losing_abilities") or ():
+        remove_ability_line(permanent, line)
+    for line in payload.get("gaining_abilities") or ():
+        grant_ability_line(permanent, line[:1].upper() + line[1:])
+    # Whose upkeep the granted trigger watches and who it hits: the seat this
+    # resolution asked to choose. Recorded on the permanent because the ability
+    # it was granted is compiled from the *permanent's* text, with no memory of
+    # the resolution that granted it — the same channel Storm World's chosen
+    # player already uses.
+    chosen_seat = context.results.get("chosen_player")
+    if isinstance(chosen_seat, int):
+        permanent.metadata["chosen_player_index"] = chosen_seat
+
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    game.log.append(
+        f"{card.name} returned to the battlefield under {game.players[seat].name}'s control"
+    )
+
+    host_key = payload.get("attached_to")
+    if host_key:
+        host = game.permanent_by_id(context.results.get(host_key))
+        # CR 303.4j asked one more time at the move itself, over the same
+        # predicate the picker used: a host chosen legally may have stopped
+        # being one while the rest of this resolution ran.
+        refusal = aura_attach_refusal(game, permanent, host)
+        if refusal is None:
+            attach_aura(permanent, host)
+            game.log.append(f"{card.name} attached to {host.card.name}")
+        else:
+            game.log.append(f"{card.name} could not attach: {refusal}")
+    return True, "resolved"
+
+
 @effect_handler("return_self_from_graveyard")
 def return_self_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Return this card from your graveyard to the battlefield [tapped]."

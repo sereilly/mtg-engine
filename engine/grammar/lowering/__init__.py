@@ -127,6 +127,10 @@ from .exile import (
     _lower_exile_until_leaves_or_untaps,
     _fused_exile_then_controller_life,
 )
+from .attachments import (
+    _lower_attach,
+    _lower_choose_permanent,
+)
 from .board import (
     _lower_phase_out,
     _lower_put_on_library_bottom,
@@ -136,7 +140,6 @@ from .board import (
     _lower_for_each_destroyed,
     _lower_delayed_destroy,
     _lower_delayed_self_action,
-    _lower_attach,
     _lower_exchange_control,
     _lower_exchange_greatest_mana_value,
     _lower_regenerate,
@@ -318,6 +321,7 @@ __all__ = [
     "_lower_reveal_until",
     "_lower_tap_or_untap",
     "_lower_attach",
+    "_lower_choose_permanent",
     "_lower_exchange_control",
     "_lower_exchange_greatest_mana_value",
     "_lower_regenerate",

@@ -212,8 +212,11 @@ def _action_permanent_choice_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="no permanent choice pending")
     if req.seat != pending.player_index:
         raise HTTPException(status_code=400, detail="not your choice")
-    if req.target_permanent_id is None:
+    if req.target_permanent_id is None and not pending.data.get("optional"):
         raise HTTPException(status_code=400, detail="target_permanent_id is required")
+    # A missing id is a *decline*, and only where the card printed one
+    # (Takklemaggot's "If they don't"). The engine re-checks the same flag, so a
+    # client that omits the id on a mandatory choice is refused there too.
     if not session.game.confirm_permanent_choice(req.seat, req.target_permanent_id):
         raise HTTPException(status_code=400, detail="invalid permanent choice")
 

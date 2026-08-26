@@ -16,7 +16,8 @@ from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND
 from ...oracle_types import OracleInstruction
-from ._events import CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER, CREATED_TOKEN
+from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
+                      CREATED_TOKEN)
 INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage": "damage",
     "earthquake_damage": "damage",
@@ -461,6 +462,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "return_self_from_graveyard": "zones",
     "return_bound_card_to_owners_hand": "zones",
     "return_source_card_to_owners_hand": "zones",
+    "return_source_card_to_battlefield": "zones",
     "bounce_target_creature": "zones",
     # "Return to your hand all enchantments you both own and control" (Remove
     # Enchantments) — the sweep twin of the bounce above.
@@ -520,6 +522,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
 # `lower.py`) read it to thread what each step records forward.
 _PRODUCES: dict[str, str] = {
     "deal_damage": "damage_dealt",
+    # "…chooses a creature that this card could enchant. **If the player does**,
+    # return this card … **attached to that creature**." (Takklemaggot.) The
+    # chosen permanent's id, which is both what the branch tests and what the
+    # step behind it acts on — the choice is not a target, so nothing on the
+    # board or on the stack records it.
+    "choose_permanent": CHOSEN_PERMANENT,
     # "Choose a player who cast one or more sorcery spells this turn.
     # Backdraft deals damage to **that player** …" The seat is the whole of what
     # the first sentence does, and the only place the second can read it: a

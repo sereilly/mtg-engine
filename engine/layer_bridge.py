@@ -41,6 +41,7 @@ from .continuous import (
     grant_abilities,
     modify_pt,
     remove_abilities,
+    remove_types,
     scope_only,
     set_colors,
     set_pt,
@@ -69,6 +70,10 @@ QUALIFIED_BUFFS = "lord_buff_while"
 #: replaces the other; each entry carries its own duration so the sweep
 #: that clears it knows which ones it owns.
 GAINED_TYPES = "gained_types"
+#: Types an effect took *away* from a permanent, the mirror of the above and a
+#: list for the same reason. One entry per effect, so the removal ends by
+#: dropping the contribution rather than by remembering what was there.
+LOST_TYPES = "lost_types"
 
 _QUALIFIER_HOLDS = {
     "attacking": lambda perm: bool(perm.attacking),
@@ -546,6 +551,21 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             label=f"gained:{gained.get('source', 'effect')}",
         ))
 
+    # Layer 4's removing half, applied after every addition above so a later
+    # add wins on timestamp (CR 613.7). "…as a non-Aura enchantment"
+    # (Takklemaggot): the returning permanent is still an enchantment and is no
+    # longer an Aura, which is one subtype off the printed line and nothing
+    # else. Read here rather than at the CR 704.5m sweep, so every reader of
+    # "is this an Aura?" gets the same answer.
+    for lost in meta.get(LOST_TYPES) or ():
+        effects.append(remove_types(
+            only,
+            card_types=list(lost.get("card_types") or ()),
+            subtypes=list(lost.get("subtypes") or ()),
+            timestamp=0,
+            label=f"lost:{lost.get('source', 'effect')}",
+        ))
+
     animation = meta.get("animate_until_end_of_turn")
     if animation:
         effects.append(add_types(
@@ -702,6 +722,42 @@ def computed_abilities(perm: Permanent) -> set[str]:
     state: State = {oid: seed_characteristics(perm)}
     apply_layers(collect_ability_effects(perm, oid), state)
     return state[oid].abilities
+
+
+def displayed_type_line(perm: Permanent) -> str:
+    """The type line to *show* for *perm*, with layer 4's removals folded in.
+
+    ``effective_card.type_line`` is layers 1 and 3 — what the object copies and
+    what a text change rewrote — and stops there, so a permanent an effect
+    returned "as a **non-Aura** enchantment" (Takklemaggot) still reads
+    "Enchantment — Aura" on screen while every rules query says it is not one.
+
+    Only the words a ``LOST_TYPES`` record names are dropped, and only when
+    :meth:`Permanent.has_type` agrees they are gone — so this is a *view* of the
+    layer-4 answer rather than a second opinion about it, and a permanent no
+    removal touches gets its printed line back unchanged. Rebuilding the whole
+    line from ``computed_types`` would be the second opinion: the computed sets
+    carry no order, no em dash and no supertype spelling, and a land whose
+    subtypes were *replaced* (Blood Moon) would come back with none at all.
+    """
+    line = perm.effective_card.type_line
+    lost = {
+        str(word).lower()
+        for record in (perm.metadata.get(LOST_TYPES) or ())
+        for word in tuple(record.get("subtypes") or ()) + tuple(record.get("card_types") or ())
+    }
+    if not lost:
+        return line
+    head, sep, tail = line.partition("—")
+    if not sep:
+        return line
+    kept = [
+        word for word in tail.split()
+        if word.lower() not in lost or perm.has_type(word)
+    ]
+    if not kept:
+        return head.strip()
+    return f"{head.strip()} — {' '.join(kept)}"
 
 
 def computed_types(perm: Permanent) -> tuple[set[str], set[str]]:

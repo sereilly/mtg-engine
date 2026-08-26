@@ -192,6 +192,15 @@ _UNTAPPED_PERMANENTS = "untapped_permanents"
 # make one producer gate vacuous while the handler read an empty record — and
 # on this card that is a spell that reports itself resolved and deals nothing.
 CHOSEN_PLAYER = "chosen_player"
+
+# The scratchpad key a "<player> chooses <permanent>" step writes and the
+# sentences behind it read — "attach it to **that** permanent" (Enchantment
+# Alteration), "return this card … **attached to that creature**"
+# (Takklemaggot). Named here for the reason every other key on this page is:
+# the ``board`` and ``zones`` lowering families and ``categories._PRODUCES``
+# all write the string, and a second spelling would make one producer gate
+# vacuous while the handler read an empty record.
+CHOSEN_PERMANENT = "attach_host"
 CHOSEN_CAST_DAMAGE = "damage_dealt_by_chosen_cast"
 
 # The scratchpad keys that are *quantities*. `categories._PRODUCES` also records

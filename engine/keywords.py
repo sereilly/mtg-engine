@@ -63,6 +63,22 @@ DERIVED_REMOVALS = "derived_ability_removals"
 # becomes-blocked dispatcher fires it without knowing a spell granted it.
 GRANTED_ABILITY_LINES = "granted_ability_lines"
 
+# The mirror channel: a *printed* ability line an effect has taken away
+# (CR 613.1f, layer 6 — ability-removing effects).
+#
+# ``DERIVED_REMOVALS`` above is the keyword half — it names a word, and
+# ``has_keyword`` asks it. That is no use for an ability the compiler builds out
+# of a whole printed sentence: Takklemaggot's returning enchantment loses
+# "enchant creature", and there is no keyword flag anywhere that says whether a
+# permanent has an enchant ability. What says so is the sentence, so what is
+# removed is the sentence — recorded here and dropped by
+# ``Permanent.effective_card`` in the same fold that appends a granted one.
+#
+# Recorded rather than applied for the reason every other layer channel is:
+# the removal is a contribution, so nothing has to remember a delta and the
+# printed card is never rewritten.
+REMOVED_ABILITY_LINES = "removed_ability_lines"
+
 #: Which keyword words that applies to. One entry today, and the membership test
 #: is not "does it have a number": it is "does the compiler build this keyword's
 #: behaviour out of the printed line". Prowess and lifelink also have behaviour
@@ -321,9 +337,38 @@ def derived_removals(perm: Permanent) -> tuple[str, ...]:
     return tuple(perm.metadata.get(DERIVED_REMOVALS) or ())
 
 
+def remove_ability_line(perm: Permanent, line: str) -> None:
+    """Layer 6: *perm* no longer has the printed ability *line*.
+
+    Matched on the normalized sentence rather than the printed one, because the
+    card that takes the ability away quotes it in lower case ("It loses
+    \"enchant creature\"") while the card prints it capitalised. One
+    normalization, shared with :func:`removed_ability_lines`, so what is
+    recorded and what is dropped cannot disagree.
+
+    No duration: nothing in this pool takes an ability away for a while, and a
+    duration nothing sweeps would be a promise the engine does not keep.
+    """
+    removed = perm.metadata.setdefault(REMOVED_ABILITY_LINES, [])
+    normalized = normalized_ability_line(line)
+    if normalized and normalized not in removed:
+        removed.append(normalized)
+
+
+def normalized_ability_line(line: str) -> str:
+    """One spelling of a printed ability line, for comparing two of them."""
+    return " ".join((line or "").split()).strip().lower().rstrip(".")
+
+
+def removed_ability_lines(perm: Permanent) -> tuple[str, ...]:
+    """The printed ability lines an effect has taken away from *perm*."""
+    return tuple(perm.metadata.get(REMOVED_ABILITY_LINES) or ())
+
+
 __all__ = [
     "ABILITY_EFFECTS", "DERIVED_GRANTS", "DERIVED_REMOVALS",
-    "GRANTED_ABILITY_LINES",
+    "GRANTED_ABILITY_LINES", "REMOVED_ABILITY_LINES",
+    "remove_ability_line", "removed_ability_lines", "normalized_ability_line",
     "LINE_DERIVED_KEYWORDS", "ability_effects", "add_derived_grant",
     "add_derived_removal", "derived_removals",
     "GRANTED_ABILITY_DURATIONS",

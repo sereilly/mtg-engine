@@ -1900,8 +1900,14 @@ class PendingChoicesMixin:
         payload: dict,
         context,
         candidates,
+        optional: bool = False,
     ) -> PendingChoice | None:
         """Queue "choose one of these permanents" for *player_index*.
+
+        *optional* is the printed difference between "chooses a creature" as an
+        instruction and as an offer. It is what makes "If the player does …
+        If they don't …" two reachable branches: without it the seat always has
+        an answer and the second branch is text the card can never take.
 
         The payload is carried whole rather than the candidate list alone: it is
         the *rule* the candidates came from, and re-running it is what keeps the
@@ -1916,6 +1922,7 @@ class PendingChoicesMixin:
             _payload=dict(payload),
             _context=context,
             _candidates=tuple(candidates),
+            optional=optional,
         )
 
     def live_permanent_choices(self, choice: PendingChoice) -> list:
@@ -1952,6 +1959,16 @@ class PendingChoicesMixin:
             self._record_permanent_choice(choice, None)
             self.log.append(
                 f"{choice.data.get('card_name', 'Effect')}: nothing is left to choose"
+            )
+            return True
+        if permanent_id is None and choice.data.get("optional"):
+            # The seat declined an offer the card made (Takklemaggot). Recorded
+            # as "nothing chosen", which is the same value an empty candidate
+            # list produces — one answer for the branch behind it to read,
+            # whether nobody could choose or nobody would.
+            self._record_permanent_choice(choice, None)
+            self.log.append(
+                f"{choice.data.get('card_name', 'Effect')}: chose nothing"
             )
             return True
         perm = self.permanent_by_id(permanent_id) if permanent_id is not None else None

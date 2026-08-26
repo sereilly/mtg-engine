@@ -783,21 +783,41 @@ def aura_attach_refusal(game, aura, host) -> str | None:
     ``enchant_seat_satisfied`` is the seat half of the same clause (CR 702.5),
     and ``cannot_be_enchanted`` is CR 303.4's protection half.
     """
+    if host is aura:
+        return "an Aura can't enchant itself"
+    return enchant_card_refusal(
+        game, aura.effective_card, game.controller_index_of(aura), host, aura=aura
+    )
+
+
+def enchant_card_refusal(game, card, controller_seat, host, *, aura=None) -> str | None:
+    """The same question asked of an Aura **card** rather than a permanent.
+
+    "…chooses a creature that this card could enchant" (Takklemaggot) is asked
+    while the Aura is in a graveyard: CR 704.5m put it there the moment the
+    creature it enchanted left, and the trigger that asks resolves afterwards.
+    There is no permanent to read a controller or an effective card off, so both
+    are passed in — the ability's controller (CR 108.4a: a card in a graveyard
+    has none of its own) and the card as printed.
+
+    One body rather than two, because :func:`aura_attach_refusal` delegates
+    here: the cast gate, the CR 704.5m sweep, two pickers and two resolutions
+    all ask this, and a second copy is a second chance to disagree about what a
+    legal host is.
+    """
     from .mixins.stack import (aura_enchant_noun, enchant_seat_satisfied,
                                permanent_matches_enchant_noun)
     from .target_immunity import cannot_be_enchanted
 
     if host is None or not game.is_on_battlefield(host):
         return "it is no longer on the battlefield"
-    if host is aura:
-        return "an Aura can't enchant itself"
-    noun = aura_enchant_noun(aura.effective_card)
+    noun = aura_enchant_noun(card)
     if noun is None:
-        return f"{aura.card.name} has no enchant ability"
+        return f"{card.name} has no enchant ability"
     if not permanent_matches_enchant_noun(host, noun):
         return f"it isn't a legal {noun}"
     if not enchant_seat_satisfied(
-        game, game.controller_index_of(aura), game.controller_index_of(host), noun
+        game, controller_seat, game.controller_index_of(host), noun
     ):
         return f"{host.card.name} is not {noun}"
     if cannot_be_enchanted(host, by_aura=aura):

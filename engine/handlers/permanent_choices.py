@@ -145,6 +145,18 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
 
             if anchor is None or aura_attach_refusal(game, anchor, perm) is not None:
                 continue
+        if payload.get("legal_host_for_source"):
+            # "…a creature **this card** could enchant" (Takklemaggot): the
+            # same rule measured against the ability's own source, which by the
+            # time this resolves is a card in a graveyard rather than a
+            # permanent. Asked of the card-shaped half of the one predicate,
+            # never of a second copy of the enchant clause.
+            from ..auras import enchant_card_refusal
+
+            if enchant_card_refusal(
+                game, context.card, seat, perm
+            ) is not None:
+                continue
         out.append(perm)
     if payload.get("greatest_mana_value") and out:
         # "…with the **greatest** mana value" (CR 202.3, read off the printed
@@ -194,6 +206,16 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
     """
     caster_seat = game.players.index(context.caster)
     chooser = payload.get("chooser")
+    if chooser == "event_subject_controller":
+        # "**That creature's** controller chooses …" (Takklemaggot): the seat
+        # the firing event froze, which is the one place it can be read — the
+        # creature is in a graveyard by the time this resolves and a graveyard
+        # card has no controller (CR 108.4a). None when no event named one,
+        # which the caller reports as a choice nobody could make.
+        seat = (context.trigger_context or {}).get("event_subject_controller")
+        if isinstance(seat, int) and 0 <= seat < len(game.players):
+            return seat
+        return None
     if chooser == "target":
         # "**their** controller chooses one of them" (Juxtapose): the seat the
         # candidates were drawn from, which for this side is the spell's chosen
@@ -226,6 +248,12 @@ def choose_permanent(
     result_key = payload["result_key"]
     context.results[result_key] = None
     seat = _chooser_seat(game, payload, context)
+    if seat is not None:
+        # Who was asked, for a later sentence that speaks about them rather than
+        # about what they picked — "…deals 1 damage to **that player**"
+        # (Takklemaggot's granted trigger). Recorded whether or not they
+        # actually choose anything, because the question was still put to them.
+        context.results["chosen_player"] = seat
     if seat is None:
         game.log.append(
             f"{getattr(context.card, 'name', '')}: there is nobody to make the choice"
@@ -252,5 +280,6 @@ def choose_permanent(
         payload=payload,
         context=context,
         candidates=candidates,
+        optional=bool(payload.get("optional")),
     )
     return True, "resolved"

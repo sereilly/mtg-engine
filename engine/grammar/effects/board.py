@@ -14,7 +14,7 @@ import dataclasses
 from .. import ast
 from ..errors import GrammarError
 from ..readers import accept_source_reference
-from ..references import parse_player_ref, parse_recipient
+from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDEX, match_longest)
 from ..phrases import (
@@ -212,6 +212,50 @@ def _parse_return(
         under_control_of = parse_player_ref(stream)
         if under_control_of is None:
             raise stream.error("expected a player after 'under the control of'")
+    # "…to the battlefield **under your control**." (Takklemaggot.) The
+    # possessive spelling of the phrase above and the same field: CR 110.2's
+    # default happens to be the same seat, but a phrase left unconsumed is a
+    # line the grammar refuses, and one consumed into nothing is a permanent
+    # whose controller the card named and the engine guessed.
+    elif destination.name == "battlefield" and stream.accept_phrase(
+        "under", "your", "control"
+    ):
+        under_control_of = ast.PlayerRef("you")
+
+    # "…attached to that creature." (Takklemaggot.) CR 303.4f: an effect that
+    # puts an Aura onto the battlefield has to say what it attaches to. "That
+    # creature" is the one an earlier step of this same sentence chose, so what
+    # is recorded is the *reference* ("chosen"), not a filter; the lowering
+    # turns it into the scratchpad key and refuses the phrase when no earlier
+    # step of the sentence wrote one.
+    attached_to: str | None = None
+    if destination.name == "battlefield" and stream.accept_phrase("attached", "to"):
+        if not (
+            stream.accept_phrase("that", "creature")
+            or stream.accept_phrase("that", "permanent")
+        ):
+            raise stream.error("expected the permanent it is attached to")
+        attached_to = "chosen"
+
+    # "…as a **non-Aura** enchantment." (Takklemaggot.) A layer-4 type change
+    # (CR 613.1d) on the permanent the move creates. Read as "non-<subtype>
+    # <card type>": the card type has to match what the returning object
+    # already is, because the sentence is describing it rather than changing
+    # it, and the subtype is the whole of what the word "non-" takes away.
+    losing_subtypes: tuple[str, ...] = ()
+    if destination.name == "battlefield":
+        mark_as = stream.mark()
+        if stream.accept_phrase("as", "a") or stream.accept_phrase("as", "an"):
+            word = stream.peek_word()
+            if word is not None and word.startswith("non-"):
+                stream.advance()
+                subtype = word[len("non-"):]
+                if stream.accept_word("enchantment", "artifact", "creature", "land"):
+                    losing_subtypes = (subtype,)
+                else:
+                    stream.reset(mark_as)
+            else:
+                stream.reset(mark_as)
 
     from_zone: ast.Zone | None = None
     if isinstance(subject, ast.TargetSpec) and subject.filter.zone != "battlefield":
@@ -230,6 +274,7 @@ def _parse_return(
             each, destination, each_from, entering_tapped=entering_tapped,
             under_control_of=under_control_of, repetitions=repetitions,
             actor=actor,
+            attached_to=attached_to, losing_subtypes=losing_subtypes,
         )
 
     if further:
@@ -755,3 +800,53 @@ def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
         stream.reset(mark)
         return None
     return ast.DelayedSelfAction(action, subject=subject)
+
+
+def parse_player_chooses_permanent(
+    stream: TokenStream, chooser: "ast.PlayerRef"
+) -> "ast.ChoosePermanent | None":
+    """``<player> chooses <noun phrase> [that this card could enchant].``
+
+    "That creature's controller chooses a creature that this card could
+    enchant." (Takklemaggot.) The subject has already been read, so this starts
+    at the verb.
+
+    Nothing is targeted: the sentence prints no "target" and the pick is made as
+    the ability resolves (CR 601.2c/115.1b), which is exactly the shape
+    ``engine/handlers/permanent_choices.py`` already performs — so this is a
+    noun phrase and a seat, not a new mechanism.
+
+    The relative clause is read **here** rather than taught to
+    ``parse_object_filter``, the same rule ``_parse_that_object`` follows: it
+    is a question about a *pair* of permanents (may this Aura enchant that
+    creature?), and the shared filter matcher answers about one. Teaching it to
+    the noun parser would hand the words to every line that prints them and
+    then drop them.
+
+    Returns None with the cursor untouched when the sentence is a different
+    "chooses" — a card name, a colour, a mode — so those keep their own
+    readings.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("chooses", "choose"):
+        return None
+    spec = parse_target_spec(stream)
+    if spec is None or spec.targeted or spec.quantifier != "a" or spec.count != 1:
+        stream.reset(mark)
+        return None
+    host_for_source = False
+    if stream.accept_phrase("that", "this", "card", "could", "enchant"):
+        host_for_source = True
+    elif stream.accept_phrase("that", "this", "aura", "could", "enchant"):
+        host_for_source = True
+    if not host_for_source:
+        # Every other narrowing a "chooses" sentence could print is one this
+        # production has no answer for, and a choice made from a wider set than
+        # the card names is not the card. Refused rather than admitted with the
+        # clause dropped.
+        stream.reset(mark)
+        return None
+    # The choice is optional exactly when the sentences behind it print both
+    # branches; the rider that reads "If they don't" is what says so, and it
+    # sets the flag through `dataclasses.replace`.
+    return ast.ChoosePermanent(chooser, spec, host_for_source=host_for_source)

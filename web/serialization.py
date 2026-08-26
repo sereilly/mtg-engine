@@ -17,6 +17,7 @@ from engine import Game
 from engine.activation_permissions import card_widens_activation
 from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
+from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public
 from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
 from engine.hand_locks import locked_hand_indices
@@ -202,8 +203,11 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # and named in the card preview.
         "is_commander": game.is_commander_permanent(perm),
         # Effective type line so a copy shows its copied types (a Copy Artifact
-        # copying a Mox reads "Artifact Enchantment", not just "Enchantment").
-        "type": perm.effective_card.type_line,
+        # copying a Mox reads "Artifact Enchantment", not just "Enchantment"),
+        # with layer 4's *removals* folded in as well — a permanent returned "as
+        # a non-Aura enchantment" (Takklemaggot) must not still read "Aura" on
+        # screen while every rules query says it is not one.
+        "type": displayed_type_line(perm),
         "tapped": perm.tapped,
         "colors": effective_colors,
         # True for printed creatures and for animated lands (Kormus Bell / Living

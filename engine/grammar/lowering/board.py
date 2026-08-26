@@ -40,7 +40,6 @@ from ._events import (
 #: Where a chosen attachment host is recorded for the step behind it to read.
 #: One name in one place, because the two instructions the lowering emits have
 #: to agree about it and a literal written twice is two chances to disagree.
-_ATTACH_HOST_KEY = "attach_host"
 
 
 # ---------------------------------------------------------------------------
@@ -359,81 +358,6 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
     if filt != ast.ObjectFilter(is_card=True, zone="graveyard", zone_owner=filt.zone_owner):
         raise LoweringError("no bottoming handler honours this restriction", node=node)
     return (OracleInstruction("put_graveyard_card_on_library_bottom", "", {}),)
-
-
-def _lower_attach(node: ast.Attach) -> tuple[OracleInstruction, ...]:
-    """"Attach this permanent to target creature you control." (CR 702.6a.)
-
-    One handler, ``attach_source_to_target``, and one shape for it: the source
-    moves, one chosen permanent receives it. The host filter rides the payload
-    exactly as a tap's does — ``type_filter``/``controller`` for the resolution
-    to re-check (CR 608.2b), ``targets`` for ``engine/targeting.py`` to build
-    the picker from — so CR 702.6c's narrowed equip ("target legendary creature
-    you control") costs nothing here. A chosen *subject* ("target Equipment you
-    control", Brass Squire) has no handler yet and refuses naming that.
-    """
-    if isinstance(node.subject, ast.TargetSpec) and _is_target(node.subject):
-        return _lower_attach_chosen(node)
-    if not isinstance(node.subject, ast.TargetSpec) or not _is_source(node.subject):
-        raise LoweringError(
-            "no handler attaches anything but the source itself", node=node
-        )
-    if not isinstance(node.host, ast.TargetSpec) or not _is_target(node.host):
-        raise LoweringError("attach needs one chosen permanent to attach to", node=node)
-    payload = _filter_payload(node.host.filter)
-    _describe_targets(payload, node.host)
-    return (OracleInstruction("attach_source_to_target", "", payload),)
-
-
-def _lower_attach_chosen(node: ast.Attach) -> tuple[OracleInstruction, ...]:
-    """"Attach target Aura attached to a creature or land to another permanent
-    of that type." (Enchantment Alteration, CR 701.3 / 303.4j.)
-
-    Two steps, not one fused kind. The host is *chosen as the spell resolves* —
-    the sentence prints no second "target" — so it is a
-    ``choose_permanent``, and the attach behind it reads the answer out of the
-    resolution's ``results`` by the key named here. Written as a sequence for
-    the reason every composite effect in this engine is: a second card that
-    chose a permanent and then destroyed it would reuse the first step for
-    free, where a ``move_aura_to_chosen_permanent`` kind would buy nothing.
-
-    Both riders the host phrase prints are carried, and neither is dropped:
-    "another" is ``exclude_relative_host`` and "of that type" is
-    ``shares_type_with_relative_host``. ``of_bound_type`` is stripped off the
-    filter *after* being read, because ``_filter_payload`` refuses it by name
-    everywhere else — a lowering with no answer for "that type" must not emit a
-    filter that quietly means "any type".
-    """
-    host = node.host
-    if not isinstance(host, ast.TargetSpec) or host.quantifier != "a":
-        raise LoweringError(
-            "a chosen attachment needs one permanent to move onto", node=node
-        )
-    if host.targeted:
-        raise LoweringError(
-            "no handler attaches a chosen object to a second target", node=node
-        )
-    host_filter = dataclasses.replace(host.filter, of_bound_type=False)
-    subject_payload = _filter_payload(node.subject.filter)
-    _describe_targets(subject_payload, node.subject)
-    choose = OracleInstruction("choose_permanent", "", {
-        "filter": _filter_payload(host_filter),
-        "result_key": _ATTACH_HOST_KEY,
-        "prompt": "Choose a permanent to attach it to.",
-        # Every narrowing below is stated relative to the chosen *target* — the
-        # object being moved — because that is what "another" and "that type"
-        # point back at.
-        "relative_to": "target",
-        "exclude_relative_host": host.distinct_from_prior,
-        "shares_type_with_relative_host": host.filter.of_bound_type,
-        # CR 303.4j: an Aura that can't legally enchant the permanent doesn't
-        # move, so an illegal host is never offered in the first place.
-        "legal_host_for_relative": True,
-    })
-    attach = OracleInstruction("attach_source_to_target", "", dict(
-        subject_payload, subject_from="target", host_from=_ATTACH_HOST_KEY,
-    ))
-    return (choose, attach)
 
 
 def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstruction, ...]:

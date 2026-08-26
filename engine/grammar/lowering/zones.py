@@ -25,7 +25,7 @@ from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS,
                                 untestable_filter_keys)
 from .. import ast
 from ..errors import LoweringError
-from ._events import (CREATED_TOKEN, EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS,
+from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY, CREATED_TOKEN, EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS,
                       _back_reference_payload)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
@@ -326,6 +326,84 @@ def _lower_return_to_zone(
                 "return_self_from_graveyard", "",
                 {"tapped": node.entering_tapped, "functions_from": "graveyard"},
             ),
+        )
+    # "Return this card to the battlefield under your control attached to that
+    # creature." / "…as a non-Aura enchantment. It loses "enchant creature" and
+    # gains "…"." (Takklemaggot.)
+    #
+    # The ability's own source with **no printed source zone**, which is the
+    # same reading ``return_source_card_to_owners_hand`` above takes and for the
+    # same reason: by the time this resolves the Aura is wherever the CR 704.5m
+    # sweep left it, and a sentence that names no zone reaches it there
+    # (CR 400.7 makes what comes back a new object either way).
+    #
+    # Every rider the sentence prints is payload on one instruction rather than
+    # a step of its own, because none of them can name what they act on: the
+    # permanent is created by this very move, so no earlier reference reaches
+    # it and no later step could be told which object to look at.
+    if (
+        _is_source(subject)
+        and node.from_zone is None
+        and node.to.name == "battlefield"
+        and node.to.owner is None
+    ):
+        assert isinstance(subject, ast.TargetSpec)
+        leftovers = _restrictions_beyond(subject.filter, frozenset({"is_source"}))
+        if leftovers:
+            raise LoweringError(
+                f"the self-return does not honour {leftovers[0]!r}", node=node
+            )
+        if node.under_control_of is None or node.under_control_of.kind != "you":
+            raise LoweringError(
+                "this card returns to the battlefield under its own "
+                "controller's control", node=node,
+            )
+        if node.repetitions is not None or node.entering_tapped:
+            raise LoweringError(
+                "the self-return to the battlefield reads no repetition or "
+                "tapped rider", node=node,
+            )
+        payload: dict[str, object] = {"control": "you"}
+        if node.attached_to is not None:
+            # "attached to **that creature**" — the one an earlier step chose.
+            # Refused when nothing did: an Aura told to enter attached to a
+            # permanent nobody picked would enter attached to nothing and be
+            # swept away by CR 704.5m, which is a card that reports supported
+            # and does the opposite of what it says.
+            if _ATTACH_HOST_KEY not in produced:
+                raise LoweringError(
+                    "\"attached to that creature\" names a permanent no "
+                    "earlier step of this sentence chose", node=node,
+                )
+            payload["attached_to"] = _ATTACH_HOST_KEY
+        if node.losing_subtypes:
+            payload["losing_subtypes"] = tuple(node.losing_subtypes)
+        if node.losing_abilities:
+            payload["losing_abilities"] = tuple(node.losing_abilities)
+        if node.gaining_abilities:
+            from ...granted_abilities import (bind_chosen_player,
+                                              granted_ability_supported)
+
+            granted = []
+            for text in node.gaining_abilities:
+                # "…gains "At the beginning of **that player's** upkeep, …"".
+                # The pronoun names the seat an earlier step of this same
+                # sentence asked to choose, and only a sentence that made such a
+                # choice can bind it — so the rewrite is gated on the record
+                # rather than applied to any quote printing the words.
+                bound = (
+                    bind_chosen_player(text)
+                    if _ATTACH_HOST_KEY in produced else text
+                )
+                if not granted_ability_supported(bound):
+                    raise LoweringError(
+                        f"the engine cannot read the granted ability {text!r}",
+                        node=node,
+                    )
+                granted.append(bound)
+            payload["gaining_abilities"] = tuple(granted)
+        return (
+            OracleInstruction("return_source_card_to_battlefield", "", payload),
         )
     # "…you may return **an** instant or sorcery card from your graveyard to
     # your hand." (Experimental Overload.) Chosen but not targeted (CR 115.1):
