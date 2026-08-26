@@ -791,6 +791,12 @@ def _lower_delayed_self_action(
             # readers (test_front_end_safety's flattener among them), and a
             # bare word sitting where a list of steps is expected is a crash
             # rather than a wrong answer — but only because something looked.
-            "arm_self_action_at_next_end_step", "", {"self_action": node.action}
+            "arm_self_action_at_next_end_step", "",
+            # The referent rides beside the action for the same reason the
+            # action does: one sentence, one kind, and what differs is data.
+            # Absent for "this artifact", so every payload written before Glyph
+            # of Destruction is byte-identical.
+            {"self_action": node.action}
+            | ({"subject": node.subject} if node.subject != "source" else {}),
         ),
     )

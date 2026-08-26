@@ -312,6 +312,46 @@ def grant_source_class_prevention_shield(game: Game, instruction: OracleInstruct
     return True, "resolved"
 
 
+@effect_handler("prevent_damage_to_target_until_eot")
+def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Prevent all damage that would be dealt to it this turn." (Glyph of
+    Destruction.)
+
+    The recipient half of ``prevent_damage_by_target_until_eot``, and a separate
+    instruction for the reason that one's docstring gives in the other
+    direction: a creature that cannot be hurt and a creature that cannot hurt
+    anything are different cards, and one flag covering both would make either
+    card's creature untouchable in combat.
+
+    "It" is whatever the sentence in front of this one named — the chosen target
+    if the spell chose one, and otherwise the ability's own source. The printed
+    pronoun cannot say which, so the referent is resolved here where both are
+    known rather than guessed at compile time.
+
+    Cleared by the cleanup step through ``_EOT_METADATA_KEYS``, which is what
+    "this turn" means here.
+    """
+    from ..prevention import COMBAT_SHIELD_TO, add_directional_shield
+
+    combat_only = bool(instruction.payload.get("combat_only"))
+    perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda p: p.is_creature,
+        fallback_on_invalid_choice=False,
+    )
+    if perm is None:
+        perm = context.source_permanent
+    if perm is None:
+        game.log.append(f"{context.card.name}: no permanent to shield")
+        return True, "resolved"
+    add_directional_shield(perm, COMBAT_SHIELD_TO, combat_only=combat_only)
+    game.log.append(
+        f"all {'combat ' if combat_only else ''}damage that would be dealt to "
+        f"{perm.card.name} this turn is prevented ({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("prevent_damage_by_target_until_eot")
 def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Prevent all [combat] damage that would be dealt by target creature this
@@ -343,9 +383,21 @@ def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstructio
     if perm is None:
         game.log.append(f"{context.card.name}: no creature to silence")
         return True, "resolved"
-    add_directional_shield(perm, COMBAT_SHIELD_BY, combat_only=combat_only)
-    game.log.append(
-        f"all {'combat ' if combat_only else ''}damage {perm.card.name} would "
-        f"deal this turn is prevented ({context.card.name})"
-    )
+    shielded = [perm]
+    # "…by that creature **and each creature blocking it**." (Feint.) The second
+    # printed source is a set named by a combat relation to the first, so it is
+    # read from the combat maps at resolution rather than from any description:
+    # a creature that started blocking after the spell was cast is one of them
+    # (CR 611.2c fixes the set when the effect begins, which is now), and a
+    # blocker of a *different* attacker is not.
+    if instruction.payload.get("also_blocking_target"):
+        for blocker in game.creatures_blocking(perm):
+            if not any(blocker is already for already in shielded):
+                shielded.append(blocker)
+    for creature in shielded:
+        add_directional_shield(creature, COMBAT_SHIELD_BY, combat_only=combat_only)
+        game.log.append(
+            f"all {'combat ' if combat_only else ''}damage {creature.card.name} "
+            f"would deal this turn is prevented ({context.card.name})"
+        )
     return True, "resolved"

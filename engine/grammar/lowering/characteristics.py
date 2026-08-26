@@ -116,6 +116,17 @@ def _lower_become_creature(
     )
 
 
+#: The printed durations a *targeted* pump has a sweep for, mapped to the
+#: `pt.TEMPORARY_PT_CHANNELS` channel that records it. "This turn" and "until
+#: end of turn" are the same moment for a modification (CR 514.2's cleanup step
+#: is where both end); everything absent from this table refuses.
+_TARGET_PUMP_DURATIONS: dict[str, str] = {
+    "until_end_of_turn": "end_of_turn",
+    "this_turn": "end_of_turn",
+    "until_end_of_combat": "end_of_combat",
+}
+
+
 def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     if node.per_each_tapped_this_way:
         # "…for each creature tapped **this way**" reaching here means no fuser
@@ -262,6 +273,19 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
             return (
                 OracleInstruction("pump_target_while_source_tapped", "", payload),
             )
+        # Which sweep takes the boost back. Only the durations
+        # ``pt.TEMPORARY_PT_CHANNELS`` has a channel for are admitted: every
+        # other one used to fall through to the end-of-turn kind with no trace
+        # in the payload that a word had been read, so "until end of combat"
+        # (Glyph of Destruction) lasted a whole turn and "until your next
+        # upkeep" (Gabriel Angelfire) lasted until this one ended.
+        duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
+        if duration is None:
+            raise LoweringError(
+                f"no sweep ends a target's pump at {node.duration.kind}", node=node
+            )
+        if duration != "end_of_turn":
+            payload["duration"] = duration
         return (OracleInstruction("pump_target_creature_until_eot", "", payload),)
 
     # "White creatures get +1/+1", "Attacking creatures get +2/+0 until end of turn"

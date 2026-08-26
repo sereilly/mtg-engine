@@ -92,3 +92,12 @@ class PreventDamage:
     # is *chosen* (CR 115.1c) rather than described — a filter cannot say
     # "the creature the player targeted".
     dealt_by: Recipient | None = None
+    # "…by **that creature and each creature blocking it**." (Feint.) The
+    # printed "and" makes the source end a *list*, and the conjuncts are not
+    # interchangeable: the first is the chosen object, the rest describe sets
+    # relative to it. Kept as a tail beside `dealt_by` rather than folding the
+    # first into a tuple, so every lowering and every reader written before this
+    # existed keeps meaning exactly what it did — and a lowering that has not
+    # been taught the conjunction refuses it by name instead of shielding only
+    # the first source, which is the silent half of the card.
+    dealt_by_others: tuple[Recipient, ...] = ()

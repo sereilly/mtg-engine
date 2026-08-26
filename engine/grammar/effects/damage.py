@@ -372,9 +372,25 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
         dealt_by = parse_recipient(stream) or parse_bound_subject(stream)
         if dealt_by is None:
             raise stream.error("expected whose damage to prevent")
+    # "…by that creature **and each creature blocking it**." (Feint.) More than
+    # one source, joined by the printed "and". Read here rather than in either
+    # of the two "by" branches above because it belongs to the conjunct *list*
+    # and not to the word order — the same argument `_parse_condition` makes for
+    # reading its own "and" once. The loop backtracks: an "and" that does not
+    # introduce another source belongs to whatever follows the clause.
+    dealt_by_others: list[ast.Recipient] = []
+    while dealt_by is not None:
+        mark = stream.mark()
+        if not stream.accept_word("and"):
+            break
+        further = parse_recipient(stream) or parse_bound_subject(stream)
+        if further is None:
+            stream.reset(mark)
+            break
+        dealt_by_others.append(further)
     return ast.PreventDamage(
         ast.AllOf(), to=recipient, duration=duration, combat_only=combat_only,
-        dealt_by=dealt_by,
+        dealt_by=dealt_by, dealt_by_others=tuple(dealt_by_others),
     )
 
 

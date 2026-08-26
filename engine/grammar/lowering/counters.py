@@ -8,6 +8,8 @@ compares its exact subject for equality rather than pattern-matching it, so a
 card with a *narrower* subject cannot silently take the same handler.
 """
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
@@ -163,6 +165,52 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
                 {"counter": node.counter, "count": node.count.value},
             ),
         )
+    # "Put a **-0/-1** counter on target creature blocking or blocked by this
+    # creature." (Lesser Werewolf.) The same placement as the +1/+1 branch far
+    # below — one counter, on one chosen creature — differing only in the CR
+    # 122.1a pair the counter's *name* carries, which `place_pt_counters` reads.
+    # So it is that branch's instruction with the kind as payload, and a card
+    # printing any other pair needs nothing here.
+    #
+    # It is read above the +1/+1 gate rather than folded into that branch so
+    # that every payload written before it stays byte-identical: the +1/+1 form
+    # keeps emitting `power`/`toughness` and no `counter` key, and the handler
+    # defaults to the kind those two have always meant.
+    #
+    # The in-combat relation is the same one Sentinel's rewrite carries and is
+    # carried the same way — stripped from the target description, because no
+    # read of the chosen creature alone can answer it, and re-asked by
+    # `legality.py` at activation and by the handler at resolution.
+    if (
+        is_pt_counter(node.counter)
+        and node.counter != "+1/+1"
+        and not node.up_to
+        and _is_target(node.subject)
+        and not _names_several_targets(node.subject)
+    ):
+        assert isinstance(node.subject, ast.TargetSpec)
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+            raise LoweringError(
+                "a counter of this kind is placed one at a time", node=node
+            )
+        filt = node.subject.filter
+        leftover = _restrictions_beyond(
+            filt, frozenset({"card_types", "in_combat_with_source"})
+        )
+        if leftover or filt.card_types != ("creature",):
+            raise LoweringError(
+                "the counter lands on a creature, optionally one in combat "
+                "with the source",
+                node=node,
+            )
+        stripped = dataclasses.replace(node.subject, filter=dataclasses.replace(
+            filt, in_combat_with_source=False
+        ))
+        payload: dict[str, object] = {"counter": node.counter}
+        if filt.in_combat_with_source:
+            payload["in_combat_with_source"] = True
+        _describe_targets(payload, stripped)
+        return (OracleInstruction("add_counter_to_target", "", payload),)
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):

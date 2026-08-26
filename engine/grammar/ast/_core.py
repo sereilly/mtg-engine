@@ -436,6 +436,24 @@ class ObjectFilter:
     # resolves the set from the fire-time combat record instead, and any
     # other lowering that meets it refuses by name.
     blocking_source: bool = False
+    # "creatures blocking **target attacking creature**" (Feint) and "each
+    # creature blocking **it**" (Feint's second sentence). The same relation as
+    # ``blocking_source`` above with the other end moved: the creature being
+    # blocked is not the ability's source but an object *this same sentence*
+    # names — declared here as a nested noun phrase (``blocking_target``), or
+    # referred back to as the pronoun the earlier sentence already targeted
+    # (``blocking_bound_target``).
+    #
+    # A nested phrase rather than more adjectives, for the reason
+    # ``targets_object`` above is one: the restriction is not a question about
+    # the blocker at all, it is a question about *another object*, and the only
+    # honest way to carry it is to carry that object's description. Both are
+    # relative, so neither is emitted by ``to_payload`` and neither reaches
+    # ``permanent_matches_filter`` — the lowerings written for them resolve the
+    # blocked object first and read the combat maps from there, and every other
+    # lowering refuses them by name.
+    blocking_target: "ObjectFilter | None" = None
+    blocking_bound_target: bool = False
     # "…all creatures that were **blocked by that creature this turn**"
     # (Glyph of Doom). A history relative to the object a delayed triggered
     # ability was bound to, answered from the block record that creature

@@ -223,6 +223,27 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return False
         return bool(context.results["coin_flip"]) is bool(payload.get("won", True))
 
+    if kind == "source_power_is":
+        # "If this creature's power is 1 or more" (Lesser Werewolf). CR 613's
+        # computed power, read through the layer accessor rather than off the
+        # printed card: the gate exists because the ability shrinks its own
+        # source, so the value it asks about is the one every earlier activation
+        # already changed. A source that has left answers False — CR 608.2b
+        # leaves nothing to ask.
+        source = context.source_permanent
+        if source is None:
+            return False
+        power = source.effective_power
+        wanted = int(payload.get("count", 0))
+        op = payload.get("op", "eq")
+        if op == "eq":
+            return power == wanted
+        if op == "le":
+            return power <= wanted
+        if op == "ge":
+            return power >= wanted
+        return False
+
     if kind == "is_state":
         source = context.source_permanent
         if source is None:

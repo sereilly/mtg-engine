@@ -933,7 +933,7 @@ class DeclareBlockersStepMixin:
 
     def _apply_temporary_buff(self, permanent: Permanent, power: int, toughness: int) -> None:
         """Apply an "until end of turn" P/T change that the cleanup step reverts."""
-        add_pt_modifier(permanent, power, toughness, until_eot=True)
+        add_pt_modifier(permanent, power, toughness, until="end_of_turn")
 
     def _apply_flanking(self, controller_index: int) -> None:
         """Resolve Flanking (CR 702.25) on declared blocks: each blocking

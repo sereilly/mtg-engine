@@ -152,8 +152,17 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         game, context, predicate=_eligible, fallback_players=(target, caster)
     )
     if target_perm is not None:
-        apply_temp_pt_boost(target_perm, power_delta, toughness_delta)
-        game.log.append(f"{card.name} gives {target_perm.card.name} +{power_delta}/+{toughness_delta} until end of turn")
+        # "…until end of combat" (Glyph of Destruction) is the same boost on a
+        # different channel, so it is payload rather than a second kind — the
+        # word decides which sweep takes it back. Absent means end of turn,
+        # which is what every payload written before the channel table meant.
+        until = str(instruction.payload.get("duration") or "end_of_turn")
+        apply_temp_pt_boost(target_perm, power_delta, toughness_delta, until=until)
+        game.log.append(
+            f"{card.name} gives {target_perm.card.name} "
+            f"+{power_delta}/+{toughness_delta} until "
+            + until.replace("_", " ")
+        )
     return True, "resolved"
 
 
@@ -606,6 +615,11 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     card = context.card
     targets = instruction.payload.get("targets") or {}
     maximum = targets.get("count") if isinstance(targets, dict) else None
+    # Which CR 122.1a counter this is. Absent on every payload written before
+    # Lesser Werewolf, and those all mean the one kind this handler used to
+    # place — so the default is the whole of the compatibility, and a card
+    # printing "-0/-1" is this instruction with a different word in it.
+    kind = str(instruction.payload.get("counter", "+1/+1"))
 
     if isinstance(maximum, int) and maximum > 1:
         filters = targets.get("filter") or {}
@@ -635,13 +649,14 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
             game.log.append(f"{card.name}: no creatures were given counters")
             return True, "resolved"
         for creature in chosen[:maximum]:
-            game.place_plus1_counters(creature)
-            game.log.append(f"{creature.card.name} gets a +1/+1 counter ({card.name})")
+            game.place_pt_counters(creature, kind)
+            game.log.append(f"{creature.card.name} gets a {kind} counter ({card.name})")
         return True, "resolved"
 
     filters = instruction.payload.get("targets", {}).get("filter") or {}
 
     source = context.source_permanent
+    in_combat_only = bool(instruction.payload.get("in_combat_with_source"))
 
     def counter_target_legal(perm) -> bool:
         # "target creature with a +1/+1 counter on it" (Tempered Veteran): the
@@ -655,6 +670,16 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         # on target creature **you control**" onto an opponent's creature.
         if not perm.is_creature or not permanent_matches_filter(perm, filters):
             return False
+        # "…blocking or blocked by this creature" (Lesser Werewolf). The
+        # relation rides the instruction rather than the filter — no read of the
+        # candidate alone can answer it — and is re-checked at resolution as
+        # well as at activation, because CR 608.2b asks a target's legality
+        # again when the ability resolves.
+        if in_combat_only and (
+            source is None
+            or not any(perm is other for other in game.creatures_in_combat_with(source))
+        ):
+            return False
         if filters.get("exclude_self") and perm is source:
             return False
         if filters.get("controller") == "you" and not game.controls(
@@ -663,12 +688,19 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
             return False
         return True
 
-    target_creature = resolve_target_permanent(game, context, predicate=counter_target_legal)
+    target_creature = resolve_target_permanent(
+        game, context, predicate=counter_target_legal,
+        # "…on target creature **blocking or blocked by this creature**"
+        # (Lesser Werewolf). A relation the fallback scan cannot re-derive from
+        # the filter, so a chosen creature that has left combat makes the
+        # ability do nothing (CR 608.2b) rather than land on a bystander.
+        fallback_on_invalid_choice=not in_combat_only,
+    )
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    game.place_plus1_counters(target_creature)
-    game.log.append(f"{target_creature.card.name} gets a +1/+1 counter ({card.name})")
+    game.place_pt_counters(target_creature, kind)
+    game.log.append(f"{target_creature.card.name} gets a {kind} counter ({card.name})")
     # "…, then double the number of +1/+1 counters on that creature."
     # (Invigorating Surge.) Read *after* the placement, so the one just put down
     # is doubled too — and placed through the same seam, so a Conclave Mentor

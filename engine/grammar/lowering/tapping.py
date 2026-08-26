@@ -14,6 +14,8 @@ about the same status, recorded on the permanent and read by the untap step.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
@@ -89,6 +91,54 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
     # fields are only what the pool prints (round 43's rule): a bare type, a
     # supertype (Arena of the Ancients' "legendary") and a controller
     # ("you control", Reset).
+    # "Tap all creatures blocking target attacking creature." (Feint.) A sweep
+    # whose set is not described by any characteristic of its members: they are
+    # named by a *relation* to another object the same sentence chooses. So the
+    # nested phrase is promoted to the instruction's target description — the
+    # attacking creature is what the spell picks (CR 601.2c), and
+    # engine/targeting.py derives the picker from that key without knowing this
+    # kind exists — and the outer phrase rides as the filter the blockers are
+    # tested against.
+    #
+    # Read before the plain sweep below, which would otherwise refuse the line
+    # by name. Only `card_types` beyond the relation, which is round 43's rule:
+    # the pool prints "creatures blocking …" and nothing narrower, and a
+    # narrowing the handler does not apply would tap a strictly larger set than
+    # the card names.
+    if (
+        isinstance(node, ast.Tap)
+        and spec.quantifier in ("all", "each")
+        and not spec.targeted
+        and spec.filter.blocking_target is not None
+    ):
+        leftovers = _restrictions_beyond(
+            spec.filter, frozenset({"card_types", "blocking_target"})
+        )
+        if leftovers:
+            raise LoweringError(
+                "the blocker sweep cannot narrow by: " + ", ".join(leftovers),
+                node=node,
+            )
+        blocked = spec.filter.blocking_target
+        blocked_payload = _filter_payload(blocked)
+        if set(blocked_payload) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the blocker sweep cannot test what it blocks", node=node
+            )
+        described = _filter_payload(
+            dataclasses.replace(spec.filter, blocking_target=None)
+        )
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the blocker sweep cannot test this restriction", node=node
+            )
+        payload: dict[str, object] = dict(described)
+        payload["targets"] = {
+            "quantifier": "target",
+            "kind": "object",
+            "filter": blocked_payload,
+        }
+        return (OracleInstruction("tap_creatures_blocking_target", "", payload),)
     if spec.quantifier in ("all", "each") and not spec.targeted:
         leftovers = _restrictions_beyond(
             spec.filter, frozenset({"card_types", "supertypes", "controller"})

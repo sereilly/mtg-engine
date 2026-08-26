@@ -64,6 +64,26 @@ class IsState:
 
 
 @dataclass(frozen=True)
+class SubjectPowerIs:
+    """"if this creature's power is 1 or more" (Lesser Werewolf).
+
+    A comparison against a *computed* characteristic (CR 613 layer 7), which is
+    why it is a condition node rather than a narrowing on the subject: the
+    ability the clause gates is the source's own, so there is no set of objects
+    to filter — there is one object, and a question about it.
+
+    The printed number and the printed comparison both travel on the node. A
+    card printing "2 or greater" or "1 or less" is this production with a
+    different payload, which is the whole reason the bound is not baked in: the
+    gate this clause exists for is Lesser Werewolf's own shrinking, and a
+    hardcoded 1 would stop being the card's number the moment a second card
+    printed one.
+    """
+    subject: "TargetSpec"
+    comparison: "Comparison"
+
+
+@dataclass(frozen=True)
 class DiedThisTurn:
     filter: ObjectFilter = field(default_factory=ObjectFilter)
 
@@ -249,5 +269,5 @@ Condition = Union[
     EveryOf, CoinFlipResult, Controls, IsState, DiedThisTurn, HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
-    DealtDamageThisTurn,
+    DealtDamageThisTurn, SubjectPowerIs,
 ]

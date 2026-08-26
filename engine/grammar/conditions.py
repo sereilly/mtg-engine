@@ -22,7 +22,7 @@ from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import PT
-from .nouns import accept_source_reference, parse_object_filter
+from .nouns import accept_source_reference, parse_comparison, parse_object_filter
 from .references import parse_player_ref
 from .phrases import _parse_duration
 from .stream import TokenStream
@@ -313,6 +313,24 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                     return ast.DealtDamageThisTurn(_SOURCE_SPEC, recipient)
                 break
     stream.reset(damage_mark)
+
+    # "if **this creature's power is 1 or more**" (Lesser Werewolf). A question
+    # about the source's computed power (CR 613 layer 7), so it is read from the
+    # same source-reference vocabulary the state and damage-history clauses
+    # above use, and the bound is parsed by the same reader every "power N or
+    # greater" noun phrase uses — one printed comparison, one meaning.
+    #
+    # Read before the state clause below, which shares the "<source>'s" prefix:
+    # both mark and reset, so the order decides only which error survives, and
+    # the more specific question asking first is what keeps "power" from being
+    # reported as an unrecognised tapped/untapped word.
+    power_mark = stream.mark()
+    if accept_source_reference(stream) and (
+        stream.accept_word("'s") or stream.accept_word("is")
+    ):
+        if stream.accept_phrase("power", "is"):
+            return ast.SubjectPowerIs(_SOURCE_SPEC, parse_comparison(stream))
+    stream.reset(power_mark)
 
     state_mark = stream.mark()
     if accept_source_reference(stream) and (
