@@ -203,9 +203,11 @@ from .combat import (
     RemoveFromCombat,
 )
 from .game import (
+    Ante,
     CreateEmblem,
     GainLife,
     LoseLife,
+    SetLifeTotal,
     CreateCopyToken,
     CreateToken,
     EndTheTurn,
@@ -397,6 +399,8 @@ __all__ = [
     "RemoveFromCombat",
     # game
     "CreateEmblem",
+    "Ante",
+    "SetLifeTotal",
     "GainLife",
     "LoseLife",
     "CreateCopyToken",

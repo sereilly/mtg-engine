@@ -172,6 +172,44 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
     return True, "resolved"
 
 
+@effect_handler("set_life_total")
+def set_life_total(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"That player's life total becomes 20." (Rebirth.)
+
+    CR 119.5: setting a total is a gain or a loss of the difference, and it is
+    written that way rather than as an assignment because both halves are
+    events. The gain goes through ``_gain_life``, the one seam every life gain
+    passes through — so Lich's "if you would gain life, draw that many cards
+    instead" still replaces it and "whenever you gain life" still fires — and
+    the loss is a plain subtraction, exactly as ``target_loses_life`` does it
+    (life loss is not damage, CR 120.3, so nothing contends with it).
+
+    The recipient key is the same vocabulary the rest of this module reads:
+    "caster" is the controller, "each_player" every seat still in the game, and
+    "that_player" the seat this resolution is about — which for an offer made to
+    each player is the seat that accepted it (see ``handlers/control_flow.may``).
+    """
+    total = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    recipient = instruction.payload.get("recipient")
+    if recipient == "caster":
+        players = [context.caster]
+    elif recipient == "each_player":
+        players = [p for p in game.players if not p.lost]
+    else:
+        players = [context.target]
+    for player in players:
+        before = player.life
+        if total > before:
+            game._gain_life(player, total - before, context.card.name)
+        elif total < before:
+            player.life -= before - total
+        game.log.append(
+            f"{context.card.name}: {player.name}'s life total became {player.life} "
+            f"(was {before})"
+        )
+    return True, "resolved"
+
+
 @effect_handler("opponents_who_could_not_discard_lose_life")
 def opponents_who_could_not_discard_lose_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Each opponent who can't loses 3 life." (Liliana, Waker of the Dead's

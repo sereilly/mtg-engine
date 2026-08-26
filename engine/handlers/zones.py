@@ -130,35 +130,41 @@ def draw_then_discard_self(game: Game, instruction: OracleInstruction, context: 
     return True, "pending_discard"
 
 
-@effect_handler("discard_hand_ante_then_draw_seven")
-def discard_hand_ante_then_draw_seven(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Contract from Below: "Discard your hand, ante the top card of your
-    library, then draw seven cards." The anted card goes to the ante zone
-    (CR 407), not the graveyard."""
-    caster = context.caster
-    card = context.card
-    while caster.hand:
-        caster.graveyard.append(caster.hand.pop(0))
-    if caster.library:
-        # CR 407.4: the caster owns the cards in their own library, so they are
-        # the player who can ante the top one.
-        game.ante_object(game.players.index(caster), caster.library.pop(0))
-    drawn = game._draw_with_replacements(caster, 7)
-    game.log.append(f"{card.name} resolved: discarded hand and drew {drawn} cards")
-    return True, "resolved"
+@effect_handler("ante_top_card")
+def ante_top_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Ante the top card of <possessive> library." (CR 407.)
 
+    Who antes is payload: Demonic Attorney's "each player antes …" sweeps every
+    seat, Rebirth's offer names the one seat that accepted it. It used to be two
+    name-keyed handlers because the grammar had no word for the verb; the two
+    cards print the same sentence with a different subject, which is exactly
+    what a recipient key is for.
 
-@effect_handler("each_player_antes_top_card")
-def each_player_antes_top_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    card = context.card
+    CR 407.4 is why the seat is also the *owner* index handed to
+    ``ante_object``: a card is anted by the player who owns it, so every ante
+    here comes off that player's own library.
+    """
+    who = instruction.payload.get("players", "caster")
+    if who == "each_player":
+        # A player who has already left the game is nobody (CR 800.4a).
+        seats = [i for i, p in enumerate(game.players) if not p.lost]
+    elif who == "that_player":
+        # The seat this resolution is currently about — the one that accepted
+        # the offer in front of the ante. `handlers/control_flow.may` binds it
+        # per prompt, so each accepting player antes their own card.
+        seats = [game.players.index(context.target)]
+    else:
+        seats = [game.players.index(context.caster)]
     anted = 0
-    # CR 407.4: each player antes their own top card, so every ante is made by
-    # that card's owner.
-    for index, player in enumerate(game.players):
+    for index in seats:
+        player = game.players[index]
         if player.library:
             game.ante_object(index, player.library.pop(0))
             anted += 1
-    game.log.append(f"{card.name} anted {anted} card(s)")
+    game.log.append(f"{context.card.name} anted {anted} card(s)")
+    # What the "if a player does" rider reads: whether an ante actually
+    # happened. An empty library antes nothing, and the branch must not run.
+    context.results["anted_cards"] = anted
     return True, "resolved"
 
 

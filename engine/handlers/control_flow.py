@@ -18,6 +18,7 @@ effect uses.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING
 
 from ..oracle_types import OracleInstruction
@@ -542,6 +543,14 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
             return False
         counter = str(instruction.payload.get("counter", "doom"))
         return int(source.metadata.get(f"{counter}_counters", 0)) > 0
+    # "Each player **may** ante the top card of their library. If a player does,
+    # that player's life total becomes 20." (Rebirth.) An empty library has no
+    # top card, so there is no ante to offer — and taking the offer anyway would
+    # run the if-you-do branch off an ante that never happened, handing a player
+    # 20 life for nothing. The offered seat is the anting seat: the offer names
+    # one player and the ante comes off that player's own library (CR 407.4).
+    if instruction.kind == "ante_top_card":
+        return bool(player.library)
     return True
 
 
@@ -606,10 +615,69 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
 
     The prompt is an ``optional_pay`` entry on the generic pending-choice queue,
     and the *consequence* has no fixed shape.
+
+    **The actor may name more than one seat.** "Each player may ante the top
+    card of their library" (Rebirth) is one decision per player, and each of
+    them is an ordinary prompt on that queue — so the same three loops in
+    ``web/prompts.py`` render, gate and default them, and the spell stays on the
+    stack until the last one is answered (CR 608.2, CR 117.3b).
     """
     actor = instruction.payload.get("actor", "you")
-    player = context.caster if actor == "you" else context.target
-    player_index = game.players.index(player)
+    seats = _offered_seats(game, actor, context)
+    for player_index in seats:
+        _offer_to_seat(game, instruction, context, player_index, rebind=actor in _EACH_ACTORS)
+    return True, "resolved"
+
+
+#: The actors that name a *set* of seats. Only these rebind ``context.target``
+#: below: a single-seat offer's target is whatever the spell or ability already
+#: chose, and overwriting it with the offered player would point every "target"
+#: in the accept branch at the wrong object (Niambi's bounce, Tolarian Kraken's
+#: reflexive tap).
+_EACH_ACTORS = frozenset({"each_player", "each_opponent"})
+
+
+def _offered_seats(game: Game, actor: str, context: OracleExecutionContext) -> list[int]:
+    """Which seats the offer is made to, in the order they answer it.
+
+    "Each player may …" (Rebirth) is one decision per player, not one decision
+    somebody makes for everybody — so the actor is a *set* of seats and the
+    handler below arms one prompt for each. CR 101.4: the seats are asked in
+    turn order starting with the active player, which is also the order the
+    queue drains them in.
+
+    A player who has already left the game is nobody (CR 800.4a).
+    """
+    if actor == "each_player":
+        count = len(game.players)
+        active = game.active_player_index or 0
+        return sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % count, i),
+        )
+    if actor == "each_opponent":
+        return [
+            i for i in game.opponents_of(game.players.index(context.caster))
+            if not game.players[i].lost
+        ]
+    return [game.players.index(context.caster if actor == "you" else context.target)]
+
+
+def _offer_to_seat(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+    player_index: int, rebind: bool = False,
+) -> None:
+    """Arm one seat's copy of the offer.
+
+    With *rebind*, ``context.target`` becomes the offered seat — which is what
+    makes "that player" inside the offer and inside its if-you-do branch mean
+    the player who took it. Only an offer made to a *set* of seats rebinds:
+    everywhere else the target is the one the spell or ability already chose,
+    and overwriting it would aim the accept branch at the wrong object.
+    """
+    player = game.players[player_index]
+    if rebind:
+        context = dataclasses.replace(context, target=player)
     # The whole printed cost, symbol by symbol — "you may pay {1}{B}" (Liliana's
     # Devotee) is a dict, not the number 2, because a payment that counted to a
     # number could only ever collect generic mana.
@@ -626,7 +694,9 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     # An offer the player cannot afford is never made; its decline branch (a
     # "…unless you pay" penalty) still applies.
     if cost and not game._player_can_pay_optional(player, {"cost": cost}):
-        return _run(game, on_decline, context) if on_decline else (True, "resolved")
+        if on_decline:
+            _run(game, on_decline, context)
+        return
 
     # The same rule for an *action* cost ("you may sacrifice another
     # creature", Dire Fleet Warmonger): with nothing legal to sacrifice, the
@@ -641,7 +711,9 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     # the player can pick and then not get.
     on_accept, offerable = _narrow_to_takeable_actions(game, player, on_accept, context)
     if not offerable:
-        return _run(game, on_decline, context) if on_decline else (True, "resolved")
+        if on_decline:
+            _run(game, on_decline, context)
+        return
 
     entry = {
         "card_name": context.card.name,
@@ -666,7 +738,6 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
         if isinstance(amount, int):
             entry["life"] = amount
     game.arm_pending_choice("optional_pay", player_index, **entry)
-    return True, "resolved"
 
 
 @effect_handler("choose_one")

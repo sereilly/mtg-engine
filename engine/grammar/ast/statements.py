@@ -131,6 +131,7 @@ from .combat import (
     RemoveFromCombat,
 )
 from .game import (
+    Ante,
     CreateEmblem,
     CreateCopyToken,
     CreateToken,
@@ -142,6 +143,7 @@ from .game import (
     GainLife,
     LoseGame,
     LoseLife,
+    SetLifeTotal,
     WinGame,
 )
 
@@ -149,7 +151,7 @@ from .game import (
 Effect = Union[
     DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
-    GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
+    GainLife, LoseLife, SetLifeTotal, Ante, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary, Exile,
     ExileUntilLeavesOrUntaps, Tap, Untap,
     TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,

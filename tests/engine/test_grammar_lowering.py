@@ -291,7 +291,8 @@ def test_you_may_pay_carries_its_consequence_as_instructions():
     Read as a trigger remainder, which is the only place a ``may`` is executable:
     the prompt outlives the resolution that armed it, and only a triggered
     ability's resolution path holds the queue open. A spell's whole effect
-    refuses for that reason (``test_a_spell_whose_whole_effect_is_optional_refuses``)."""
+    reaches the same shape since round 32
+    (``test_a_spell_whose_whole_effect_is_optional_lowers``)."""
     assert _instructions(
         "When this creature enters, you may pay {1}. If you do, you gain 1 life."
     ) == [
@@ -349,20 +350,60 @@ def test_a_free_optional_action_lowers_to_its_own_handler():
     ]
 
 
-def test_a_spell_whose_whole_effect_is_optional_refuses():
-    """The limit ``_lower_may`` has documented since it was written, now
-    enforced. The prompt rides the pending-choice queue and only a triggered
-    ability's resolution holds that queue open; a spell leaves the stack the
-    instant it resolves, so its effect would be queued and never performed.
-    Measured on Twiddle, which is why Twiddle keeps its card hook.
+def test_a_spell_whose_whole_effect_is_optional_lowers():
+    """This refused until round 32, and the refusal was right when it was
+    written: the prompt rode ``pending_optional_pays``, which only a triggered
+    ability's resolution path held open, so a spell — which leaves the stack the
+    instant it resolves — queued its effect and never performed it.
 
-    Only the *whole* line: a ``may`` that is one sentence of a longer spell has
-    steps in front of it that run.
+    ``arm_pending_choice`` now stamps the resolving stack object and
+    ``ChoiceSpec.holds_priority`` keeps it there until the last of its prompts
+    is answered (CR 608.2, CR 117.3b), so a spell's ``may`` outlives its own
+    resolution. Twiddle is the shipped card that changed, and it changed from
+    acting to *asking*.
     """
     result = compile_line("You may tap or untap target creature.", card_name="Test")
 
-    assert result.parsed and not result.lowered
-    assert "whole effect is optional" in result.failure_reason
+    assert result.lowered
+    assert result.instructions[0].kind == "may"
+    assert [step.kind for step in result.instructions[0].payload["action"]] == [
+        "tap_or_untap_target"
+    ]
+
+
+def test_an_offer_to_each_player_keeps_the_actor_it_was_printed_with():
+    """"Each player may …" (Rebirth) is one decision *per player*, so the actor
+    is carried as payload and ``handlers/control_flow.may`` arms one prompt for
+    each named seat. Lowering it as "you may" would let the caster answer for
+    everybody."""
+    result = compile_line(
+        "Each player may ante the top card of their library. "
+        "If a player does, that player's life total becomes 20.",
+        card_name="Rebirth",
+    )
+    assert result.lowered
+    offer = result.instructions[0]
+    assert offer.kind == "may"
+    assert offer.payload["actor"] == "each_player"
+    assert [step.kind for step in offer.payload["action"]] == ["ante_top_card"]
+    assert offer.payload["action"][0].payload["players"] == "that_player"
+    assert [step.kind for step in offer.payload["then"]] == ["set_life_total"]
+    assert offer.payload["then"][0].payload == {
+        "recipient": "that_player", "amount": 20,
+    }
+
+
+def test_if_a_player_does_needs_an_offer_made_to_more_than_one_seat():
+    """The third-person rider is a spelling of "if you do" under a multi-seat
+    offer. Over a "you may" there is nothing for "a player" to refer back to,
+    and reading it as "you" would put the branch on the caster whoever actually
+    took the action — so the line refuses instead."""
+    result = compile_line(
+        "You may ante the top card of your library. "
+        "If a player does, that player's life total becomes 20.",
+        card_name="Test",
+    )
+    assert not result.parsed
 
 
 def test_you_draw_and_target_player_draws_use_different_handlers():

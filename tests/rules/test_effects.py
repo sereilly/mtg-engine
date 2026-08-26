@@ -837,3 +837,69 @@ def test_610_3d_simultaneous_zone_changes_from_same_event():
 
     assert len(p2.exile) == 0
     assert len(p2.battlefield) == 2
+
+
+# ---------------------------------------------------------------------------
+# CR 119.5 — setting a life total (round 32)
+#
+# "That player's life total becomes 20." (Rebirth.) The rule is that this is a
+# gain or a loss of the difference, which is why it cannot be lowered as either
+# one: the printed number is the result, and which direction it moves in is not
+# known until the effect resolves.
+# ---------------------------------------------------------------------------
+
+
+def _r32_set_life_card(name: str = "Life Setter", text: str = "Your life total becomes 20."):
+    return _mk_card(name, "Sorcery", text)
+
+
+def _r32_set_life_game(life: int):
+    player = PlayerState(name="P1", life=life, hand=[_r32_set_life_card()])
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    return game, player
+
+
+@pytest.mark.cr("119.5")
+def test_setting_a_life_total_upward_is_a_gain_of_the_difference():
+    game, player = _r32_set_life_game(5)
+
+    assert game.cast_from_hand(0, "Life Setter").supported
+
+    assert player.life == 20
+
+
+@pytest.mark.cr("119.5")
+def test_setting_a_life_total_downward_is_a_loss_of_the_difference():
+    game, player = _r32_set_life_game(31)
+
+    assert game.cast_from_hand(0, "Life Setter").supported
+
+    assert player.life == 20
+
+
+@pytest.mark.cr("119.5")
+def test_setting_a_life_total_to_what_it_already_is_changes_nothing():
+    game, player = _r32_set_life_game(20)
+
+    assert game.cast_from_hand(0, "Life Setter").supported
+
+    assert player.life == 20
+
+
+@pytest.mark.cr("119.5", "614.1")
+def test_the_gain_half_goes_through_the_life_gain_seam():
+    """CR 119.5 makes the upward half a *gain*, so a CR 614 replacement of life
+    gain still sees it. Lich is the pool's ("If you would gain life, draw that
+    many cards instead"), and an assignment straight onto ``player.life`` would
+    have walked past it."""
+    from unittest.mock import patch
+
+    game, player = _r32_set_life_game(5)
+
+    with patch.object(type(game), "_gain_life", autospec=True) as gain:
+        assert game.cast_from_hand(0, "Life Setter").supported
+
+    assert gain.call_count == 1
+    assert gain.call_args.args[1] is player
+    assert gain.call_args.args[2] == 15

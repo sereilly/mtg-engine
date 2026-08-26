@@ -454,15 +454,38 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     mark = stream.mark()
     if not stream.accept_word("if"):
         return False
-    if not stream.accept_word("you"):
+    # "If **a player** does, …" (Rebirth) is the same rider under an offer made
+    # to more than one seat: the offer is one decision per player, and this asks
+    # of each of them whether they took it. The third person is the whole
+    # difference, so it is a spelling of the subject rather than a second
+    # production — and it is admitted only over a ``May`` whose actor is not
+    # "you", where the words have somebody to refer to.
+    third_person = False
+    if stream.accept_word("you"):
+        pass
+    elif stream.accept_phrase("a", "player"):
+        third_person = True
+    else:
         stream.reset(mark)
         return False
 
-    if stream.accept_word("do"):
+    if stream.accept_word("does" if third_person else "do"):
         declined = False
-    elif stream.accept_word("don't") or stream.accept_phrase("do", "not"):
+    elif (
+        stream.accept_word("doesn't" if third_person else "don't")
+        or stream.accept_phrase("does" if third_person else "do", "not")
+    ):
         declined = True
     else:
+        stream.reset(mark)
+        return False
+    if third_person and not (
+        isinstance(target, ast.May)
+        and target.actor.kind not in ("you", "that_player")
+    ):
+        # Nothing for "a player" to refer back to: the offer named one seat, or
+        # there was no offer at all. Refused rather than read as "you", which
+        # would put the branch on the caster whoever actually took the action.
         stream.reset(mark)
         return False
 

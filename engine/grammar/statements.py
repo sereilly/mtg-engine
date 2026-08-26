@@ -66,6 +66,8 @@ from .effects import (
     _parse_enchant,
     _parse_end_the_turn,
     _parse_extra_turn,
+    _parse_ante,
+    _parse_life_total_becomes,
     _parse_gain_control,
     _parse_gains,
     _parse_choose_number,
@@ -339,10 +341,23 @@ def _parse_subject_verb(
     # what the subject-verb table below says about a sentence that has none.
     if stream.at_word("mill"):
         return _parse_mill(stream, ast.PlayerRef("you"))
+    # "Ante the top card of your library." — a bare imperative like the draw
+    # and discard above it, and the shape Rebirth prints inside its offer.
+    if stream.at_word("ante"):
+        ante = _parse_ante(stream)
+        if ante is not None:
+            return ante
     if stream.at_word("counter"):
         return _parse_counter(stream)
     if stream.at_word("enchant"):
         return _parse_enchant(stream)
+
+    # "That player's life total becomes 20." (Rebirth.) The subject is a
+    # possessive **of a player**, which the recipient parser below reads down
+    # to the player and then chokes on the "'s". Refuses without consuming.
+    life_total = _parse_life_total_becomes(stream)
+    if life_total is not None:
+        return life_total
 
     mark = stream.mark()
 
@@ -424,6 +439,26 @@ def _parse_subject_verb(
         if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):
             stream.advance()
             return _parse_sacrifice(stream, source_spec)
+        # "Each player antes the top card of their library." (Demonic
+        # Attorney.) The subject is who antes (CR 407.4: a card is anted by
+        # its owner), so it is handed to the production rather than read back
+        # off the possessive.
+        if token.text in ("antes", "ante") and isinstance(source_spec, ast.PlayerRef):
+            ante = _parse_ante(stream, source_spec)
+            if ante is not None:
+                return ante
+        # "**Each player may** ante the top card of their library." (Rebirth.)
+        # The offer with a printed subject other than "you", which the bare
+        # "you may" branch in `_parse_statement_body` cannot reach. One offer
+        # node either way; who is offered is the actor field it already has,
+        # and `handlers/control_flow.may` arms one prompt per named seat.
+        if token.text == "may" and isinstance(source_spec, ast.PlayerRef):
+            mark_may = stream.mark()
+            stream.advance()
+            try:
+                return ast.May(source_spec, action=_parse_optional_action(stream))
+            except GrammarError:
+                stream.reset(mark_may)
         if token.text in ("becomes", "become"):
             return _parse_becomes(stream, source_spec)
         if token.text in ("phases", "phase"):

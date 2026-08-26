@@ -186,11 +186,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
     # already parses; the sentence after it is not. The cap is what makes the
     # handler this card's — lowering the first sentence alone would let the
     # counters past seven.
-    'Contract from Below': {
-        'discard your hand, ante the top card of your library, then draw seven '
-        'cards':
-            _line('discard_hand_ante_then_draw_seven', 'spell_pattern'),
-    },
     'Cyclone': {
         'at the beginning of your upkeep, put a wind counter on this '
         'enchantment, then sacrifice this enchantment unless you pay {g} for '
@@ -209,10 +204,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'you own target card in the ante. exchange that card with the top card '
         'of your library':
             _line('exchange_ante_with_top_library', 'spell_pattern'),
-    },
-    'Demonic Attorney': {
-        'each player antes the top card of their library':
-            _line('each_player_antes_top_card', 'spell_pattern'),
     },
     'Demonic Hordes': {
         "at the beginning of your upkeep, unless you pay {b}{b}{b}, tap this "
@@ -598,10 +589,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'each player shuffles their hand and graveyard into their library, then '
         'draws seven cards':
             _line('timetwister', 'spell_pattern'),
-    },
-    'Twiddle': {
-        'you may tap or untap target artifact, creature, or land':
-            _line('tap_or_untap_target', 'spell_pattern'),
     },
     'Unstable Mutation': {
         "at the beginning of the upkeep of enchanted creature's controller, put "

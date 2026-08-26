@@ -113,6 +113,8 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         "damage", "pump", "life", "destruction", "tapping", "optional", "zones",
         "mana", "regeneration", "counterspells", "prevention", "recolor", "upkeep",
         "turns", "evasion", "tokens", "counters", "text_change", "control",
+        # The ante zone (CR 407) — inert outside the ante variant.
+        "ante",
         # "Choose target creature." — the targeting half of a two-sentence
         # spell, which does nothing on its own (see `choose_target_permanent`).
         "targeting",

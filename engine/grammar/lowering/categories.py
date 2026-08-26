@@ -148,6 +148,15 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "draw_then_discard_self": "zones",
     "discard_then_draw_that_many": "zones",
     "target_gains_life": "life",
+    # "That player's life total becomes 20." (Rebirth.) CR 119.5 makes it a
+    # gain or a loss of the difference, so it is the life family — the
+    # printed number being the result rather than the delta is a fact about
+    # the handler, not about which switch gates the card.
+    "set_life_total": "life",
+    # The ante zone (CR 407). Its own category rather than "zones": every
+    # other member of that family moves an object between zones the ordinary
+    # game has, and this one is inert outside the ante variant.
+    "ante_top_card": "ante",
     "target_loses_life": "life",
     "destroy_target_permanent": "destruction",
     "destroy_all_artifacts": "destruction",
@@ -552,12 +561,10 @@ _PRODUCES: dict[str, str] = {
 # "damage" is enough to turn on a sequence of damage instructions without
 # inventing a category nobody could reason about.
 #
-# ``may`` is deliberately NOT in here: it gets its own ungated category above.
-# Lowering an optional action is correct, but the prompt it raises still rides
-# the one-card ``pending_optional_pays`` flow, and cards already on that flow
-# (Soul Net, the Rod cycle) hold their trigger on the stack until the player
-# answers — behavior the generic handler does not yet reproduce. Switching
-# "optional" on is gated behind the pending-choice queue.
+# ``may`` is deliberately NOT in here: it gets its own ungated category above,
+# because an offer is not the same switch as the effect behind it. Wrapping it
+# with the others would let "optional" be turned off under a family that is on,
+# which is a card that performs its offer's consequence without asking.
 _WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
     "sequence": ("steps",),
     "if_then": ("then", "else"),

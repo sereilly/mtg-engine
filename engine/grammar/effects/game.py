@@ -12,9 +12,10 @@ family.
 from ...tokens import PREDEFINED_TOKENS
 from .. import ast
 from ..amounts import expect_pt, parse_amount
+from ..errors import GrammarError
 from ..lexer import (QUOTE, WORD)
 from ..nouns import parse_object_filter
-from ..references import parse_target_spec
+from ..references import parse_player_ref, parse_target_spec
 from ..phrases import _parse_for_each
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX, match_longest)
@@ -426,3 +427,78 @@ def _parse_end_the_turn(stream: TokenStream) -> ast.Statement:
     stream.expect_word("the")
     stream.expect_word("turn")
     return ast.EndTheTurn()
+
+
+def _parse_ante(
+    stream: TokenStream, subject: ast.PlayerRef | None = None
+) -> ast.Statement | None:
+    """``[<player>] ante[s] the top card of <possessive> library`` (CR 407).
+
+    Two printed shapes, one production. Demonic Attorney prints the subject
+    ("Each player antes the top card of their library"); Rebirth's offer prints
+    none, because the offering player is the one the ``may`` in front of it
+    named ("Each player may ante the top card of their library").
+
+    So **who antes is the printed subject where there is one, and the possessive
+    where there is not**. That is not a fallback: with no subject the only word
+    naming the player is "your"/"their", and reading it is reading the card.
+    "Their" back-refers exactly the way ``references.parse_player_ref`` reads
+    "they" — as ``that_player`` — so the offer binds it per seat and Demonic
+    Attorney's every-seat loop never sees it.
+
+    Refuses without consuming anything else, so any other sentence opening with
+    the word keeps the refusal it has today.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("antes", "ante"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("the", "top", "card", "of"):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("your"):
+        possessive = ast.PlayerRef("you")
+    elif stream.accept_word("their") or stream.accept_phrase("his", "or", "her"):
+        possessive = ast.PlayerRef("that_player")
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("library"):
+        stream.reset(mark)
+        return None
+    return ast.Ante(subject if subject is not None else possessive)
+
+
+def _parse_life_total_becomes(stream: TokenStream) -> ast.Statement | None:
+    """``<player>'s life total becomes <N>`` / ``your life total becomes <N>``.
+
+    CR 119.5: this is a gain or a loss of the difference, but the printed number
+    is the *result*, so the sentence cannot be read as either one until the
+    handler knows the current total. Its own node for that reason rather than a
+    ``GainLife`` with a flag.
+
+    Read before ``_parse_subject_verb``'s noun phrase because the subject is a
+    possessive *of a player* — "that player's life total" — which the recipient
+    parser reads down to the player and then chokes on. Refuses without
+    consuming, so every other possessive sentence keeps its reading.
+    """
+    mark = stream.mark()
+    if stream.accept_word("your"):
+        player = ast.PlayerRef("you")
+    else:
+        player = parse_player_ref(stream)
+        if player is None or not stream.accept_word("'s"):
+            stream.reset(mark)
+            return None
+    if not stream.accept_phrase("life", "total"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("becomes", "become"):
+        stream.reset(mark)
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    return ast.SetLifeTotal(player, amount)

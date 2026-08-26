@@ -490,3 +490,60 @@ def _stamp_token_count(payload: dict, node: "ast.CreateToken"):
     if count != 1:
         payload["count"] = count
     return count
+
+
+# ---------------------------------------------------------------------------
+# Ante and setting a life total
+# ---------------------------------------------------------------------------
+
+
+#: Which seats a printed player reference names, in the vocabulary every
+#: recipient payload in the engine already uses. Shared by the two lowerings
+#: below so the ante and the life-total rewrite of one card cannot disagree
+#: about who "that player" is.
+_ANTE_RECIPIENTS: dict[str, str] = {
+    "you": "caster",
+    "each_player": "each_player",
+    "that_player": "that_player",
+}
+
+
+def _player_recipient(player: ast.PlayerRef, node) -> str:
+    recipient = _ANTE_RECIPIENTS.get(player.kind)
+    if recipient is None:
+        raise LoweringError(
+            f"no seat is named by {player.kind!r} here", node=node
+        )
+    return recipient
+
+
+def _lower_ante(node: ast.Ante) -> tuple[OracleInstruction, ...]:
+    """"Ante the top card of your library." (CR 407.)
+
+    One instruction for both printed shapes; who antes is payload. Demonic
+    Attorney's every-seat sweep and Rebirth's per-seat offer differ only in the
+    recipient key, which is exactly the difference the card prints.
+    """
+    return (
+        OracleInstruction(
+            "ante_top_card", "", {"players": _player_recipient(node.player, node)}
+        ),
+    )
+
+
+def _lower_set_life_total(node: ast.SetLifeTotal) -> tuple[OracleInstruction, ...]:
+    """"That player's life total becomes 20." (Rebirth.)
+
+    CR 119.5 makes this a gain or a loss of the difference, so the handler works
+    out the direction; the payload carries the printed *result*, which is all
+    the card says.
+    """
+    return (
+        OracleInstruction(
+            "set_life_total", "",
+            {
+                "recipient": _player_recipient(node.player, node),
+                "amount": _amount_payload(node.amount),
+            },
+        ),
+    )

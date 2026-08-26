@@ -44,6 +44,34 @@ class LoseLife:
 
 
 @dataclass(frozen=True)
+class SetLifeTotal:
+    """"That player's life total becomes 20." (Rebirth.)
+
+    CR 119.5: setting a life total is a gain or a loss of the difference, not a
+    third kind of life change — but the printed number is the *result*, not the
+    delta, so it cannot be lowered as a gain of a fixed amount. The node carries
+    the target total and the handler works out which way it moves.
+    """
+    player: PlayerRef
+    amount: Amount
+
+
+@dataclass(frozen=True)
+class Ante:
+    """"Ante the top card of your library." (CR 407.)
+
+    ``player`` is who antes, which is a different question from who the effect's
+    controller is: Demonic Attorney prints "each player antes …", so every seat
+    antes a card off its own library (CR 407.4 — a card is anted by its owner).
+
+    Only the top-of-library ante is a node: it is the one the pool prints, and
+    "ante a card from your hand" would choose differently and needs a prompt
+    this has no field for.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class CreateToken:
     count: Amount
     # None for a **noncreature** token (a Treasure): CR 208.1 gives P/T only to

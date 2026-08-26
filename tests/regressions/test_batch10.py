@@ -37,9 +37,19 @@ from web.app import _effective_keywords
 # ---------------------------------------------------------------------------
 
 class TestTwiddle:
-    def test_compiles_to_tap_or_untap(self, cards):
+    """Round 32 changed what this card *is*: "**You may** tap or untap …" is an
+    offer, and until the refusal in ``lower_ability`` came out the word was
+    dropped and a card hook performed the toggle unconditionally. The toggle
+    itself is unchanged — these three still assert it — but it now happens on
+    the far side of a prompt, so each one answers the offer first.
+    """
+
+    def test_compiles_to_an_offer_of_tap_or_untap(self, cards):
         prog = compile_card_oracle(cards["Twiddle"])
-        assert prog.instructions[0].kind == "tap_or_untap_target"
+        assert prog.instructions[0].kind == "may"
+        assert [step.kind for step in prog.instructions[0].payload["action"]] == [
+            "tap_or_untap_target"
+        ]
 
     def test_taps_opponents_untapped_land(self, cards):
         p0 = PlayerState(name="P0", hand=[cards["Twiddle"]], battlefield=[Permanent(card=cards["Island"])])
@@ -48,6 +58,8 @@ class TestTwiddle:
         p1 = PlayerState(name="P1", battlefield=[opp_creature, opp_land])
         game = _game(p0, p1)
         game.cast_from_hand(0, "Twiddle", target_player_index=1, target_permanent_index=1)
+        assert opp_land.tapped is False, "nothing happens until the offer is answered"
+        game.auto_resolve_pending_optional_pays()
         assert opp_land.tapped is True       # the chosen land is tapped
         assert opp_creature.tapped is False  # not the first permanent
 
@@ -57,7 +69,19 @@ class TestTwiddle:
         p0 = PlayerState(name="P0", hand=[cards["Twiddle"]], battlefield=[Permanent(card=cards["Island"]), mine])
         game = _game(p0, PlayerState(name="P2"))
         game.cast_from_hand(0, "Twiddle", target_player_index=0, target_permanent_index=1)
+        game.auto_resolve_pending_optional_pays()
         assert mine.tapped is False
+
+    def test_declining_the_offer_leaves_the_permanent_alone(self, cards):
+        """The half the card hook could not express: "you may" has a *no*."""
+        mine = Permanent(card=cards["Grizzly Bears"])
+        mine.tapped = True
+        p0 = PlayerState(name="P0", hand=[cards["Twiddle"]], battlefield=[Permanent(card=cards["Island"]), mine])
+        game = _game(p0, PlayerState(name="P2"))
+        game.cast_from_hand(0, "Twiddle", target_player_index=0, target_permanent_index=1)
+        assert game.confirm_optional_pay(0, accept=False)
+        assert mine.tapped is True
+        assert game.pending_optional_pays == []
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,8 @@ from __future__ import annotations
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 
+from tests.helpers import _mk_card
+
 
 # ---------------------------------------------------------------------------
 # Syphon Soul (round 20) — "each other player", and the life the sweep produced
@@ -1046,3 +1048,104 @@ def test_juxtapose_on_an_empty_board_resolves_and_does_nothing(
 
     assert result.supported, result.details
     assert _r31_jx_names(game) == [[], []], game.log
+
+
+# ---------------------------------------------------------------------------
+# Rebirth (round 32) — "Each player may ante the top card of their library.
+# If a player does, that player's life total becomes 20."
+#
+# The card the round-32 refusal removal unlocked. It is the first spell in the
+# pool whose *whole* effect is an offer, and the first offer the pool makes to
+# more than one seat at once — so each seat gets its own prompt, each answers
+# for itself, and the spell stays on the stack until the last of them has.
+# ---------------------------------------------------------------------------
+
+
+def _r32_rebirth_game(set_pool, *, seats: int = 2, lives=None, libraries=None):
+    pool = set_pool("LEG")
+    players = []
+    for i in range(seats):
+        size = 3 if libraries is None else libraries[i]
+        players.append(
+            PlayerState(
+                name=f"P{i + 1}",
+                life=20 if lives is None else lives[i],
+                library=[
+                    _mk_card(f"P{i + 1}Card{n}", "Instant", "")
+                    for n in range(size)
+                ],
+            )
+        )
+    players[0].hand = [pool["Rebirth"]]
+    game = Game(players=players, playing_for_ante=True)
+    game.enforce_mana_costs = False
+    return game, players
+
+
+def test_rebirth_offers_every_seat_its_own_decision(set_pool):
+    """One prompt per player, not one the caster answers for everybody."""
+    game, players = _r32_rebirth_game(set_pool, seats=3)
+
+    result = game.cast_from_hand(0, "Rebirth")
+
+    assert result.supported, result.details
+    assert sorted(e["player_index"] for e in game.pending_optional_pays) == [0, 1, 2]
+    assert all(p.ante == [] for p in players), "nothing happens before the answers"
+
+
+def test_a_seat_that_accepts_antes_its_own_card_and_goes_to_twenty(set_pool):
+    """"That player" is the seat that took the offer — the ante comes off that
+    player's own library (CR 407.4) and the life total is that player's."""
+    game, players = _r32_rebirth_game(set_pool, lives=[5, 5])
+
+    game.cast_from_hand(0, "Rebirth")
+    assert game.confirm_optional_pay(1, accept=True)
+
+    assert [c.name for c in players[1].ante] == ["P2Card0"]
+    assert players[1].life == 20
+    assert players[0].ante == [] and players[0].life == 5, game.log
+
+
+def test_a_seat_that_declines_antes_nothing_and_keeps_its_life_total(set_pool):
+    game, players = _r32_rebirth_game(set_pool, lives=[30, 30])
+
+    game.cast_from_hand(0, "Rebirth")
+    assert game.confirm_optional_pay(0, accept=False)
+    assert game.confirm_optional_pay(1, accept=True)
+
+    assert players[0].ante == [] and players[0].life == 30
+    assert [c.name for c in players[1].ante] == ["P2Card0"]
+    # CR 119.5: setting a total above 20 is a *loss* of the difference.
+    assert players[1].life == 20, game.log
+
+
+def test_an_empty_library_is_never_offered_the_ante(set_pool):
+    """No top card means no ante to take, and taking the offer anyway would
+    hand a player 20 life for an ante that never happened."""
+    game, players = _r32_rebirth_game(set_pool, lives=[5, 5], libraries=[3, 0])
+
+    game.cast_from_hand(0, "Rebirth")
+
+    assert [e["player_index"] for e in game.pending_optional_pays] == [0]
+    assert players[1].life == 5, game.log
+
+
+def test_rebirth_holds_the_stack_until_the_last_seat_has_answered(set_pool):
+    """CR 608.2 / CR 117.3b: the spell is still resolving while it owes anybody
+    a decision, so it stays on the stack and nobody receives priority."""
+    game, _ = _r32_rebirth_game(set_pool)
+    game.interactive_seats = {0, 1}
+    game.active_player_index = 0
+    assert game.queue_from_hand(0, "Rebirth").supported
+    game.start_priority_window(0)
+
+    game.pass_priority(0)
+    assert game.pass_priority(1) == "awaiting_choice"
+
+    assert [item.card.name for item in game.stack] == ["Rebirth"]
+    assert game.waiting_prompt() is not None
+    game.confirm_optional_pay(0, accept=True)
+    assert len(game.stack) == 1, "one seat still owes an answer"
+    game.confirm_optional_pay(1, accept=False)
+    assert game.stack == []
+    assert game.waiting_prompt() is None

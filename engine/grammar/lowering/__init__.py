@@ -204,6 +204,8 @@ from .combat import (
 )
 from .game import (
     _lower_create_emblem,
+    _lower_ante,
+    _lower_set_life_total,
     _lower_gain_life,
     _title,
     _lower_create_copy_token,
@@ -362,6 +364,8 @@ __all__ = [
     "_lower_attack_as_though",
     "_lower_attacking_doesnt_tap",
     "_lower_remove_from_combat",
+    "_lower_ante",
+    "_lower_set_life_total",
     "_lower_gain_life",
     "_title",
     "_lower_create_emblem",

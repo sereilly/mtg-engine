@@ -102,6 +102,8 @@ from .lowering import (
     _lower_gain_ability_text,
     _lower_gain_keyword,
     _lower_lose_keyword,
+    _lower_ante,
+    _lower_set_life_total,
     _lower_gain_life,
     _lower_double_power,
     _lower_switch_pt,
@@ -237,6 +239,10 @@ def lower_statement(
         return _lower_switch_pt(statement)
     if isinstance(statement, ast.RemoveCounter):
         return _lower_remove_counter(statement, dispatch_event)
+    if isinstance(statement, ast.Ante):
+        return _lower_ante(statement)
+    if isinstance(statement, ast.SetLifeTotal):
+        return _lower_set_life_total(statement)
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
@@ -706,19 +712,18 @@ def _lower_may(
     ordinary instruction sequence, so any effect can sit behind an optional
     cost.
 
-    **Known limit — a spell whose whole effect is optional.** The prompt still
-    rides ``pending_optional_pays``, and only the triggered-ability resolution
-    path holds that queue open and drains it (``resolve_top_of_stack``'s
-    ``pause_for_choices``, ``auto_resolve_pending_optional_pays``). A spell
-    leaves the stack the instant it resolves, so a line like Twiddle's "You may
-    tap or untap target artifact, creature, or land." would queue its effect and
-    never perform it — measured, not assumed: lowering Twiddle that way makes
-    all three of its pinned regression tests fail with the permanent untouched.
-    No card reaches that shape today (every usable ``may`` in the pool is a
-    trigger remainder), and the check cannot live here: the coverage script and
-    the lowering tests compile bare *clauses*, which are indistinguishable from
-    a spell's whole line once the trigger prefix is gone. It stops being a trap
-    when the prompt moves to the general pending-choice queue (roadmap phase 4).
+    **A spell whose whole effect is optional** was a documented limit here until
+    round 32, and ``lower_ability`` refused the shape: the prompt rode
+    ``pending_optional_pays``, which only the triggered-ability resolution path
+    held open, so a spell — which leaves the stack the instant it resolves —
+    queued its effect and never performed it. That is no longer true.
+    ``arm_pending_choice`` stamps the stack object the prompt is holding open
+    and ``ChoiceSpec.holds_priority`` keeps it there until the last of its
+    prompts is answered (CR 608.2, CR 117.3b), so Twiddle asks and then acts.
+
+    **The actor may name a set of seats.** "Each player may …" (Rebirth) is one
+    decision per player; the actor is carried as payload and
+    ``handlers/control_flow.may`` arms one prompt for each named seat.
     """
     action = lower_statement(node.action, produced, event=event, event_subject=event_subject, whole_effect=False) if node.action else ()
     # "If you do" is the rest of *this* resolution, so it can read what the
@@ -868,26 +873,16 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
     instructions of their own — they are recorded by the compiler as keyword or
     static lines instead."""
     if isinstance(node, ast.SpellEffectLine):
-        # A spell whose **whole** effect is optional. `_lower_may` has carried
-        # this as a known limit since it was written, measured on this exact card
-        # (Twiddle): the prompt rides `pending_optional_pays`, and only the
-        # triggered-ability resolution path holds that queue open and drains it,
-        # so a spell — which leaves the stack the instant it resolves — would
-        # queue its effect and never perform it. It went unenforced because no
-        # line reached the shape; round 88 made one reachable by teaching the
-        # tap-or-untap toggle to read its noun phrase, and Twiddle's hook was
-        # silently shadowed by a `may` that did nothing.
-        #
-        # Only the *whole* line, and only a spell's: a `may` that is one sentence
-        # of a longer spell (Basri's Aegis, Liliana's Scorn) has steps in front
-        # of it that run, and a trigger remainder is the shape the queue was
-        # built for.
-        if isinstance(node.statement, ast.May):
-            raise LoweringError(
-                "a spell whose whole effect is optional has no prompt that "
-                "outlives its resolution",
-                node=node.statement,
-            )
+        # A spell whose **whole** effect is optional used to refuse here. The
+        # reason was real and is now gone: the prompt rode
+        # ``pending_optional_pays``, which only the triggered-ability resolution
+        # path held open, so a spell — which leaves the stack the instant it
+        # resolves — queued its effect and never performed it. Since
+        # ``arm_pending_choice`` stamps the resolving stack object and
+        # ``ChoiceSpec.holds_priority`` keeps that object on the stack until the
+        # last of its prompts is answered (CR 608.2, CR 117.3b), a spell's
+        # ``may`` outlives its own resolution exactly like a trigger's. Twiddle
+        # and Rebirth are the two cards that reach the shape.
         return _lower_line_statement(node.statement)
     if isinstance(node, ast.TriggeredAbilityNode):
         fused = _fused_upkeep_pay_to_untap(node)

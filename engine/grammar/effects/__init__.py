@@ -105,6 +105,8 @@ from .combat import (
     _parse_remove_from_combat,
 )
 from .game import (
+    _parse_ante,
+    _parse_life_total_becomes,
     _parse_wins,
     _parse_choose_number,
     _parse_flip_coin,
@@ -182,6 +184,8 @@ __all__ = [
     "_parse_remove_from_combat",
     "_CANT_BE_ACTIONS",
     "_parse_cant_be",
+    "_parse_ante",
+    "_parse_life_total_becomes",
     "_parse_wins",
     "_parse_choose_number",
     "_parse_flip_coin",

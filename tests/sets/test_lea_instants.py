@@ -1139,6 +1139,9 @@ def test_twiddle_untaps_target_permanent(all_cards):
     result = game.cast_from_hand(0, "Twiddle", target_player_index=1)
 
     assert result.supported
+    # "**You may** tap or untap …" — an offer since round 32, so the toggle
+    # happens when the offer is answered rather than on resolution.
+    game.auto_resolve_pending_optional_pays()
     assert p2.battlefield[0].tapped is False
 
 

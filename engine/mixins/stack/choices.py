@@ -2563,7 +2563,7 @@ class PendingChoicesMixin:
                 ),
             )
         else:
-            self.log.append(f"{player.name} declined {entry['card_name']}'s pay-for-life trigger")
+            self.log.append(f"{player.name} declined {entry['card_name']}")
 
     def confirm_optional_pay(self, player_index: int, card_name: str | None = None, accept: bool = True) -> bool:
         """Resolve the first pending optional "pay {N}" trigger for a player (the
@@ -3250,7 +3250,10 @@ register_choice(
     default=lambda game, choice: game._default_optional_pay(choice),
     action="resolve_optional_pay",
     prompt_key="optional_pay",
-    blocked_detail="resolve the pay-for-life trigger before other actions",
+    # The kind outgrew its first card: it now carries any optional cost or
+    # action, on a trigger or on a whole spell (Twiddle, Rebirth), so the
+    # message names the offer rather than the one card it was written for.
+    blocked_detail="answer the optional-cost offer before other actions",
 )
 
 register_choice(

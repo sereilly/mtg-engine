@@ -178,6 +178,13 @@
   ]
  },
  {
+  "card": "Twiddle",
+  "clause": "you may tap or untap target artifact, creature, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Ugin, the Spirit Dragon",
   "clause": "exile each permanent with mana value x or less that's one or more colors",
   "ignored": [

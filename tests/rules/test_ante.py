@@ -721,3 +721,44 @@ def test_407_3_the_deck_instruction_is_claimed_on_a_creature_too():
 
     assert compile_card_oracle(card).supported
     assert is_ante_card(card), "the claim and the deck bar read one constant"
+
+
+# ---------------------------------------------------------------------------
+# CR 407.4 through an *offer* (round 32)
+#
+# Rebirth is the pool's only "each player may ante …". Demonic Attorney's
+# every-seat sweep and this share one instruction now, so the rule that a card
+# is anted by its owner is asserted on both shapes rather than on the one that
+# happened to have a handler.
+# ---------------------------------------------------------------------------
+
+
+def _r32_rebirth(set_pool, seats: int = 3):
+    game = _ante_game(players=seats)
+    game.players[0].hand = [set_pool("LEG")["Rebirth"]]
+    return game
+
+
+@pytest.mark.cr("407.4")
+def test_an_offered_ante_comes_off_the_accepting_players_own_library(set_pool):
+    game = _r32_rebirth(set_pool)
+    tops = [p.library[0].name for p in game.players]
+
+    assert game.cast_from_hand(0, "Rebirth").supported
+    assert game.confirm_optional_pay(2, accept=True)
+
+    assert [c.name for c in game.players[2].ante] == [tops[2]]
+    assert game.players[0].ante == [] and game.players[1].ante == []
+
+
+@pytest.mark.cr("101.4")
+def test_each_player_is_offered_the_ante_in_turn_order(set_pool):
+    """APNAP: the active player answers first, then each other seat in turn
+    order. The queue is drained in the order it was armed, so the order the
+    prompts are armed in *is* the order the decisions are made in."""
+    game = _r32_rebirth(set_pool)
+    game.active_player_index = 1
+
+    assert game.cast_from_hand(0, "Rebirth").supported
+
+    assert [e["player_index"] for e in game.pending_optional_pays] == [1, 2, 0]
