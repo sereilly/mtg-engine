@@ -915,6 +915,173 @@ def _from_instruction(instruction) -> dict | None:
     return dict(by_kind) if by_kind is not None else None
 
 
+#: The spec ``kind`` a several-**role** target description takes.
+#:
+#: Every other kind names one picker over one list, because every other spell in
+#: the pool chooses its targets from one set: "up to two target creatures" is two
+#: slots of the same kind, and ``_enumerate_targets`` answers all of them at
+#: once. "Target creature that **target Wall** blocked this turn" (Glyph of
+#: Delusion) is not that. The two slots have different kinds, different
+#: narrowings, and — the part no flag can express — the second slot's legal set
+#: is decided by what was chosen for the first.
+#:
+#: So a roles spec carries an ordered ``roles`` list instead of a single kind,
+#: and ``engine/legality.py`` enumerates role *n* only with roles 0…n-1 settled.
+#: Anything that reads ``spec["kind"]`` and does not know this name sees a kind
+#: it has no branch for, which is the loud direction: a roles spec silently
+#: reduced to its first role would let a spell be cast with a target no gate
+#: ever checked.
+ROLES_TARGET_KIND = "roles"
+
+
+def roles_spec(targets: dict) -> dict | None:
+    """The ordered-role spec a ``kind: "roles"`` description means.
+
+    Each role is itself an ordinary object description, so it goes through the
+    same :func:`_from_targets_payload` every one-target spell does — the picker
+    flags a role carries mean exactly what they mean anywhere else, and a
+    narrowing added to that reader reaches a role for free.
+
+    ``depends_on`` is lifted out of the role's own key so every consumer asks
+    one question ("which earlier role settles this one?") rather than knowing
+    the vocabulary of relations. The relation *key* travels beside it, because
+    the enumerator has to know not merely that there is a dependency but what
+    it asks of the pair.
+    """
+    roles: list[dict] = []
+    for entry in targets.get("roles") or ():
+        if not isinstance(entry, dict):
+            return None
+        described = _from_targets_payload({**entry, "kind": entry.get("kind", "object")})
+        if described is None:
+            return None
+        described["role"] = entry.get("role")
+        relation, depends_on = role_dependency(entry)
+        if relation is not None:
+            described["relation"] = relation
+            described["depends_on"] = depends_on
+        roles.append(described)
+    if len(roles) < 2:
+        # One role is not a roles description — it is an ordinary one-target
+        # spell wearing a shape nothing else reads. Refusing here rather than
+        # flattening it keeps the two shapes from both being able to mean the
+        # same spell.
+        return None
+    return {"kind": ROLES_TARGET_KIND, "roles": roles}
+
+
+#: What each dependent-role relation asks of the pair, given the *earlier*
+#: role's chosen permanent and a candidate for the later one.
+#:
+#: One table, three readers: ``engine/legality.py`` narrows the picker with it,
+#: the same module's gate re-asks it over the targets a caster named, and the
+#: handler re-asks it once more at resolution (CR 608.2b). A relation whose
+#: picker and whose re-check were separate tables is the defect this repo keeps
+#: finding; here the *only* way to add a relation is to add it where all three
+#: look.
+#:
+#: A relation the grammar can describe and this table does not know refuses —
+#: ``legality`` offers nothing for it and the re-check answers False — because
+#: an unanswerable narrowing must never widen to "any".
+ROLE_RELATION_TESTS = {
+    # "target creature that **target Wall** blocked this turn" (Glyph of
+    # Delusion). The record is stamped on the blocker by the declare-blockers
+    # step and read by id, never by slot: both permanents may leave and return
+    # between the cast and the resolution, and CR 400.7 makes the returning one
+    # a different object.
+    "blocked_by_role": lambda earlier, candidate: (
+        candidate.permanent_id
+        in set(earlier.metadata.get("blocked_attacker_ids_this_turn") or ())
+    ),
+}
+
+
+def role_dependency(role: dict) -> tuple[str | None, str | None]:
+    """*role*'s dependency as ``(relation key, earlier role name)``.
+
+    One reader for **both** shapes a role is held in: the lowering's ``targets``
+    payload, where the relation *is* the key (``"blocked_by_role": "blocker"``),
+    and the derived spec, which lifts it into ``relation``/``depends_on`` so a
+    picker can ask one question. Written once because the CR 608.2b re-check at
+    resolution holds the payload while the picker holds the spec — and a reader
+    that knew only the spec's spelling answered "no dependency" about the
+    payload, which is a re-check that passes whatever the board says.
+    """
+    relation = role.get("relation")
+    if isinstance(relation, str):
+        depends_on = role.get("depends_on")
+        return relation, depends_on if isinstance(depends_on, str) else None
+    for key, value in role.items():
+        if key.endswith("_role") and isinstance(value, str):
+            return key, value
+    return None, None
+
+
+def role_relation_holds(role: dict, earlier, candidate) -> bool:
+    """Whether *candidate* satisfies *role*'s dependency on *earlier*.
+
+    True when the role has no dependency at all — the question does not arise
+    for role 0 — and False whenever it has one this engine cannot answer or the
+    earlier role resolves to nothing.
+    """
+    relation, _depends_on = role_dependency(role)
+    if relation is None:
+        return True
+    test = ROLE_RELATION_TESTS.get(relation)
+    if test is None or earlier is None or candidate is None:
+        return False
+    return bool(test(earlier, candidate))
+
+
+def spec_roles(spec: dict | None) -> list[dict]:
+    """The ordered roles *spec* names, empty for every one-target spec.
+
+    The one accessor, so a caller never has to test ``kind == "roles"`` *and*
+    remember the key. An empty list is the honest answer for a spell that
+    chooses one thing, and every loop written over it then reads the same for
+    both shapes.
+    """
+    if not spec or spec.get("kind") != ROLES_TARGET_KIND:
+        return []
+    return list(spec.get("roles") or ())
+
+
+def payload_role_slot(payload: dict | None, role: str | None) -> int | None:
+    """Which slot of the chosen-target list *role* occupies, read straight off
+    an instruction's own ``targets`` description.
+
+    The resolution's form of :func:`role_slot`. A handler holds the payload the
+    lowering wrote and not the derived spec, and re-deriving one to ask a
+    question the payload already answers is the second reading this module
+    exists to abolish. Same list, same order, one answer.
+    """
+    targets = (payload or {}).get("targets")
+    if not isinstance(targets, dict) or targets.get("kind") != ROLES_TARGET_KIND:
+        return None
+    for index, entry in enumerate(targets.get("roles") or ()):
+        if isinstance(entry, dict) and entry.get("role") == role:
+            return index
+    return None
+
+
+def role_slot(spec: dict | None, role: str | None) -> int | None:
+    """Which slot of the chosen-target list *role* occupies, or None.
+
+    The wire, the stack item and the resolution all carry a spell's targets as
+    one positional list, and for a roles spell that list is in **dependency
+    order** — the order :func:`spec_roles` reports. This is the one translation
+    from a role's name to its slot, so the handler that reads "the subject" and
+    the where-clause that reads "the blocked creature" cannot disagree about
+    which of the two the caster picked.
+    """
+    if role is None:
+        return None
+    for index, entry in enumerate(spec_roles(spec)):
+        if entry.get("role") == role:
+            return index
+    return None
+
+
 def _from_targets_payload(targets) -> dict | None:
     """The spec from a grammar-lowered ``targets`` description.
 
@@ -932,6 +1099,8 @@ def _from_targets_payload(targets) -> dict | None:
         # `_KIND_TO_SPEC_FROM_PAYLOAD`; answering here would hand the picker a
         # battlefield when the effect reads a graveyard.
         return None
+    if kind == "roles":
+        return roles_spec(targets)
     if kind == "any":
         return {"kind": "any"}
     if kind == "divided":

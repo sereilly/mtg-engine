@@ -341,6 +341,94 @@ def _describe_several_targets(payload: dict[str, object], recipient: ast.TargetS
         payload["targets"]["unbounded"] = True
 
 
+#: A printed relation whose *other end is itself a target*, and the key the
+#: dependent role carries to say which role answers it.
+#:
+#: "target creature that **target Wall** blocked this turn" (Glyph of Delusion)
+#: names two targets of different kinds in one noun phrase: the creature the
+#: effect acts on, and the Wall whose block record decides which creatures are
+#: legal at all. The relation cannot be a plain filter key — ``subject_matches``
+#: answers about one permanent, and this one is answered by a *record on the
+#: other target* — so the two are described as ordered **roles** instead
+#: (:func:`describe_target_roles`), and this table is what makes that shape
+#: general: a second such relation is a row here, not a second builder.
+#: Keyed by the ``ObjectFilter`` field, valued by the *name* the other end takes
+#: as a role and the key the dependent role points back with.
+DEPENDENT_TARGET_RELATIONS: dict[str, tuple[str, str]] = {
+    "blocked_by_target_object": ("blocker", "blocked_by_role"),
+}
+
+#: The role name of the object a roles description's effect actually acts on.
+#: One name, read by the lowering that builds the description, by
+#: ``engine/targeting.py``'s spec, by ``engine/legality.py``'s enumerator and by
+#: the handler at resolution — so "which of the two did the player pick for the
+#: counters?" has one answer rather than four positional conventions.
+PRIMARY_TARGET_ROLE = "subject"
+
+
+def describe_target_roles(
+    payload: dict[str, object], recipient: ast.TargetSpec
+) -> bool:
+    """Describe *recipient* as ordered target **roles**, or return False.
+
+    True when the noun phrase named a second target inside itself — one of
+    :data:`DEPENDENT_TARGET_RELATIONS` — and the description was written onto
+    *payload*; False when it did not, so the caller falls through to the
+    ordinary one-target description it already had.
+
+    **The roles are listed in dependency order, not printed order.** Glyph of
+    Delusion prints the creature first and the Wall second, but which creatures
+    are legal at all is decided by the Wall's block record, so the Wall is role
+    0 and the creature role 1. That order is the whole wire convention: the
+    picker walks the roles in it, the caster's answers travel in it, and
+    ``engine/legality.py`` enumerates role *n* only with roles 0…n-1 already
+    settled. Describing them in printed order would ask the caster for a
+    creature before anything could say which creatures the card allows.
+    """
+    filt = recipient.filter
+    relation = next(
+        (
+            field
+            for field in DEPENDENT_TARGET_RELATIONS
+            if getattr(filt, field, None) is not None
+            and not isinstance(getattr(filt, field), bool)
+        ),
+        None,
+    )
+    if relation is None:
+        return False
+    role_name, role_key = DEPENDENT_TARGET_RELATIONS[relation]
+    inner = getattr(filt, relation)
+    inner_payload = _filter_payload(inner)
+    subject_payload = _filter_payload(
+        filt, carried_separately=frozenset({relation})
+    )
+    if not inner_payload or not subject_payload:
+        raise LoweringError(
+            "a target role with no narrowing would offer every permanent",
+            node=recipient,
+        )
+    payload["targets"] = {
+        "kind": "roles",
+        "roles": [
+            {
+                "role": role_name,
+                "kind": "object",
+                "count": 1,
+                "filter": inner_payload,
+            },
+            {
+                "role": PRIMARY_TARGET_ROLE,
+                "kind": "object",
+                "count": 1,
+                "filter": subject_payload,
+                role_key: role_name,
+            },
+        ],
+    }
+    return True
+
+
 def _describe_several_card_targets(
     payload: dict[str, object], recipient: ast.TargetSpec
 ) -> None:

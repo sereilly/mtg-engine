@@ -201,11 +201,45 @@ _SELF_NOUN = r"(?:artifact|creature|enchantment|land|permanent)"
 # table — it is one half of a fused instruction in
 # mixins/oracle_instructions.py, not a self-referential line the untap step
 # reads.
+#: "This creature doesn't untap during your untap step **if it has a glyph
+#: counter on it**." (Granted by Glyph of Delusion.) The same restriction as the
+#: bare line below, under a condition the step re-asks each turn — which is why
+#: it cannot be left to the loose substring probe: that probe fires on any line
+#: containing the phrase, so a conditional line would freeze the creature for
+#: the rest of the game and the counters the card removes one per upkeep would
+#: mean nothing.
+#:
+#: The counter's name is payload for the reason every printed word in this file
+#: is: a card printing "if it has a **paralysis** counter on it" is the same
+#: restriction and must need no second row.
+_SELF_UNTAP_COUNTER_CONDITION = re.compile(
+    rf"^this {_SELF_NOUN} {re.escape(SELF_DOESNT_UNTAP_PHRASE)} "
+    r"if it has an? (?P<counter>[a-z][a-z' -]*) counter on it$"
+)
+
+
+def self_untap_counter_condition(line: str, card_name: str | None = None) -> str | None:
+    """The counter whose presence switches *line*'s untap restriction on, or
+    None when the line states no such condition.
+
+    Read by :func:`self_untap_line` — so the support gate admits the line — and
+    by ``engine/phases/untap_step.py``, so the step that keeps the permanent
+    tapped asks the same condition the gate claimed. One reader would be the
+    gate saying a card works; two that disagree is the shape this file's
+    docstring warns about, in the direction where the card does *more* than it
+    prints.
+    """
+    normalized = _collapse_self_name(line.strip().lower(), card_name).rstrip(".")
+    match = _SELF_UNTAP_COUNTER_CONDITION.match(normalized)
+    return match.group("counter") if match is not None else None
+
+
 _SELF_UNTAP_LINE_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
     (
         re.compile(rf"^this {_SELF_NOUN} {re.escape(SELF_DOESNT_UNTAP_PHRASE)}$"),
         "doesnt_untap",
     ),
+    (_SELF_UNTAP_COUNTER_CONDITION, "doesnt_untap_with_counter"),
     (
         re.compile(
             rf"^{re.escape(SELF_MAY_KEEP_TAPPED_PHRASE)} this {_SELF_NOUN} "

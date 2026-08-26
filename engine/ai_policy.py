@@ -28,7 +28,8 @@ from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import x_spend_color_from_text
 from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
-from .targeting import bounce_subject_filter, derive_activation_spec, derive_cast_spec
+from .targeting import (bounce_subject_filter, derive_activation_spec,
+                        derive_cast_spec, spec_roles)
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
@@ -108,9 +109,19 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
                 continue  # Aura spells require a legal target (Rule 115.1b)
             target, target_permanent_index = aura_choice
         else:
-            several = _choose_several_targets(game, player_index, card)
-            if several is not None:
-                target, target_permanent_index, target_permanent_ids = several
+            roles = _choose_role_targets(game, player_index, card)
+            if roles is not None:
+                if roles == ():
+                    # A roles spell with no legal chain of targets. Skipped
+                    # rather than cast: CR 601.2c needs every role filled, and
+                    # the cast gate would refuse it — an AI turn spent on an
+                    # action the game then rejects.
+                    continue
+                target, target_permanent_index, target_permanent_ids = roles
+            else:
+                several = _choose_several_targets(game, player_index, card)
+                if several is not None:
+                    target, target_permanent_index, target_permanent_ids = several
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs and card.primary_type != "land":
@@ -884,6 +895,43 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
         if permanent_matches_enchant_noun(permanent, noun):
             return target_player_index, permanent_index
     return None
+
+
+def _choose_role_targets(
+    game: Game, caster_index: int, card: CardDefinition
+):
+    """Pick one target per **role** for a spell naming several kinds of target.
+
+    ``None`` when *card* names no roles at all — every other spell in the pool —
+    and ``()`` when it names them and no legal chain exists, which is a refusal
+    rather than an absence: CR 601.2c fills every role or the spell is not cast.
+
+    The chain comes from ``cast_target_spec``, the same walk the browser's
+    picker is handed, so the AI and a human seat are offered exactly the same
+    choices. Taking the first option at each level is the whole policy, and it
+    is safe *because* of what that walk already did: a first choice leaving a
+    later role with nothing is not in the list. A card that ever wants a better
+    chain wants a valuation in ``engine/ai_valuation.py``, derived from its
+    compiled program, not a branch here.
+    """
+    if not spec_roles(derive_cast_spec(card, compile_card_oracle(card))):
+        return None
+    options = game.cast_target_spec(caster_index, card).get("valid_targets") or []
+    picks: list[dict] = []
+    while options:
+        picks.append(options[0])
+        options = options[0].get("next") or []
+    if not picks:
+        return ()
+    ids = [
+        game.permanent_id_of(game.permanent_at(pick["seat"], pick["index"]))
+        for pick in picks
+    ]
+    if not all(isinstance(value, int) for value in ids):
+        return ()
+    # The seat is still sent, because every cast carries one; the *ids* are what
+    # address the two boards a roles spell may span (CR 400.7).
+    return picks[0]["seat"], [pick["index"] for pick in picks], ids
 
 
 def _choose_several_targets(

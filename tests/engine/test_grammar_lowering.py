@@ -4349,3 +4349,78 @@ def test_instead_is_refused_on_a_chosen_target():
     )
 
     assert not compiled.lowered
+
+
+# ---------------------------------------------------------------------------
+# Target roles (round 34): a sentence naming two targets of different kinds.
+# ---------------------------------------------------------------------------
+
+_R34_ROLES_LINE = (
+    "Put X glyph counters on target creature that target Wall blocked this "
+    "turn, where X is the power of that blocked creature."
+)
+
+
+def test_r34_a_dependent_noun_phrase_lowers_to_ordered_roles():
+    """The Wall is role 0 and the creature role 1 — **dependency** order, not
+    the printed order — because which creatures are legal is decided by the
+    Wall, and a picker asked in printed order has no way to narrow."""
+    compiled = compile_line(_R34_ROLES_LINE)
+    assert compiled.usable, compiled.failure_reason
+    payload = compiled.instructions[0].payload
+    assert payload["subject_role"] == "subject"
+    assert payload["targets"] == {
+        "kind": "roles",
+        "roles": [
+            {
+                "role": "blocker", "kind": "object", "count": 1,
+                "filter": {"type_filter": "creature", "subtype_filter": "wall"},
+            },
+            {
+                "role": "subject", "kind": "object", "count": 1,
+                "filter": {"type_filter": "creature"},
+                "blocked_by_role": "blocker",
+            },
+        ],
+    }
+
+
+def test_r34_the_where_clause_names_which_role_it_reads():
+    """"the power of **that blocked creature**" — a sentence with two targets
+    cannot be asked for "the target"."""
+    payload = compile_line(_R34_ROLES_LINE).instructions[0].payload
+    assert payload["x_from_count"]["object_characteristic"]["role"] == "subject"
+
+
+@pytest.mark.parametrize(
+    "line,reason",
+    [
+        # A bare "its" over two targets does not say which — refused rather
+        # than resolved against whichever slot came first.
+        (
+            "Put X glyph counters on target creature that target Wall blocked "
+            "this turn, where X is its power.",
+            "does not say which",
+        ),
+        # A referent naming neither role.
+        (
+            "Put X glyph counters on target creature that target Wall blocked "
+            "this turn, where X is the power of that blocked artifact.",
+            "no single target role",
+        ),
+    ],
+)
+def test_r34_an_unresolvable_where_clause_referent_refuses(line, reason):
+    compiled = compile_line(line)
+    assert not compiled.usable
+    assert reason in (compiled.failure_reason or "")
+
+
+def test_r34_the_other_role_is_reachable_by_its_own_printed_words():
+    """The referent is matched, not guessed: "that Wall" reads the blocker."""
+    line = (
+        "Put X glyph counters on target creature that target Wall blocked this "
+        "turn, where X is the power of that Wall."
+    )
+    payload = compile_line(line).instructions[0].payload
+    assert payload["x_from_count"]["object_characteristic"]["role"] == "blocker"

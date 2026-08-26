@@ -791,21 +791,41 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
     """
     from ..named_counters import add_counters
     from ..subject_filters import subject_matches
+    from ._common import resolve_role_permanent, roles_still_legal
 
-    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
     observer = game.players.index(context.caster)
     source = context.source_permanent
-    target = resolve_target_permanent(
-        game, context,
-        predicate=lambda perm: subject_matches(
-            game, perm, filters, observer=observer, source=source
-        ),
-    )
+    subject_role = instruction.payload.get("subject_role")
+    if subject_role is not None:
+        # "Put X glyph counters on target creature that target Wall blocked
+        # this turn" (Glyph of Delusion). Two targets of different kinds, so
+        # which one takes the counters is the *role* the lowering named rather
+        # than "the first slot" — and both are re-checked here, because CR
+        # 608.2b re-checks every target and the relation between them is a
+        # record either of them can take off the battlefield with it.
+        target = resolve_role_permanent(
+            game, context, instruction.payload, subject_role
+        )
+        if target is not None and not roles_still_legal(
+            game, context, instruction.payload, observer=observer
+        ):
+            game.log.append(
+                f"{context.card.name}: its targets are no longer legal"
+            )
+            return True, "resolved"
+    else:
+        filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+        target = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: subject_matches(
+                game, perm, filters, observer=observer, source=source
+            ),
+        )
     if target is None:
         game.log.append(f"{context.card.name}: no valid permanent for a counter")
         return True, "resolved"
     counter = str(instruction.payload.get("counter", ""))
-    count = int(instruction.payload.get("count", 1))
+    count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
     total = add_counters(target, counter, count)
     game.log.append(
         f"{target.card.name} gets a {counter} counter ({total} total)"

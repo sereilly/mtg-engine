@@ -18,6 +18,7 @@ from ..turn_state import record_turn_start_states
 from ..untap_restrictions import (
     SELF_DOESNT_UNTAP_PHRASE,
     SELF_MAY_KEEP_TAPPED_PHRASE,
+    self_untap_counter_condition,
     self_untap_line,
     untap_restriction_for,
 )
@@ -27,6 +28,40 @@ from ..untap_restrictions import (
 #: step asks each one separately, so a card printed with any of them needs no
 #: code here — only a row in engine/untap_restrictions.py.
 _LIMITED_TYPES = ("land", "creature", "artifact")
+
+
+def _self_untap_blocked(permanent) -> bool:
+    """Whether *permanent*'s own text keeps it tapped **this** untap step.
+
+    The loose substring probe this replaced was right about every unconditional
+    printing of the phrase and wrong about a conditional one: "doesn't untap
+    during your untap step **if it has a glyph counter on it**" (granted by
+    Glyph of Delusion) contains the phrase, so the probe kept the creature
+    tapped for the rest of the game while the card removes one counter per
+    upkeep and is supposed to release it.
+
+    So the lines are read one at a time. A line stating a counter condition
+    applies only while the counter is there; any other line carrying the phrase
+    keeps its old, unconditional reading - the probe's looseness is deliberate
+    (see ``engine/untap_restrictions.py``), and narrowing it here would be a
+    second, stricter reader of text this module does not own.
+
+    ``effective_card`` throughout, so a CR 613 layer-3 text change and a granted
+    line are both read; the condition is asked of the permanent, which is where
+    a CR 122.1 counter lives.
+    """
+    from ..named_counters import counters_on
+
+    blocked = False
+    for line in (permanent.effective_card.oracle_text or "").splitlines():
+        if SELF_DOESNT_UNTAP_PHRASE not in line.lower():
+            continue
+        counter = self_untap_counter_condition(line, permanent.effective_card.name)
+        if counter is None:
+            return True
+        if counters_on(permanent, counter) > 0:
+            blocked = True
+    return blocked
 
 
 class UntapStepMixin:
@@ -237,7 +272,7 @@ class UntapStepMixin:
 
             # Permanents that read "doesn't untap during your untap step" (e.g.
             # Time Vault, Basalt Monolith) stay tapped (Rule 502.4, 702 self-text).
-            if SELF_DOESNT_UNTAP_PHRASE in permanent.effective_card.oracle_text.lower():
+            if _self_untap_blocked(permanent):
                 continue
 
             # "…don't untap during their controller's next untap step" (Frost

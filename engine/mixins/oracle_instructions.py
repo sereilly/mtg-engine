@@ -51,7 +51,7 @@ class OracleInstructionsMixin:
         count_spec = instruction.payload.get(X_FROM_COUNT)
         if count_spec:
             context = dataclasses.replace(
-                context, x_value=count_from_payload(self, context, count_spec)
+                context, x_value=count_from_payload(self, context, count_spec, instruction)
             )
         handler = EFFECT_HANDLERS.get(instruction.kind)
         if handler is None:

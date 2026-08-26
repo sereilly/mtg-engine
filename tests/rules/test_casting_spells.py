@@ -1098,3 +1098,52 @@ def test_r31_protection_is_enforced_when_the_target_is_named_by_id(catalog_by_na
     )
     assert not result.supported, result.details
     assert "White Knight" in result.details
+
+
+# ---------------------------------------------------------------------------
+# CR 601.2c with several targets of *different kinds* (round 34).
+# ---------------------------------------------------------------------------
+
+
+def _r34_wall(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Wall",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Wall",
+             "power": "0", "toughness": "6"},
+    )
+
+
+@pytest.mark.cr("601.2c")
+def test_r34_the_same_object_cannot_fill_two_target_roles(set_pool):
+    """"The same target can't be chosen multiple times for any one instance of
+    the word 'target'" — and a spell whose roles are both creatures could
+    otherwise name one permanent twice.
+
+    A Wall that blocked *itself* is impossible, so the rule is asserted through
+    the enumeration rather than through a board that happens to make it moot:
+    the second role's offered list must not contain the permanent the first
+    role already took.
+    """
+    wall = Permanent(card=_r34_wall("Wall A"))
+    p1 = PlayerState(name="P1", battlefield=[])
+    p2 = PlayerState(name="P2", battlefield=[wall],
+                     hand=[set_pool("LEG")["Glyph of Delusion"]])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    # The Wall blocked *itself* according to the record — an impossible board,
+    # written by hand precisely so the only thing standing between the caster
+    # and naming one permanent twice is CR 601.2c.
+    wall.metadata["blocked_attacker_ids_this_turn"] = [wall.permanent_id]
+
+    spec = game.cast_target_spec(1, game.players[1].hand[0])
+    assert spec["kind"] == "roles"
+    assert spec["valid_targets"] == []
+
+    result = game.cast_from_hand(
+        1, "Glyph of Delusion",
+        target_permanent_ids=[wall.permanent_id, wall.permanent_id],
+    )
+    assert result.supported is False
+    assert "no valid target" in result.details
