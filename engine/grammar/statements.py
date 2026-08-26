@@ -59,6 +59,7 @@ from .effects import (
     _parse_exile_graveyard,
     _parse_reveal_hand_and_choose,
     _parse_exile_top_of_library,
+    _parse_put_exiled_with_source,
     _parse_enchant,
     _parse_end_the_turn,
     _parse_extra_turn,
@@ -161,6 +162,14 @@ def _parse_subject_verb(
     if stream.at_word("exchange"):
         return _parse_exchange_control(stream)
     if stream.at_word("put"):
+        # "Put all cards exiled with this artifact into their owner's hand."
+        # (Knowledge Vault.) Tried first and non-consuming on refusal: the
+        # counter production reads the noun after "put" as a counter kind and
+        # would fail this sentence with "expected 'counter or counters'",
+        # which is a refusal site that names the wrong problem.
+        linked = _parse_put_exiled_with_source(stream)
+        if linked is not None:
+            return linked
         return _parse_put_counter(stream)
     if stream.at_word("double"):
         return _parse_double(stream)

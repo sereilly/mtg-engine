@@ -142,6 +142,7 @@ from .lowering import (
     _lower_exile_until_leaves_or_untaps,
     _lower_ownership_exchange_unless_paid,
     _lower_exile_top_of_library,
+    _lower_put_exiled_with_source,
     _lower_look_top_pick,
     _lower_search_and_exile,
     _lower_search_library,
@@ -387,6 +388,8 @@ def lower_statement(
 
     if isinstance(statement, ast.ExileTopOfLibrary):
         return _lower_exile_top_of_library(statement)
+    if isinstance(statement, ast.PutExiledWithSource):
+        return _lower_put_exiled_with_source(statement)
 
     if isinstance(statement, ast.LookTopPickToHand):
         return _lower_look_top_pick(statement, event)

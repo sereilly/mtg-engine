@@ -16,6 +16,7 @@ from ..delayed_triggers import fire_delayed_triggers
 from ..events import emit
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
+from ..linked_exile import LEAVES, UNTAPPED
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..game_types import GraveyardTarget
 from ..oracle import compile_card_oracle
@@ -754,7 +755,7 @@ class GameHelpersMixin:
         # first is in `remove_from_battlefield`: this is the one place a
         # permanent becomes untapped, so a return wired into any single untapper
         # would be a return the other ten forgot.
-        self.return_linked_exile(permanent, "became untapped")
+        self.return_linked_exile(permanent, "became untapped", UNTAPPED)
         return True
 
     # ------------------------------------------------------------------
@@ -1133,19 +1134,70 @@ class GameHelpersMixin:
         # single caller would be a return the other forty forgot, which is the
         # reason this function exists at all.
         for perm in removed:
-            self.return_linked_exile(perm, "left the battlefield")
+            self.return_linked_exile(perm, "left the battlefield", LEAVES)
         return removed
 
-    def return_linked_exile(self, permanent: Permanent, why: str) -> None:
-        """Give back everything exiled *with* ``permanent`` (CR 400.7, 610.3).
+    def leave_linked_exile(
+        self, entry: dict, zone: str
+    ) -> "Permanent | None":
+        """Take one linked-exile entry's card out of exile and into *zone*.
 
-        Two callers, because two things end a linked exile: the permanent
+        The one placement both readers of the record share: the automatic
+        return below, and the ``put_exiled_with_source`` handler that Knowledge
+        Vault's two linked abilities compile to. Returns the arriving
+        ``Permanent`` for a battlefield destination and None otherwise; None
+        also means the card was not in exile to move, which is CR 608.2b doing
+        as much as possible rather than creating a card from nowhere.
+
+        A hand or a library goes through ``put_card_into_hand`` /
+        ``put_card_into_library`` rather than appending, because CR 903.9b has
+        no single fire site and this is one more of the places that would have
+        forgotten it.
+        """
+        owner = self.players[int(entry["owner_index"])]
+        card = entry["card"]
+        if card not in owner.exile:
+            return None
+        owner.exile.remove(card)
+        if zone == "hand":
+            self.put_card_into_hand(owner, card)
+            return None
+        if zone == "library":
+            self.put_card_into_library(owner, card)
+            return None
+        if zone != "battlefield":
+            getattr(owner, zone).append(card)
+            return None
+        arrival = Permanent(card=card)
+        self._put_permanent_onto_battlefield(int(entry["owner_index"]), arrival, None)
+        if entry.get("tapped"):
+            arrival.tapped = True
+        if entry.get("counters"):
+            from ..handlers.zones import restore_noted_counters
+
+            restore_noted_counters(self, arrival, entry["counters"])
+        return arrival
+
+    def return_linked_exile(self, permanent: Permanent, why: str, ending: str) -> None:
+        """Give back everything *ending* gives back of what was exiled with
+        ``permanent`` (CR 400.7, 610.3).
+
+        Two callers, because two things can end a linked exile: the permanent
         leaving the battlefield (Kitesail Freebooter, Idol of Endurance) and —
         Tawnos's Coffin alone — the permanent becoming untapped. One function
         because the unwinding is identical and the difference is only what says
         the word.
+
+        *ending* is which of the two happened, and it is matched against the
+        entry's own ``ends_on`` rather than assumed: only a card exiled by an
+        ability that printed "or becomes untapped" comes back for an untap.
+        Without that test the untap caller ended every linked exile in the
+        game, and Idol of Endurance — which taps for its own ability — dumped
+        its whole pile into the graveyard at the next untap step.
         """
-        entries = permanent.metadata.pop("exiled_until_leaves", ()) or ()
+        from ..linked_exile import take_linked_entries
+
+        entries = take_linked_entries(permanent, ending=ending)
         returned: Permanent | None = None
         for entry in entries:
             owner = self.players[int(entry["owner_index"])]
@@ -1158,24 +1210,13 @@ class GameHelpersMixin:
             destination = str(entry.get("to", "hand"))
             if card not in owner.exile:
                 continue
-            owner.exile.remove(card)
-            if destination != "battlefield":
-                getattr(owner, destination).append(card)
+            arrival = self.leave_linked_exile(entry, destination)
+            if arrival is None:
                 self.log.append(
                     f"{card.name} returns to {owner.name}'s {destination} "
                     f"({permanent.card.name} {why})"
                 )
                 continue
-            arrival = Permanent(card=card)
-            self._put_permanent_onto_battlefield(
-                int(entry["owner_index"]), arrival, None
-            )
-            if entry.get("tapped"):
-                arrival.tapped = True
-            if entry.get("counters"):
-                from ..handlers.zones import restore_noted_counters
-
-                restore_noted_counters(self, arrival, entry["counters"])
             # "…**attached to that permanent**" — the Auras go back onto the
             # creature the entry before them brought back, which is why they
             # travel in one record and in printed order. Nothing to attach to

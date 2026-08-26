@@ -10406,6 +10406,16 @@ function renderZoneCards(
     !!chosenSlots && chosenSlots.some((t) => t.seat === zoneSeat && t.idx === index);
   for (let index = cards.length - 1; index >= 0; index--) {
     const card = cards[index];
+    // A card exiled **face down** (CR 406.3, Knowledge Vault) reaches the
+    // client as the same "<hidden>" placeholder a concealed hand uses — it is
+    // hidden from every player, its owner included, so there is nothing here
+    // to click and nothing to name.
+    if (card === "<hidden>") {
+      container.appendChild(
+        createCardElement("Hidden", { compact: true, showManaCost: false, hidden: true })
+      );
+      continue;
+    }
     const el = createCardElement(card, {
       compact: true, showManaCost: false,
       selected: graveyardTargeting && isChosenGraveyardTarget(index),

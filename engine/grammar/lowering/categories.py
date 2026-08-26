@@ -273,6 +273,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # grant over it. All zone work — the permission is about which zone a card
     # may be cast from — so no new category and GRAMMAR_CATEGORIES is unchanged.
     "exile_top_of_library": "zones",
+    "put_exiled_with_source": "zones",
     "exile_graveyard_until_leaves": "zones",
     "exile_until_leaves_or_untaps": "zones",
     "exchange_ownership_unless_paid": "zones",
@@ -523,6 +524,13 @@ _PRODUCES: dict[str, str] = {
     # flying." (Archfiend's Vessel.) The self-exile records that it happened, so
     # the branch after it is the ordinary if-you-do rather than a fused kind.
     "exile_self": "exiled_self",
+    # "Sacrifice this artifact. **If you do**, discard your hand, then put all
+    # cards exiled with this artifact into their owner's hand." (Knowledge
+    # Vault.) The same shape: the sacrifice records that it took place, so the
+    # branch behind it is the ordinary if-you-do. A source that had already
+    # left records nothing, and CR 608.2b's "as much as possible" is then
+    # exactly the branch not running.
+    "sacrifice_self": "sacrificed_self",
     # "Return another target creature you control to its owner's hand. If you
     # do, you gain life equal to **that creature's** mana value." (Niambi,
     # Esteemed Speaker.) The bounce records the mana value of what it returned,

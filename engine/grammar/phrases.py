@@ -576,6 +576,28 @@ def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
     return tuple(keywords)
 
 
+def _accept_self_reference(stream: TokenStream) -> bool:
+    """Consume one reference to the ability's own source, or leave the cursor.
+
+    Two printed spellings: "this <noun>" (Willow Satyr, The Wretched), and the
+    card naming itself — which the lexer has already collapsed to one SELF
+    token (Rubinia Soulsinger's "you control Rubinia Soulsinger"). The noun
+    after "this" names the source's own type and adds nothing a payload would
+    carry, but it still has to be consumed for the line to be accounted for in
+    full.
+    """
+    token = stream.peek()
+    if token is not None and token.kind == "self":
+        stream.advance()
+        return True
+    mark = stream.mark()
+    if stream.accept_word("this") and stream.peek_word() is not None:
+        stream.advance()
+        return True
+    stream.reset(mark)
+    return False
+
+
 def _parse_zone(stream: TokenStream) -> ast.Zone:
     """A zone destination: ``your hand``, ``the battlefield``, ``its owner's hand``.
 

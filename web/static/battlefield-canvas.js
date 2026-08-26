@@ -1451,7 +1451,14 @@ class BattlefieldCanvas {
         piles.push({ seat: seatIdx, kind: "graveyard", count: grave.length, topCard: grave[grave.length - 1], cx: 0, cy: 0, w: 0, h: 0 });
       }
       if (exile.length > 0) {
-        piles.push({ seat: seatIdx, kind: "exile", count: exile.length, topCard: exile[exile.length - 1], cx: 0, cy: 0, w: 0, h: 0 });
+        // A face-down exiled card (CR 406.3) arrives as the "<hidden>" string,
+        // which has no face to show on the pile — the pile still counts it.
+        const exileTop = exile[exile.length - 1];
+        piles.push({
+          seat: seatIdx, kind: "exile", count: exile.length,
+          topCard: exileTop === "<hidden>" ? null : exileTop,
+          cx: 0, cy: 0, w: 0, h: 0,
+        });
       }
       // The ante zone (CR 407) only exists in an ante game, so its pile appears
       // the moment an ante card puts something there.

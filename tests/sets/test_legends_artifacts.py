@@ -1102,3 +1102,177 @@ def test_nova_pentacle_asks_the_opponent_who_takes_the_damage(set_pool):
 
     assert theirs.damage_marked == 2, "the creature the opponent picked"
     assert mine.damage_marked == 0
+
+
+# ---------------------------------------------------------------------------
+# Knowledge Vault (round 30) — cards exiled *with* a permanent (CR 400.7/610.3)
+# ---------------------------------------------------------------------------
+
+
+def _r30_vault_game(set_pool, vault_count: int = 1):
+    """A board with *vault_count* Knowledge Vaults and a library of named cards.
+
+    The library entries are distinct cards so a test can say which Vault exiled
+    which — one shared name would let a record keyed on the wrong thing pass.
+    """
+    pool = set_pool("LEG")
+    vaults = [Permanent(card=pool["Knowledge Vault"]) for _ in range(vault_count)]
+    library = [
+        pool["Hell's Caretaker"], pool["Nova Pentacle"],
+        pool["Alchor's Tomb"], pool["Serpent Generator"],
+    ]
+    p1 = PlayerState(name="P1", battlefield=list(vaults), library=library)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, vaults, p1, p2
+
+
+def _r30_exile_with(game, vault, seat: int = 0):
+    """Run one Vault's ``{2}, {T}`` ability and settle the stack."""
+    game.activate_permanent_ability(
+        seat, "Knowledge Vault", permanent_index=game.players[seat].battlefield.index(vault),
+        ability_index=0,
+    )
+    game._settle()
+    vault.tapped = False       # so the next activation of the same Vault can pay {T}
+
+
+def test_knowledge_vault_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Knowledge Vault"])
+    assert program.supported, program.reason
+    assert len(program.activated_abilities) == 2
+    assert len(program.triggered_abilities) == 1
+
+
+def test_knowledge_vault_exiles_the_top_card(set_pool):
+    """"{2}, {T}: Exile the top card of your library face down." — one card,
+    off the top, into exile."""
+    game, (vault,), p1, _p2 = _r30_vault_game(set_pool)
+
+    _r30_exile_with(game, vault)
+
+    assert [c.name for c in p1.exile] == ["Hell's Caretaker"]
+    assert [c.name for c in p1.library] == [
+        "Nova Pentacle", "Alchor's Tomb", "Serpent Generator",
+    ]
+
+
+def test_knowledge_vault_exiles_face_down(set_pool):
+    """The rider is carried out, not dropped: the exiled card is face down
+    (CR 406.3), which the engine answers from the linked-exile record because
+    two copies of one card in a deck are the same object."""
+    from engine.linked_exile import face_down_exiled_cards
+
+    game, (vault,), p1, _p2 = _r30_vault_game(set_pool)
+
+    _r30_exile_with(game, vault)
+
+    assert [c.name for c in face_down_exiled_cards(game, 0)] == ["Hell's Caretaker"]
+
+
+def test_knowledge_vault_sacrifice_returns_exactly_what_it_exiled(set_pool):
+    """"{0}: Sacrifice this artifact. If you do, discard your hand, then put
+    all cards exiled with this artifact into their owner's hand."
+
+    The record has to survive the Vault's own sacrifice — the sentence that
+    reads it runs after the sentence that destroys the permanent holding it.
+    """
+    game, (vault,), p1, _p2 = _r30_vault_game(set_pool)
+    _r30_exile_with(game, vault)
+    _r30_exile_with(game, vault)
+    p1.hand = [set_pool("LEG")["Nova Pentacle"]]
+
+    game.activate_permanent_ability(0, "Knowledge Vault", permanent_index=0, ability_index=1)
+    game._settle()
+
+    assert sorted(c.name for c in p1.hand) == ["Hell's Caretaker", "Nova Pentacle"]
+    assert p1.exile == []
+    assert not any(p.card.name == "Knowledge Vault" for p in p1.battlefield)
+
+
+def test_knowledge_vault_sacrifice_discards_the_hand_first(set_pool):
+    """"discard your hand, **then** put all cards exiled with this artifact
+    into their owner's hand" — the order is printed, and reversing it would
+    bin the cards the ability just gave back."""
+    game, (vault,), p1, _p2 = _r30_vault_game(set_pool)
+    _r30_exile_with(game, vault)
+    p1.hand = [set_pool("LEG")["Serpent Generator"]]
+
+    game.activate_permanent_ability(0, "Knowledge Vault", permanent_index=0, ability_index=1)
+    game._settle()
+
+    assert [c.name for c in p1.hand] == ["Hell's Caretaker"]
+    assert sorted(c.name for c in p1.graveyard) == ["Knowledge Vault", "Serpent Generator"]
+
+
+def test_a_second_knowledge_vault_keeps_its_own_pile(set_pool):
+    """Two Vaults, each holding a different card: sacrificing one gives back
+    that one's cards and leaves the other's in exile.
+
+    This is the test a record keyed on the *name* of the permanent, or on a
+    game-wide list, or on a ``permanent_id`` stamped fresh on entry (CR 400.7)
+    would fail.
+    """
+    game, (first, second), p1, _p2 = _r30_vault_game(set_pool, vault_count=2)
+    _r30_exile_with(game, first)     # Hell's Caretaker
+    _r30_exile_with(game, second)    # Nova Pentacle
+
+    game.activate_permanent_ability(
+        0, "Knowledge Vault", permanent_index=p1.battlefield.index(first),
+        ability_index=1,
+    )
+    game._settle()
+
+    assert [c.name for c in p1.hand] == ["Hell's Caretaker"]
+    assert [c.name for c in p1.exile] == ["Nova Pentacle"]
+    assert [p.card.name for p in p1.battlefield] == ["Knowledge Vault"]
+
+
+def test_knowledge_vault_trigger_finds_nothing_after_its_own_sacrifice(set_pool):
+    """The ``{0}`` ability sacrifices the Vault, so its leaves-the-battlefield
+    trigger goes on the stack — but the pile was *drained* when the cards were
+    put into the hand, so the trigger cannot pull them back out of it."""
+    game, (vault,), p1, _p2 = _r30_vault_game(set_pool)
+    _r30_exile_with(game, vault)
+
+    game.activate_permanent_ability(0, "Knowledge Vault", permanent_index=0, ability_index=1)
+    game._settle()
+
+    assert [c.name for c in p1.hand] == ["Hell's Caretaker"]
+    assert [c.name for c in p1.graveyard] == ["Knowledge Vault"], (
+        "only the Vault itself; the trigger found an empty pile"
+    )
+
+
+def test_knowledge_vault_destroyed_buries_what_it_exiled(set_pool):
+    """"When this artifact leaves the battlefield, put all cards exiled with it
+    into their owner's graveyard." — the other half of the link, fired from the
+    record rather than from a permanent that is no longer there."""
+    game, (vault,), p1, _p2 = _r30_vault_game(set_pool)
+    _r30_exile_with(game, vault)
+    _r30_exile_with(game, vault)
+
+    game.sacrifice_permanent(vault)
+    game._settle()
+
+    assert sorted(c.name for c in p1.graveyard) == [
+        "Hell's Caretaker", "Knowledge Vault", "Nova Pentacle",
+    ]
+    assert p1.exile == []
+
+
+def test_untapping_a_knowledge_vault_keeps_its_pile(set_pool):
+    """The Vault taps for its own ability and untaps every turn. Only Tawnos's
+    Coffin's exile ends on an untap, and the entry says so — before that was
+    per entry, ``become_untapped`` ended *every* linked exile in the game."""
+    game, (vault,), p1, _p2 = _r30_vault_game(set_pool)
+    game.activate_permanent_ability(0, "Knowledge Vault", permanent_index=0, ability_index=0)
+    game._settle()
+    assert vault.tapped
+
+    game.become_untapped(vault)
+
+    assert [c.name for c in p1.exile] == ["Hell's Caretaker"]
+    assert p1.graveyard == []

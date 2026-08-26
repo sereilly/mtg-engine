@@ -21,7 +21,7 @@ from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import _parse_card_alternatives, _parse_zone
+from ..phrases import _accept_self_reference, _parse_card_alternatives, _parse_zone
 
 
 def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
@@ -711,7 +711,36 @@ def _parse_exile_top_of_library(stream: TokenStream) -> ast.Statement | None:
         stream.expect_word("cards")
     for word in ("of", "your", "library"):
         stream.expect_word(word)
-    return ast.ExileTopOfLibrary(count)
+    # "…face down." (Knowledge Vault.) Optional, and consumed here rather than
+    # left to a trailing-rider pass, because the two spellings are one exile
+    # with a different visibility rather than two effects.
+    face_down = bool(stream.accept_phrase("face", "down"))
+    return ast.ExileTopOfLibrary(count, face_down)
+
+
+def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
+    """``Put all cards exiled with this artifact into their owner's hand.``
+    (Knowledge Vault's ``{0}`` ability; its leaves-the-battlefield trigger says
+    "exiled with **it** … into their owner's graveyard".)
+
+    Returns None with the cursor untouched on anything else, because every
+    other "put …" in the pool is counters or a card from a named zone, and this
+    production has to be tried before them without being able to shadow them.
+
+    The self-reference is required and consumed in full: "cards exiled with
+    *this artifact*" is CR 610.3's linked pile, and a wording naming another
+    permanent would be a different pile this cannot find.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("put", "all", "cards", "exiled", "with"):
+        stream.reset(mark)
+        return None
+    if not (stream.accept_word("it") or _accept_self_reference(stream)):
+        stream.reset(mark)
+        return None
+    stream.expect_word("into")
+    zone = _parse_zone(stream)
+    return ast.PutExiledWithSource(zone)
 
 
 def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:

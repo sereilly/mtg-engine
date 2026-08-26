@@ -693,24 +693,60 @@ def test_610_3_a_linked_exile_returns_the_card_to_the_zone_it_came_from():
     that happens to be right: one permanent takes a card from a hand, the other
     takes one from a graveyard, and each card goes back where it was.
     """
+    from engine.linked_exile import LEAVES, link_exiled_card
+
     from_hand = Permanent(card=_mk_card("Hand Taker", "Artifact"))
     from_yard = Permanent(card=_mk_card("Yard Taker", "Artifact"))
     p1 = PlayerState(name="P1", battlefield=[from_hand, from_yard])
     held, buried = _mk_creature("Held Bear", 2, 2), _mk_creature("Buried Bear", 2, 2)
     p2 = PlayerState(name="P2", exile=[held, buried])
     game = Game(players=[p1, p2])
-    from_hand.metadata["exiled_until_leaves"] = [
-        {"owner_index": 1, "card": held, "to": "hand"}
-    ]
-    from_yard.metadata["exiled_until_leaves"] = [
-        {"owner_index": 1, "card": buried, "to": "graveyard"}
-    ]
+    link_exiled_card(from_hand, held, 1, to="hand", ends_on=(LEAVES,))
+    link_exiled_card(from_yard, buried, 1, to="graveyard", ends_on=(LEAVES,))
 
     game.remove_all_from_battlefield([from_hand, from_yard])
 
     assert [c.name for c in p2.hand] == ["Held Bear"]
     assert [c.name for c in p2.graveyard] == ["Buried Bear"]
     assert p2.exile == []
+
+
+@pytest.mark.cr("610.3", "701.26b")
+def test_610_3_only_the_named_event_ends_a_linked_exile():
+    """610.3: the second one-shot effect is created "immediately after **the
+    specified event**" — the one the first effect named, and no other.
+
+    Two permanents holding one card each: one exile ends on the permanent
+    leaving the battlefield, the other also on it becoming untapped (Tawnos's
+    Coffin's second ending). Untapping both gives back only the second.
+
+    The engine used to end every linked exile on any untap, which is a bug with
+    no card of its own to fail on: Idol of Endurance taps for its own ability
+    and untaps in the next untap step, so its whole pile went to the graveyard
+    a turn after it was exiled.
+    """
+    from engine.linked_exile import LEAVES, UNTAPPED, link_exiled_card
+
+    leaves_only = Permanent(card=_mk_card("Leaves Only", "Artifact"))
+    or_untaps = Permanent(card=_mk_card("Or Untaps", "Artifact"))
+    leaves_only.tapped = True
+    or_untaps.tapped = True
+    kept, given = _mk_creature("Kept Bear", 2, 2), _mk_creature("Given Bear", 2, 2)
+    p1 = PlayerState(name="P1", battlefield=[leaves_only, or_untaps])
+    p2 = PlayerState(name="P2", exile=[kept, given])
+    game = Game(players=[p1, p2])
+    link_exiled_card(leaves_only, kept, 1, to="hand", ends_on=(LEAVES,))
+    link_exiled_card(or_untaps, given, 1, to="hand", ends_on=(LEAVES, UNTAPPED))
+
+    game.become_untapped(leaves_only)
+    game.become_untapped(or_untaps)
+
+    assert [c.name for c in p2.hand] == ["Given Bear"]
+    assert [c.name for c in p2.exile] == ["Kept Bear"]
+
+    game.remove_from_battlefield(leaves_only)
+
+    assert sorted(c.name for c in p2.hand) == ["Given Bear", "Kept Bear"]
 
 
 @pytest.mark.cr("610.3")
