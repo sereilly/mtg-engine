@@ -171,6 +171,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "destroy_all_lands_of_type": "destruction",
     "destroy_all_matching": "destruction",
     "destroy_attached_permanent": "destruction",
+    "destroy_self": "destruction",
     "destroy_all_artifacts_creatures_enchantments": "destruction",
     "delayed_destroy_blocked_or_blocker": "destruction",
     "tap_target_permanent": "tapping",
@@ -560,6 +561,10 @@ _PRODUCES: dict[str, str] = {
     # — by then a target may have left, and CR 611.2c fixed the set when the
     # effect began.
     "tap_target_permanent": "tapped_permanents",
+    # "…tap the creature, **remove it** from combat" (Imprison). The Aura's tap
+    # names its own attachment rather than a target, so it is a different
+    # producer of the same record — what this effect just tapped.
+    "tap_enchanted_creature": "tapped_permanents",
     # "Untap target attacking creature and remove **it** from combat. Gain
     # control of **that creature** until end of turn." (Disharmony.) The untap
     # records what it resolved — affected, not merely flipped: a vigilance

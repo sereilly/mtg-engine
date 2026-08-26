@@ -287,11 +287,18 @@ def _lower_counter_ability(
     card says triggered is countering something its controller could not have
     chosen.
     """
-    if node.subject.quantifier != "target":
+    if node.subject.quantifier not in ("target", "that"):
         raise LoweringError("an ability is countered by targeting it", node=node)
     payload: dict[str, object] = {
         "ability_kinds": tuple(node.subject.filter.ability_kinds),
     }
+    # "**Counter that ability.**" (Imprison.) Nothing is chosen: the ability is
+    # the one the trigger's event was about, and the fire site put it on the
+    # stack item's context. The same flag `counter_top_stack_spell` carries for
+    # "counter it", so the handler pair answers "which object?" the same way on
+    # both sides of CR 113.7a's card/no-card divide.
+    if node.subject.quantifier == "that":
+        payload["bound_to_trigger"] = True
     # "…from an artifact source" (Rust, Ayesha Tanaka). Payload for the reason
     # the kinds above are: the handler tests it, because a counter that reached
     # an ability from a creature when the card says artifact is countering

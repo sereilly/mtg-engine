@@ -4,7 +4,8 @@ These are what let an effect be *composed* rather than fused into a bespoke
 instruction kind. The legacy compiler delivered exactly one instruction per
 spell, so every "do X and also Y" card needed its own kind —
 ``deal_damage_and_gain_life``, ``deal_damage_and_self_damage``,
-``grant_islandwalk_and_linked_destroy`` and 25 more, which is combinatorial in
+``grant_target_keyword_until_eot`` fused with a linked destroy, and 25 more,
+which is combinatorial in
 the number of base effects and was the single largest driver of kind growth.
 
 With ``sequence`` in the IR, "X and Y" is two ordinary instructions and no new

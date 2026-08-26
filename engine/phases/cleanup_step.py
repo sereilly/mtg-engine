@@ -156,9 +156,6 @@ class CleanupStepMixin:
                 # again (engine/control.py).
                 if end_until_eot_control_changes(permanent):
                     control_reverted = True
-                # Sandals of Abdallah: the linked "when that creature dies this
-                # turn" destruction expires with the islandwalk grant above.
-                permanent.metadata.pop("on_death_destroy_permanents", None)
         # A control change that ended is a change to who controls what, so the
         # battlefield projection and every derived characteristic are rebuilt —
         # the same pair `change_control`'s callers run when one begins.

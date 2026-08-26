@@ -82,6 +82,12 @@ PARSE_LAYERS = [
     # production: the walk is about the shape of the AST, so it imports `ast`
     # and nothing else.
     "rebinding",
+    # Trigger events whose subject the sentence *names* — the source, or the
+    # permanent the source is attached to — rather than quantifying it. Split
+    # out of `triggers` at the size guard below, along the boundary that module
+    # already drew, and under it: these read tokens and build events, and none
+    # of them reaches a table.
+    "trigger_subjects",
     # The trigger tables and the productions that read them. Split out of
     # `phrases` when Antiquities' trigger work pushed that module past the
     # thousand-line guard below — above `phrases`, whose shared fragments it

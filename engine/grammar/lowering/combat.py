@@ -17,6 +17,7 @@ from ._common import (
     _targets_only,
 )
 from ._events import (
+    _TAPPED_PERMANENTS,
     _UNTAPPED_PERMANENTS,
 )
 
@@ -205,7 +206,8 @@ def _lower_remove_from_combat(
     node: ast.RemoveFromCombat, produced: frozenset[str]
 ) -> tuple[OracleInstruction, ...]:
     """"Untap target attacking creature **and remove it from combat**."
-    (Disharmony, CR 506.4c.)
+    (Disharmony) / "…tap the creature, remove it from combat…" (Imprison).
+    CR 506.4c.
 
     Two refusals, each a way the sentence could otherwise mean more than it
     says — the discipline ``_lower_doesnt_untap_next_step`` states:
@@ -214,9 +216,11 @@ def _lower_remove_from_combat(
       as the tail of a conjunction whose head chose the object. A chosen
       target here would be a second, independent choice the card never
       offered (False Orders makes one, and stays a name-keyed hook).
-    * A producer must have recorded which permanent that was. The handler
-      reads ids out of the resolution scratchpad, and with nothing recorded
-      it would remove nothing while the card compiled clean.
+    * A producer must have recorded which permanent that was — whichever of
+      the two spellings wrote it, since a tap and an untap both record what
+      they affected. The handler reads ids out of the resolution scratchpad,
+      and with nothing recorded it would remove nothing while the card
+      compiled clean.
     """
     subject = node.subject
     if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "it":
@@ -224,16 +228,24 @@ def _lower_remove_from_combat(
             "remove-from-combat acts on the object the sentence already chose",
             node=node,
         )
-    if _UNTAPPED_PERMANENTS not in produced:
+    # **Whichever record the step in front of it wrote.** Disharmony untaps its
+    # creature and Imprison taps its own; both sentences then say "remove it
+    # from combat", and "it" is what that step affected either way. Asked of
+    # `_RECORDED_PERMANENTS` — the keys that hold permanents by id — rather than
+    # of one spelling, because naming one producer here would refuse the other
+    # card for saying "tap" where this one said "untap".
+    source = next(
+        (key for key in (_UNTAPPED_PERMANENTS, _TAPPED_PERMANENTS) if key in produced),
+        None,
+    )
+    if source is None:
         raise LoweringError(
-            f"back-reference to {_UNTAPPED_PERMANENTS!r} with no producer in "
-            "this effect",
+            "back-reference to a permanent this effect recorded, with no "
+            "producer in this effect",
             node=node,
         )
     return (
-        OracleInstruction(
-            "remove_from_combat", "", {"permanents_from": _UNTAPPED_PERMANENTS}
-        ),
+        OracleInstruction("remove_from_combat", "", {"permanents_from": source}),
     )
 
 

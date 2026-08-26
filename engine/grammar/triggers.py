@@ -34,6 +34,12 @@ from .phrases import (
     parse_subject_filter_at,
 )
 from .stream import TokenStream
+from .trigger_subjects import (
+    _accept_ability_activated_tail,
+    _parse_ability_activated_event,
+    _parse_attached_combat_event,
+    _parse_named_subject_tap_event,
+)
 from .vocabulary import (
     CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, NUMBER_WORDS, ORDINAL_WORDS,
 )
@@ -241,44 +247,6 @@ _CAST_TYPE_UNIONS: tuple[tuple[tuple[str, ...], "ast.ObjectFilter"], ...] = (
 )
 
 
-def _accept_ability_activated_tail(stream: TokenStream) -> bool:
-    """"…or a player activates an artifact's ability without {T} in its
-    activation cost" — the second trigger event of a tap-or-activate ability.
-
-    All-or-nothing: a partial match rewinds, so a line that says something else
-    after "becomes tapped" keeps its tokens and the plain tap reading stands.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("or"):
-        stream.reset(mark)
-        return False
-    if not (
-        stream.accept_phrase("a", "player", "activates")
-        or stream.accept_phrase("an", "opponent", "activates")
-    ):
-        stream.reset(mark)
-        return False
-    # "an artifact's ability" / "an ability of enchanted artifact" — the object
-    # whose ability it is repeats the subject already parsed, so it is consumed
-    # rather than re-read. Whatever it named, the ability belongs to the same
-    # set of permanents the tap half describes; a card pairing two *different*
-    # subjects would not consume its line and would fall back.
-    while not stream.exhausted and not stream.at_word("without"):
-        stream.advance()
-    if not stream.accept_word("without"):
-        stream.reset(mark)
-        return False
-    token = stream.peek()
-    if token is None or token.kind != MANA or token.text != "{T}":
-        stream.reset(mark)
-        return False
-    stream.advance()
-    if not stream.accept_phrase("in", "its", "activation", "cost"):
-        stream.reset(mark)
-        return False
-    return True
-
-
 # The printed recipients of a damage event, longest first: "a player or
 # planeswalker" has "a player" as a strict prefix, and matching the shorter one
 # would leave the union's second half stranded — the ordering rule this whole
@@ -422,58 +390,6 @@ def _parse_damage_dealt_event(
             stream.reset(mark)
             return None
     return ast.TriggerEvent("damage_dealt", word, subject=subject)
-
-
-def _parse_named_subject_tap_event(
-    stream: TokenStream, word: str
-) -> ast.TriggerEvent | None:
-    """"When(ever) **enchanted <noun>** / **this <noun>** becomes tapped" —
-    CR 701.26a's event about a subject the sentence *names* rather than
-    quantifies.
-
-    One production for both subjects and both trigger words, because they are
-    one event: `engine/oracle.py`'s table used to spell "enchanted land"
-    (Psychic Venom) and "this land" (City of Brass) as conditions of their own,
-    and a kind of its own is what let each be dispatched by a pass inside
-    `tap_land_for_mana` that fired on the single tapper it sat in. The subject
-    rides the event; who tapped is `become_tapped`'s business either way.
-
-    The compound tail is read first where it is present (Artifact Possession's
-    "…**or a player activates an ability of enchanted artifact**"): that clause
-    has the plain tap reading as a strict prefix, so returning the plain event
-    first would leave the rest of the *condition* to be parsed as the effect.
-    """
-    mark = stream.mark()
-    if stream.accept_word("enchanted"):
-        noun = stream.peek_word()
-        if noun is not None:
-            stream.advance()
-            if stream.accept_phrase("becomes", "tapped"):
-                subject = ast.ObjectFilter(is_enchanted=True)
-                if _accept_ability_activated_tail(stream):
-                    return ast.TriggerEvent(
-                        "permanent_tapped_or_ability_activated", word,
-                        subject=subject,
-                    )
-                return ast.TriggerEvent(
-                    "permanent_becomes_tapped", word, subject=subject,
-                )
-    stream.reset(mark)
-    # "**This** land becomes tapped" — the source itself. The self-reference
-    # arrives either as the SELF token (the card's own name, which
-    # `normalize_creature_line` leaves in place) or as the word "this" with the
-    # printed type behind it.
-    if stream.at_kind(SELF) or stream.at_word("this"):
-        stream.advance()
-        if not stream.at_kind(SELF):
-            stream.accept_word("creature", "artifact", "enchantment", "land", "permanent")
-        if stream.accept_phrase("becomes", "tapped"):
-            return ast.TriggerEvent(
-                "permanent_becomes_tapped", word,
-                subject=ast.ObjectFilter(is_source=True),
-            )
-    stream.reset(mark)
-    return None
 
 
 def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
@@ -765,6 +681,17 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # The two named-subject tap events (Artifact Possession, Psychic Venom,
         # City of Brass, Spirit Shackle). Read before the phrase table, whose
         # entries would claim their prefixes.
+        # The activation event whose subject is the *ability's* permanent
+        # rather than the sentence's opening noun (Imprison). Before the tap
+        # productions for the same reason they sit before the phrase table:
+        # "a player activates …" would otherwise be read as a quantified
+        # subject and named a condition the legacy table does not.
+        activated = _parse_ability_activated_event(stream, "whenever")
+        if activated is not None:
+            return activated
+        attached_combat = _parse_attached_combat_event(stream, "whenever")
+        if attached_combat is not None:
+            return attached_combat
         named_tap = _parse_named_subject_tap_event(stream, "whenever")
         if named_tap is not None:
             return named_tap

@@ -203,8 +203,14 @@ _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
 # `_PRODUCED_QUANTITIES` above and narrow for the same reason — a producer
 # missing from here refuses the words rather than reading a mana value out of
 # something that is not a permanent.
+#: The tap half of the pair, named for the same reason ``_UNTAPPED_PERMANENTS``
+#: is: two lowering families and ``categories._PRODUCES`` all write this string,
+#: and a second spelling would make one of the producer gates vacuous while the
+#: handler read an empty record.
+_TAPPED_PERMANENTS = "tapped_permanents"
+
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
-    "tapped_permanents", _UNTAPPED_PERMANENTS,
+    _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS,
 })
 
 
