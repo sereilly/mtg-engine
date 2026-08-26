@@ -8,6 +8,7 @@ P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
 "until end of turn" return here (CR 610.3). No player normally receives priority.
 """
 
+from ..delayed_triggers import expire_delayed_triggers
 from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissions
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
@@ -70,12 +71,11 @@ class CleanupStepMixin:
 
         self.combat_damage_prevented_until_eot = False
         self.combat_damage_prevented_for = []
-        # CR 603.7: a delayed trigger scoped to "this turn" that has not fired
-        # (or has fired all it will) expires with the turn.
-        self.delayed_triggers = [
-            entry for entry in self.delayed_triggers
-            if entry.get("duration") != "end_of_turn"
-        ]
+        # CR 603.7b: a delayed trigger scoped to "this turn" that has not fired
+        # (or has fired all it will) expires with the turn. Which entries those
+        # are is the entry's own ``duration``, read by one sweep in
+        # ``engine/delayed_triggers.py``.
+        expire_delayed_triggers(self)
         # CR 611.2a: "until end of turn" / "this turn" cast-or-play permissions
         # end with the turn; an undurationed grant (Chandra, Flame's Catalyst's
         # −2) survives the sweep and dies with its card's zone instead.

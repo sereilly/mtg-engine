@@ -71,7 +71,9 @@ from .lowering import (
     _lower_change_text,
     _lower_combat_restriction,
     _lower_counter_ability,
+    _lower_choose_target,
     _lower_counter_spell,
+    _lower_create_delayed_trigger,
     _lower_create_emblem,
     _lower_create_copy_token,
     _lower_create_token,
@@ -248,7 +250,7 @@ def lower_statement(
     if isinstance(statement, ast.Scry):
         return _lower_scry(statement)
     if isinstance(statement, ast.AddMana):
-        return _lower_add_mana(statement)
+        return _lower_add_mana(statement, produced)
     if isinstance(statement, ast.AddManaForTappedLand):
         return _lower_add_mana_for_tapped_land(statement, dispatch_event)
     if isinstance(statement, ast.CreateCopyToken):
@@ -455,6 +457,14 @@ def lower_statement(
 
     if isinstance(statement, ast.RemoveFromCombat):
         return _lower_remove_from_combat(statement, produced)
+
+    if isinstance(statement, ast.ChooseTarget):
+        return _lower_choose_target(statement)
+
+    if isinstance(statement, ast.CreateDelayedTrigger):
+        return _lower_create_delayed_trigger(statement, lower_statement(
+            statement.effect, produced, event=statement.event, whole_effect=True,
+        ))
 
     if isinstance(statement, ast.WhereX):
         return _lower_where_x(statement, produced, event, event_subject)

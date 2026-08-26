@@ -168,6 +168,7 @@ from .cards import (
     RevealTopToHandOrBottom,
 )
 from .stack import (
+    ChooseTarget,
     CopyThatSpell,
     CounterAbility,
     CounterSpell,
@@ -202,6 +203,7 @@ from .statements import (
     ForEach,
     OneOf,
     WhereX,
+    CreateDelayedTrigger,
     Statement,
     TriggerEvent,
     KeywordInstance,
@@ -344,6 +346,8 @@ __all__ = [
     # stack
     "CopyThatSpell",
     "CounterAbility",
+    "ChooseTarget",
+    "CreateDelayedTrigger",
     "CounterSpell",
     "ModalNode",
     # combat

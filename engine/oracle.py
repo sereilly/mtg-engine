@@ -1817,12 +1817,13 @@ _DELAYED_ATTACK_UNTIL_RE = re.compile(
     r"(?P<event>attacks|deals combat damage to a player), (?P<effect>.+)$"
 )
 
-#: Which fire site each delayed-trigger event belongs to. A phrase whose event
-#: is not here has nowhere to be announced, so the clause refuses rather than
-#: arming a trigger nothing will ever look at — the dispatcher question round 93
-#: wrote down, asked at the moment the trigger is *created* instead of at the
-#: moment it should have fired.
-_DELAYED_EVENTS: dict[str, str] = {
+#: Which delayed-trigger event each printed phrase names. A phrase whose event
+#: has no fire site has nowhere to be announced, so the clause refuses rather
+#: than arming a trigger nothing will ever look at — the dispatcher question
+#: round 93 wrote down, asked at the moment the trigger is *created* instead of
+#: at the moment it should have fired. Which events *have* a fire site is
+#: ``engine/delayed_triggers.DELAYED_EVENTS``, not a second list here.
+_DELAYED_EVENT_PHRASES: dict[str, str] = {
     "attacks": "creatures_attack",
     "deals combat damage to a player": "creature_deals_combat_damage_to_player",
 }
@@ -1853,11 +1854,15 @@ def _parse_delayed_attack_trigger(
             "create_delayed_trigger",
             "",
             {
-                "event": _DELAYED_EVENTS[narrowed.group("event")],
+                "event": _DELAYED_EVENT_PHRASES[narrowed.group("event")],
                 "batch": False,
                 "nontoken": False,
-                "attacker_filter": described,
+                "subject_filter": described,
                 "instruction": inner[0],
+                # "Until end of turn, **whenever** …" — CR 603.7b's "unless
+                # it's stated otherwise": this one fires every time its event
+                # happens for as long as it lasts.
+                "once": False,
                 "duration": "end_of_turn",
             },
         )
@@ -1875,6 +1880,7 @@ def _parse_delayed_attack_trigger(
             "batch": bool(match.group("batch")),
             "nontoken": bool(match.group("nontoken")),
             "instruction": inner[0],
+            "once": False,
             "duration": "end_of_turn",
         },
     )

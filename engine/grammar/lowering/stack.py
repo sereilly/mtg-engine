@@ -13,6 +13,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
+    _describe_targets,
     _filter_payload,
     _lower_condition,
     _restrictions_beyond,
@@ -346,3 +347,95 @@ def _lower_modal_head(node: ast.ModalNode) -> tuple[OracleInstruction, ...]:
             node=node,
         )
     return ()
+
+
+# ---------------------------------------------------------------------------
+# Delayed triggered abilities (CR 603.7)
+# ---------------------------------------------------------------------------
+
+
+def _delayed_filter_payload(filt: "ast.ObjectFilter | None", node) -> dict[str, object]:
+    """A noun phrase the delayed trigger's fire site will test, or a refusal.
+
+    The same gate ``_counter_targets_filter`` states, for the same reason and in
+    the same direction: the fire site asks ``subject_matches``, so a key that
+    matcher cannot answer would make the ability fire on a strictly larger set
+    than the card prints. "Dealt damage by **an attacking creature**" is the
+    whole difference between Glyph of Life and a card that gains life off any
+    ping.
+    """
+    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+
+    if filt is None:
+        return {}
+    payload = _filter_payload(filt)
+    untestable = set(payload) - TESTABLE_SUBJECT_FILTER_KEYS
+    if untestable:
+        raise LoweringError(
+            "nothing tests a delayed trigger's subject by "
+            + ", ".join(sorted(untestable)),
+            node=node,
+        )
+    return payload
+
+
+def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...]:
+    """"Choose target creature." — the targeting half of a two-sentence spell.
+
+    The instruction does nothing on resolution and that is the whole of it:
+    CR 601.2c chooses the target as the spell is cast, and the sentence prints
+    no effect. It exists so ``engine/targeting.py`` can derive what the spell
+    targets from the compiled program, which is where every other card's
+    picker comes from — the alternative is a second reading of the oracle text.
+    """
+    payload: dict[str, object] = {}
+    _describe_targets(payload, node.subject)
+    if "targets" not in payload:
+        raise LoweringError("this 'choose' names no target", node=node)
+    return (OracleInstruction("choose_target_permanent", "", payload),)
+
+
+def _lower_create_delayed_trigger(
+    node: ast.CreateDelayedTrigger,
+    effect: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """The ``create_delayed_trigger`` instruction for one printed delay.
+
+    *effect* is the inner statement, already lowered by the dispatch above —
+    lowered under the delayed ability's own event, so "you gain **that much**
+    life" reads the number that event carries rather than one from the spell
+    that created the ability.
+
+    Two refusals, and both are the same rule stated at the two ends: an event
+    no fire site announces would leave an ability waiting forever, and an
+    effect that lowered to nothing would leave one firing into nothing.
+    """
+    from ...delayed_triggers import DELAYED_EVENTS
+
+    if node.event not in DELAYED_EVENTS:
+        raise LoweringError(
+            f"no fire site announces the delayed event {node.event!r}", node=node
+        )
+    if not effect:
+        raise LoweringError("this delayed ability has no effect", node=node)
+    # Several sentences behind one delay are one ability's effect, so they
+    # compose the way every other multi-step effect does (CR 608.2) rather than
+    # becoming several abilities.
+    instruction = (
+        effect[0] if len(effect) == 1
+        else OracleInstruction("sequence", "", {"steps": list(effect)})
+    )
+    payload: dict[str, object] = {
+        "event": node.event,
+        "instruction": instruction,
+        "once": node.once,
+        "duration": node.duration,
+        "binds_target": node.binds_target,
+    }
+    subject = _delayed_filter_payload(node.subject, node)
+    if subject:
+        payload["subject_filter"] = subject
+    agent = _delayed_filter_payload(node.agent, node)
+    if agent:
+        payload["agent_filter"] = agent
+    return (OracleInstruction("create_delayed_trigger", "", payload),)

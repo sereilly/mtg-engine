@@ -61,40 +61,21 @@ class EffectsMixin:
         an entry that belongs to no permanent. Round 93 and round 105 both found
         a trigger with nowhere to be announced; arming one whose event no site
         reads is the same defect, so the compiler refuses an event that is not
-        in ``_DELAYED_EVENTS`` and this is the site that makes the combat-damage
-        entry true.
+        in ``delayed_triggers.DELAYED_EVENTS`` and this is the site that makes
+        the combat-damage entry true.
         """
-        from ..subject_filters import subject_matches
+        from ..delayed_triggers import fire_delayed_triggers
 
-        if not self.delayed_triggers or amount <= 0:
+        if amount <= 0:
             return
-        defending_index = self.players.index(defending_player)
-        events: list[dict] = []
-        for entry in list(self.delayed_triggers):
-            if entry.get("event") != "creature_deals_combat_damage_to_player":
-                continue
-            seat = int(entry.get("controller_index", 0))
-            if not subject_matches(
-                self, attacker, entry.get("attacker_filter") or {}, observer=seat
-            ):
-                continue
-            instruction = entry.get("instruction")
-            if instruction is None:
-                continue
-            events.append({
-                "controller_index": seat,
-                "source_permanent": attacker,
-                "card": entry.get("card"),
-                "instruction": instruction,
-                "effect_kind": "triggered_delayed",
-                "ability_text": entry.get("source_name", "delayed trigger"),
-                "trigger_context": {
-                    "defending_player_index": defending_index,
-                    "amount": amount,
-                },
-            })
-        if events:
-            self._enqueue_triggered_batch(events)
+        fire_delayed_triggers(
+            self, "creature_deals_combat_damage_to_player",
+            subject=attacker,
+            trigger_context={
+                "defending_player_index": self.players.index(defending_player),
+                "amount": amount,
+            },
+        )
 
     def _fire_batched_combat_damage_triggers(self, damagers_by_defender: dict) -> None:
         """"Whenever **one or more** <subject> deal combat damage to a player."

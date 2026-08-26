@@ -113,6 +113,12 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         "damage", "pump", "life", "destruction", "tapping", "optional", "zones",
         "mana", "regeneration", "counterspells", "prevention", "recolor", "upkeep",
         "turns", "evasion", "tokens", "counters", "text_change", "control",
+        # "Choose target creature." — the targeting half of a two-sentence
+        # spell, which does nothing on its own (see `choose_target_permanent`).
+        "targeting",
+        # A delayed triggered ability the effect creates (CR 603.7):
+        # `engine/delayed_triggers.py`.
+        "delayed_triggers",
         # A type an effect *adds* to a permanent — "becomes an artifact in
         # addition to its other types" (Ashnod's Transmogrant), "becomes an
         # artifact creature with power and toughness each equal to its mana

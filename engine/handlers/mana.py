@@ -151,6 +151,23 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
     # it names one of the printed alternatives; otherwise the first printed
     # symbol is the default, so a non-interactive caller still gets one mana
     # and never two.
+    # "…add an amount of {C} equal to that spell's mana value." (Mana Drain.)
+    # The count is not on the payload: it is whatever the effect that created
+    # this delayed ability recorded, frozen into the trigger's context when the
+    # ability was created (CR 608.2h). Read before the printed shapes below,
+    # which all carry their own number.
+    count_key = instruction.payload.get("count_from_trigger")
+    if count_key:
+        symbol = str(instruction.payload.get("symbol", "C"))
+        count = max(0, int((context.trigger_context or {}).get(count_key, 0)))
+        if count:
+            caster.mana_pool[symbol] = caster.mana_pool.get(symbol, 0) + count
+        game.log.append(
+            f"{card.name} produced {'{' + symbol + '}' * count}"
+            if count else f"{card.name} produced no mana"
+        )
+        return True, "resolved"
+
     pips_choice = instruction.payload.get("pips_choice")
     if pips_choice:
         alternatives = [symbol for symbol, _count in pips_choice]

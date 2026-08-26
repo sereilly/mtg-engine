@@ -296,11 +296,12 @@ class Game(
     # is a nullable buffer rather than a queue that is always drained.
     # See ``StackResolutionMixin.deferring_triggers``.
     deferred_triggers: list | None = None
-    # CR 603.7 delayed triggered abilities created by a resolving ability
-    # ("Whenever one or more nontoken creatures attack this turn, …" — Basri
-    # Ket's −2). Each entry: {"controller_index", "event", "batch", "nontoken",
-    # "instruction", "source_name", "card"}. Fired from the declare-attackers
-    # step; "this turn" entries are cleared at cleanup.
+    # CR 603.7 delayed triggered abilities created by a resolving spell or
+    # ability ("Whenever one or more nontoken creatures attack this turn, …" —
+    # Basri Ket's −2; "At the beginning of your next main phase, …" — Mana
+    # Drain). Each entry is a ``delayed_triggers.DelayedTrigger``; that module
+    # holds the events that have a fire site, the one routine that fires them
+    # and the expiry the cleanup step runs.
     delayed_triggers: list = field(default_factory=list)
     # CR 601.3 permissions to cast/play from outside the hand ("you may play
     # cards exiled this way", "you may cast target … from your graveyard") and

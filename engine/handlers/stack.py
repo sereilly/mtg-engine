@@ -434,6 +434,12 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
 
         game.stack.remove(target)
         countered = target
+        # "…add an amount of {C} equal to **that spell's** mana value." (Mana
+        # Drain.) The countered spell's mana value, recorded in the resolution
+        # scratchpad the moment it is known: the next sentence creates a
+        # delayed ability that will not fire until a later phase, by which time
+        # the card is in a graveyard and the stack item is gone (CR 608.2h).
+        context.results["countered_spell_mana_value"] = int(countered.card.cmc or 0)
         if countered.is_copy:
             # 704.5e: a countered copy of a spell ceases to exist instead of
             # going to a graveyard — it has no physical card to put there.

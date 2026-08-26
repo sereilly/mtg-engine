@@ -118,6 +118,12 @@ _EVENT_QUANTITIES: dict[str, str] = {
     # site, not of the rule, and stopped being true the moment there was one
     # seam to record it at.
     "damage_dealt": "amount",
+    # "Whenever that creature is dealt damage by an attacking creature this
+    # turn, you gain **that much** life." (Glyph of Life.) A delayed triggered
+    # ability (CR 603.7) reads its number from the same place an ordinary one
+    # does — the context its fire site froze — so it is a row here rather than
+    # anything the delayed machinery answers for itself.
+    "bound_permanent_dealt_damage": "damage_dealt",
 }
 
 # The scratchpad key the untap records and two later sentences read ("remove

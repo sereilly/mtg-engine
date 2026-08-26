@@ -103,6 +103,13 @@ class AddMana:
     # ability's sacrifice cost ate, which is last-known information by the time
     # this resolves.
     from_sacrificed_cost: str | None = None
+    # "an amount of {C} equal to **that spell's** mana value" (Mana Drain). The
+    # same printed shape as `from_sacrificed_cost` above, back-referring to a
+    # different object: the spell an earlier sentence countered, whose mana
+    # value only that sentence could read (CR 608.2h) — by the time this clause
+    # runs, in a later phase, the card is in a graveyard and the stack item is
+    # gone. The symbol, again, so a card printing another colour needs no code.
+    from_countered_spell: str | None = None
     # "Add {G} **for each creature with power 4 or greater you control**"
     # (Leafkin Avenger). A board count multiplying the whole clause, the same
     # shape a life gain and a counter placement already carry — so it is a
