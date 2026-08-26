@@ -173,6 +173,7 @@ from .cards import (
     ExileGraveyardUntilLeaves,
     CastFromExiledWith,
     NameAndStrip,
+    NameThenRevealTop,
     RevealUntil,
     RevealTopToHandOrBottom,
 )
@@ -357,6 +358,7 @@ __all__ = [
     "ExileGraveyardUntilLeaves",
     "CastFromExiledWith",
     "NameAndStrip",
+    "NameThenRevealTop",
     "RevealUntil",
     "RevealTopToHandOrBottom",
     # stack

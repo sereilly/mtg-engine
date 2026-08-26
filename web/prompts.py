@@ -262,6 +262,25 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("name_then_reveal_top")
+def _name_then_reveal_top(ctx: PromptContext, choices: list) -> dict:
+    """Petra Sphinx's "choose a card name".
+
+    No suggestion list at all, and that is the rule rather than a gap: the
+    chooser is guessing at the top of their **own** library, so a list built
+    over what they can see would either be useless (their graveyard) or would
+    hand them the answer (their library). CR 202.1 lets them name any card, and
+    the engine accepts whatever they type.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "match_zone": choice.data.get("match_zone", "hand"),
+        "miss_zone": choice.data.get("miss_zone", "graveyard"),
+    }
+
+
 # Zones whose contents every player may look at (CR 400.2): what a prompt may
 # list to a seat other than the zone's owner.
 _PUBLIC_ZONES = frozenset({"graveyard", "exile", "battlefield", "ante", "command_zone"})

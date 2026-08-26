@@ -384,3 +384,59 @@ def _parse_name_and_strip(stream: TokenStream) -> ast.Statement:
         token_power=power.value, token_toughness=toughness.value,
         token_colors=tuple(colors), token_subtypes=tuple(subtypes),
     )
+
+
+#: Where a revealed card may be printed to go. A closed list because each of
+#: these is a zone the mover below actually knows how to reach; a word outside
+#: it refuses the line rather than lowering onto a destination nothing moves to.
+_REVEAL_DESTINATIONS: tuple[str, ...] = ("hand", "graveyard")
+
+
+def _parse_name_then_reveal_top(
+    stream: TokenStream, who: ast.PlayerRef
+) -> ast.Statement:
+    """Petra Sphinx's whole three-sentence guess.
+
+    The subject has already been read — "target player" — so this starts at the
+    verb and reads to the end of the third sentence. Every word is required,
+    and the two destinations are the only things that vary: "into their hand"
+    on a hit and "into their graveyard" on a miss are read where they are
+    printed rather than assumed, because the same guess with the miss going to
+    the bottom of the library is a card this production should read too.
+
+    "If it doesn't" is consumed rather than treated as decoration. It is the
+    *complement* of the sentence before it, so nothing here has to model a
+    second condition — but a line that omits it is a card whose miss does
+    nothing, and dropping the words would make the two indistinguishable.
+    """
+    for word in ("chooses", "a", "card", "name"):
+        stream.expect_word(word)
+    if not stream.accept_punct(","):
+        raise stream.error("expected the comma before the reveal")
+    for word in ("then", "reveals", "the", "top", "card", "of", "their", "library"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the hit sentence after the reveal")
+    for word in ("if", "that", "card", "has", "the", "chosen", "name"):
+        stream.expect_word(word)
+    if not stream.accept_punct(","):
+        raise stream.error("expected the comma before the hit's destination")
+    for word in ("that", "player", "puts", "it", "into", "their"):
+        stream.expect_word(word)
+    match_zone = stream.peek_word()
+    if match_zone not in _REVEAL_DESTINATIONS:
+        raise stream.error("expected the zone a matching card goes to")
+    stream.advance()
+    if not stream.accept_punct("."):
+        raise stream.error("expected the miss sentence after the hit")
+    for word in ("if", "it", "doesn't"):
+        stream.expect_word(word)
+    if not stream.accept_punct(","):
+        raise stream.error("expected the comma before the miss's destination")
+    for word in ("the", "player", "puts", "it", "into", "their"):
+        stream.expect_word(word)
+    miss_zone = stream.peek_word()
+    if miss_zone not in _REVEAL_DESTINATIONS:
+        raise stream.error("expected the zone a non-matching card goes to")
+    stream.advance()
+    return ast.NameThenRevealTop(who, match_zone, miss_zone)

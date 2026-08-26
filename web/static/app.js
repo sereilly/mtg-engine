@@ -2339,6 +2339,14 @@ function getNameAndStripInfo(state = currentState) {
   return info;
 }
 
+// Petra Sphinx: the targeted player guesses at the top of their own library.
+function getNameThenRevealTopInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.name_then_reveal_top;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 // Enchantment Alteration: a permanent chosen as the spell resolves, where
 // nothing was targeted. Answered by stable id — the candidates may sit on
 // either battlefield and an index is positional on one seat.
@@ -4462,6 +4470,58 @@ function applyNameAndStripPrompt(info) {
   });
 }
 
+// Petra Sphinx: "Target player chooses a card name, then reveals the top card of
+// their library." No suggestion list — the guess is at the chooser's own hidden
+// library, so any list would either be useless or give the answer away.
+let nameThenRevealTopDraft = null;
+function applyNameThenRevealTopPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  if (nameThenRevealTopDraft === null) nameThenRevealTopDraft = "";
+  title.textContent = "Name a card";
+  body.textContent =
+    `${info.card_name || "This ability"}: name a card, then reveal the top card of your library. ` +
+    `A match goes to your ${info.match_zone || "hand"}; anything else goes to your ${info.miss_zone || "graveyard"}.`;
+  steps.innerHTML =
+    `<div class="name-strip-row"><input id="nameThenRevealTopInput" type="text" placeholder="Card name" value="${escapeHtml(nameThenRevealTopDraft)}" autocomplete="off" /><button type="button" class="prompt-choice-btn" data-name-then-reveal-confirm="1">Name It</button></div>`;
+
+  const input = steps.querySelector("#nameThenRevealTopInput");
+  const submit = async () => {
+    const name = (input?.value || "").trim();
+    if (!name) {
+      updateActionHint("Type a card name first.", true);
+      return;
+    }
+    try {
+      await sendAction({ seat, action: "name_then_reveal_top_confirm", card_name: name });
+      nameThenRevealTopDraft = null;
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  };
+  input?.addEventListener("input", () => {
+    nameThenRevealTopDraft = input.value;
+  });
+  input?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submit();
+  });
+  steps.querySelector("[data-name-then-reveal-confirm]")?.addEventListener("click", submit);
+}
+
 // Power Sink: "Counter target spell unless its controller pays {X}." The targeted
 // spell's controller taps lands to fill their pool, then pays {X} to keep their
 // spell or declines (and it is countered, tapping their lands and draining mana).
@@ -6314,6 +6374,12 @@ function renderActivationPrompt() {
   const nameAndStripInfo = getNameAndStripInfo();
   if (nameAndStripInfo) {
     applyNameAndStripPrompt(nameAndStripInfo);
+    return;
+  }
+
+  const nameThenRevealTopInfo = getNameThenRevealTopInfo();
+  if (nameThenRevealTopInfo) {
+    applyNameThenRevealTopPrompt(nameThenRevealTopInfo);
     return;
   }
 

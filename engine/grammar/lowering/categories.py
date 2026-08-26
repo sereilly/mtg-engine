@@ -285,6 +285,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "reveal_top_of_library": "zones",
     "reveal_until_match": "zones",
     "name_and_strip": "zones",
+    # Petra Sphinx's guess. "zones" like the reveals above it: what the card
+    # does is look at the top of a library and move that card somewhere, and
+    # the name is only what decides which somewhere.
+    "name_then_reveal_top": "zones",
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
     # A durationless keyword grant to the enchanted creature (Cocoon's hatch):

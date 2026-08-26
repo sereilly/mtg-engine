@@ -2445,3 +2445,99 @@ def test_lesser_werewolf_stops_when_its_own_power_reaches_zero(set_pool):
     game._settle()
     assert werewolf.effective_power == 0
     assert blocked.effective_toughness == 1
+
+
+# ---------------------------------------------------------------------------
+# Round 25 — "chooses a card name, then reveals the top card of their library"
+# ---------------------------------------------------------------------------
+
+
+def _petra_game(set_pool, library: list[CardDefinition]):
+    """Petra Sphinx on seat 1, aimed at seat 0, whose library is *library*."""
+    sphinx = Permanent(card=set_pool("LEG")["Petra Sphinx"])
+    victim = PlayerState(name="P1", library=list(library))
+    game = Game(players=[victim, PlayerState(name="P2", battlefield=[sphinx])])
+    game.start_turn(1)
+    return game, victim
+
+
+def test_petra_sphinx_puts_a_correctly_named_card_into_its_owners_hand(set_pool):
+    """The chooser, the library, the hand and the graveyard are all the
+    *targeted* player's — the card never says "you"."""
+    top = _vanilla("Guessed Card", 1, 1)
+    game, victim = _petra_game(set_pool, [top, _vanilla("Under It", 1, 1)])
+
+    result = game.activate_permanent_ability(1, "Petra Sphinx", target_player_index=0)
+    assert result.supported, result.details
+    game._settle()
+
+    pending = next(iter(game.pending_choices_of("name_then_reveal_top")), None)
+    assert pending is not None and pending.player_index == 0
+    assert game.confirm_name_then_reveal_top(0, "Guessed Card")
+
+    assert [c.name for c in victim.hand] == ["Guessed Card"]
+    assert victim.graveyard == []
+    assert len(victim.library) == 1
+
+
+def test_petra_sphinx_mills_a_wrongly_named_card(set_pool):
+    """The miss half. A name no card in the game bears is a legal choice
+    (CR 202.1) and simply misses — it is not refused."""
+    top = _vanilla("Guessed Card", 1, 1)
+    game, victim = _petra_game(set_pool, [top, _vanilla("Under It", 1, 1)])
+
+    game.activate_permanent_ability(1, "Petra Sphinx", target_player_index=0)
+    game._settle()
+    assert game.confirm_name_then_reveal_top(0, "Not In This Game")
+
+    assert victim.hand == []
+    assert [c.name for c in victim.graveyard] == ["Guessed Card"]
+    assert len(victim.library) == 1
+
+
+def test_petra_sphinx_compares_the_revealed_card_not_the_one_beneath_it(set_pool):
+    """Naming the *second* card is a miss: the reveal is the top card only, and
+    a search of the whole library would make this a hit."""
+    game, victim = _petra_game(
+        set_pool, [_vanilla("Top", 1, 1), _vanilla("Second", 1, 1)]
+    )
+
+    game.activate_permanent_ability(1, "Petra Sphinx", target_player_index=0)
+    game._settle()
+    assert game.confirm_name_then_reveal_top(0, "Second")
+
+    assert victim.hand == []
+    assert [c.name for c in victim.graveyard] == ["Top"]
+
+
+def test_petra_sphinx_asks_nothing_of_an_empty_library(set_pool):
+    """No card to reveal means no name to choose — the ability resolves and
+    leaves no prompt owed."""
+    game, victim = _petra_game(set_pool, [])
+
+    game.activate_permanent_ability(1, "Petra Sphinx", target_player_index=0)
+    game._settle()
+
+    assert not list(game.pending_choices_of("name_then_reveal_top"))
+    assert victim.hand == [] and victim.graveyard == []
+
+
+def test_petra_sphinx_default_names_the_commonest_card_in_that_library(set_pool):
+    """A non-interactive seat's answer. A player knows what is in their own
+    library, only not its order (CR 400.2), so naming its commonest remaining
+    card is a choice a human could make — and it is deterministic, which a
+    seeded replay needs."""
+    game, victim = _petra_game(set_pool, [
+        _vanilla("Rare Thing", 1, 1),
+        _vanilla("Common Thing", 1, 1),
+        _vanilla("Common Thing", 1, 1),
+    ])
+
+    game.activate_permanent_ability(1, "Petra Sphinx", target_player_index=0)
+    game._settle()
+    game.auto_resolve_pending_choices(kinds=("name_then_reveal_top",))
+
+    # "Common Thing" was named; the top card was "Rare Thing", so it misses.
+    assert [c.name for c in victim.graveyard] == ["Rare Thing"]
+    assert victim.hand == []
+    assert not list(game.pending_choices_of("name_then_reveal_top"))
