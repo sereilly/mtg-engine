@@ -78,6 +78,7 @@ from .effects import (
     _parse_sacrifice_expansion_permanents,
     _parse_delayed_self_action,
     _parse_shuffle_graveyard_into_library,
+    _parse_shuffle_hand_into_library,
     _parse_search_library,
     _parse_doesnt_untap_next_step,
     _parse_tap_untap,
@@ -526,6 +527,13 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     graveyard_shuffle = _parse_shuffle_graveyard_into_library(stream)
     if graveyard_shuffle is not None:
         return graveyard_shuffle
+    # "Each player shuffles the cards from their hand into their library, then
+    # draws that many cards." (Winds of Change.) Same position and the same
+    # reason: the subject-verb reader below has no "shuffles", and the sentence
+    # names zones rather than an object it could take as a subject.
+    hand_shuffle = _parse_shuffle_hand_into_library(stream)
+    if hand_shuffle is not None:
+        return hand_shuffle
     # "Destroy this artifact at the beginning of the next end step." (Rocket
     # Launcher, Rakalite.) Read before the plain destroy/return productions,
     # whose sentences are this one's prefix — matched first they would perform

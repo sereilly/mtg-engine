@@ -133,6 +133,36 @@ def _lower_look_at_hand(node: ast.LookAtHand) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("look_at_target_hand", "", _targets_only(node.player)),)
 
 
+def _lower_look_at_library_top(
+    node: ast.LookAtLibraryTop,
+) -> tuple[OracleInstruction, ...]:
+    """"Look at the top five cards of target player's library. You may then
+    have that player shuffle that library." (Visions.)
+
+    Only a chosen player has a contract to lower onto, for the reason
+    :func:`_lower_look_at_hand` gives: the handler reads one player off the
+    resolution context, and "each opponent" would need a loop it does not have.
+
+    How many cards and whether the shuffle is offered are both payload. The
+    number is obvious; the offer is the one that matters, because the handler
+    that reads it today derived the same fact for Natural Selection by matching
+    a substring of the card's oracle text — a card printing the offer in any
+    other words would have been given a prompt with the option missing.
+    """
+    if node.player.kind != "target_player":
+        raise LoweringError(
+            f"no handler looks at the top of {node.player.kind!r}'s library", node=node
+        )
+    if not isinstance(node.count, ast.Fixed):
+        raise LoweringError("the library look needs a printed number", node=node)
+    payload: dict[str, object] = {
+        "amount": node.count.value,
+        "may_shuffle": node.may_shuffle,
+    }
+    payload.update(_targets_only(node.player))
+    return (OracleInstruction("look_at_target_library_top", "", payload),)
+
+
 # Restrictions the search flow can honour. `card_type` is compared against the
 # card's `primary_type`, and `is_card` only says the noun phrase named cards —
 # which a library holds by definition (CR 400.1). The rest come from

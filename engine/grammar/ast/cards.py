@@ -186,6 +186,23 @@ class Shuffle:
 
 
 @dataclass(frozen=True)
+class LookAtLibraryTop:
+    """``Look at the top five cards of target player's library. You may then
+    have that player shuffle that library.`` (Visions.)
+
+    Distinct from ``LookTopPickToHand`` below, which is always about *your own*
+    library and always takes a card out of it. This one takes nothing: the
+    whole effect is the information, plus an offer to shuffle away the order
+    the looker just learned. ``may_shuffle`` is on the node because the offer
+    is about the library this sentence named — carried separately it would have
+    to name a player again.
+    """
+    count: "Amount"
+    player: PlayerRef
+    may_shuffle: bool = False
+
+
+@dataclass(frozen=True)
 class LookTopPickToHand:
     """``Look at the top three cards of your library. Put one of those cards
     into your hand and the rest on the bottom of your library in any order.
