@@ -129,7 +129,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # two-source shield landed. The parse side keeps prevention with damage because
 # the two read the same recipient and duration vocabulary; the lowering halves
 # share not one helper, which is the same asymmetry the families above record.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "counters", "keywords", "tapping", "prevention", "where_x"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "where_x"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 
@@ -384,4 +384,45 @@ def test_every_grammar_module_is_placed_or_exempt():
         "grammar modules outside the layer order and not exempt: "
         f"{missing}. Place each in PARSE_LAYERS/LOWER_LAYERS, or add it to "
         "UNLAYERED with the reason it is not a layer."
+    )
+
+
+# The modules inside a family package that are *not* families: the floors every
+# family may read (`_core`'s vocabulary, `_common`'s helpers, `_events`' tables,
+# `conditions`' question — a condition is built from the vocabulary while none
+# of the vocabulary is built from a condition, which is why both `ast/` and
+# `lowering/` have one and why other families import it) and the roofs built
+# from all of them (`statements`' unions, `categories`' dispatch table). Neither
+# has an independence to check. Named rather than skipped, for the same reason
+# `UNLAYERED` is — see the test below.
+FAMILY_SHARED = {
+    "_common", "_core", "_events", "conditions", "categories", "statements",
+}
+
+
+@pytest.mark.parametrize(
+    "package, families",
+    [
+        ("effects", EFFECT_FAMILIES),
+        ("lowering", LOWERING_FAMILIES),
+        ("ast", AST_FAMILIES),
+    ],
+)
+def test_every_family_module_is_listed_or_shared(package, families):
+    """A family nobody listed is a family `test_families_do_not_import_each_other`
+    never looks at.
+
+    The same hole as `test_every_grammar_module_is_placed_or_exempt`, one level
+    down: that test iterates the *list*, so a new family module escapes it by
+    being forgotten — silently, with the suite green. `lowering/exile.py` was
+    written the day this assertion was added and would have been the first to
+    slip through.
+    """
+    present = {p.stem for p in (GRAMMAR / package).glob("*.py")}
+    present.discard("__init__")
+    missing = sorted(present - set(families) - FAMILY_SHARED)
+    assert not missing, (
+        f"{package}/ modules that are neither a listed family nor a shared "
+        f"floor: {missing}. Add each to the family list, or to FAMILY_SHARED "
+        "with the reason every family may read it."
     )

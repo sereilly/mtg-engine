@@ -111,17 +111,19 @@ from .counters import (
     _lower_for_each,
 )
 from .zones import (
-    _lower_exile_until_leaves_or_untaps,
     _lower_ownership_exchange_unless_paid,
     _lower_random_reveal_ownership_exchange,
     _lower_shuffle_graveyard_into_library,
     _lower_shuffle_hand_into_library,
-    _EXILED_CREATURE,
     _reads_no_return_restriction,
     _lower_put_onto_battlefield,
     _lower_return_to_zone,
-    _lower_exile,
     _lower_put_on_library_top,
+)
+from .exile import (
+    _EXILED_CREATURE,
+    _lower_exile,
+    _lower_exile_until_leaves_or_untaps,
     _fused_exile_then_controller_life,
 )
 from .board import (
