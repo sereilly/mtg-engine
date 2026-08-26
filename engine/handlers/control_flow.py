@@ -652,17 +652,21 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
 
 @effect_handler("choose_one")
 def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """A modal triggered ability's "Choose one —" (Trufflesnout, Elder
-    Gargaroth): the controller picks one of the modes the payload carries and
-    that mode's instruction runs against this same context.
+    """A ``choose_one`` reached at *resolution*: alternatives that are a step of
+    an effect already running ("that creature gains flying or first strike").
 
-    The pick is a ``mode_choice`` pending prompt for an interactive
-    controller; every other seat takes the default (the first printed mode —
-    a stated policy, not a valuation) the moment it is armed, because the
-    trigger's resolution has to finish. CR 700.2b would have the mode chosen
-    as the ability is put on the stack; asking at resolution is the same
-    standing approximation the engine makes for an ETB trigger's target, and
-    nothing can act in between because the prompt blocks the owing seat.
+    Not a modal **ability**. A modal triggered ability chooses its mode as it is
+    put on the stack (CR 700.2b), which
+    ``mixins/stack/resolution._choose_trigger_mode`` does, and by the time such
+    an ability resolves ``_chosen_trigger_instruction`` has already substituted
+    the chosen mode — so a modal head never arrives here with a mode still to
+    pick. What does arrive is the nested form, where there is no announcement to
+    hang the choice on and the branch simply runs against this same context.
+
+    The pick is a ``mode_choice`` pending prompt for an interactive controller;
+    every other seat takes the default (the first printed mode - a stated
+    policy, not a valuation) the moment it is armed, because the resolution has
+    to finish.
     """
     modes = tuple(instruction.payload.get("modes") or ())
     if not modes:

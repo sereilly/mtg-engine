@@ -1823,3 +1823,112 @@ def test_spectral_cloak_takes_shroud_with_it(set_pool):
     detach_aura(aura, host)
 
     assert not host.has_keyword("shroud")
+
+
+# ---------------------------------------------------------------------------
+# Relic Bind (round 30) — a triggered ability whose modes target, and the one
+# card in the whole pool printing "Enchant artifact an opponent controls".
+# ---------------------------------------------------------------------------
+
+
+def _r30_artifact(name: str = "Trinket") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Artifact", oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Artifact"},
+    )
+
+
+def _r30_relic_bind(set_pool):
+    """Relic Bind on seat 0, enchanting seat 1's artifact. Seat 0 is
+    interactive, so the mode prompt is asked rather than defaulted."""
+    aura = Permanent(card=set_pool("LEG")["Relic Bind"])
+    host = Permanent(card=_r30_artifact("Su-Chi"))
+    p1 = PlayerState(name="P1", battlefield=[aura])
+    p2 = PlayerState(name="P2", battlefield=[host])
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0}
+    attach_aura(aura, host)
+    return game, p1, p2, aura, host
+
+
+def test_relic_bind_asks_for_its_mode_when_the_artifact_taps(set_pool):
+    """"Whenever enchanted artifact becomes tapped, choose one —". The mode is
+    owed as the ability goes on the stack (CR 700.2b), and each of the two
+    modes carries the targets *it* chooses (CR 115.8) — a damage mode reading
+    "target player or planeswalker" and a life mode reading "target player"."""
+    game, _p1, _p2, _aura, host = _r30_relic_bind(set_pool)
+
+    game.become_tapped(host)
+
+    assert [item.card.name for item in game.stack] == ["Relic Bind"]
+    choice = game.pending_choices_of("mode_choice", 0)[0]
+    assert choice.data["labels"] == [
+        "This Aura deals 1 damage to target player or planeswalker",
+        "Target player gains 1 life",
+    ]
+    assert [option["spec"]["kind"] for option in choice.data["_options"]] == [
+        "player_or_planeswalker", "player",
+    ]
+
+
+def test_relic_bind_damages_the_player_its_controller_named(set_pool):
+    """The target travels with the mode, so the damage lands where it was
+    aimed rather than on whichever seat a default would have picked."""
+    game, p1, p2, _aura, host = _r30_relic_bind(set_pool)
+
+    game.become_tapped(host)
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=0, target={"seat": 1})
+    game.resolve_top_of_stack()
+
+    assert (p1.life, p2.life) == (20, 19)
+
+
+def test_relic_binds_other_mode_gains_life_for_the_named_player(set_pool):
+    """The second bullet is a benefit and targets a player too, which is the
+    whole reason the mode and the target have to be one announcement: the same
+    ability aims at opposite seats depending on which mode was taken."""
+    game, p1, p2, _aura, host = _r30_relic_bind(set_pool)
+
+    game.become_tapped(host)
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=1, target={"seat": 0})
+    game.resolve_top_of_stack()
+
+    assert (p1.life, p2.life) == (21, 20)
+
+
+def test_relic_bind_ignores_an_artifact_it_does_not_enchant(set_pool):
+    """The narrowing is an identity check on the Aura's own host (CR 400.7):
+    two artifacts on one battlefield compare equal by value."""
+    game, _p1, p2, _aura, _host = _r30_relic_bind(set_pool)
+    other = Permanent(card=_r30_artifact("Su-Chi"))
+    p2.battlefield.append(other)
+
+    game.become_tapped(other)
+
+    assert game.stack == []
+
+
+def test_relic_bind_may_only_enchant_an_artifact_an_opponent_controls(set_pool):
+    """"Enchant artifact **an opponent controls**" — the only card in the pool
+    printing that clause. The seat half is a cast-time restriction (CR 601.2c),
+    so the caster's own artifact is refused with nothing spent, and the picker
+    is offered the same list."""
+    card = set_pool("LEG")["Relic Bind"]
+    mine = Permanent(card=_r30_artifact("Mine"))
+    theirs = Permanent(card=_r30_artifact("Theirs"))
+    p1 = PlayerState(name="P1", battlefield=[mine], hand=[card])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    spec = game.cast_target_spec(0, card)
+    assert spec["kind"] == "artifact" and spec.get("opponent_only")
+    assert [t["seat"] for t in spec["valid_targets"]] == [1], (
+        "only the opponent's artifact is offered"
+    )
+
+    ok, _ = game._validate_cast_targets(
+        card, 0, target_player_index=0, target_permanent_index=0,
+    )
+    assert not ok, "the caster's own artifact is not a legal host"

@@ -41,6 +41,7 @@ from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle, expand_ability_lines
 from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
+from .modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
 from .targeting import (
     derive_activation_spec,
     derive_cast_spec,
@@ -462,6 +463,51 @@ class LegalityMixin:
                 for_cast=False,
             )
         return spec
+
+    def trigger_mode_options(
+        self, controller_index: int, card: CardDefinition, instruction, source_permanent=None,
+    ) -> list[dict]:
+        """Every mode of a modal triggered ability that *can* be chosen, each
+        with the targets it could choose (CR 700.2b, CR 603.3c/603.3d).
+
+        One call, asked at the one moment the rule allows the choice — as the
+        ability is put on the stack — and asked by **both** halves of that
+        moment: ``_choose_trigger_mode`` reads it to decide whether the ability
+        may go on the stack at all (an empty list means no mode is legal, and
+        the ability is removed), and the prompt it arms offers exactly these
+        entries. That is the same shape ``activation_target_refusal`` already
+        gives an activated ability, and for the same reason: a gate and a
+        picker with two tables between them is this engine's recurring defect.
+
+        A mode that targets and has no legal target is **omitted**, not offered
+        and refused — CR 700.2b says it "can't be chosen". A mode that targets
+        nothing is always choosable and carries an empty candidate list.
+
+        The candidates come from ``_enumerate_targets``, so a mode is offered
+        the same list an activated ability with that same effect would be — the
+        protection, shroud and per-kind narrowing all included.
+        """
+        options: list[dict] = []
+        for index, mode in enumerate(modal_trigger_modes(instruction)):
+            mode_instruction = mode["instruction"]
+            spec = dict(modal_trigger_mode_spec(mode) or {"kind": "none"})
+            spec["requires_target"] = spec["kind"] != "none"
+            valid = self._enumerate_targets(
+                controller_index, card, spec, for_cast=False,
+                ability_instruction=_targeting_instruction(mode_instruction),
+                source_permanent=source_permanent,
+                ability_source=source_permanent,
+            )
+            if spec["requires_target"] and not valid:
+                continue
+            options.append({
+                "index": index,
+                "label": mode["label"],
+                "instruction": mode_instruction,
+                "spec": spec,
+                "valid_targets": valid,
+            })
+        return options
 
     def activation_target_refusal(
         self, controller_index: int, source_permanent, ability, *,

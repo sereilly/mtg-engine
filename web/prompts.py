@@ -771,17 +771,57 @@ def _body_choice(ctx: PromptContext, choices: list) -> dict:
 
 @prompt_renderer("mode_choice")
 def _mode_choice(ctx: PromptContext, choices: list) -> dict:
-    """A modal triggered ability's "Choose one —" (Trufflesnout, Elder
-    Gargaroth): the printed bullet labels, answered by index."""
+    """A modal ability's "Choose one -" (Relic Bind, Trufflesnout, Elder
+    Gargaroth): the offered mode labels, answered by index.
+
+    A mode that targets carries its own candidates, because CR 700.2b and
+    CR 601.2c make the mode and its target one announcement - the player who
+    picks the mode picks its target in the same breath, and the modes of one
+    ability may target quite different things (CR 115.8). The candidates are
+    the engine's own offered list, so the picker cannot offer what the answer
+    path would refuse; a permanent rides its stable ``id`` alongside the
+    ``seat``/``index`` the canvas addresses it by.
+
+    ``targets`` is absent for a mode that chooses nothing, and for every mode
+    of a ``choose_one`` nested inside a running resolution, which announces no
+    targets at all.
+    """
     choice = choices[0]
     data = choice.data
+    options = tuple(data.get("_options") or ())
+    modes = []
+    for index, label in enumerate(data.get("labels") or []):
+        entry = {"index": index, "label": label}
+        option = options[index] if index < len(options) else None
+        if option is not None and option["spec"].get("requires_target"):
+            entry["targets"] = [
+                _mode_target_view(ctx, candidate)
+                for candidate in option.get("valid_targets") or []
+            ]
+        modes.append(entry)
     return {
         "player_seat": choice.player_index,
         "card_name": data["card_name"],
-        "modes": [
-            {"index": i, "label": label}
-            for i, label in enumerate(data.get("labels") or [])
-        ],
+        "modes": modes,
+    }
+
+
+def _mode_target_view(ctx: PromptContext, candidate: dict) -> dict:
+    """One candidate of one mode, as the client picks it."""
+    if candidate.get("kind") != "permanent":
+        seat = candidate.get("seat")
+        return {
+            "kind": "player",
+            "seat": seat,
+            "name": ctx.game.players[seat].name,
+        }
+    permanent = ctx.game.permanent_at(candidate["seat"], candidate["index"])
+    return {
+        "kind": "permanent",
+        "seat": candidate["seat"],
+        "index": candidate["index"],
+        "id": None if permanent is None else permanent.permanent_id,
+        "name": candidate.get("name"),
     }
 
 

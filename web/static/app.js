@@ -4409,17 +4409,42 @@ function applyModeChoicePrompt(info) {
   customOkBtn.disabled = true;
 
   title.textContent = "Choose one";
-  body.textContent = `${info.card_name || "Triggered ability"}: pick a mode.`;
+  const targeted = (info.modes || []).some((mode) => Array.isArray(mode.targets));
+  body.textContent = targeted
+    ? `${info.card_name || "Triggered ability"}: pick a mode and its target.`
+    : `${info.card_name || "Triggered ability"}: pick a mode.`;
+  // A mode that targets is offered once per candidate: CR 700.2b chooses the
+  // mode and CR 601.2c its target as one announcement, so there is no state
+  // between the two clicks to hold - and a mode with no legal target is not in
+  // this list at all, because the engine has already removed it.
   const buttons = (info.modes || [])
-    .map(
-      (mode) =>
-        `<button type="button" class="prompt-choice-btn" data-mode-index="${Number(mode.index)}">${escapeHtml(mode.label || `Mode ${Number(mode.index) + 1}`)}</button>`,
-    )
+    .flatMap((mode) => {
+      const label = escapeHtml(mode.label || `Mode ${Number(mode.index) + 1}`);
+      if (!Array.isArray(mode.targets)) {
+        return [
+          `<button type="button" class="prompt-choice-btn" data-mode-index="${Number(mode.index)}">${label}</button>`,
+        ];
+      }
+      return mode.targets.map((target) => {
+        const attrs =
+          target.kind === "permanent"
+            ? ` data-target-id="${Number(target.id)}"`
+            : ` data-target-seat="${Number(target.seat)}"`;
+        return `<button type="button" class="prompt-choice-btn" data-mode-index="${Number(mode.index)}"${attrs}>${label} &rarr; ${escapeHtml(target.name || "target")}</button>`;
+      });
+    })
     .join("");
   steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
   steps.querySelectorAll("[data-mode-index]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      await sendAction({ seat, action: "mode_choice_confirm", hand_index: Number(btn.dataset.modeIndex) });
+      const payload = {
+        seat,
+        action: "mode_choice_confirm",
+        hand_index: Number(btn.dataset.modeIndex),
+      };
+      if (btn.dataset.targetId !== undefined) payload.target_permanent_id = Number(btn.dataset.targetId);
+      if (btn.dataset.targetSeat !== undefined) payload.target_seat = Number(btn.dataset.targetSeat);
+      await sendAction(payload);
     });
   });
 }

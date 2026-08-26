@@ -1443,6 +1443,27 @@ class GameHelpersMixin:
         return None if permanent is None else permanent.permanent_id
 
     def _stack_push(self, item):
+        """Put *item* on the stack and finish announcing it, then return it.
+
+        Two steps, because the second is only meaningful once the first has
+        happened: :meth:`_stack_push_object` records the targets' identities
+        and appends the object, and then a **modal triggered ability** chooses
+        its mode and that mode's targets, which CR 700.2b and CR 603.3c place
+        exactly here — "as part of putting that ability on the stack".
+
+        It hangs off this method rather than off ``_enqueue_triggered_ability``
+        for the reason this method exists at all: it is *the* one place an
+        object goes on the stack, and the enqueue helper is not — the attack
+        and block trigger fire sites in ``phases/declare_attackers_step.py``
+        build their own ``StackItem`` and push it here directly. A choice armed
+        one layer up covered the enqueued triggers and quietly missed those,
+        which is the fire-site problem in miniature.
+        """
+        self._stack_push_object(item)
+        self._choose_trigger_mode(item)
+        return item
+
+    def _stack_push_object(self, item) -> None:
         """Put *item* on the stack, recording its target's identity (CR 601.2c).
 
         The one place an object goes on the stack, and the reason it is one
@@ -1491,7 +1512,7 @@ class GameHelpersMixin:
                 self.graveyard_target_seat(item, spec), item.target_permanent_index
             )
             self.stack.append(item)
-            return item
+            return
         if item.target_permanent_id is not None:
             # The caller already knows the identities. The web layer does: it
             # resolves `target_permanent_ids` off the wire and then used to
@@ -1501,7 +1522,7 @@ class GameHelpersMixin:
             # board. Garruk, Savage Herald's -2 names one creature you control
             # and then anyone's, so it is the shape that needed this.
             self.stack.append(item)
-            return item
+            return
         seat = item.target_player_index
         if seat is None:
             # The convention resolution uses when no target player was named.
@@ -1510,7 +1531,6 @@ class GameHelpersMixin:
             item.target_permanent_id = self.permanent_ids_at(seat, item.target_permanent_index)
         self.stack.append(item)
         self._announce_targeting(item)
-        return item
 
     def _announce_targeting(self, item) -> None:
         """"…becomes the target of a spell or ability" (CR 603.2, Warden of the

@@ -36,7 +36,7 @@ from ...oracle_types import x_spend_color_from_text
 from ...target_restrictions import forbidden_target
 from ...targeting import bounce_subject_filter, graveyard_target_spec
 from ...subject_filters import filter_head_noun, subject_matches
-from ...targeting import derive_cast_spec, targets_mana_value_x
+from ...targeting import derive_cast_spec, enchant_subject_seat, targets_mana_value_x
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
 # "creature" uses Permanent.is_creature so animated lands (Kormus Bell / Living
@@ -72,22 +72,45 @@ def aura_enchant_noun(card: CardDefinition) -> str | None:
     return None
 
 
-def enchant_noun_own_only(noun: str) -> bool:
-    """Whether the enchant clause restricts the host to the Aura's own
-    controller's permanents ("Enchant creature **you control**", Cocoon).
+def enchant_noun_seat(noun: str) -> str | None:
+    """Which seat an enchant clause restricts the host to, or None.
+
+    ``"you"`` for "Enchant creature **you control**" (Cocoon), ``"opponent"``
+    for "Enchant artifact **an opponent controls**" (Relic Bind), None for a
+    clause that names no seat.
 
     The seat half of the clause, separated from the type half because the type
     is a question about the permanent alone while this one needs two seats —
-    asked by the cast gate (CR 601.2c), by the AI's target picker, and by the
-    CR 704.5m sweep that puts the Aura into the graveyard when its host
-    changes sides.
+    asked by the cast gate (CR 601.2c), by the AI's target picker, by
+    ``auras.aura_attach_refusal`` and by the CR 704.5m sweep that puts the Aura
+    into the graveyard when its host stops satisfying the clause. The split
+    itself is ``targeting.enchant_subject_seat``, which the picker's spec is
+    also built from, so the offered list and the enforced rule cannot drift.
     """
-    return noun.endswith(" you control")
+    return enchant_subject_seat(noun)[1]
+
+
+def enchant_seat_satisfied(game, aura_seat: int | None, host_seat: int | None, noun: str) -> bool:
+    """Whether *host_seat* satisfies *noun*'s seat clause for an Aura
+    controlled by *aura_seat*.
+
+    One answer rather than an ``== aura_seat`` here and a ``!= aura_seat``
+    there: "an opponent controls" is not the negation of "you control" at a
+    multiplayer table (CR 102.3 — a player is never their own opponent, but
+    neither is a teammate an opponent), so the opponent half asks the game.
+    """
+    seat = enchant_noun_seat(noun)
+    if seat is None:
+        return True
+    if aura_seat is None or host_seat is None:
+        return False
+    if seat == "you":
+        return host_seat == aura_seat
+    return host_seat in game.opponents_of(aura_seat)
 
 
 def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
-    if enchant_noun_own_only(noun):
-        noun = noun[: -len(" you control")].strip()
+    noun = enchant_subject_seat(noun)[0]
     matcher = _ENCHANT_TARGET_MATCHERS.get(noun)
     if matcher is None:
         return True  # unknown enchant type — treat any permanent as legal
@@ -967,14 +990,15 @@ class SpellCastingMixin:
                         chosen, enchant_noun
                     ):
                         return False, f"no valid target for {card.name}"
-                    # "Enchant creature **you control**" (Cocoon): the seat
+                    # "Enchant creature **you control**" (Cocoon), "Enchant
+                    # artifact **an opponent controls**" (Relic Bind): the seat
                     # half of the clause, CR 601.2c — an illegal choice makes
                     # the spell uncastable, not merely ineffective.
-                    if enchant_noun_own_only(enchant_noun) and not self.controls(
-                        caster_index, chosen
+                    if not enchant_seat_satisfied(
+                        self, caster_index, self.controller_index_of(chosen), enchant_noun
                     ):
                         return False, (
-                            f"{card.name} can only enchant a permanent you control"
+                            f"{card.name} can only enchant {enchant_noun}"
                         )
                     # "You can't choose an untapped creature as this spell's
                     # target as you cast it." (Enthralling Hold.) CR 601.2c: an

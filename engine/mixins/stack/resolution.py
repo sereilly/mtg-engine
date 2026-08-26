@@ -18,6 +18,7 @@ from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
+from ...modal_triggers import INLINE_TRIGGER_CONDITIONS, modal_trigger_modes
 from ...resumption import run_resumable
 
 class StackResolutionMixin:
@@ -136,6 +137,76 @@ class StackResolutionMixin:
                     hook_event=hook_event,
                 )
             )
+
+    def _choose_trigger_mode(self, item: StackItem) -> None:
+        """Choose *item*'s mode and that mode's targets, as it goes on the
+        stack (CR 700.2b / CR 603.3c-d).
+
+        The rule is explicit about **when**: the modes of a modal triggered
+        ability are chosen "as part of putting that ability on the stack", and
+        CR 603.3d then routes the rest through CR 601.2c, which is where the
+        targets are chosen. So the two decisions are one decision, made here,
+        at the one moment they are allowed — and not, as this engine did until
+        now, at resolution, where nothing collects a target and a targeted mode
+        would run against a target nobody picked.
+
+        CR 700.2b's other half is the empty case: "If no mode is chosen, the
+        ability is removed from the stack." A mode with no legal target can't
+        be chosen, so an ability whose every mode is in that state never
+        resolves — it is taken back off the stack here rather than resolving
+        into a no-op, which is a different observable game state (nothing
+        responds to it, and nothing counts it as having resolved).
+
+        The offered list is ``legality.trigger_mode_options``, which is also
+        what decides the empty case one line above: the gate and the picker are
+        one call, not two tables.
+        """
+        instruction = item.ability_instruction
+        if not modal_trigger_modes(instruction):
+            return
+        options = self.trigger_mode_options(
+            item.caster_index, item.card, instruction, item.source_permanent,
+        )
+        if not options:
+            self.stack = [existing for existing in self.stack if existing is not item]
+            self.log.append(
+                f"{item.card.name}'s triggered ability was removed from the stack: "
+                "no mode could be chosen (700.2b)"
+            )
+            return
+        self.arm_pending_choice(
+            "mode_choice", item.caster_index,
+            card_name=item.card.name,
+            labels=[option["label"] for option in options],
+            _options=tuple(options),
+            _trigger_item=item,
+        )
+
+    def _default_trigger_mode_target(self, option: dict, controller_index: int) -> dict | None:
+        """Which candidate a non-interactive seat takes for *option*.
+
+        A stated policy, like the "first printed mode" beside it, and derived
+        rather than named: ``ai_valuation.activation_target_side`` reads the
+        mode's own instruction kind through ``INSTRUCTION_CATEGORIES`` and says
+        whether an effect of that family wants an opponent's side or its own.
+        A family with no answer falls back to the first candidate offered,
+        which is what every prompt in this engine does when nothing
+        distinguishes the options.
+        """
+        from ...ai_valuation import activation_target_side
+
+        candidates = option.get("valid_targets") or []
+        if not candidates:
+            return None
+        side = activation_target_side(option["instruction"])
+        if side is not None:
+            opponents = set(self.opponents_of(controller_index))
+            wanted = opponents if side == "opponent" else {controller_index}
+            for candidate in candidates:
+                if candidate.get("seat") in wanted:
+                    return candidate
+        return candidates[0]
+
     def _enqueue_triggered_batch(self, events: list[dict]) -> None:
         """Put a batch of triggered abilities that fired from one event onto the stack
         in APNAP order (CR 603.3b): the active player's triggers are enqueued first
@@ -310,6 +381,30 @@ class StackResolutionMixin:
             self.stack.append(item)
             woc_after.data["_stack_item"] = item
         return True
+    def _chosen_trigger_instruction(self, item: StackItem):
+        """What a triggered ability actually runs — its chosen mode, if it had
+        one to choose.
+
+        The mode was picked as the object went on the stack (CR 700.2b), so by
+        the time it resolves there is nothing left to ask: the ability behaves
+        exactly like an unmodal one whose targets were chosen at the same
+        moment. This is where that recorded index is spent.
+
+        A modal item that reaches here with no recorded mode falls through to
+        the ``choose_one`` instruction itself, which asks at resolution the way
+        the engine used to. That is a backstop for a prompt discarded by
+        something other than an answer, not a second policy: it cannot happen
+        through the arming path, because the prompt blocks the seat until it is
+        answered, and it does the only safe thing if it ever does.
+        """
+        instruction = item.ability_instruction
+        modes = modal_trigger_modes(instruction)
+        if not modes or item.chosen_mode_index is None:
+            return instruction
+        if not 0 <= item.chosen_mode_index < len(modes):
+            return instruction
+        return modes[item.chosen_mode_index]["instruction"]
+
     def _log_ability_outcome(self, item: StackItem, supported: bool, details: str) -> None:
         """What the game log says an ability's resolution did.
 
@@ -399,7 +494,9 @@ class StackResolutionMixin:
                 )
                 return
             state_machine = OracleStateMachine(self, context)
-            supported, details = state_machine.run(item.ability_instruction)
+            supported, details = state_machine.run(
+                self._chosen_trigger_instruction(item)
+            )
             self._log_ability_outcome(item, supported, details)
             return
 
@@ -732,7 +829,11 @@ class StackResolutionMixin:
         and only falls back to the index when there is none."""
         program = compile_card_oracle(permanent.card)
         for trig in program.triggered_abilities:
-            if trig.condition.kind != "enters_battlefield" or not trig.supported or trig.instruction is None:
+            if (
+                trig.condition.kind not in INLINE_TRIGGER_CONDITIONS
+                or not trig.supported
+                or trig.instruction is None
+            ):
                 continue
             caster = self.players[controller_index]
             target_idx = target_player_index if target_player_index is not None else controller_index

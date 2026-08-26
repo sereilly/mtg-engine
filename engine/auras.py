@@ -489,6 +489,33 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
     return None
 
 
+def modal_trigger_run_claim(
+    normalized_lines: list[str], index: int, card_name: str = "",
+) -> str | None:
+    """Name what carries out the modal trigger whose head sits at *index*.
+
+    A modal triggered ability is printed as a head and a run of bullets, and
+    the bullets are *not* effect lines of their own — the same grouping
+    ``oracle._modal_trigger_ability`` performs when it builds the ability.
+    Asking this gate line by line reads the head as an ordinary attached
+    trigger (claimed, correctly) and then each bullet as an unclaimed effect,
+    so Relic Bind reported "unimplemented aura effect: • this aura deals 1
+    damage to …" for a line the trigger already owns.
+
+    The claim is the *builder's own answer*, not a shape test: it asks
+    ``_modal_trigger_ability``, which refuses a dead mode and a condition it
+    cannot read. So an Aura whose modes the engine cannot perform stays
+    unclaimed and visibly unsupported, which is the whole reason this file
+    stopped claiming attached triggers with a wildcard.
+    """
+    from .oracle import _modal_trigger_ability
+
+    built = _modal_trigger_ability(normalized_lines, index, card_name or None)
+    if isinstance(built, tuple):
+        return "modal attached trigger — oracle._modal_trigger_ability"
+    return None
+
+
 def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> list[str]:
     """The Aura effect lines among *normalized_lines* nothing here claims.
 
@@ -502,18 +529,40 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
     with the reason "unimplemented aura effect: flash". Asked of the keyword
     gate rather than of a list here, so what an Aura may print and what the
     engine implements stay one table (`IMPLEMENTED_KEYWORDS`).
+
+    A **bulleted run under a modal head is one line**, for the same reason: the
+    bullets are modes of the trigger above them, not effects the Aura has
+    beside it. They are skipped only when
+    :func:`modal_trigger_run_claim` says the whole run is carried out.
     """
+    from .oracle import _bullets_after
+
+    unclaimed: list[str] = []
+    index = 0
+    while index < len(normalized_lines):
+        line = normalized_lines[index]
+        bullets = _bullets_after(normalized_lines, index)
+        if bullets and not line.startswith("•"):
+            if modal_trigger_run_claim(normalized_lines, index, card_name) is None:
+                unclaimed.append(line)
+            index += 1 + len(bullets)
+            continue
+        if line and not _aura_line_claimed(line, card_name):
+            unclaimed.append(line)
+        index += 1
+    return unclaimed
+
+
+def _aura_line_claimed(line: str, card_name: str) -> bool:
+    """Whether one Aura/Equipment effect line has an implementation behind it."""
     from .oracle import _is_supported_keyword_line
     from .cast_costs import cast_cost_claims_line
     from .enter_effects import enter_effect_line
     from .target_restrictions import target_restriction_line
 
-    return [
-        line
-        for line in normalized_lines
-        if line
-        and not line.startswith("enchant ")
-        and not _is_supported_keyword_line(line)
+    return bool(
+        line.startswith("enchant ")
+        or _is_supported_keyword_line(line)
         # "This Equipment enters with a soul counter on it." (Malefic Scythe.)
         # Entry state `_initialize_permanent_state` carries out from the
         # permanent's own text as it arrives — not an effect it has while
@@ -521,7 +570,7 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
         # by an effect template here. Equipment reach this gate since the
         # compiler started holding them to it; an Aura printing an entry line
         # the table reads is claimed the same way.
-        and enter_effect_line(line) is None
+        or enter_effect_line(line) is not None
         # "You can't choose an untapped creature as this spell's target as you
         # cast it." (Enthralling Hold.) Not an effect the Aura has while it is
         # attached — it is spent as the spell is cast (CR 601.2c) — so it is
@@ -530,7 +579,7 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
         # them. Asked as the same reader the cast path calls, so a phrase the
         # matcher cannot answer leaves the line unclaimed and the card
         # unsupported rather than admitted with the restriction absent.
-        and not target_restriction_line(line)
+        or target_restriction_line(line)
         # "You may cast this card from your graveyard by paying 3 life and
         # discarding a card in addition to paying its other costs." (Demonic
         # Embrace.) Not an effect the Aura has while attached and not a
@@ -538,9 +587,9 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
         # read off this same line by the two tables that charge and open them.
         # Asked as those tables rather than listed here, so a clause they cannot
         # charge leaves the line unclaimed and the card unsupported.
-        and not cast_cost_claims_line(line)
-        and aura_effect_claim(line, card_name) is None
-    ]
+        or cast_cost_claims_line(line)
+        or aura_effect_claim(line, card_name) is not None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -630,10 +679,10 @@ def aura_attach_refusal(game, aura, host) -> str | None:
 
     Every clause is one the engine already reads somewhere else:
     ``aura_enchant_noun`` is what the cast gate matches a target against,
-    ``enchant_noun_own_only`` is the seat half of the same clause (CR 702.5),
+    ``enchant_seat_satisfied`` is the seat half of the same clause (CR 702.5),
     and ``cannot_be_enchanted`` is CR 303.4's protection half.
     """
-    from .mixins.stack import (aura_enchant_noun, enchant_noun_own_only,
+    from .mixins.stack import (aura_enchant_noun, enchant_seat_satisfied,
                                permanent_matches_enchant_noun)
     from .target_immunity import cannot_be_enchanted
 
@@ -646,10 +695,10 @@ def aura_attach_refusal(game, aura, host) -> str | None:
         return f"{aura.card.name} has no enchant ability"
     if not permanent_matches_enchant_noun(host, noun):
         return f"it isn't a legal {noun}"
-    if enchant_noun_own_only(noun):
-        seat = game.controller_index_of(aura)
-        if seat is None or game.controller_index_of(host) != seat:
-            return f"{noun} names a permanent its controller doesn't control"
+    if not enchant_seat_satisfied(
+        game, game.controller_index_of(aura), game.controller_index_of(host), noun
+    ):
+        return f"{host.card.name} is not {noun}"
     if cannot_be_enchanted(host, by_aura=aura):
         return "it can't be enchanted"
     return None

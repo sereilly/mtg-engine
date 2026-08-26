@@ -2382,24 +2382,120 @@ class PendingChoicesMixin:
         )
         return True
 
-    def _resolve_mode_choice(self, choice: PendingChoice, mode_index: int) -> bool:
-        """Run the chosen mode of a modal triggered ability (Trufflesnout,
-        Elder Gargaroth). The modes travel as instructions with the resolution
-        context they belong to, the optional-pay shape — an index outside the
-        list is refused and the prompt stays owed."""
-        modes = tuple(choice.data.get("_modes") or ())
-        context = choice.data.get("_context")
-        if not (0 <= mode_index < len(modes)) or context is None:
+    def _resolve_mode_choice(
+        self, choice: PendingChoice, mode_index: int, target: dict | None = None,
+    ) -> bool:
+        """Answer a "Choose one —" prompt with the *mode_index*'th offered mode.
+
+        Two arming sites, one answer, and the difference between them is
+        **when** rather than what:
+
+        * A **modal triggered ability** (Relic Bind, Trufflesnout, Elder
+          Gargaroth) is armed by ``_choose_trigger_mode`` as the ability is put
+          on the stack, which is where CR 700.2b and CR 603.3c/603.3d put the
+          choice. The answer — the mode *and*, per CR 601.2c, its target — is
+          recorded onto that stack object; the ability resolves later, as an
+          ability with a mode and a target already chosen.
+        * A ``choose_one`` **nested inside a larger effect** ("that creature
+          gains flying or first strike") is not a modal ability at all: the
+          alternatives are a step of a resolution that is already running, so
+          the chosen branch runs against the context it was armed with.
+
+        ``_trigger_item`` is which of the two, and it is on the prompt rather
+        than in a list of kinds here for the reason every registry in this
+        engine exists: a second arming site added later says which one it is by
+        the data it arms with.
+
+        An index outside the offered list is refused and the prompt stays owed,
+        the optional-pay shape. So is a mode that needs a target with no legal
+        target named — CR 601.2c chooses the targets as part of the same
+        announcement, and a mode announced without them was never legally
+        chosen.
+        """
+        item = choice.data.get("_trigger_item")
+        options = tuple(choice.data.get("_options") or ())
+        legacy_modes = tuple(choice.data.get("_modes") or ())
+        count = len(options) if item is not None else len(legacy_modes)
+        if not 0 <= mode_index < count:
             return False
-        self.discard_pending_choice(choice)
         labels = choice.data.get("labels") or ()
-        if 0 <= mode_index < len(labels):
-            self.log.append(
-                f"{choice.data.get('card_name', 'Ability')}: chose \"{labels[mode_index]}\""
+        label = labels[mode_index] if 0 <= mode_index < len(labels) else "a mode"
+        card_name = choice.data.get("card_name", "Ability")
+        if item is None:
+            context = choice.data.get("_context")
+            if context is None:
+                return False
+            self.discard_pending_choice(choice)
+            self.log.append(f'{card_name}: chose "{label}"')
+            self._execute_oracle_instruction(legacy_modes[mode_index], context)
+            self.check_state_based_actions()
+            return True
+        option = options[mode_index]
+        if option["spec"].get("requires_target"):
+            target = (
+                self._select_trigger_mode_target(option, target) if target is not None
+                else self._default_trigger_mode_target(option, choice.player_index)
             )
-        self._execute_oracle_instruction(modes[mode_index], context)
-        self.check_state_based_actions()
+            if target is None:
+                return False
+        else:
+            target = None
+        self.discard_pending_choice(choice)
+        item.chosen_mode_index = option["index"]
+        if target is not None:
+            item.target_player_index = target.get("seat")
+            if target.get("kind") == "permanent":
+                item.target_permanent_index = target.get("index")
+                item.target_permanent_id = self.permanent_ids_at(
+                    target.get("seat"), target.get("index")
+                )
+            else:
+                item.target_permanent_index = None
+                item.target_permanent_id = None
+        chosen_for = ""
+        if target is not None:
+            chosen_for = (
+                f" targeting {target['name']}" if target.get("kind") == "permanent"
+                else f" targeting {self.players[target['seat']].name}"
+            )
+        self.log.append(f'{card_name}: chose "{label}"{chosen_for}')
         return True
+
+    def _select_trigger_mode_target(self, option: dict, target: dict) -> dict | None:
+        """The offered candidate *target* names, or None if it names none.
+
+        *target* is what a caller could say over a wire: ``permanent_id`` for
+        an object (the stable identity, never a battlefield slot - CR 400.7,
+        and an index chosen a moment ago can address a different permanent),
+        ``seat`` for a player. It is resolved **against the option's own
+        candidate list**, so an answer naming something the picker never
+        offered is refused rather than quietly performed - the engine and the
+        picker agree on what is a legal target because they are reading the
+        same list.
+        """
+        for candidate in option.get("valid_targets") or []:
+            if candidate.get("kind") == "permanent":
+                if target.get("permanent_id") is None:
+                    continue
+                permanent = self.permanent_at(candidate["seat"], candidate["index"])
+                if permanent is not None and permanent.permanent_id == target["permanent_id"]:
+                    return candidate
+            elif target.get("permanent_id") is None and candidate.get("seat") == target.get("seat"):
+                return candidate
+        return None
+
+    def _default_mode_choice(self, choice: PendingChoice) -> bool:
+        """What a non-interactive seat answers a "Choose one —" prompt with:
+        the first *offered* mode.
+
+        A stated policy, not a valuation — the same one the choice registry has
+        always taken — and "offered" rather than "printed" because CR 700.2b
+        has already removed from the list any mode whose targets could not be
+        chosen. The target inside that mode is
+        ``_default_trigger_mode_target``'s, which is derived from the mode's
+        own effect family rather than named per card.
+        """
+        return self._resolve_mode_choice(choice, 0)
 
     def _apply_optional_pay_decline(self, player_index: int, entry: dict) -> None:
         """The consequence of NOT paying an optional-pay prompt. Plain "may pay"
@@ -3240,10 +3336,10 @@ register_choice(
 
 register_choice(
     "mode_choice",
-    resolve=lambda game, choice, r: game._resolve_mode_choice(choice, r["mode_index"]),
-    # The first printed mode — a stated policy (like the up-to-N maximum), not
-    # a valuation; a card whose AI should ever pick otherwise needs one.
-    default=lambda game, choice: game._resolve_mode_choice(choice, 0),
+    resolve=lambda game, choice, r: game._resolve_mode_choice(
+        choice, r["mode_index"], r.get("target"),
+    ),
+    default=lambda game, choice: game._default_mode_choice(choice),
     action="mode_choice_confirm",
     prompt_key="mode_choice",
     blocked_detail="choose a mode for the triggered ability before other actions",

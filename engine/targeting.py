@@ -52,20 +52,45 @@ from .subject_filters import filter_head_noun
 # permanent on the battlefield. The negative lookahead is load-bearing: without
 # it Animate Dead derives "creature" and the UI would offer battlefield
 # creatures for a reanimation spell.
-# "creature you control" first: the alternation is first-match, and the plain
-# "creature" would consume its prefix and leave " you control" to fail the
-# whole-line anchor — which is a claim withdrawn, not a claim narrowed.
-_ENCHANT_SUBJECTS = (
-    "creature you control", "creature", "land", "artifact", "enchantment", "wall",
+# An "Enchant <subject>" clause is a **type** half and an optional **seat**
+# half (CR 702.5's [quality]), and the two are independent: any of the five
+# nouns can be printed with either seat clause. Spelling the combinations out
+# as one flat alternation is what made "creature you control" have to be
+# listed first — the alternation is first-match, so a plain "creature" would
+# consume its prefix and leave " you control" to fail the whole-line anchor,
+# which is a claim withdrawn rather than narrowed. Composing the halves
+# instead means the tenth combination costs nothing, which is how "artifact an
+# opponent controls" (Relic Bind — the only card in the pool printing it)
+# arrived without a second entry.
+_ENCHANT_NOUNS = ("creature", "land", "artifact", "enchantment", "wall")
+_ENCHANT_SEAT_CLAUSES = {"you control": "you", "an opponent controls": "opponent"}
+_ENCHANT_SUBJECT = (
+    rf"(?:{'|'.join(_ENCHANT_NOUNS)})"
+    rf"(?: (?:{'|'.join(_ENCHANT_SEAT_CLAUSES)}))?"
 )
-_ENCHANT_LINE = re.compile(
-    rf"^enchant ({'|'.join(_ENCHANT_SUBJECTS)})\b(?! card)",
-    re.MULTILINE,
-)
+# Anchored at both ends, and read one printed line at a time. It used to be
+# searched over the card's whole *normalized* text, which is space-joined - so
+# Steal Artifact ("Enchant artifact" / "You control enchanted artifact") reads
+# as one string in which "artifact you control" appears, and the clause gained
+# a seat restriction the card never printed. The line structure is the only
+# thing that says where the clause ends, so the reader keeps it.
+_WHOLE_ENCHANT_LINE = re.compile(rf"^enchant ({_ENCHANT_SUBJECT})$")
 
-# The whole-line form of the same scan, anchored at both ends so it claims a
-# line that is *only* the attachment restriction.
-_WHOLE_ENCHANT_LINE = re.compile(rf"^enchant ({'|'.join(_ENCHANT_SUBJECTS)})$")
+
+def enchant_subject_seat(subject: str) -> tuple[str, str | None]:
+    """Split an enchant subject into its noun and its seat requirement.
+
+    ``"artifact an opponent controls"`` -> ``("artifact", "opponent")``; a bare
+    noun -> ``(noun, None)``. The one place the two halves of the clause come
+    apart, so the picker, the cast gate, the CR 704.5m sweep and the AI read
+    one split rather than keeping four ``endswith`` tests between them.
+    """
+    for clause, seat in _ENCHANT_SEAT_CLAUSES.items():
+        suffix = f" {clause}"
+        if subject.endswith(suffix):
+            return subject[: -len(suffix)].strip(), seat
+    return subject, None
+
 
 # The graveyard form the scan above deliberately excludes. It is its own entry
 # rather than a loosening of that pattern, because it names a different zone and
@@ -85,9 +110,8 @@ def enchant_line_subject(line: str) -> str | None:
     """What *line* attaches to, if the whole line is an ``Enchant <subject>``
     restriction (CR 702.5) — otherwise ``None``.
 
-    The single-line form of the :data:`_ENCHANT_LINE` scan
-    :func:`derive_cast_spec` runs over a card's whole normalized text, sharing
-    its subject vocabulary so the two cannot drift. It exists so
+    The reader :func:`card_enchant_subject` runs over a card's printed
+    lines, sharing its subject vocabulary so the two cannot drift. It exists so
     ``engine/grammar/registries.py`` can ask *this* module whether an Aura's
     attachment line is already accounted for, rather than copying the phrasing
     into the grammar where nothing would keep the copy honest.
@@ -104,22 +128,54 @@ def enchant_line_subject(line: str) -> str | None:
     return match.group(1) if match is not None else None
 
 
-# What an "Enchant <subject>" line means as a cast-time spec. A Wall is a
-# creature to the targeting layer, narrowed by `enchant_wall`; an Aura that
-# enchants an enchantment is offered the general permanent picker, narrowed by
-# `enchant_enchantment`.
-_ENCHANT_SUBJECT_TO_SPEC: dict[str, dict] = {
+def card_enchant_subject(oracle_text: str) -> str | None:
+    """The "Enchant <subject>" clause *oracle_text* prints, or None.
+
+    Per printed line, through the same :func:`enchant_line_subject` the grammar
+    asks whether the line is claimed - so what the picker offers and what the
+    parse-coverage gate calls accounted for are one reading. The line is
+    *found*, not assumed to be the first: Capture Sphere prints "Flash" above
+    it (see ``stack/casting.aura_enchant_noun``, which learned the same lesson).
+    """
+    for line in (oracle_text or "").splitlines():
+        subject = enchant_line_subject(line)
+        if subject is not None:
+            return subject
+    return None
+
+
+_ENCHANT_NOUN_TO_SPEC: dict[str, dict] = {
     "creature": {"kind": "creature"},
-    # "Enchant creature you control" (Cocoon, CR 303.4a's [quality]). The
-    # picker applies `own_only` itself — a seat test, not a permanent test —
-    # and the cast gate and the CR 704.5m sweep enforce the same half through
-    # `enchant_noun_own_only`.
-    "creature you control": {"kind": "creature", "own_only": True},
     "wall": {"kind": "creature", "enchant_wall": True},
     "land": {"kind": "land"},
     "artifact": {"kind": "artifact"},
     "enchantment": {"kind": "permanent", "enchant_enchantment": True},
 }
+
+# The seat half of the clause as the picker's own flag. It is a seat test, not
+# a permanent test, which is why `_enumerate_targets` applies it rather than
+# `permanent_matches_filter` — and the cast gate, the CR 704.5m sweep and the
+# AI enforce the same half through `enchant_noun_seat`.
+_ENCHANT_SEAT_TO_FLAG = {"you": "own_only", "opponent": "opponent_only"}
+
+
+def enchant_subject_spec(subject: str) -> dict | None:
+    """The cast-time target spec an "Enchant <subject>" clause describes.
+
+    "Enchant creature you control" (Cocoon) and "Enchant artifact an opponent
+    controls" (Relic Bind) are one noun spec plus one flag, so the
+    combinations are composed here rather than enumerated.
+    """
+    noun, seat = enchant_subject_seat(subject)
+    spec = _ENCHANT_NOUN_TO_SPEC.get(noun)
+    if spec is None:
+        return None
+    spec = dict(spec)
+    flag = _ENCHANT_SEAT_TO_FLAG.get(seat)
+    if flag is not None:
+        spec[flag] = True
+    return spec
+
 
 # An instruction's type_filter, as a target kind. Filters naming more than one
 # type fall back to the general permanent picker, which then applies the filter.
@@ -667,10 +723,9 @@ def derive_cast_spec(card, program) -> dict | None:
         # `reanimate_creature` this one is not scoped to their own.
         return {"kind": "graveyard_creature"}
 
-    enchant = _ENCHANT_LINE.search(program.normalized_text or "")
+    enchant = card_enchant_subject(card.oracle_text)
     if enchant is not None:
-        spec = _ENCHANT_SUBJECT_TO_SPEC.get(enchant.group(1))
-        return dict(spec) if spec is not None else None
+        return enchant_subject_spec(enchant)
 
     copied = copy_on_enter_type(program.normalized_text or "")
     if copied is not None:
