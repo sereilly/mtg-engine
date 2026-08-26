@@ -44,11 +44,12 @@ from .errors import GrammarError
 from .lexer import (BULLET, PUNCT, QUOTE, tokenize)
 from .costs import _parse_costs
 from .registries import registry_for_line
-from .riders import (_RIDER_FOLDED, _attach_destroyed_this_way, _attach_exchanged_this_way, _attach_if_you_cant, _attach_if_you_do, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_conditional_pronoun_grant_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
+from .riders import (_RIDER_FOLDED, _attach_destroyed_this_way, _attach_exchanged_this_way, _attach_if_you_cant, _attach_if_you_do, _attach_otherwise, _attach_riders, _attach_counter_cap, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_conditional_pronoun_grant_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_pronoun_grant_rider, _parse_pronoun_verb_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .phrases import accept_member_state_clause
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
-from .triggers import _parse_trigger_event, rebind_pronoun_to_event_subject
+from .rebinding import rebind_pronoun_to_event_subject
+from .triggers import _parse_trigger_event
 from .effects import (
     _parse_activation_restriction,
     _parse_damage_rider_sentence,
@@ -272,6 +273,11 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if _attach_if_you_cant(stream, steps):
                 continue
             if _attach_when_you_do(stream, steps):
+                continue
+            # "Otherwise, it gets +4/-X until end of turn." (Blood Lust.) The
+            # second arm of the conditional sentence before it.
+            if _attach_otherwise(stream, steps):
+                stream.accept_punct(".")
                 continue
             # "This ability can't cause the total number of +1/+0 counters on
             # this creature to be greater than N." (the Clockwork cycle.) A

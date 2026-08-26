@@ -550,6 +550,46 @@ def _parse_card_alternatives(
     return tuple(alternatives)
 
 
+#: The characteristics a "where X is **its** …" clause may name, as the printed
+#: words that spell each one. A table rather than three branches: they differ in
+#: which accessor the resolution reads and in nothing else, so a card printing
+#: the next one is data.
+_SUBJECT_CHARACTERISTICS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("mana", "value"), "mana_value"),
+    (("power",), "power"),
+    (("toughness",), "toughness"),
+)
+
+#: The printed words that add or subtract a constant from a quantity, and the
+#: sign each one carries.
+_OFFSET_WORDS: dict[str, int] = {"minus": -1, "plus": 1}
+
+
+def _accept_offset(stream: TokenStream) -> int:
+    """``minus 1`` / ``plus 2`` after a quantity — the signed constant, or 0.
+
+    The number is payload for the reason every printed number in this file is:
+    "minus 1" and "minus 4" are one arithmetic, and spelling either into the
+    phrase makes the other a non-match.
+    """
+    word = stream.peek_word()
+    sign = _OFFSET_WORDS.get(word) if word else None
+    if sign is None:
+        return 0
+    mark = stream.mark()
+    stream.advance()
+    token = stream.peek()
+    if token is not None and token.kind == NUMBER:
+        stream.advance()
+        return sign * int(token.text)
+    number = NUMBER_WORDS.get(stream.peek_word() or "")
+    if number is not None:
+        stream.advance()
+        return sign * number
+    stream.reset(mark)
+    return 0
+
+
 def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
     """``[,] where X is <definition>`` — or None when the clause is absent.
 
@@ -573,11 +613,24 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
         return None
     if not (stream.accept_word("x") and stream.accept_word("is")):
         raise stream.error("expected 'X is' after 'where'")
-    # "…where X is **its** mana value." A characteristic of the object the
-    # sentence already named rather than an aggregate over a set, so it carries
-    # no filter — read first because it does not open with "the".
-    if stream.accept_phrase("its", "mana", "value"):
-        return ast.ManaValueOfSubject()
+    # "…where X is **its** mana value" / "…where X is **its toughness minus
+    # 1**". A characteristic of the object the sentence already named rather
+    # than an aggregate over a set, so it carries no filter — read first
+    # because it does not open with "the".
+    #
+    # Which characteristic and which printed offset are both payload: the three
+    # words are one production, and "minus 1" is the same arithmetic "minus 4"
+    # is on Black Vise. A clause that named a characteristic and then printed
+    # words this cannot read refuses through the ordinary path below rather
+    # than dropping them, which is what keeps Blood Lust's -X from becoming the
+    # whole toughness.
+    if stream.at_word("its"):
+        its_mark = stream.mark()
+        stream.advance()
+        for phrase, name in _SUBJECT_CHARACTERISTICS:
+            if stream.accept_phrase(*phrase):
+                return ast.CharacteristicOfSubject(name, _accept_offset(stream))
+        stream.reset(its_mark)
     # "…where X is **twice** the number of white creatures that player
     # controls" (Jovial Evil). A multiplier in front of whatever definition
     # follows, read here so it scales every one of them rather than only the

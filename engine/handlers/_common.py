@@ -81,28 +81,60 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
     back_reference = spec.get("back_reference")
     if back_reference is not None:
         return max(0, int(context.results.get(back_reference, 0) or 0))
-    named = spec.get("object_mana_value")
-    if named == "triggering_spell":
-        # The spell the trigger's condition bound, carried on the event by the
-        # cast fire site. Read here rather than off the stack top: by the time
-        # the trigger resolves, anything could be above the spell that caused
-        # it, and the stack top is a different object.
-        cast_card = (context.trigger_context or {}).get("cast_card")
-        return max(0, int(getattr(cast_card, "cmc", 0) or 0)) if cast_card else 0
-    if named == "target":
-        perm = resolve_target_permanent(
-            game, context, predicate=lambda p: True, fallback_on_invalid_choice=False
-        )
-        if perm is None:
-            return 0
-        # CR 202.3: mana value is a characteristic of the *card*, unaffected by
-        # anything on the battlefield, so it is read off the printed cost.
-        return max(0, int(getattr(perm.card, "cmc", 0) or 0))
+    characteristic = spec.get("object_characteristic")
+    if isinstance(characteristic, dict):
+        return _characteristic_of_object(game, context, characteristic)
     owner = context.caster if spec.get("owner", "you") == "you" else (context.target or context.caster)
     return evaluate_count(
         game, owner, spec,
         exclude=context.source_permanent, source=context.source_permanent,
     )
+
+
+def _characteristic_of_object(
+    game: "Game", context: "OracleExecutionContext", spec: dict
+) -> int:
+    """"…where X is **its** mana value" / "**its toughness minus 1**" — one
+    named object's characteristic, plus whatever constant the clause printed.
+
+    Not a count of a set, so it is answered here where the context knows which
+    object the sentence named; :func:`evaluate_count` is owner-scoped and could
+    not — a toughness belongs to a permanent, not to a player.
+
+    The three characteristics are one lookup because the clause reads them the
+    same way. Where they differ is *what* answers: CR 202.3 makes mana value a
+    characteristic of the card, unaffected by anything on the battlefield, so
+    it comes off the printed cost; CR 613 makes power and toughness computed,
+    so they come through the layer accessors and a pumped creature answers with
+    the number it currently has.
+
+    The offset is applied before the floor, so "its toughness minus 1" on a 0/1
+    is 0 rather than -1 — an amount is never negative here, and the sign a
+    pump prints travels separately.
+    """
+    offset = int(spec.get("offset", 0) or 0)
+    name = spec.get("characteristic", "mana_value")
+    if spec.get("object") == "triggering_spell":
+        # The spell the trigger's condition bound, carried on the event by the
+        # cast fire site. Read here rather than off the stack top: by the time
+        # the trigger resolves, anything could be above the spell that caused
+        # it, and the stack top is a different object.
+        cast_card = (context.trigger_context or {}).get("cast_card")
+        if cast_card is None:
+            return 0
+        return max(0, int(getattr(cast_card, "cmc", 0) or 0) + offset)
+    perm = resolve_target_permanent(
+        game, context, predicate=lambda p: True, fallback_on_invalid_choice=False
+    )
+    if perm is None:
+        return 0
+    if name == "power":
+        value = int(perm.effective_power)
+    elif name == "toughness":
+        value = int(perm.effective_toughness)
+    else:
+        value = int(getattr(perm.card, "cmc", 0) or 0)
+    return max(0, value + offset)
 
 
 def _scaled(total: int, spec: dict) -> int:

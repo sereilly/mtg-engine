@@ -241,64 +241,6 @@ _CAST_TYPE_UNIONS: tuple[tuple[tuple[str, ...], "ast.ObjectFilter"], ...] = (
 )
 
 
-def _rebound(node, subject: ast.ObjectFilter):
-    """*node* with every bare pronoun rebound to *subject*, or *node* itself.
-
-    A structural walk rather than a per-node table: a pronoun can sit anywhere
-    a recipient can, and a list of the productions that admit one goes stale
-    the way every fire-site list in this engine has.
-    """
-    if isinstance(node, ast.TargetSpec):
-        if node.quantifier == "it" and node.filter.is_source:
-            return replace(node, filter=subject)
-    if dataclasses.is_dataclass(node) and not isinstance(node, type):
-        changes = {
-            field.name: rebound
-            for field in dataclasses.fields(node)
-            for rebound in (_rebound(getattr(node, field.name), subject),)
-            if rebound is not getattr(node, field.name)
-        }
-        return replace(node, **changes) if changes else node
-    # Tuples and lists alike: the AST is all-tuple today, and a walk that knew
-    # only about tuples would step over the first list field somebody adds
-    # without saying so — a pronoun quietly left pointing at the wrong object,
-    # which is the exact failure this function exists to prevent.
-    if isinstance(node, (tuple, list)):
-        walked = [_rebound(item, subject) for item in node]
-        if all(a is b for a, b in zip(walked, node)):
-            return node
-        return type(node)(walked)
-    return node
-
-
-def rebind_pronoun_to_event_subject(
-    event: ast.TriggerEvent, statement: ast.Statement
-) -> ast.Statement:
-    """"When enchanted land becomes tapped, destroy **it**" (Blight) — the
-    pronoun names the object the *condition* was about.
-
-    ``parse_recipient`` reads a bare "it" as the ability's own source, which is
-    what it means on every line whose trigger has no other subject to name, and
-    on every line with no trigger at all. Where the condition does name one, the
-    pronoun is a back-reference to it, and this is the one place both halves of
-    the sentence are in hand — the same decision round 8 made for "its", made at
-    the same moment for the same reason.
-
-    Only a *bare pronoun* is rebound. A card naming itself mid-sentence ("this
-    Aura deals 2 damage to that land's controller", Psychic Venom) is a
-    different reference that happens to be spelled with the same filter, and
-    rewriting it would aim an Aura's own effect at the permanent it enchants —
-    which is why the pronoun carries its own quantifier.
-
-    An event with no subject, or one whose subject *is* the source, leaves the
-    statement untouched: there is nothing else for the word to name.
-    """
-    subject = event.subject
-    if not isinstance(subject, ast.ObjectFilter) or subject.is_source:
-        return statement
-    return _rebound(statement, subject)
-
-
 def _accept_ability_activated_tail(stream: TokenStream) -> bool:
     """"…or a player activates an artifact's ability without {T} in its
     activation cost" — the second trigger event of a tap-or-activate ability.

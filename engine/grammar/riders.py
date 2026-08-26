@@ -26,6 +26,7 @@ from .nouns import parse_object_filter
 from .effects import _parse_create_token, _parse_gains
 from .phrases import _accept_number
 from .statements import _parse_condition, parse_statement
+from .rebinding import rebind_pronoun_to_condition_target
 from .effects import _parse_loses
 from .stream import TokenStream
 
@@ -366,6 +367,43 @@ def _parse_conditional_instead_rider(
         stream.reset(mark)
         return False
     steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
+    return True
+
+
+def _attach_otherwise(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """``Otherwise, <statement>.`` after a conditional sentence (Blood Lust).
+
+    The second arm of the sentence before it, not a step of its own: run as a
+    step it would happen *as well as* the arm that already ran, and Blood Lust
+    would give a 5-toughness creature +8 power and kill it.
+
+    Only a :class:`ast.Conditional` that has no second arm yet may take one. A
+    ``May`` prints its negative branch as "If you don't, …" and already has a
+    field for it, so folding this onto anything else would be reading one
+    sentence as another; a second "Otherwise" after the first is a card this
+    cannot read, and it refuses rather than overwriting the arm it read first.
+
+    The pronoun in the arm is rebound the same way the first arm's was, and
+    from the same condition — both arms of one sentence say "it" about the same
+    creature, and rebinding only the arm that happened to be parsed inside
+    ``parse_statement`` would leave this one pumping the spell on the stack.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.Conditional) or last.otherwise is not None:
+        return False
+    mark = stream.mark()
+    if not stream.accept_word("otherwise"):
+        return False
+    stream.accept_punct(",")
+    try:
+        arm = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    steps[-1] = dataclasses.replace(
+        last,
+        otherwise=rebind_pronoun_to_condition_target(last.condition, arm),
+    )
     return True
 
 

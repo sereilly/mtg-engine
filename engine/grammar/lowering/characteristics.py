@@ -75,12 +75,20 @@ def _x_definition_spec(definition: ast.Amount, node) -> dict:
         return count_spec(definition.filter, node, aggregate="distinct_colors")
     if isinstance(definition, ast.CountOf):
         return count_spec(definition.filter, node)
-    if isinstance(definition, ast.ManaValueOfSubject):
+    if isinstance(definition, ast.CharacteristicOfSubject):
         # "…, where X is **its** mana value" (Great Defender, Subdue, Kry
-        # Shield). Not an aggregate over a set: the object is the one the
-        # sentence already named, and the resolution reads the characteristic
-        # off it (CR 202.3, so off the card rather than off the battlefield).
-        return {"object_mana_value": "target"}
+        # Shield), "…, where X is **its toughness minus 1**" (Blood Lust). Not
+        # an aggregate over a set: the object is the one the sentence already
+        # named, and the resolution reads the characteristic off it — mana
+        # value off the card (CR 202.3), power and toughness through the layers
+        # (CR 613), which is the resolution's business rather than this one's.
+        return {
+            "object_characteristic": {
+                "object": "target",
+                "characteristic": definition.characteristic,
+                "offset": definition.offset,
+            }
+        }
     raise LoweringError("only a count or a maximum can define X here", node=node)
 
 

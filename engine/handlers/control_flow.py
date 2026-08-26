@@ -223,25 +223,39 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return False
         return bool(context.results["coin_flip"]) is bool(payload.get("won", True))
 
-    if kind == "source_power_is":
-        # "If this creature's power is 1 or more" (Lesser Werewolf). CR 613's
-        # computed power, read through the layer accessor rather than off the
-        # printed card: the gate exists because the ability shrinks its own
-        # source, so the value it asks about is the one every earlier activation
-        # already changed. A source that has left answers False — CR 608.2b
-        # leaves nothing to ask.
-        source = context.source_permanent
-        if source is None:
+    if kind == "subject_characteristic_is":
+        # "If this creature's power is 1 or more" (Lesser Werewolf), "If target
+        # creature has toughness 5 or greater" (Blood Lust). CR 613's computed
+        # characteristic, read through the layer accessors rather than off the
+        # printed card: Lesser Werewolf's gate exists because the ability
+        # shrinks its own source, and Blood Lust must see a creature another
+        # spell already pumped. Nothing to ask about answers False — a source
+        # that has left (CR 608.2b) and a target that is no longer legal both.
+        from ._common import resolve_target_permanent
+
+        if payload.get("subject") == "target":
+            # Through the same resolver the arms use, so the branch and the
+            # effect cannot disagree about which creature the sentence meant.
+            subject = resolve_target_permanent(
+                game, context, fallback_on_invalid_choice=False
+            )
+        else:
+            subject = context.source_permanent
+        if subject is None:
             return False
-        power = source.effective_power
+        value = (
+            subject.effective_toughness
+            if payload.get("characteristic") == "toughness"
+            else subject.effective_power
+        )
         wanted = int(payload.get("count", 0))
         op = payload.get("op", "eq")
         if op == "eq":
-            return power == wanted
+            return value == wanted
         if op == "le":
-            return power <= wanted
+            return value <= wanted
         if op == "ge":
-            return power >= wanted
+            return value >= wanted
         return False
 
     if kind == "is_state":

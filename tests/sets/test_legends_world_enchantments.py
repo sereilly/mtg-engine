@@ -97,7 +97,13 @@ def test_in_the_eye_of_chaos_sizes_its_tax_from_the_spell(set_pool):
     instruction = program.triggered_abilities[0].instruction
     assert instruction.payload["unless_pays_x"] is True
     assert instruction.payload["bound_to_trigger"] is True
-    assert instruction.payload["x_from_count"] == {"object_mana_value": "triggering_spell"}
+    assert instruction.payload["x_from_count"] == {
+        "object_characteristic": {
+            "object": "triggering_spell",
+            "characteristic": "mana_value",
+            "offset": 0,
+        }
+    }
 
 
 def test_the_three_taxes_are_all_world_enchantments_or_not(set_pool):

@@ -1618,3 +1618,102 @@ def test_rapid_fires_rampage_ends_with_the_turn(set_pool):
 
     assert not game._has_keyword(creature, "rampage")
     assert not game._has_keyword(creature, "first strike")
+
+
+# ---------------------------------------------------------------------------
+# Blood Lust (round 25) — a condition about the spell's own target, a second
+# arm, and an X read off a characteristic rather than a count.
+# ---------------------------------------------------------------------------
+
+
+def _sized(name: str, power: int, toughness: int) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _blood_lust(set_pool, power: int, toughness: int):
+    """Cast Blood Lust at a creature of the given printed size."""
+    victim = Permanent(card=_sized("Bear", power, toughness))
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEG")["Blood Lust"]], battlefield=[victim]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    result = game.cast_from_hand(
+        0, "Blood Lust", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+    return game, victim, result
+
+
+@pytest.mark.parametrize("toughness,expected", [(5, 1), (6, 2), (9, 5)])
+def test_blood_lust_takes_the_flat_arm_at_five_toughness_or_more(
+    set_pool, toughness, expected
+):
+    """"If target creature has toughness 5 or greater, it gets +4/-4." The
+    condition reads the *target's* computed toughness (CR 613), not the
+    source's — the spell is on the stack and has none."""
+    _game, victim, result = _blood_lust(set_pool, 2, toughness)
+
+    assert result.supported
+    assert victim.effective_power == 6
+    assert victim.effective_toughness == expected
+
+
+@pytest.mark.parametrize("toughness", [1, 2, 4])
+def test_blood_lust_takes_the_computed_arm_below_five(set_pool, toughness):
+    """"Otherwise, it gets +4/-X, where X is its toughness minus 1." The second
+    arm leaves the creature on exactly 1 toughness whatever it started at,
+    which is the whole reason the card prints two arms: a flat -4 would kill
+    everything smaller than a 5-toughness creature outright."""
+    _game, victim, result = _blood_lust(set_pool, 2, toughness)
+
+    assert result.supported
+    assert victim.effective_power == 6
+    assert victim.effective_toughness == 1, "the printed minus 1 is honoured"
+
+
+def test_blood_lust_leaves_its_target_alive_on_the_computed_arm(set_pool):
+    """The dropped-rider reading — "-X where X is its toughness" with the minus
+    1 lost — would put a 1/1 on 0 toughness and CR 704.5f would bury it."""
+    game, victim, _result = _blood_lust(set_pool, 1, 1)
+
+    assert victim in game.players[0].battlefield
+
+
+def test_blood_lust_reads_the_toughness_a_pump_already_changed(set_pool):
+    """CR 613 layer 7: the gate asks what the creature's toughness *is* at
+    resolution. A 2/2 given +0/+3 by something else takes the flat arm, which
+    reading the printed card would get wrong."""
+    from engine.pt import add_pt_modifier
+
+    victim = Permanent(card=_sized("Bear", 2, 2))
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEG")["Blood Lust"]], battlefield=[victim]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    add_pt_modifier(victim, 0, 3)
+
+    game.cast_from_hand(
+        0, "Blood Lust", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert victim.effective_toughness == 1, "5 - 4, the flat arm"
+
+
+def test_blood_lust_targets_a_creature(set_pool):
+    """The condition is where the word "target" is printed, so the target the
+    picker offers has to be derived from it — without that the spell announces
+    no target and both arms resolve against nothing."""
+    from engine.targeting import derive_cast_spec
+
+    card = set_pool("LEG")["Blood Lust"]
+    program = compile_card_oracle(card)
+
+    assert program.supported, program.reason
+    assert derive_cast_spec(card, program) == {"kind": "creature"}
