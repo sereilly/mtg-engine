@@ -3081,9 +3081,13 @@ def test_as_long_as_lines_stay_unlowered_and_unusable():
     assert not result.lowered
     assert not result.usable
     # The refusal now names what actually carries the line, rather than a phase
-    # that turned out not to be blocking it.
+    # that turned out not to be blocking it — and says *which* conditional
+    # bonuses the table carries, since round 27 gave the grammar the ones whose
+    # condition is about an opponent's board (Beasts of Bogardan) and left every
+    # condition about your own board here.
     assert result.failure_reason == (
-        "a conditional static bonus is derived by engine/static_bonuses.py"
+        "a conditional static bonus about your own board is derived by "
+        "engine/static_bonuses.py"
     )
 
 

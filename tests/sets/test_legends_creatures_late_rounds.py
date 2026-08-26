@@ -1471,3 +1471,85 @@ def test_shimian_night_stalker_redirect_expires_with_the_turn(set_pool):
 
     assert p1.life == 16
     assert stalker.damage_marked == 0
+
+
+# ---------------------------------------------------------------------------
+# Round 27 — Beasts of Bogardan. "This creature gets +1/+1 as long as an
+# opponent controls a nontoken white permanent." A conditional static (CR 613
+# layer 7c) whose condition is a printed noun phrase about *another player's*
+# board — read by the grammar's noun parser and answered by `subject_matches`,
+# the one place a phrase is tested against a permanent.
+# ---------------------------------------------------------------------------
+
+
+def _r27_permanent(name: str, colors: tuple[str, ...], *, token: bool = False) -> Permanent:
+    card = CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature — Bear", oracle_text="",
+        colors=colors, color_identity=colors, keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear",
+             "power": "2", "toughness": "2"},
+    )
+    return Permanent(card=card, metadata={"is_token": True} if token else {})
+
+
+def _r27_bogardan_board(set_pool):
+    beast = Permanent(card=set_pool("LEG")["Beasts of Bogardan"])
+    p1 = PlayerState(name="P1", battlefield=[beast])
+    p2 = PlayerState(name="P2")
+    return Game(players=[p1, p2]), p1, p2, beast
+
+
+def _r27_power(game, beast) -> int:
+    game._refresh_dynamic_creatures()
+    return beast.effective_power
+
+
+def test_beasts_of_bogardan_carries_both_halves_of_its_noun_phrase(set_pool):
+    """The colour *and* the "nontoken" ride the condition's filter. Either one
+    dropped is a condition looser than printed, and the bonus would appear on a
+    board the card says nothing about."""
+    program = compile_card_oracle(set_pool("LEG")["Beasts of Bogardan"])
+    assert program.supported, program.reason
+    condition = next(
+        i.payload["condition"]
+        for i in program.instructions
+        if i.kind == "conditional_static"
+    )
+    assert condition["who"] == "opponent"
+    assert condition["filter"] == {"color_filter": "W", "nontoken": True}
+
+
+def test_beasts_of_bogardan_reads_the_opponents_board_not_yours(set_pool):
+    """"An opponent controls" is a question about a seat. Asked of the wrong one
+    it would answer off the controller's own white permanents, which is a
+    different card entirely."""
+    game, mine, theirs, beast = _r27_bogardan_board(set_pool)
+    assert _r27_power(game, beast) == 3
+
+    mine.battlefield.append(_r27_permanent("Mine", ("W",)))
+    assert _r27_power(game, beast) == 3
+
+    theirs.battlefield.append(_r27_permanent("Theirs", ("W",)))
+    assert _r27_power(game, beast) == 4
+
+
+def test_beasts_of_bogardan_ignores_a_token(set_pool):
+    """"Nontoken" is the whole difference between this card and one that turns
+    on against any white board at all."""
+    game, mine, theirs, beast = _r27_bogardan_board(set_pool)
+
+    theirs.battlefield.append(_r27_permanent("Soldier", ("W",), token=True))
+
+    assert _r27_power(game, beast) == 3
+
+
+def test_beasts_of_bogardan_loses_the_bonus_when_the_board_changes(set_pool):
+    """CR 611.3a — the condition is asked on every recompute, not locked in."""
+    game, mine, theirs, beast = _r27_bogardan_board(set_pool)
+    white = _r27_permanent("Theirs", ("W",))
+    theirs.battlefield.append(white)
+    assert _r27_power(game, beast) == 4
+
+    theirs.battlefield.remove(white)
+
+    assert _r27_power(game, beast) == 3

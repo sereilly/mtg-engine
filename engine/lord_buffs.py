@@ -197,6 +197,19 @@ class LordBuff:
     # evaluated by ``static_bonuses.conditional_static_holds``, the same
     # evaluator every ``conditional_static`` payload gets.
     condition: str | dict | None = None
+    # "All creatures **lose flying**." (Gravity Sphere.) The mirror of
+    # ``keywords``, and its own field rather than a sign on that one: granting
+    # and removing share layer 6 but are opposite contributions, and a single
+    # list would make "have flying" and "lose flying" indistinguishable in the
+    # payload. What the consumer does with it is the same shape — a derived
+    # channel cleared and rebuilt from the board every recompute — so a source
+    # leaving the battlefield gives the ability back with nothing to undo.
+    #
+    # **Last**, and that is not cosmetic: three callers build a ``LordBuff``
+    # positionally, so a field inserted in the middle silently re-labels their
+    # arguments — Zombie Master's granted ability arrived as a protection
+    # quality, one character per letter, the first time this was written above.
+    lost_keywords: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +494,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["named"] = buff.filter.named
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
+    if buff.lost_keywords:
+        payload["lost_keywords"] = list(buff.lost_keywords)
     if buff.protection_from:
         payload["protection_from"] = list(buff.protection_from)
     if buff.granted_ability:
@@ -506,6 +521,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),
         keywords=tuple(payload.get("keywords") or ()),
+        lost_keywords=tuple(payload.get("lost_keywords") or ()),
         protection_from=tuple(payload.get("protection_from") or ()),
         granted_ability=payload.get("granted_ability"),
         condition=payload.get("condition"),

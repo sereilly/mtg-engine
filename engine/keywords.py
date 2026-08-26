@@ -35,6 +35,15 @@ ABILITY_EFFECTS = "ability_effects"
 # per recompute forever, and CR 611.3a means the recompute runs constantly.
 DERIVED_GRANTS = "derived_ability_grants"
 
+# The mirror channel: abilities a permanent has *lost* because of something else
+# on the battlefield right now ("All creatures lose flying", Gravity Sphere).
+# Same lifetime and the same reason for it — cleared and rebuilt from the board
+# on every recompute, so the source leaving gives the ability back with nothing
+# to find and undo. Kept apart from DERIVED_GRANTS rather than signed, because
+# layer 6 resolves a grant against a removal and a single list could not say
+# which a word was.
+DERIVED_REMOVALS = "derived_ability_removals"
+
 # Key under which granted **printed ability lines** live — the third channel in
 # this file, and the one for an ability layer 6's word-set cannot carry.
 #
@@ -135,12 +144,16 @@ def ability_effects(perm: Permanent) -> list[dict]:
 
 
 def clear_derived_grants(perm: Permanent) -> None:
-    """Drop the grants derived from the current board (CR 611.3b).
+    """Drop the grants and removals derived from the current board (CR 611.3b).
 
     Called by the same function that rebuilds them. Splitting the clear from the
-    rebuild is how a derived channel turns into an accumulating one.
+    rebuild is how a derived channel turns into an accumulating one — and both
+    directions are cleared here, together, for the same reason: a removal left
+    behind by a pass that only cleared the grants would keep taking an ability
+    away after its source had gone.
     """
     perm.metadata.pop(DERIVED_GRANTS, None)
+    perm.metadata.pop(DERIVED_REMOVALS, None)
 
 
 def grant_ability_line(perm: Permanent, line: str, *, until_eot: bool = False) -> None:
@@ -189,9 +202,25 @@ def derived_grants(perm: Permanent) -> tuple[str, ...]:
     return tuple(perm.metadata.get(DERIVED_GRANTS) or ())
 
 
+def add_derived_removal(perm: Permanent, keyword: str) -> None:
+    """Layer 6: *perm* lacks *keyword* for as long as the source keeps taking
+    it away."""
+    removed = perm.metadata.setdefault(DERIVED_REMOVALS, [])
+    lowered = keyword.lower()
+    if lowered not in removed:
+        removed.append(lowered)
+
+
+def derived_removals(perm: Permanent) -> tuple[str, ...]:
+    """The abilities a board-wide source is currently taking from *perm*."""
+    return tuple(perm.metadata.get(DERIVED_REMOVALS) or ())
+
+
 __all__ = [
-    "ABILITY_EFFECTS", "DERIVED_GRANTS", "GRANTED_ABILITY_LINES",
+    "ABILITY_EFFECTS", "DERIVED_GRANTS", "DERIVED_REMOVALS",
+    "GRANTED_ABILITY_LINES",
     "LINE_DERIVED_KEYWORDS", "ability_effects", "add_derived_grant",
+    "add_derived_removal", "derived_removals",
     "clear_derived_grants", "clear_until_eot_granted_ability_lines",
     "clear_until_eot_keywords", "derived_grants", "grant_ability_line",
     "keyword_ability_name",

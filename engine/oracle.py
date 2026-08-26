@@ -2117,7 +2117,9 @@ _DOESNT_UNTAP_LINE = "this creature doesn't untap during your untap step"
 #: table still reads every line the grammar refuses (Jihad's stored-choice
 #: condition). Both producers emit through ``lord_buff_payload``, and the
 #: pool-wide differential run when the gate widened found zero payload drift.
-_GRAMMAR_STATIC_CREATURE_KINDS = frozenset({"dynamic_pt_bonus", "lord_buff"})
+_GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
+    {"dynamic_pt_bonus", "lord_buff", "conditional_static"}
+)
 
 
 def _grammar_static_creature_instruction(

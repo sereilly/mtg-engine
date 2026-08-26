@@ -1576,3 +1576,78 @@ def test_lands_edge_may_be_activated_by_the_other_player(set_pool, cards):
     assert [c.name for c in game.players[0].hand] == ["Mountain"], (
         "the activator's own hand pays the cost"
     )
+
+
+# ---------------------------------------------------------------------------
+# Round 27 — Angelic Voices. "Creatures you control get +1/+1 as long as you
+# control no nonartifact, nonwhite creatures." A conditional anthem whose
+# condition carries a printed *threshold* — read as presence it would be its
+# own negation, which is why the lowering refused a counted condition until the
+# evaluator counted.
+# ---------------------------------------------------------------------------
+
+
+def _r27_body(name: str, colors: tuple[str, ...], type_line: str = "Creature — Bear") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=colors, color_identity=colors, keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "power": "2", "toughness": "2"},
+    )
+
+
+def _r27_voices_board(set_pool):
+    angel = Permanent(card=_r27_body("Angel", ("W",)))
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEG")["Angelic Voices"]], battlefield=[angel]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    assert game.cast_from_hand(0, "Angelic Voices").supported
+    game.resolve_top_of_stack()
+    return game, p1, angel
+
+
+def test_angelic_voices_carries_the_printed_threshold(set_pool):
+    """"No …" is `== 0`, and both halves ride the payload. A condition lowered
+    without them would be "at least one", which is the sentence inverted."""
+    program = compile_card_oracle(set_pool("LEG")["Angelic Voices"])
+    assert program.supported, program.reason
+    condition = program.instructions[0].payload["condition"]
+    assert (condition["count"], condition["op"]) == (0, "eq")
+    assert condition["who"] == "you"
+
+
+def test_angelic_voices_buffs_while_the_board_stays_white(set_pool):
+    game, seat, angel = _r27_voices_board(set_pool)
+    assert (angel.effective_power, angel.effective_toughness) == (3, 3)
+
+
+def test_angelic_voices_stops_when_an_off_colour_creature_arrives(set_pool):
+    """And starts again when it goes — CR 611.3a, the condition is asked on
+    every recompute rather than locked in at resolution."""
+    game, seat, angel = _r27_voices_board(set_pool)
+    intruder = Permanent(card=_r27_body("Grizzly", ("G",)))
+
+    seat.battlefield.append(intruder)
+    game._recalculate_lord_buffs()
+    game._refresh_dynamic_creatures()
+    assert angel.effective_power == 2
+
+    seat.battlefield.remove(intruder)
+    game._recalculate_lord_buffs()
+    game._refresh_dynamic_creatures()
+    assert angel.effective_power == 3
+
+
+def test_angelic_voices_ignores_an_artifact_creature(set_pool):
+    """"Nonartifact, nonwhite" is two exclusions, and a colourless artifact
+    creature fails the first — so the condition still holds. Dropping either
+    word would turn the card off on a board it is printed to work on."""
+    game, seat, angel = _r27_voices_board(set_pool)
+
+    seat.battlefield.append(
+        Permanent(card=_r27_body("Golem", (), "Artifact Creature — Golem"))
+    )
+    game._recalculate_lord_buffs()
+    game._refresh_dynamic_creatures()
+
+    assert angel.effective_power == 3

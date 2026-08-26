@@ -44,7 +44,7 @@ from .continuous import (
     set_pt,
     switch_pt,
 )
-from .keywords import ability_effects, derived_grants
+from .keywords import ability_effects, derived_grants, derived_removals
 from .land_types import land_type_changes
 from .lord_buffs import QUALIFIER_FIELDS
 
@@ -441,6 +441,16 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
     if granted:
         effects.append(
             grant_abilities(only, list(granted), timestamp=0, label="lord grant")
+        )
+
+    # And the mirror: abilities a board-wide source is taking away right now
+    # ("All creatures lose flying", Gravity Sphere). Derived every recompute
+    # like the grant above, so the ability comes back the moment the source
+    # leaves — there is no stored removal to reverse.
+    removed = derived_removals(perm)
+    if removed:
+        effects.append(
+            remove_abilities(only, list(removed), timestamp=0, label="lord removal")
         )
 
     # Layer 6 from each attached Aura, stamped with the moment it attached

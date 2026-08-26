@@ -219,17 +219,20 @@ def test_the_acknowledgement_list_has_no_dead_entries():
         "This creature gets +1/+1 as long as you control a Zombie.",
         # The gate admitted every line starting "other " — a prefix, not a
         # template — so a lord whose effect the engine does not implement
-        # reported supported and did nothing. All four of these are the shape
+        # reported supported and did nothing. All three of these are the shape
         # engine/lord_buffs.py refuses: an unmodelled effect, an unimplemented
-        # keyword, an activated ability at a cost nothing charges, and an
-        # "as long as" whose condition parses but carries a threshold the
-        # evaluator does not test (`conditional_static_holds` asks presence,
-        # not a count — the plain "as long as you control a Mountain" is a
-        # supported conditional anthem now, so it can no longer stand here).
+        # keyword and an activated ability at a cost nothing charges.
+        #
+        # A fourth used to stand here — "…as long as you control two or more
+        # Mountains" — because the condition parsed and `conditional_static_holds`
+        # asked presence, so the threshold would have been dropped. The
+        # evaluator counts now (round 27, for Angelic Voices' "you control **no**
+        # nonartifact, nonwhite creatures"), so the line is implemented rather
+        # than unimplemented, and the honest place for it is
+        # `test_a_counted_anthem_condition_is_evaluated_as_a_count` below.
         "Other Goblins glimmer uncontrollably.",
         "Other Goblins get +1/+1 and have shadow.",
         'Other Zombies have "{5}: Regenerate this permanent."',
-        "Other Goblins get +1/+1 as long as you control two or more Mountains.",
     ],
 )
 def test_an_unimplemented_rider_is_reported_unsupported(text):
@@ -246,3 +249,51 @@ def test_an_unimplemented_rider_is_reported_unsupported(text):
              "power": "2", "toughness": "2"},
     )
     assert not compile_card_oracle(card).supported
+
+
+def test_a_counted_anthem_condition_is_evaluated_as_a_count():
+    """"…as long as you control **two or more** Mountains" — the threshold rides
+    the payload and is compared, rather than being read as "at least one".
+
+    An invented card, because the point is the template: read as presence the
+    buff would appear one Mountain early, which is a condition weaker than
+    printed and the exact drop this test used to guard by refusing the line.
+    """
+    from engine import Game, PlayerState
+    from engine.models import CardDefinition, Permanent
+
+    def _card(name: str, type_line: str, text: str = "") -> CardDefinition:
+        raw = {"name": name, "type_line": type_line}
+        if "Creature" in type_line:
+            raw.update(power="2", toughness="2")
+        return CardDefinition(
+            name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text=text,
+            colors=("R",), color_identity=("R",), keywords=(), produced_mana=(),
+            raw=raw,
+        )
+
+    lord = Permanent(card=_card(
+        "Probe", "Creature — Goblin",
+        "Other Goblins get +1/+1 as long as you control two or more Mountains.",
+    ))
+    program = compile_card_oracle(lord.card)
+    assert program.supported, program.reason
+    condition = program.instructions[0].payload["condition"]
+    assert (condition["count"], condition["op"]) == (2, "ge")
+
+    goblin = Permanent(card=_card("Gob", "Creature — Goblin"))
+    seat = PlayerState(name="P1", battlefield=[lord, goblin])
+    game = Game(players=[seat, PlayerState(name="P2")])
+
+    def _power() -> int:
+        game._recalculate_lord_buffs()
+        game._refresh_dynamic_creatures()
+        return goblin.effective_power
+
+    assert _power() == 2
+    seat.battlefield.append(Permanent(card=_card("Mountain", "Basic Land — Mountain")))
+    assert _power() == 2
+    seat.battlefield.append(Permanent(card=_card("Mountain", "Basic Land — Mountain")))
+    assert _power() == 3
+    seat.battlefield.pop()
+    assert _power() == 2
