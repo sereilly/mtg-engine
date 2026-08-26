@@ -1596,17 +1596,26 @@ class PendingChoicesMixin:
             return {k: int(v) for k, v in cost.items()}
         return generic_cost(int(data.get("amount", 0)))
 
+    def _counter_payment_plan(self, player, cost: dict[str, int]):
+        """How *player* can pay a counterspell's "unless you pay", or None.
+
+        Pool **and** untapped lands, which is CR 605.3b: a player may activate a
+        mana ability while paying a cost, and this payment happens during the
+        counterspell's resolution with no priority window in which to do it any
+        other way. The sibling `_optional_pay_plan` has always answered this way
+        for "you may pay" — the two are the same question, and this one spent
+        only floating mana, so an AI holding untapped lands declined a cost it
+        could afford and lost the spell.
+        """
+        return plan_payment(
+            player.mana_pool, untapped_mana_lands(self.controlled_by(player)), cost
+        )
+
     def _default_mana_payment(self, choice: PendingChoice) -> None:
         controller = self.players[choice.player_index]
         cost = self._mana_payment_cost(choice.data)
-        # `lands=()` on purpose: this is the *non-interactive* default, and it
-        # spends only what is already floating. CR 605.3b would let a player
-        # tap lands to answer during resolution, and an interactive seat can —
-        # the prompt lists "tap" and "activate" among the actions that answer
-        # it. Closing that gap for the auto path is a change to what every
-        # seeded AI simulation does, so it is not smuggled in here.
         self._resolve_mana_payment(
-            choice, plan_payment(controller.mana_pool, (), cost) is not None
+            choice, self._counter_payment_plan(controller, cost) is not None
         )
 
     def _resolve_mana_payment(self, choice: PendingChoice, pay: bool) -> bool:
@@ -1618,11 +1627,15 @@ class PendingChoicesMixin:
         # Which symbols come out, not just how many: paying {W} by draining a
         # red pip is what a bare count could not tell apart, and it is the
         # difference between Ayesha Tanaka's ability working and working for
-        # everyone.
-        plan = plan_payment(controller.mana_pool, (), cost) if pay else None
+        # everyone. Lands are tapped as well as pips spent (CR 605.3b) — the
+        # plan names both halves, and paying from one without the other would
+        # let the same land answer two costs.
+        plan = self._counter_payment_plan(controller, cost) if pay else None
         if plan is not None:
             for symbol, spent in plan.from_pool.items():
                 controller.mana_pool[symbol] = controller.mana_pool.get(symbol, 0) - spent
+            for land in plan.tapped:
+                self.become_tapped(land)
             name = target.card.name if target is not None else "the spell"
             self.log.append(
                 f"{controller.name} paid {mana_cost_label(cost)}; {name} is not countered"

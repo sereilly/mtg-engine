@@ -98,3 +98,44 @@ def test_303_4_the_enchant_line_itself_is_not_an_effect():
     Aura carrying nothing else does nothing at all."""
     assert unclaimed_aura_lines(["enchant creature"]) == []
     assert aura_effect_claim("enchant creature") is None
+
+
+@pytest.mark.cr("303.4")
+def test_an_aura_entry_effect_the_engine_cannot_perform_is_not_claimed():
+    """The hole the ETB row's `.+$` left open, closed and pinned.
+
+    The claim table's job is to say what *implements* a line. That row matched
+    any effect at all after "when this Aura enters", naming a method that
+    performs exactly two of them — so an Aura printing an entry effect the
+    engine cannot carry out reported **supported** and then did nothing, which
+    is the silent direction this whole file exists to refuse.
+
+    Invented sentences on purpose: every real printing either lowers (and is
+    claimed by `aura_compiled_trigger_claim`, which asks the compiler) or is one
+    of the two bespoke texts, so a test written from the pool alone passes
+    against the wildcard.
+    """
+    for line in (
+        "when this aura enters, frobnicate the widget",
+        "when this aura enters, each player recites a poem",
+        "when this enchantment enters, the sky turns green",
+    ):
+        assert aura_effect_claim(line, "") is None, (
+            f"claimed an entry effect nothing implements: {line!r}"
+        )
+
+
+@pytest.mark.cr("303.4")
+def test_the_two_bespoke_entry_texts_are_still_claimed():
+    """The other direction: narrowing the row must not drop the two entry
+    effects `_apply_aura_effect` really does perform by text matching."""
+    animate = (
+        "when this aura enters, if it's on the battlefield, return enchanted "
+        "creature card to the battlefield under your control"
+    )
+    earthbind = (
+        "when this aura enters, if enchanted creature has flying, this aura "
+        "deals 2 damage to that creature"
+    )
+    assert aura_effect_claim(animate, "") is not None
+    assert aura_effect_claim(earthbind, "") is not None

@@ -231,12 +231,36 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
     # by *asking* the code that would carry the line out — see the docstring
     # there for why a wildcard was the wrong shape.
     (
-        # The Aura's own enters-the-battlefield trigger. Modern Oracle says
-        # "this aura"; older printings and test fixtures name the card, so
-        # `aura_effect_claim` also accepts the card's own name as the subject
-        # (checked by the caller, never a wildcard — a wildcard here would
-        # re-open exactly the hole this table closes).
-        re.compile(r"^when this (?:aura|enchantment) enters(?:,| ).+$"),
+        # The **two** enters-the-battlefield texts `_apply_aura_effect` performs
+        # by bespoke text matching, and each pattern is keyed to the substrings
+        # *that method* tests — Animate Dead's reanimation pair and Earthbind's
+        # flying condition. Anything else is an ordinary compiled trigger and is
+        # claimed below by `aura_compiled_trigger_claim`, which asks the
+        # compiler whether the effect lowers.
+        #
+        # This row used to end `.+$`. The comment beside it said "never a
+        # wildcard", and meant the *subject* — the effect half was open, so
+        # "when this Aura enters, frobnicate the widget" was claimed by a method
+        # implementing nothing of the sort, and any Aura printing an entry
+        # effect the engine cannot perform reported supported and did nothing.
+        # Keying to the method's own substrings is what keeps the gate and the
+        # dispatch reading one rule rather than two copies.
+        # `_apply_aura_effect` asks for two substrings across the *whole* card:
+        # "creature card in a graveyard" (which is the **enchant** line, and is
+        # already required by the `aura_enchants` gate in front of that branch)
+        # and this one, which is the entry line's own half. A claim is asked per
+        # line, so this pattern carries the half a line can answer for.
+        re.compile(
+            r"^when this (?:aura|enchantment) enters.*"
+            r"return enchanted creature card to the battlefield"
+        ),
+        "enters-the-battlefield Aura trigger — _apply_aura_effect",
+    ),
+    (
+        re.compile(
+            r"^when this (?:aura|enchantment) enters.*"
+            r"if (?:enchanted|this) creature has flying"
+        ),
         "enters-the-battlefield Aura trigger — _apply_aura_effect",
     ),
     (

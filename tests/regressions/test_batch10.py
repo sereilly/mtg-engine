@@ -276,10 +276,38 @@ class TestPowerSink:
         assert any(c.name == "Lightning Bolt" for c in p1.graveyard)  # countered
         assert all(ln.tapped for ln in p1lands)  # Power Sink rider taps their lands
 
-    def test_headless_auto_resolves_counter_when_unable_to_pay(self, cards):
-        game, p0, p1, p1lands = self._board(cards)
-        # No mana available -> the headless path counters without leaving it pending.
+    def test_headless_pays_by_tapping_lands(self, cards):
+        """CR 605.3b: a player may activate a mana ability to pay a cost, and
+        this payment happens inside the counterspell's resolution with no
+        priority window in which to do it any other way.
+
+        This case used to assert the *opposite* — an empty pool was read as
+        "unable to pay" and the Bolt was countered, though its controller had
+        two untapped Mountains and owed {2}. The interactive prompt has always
+        allowed the taps (`also_answers=("tap", "activate")`); only the
+        headless default declined a cost the board could afford.
+        """
+        game, _p0, p1, p1lands = self._board(cards)
+
         game.resolve_top_of_stack(pause_for_choices=False)
+
+        assert game.pending_mana_payment is None
+        assert any(it.card.name == "Lightning Bolt" for it in game.stack), (
+            "the controller could pay {2} from two untapped Mountains"
+        )
+        assert all(ln.tapped for ln in p1lands), "and the lands paid for it"
+
+    def test_headless_counters_when_the_board_cannot_pay(self, cards):
+        """The other half, and the one that still counters: no pool and no
+        lands is genuinely unable, and the plan says so rather than the empty
+        pool alone saying it."""
+        game, _p0, p1, p1lands = self._board(cards)
+        for land in list(p1lands):
+            p1.battlefield.remove(land)
+        game._sync_control()
+
+        game.resolve_top_of_stack(pause_for_choices=False)
+
         assert game.pending_mana_payment is None
         assert any(c.name == "Lightning Bolt" for c in p1.graveyard)
 

@@ -1809,3 +1809,62 @@ dispatch roof and will trip first.
 734/734. Suite 7,273, unchanged — the two handler fixes are behaviour-preserving
 by construction, and the splits move code without changing it. Every `--check`
 green.
+
+## LEG debt round 2: the last two outstanding items
+
+*(2026-08-25.)* No cards. Both items rounds 13 and 17 deferred, and both turned
+out smaller than the deferral assumed.
+
+**CR 605.3b: the payment default now taps lands.** A counterspell's "unless its
+controller pays" resolved by spending *floating mana only*, so a player holding
+two untapped Mountains declined a `{2}` they could afford and lost the spell.
+CR 605.3b lets a player activate a mana ability while paying a cost, and this
+payment happens inside the counterspell's resolution with no priority window in
+which to do it any other way — which is exactly the justification the sibling
+`_optional_pay_plan` already carried for "you may pay". The counter payment was
+the odd one out; both now ask one `_counter_payment_plan`, and the plan's lands
+are tapped as well as its pips spent.
+
+Round 17 deferred this as "a change to what every seeded AI simulation does".
+**It changes none of them** — the LEA batch logs the same 443 interactions
+before and after. The deferral was right to want a differential and wrong about
+what it would show.
+
+One regression test asserted the old behaviour outright: with two untapped
+Mountains and `{2}` owed, "no mana available → the headless path counters". Its
+comment said "no mana available" and it meant *no floating mana*. It now asserts
+the payment, and a second case pins the genuinely-unable path with the lands
+removed, so the two readings cannot be confused again.
+
+**The Aura ETB row stopped being a wildcard.** `_TEMPLATES` claimed
+`^when this (?:aura|enchantment) enters(?:,| ).+$` for
+`_apply_aura_effect` — a method that performs exactly **two** entry texts by
+bespoke matching. So "when this Aura enters, frobnicate the widget" was claimed
+by code implementing nothing of the sort, and any Aura printing an entry effect
+the engine cannot carry out reported supported and did nothing.
+
+The comment beside the row said "never a wildcard" and meant the *subject*; the
+effect half was open. The two rows that replace it are keyed to the substrings
+`_apply_aura_effect` itself tests, so the gate and the dispatch read one rule.
+Everything else falls through to `aura_compiled_trigger_claim`, which asks the
+compiler whether the effect lowers — and refuses when it does not.
+
+Measured before changing anything: of the nine Auras in the pool whose entry
+line the wildcard matched, **seven were already claimed by the compiled path**
+and only Animate Dead and Earthbind depended on it — precisely the two the
+method implements. The differential was zero cards.
+
+Getting the two patterns right took three attempts, and the failures were
+informative: `_apply_aura_effect` tests its substrings against the **whole
+card**, while a claim is asked per *line*, and Animate Dead's other half
+("creature card in a graveyard") lives on the enchant line — already required by
+the `aura_enchants` gate in front of that branch. The pattern carries the half a
+line can answer for.
+
+The guard is written with invented sentences, deliberately: every real printing
+either lowers or is one of the two bespoke texts, so a test written from the
+pool alone passes against the wildcard.
+
+**Numbers.** No card moved: LEG 220 of 310, shipped pool 734/734. Suite 7,273 →
+**7,276** (three new tests: one corrected regression, two new guards). Every
+`--check` green. AI simulation identical.
