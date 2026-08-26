@@ -1959,3 +1959,99 @@ def test_rabid_wombat_grows_with_every_aura_on_it(set_pool):
     detach_aura(auras[0], wombat)
     game._refresh_dynamic_creatures()
     assert (wombat.effective_power, wombat.effective_toughness) == (2, 3)
+
+
+# ---------------------------------------------------------------------------
+# Bronze Horse (round 22) - a conditional static shield against targeting spells
+# ---------------------------------------------------------------------------
+
+
+def _bronze_horse_game(set_pool, *, with_friend: bool):
+    """Bronze Horse and a Lightning Bolt in hand, with or without the other
+    creature its condition counts.
+
+    The Bolt comes from Alpha because Legends prints no spell that deals damage
+    to a single chosen target - and what this card is about is the *targeting*,
+    so the test needs a spell that does it.
+    """
+    horse = Permanent(card=set_pool("LEG")["Bronze Horse"])
+    battlefield = [horse]
+    if with_friend:
+        battlefield.append(Permanent(card=_vanilla("Friend", 1, 1)))
+    p1 = PlayerState(name="P1", battlefield=battlefield)
+    p2 = PlayerState(name="P2", hand=[set_pool("LEA")["Lightning Bolt"]])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(1)
+    return game, horse, p1, p2
+
+
+def _bolt_the_horse(game) -> None:
+    result = game.cast_from_hand(
+        1, "Lightning Bolt", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+    assert result.supported, result.reason
+
+
+def test_bronze_horse_is_supported(set_pool):
+    """Its whole text: a conditional static prevention plus one keyword line."""
+    program = compile_card_oracle(set_pool("LEG")["Bronze Horse"])
+    assert program.supported, program.reason
+
+
+def test_bronze_horse_prevents_a_spell_that_targets_it(set_pool):
+    """"...prevent all damage that would be dealt to this creature by spells
+    that target it." The narrowing is a fact about the spell on the stack, not
+    a property of the source object, so it is read off the stack at the moment
+    the damage would be dealt (CR 608.2m: the spell is still there)."""
+    game, horse, _p1, _p2 = _bronze_horse_game(set_pool, with_friend=True)
+
+    _bolt_the_horse(game)
+
+    assert horse.damage_marked == 0
+    assert game.controller_index_of(horse) == 0, "and it is still on the battlefield"
+
+
+def test_bronze_horse_needs_the_other_creature_its_condition_counts(set_pool):
+    """"**As long as you control another creature**" - CR 611.2. The clause is
+    rechecked on the event rather than latched, so a Horse standing alone is a
+    3/4 that dies to a Bolt like any other."""
+    game, horse, _p1, _p2 = _bronze_horse_game(set_pool, with_friend=False)
+
+    _bolt_the_horse(game)
+
+    assert horse.damage_marked == 3, "the condition did not hold"
+
+
+def test_bronze_horse_only_shields_what_the_spell_aimed_at(set_pool):
+    """"spells that **target it**". The same Bolt pointed at the other creature
+    is not shielded against - the shield is about this permanent being the
+    chosen target, not about the spell existing."""
+    game, horse, p1, _p2 = _bronze_horse_game(set_pool, with_friend=True)
+    friend = p1.battlefield[1]
+
+    result = game.cast_from_hand(
+        1, "Lightning Bolt", target_player_index=0, target_permanent_index=1
+    )
+    game._settle()
+
+    assert result.supported, result.reason
+    assert horse.damage_marked == 0, "it was never the target"
+    assert friend not in game.controlled_by(0), "and the Bolt killed what it aimed at"
+
+
+def test_bronze_horse_still_takes_damage_nothing_targeted_it_with(set_pool):
+    """A shield admitting the phrase and then ignoring "spells that target it"
+    would be a Horse that cannot be damaged at all. Combat damage from a
+    creature is neither a spell nor a targeting, and it lands."""
+    from engine.damage_events import deal_damage
+
+    game, horse, _p1, _p2 = _bronze_horse_game(set_pool, with_friend=True)
+    ogre = Permanent(card=_vanilla("Ogre", 3, 3))
+    game.players[1].battlefield.append(ogre)
+
+    dealt = deal_damage(game, {
+        "recipient": horse, "amount": 3, "source": ogre, "combat": True,
+    }).dealt
+    assert dealt == 3

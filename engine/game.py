@@ -359,6 +359,15 @@ class Game(
     # `sequence` or a replacement nests resolutions inside one another. Empty
     # outside a resolution, which is the honest answer for a turn-based action.
     resolving_seats: list = field(default_factory=list)
+    # The chosen targets of the object whose instruction is running, by stable
+    # permanent id, pushed and popped beside ``resolving_seats``. Same reason
+    # that one exists: "spells that target it" (Bronze Horse) is a question
+    # about the *resolving object*, and the damage paths receive a bare
+    # ``CardDefinition`` that records nothing about what was chosen. Reading it
+    # off the stack is not an option -- the object is popped before its
+    # instructions run -- so it is recorded for the duration at the one
+    # dispatch point that knows it.
+    resolving_targets: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

@@ -722,8 +722,16 @@ def prevent_and_count_kind(line: str) -> str | None:
 #: permissive matcher: the shield is derived by reading a permanent's text, and
 #: an Aura is itself a permanent — a single matcher would have Artifact Ward
 #: shielding *itself* from artifact sources, which is a card nobody printed.
+#: The optional leading condition (Bronze Horse: "**As long as you control
+#: another creature,** prevent all damage ..."). CR 611.2's "as long as" clause
+#: on a static ability -- the shield exists only while it holds, and it is
+#: rechecked on every event rather than latched, because the creature it counts
+#: may leave. The noun phrase is read by the same reader every other printed
+#: noun phrase goes through, so "another creature" means here what it means
+#: everywhere.
 _PREVENT_ALL_FROM_SOURCE_TYPE_RE = re.compile(
-    r"^prevent all (?P<combat>combat )?damage that would be dealt to "
+    r"^(?:as long as you control (?P<condition>[^,]+), )?"
+    r"prevent all (?P<combat>combat )?damage that would be dealt to "
     r"(?P<subject>this|enchanted|equipped) "
     r"(?:artifact|creature|enchantment|land|permanent) by "
     r"(?P<source>"
@@ -731,6 +739,7 @@ _PREVENT_ALL_FROM_SOURCE_TYPE_RE = re.compile(
     r"|enchanted creatures"
     r"|walls"
     r"|creatures it's blocking"
+    r"|spells that target it"
     r")$"
 )
 
@@ -760,6 +769,12 @@ _SOURCE_CLASSES: dict[str, dict[str, object]] = {
     "walls": {"subtype": "wall"},
     "enchanted creatures": {"card_type": "creature", "enchanted": True},
     "creatures it's blocking": {"card_type": "creature", "blocked_by_recipient": True},
+    # "...by **spells that target it**" (Bronze Horse). Not a property of the
+    # source object at all: it is a fact about the spell on the stack that is
+    # dealing the damage, and the same spell aimed at something else is not
+    # shielded against. A fourth kind of narrowing beside the three above, which
+    # is why the value is a dict rather than a type word.
+    "spells that target it": {"spell_targets_recipient": True},
 }
 
 
@@ -783,6 +798,10 @@ def _source_shield_matches(game, source, recipient, wanted: dict) -> bool:
 
         if not hasattr(source, "metadata") or not auras_attached_to(source):
             return False
+    if wanted.get("spell_targets_recipient") and not _spell_targets_recipient(
+        game, source, recipient
+    ):
+        return False
     if wanted.get("blocked_by_recipient"):
         # "…by creatures **it's blocking**" (Wall of Shadows, Wall of Vapor).
         # The Wall is the blocker and the source is an attacker it was declared
@@ -792,6 +811,34 @@ def _source_shield_matches(game, source, recipient, wanted: dict) -> bool:
         if not _recipient_is_blocking(game, recipient, source):
             return False
     return True
+
+
+def _spell_targets_recipient(game, source, recipient) -> bool:
+    """Whether *source* is a spell on the stack that targets *recipient*.
+
+    A spell's damage source is the card itself (CR 109.5) -- the card as
+    printed, which records neither who cast it nor what it was aimed at. So the
+    targets come from ``Game.resolving_targets``, the seam
+    ``_execute_oracle_instruction`` pushes around every instruction, exactly as
+    the seat does. Reading the stack instead does not work and is not merely
+    slower: the object is popped before its instructions run, so by the time the
+    damage would be dealt there is nothing there to ask.
+
+    "Spells", not abilities: an activated or triggered ability is not a spell
+    (CR 111.1), and its damage source is the permanent it is on -- which is what
+    the first refusal below tests, because a permanent is not a spell however it
+    is dealing the damage.
+
+    By the stable target *id* rather than a recorded index: an index is a slot
+    in a battlefield list, and anything leaving renumbers every later one.
+    """
+    if source is None or hasattr(source, "metadata"):
+        return False
+    permanent_id = getattr(recipient, "permanent_id", None)
+    if permanent_id is None:
+        return False
+    chosen = getattr(game, "resolving_targets", None) or ()
+    return bool(chosen) and permanent_id in chosen[-1]
 
 
 def _recipient_is_blocking(game, recipient, source) -> bool:
@@ -814,13 +861,28 @@ def _source_type_shield_match(line: str):
 
 
 def _shield_from_match(match) -> dict | None:
-    """The source class and event narrowing one matched line describes."""
+    """The source class, event narrowing and condition one matched line
+    describes."""
     wanted = _SOURCE_CLASSES.get(match.group("source"))
     if wanted is None:
         # A phrase the pattern admits with no class behind it would be a shield
         # against everything. Answering None keeps the card unsupported.
         return None
-    return {**wanted, "combat_only": bool(match.group("combat"))}
+    described = {**wanted, "combat_only": bool(match.group("combat"))}
+    phrase = match.group("condition")
+    if phrase is not None:
+        # The grammar's own noun-phrase reader, lazily imported because the
+        # grammar's parse claim imports this module. A phrase it cannot read
+        # answers None, which keeps the card unsupported rather than shielding
+        # it unconditionally -- a condition dropped is a shield strictly wider
+        # than the card prints.
+        from .grammar import subject_filter_payload
+
+        filt = subject_filter_payload(phrase)
+        if filt is None:
+            return None
+        described["condition"] = {"kind": "controls", "who": "you", "filter": filt}
+    return described
 
 
 def prevent_all_from_source_type(line: str) -> dict | None:
@@ -864,14 +926,37 @@ def _source_type_shielded_by(game, event: dict) -> dict | None:
         return None
     for line in getattr(recipient, "effective_card", recipient.card).oracle_text.splitlines():
         wanted = prevent_all_from_source_type(line)
-        if wanted is not None:
+        if wanted is not None and _condition_holds(game, wanted, recipient):
             return wanted
     for attached in auras_attached_to(recipient):
         for line in attached.effective_card.oracle_text.splitlines():
             wanted = attached_prevent_all_from_source_type(line)
-            if wanted is not None:
+            if wanted is not None and _condition_holds(game, wanted, attached):
                 return wanted
     return None
+
+
+def _condition_holds(game, wanted: dict, holder) -> bool:
+    """Whether a shield's "as long as" clause holds right now (CR 611.2).
+
+    Asked here, where the permanent whose text carried the line is in hand, and
+    asked on every event rather than latched: the creature the clause counts may
+    leave, and a shield that outlived its condition is one the card does not
+    print. Pure, like every other predicate in this file.
+
+    The clause is evaluated by ``engine/static_bonuses.conditional_static_holds``
+    -- the same payload shape and the same evaluator the conditional P/T bonuses
+    use, so "you control another creature" has one meaning in the engine.
+    """
+    condition = wanted.get("condition")
+    if condition is None:
+        return True
+    from .static_bonuses import conditional_static_holds
+
+    seat = game.controller_index_of(holder)
+    if seat is None:
+        return False
+    return conditional_static_holds(game, seat, holder, condition)
 
 
 def _applies_source_type_blanket(game, event: dict) -> bool:
