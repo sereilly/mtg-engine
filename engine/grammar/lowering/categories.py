@@ -308,6 +308,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Unsubstantiate: a spell unstacked to its owner's hand, or a creature bounced.
     "return_spell_or_creature_to_hand": "zones",
     "put_cards_from_hand_onto_battlefield": "zones",
+    # "…put **a** permanent card from their hand onto the battlefield."
+    # (Eureka.) The chosen-card twin of the sweep above: same zone change, one
+    # card, and the seat picks which.
+    "put_chosen_card_from_hand_onto_battlefield": "zones",
     "reveal_top_to_hand_or_bottom": "zones",
     # The bare reveal (Track Down). Same category as the template above: both
     # look at the top of a library, and what differs is what the card's other
@@ -581,6 +585,10 @@ _WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
     "sequence": ("steps",),
     "if_then": ("then", "else"),
     "for_each": ("effect",),
+    # A round of offers repeated until nobody takes it (Eureka). A wrapper for
+    # the same reason ``for_each`` is: what the round *does* is the act it
+    # carries, and the repetition is not an effect of its own.
+    "repeat_offer_round": ("action",),
 }
 
 

@@ -99,6 +99,7 @@ from .lowering import (
     _lower_exile,
     _lower_extra_turn,
     _lower_for_each,
+    _lower_repeat_process,
     _lower_gain_control,
     _lower_gain_ability_text,
     _lower_gain_keyword,
@@ -574,6 +575,11 @@ def lower_statement(
 
     if isinstance(statement, ast.ForEach):
         return _lower_for_each(statement)
+
+    # The offer-round loop takes the recursion back as an argument: its lowering
+    # lives in the `game` family, which is below this dispatcher.
+    if isinstance(statement, ast.RepeatProcess):
+        return _lower_repeat_process(statement, lower_statement)
 
     if isinstance(statement, ast.Exile):
         return _lower_exile(statement)

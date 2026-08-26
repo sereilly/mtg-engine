@@ -231,6 +231,33 @@ class May:
     #: with a target of its own ends up pointed at whatever the producing action
     #: happened to name.
     reflexive: "Statement | None" = None
+    #: "**Starting with you**, each player may …" (Eureka). Which seat is asked
+    #: first. CR 101.4 already orders a multi-seat offer from the active player,
+    #: and for a sorcery those are the same seat — but they are not the same
+    #: *rule*, and dropping the words would leave the printed order unstated
+    #: wherever they come apart (a copy of the spell resolving under another
+    #: seat's control). None means CR 101.4's default.
+    starting_with: PlayerRef | None = None
+
+
+@dataclass(frozen=True)
+class RepeatProcess:
+    """"**Repeat this process until no one** puts a card onto the battlefield."
+    (Eureka.)
+
+    The sentence before it is one *round* of an offer made to every seat; this
+    one says the round happens again whenever anybody took it. So it wraps that
+    statement rather than being a step beside it — the round is the process, and
+    "this process" has no other referent.
+
+    *restatement* is the offered act as the clause names it ("puts a card onto
+    the battlefield"), parsed as a statement of its own. It is carried, not
+    dropped: lowering checks it describes the same kind of act as the offer, so
+    a card whose repeat clause names something *else* refuses instead of
+    repeating the wrong thing.
+    """
+    round: "Statement"
+    restatement: "Statement"
 
 
 @dataclass(frozen=True)
@@ -329,7 +356,7 @@ class CreateDelayedTrigger:
     agent: ObjectFilter | None = None
 
 
-Statement = Union[Sequence, Conjunction, Conditional, May, ForEach, WhereX, CreateDelayedTrigger, Effect]
+Statement = Union[Sequence, Conjunction, Conditional, May, ForEach, RepeatProcess, WhereX, CreateDelayedTrigger, Effect]
 
 
 # ---------------------------------------------------------------------------

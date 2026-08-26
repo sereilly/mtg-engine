@@ -72,6 +72,7 @@ ActionKind = Literal[
     "confirm_mana_payment",
     "kudzu_reattach_confirm",
     "face_down_cast_confirm",
+    "put_from_hand_confirm",
     "time_vault_skip",
     "time_vault_decline",
     "island_sanctuary_skip",

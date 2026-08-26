@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from ..oracle_types import OracleInstruction
 from ..turn_state import started_the_turn
+from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
 from ._common import flip_coin, permanent_matches_filter
 from .registry import effect_handler
@@ -637,7 +638,10 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
 _EACH_ACTORS = frozenset({"each_player", "each_opponent"})
 
 
-def _offered_seats(game: Game, actor: str, context: OracleExecutionContext) -> list[int]:
+def _offered_seats(
+    game: Game, actor: str, context: OracleExecutionContext,
+    start_seat: int | None = None,
+) -> list[int]:
     """Which seats the offer is made to, in the order they answer it.
 
     "Each player may …" (Rebirth) is one decision per player, not one decision
@@ -650,7 +654,11 @@ def _offered_seats(game: Game, actor: str, context: OracleExecutionContext) -> l
     """
     if actor == "each_player":
         count = len(game.players)
-        active = game.active_player_index or 0
+        # "**Starting with you**, each player may …" (Eureka) names the first
+        # seat outright. Without it CR 101.4's default stands: the active
+        # player first. The same seat for a sorcery, which is why the argument
+        # exists rather than the caller simply relying on the default.
+        active = (game.active_player_index or 0) if start_seat is None else start_seat
         return sorted(
             (i for i, p in enumerate(game.players) if not p.lost),
             key=lambda i: ((i - active) % count, i),
@@ -740,6 +748,63 @@ def _offer_to_seat(
     game.arm_pending_choice("optional_pay", player_index, **entry)
 
 
+#: The last item :func:`repeat_offer_round` walks: the end of one round, where
+#: whether there is another one is decided.
+_END_OF_ROUND = object()
+
+
+@effect_handler("repeat_offer_round")
+def repeat_offer_round(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Starting with you, each player may put a permanent card from their hand
+    onto the battlefield. **Repeat this process until no one puts a card onto
+    the battlefield.**" (Eureka.)
+
+    One round is the offer made to every seat in turn (CR 101.4), and the round
+    happens again whenever anybody took it. What "anybody took it" reads is the
+    record the offered act leaves — see ``engine/repeated_offers.py``, which is
+    the one table this and the lowering that admitted the clause both ask.
+
+    Both loops are ``run_resumable``: an interactive seat's pick suspends the
+    resolution, and the seats behind it — and the rounds behind *that* — are the
+    work still owed. The decision about the next round therefore cannot sit
+    after the loop, where it would not run at all once a seat stopped to think;
+    it is the loop's own last step, which is what ``_END_OF_ROUND`` is for.
+
+    Termination is a property of the act, not a counter: every offer taken moves
+    a card out of a hand, so the rounds are bounded by the cards there were.
+    """
+    steps = _steps(instruction, "action")
+    actor = instruction.payload.get("actor", "each_player")
+    start_seat = (
+        game.players.index(context.caster)
+        if instruction.payload.get("offer_order") == "you"
+        else None
+    )
+    taken = context.results.setdefault(OFFER_TAKEN_RESULTS, [])
+
+    def run_round() -> None:
+        # Re-asked each round: a seat that has left the game is nobody
+        # (CR 800.4a), and a round is not a snapshot of who was there first.
+        seats = _offered_seats(game, actor, context, start_seat=start_seat)
+        at_round_start = len(taken)
+
+        def offer(item) -> None:
+            if item is _END_OF_ROUND:
+                if len(taken) > at_round_start:
+                    run_round()
+                return
+            # The offered seat is "their hand" and "that player" inside the act,
+            # exactly as ``_offer_to_seat`` rebinds it for a one-shot offer. The
+            # replacement shares this context's ``results``, which is how every
+            # seat of every round appends to the one record above.
+            _run(game, steps, dataclasses.replace(context, target=game.players[item]))
+
+        run_resumable(game, [*seats, _END_OF_ROUND], offer)
+
+    run_round()
+    return True, "resolved"
+
+
 @effect_handler("choose_one")
 def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """A ``choose_one`` reached at *resolution*: alternatives that are a step of
@@ -772,22 +837,45 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
     return True, "resolved"
 
 
+#: The last item :func:`for_each` walks: not a permanent, the *end* of the loop.
+#: It exists because the restore of ``iteration_target`` has to be a step of the
+#: loop rather than a line after it — see the handler's docstring.
+_END_OF_ITERATION = object()
+
+
 @effect_handler("for_each")
 def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"For each <objects>, <effect>." The matching set is snapshotted before
     the first iteration so an effect that removes objects cannot shorten its own
-    loop."""
+    loop.
+
+    Run through ``run_resumable``, like every other loop in this file. A step
+    that stops to ask the player a question — a scry, a search, a CR 616.1e
+    ordering — used to lose every iteration behind it here: this was a bare
+    ``for``, so the handler returned "resolved" with half the sentence undone
+    and nothing recorded the rest. ``engine/resumption.py`` states the rule the
+    fix follows, and the rule's other half is why the restore below rides on a
+    sentinel *item* rather than sitting after the call: work written after a
+    resumable loop does not run when a step suspends.
+    """
     filters = instruction.payload.get("iterator") or {}
     steps = _steps(instruction, "effect")
     matched = [
         permanent
-        for player in game.players
-        for permanent in list(player.battlefield)
-        if permanent_matches_filter(game, permanent, filters)
+        for permanent in game.all_permanents()
+        # (game, perm, filters) until this round — three arguments to a
+        # two-argument function, which is what a loop no card reaches gets to
+        # keep. The pure matcher takes the object and the payload.
+        if permanent_matches_filter(permanent, filters)
     ]
     previous = context.iteration_target
-    for permanent in matched:
-        context.iteration_target = permanent
+
+    def run_one(item) -> None:
+        if item is _END_OF_ITERATION:
+            context.iteration_target = previous
+            return
+        context.iteration_target = item
         _run(game, steps, context)
-    context.iteration_target = previous
+
+    run_resumable(game, matched + [_END_OF_ITERATION], run_one)
     return True, "resolved"

@@ -624,3 +624,90 @@ def test_two_seats_owing_a_discard_both_hold_the_resolution(catalog_by_name):
     assert not game.effect_suspended and game.resume_stack == []
     assert [p.life for p in game.players] == [18, 18, 18]
     assert len(caster.hand) == 2 and left.hand == [] and right.hand == []
+
+
+# ---------------------------------------------------------------------------
+# A round of offers, repeated
+# ---------------------------------------------------------------------------
+#
+# "Starting with you, each player may put a permanent card from their hand onto
+# the battlefield. Repeat this process until no one puts a card onto the
+# battlefield." (Eureka.) Each seat's offer is a decision, so the round is a
+# loop of them — and the *round* is a loop too. What these pin is that a seat
+# stopping to think costs neither the seats behind it nor the rounds behind
+# those.
+
+
+def _r33_eureka_game(set_pool, catalog_by_name, hands: list[list[str]], interactive=()) -> Game:
+    players = []
+    for index, names in enumerate(hands):
+        hand = [catalog_by_name[name] for name in names]
+        if index == 0:
+            hand = [set_pool("LEG")["Eureka"], *hand]
+        players.append(
+            PlayerState(
+                name=f"P{index + 1}",
+                hand=hand,
+                library=[_mk_creature_card("Filler", 1, 1)],
+            )
+        )
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.interactive_seats = set(interactive)
+    return game
+
+
+@pytest.mark.cr("101.4", "608.2c")
+def test_101_4_every_seat_is_offered_the_round_in_turn_order(set_pool, catalog_by_name):
+    """One decision per player, asked in turn order, before the process repeats.
+
+    A loop that finished one seat's whole hand before asking the next would
+    empty the hands just as thoroughly and be a different card.
+    """
+    game = _r33_eureka_game(
+        set_pool, catalog_by_name, [["Shivan Dragon", "Black Lotus"], ["Serra Angel", "Wall of Stone"]]
+    )
+
+    assert game.cast_from_hand(0, "Eureka").supported
+
+    puts = [line.split()[0] for line in game.log if line.endswith("(Eureka)")]
+    assert puts == ["P1", "P2", "P1", "P2"], game.log
+
+
+@pytest.mark.cr("117.3b", "608.2c")
+def test_117_3b_the_rounds_behind_an_unanswered_offer_still_happen(set_pool, catalog_by_name):
+    """The spell waits on the seat that has not answered, and picks up the rest
+    of the round — and the round after it — once the answer arrives.
+
+    The loop that carries this is nested: seats inside a round, rounds inside
+    the process. Re-running only the step that asked would leave the second seat
+    unasked and the second round never begun.
+    """
+    game = _r33_eureka_game(
+        set_pool, catalog_by_name,
+        [["Shivan Dragon", "Black Lotus"], ["Serra Angel"]],
+        interactive={0},
+    )
+
+    assert game.cast_from_hand(0, "Eureka").supported
+    game.resolve_stack()
+
+    # Seat 1 is not interactive and has already taken its default, but seat 0
+    # is still owed the first offer of the first round.
+    owed = game.waiting_prompt()
+    assert owed is not None and owed.player_index == 0
+    assert [p.card.name for p in game.players[1].battlefield] == []
+
+    while game.pending_choices:
+        choice = game.pending_choices[0]
+        live = game.live_put_from_hand_choices(choice)
+        assert game.confirm_put_from_hand_choice(choice.player_index, live[0] if live else None)
+
+    assert game.waiting_prompt() is None
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Shivan Dragon", "Black Lotus",
+    ], "the second round never ran"
+    assert [p.card.name for p in game.players[1].battlefield] == [
+        "Serra Angel"
+    ], "the seat behind the one that asked was skipped"

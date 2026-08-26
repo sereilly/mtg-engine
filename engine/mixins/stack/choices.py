@@ -1976,6 +1976,87 @@ class PendingChoicesMixin:
         ):
             self._record_permanent_choice(choice, None)
 
+    # -- A card put onto the battlefield out of a hand -----------------------
+
+    def arm_put_from_hand_choice(self, player_index: int, payload: dict, context) -> None:
+        """Queue "pick a card in your hand to put onto the battlefield" for
+        *player_index*.
+
+        The whole payload travels rather than the candidate list, for the reason
+        ``arm_permanent_choice`` gives: it is the *rule* the candidates came
+        from, and re-running it is what keeps the list offered and the list an
+        answer is checked against from being two lists.
+        """
+        self.arm_pending_choice(
+            "put_from_hand_choice", player_index,
+            card_name=context.card.name,
+            optional=bool(payload.get("optional")),
+            _payload=dict(payload),
+            _context=context,
+        )
+
+    def live_put_from_hand_choices(self, choice: PendingChoice) -> list[int]:
+        """The hand slots still eligible, from the engine's own rule."""
+        from ...handlers.zones import put_from_hand_candidates
+
+        return put_from_hand_candidates(
+            self, choice.data.get("_payload") or {}, self.players[choice.player_index]
+        )
+
+    def confirm_put_from_hand_choice(self, player_index: int, hand_index) -> bool:
+        """Answer the pending pick. ``hand_index`` of None is declining, which is
+        only an answer when the sentence said "may"."""
+        return self.resolve_pending_choice(
+            "put_from_hand_choice", player_index, hand_index=hand_index
+        )
+
+    def _resolve_put_from_hand_choice(self, choice: PendingChoice, hand_index) -> bool:
+        from ...repeated_offers import OFFER_TAKEN_RESULTS
+
+        player = self.players[choice.player_index]
+        live = self.live_put_from_hand_choices(choice)
+        name = choice.data.get("card_name", "Effect")
+        if hand_index is None:
+            # Declining. Refused outright on a mandatory pick with something
+            # legal left, so a client cannot answer a sentence that offered no
+            # way out — but allowed once nothing qualifies, because then the
+            # decision is over either way (CR 608.2b).
+            if live and not choice.data.get("optional"):
+                return False
+            self.log.append(f"{player.name} put no card onto the battlefield")
+            self.discard_pending_choice(choice)
+            return True
+        if hand_index not in live:
+            return False
+        card = player.hand[hand_index]
+        player.hand = [c for i, c in enumerate(player.hand) if i != hand_index]
+        self._put_permanent_onto_battlefield(
+            choice.player_index, Permanent(card=card), None
+        )
+        # The record a repeated round ends on — see engine/repeated_offers.py.
+        # Appended rather than set, because every seat of the round shares the
+        # one resolution scratchpad.
+        choice.data["_context"].results.setdefault(OFFER_TAKEN_RESULTS, []).append(
+            card.name
+        )
+        self.log.append(f"{player.name} put {card.name} onto the battlefield ({name})")
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_put_from_hand_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** eligible card in hand order.
+
+        Not a valuation — hand order is seed-deterministic, which is what AI and
+        headless play need, and it is the same policy
+        ``put_cards_from_hand_onto_battlefield`` already states for the sweep
+        beside it: more battlefield is what the AI plays toward. A seat that
+        should decline cleverly needs a weight in ``engine/ai_valuation.py``,
+        not a branch here.
+        """
+        live = self.live_put_from_hand_choices(choice)
+        if not live or not self._resolve_put_from_hand_choice(choice, live[0]):
+            self._resolve_put_from_hand_choice(choice, None)
+
     # -- Kudzu's reattachment ------------------------------------------------
 
     def confirm_kudzu_reattach(self, player_index: int, land_index: int) -> bool:
@@ -3435,6 +3516,28 @@ register_choice(
     # keeps AI and headless play free of the suspension above.
     default_at_arm=True,
     spectator_visible=True,
+)
+
+register_choice(
+    "put_from_hand_choice",
+    resolve=lambda game, choice, r: game._resolve_put_from_hand_choice(
+        choice, r.get("hand_index")
+    ),
+    default=lambda game, choice: game._default_put_from_hand_choice(choice),
+    action="put_from_hand_confirm",
+    prompt_key="put_from_hand_choice",
+    blocked_detail="choose a card to put onto the battlefield before other actions",
+    # The round this is a step of counts the answers to decide whether it
+    # happens again (Eureka), so the loop genuinely stops here.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible, unlike the permanent pick above: the
+    # candidates are cards in a hand (CR 400.2, a hidden zone), so rendering them
+    # to a seatless viewer would publish the hand. Only the seat that owes the
+    # decision is shown it.
 )
 
 register_choice(

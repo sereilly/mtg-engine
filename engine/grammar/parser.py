@@ -240,6 +240,86 @@ def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
     return False
 
 
+def _rest_of_sentence(stream: TokenStream) -> str | None:
+    """Consume the tokens up to the next full stop and return their source text.
+
+    The same slice ``_parse_registry_claimed_sentence`` takes, and for a related
+    reason: what the words mean is decided by handing them back to a reader,
+    not by matching them here.
+    """
+    start_token = stream.peek()
+    if start_token is None:
+        return None
+    end = start_token.end
+    while not stream.exhausted:
+        token = stream.peek()
+        if token is None or (token.kind == PUNCT and token.text == "."):
+            break
+        end = token.end
+        stream.advance()
+    stream.accept_punct(".")
+    return stream.line[start_token.start:end]
+
+
+def _as_imperative(phrase: str) -> str:
+    """A restated act in the third person, read back as the act itself.
+
+    "no one **puts** a card onto the battlefield" is the same act as "**put** a
+    card onto the battlefield"; the verb tables hold the uninflected spelling,
+    so the inflection is undone before they are asked. One rule about English —
+    a third-person singular present verb ends in *s* — rather than a table of
+    verbs, which would go stale the moment a production learned a new one.
+    """
+    head, _, tail = phrase.partition(" ")
+    if head.endswith("s") and not head.endswith("ss"):
+        head = head[:-1]
+    return f"{head} {tail}" if tail else head
+
+
+def _attach_repeat_this_process(stream: TokenStream, steps: list) -> bool:
+    """Fold "Repeat this process until no one puts a card onto the battlefield."
+    into the offer before it (Eureka).
+
+    "This process" is the sentence before this one — an offer made to every seat
+    in turn — so the clause wraps that statement instead of standing beside it
+    as a step. Parsed as its own step it would name no process at all.
+
+    The tail is a *restatement* of the offered act, and it is checked rather
+    than skipped: it is re-read as a statement of its own and must describe the
+    same kind of act as the offer. A card printing a repeat clause about
+    something else is a card this reading would repeat the wrong thing for, so
+    it rewinds and the line refuses.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.May) or last.action is None:
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("repeat", "this", "process", "until"):
+        stream.reset(mark)
+        return False
+    if not (stream.accept_phrase("no", "one") or stream.accept_phrase("no", "player")):
+        stream.reset(mark)
+        return False
+    phrase = _rest_of_sentence(stream)
+    if not phrase:
+        stream.reset(mark)
+        return False
+    try:
+        imperative = _as_imperative(phrase)
+        restated_stream = TokenStream(tokenize(imperative).tokens, imperative)
+        restated = parse_statement(restated_stream)
+        if not restated_stream.exhausted:
+            raise GrammarError("unconsumed text", line=imperative)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    if type(restated) is not type(last.action):
+        stream.reset(mark)
+        return False
+    steps[-1] = ast.RepeatProcess(round=last, restatement=restated)
+    return True
+
+
 def _sentence_ended_on_a_quote(stream: TokenStream) -> bool:
     """Whether the sentence just read ended on a closing quotation mark.
 
@@ -291,6 +371,11 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if _attach_if_you_cant(stream, steps):
                 continue
             if _attach_when_you_do(stream, steps):
+                continue
+            # "Repeat this process until no one puts a card onto the
+            # battlefield." (Eureka.) A clause about the sentence before it,
+            # folded into that sentence the way every other rider here is.
+            if _attach_repeat_this_process(stream, steps):
                 continue
             # "Otherwise, it gets +4/-X until end of turn." (Blood Lust.) The
             # second arm of the conditional sentence before it.

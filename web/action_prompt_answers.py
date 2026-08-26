@@ -364,6 +364,26 @@ def _action_kudzu_reattach_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="invalid Kudzu reattach selection")
 
+@action_handler("put_from_hand_confirm")
+def _action_put_from_hand_confirm(session, req, seat_type):
+    # Eureka: the offered seat picks a card in its hand to put onto the
+    # battlefield, or declines (accept=False / no hand_index). The engine
+    # re-checks the pick against the same candidate rule the prompt was drawn
+    # from, so a client offering a whole hand cannot widen the choice — and it
+    # refuses a decline the sentence never offered.
+    pending = next(
+        (c for c in session.game.pending_choices_of("put_from_hand_choice")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no card choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    hand_index = None if req.accept is False else req.hand_index
+    if hand_index is None and req.accept is not False:
+        raise HTTPException(status_code=400, detail="hand_index is required")
+    if not session.game.confirm_put_from_hand_choice(req.seat, hand_index):
+        raise HTTPException(status_code=400, detail="invalid card choice")
+
 @action_handler("face_down_cast_confirm")
 def _action_face_down_cast_confirm(session, req, seat_type):
     # Illusionary Mask: the controller picks a hand creature to cast face down,
