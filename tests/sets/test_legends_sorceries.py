@@ -350,3 +350,83 @@ def test_visions_looks_at_a_short_library_without_reaching_past_it(set_pool):
     game._settle()
 
     assert game.pending_reorder_library["top_count"] == 2, game.log
+
+
+# ---------------------------------------------------------------------------
+# Energy Tap (round 23) — "Tap target untapped creature you control. If you do,
+# add an amount of {C} equal to that creature's mana value."
+#
+# The new piece is the third referent of the printed "an amount of {SYM} equal
+# to …" shape: "that creature" is the permanent an earlier step of this same
+# effect recorded, still on the battlefield, so the mana value is read off it
+# at resolution instead of remembered as a number.
+# ---------------------------------------------------------------------------
+
+
+def _energy_tap_creature(name: str, cost: str, cmc: float):
+    from engine.models import CardDefinition
+
+    return CardDefinition(
+        name=name, mana_cost=cost, cmc=cmc, type_line="Creature - Bear",
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _energy_tap_game(set_pool):
+    from engine import Game, PlayerState
+    from engine.models import Permanent
+
+    mine = Permanent(card=_energy_tap_creature("Mine", "{2}{G}", 3.0))
+    theirs = Permanent(card=_energy_tap_creature("Theirs", "{5}{G}", 6.0))
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEG")["Energy Tap"]], battlefield=[mine]
+    )
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    return game, p1, p2, mine, theirs
+
+
+def test_energy_tap_taps_the_creature_and_adds_its_mana_value_in_colourless(set_pool):
+    game, p1, _p2, mine, _theirs = _energy_tap_game(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Energy Tap", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported is True
+    assert mine.tapped is True
+    # Three, not one: the amount is the creature's mana value, not the printed
+    # symbol's count. A lowering that dropped the "equal to" would add {C}.
+    assert p1.mana_pool.get("C", 0) == 3
+
+
+def test_energy_tap_adds_nothing_when_there_was_nothing_to_tap(set_pool):
+    """"If you do" is the tap's own record. With no legal target the tap
+    records nothing, the branch does not run, and no mana appears — the failure
+    a back-reference with no producer would otherwise hide."""
+    game, p1, _p2, mine, _theirs = _energy_tap_game(set_pool)
+    mine.tapped = True
+
+    game.cast_from_hand(0, "Energy Tap", target_player_index=0, target_permanent_index=0)
+    game._settle()
+
+    assert p1.mana_pool.get("C", 0) == 0
+
+
+def test_energy_tap_will_not_tap_a_creature_its_caster_does_not_control(set_pool):
+    """"…untapped creature **you control**". An unenforced narrowing is the
+    quiet failure: the spell would work more often than the card allows."""
+    game, p1, _p2, mine, theirs = _energy_tap_game(set_pool)
+
+    game.cast_from_hand(0, "Energy Tap", target_player_index=1, target_permanent_index=0)
+    game._settle()
+
+    assert theirs.tapped is False
+    assert p1.mana_pool.get("C", 0) != 6

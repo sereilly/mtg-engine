@@ -16,6 +16,7 @@ from ._common import (
     _amount_payload,
     _filter_payload,
 )
+from ._events import _RECORDED_PERMANENTS
 
 
 def _lower_add_mana(
@@ -66,6 +67,32 @@ def _lower_add_mana(
                 {
                     "symbol": node.from_countered_spell,
                     "count_from_trigger": "countered_spell_mana_value",
+                },
+            ),
+        )
+    # "Tap target untapped creature you control. If you do, add an amount of
+    # {C} equal to **that creature's** mana value." (Energy Tap.) The creature
+    # is still on the battlefield when this runs, so the number is read off it
+    # at resolution rather than remembered — but *which* creature is only
+    # knowable from what an earlier step of this same effect recorded. So the
+    # clause refuses unless one of those steps recorded a permanent: with no
+    # record the handler would find nothing and add no mana while the card
+    # reported itself supported.
+    if node.from_bound_creature:
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if len(recorded) != 1:
+            raise LoweringError(
+                "\"that creature's mana value\" names a creature "
+                + ("nothing in this effect recorded" if not recorded
+                   else "several earlier steps recorded"),
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "add_mana_from_text", "",
+                {
+                    "symbol": node.from_bound_creature,
+                    "count_from_mana_value_of": recorded[0],
                 },
             ),
         )

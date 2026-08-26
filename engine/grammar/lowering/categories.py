@@ -300,6 +300,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "player_loses_game": "game_end",
     "target_player_loses_game": "game_end",
     "game_is_draw": "game_end",
+    "grant_unblockable_to_target": "evasion",
     "grant_unblockable_to_low_power_target": "evasion",
     "grant_unblockable_to_self": "evasion",
     # Restrictions on declaring attackers/blockers (CR 506, 509).

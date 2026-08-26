@@ -211,6 +211,17 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
                 return ast.AddMana(
                     (), source_text=_clause(), from_countered_spell=symbol,
                 )
+            # "…equal to **that creature's** mana value." (Energy Tap.) A
+            # third referent for the same printed shape: the creature an
+            # earlier sentence of this effect acted on. Read as either of the
+            # two above it would name an object nothing recorded and add no
+            # mana at all, so the noun is matched rather than skipped.
+            if stream.accept_phrase(
+                "equal", "to", "that", "creature", "'s", "mana", "value"
+            ):
+                return ast.AddMana(
+                    (), source_text=_clause(), from_bound_creature=symbol,
+                )
             if stream.accept_phrase("equal", "to", "the", "sacrificed") and stream.peek_word():
                 # The noun repeats what the cost already named ("artifact"), so
                 # it is consumed rather than re-read: the cost decided what was

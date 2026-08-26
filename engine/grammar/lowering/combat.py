@@ -158,6 +158,16 @@ def _lower_cant_be(node: ast.CantBe) -> tuple[OracleInstruction, ...]:
         )
 
     if node.action == "blocked":
+        # The unrestricted printing — "Target creature can't be blocked this
+        # turn." (Teleport). There is nothing beyond the creature type for a
+        # handler to honour, so the target description *is* the whole payload
+        # and engine/targeting.py can raise the picker from it.
+        if filt == ast.ObjectFilter(card_types=("creature",)):
+            return (
+                OracleInstruction(
+                    "grant_unblockable_to_target", "", _targets_only(node.subject)
+                ),
+            )
         # The trap: the handler's "power 2 or less" is a literal in its own
         # source, not something it reads from the payload. A card reading
         # "power 3 or less" would compile cleanly and get the wrong threshold,

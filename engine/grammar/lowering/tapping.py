@@ -150,6 +150,12 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
     payload = _filter_payload(spec.filter)
 
     if isinstance(node, ast.Tap):
+        # The handler tests the noun phrase with `subject_matches`, so a key
+        # outside what that answers would be carried and ignored — the tap
+        # reaching more permanents than the card names. Same gate, same reason,
+        # as the sweep above.
+        if set(payload) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError("the tap cannot test this restriction", node=node)
         tap_payload = dict(payload)
         _describe_targets(tap_payload, spec)
         return (OracleInstruction("tap_target_permanent", "", tap_payload),)
