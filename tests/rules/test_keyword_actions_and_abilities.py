@@ -214,3 +214,93 @@ def test_702_26d_a_permanent_phases_in_at_its_controllers_untap_step(set_pool):
 
     assert victim not in p2.phased_out
     assert game.is_on_battlefield(victim)
+
+
+# ---------------------------------------------------------------------------
+# 701.12 — Exchange
+# ---------------------------------------------------------------------------
+#
+# Driven through Gauntlets of Chaos rather than by calling the handler, because
+# what these rules govern is the *whole* resolution: whether the exchange is
+# attempted at all, and what happens when one half of it cannot be completed.
+
+
+def _exchange_board(set_pool):
+    pool = set_pool("LEG")
+    gauntlets = Permanent(card=pool["Gauntlets of Chaos"])
+    mine = Permanent(card=pool["Black Mana Battery"])
+    theirs = Permanent(card=pool["Red Mana Battery"])
+    p1 = PlayerState(name="P1", battlefield=[gauntlets, mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, mine, theirs
+
+
+def _exchange(game, first, second):
+    game.activate_permanent_ability(
+        0, "Gauntlets of Chaos", permanent_index=0,
+        target_player_index=0,
+        target_permanent_ids=[first.permanent_id, second.permanent_id],
+    )
+    game._settle()
+
+
+@pytest.mark.cr("701.12", "701.12b")
+def test_701_12b_each_player_gains_control_of_the_others_permanent(set_pool):
+    """"…each of those players simultaneously gains control of the permanent
+    that was controlled by the other player." Both halves move, and neither
+    permanent's base controller is rewritten (CR 613.1b), so the seat an ended
+    effect would revert to is still the seat it entered under."""
+    from engine.control import base_controller
+
+    game, mine, theirs = _exchange_board(set_pool)
+
+    _exchange(game, mine, theirs)
+
+    assert game.controller_index_of(mine) == 1
+    assert game.controller_index_of(theirs) == 0
+    assert (base_controller(mine), base_controller(theirs)) == (0, 1)
+
+
+@pytest.mark.cr("701.12", "701.12a")
+def test_701_12a_an_exchange_that_cannot_be_completed_does_no_part_of_itself(set_pool):
+    """"…if the entire exchange can't be completed, no part of the exchange
+    occurs." The rule's own example: one of the two permanents is gone before
+    the ability resolves, so the other must not change hands on its own."""
+    game, mine, theirs = _exchange_board(set_pool)
+    game.remove_from_battlefield(theirs)
+
+    _exchange(game, mine, theirs)
+
+    assert game.controller_index_of(mine) == 0
+
+
+@pytest.mark.cr("701.12", "701.12b")
+def test_701_12b_two_permanents_one_player_controls_exchange_to_nothing(set_pool):
+    """"If, on the other hand, those permanents are controlled by the same
+    player, the exchange effect does nothing."
+
+    On this card the printed "target permanent an opponent controls" refuses
+    first, and the rule's own guard sits behind it — both are asserted by the
+    same observation, which is the point: nothing is *recorded* either. A
+    layer-2 contribution restating what was already true would become visible
+    the moment something else ended one of them."""
+    from engine.control import has_control_change
+
+    pool = set_pool("LEG")
+    gauntlets = Permanent(card=pool["Gauntlets of Chaos"])
+    one = Permanent(card=pool["Black Mana Battery"])
+    two = Permanent(card=pool["Red Mana Battery"])
+    p1 = PlayerState(name="P1", battlefield=[gauntlets, one, two])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    _exchange(game, one, two)
+
+    assert game.controller_index_of(one) == 0
+    assert game.controller_index_of(two) == 0
+    assert not has_control_change(one) and not has_control_change(two)

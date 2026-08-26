@@ -312,6 +312,40 @@ def _parse_attach(stream: TokenStream) -> ast.Statement:
     return ast.Attach(subject, host)
 
 
+def _parse_exchange_control(stream: TokenStream) -> ast.Statement:
+    """``Exchange control of <first> and <second>.`` (CR 701.12b — Gauntlets of
+    Chaos.)
+
+    Both halves go through ``parse_recipient``, so the printed type list
+    ("target artifact, creature, or land you control") and the printed
+    controller ("target permanent an opponent controls") are read by the noun
+    phrase every other production already uses.
+
+    "…that shares one of those types with it" is read *here* rather than by the
+    noun parser, and that is the point: it compares the second permanent with
+    the **first**, and an ``ObjectFilter`` describes one permanent with nothing
+    to compare against. Parsed there it could only have been dropped, and a
+    dropped restriction is an exchange the card does not allow — a Mox traded
+    for a Forest. The production that holds both slots is the one that can
+    carry it.
+    """
+    stream.expect_word("exchange")
+    stream.expect_word("control")
+    stream.expect_word("of")
+    first = parse_recipient(stream)
+    if first is None:
+        raise stream.error("expected what to exchange control of")
+    if not stream.accept_word("and"):
+        raise stream.error("expected 'and' between the two permanents exchanged")
+    second = parse_recipient(stream)
+    if second is None:
+        raise stream.error("expected the other permanent of the exchange")
+    shares = stream.accept_phrase(
+        "that", "shares", "one", "of", "those", "types", "with", "it"
+    )
+    return ast.ExchangeControl(first, second, shares_a_type=bool(shares))
+
+
 def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
     """``tap <objects>`` / ``untap <objects>`` / ``tap or untap <objects>``.
 

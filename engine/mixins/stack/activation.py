@@ -957,6 +957,15 @@ class AbilityActivationMixin:
                 choices={
                     "chosen_source": chosen_source,
                     "sacrificed_for_cost": sacrifice_cost_permanent,
+                    # "…the color of your choice" (Alchor's Tomb): the colour
+                    # arrives with the activation, on the same `mana_color` key
+                    # an any-colour mana ability uses, and rides to resolution
+                    # on the stack item — which is where the cast side already
+                    # carries a spell's chosen colour (`resolution.py` reads
+                    # `item.choices["new_color"]` for the Lace cycle). One key,
+                    # so a handler need not know whether a spell or an ability
+                    # asked the question.
+                    "new_color": self._normalize_mana_color(mana_color),
                 },
             )
         )

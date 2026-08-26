@@ -184,6 +184,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (Dwarven Song and its four siblings). Same category: what differs is how
     # long it lasts and how many it names, not what it does.
     "recolor_targets_until_eot": "recolor",
+    # "…becomes the color of your choice" — the colour arrives with the answer
+    # rather than with the text (CR 609.3), which is a payload difference and
+    # not a category one.
+    "recolor_target_chosen_color": "recolor",
+    # CR 701.12b, an atomic swap of two layer-2 contributions.
+    "exchange_control_of_targets": "control",
     # A printed text change (CR 612). Its own category rather than "recolor":
     # the Lace cycle makes an object a colour, while this replaces a *word*
     # wherever the object's text uses it, and one of the two modes does not

@@ -114,6 +114,36 @@ class Attach:
 
 
 @dataclass(frozen=True)
+class ExchangeControl:
+    """``Exchange control of <first> and <second>.`` (CR 701.12b — Gauntlets of
+    Chaos.)
+
+    One node for both halves rather than two control changes in a
+    :class:`Sequence`, for the reason CR 701.12a states: an exchange is atomic,
+    so if either half cannot be completed *no part of it happens*. Written as
+    two steps the first would apply and the second would not, which hands one
+    player a permanent for nothing.
+
+    ``shares_a_type`` is the printed "…that shares one of those types with it".
+    It is a relation *between the two slots*, not a property of either
+    permanent, so it rides here beside them exactly as the two-target pump's
+    ``distinct`` does — an :class:`ObjectFilter` has nothing to compare against
+    and would have to drop it.
+
+    ``destroy_attached_auras`` is the trailing "If those permanents are
+    exchanged this way, destroy all Auras attached to them." A rider on this
+    node rather than a following statement, because "exchanged **this way**" is
+    a question only the exchange can answer: on its own the sentence names no
+    permanents at all.
+    """
+
+    first: Recipient
+    second: Recipient
+    shares_a_type: bool = False
+    destroy_attached_auras: bool = False
+
+
+@dataclass(frozen=True)
 class Tap:
     subject: Recipient
 

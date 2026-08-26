@@ -237,3 +237,247 @@ def test_ring_of_immortals_offers_only_what_it_could_counter(set_pool):
     assert game._enumerate_targets(
         0, pool["Ring of Immortals"], spec, for_cast=False
     ) == [], "a sorcery is outside the printed class union"
+
+
+# ---------------------------------------------------------------------------
+# Alchor's Tomb (round 22) — a colour chosen as the ability resolves
+# ---------------------------------------------------------------------------
+
+
+def _tomb_game(set_pool):
+    pool = set_pool("LEG")
+    tomb = Permanent(card=pool["Alchor's Tomb"])
+    mine = Permanent(card=pool["Hell's Caretaker"])
+    theirs = Permanent(card=pool["Hell's Caretaker"])
+    p1 = PlayerState(name="P1", battlefield=[tomb, mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, tomb, mine, theirs
+
+
+def test_alchors_tomb_recolours_the_permanent_that_was_targeted(set_pool):
+    """The colour is not in the text — it arrives with the activation (CR 609.3)
+    and reaches the permanent the activator actually named. Both creatures share
+    a name, so a handler locating by value would recolour the wrong one."""
+    game, tomb, mine, theirs = _tomb_game(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Alchor's Tomb", permanent_index=0,
+        target_player_index=0,
+        target_permanent_ids=[mine.permanent_id],
+        mana_color="U",
+    )
+    game._settle()
+
+    assert result.supported
+    assert tomb.tapped
+    assert mine.effective_colors == {"U"}, "the named creature became blue"
+    assert theirs.effective_colors == set(theirs.card.colors), "the look-alike is untouched"
+
+
+def test_alchors_tomb_refuses_a_permanent_the_activator_does_not_control(set_pool):
+    """"Target permanent **you control**" — the narrowing is on the payload and
+    is asked at resolution, so the opponent's creature is not recoloured even if
+    its id is sent."""
+    game, _tomb, mine, theirs = _tomb_game(set_pool)
+
+    game.activate_permanent_ability(
+        0, "Alchor's Tomb", permanent_index=0,
+        target_player_index=1,
+        target_permanent_ids=[theirs.permanent_id],
+        mana_color="U",
+    )
+    game._settle()
+
+    assert theirs.effective_colors == set(theirs.card.colors)
+    assert mine.effective_colors == set(mine.card.colors)
+
+
+def test_alchors_tomb_without_a_chosen_colour_recolours_nothing(set_pool):
+    """No colour answered means no colour applied — a permanent that became a
+    colour nobody picked is the wrong colour."""
+    game, _tomb, mine, _theirs = _tomb_game(set_pool)
+
+    game.activate_permanent_ability(
+        0, "Alchor's Tomb", permanent_index=0,
+        target_player_index=0,
+        target_permanent_ids=[mine.permanent_id],
+    )
+    game._settle()
+
+    assert mine.effective_colors == set(mine.card.colors)
+
+
+# ---------------------------------------------------------------------------
+# Gauntlets of Chaos (round 22) — an atomic exchange of control
+# ---------------------------------------------------------------------------
+
+
+def _gauntlets_game(set_pool):
+    """P1 holds the Gauntlets and two look-alike Batteries; P2 holds a third.
+
+    Two permanents sharing a name is the point: an exchange that located either
+    half by value would swap whichever Battery it found first.
+    """
+    pool = set_pool("LEG")
+    gauntlets = Permanent(card=pool["Gauntlets of Chaos"])
+    decoy = Permanent(card=pool["Black Mana Battery"])
+    mine = Permanent(card=pool["Black Mana Battery"])
+    theirs = Permanent(card=pool["Red Mana Battery"])
+    p1 = PlayerState(name="P1", battlefield=[gauntlets, decoy, mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, gauntlets, decoy, mine, theirs
+
+
+def _fire_gauntlets(game, first, second):
+    result = game.activate_permanent_ability(
+        0, "Gauntlets of Chaos", permanent_index=0,
+        target_player_index=0,
+        target_permanent_ids=[
+            first.permanent_id if first is not None else None,
+            second.permanent_id if second is not None else None,
+        ],
+    )
+    game._settle()
+    return result
+
+
+def test_gauntlets_of_chaos_exchanges_both_halves(set_pool):
+    """CR 701.12b: each player simultaneously gains control of the permanent the
+    other controlled. Both halves move, and the look-alike beside the named
+    permanent stays where it is."""
+    from engine.control import base_controller
+
+    game, _gauntlets, decoy, mine, theirs = _gauntlets_game(set_pool)
+
+    result = _fire_gauntlets(game, mine, theirs)
+
+    assert result.supported
+    assert game.controller_index_of(mine) == 1, "P1's Battery went to P2"
+    assert game.controller_index_of(theirs) == 0, "P2's Battery came to P1"
+    assert game.controller_index_of(decoy) == 0, "the look-alike never moved"
+    # CR 613.1b / 108.3: the exchange is a layer-2 contribution, so the seat each
+    # permanent entered under — and the owner that reads off it — is untouched.
+    assert base_controller(mine) == 0
+    assert base_controller(theirs) == 1
+    assert game.owner_index_of(mine) == 0
+    assert game.owner_index_of(theirs) == 1
+
+
+def test_gauntlets_of_chaos_exchange_survives_one_half_leaving(set_pool):
+    """Two contributions, one per permanent, not one remembered swap: destroying
+    the permanent that went the other way leaves this one exactly where the
+    exchange put it."""
+    game, _gauntlets, _decoy, mine, theirs = _gauntlets_game(set_pool)
+    _fire_gauntlets(game, mine, theirs)
+
+    game.remove_from_battlefield(theirs)
+    game.check_state_based_actions()
+
+    assert game.controller_index_of(mine) == 1
+
+
+def test_gauntlets_of_chaos_does_nothing_when_a_half_is_gone(set_pool):
+    """CR 701.12a: if the entire exchange can't be completed, no part of it
+    occurs — the other permanent must not change hands on its own."""
+    game, _gauntlets, _decoy, mine, theirs = _gauntlets_game(set_pool)
+    game.remove_from_battlefield(theirs)
+
+    _fire_gauntlets(game, mine, theirs)
+
+    assert game.controller_index_of(mine) == 0, "half an exchange is a gift"
+
+
+def test_gauntlets_of_chaos_refuses_two_permanents_sharing_no_printed_type(set_pool):
+    """"…that shares one of those types with it." The relation is between the two
+    slots, so a Battery traded for an enchantment is not an exchange this card
+    allows."""
+    pool = set_pool("LEG")
+    gauntlets = Permanent(card=pool["Gauntlets of Chaos"])
+    mine = Permanent(card=pool["Black Mana Battery"])
+    theirs = Permanent(card=pool["Arena of the Ancients"])
+    enchantment = Permanent(card=pool["Land Equilibrium"])
+    p1 = PlayerState(name="P1", battlefield=[gauntlets, mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs, enchantment])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    _fire_gauntlets(game, mine, enchantment)
+
+    assert game.controller_index_of(mine) == 0
+    assert game.controller_index_of(enchantment) == 1
+    assert any("shares none of" in entry for entry in game.log), (
+        "the refusal must be the shared-type test, not a failure to find the "
+        "opponent's permanent at all"
+    )
+
+    # The artifact on that same battlefield *does* share a type, so the same
+    # activation against it goes through — which is what makes the refusal above
+    # about the relation between the slots rather than about the slots.
+    game.players[0].battlefield.insert(0, Permanent(card=pool["Gauntlets of Chaos"]))
+    game._sync_control()
+    _fire_gauntlets(game, mine, theirs)
+    assert game.controller_index_of(mine) == 1
+    assert game.controller_index_of(theirs) == 0
+
+
+def test_gauntlets_of_chaos_destroys_the_auras_on_both_halves(set_pool):
+    """"If those permanents are exchanged this way, destroy all Auras attached to
+    them." The rider is executed, and it reads the two exchanged permanents —
+    an Aura on a third permanent survives."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("LEG")
+    gauntlets = Permanent(card=pool["Gauntlets of Chaos"])
+    mine = Permanent(card=pool["Segovian Leviathan"])
+    bystander = Permanent(card=pool["Segovian Leviathan"])
+    theirs = Permanent(card=pool["Sivitri Scarzam"])
+    on_mine = Permanent(card=pool["Giant Strength"])
+    on_theirs = Permanent(card=pool["Spirit Link"])
+    elsewhere = Permanent(card=pool["Giant Strength"])
+    p1 = PlayerState(name="P1", battlefield=[gauntlets, mine, bystander, on_mine, elsewhere])
+    p2 = PlayerState(name="P2", battlefield=[theirs, on_theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    attach_aura(on_mine, mine)
+    attach_aura(on_theirs, theirs)
+    attach_aura(elsewhere, bystander)
+
+    _fire_gauntlets(game, mine, theirs)
+
+    assert game.controller_index_of(mine) == 1
+    assert game.controller_index_of(theirs) == 0
+    assert not game.is_on_battlefield(on_mine)
+    assert not game.is_on_battlefield(on_theirs)
+    assert game.is_on_battlefield(elsewhere), "an Aura on a third permanent survives"
+
+
+def test_gauntlets_of_chaos_leaves_no_aura_destruction_when_nothing_is_exchanged(set_pool):
+    """The rider is conditioned on the exchange having happened, and the
+    condition is the binding rather than a second reading of the board."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("LEG")
+    gauntlets = Permanent(card=pool["Gauntlets of Chaos"])
+    mine = Permanent(card=pool["Segovian Leviathan"])
+    theirs = Permanent(card=pool["Sivitri Scarzam"])
+    on_mine = Permanent(card=pool["Giant Strength"])
+    p1 = PlayerState(name="P1", battlefield=[gauntlets, mine, on_mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    attach_aura(on_mine, mine)
+    game.remove_from_battlefield(theirs)
+
+    _fire_gauntlets(game, mine, theirs)
+
+    assert game.controller_index_of(mine) == 0
+    assert game.is_on_battlefield(on_mine)
