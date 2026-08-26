@@ -722,6 +722,17 @@ class CharacteristicOfSubject:
     """
     characteristic: str          # mana_value | power | toughness
     offset: int = 0
+    #: The noun phrase a *named* back-reference spells out — "the power of
+    #: **that blocked creature**" (Glyph of Delusion) rather than a bare "its".
+    #:
+    #: A sentence that names one object needs no referent: "its" can only mean
+    #: that one. A sentence that names **two** targets of different kinds does,
+    #: because "its" would be ambiguous and English says which by repeating the
+    #: noun. So the phrase is parsed and carried, and the lowering matches it
+    #: against the sentence's own target roles — an unmatched or ambiguous
+    #: referent refuses the line rather than picking a role and being right half
+    #: the time.
+    referent: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

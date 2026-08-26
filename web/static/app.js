@@ -1659,6 +1659,15 @@ function pendingTargetFields(card, validTargetsOverride = null) {
 }
 
 // --- Cast-time target predicates (read the hand card's cast spec) ---
+// A spell naming several targets of **different kinds**, chosen in *dependency*
+// order (Glyph of Delusion: "target creature that target Wall blocked this
+// turn"). Every other prompt below picks from one list; this one walks a list
+// per role, because which creatures are legal at all is decided by the Wall
+// already chosen. The backend ships the whole walk on `valid_targets` — each
+// entry carrying under `next` the targets the later roles would then allow — so
+// the browser never re-derives a legal set and never asks the server between
+// clicks.
+function cardRequiresTargetRoles(card) { return specKind(card) === "roles"; }
 function cardRequiresTargetPlayer(card) { return specKind(card) === "player"; }
 function cardRequiresTargetLand(card) { return specKind(card) === "land"; }
 function cardRequiresTargetGraveyardCreature(card) { return specKind(card) === "graveyard_creature"; }
@@ -6978,6 +6987,18 @@ function renderActivationPrompt() {
       cancelBtn.disabled = false;
       customOkBtn.disabled = true;
       return;
+    } else if (pendingCastTarget.targetKind === "roles") {
+      body.textContent =
+        "This spell names several targets of different kinds. Click the glowing "
+        + "permanents one at a time — each choice narrows the next.";
+      steps.innerHTML = [
+        `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
+        `<div>${escapeHtml(roleTargetsHint())}</div>`,
+      ].join("");
+      cancelBtn.classList.remove("hidden");
+      cancelBtn.disabled = false;
+      customOkBtn.disabled = true;
+      return;
     } else if (pendingCastTarget.targetKind === "several") {
       body.textContent =
         `Click up to ${pendingCastTarget.maxTargets} valid permanents to choose them, then confirm. ` +
@@ -8444,6 +8465,106 @@ function dividedTargetCount() {
 // confirm shape is the divided prompt's, but the two must not be merged — a
 // divided spell splits *one* quantity across its targets and follows up with an
 // X prompt, while these are N independent targets of one effect.
+
+// ---- Several targets of different kinds, in dependency order (CR 601.2c) ----
+
+/** The printed noun a role is asking the caster to click. */
+function roleTargetNoun(role) {
+  if (!role) return "permanent";
+  if (role.wall_only) return "Wall";
+  return role.kind || "permanent";
+}
+
+function roleTargetsHint() {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "roles") return "";
+  const role = p.roles[p.roleChosen.length];
+  if (!role) return `${p.cardName}: every target chosen.`;
+  const step = `${p.roleChosen.length + 1} of ${p.roles.length}`;
+  return `Choose the ${roleTargetNoun(role)} for ${p.cardName} (${step}).`;
+}
+
+function startCastRolesTargetPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+  const spec = targetSpecOf(card);
+  const roles = spec.roles || [];
+  const options = spec.valid_targets || [];
+  // The backend has already dropped a first choice that would leave a later
+  // role with nothing (CR 601.2c chooses every target, so such a choice is not
+  // a legal one) — an empty list here therefore means the spell cannot be cast
+  // at all, not that the caster picked badly.
+  if (!roles.length || !options.length) {
+    clearPendingHandCast();
+    updateActionHint(`No legal targets for ${cardName}.`, true);
+    return;
+  }
+  pendingCastTarget = {
+    card,
+    cardName,
+    castAction,
+    targetKind: "roles",
+    roles,
+    roleChosen: [],
+    roleOptions: options,
+    ...indexValidTargets(options),
+  };
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(roleTargetsHint());
+}
+
+function chooseRoleTarget(targetSeat, permanentIndex) {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "roles") return;
+  const option = (p.roleOptions || []).find(
+    (o) => o && o.seat === targetSeat && o.index === permanentIndex,
+  );
+  if (!option) {
+    updateActionHint("That permanent isn't a legal choice for this target.", true);
+    return;
+  }
+  // Ids, for the reason every other picker sends them: a permanent that left
+  // between the click and the send must be a refusal rather than whichever
+  // permanent slid into its slot. A roles spell needs them more than most —
+  // its two targets may sit on two battlefields, which one `target_seat` and a
+  // list of slots cannot address.
+  const permanentId = permanentIdAt(targetSeat, permanentIndex);
+  if (!Number.isInteger(permanentId)) {
+    updateActionHint("That permanent has left the battlefield — pick again.", true);
+    return;
+  }
+  p.roleChosen.push({ seat: targetSeat, idx: permanentIndex, id: permanentId });
+  if (p.roleChosen.length >= p.roles.length) {
+    confirmRoleTargets();
+    return;
+  }
+  p.roleOptions = option.next || [];
+  Object.assign(p, indexValidTargets(p.roleOptions));
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(roleTargetsHint());
+}
+
+function confirmRoleTargets() {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "roles") return;
+  const { cardName, castAction, roleChosen } = p;
+  // In role order, which is the order the engine's own roles list is in — the
+  // wire is positional and both ends read one list.
+  const body = {
+    seat,
+    action: castAction || "cast",
+    card_name: cardName,
+    target_permanent_ids: roleChosen.map((t) => t.id),
+  };
+  clearPendingCastTargeting();
+  updateActionHint(`Casting ${cardName}...`);
+  sendAction(body)
+    .then(() => updateActionHint(`Cast ${cardName}.`))
+    .catch((e) => updateActionHint(e.message, true))
+    .finally(() => clearPendingHandCast());
+}
 
 function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets = null, announced = null) {
   const cardName = normalizeCardName(card);
@@ -10230,6 +10351,11 @@ function createCardElement(card, options = {}) {
           return;
         }
 
+        if (cardRequiresTargetRoles(card)) {
+          startCastRolesTargetPrompt(card);
+          return;
+        }
+
         if (cardRequiresTargetGraveyardCreature(card)) {
           startCastGraveyardCreatureTargetPrompt(card);
           return;
@@ -10688,6 +10814,7 @@ async function beginZoneCast(card, zone) {
   try {
     if (cardIsModal(card) && startModalChoicePrompt(card)) return;
     if (cardRequiresDiscardCost(card) && startCastDiscardCostPrompt(card)) return;
+    if (cardRequiresTargetRoles(card)) { startCastRolesTargetPrompt(card); return; }
     if (cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
     if (cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
     if (cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
@@ -13264,6 +13391,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
       if (card && cardIsModal(card) && startModalChoicePrompt(card)) { return; }
       if (card && cardRequiresDiscardCost(card) && startCastDiscardCostPrompt(card)) { return; }
+      if (card && cardRequiresTargetRoles(card)) { startCastRolesTargetPrompt(card); return; }
       if (card && cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
       if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
@@ -13421,6 +13549,10 @@ function initBattlefieldCanvas() {
           }
           if (pendingCastTarget.targetKind === "several") {
             toggleSeveralTarget(cardSeat, permanentIndex);
+            return;
+          }
+          if (pendingCastTarget.targetKind === "roles") {
+            chooseRoleTarget(cardSeat, permanentIndex);
             return;
           }
           resolvePendingCastTarget(cardSeat, permanentIndex);

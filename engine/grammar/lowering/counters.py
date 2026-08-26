@@ -16,6 +16,7 @@ from .. import ast
 from ..errors import LoweringError
 from ..phrases import is_pt_counter
 from ._common import (
+    PRIMARY_TARGET_ROLE,
     _amount_payload,
     _describe_several_targets,
     _describe_targets,
@@ -24,6 +25,7 @@ from ._common import (
     _is_target,
     _names_several_targets,
     _restrictions_beyond,
+    describe_target_roles,
 )
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
@@ -145,6 +147,39 @@ def _lower_put_counter(
         and not _names_several_targets(node.subject)
     ):
         assert isinstance(node.subject, ast.TargetSpec)
+        # "Put X glyph counters on target creature **that target Wall blocked
+        # this turn**" (Glyph of Delusion). The noun phrase names a second
+        # target of a different kind, so the description is ordered *roles*
+        # rather than one filter — and the count may be the sentence's X,
+        # because the where-clause behind it reads a characteristic of the
+        # role this effect acts on rather than a number the caster announced.
+        #
+        # Before the fixed-count refusal below and before the testable-key
+        # gate, because both are true of a one-target description and neither
+        # is the question here: the relation has no filter form at all
+        # (``subject_matches`` answers about one permanent; this is a record on
+        # the *other* target), so falling through would drop it and offer every
+        # creature on the board.
+        roles_payload: dict[str, object] = {
+            "counter": node.counter,
+            "count": _amount_payload(node.count),
+            "subject_role": PRIMARY_TARGET_ROLE,
+        }
+        if describe_target_roles(roles_payload, node.subject):
+            for role in roles_payload["targets"]["roles"]:
+                if set(role["filter"]) - TESTABLE_SUBJECT_FILTER_KEYS:
+                    raise LoweringError(
+                        "a named-counter target role cannot test this "
+                        "restriction", node=node,
+                    )
+                if not role["filter"].get("type_filter"):
+                    raise LoweringError(
+                        "a named-counter target role with no card type would "
+                        "offer every permanent", node=node,
+                    )
+            return (
+                OracleInstruction("add_named_counter_to_target", "", roles_payload),
+            )
         if not isinstance(node.count, ast.Fixed):
             raise LoweringError(
                 "a named counter is placed a fixed number at a time", node=node

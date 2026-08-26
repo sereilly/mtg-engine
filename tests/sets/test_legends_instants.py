@@ -2376,3 +2376,173 @@ def test_glyph_of_reincarnation_with_its_wall_gone_sweeps_nothing(set_pool):
         "Attacker One", "Attacker Two",
     ]
     assert game.pending_choices == []
+
+
+# ---------------------------------------------------------------------------
+# Glyph of Delusion (round 34) — the first spell in the pool naming **two
+# targets of different kinds**, the second of them constrained by the first.
+# CR 601.2c.
+# ---------------------------------------------------------------------------
+
+
+def _r34_creature(name: str, power: int, toughness: int, subtype: str = "Bear"):
+    type_line = f"Creature - {subtype}"
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text="", colors=("G",), color_identity=("G",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _r34_blocked_board(set_pool, glyphs: int = 1):
+    """Three attackers, two Walls, and a block record only the Walls carry.
+
+    Wall A blocks the 3/3, Wall B blocks the 5/5, and the 2/2 gets through — so
+    every question the card asks ("which creatures did *this* Wall stop?") has a
+    different answer per Wall and a wrong answer is visible rather than lucky.
+    """
+    attackers = [
+        Permanent(card=_r34_creature("Attacker One", 3, 3)),
+        Permanent(card=_r34_creature("Attacker Two", 5, 5)),
+        Permanent(card=_r34_creature("Attacker Three", 2, 2)),
+    ]
+    walls = [
+        Permanent(card=_r34_creature("Wall A", 0, 6, "Wall")),
+        Permanent(card=_r34_creature("Wall B", 0, 6, "Wall")),
+    ]
+    pool = set_pool("LEG")
+    p1 = PlayerState(name="P1", battlefield=attackers)
+    p2 = PlayerState(
+        name="P2", battlefield=walls,
+        hand=[pool["Glyph of Delusion"]] * glyphs,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    game.declare_attackers(0, [0, 1, 2])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0, 1: 1})
+    return game, attackers, walls
+
+
+def test_r34_glyph_of_delusion_is_supported(set_pool):
+    assert compile_card_oracle(set_pool("LEG")["Glyph of Delusion"]).supported
+
+
+def test_r34_the_second_picker_offers_only_what_the_named_wall_blocked(set_pool):
+    """The whole point of a *roles* spec: role 1's legal set is decided by the
+    permanent chosen for role 0, not by the printed noun alone."""
+    game, attackers, walls = _r34_blocked_board(set_pool)
+    spec = game.cast_target_spec(1, game.players[1].hand[0])
+
+    assert spec["kind"] == "roles"
+    assert [role["role"] for role in spec["roles"]] == ["blocker", "subject"]
+    offered = {
+        entry["name"]: [nxt["name"] for nxt in entry["next"]]
+        for entry in spec["valid_targets"]
+    }
+    # Only Walls for role 0, and each one leads to the single creature it
+    # blocked — never the other Wall's victim, never the unblocked attacker.
+    assert offered == {
+        "Wall A": ["Attacker One"],
+        "Wall B": ["Attacker Two"],
+    }
+
+
+def test_r34_the_gate_refuses_a_creature_the_named_wall_did_not_block(set_pool):
+    """The picker and the gate read one list, so what is not offered is not
+    castable — including from a caller that never saw the picker."""
+    game, attackers, walls = _r34_blocked_board(set_pool)
+    result = game.cast_from_hand(
+        1, "Glyph of Delusion",
+        target_permanent_ids=[walls[0].permanent_id, attackers[1].permanent_id],
+    )
+    assert result.supported is False
+    assert "no valid target" in result.details
+
+
+def test_r34_an_incomplete_announcement_is_refused(set_pool):
+    """CR 601.2c chooses *every* target as the spell is cast."""
+    game, _attackers, walls = _r34_blocked_board(set_pool)
+    result = game.cast_from_hand(
+        1, "Glyph of Delusion", target_permanent_ids=[walls[0].permanent_id],
+    )
+    assert result.supported is False
+    assert "requires 2 targets" in result.details
+
+
+def test_r34_the_counters_equal_the_blocked_creatures_power(set_pool):
+    """"…where X is the power of that blocked creature": the where-clause reads
+    the *subject* role, not whichever slot happens to come first."""
+    from engine.named_counters import counters_on
+
+    game, attackers, walls = _r34_blocked_board(set_pool)
+    result = game.cast_from_hand(
+        1, "Glyph of Delusion",
+        target_permanent_ids=[walls[1].permanent_id, attackers[1].permanent_id],
+    )
+    assert result.supported is True
+    game.resolve_top_of_stack()
+
+    # Attacker Two is a 5/5, and it is the *second* role — reading role 0 would
+    # give the Wall's 0.
+    assert counters_on(attackers[1], "glyph") == 5
+    assert counters_on(attackers[0], "glyph") == 0
+
+
+def test_r34_the_granted_lines_keep_it_tapped_until_the_counters_are_gone(set_pool):
+    """Both quoted grants, and the interaction between them: the untap
+    restriction is *conditional* on a counter the other grant removes."""
+    from engine.named_counters import counters_on
+
+    game, attackers, walls = _r34_blocked_board(set_pool)
+    game.cast_from_hand(
+        1, "Glyph of Delusion",
+        target_permanent_ids=[walls[0].permanent_id, attackers[0].permanent_id],
+    )
+    game.resolve_top_of_stack()
+    assert counters_on(attackers[0], "glyph") == 3
+
+    seen = []
+    for _ in range(4):
+        attackers[0].tapped = True
+        game.start_turn(0)
+        game._close_current_priority_step()
+        game._settle()
+        seen.append((counters_on(attackers[0], "glyph"), attackers[0].tapped))
+    # One counter comes off per upkeep, and the creature untaps only once the
+    # last one has gone — a substring probe over the granted line would have
+    # kept it tapped forever.
+    assert seen == [(2, True), (1, True), (0, True), (0, False)]
+
+
+def test_r34_a_blocker_that_left_and_returned_makes_the_spell_fizzle(set_pool):
+    """CR 608.2b re-checks every role, and the *relation* between them.
+
+    Both targets can still be on the battlefield while the thing that made the
+    pair legal is gone: CR 400.7 makes a returning permanent a new object, so
+    the Wall that comes back carries no block record and the creature the
+    caster named is no longer one it blocked. A re-check that only asked "is
+    each target still there?" would put the counters on anyway.
+    """
+    from engine.named_counters import counters_on
+
+    game, attackers, walls = _r34_blocked_board(set_pool)
+    # Queued rather than cast: ``cast_from_hand`` resolves the spell as part of
+    # the call, and this test is about what changes *while it is on the stack*.
+    game.queue_from_hand(
+        1, "Glyph of Delusion",
+        target_permanent_ids=[walls[0].permanent_id, attackers[0].permanent_id],
+    )
+    # The Wall's record is what the pair rests on; drop it the way a bounce and
+    # a recast would.
+    walls[0].metadata.pop("blocked_attacker_ids_this_turn", None)
+    game.resolve_top_of_stack()
+
+    assert counters_on(attackers[0], "glyph") == 0
+    assert any("no longer legal" in line for line in game.log[-4:])

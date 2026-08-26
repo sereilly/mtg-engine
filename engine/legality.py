@@ -43,8 +43,11 @@ from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
 from .modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
 from .targeting import (
+    ROLES_TARGET_KIND,
     derive_activation_spec,
     derive_cast_spec,
+    role_relation_holds,
+    spec_roles,
     usable_activated_abilities,
 )
 
@@ -400,6 +403,18 @@ class LegalityMixin:
         # describes no cast-time choice means the spell makes none.
         spec = derive_cast_spec(card, program) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
+        if spec["kind"] == ROLES_TARGET_KIND:
+            # A spell whose targets are of *different kinds*, chosen in
+            # dependency order (CR 601.2c). ``valid_targets`` is role 0's list —
+            # the shape every caller downstream already reads, so "does this
+            # spell have a legal target at all?" keeps working — and each entry
+            # carries under ``next`` the targets the later roles would then
+            # allow. One walk, so what the browser offers and what
+            # ``_validate_cast_targets`` accepts come from the same call.
+            spec["valid_targets"] = self._role_target_walk(
+                caster_index, card, spec, (), for_cast=True
+            )
+            return spec
         spec["valid_targets"] = self._enumerate_targets(caster_index, card, spec, for_cast=True)
         # "Any number of target …" (Drafna's Restoration) prints no maximum, so
         # the cap is however many legal targets there are — a number that exists
@@ -408,6 +423,150 @@ class LegalityMixin:
         if spec.pop("unbounded_targets", False):
             spec["max_targets"] = len(spec["valid_targets"])
         return spec
+
+    # -- Several targets of different kinds (CR 601.2c) ---------------------
+    def role_target_options(
+        self, caster_index: int, card: CardDefinition, spec: dict,
+        chosen: tuple, *, for_cast: bool, source_permanent=None,
+        ability_instruction=None, ability_source=None,
+    ) -> list[dict]:
+        """Every legal target for the **next** role, given the roles already
+        chosen - and the whole of what makes a roles spell safe.
+
+        One call, and it is both the gate and the picker: ``cast_target_spec``
+        walks it to build the list the browser offers, and
+        :meth:`_validate_cast_targets` walks the same call over the targets a
+        caster actually named. That is the shape ``trigger_mode_options``
+        already has, and it is here for the reason CLAUDE.md keeps naming - a
+        picker and a gate with two tables between them is this engine's
+        recurring defect, and on a *target* list the failure is a spell cast at
+        something nothing ever checked.
+
+        Two narrowings live here and nowhere else, because neither is a
+        property of one permanent:
+
+        * **the dependency.** "target creature that **target Wall** blocked
+          this turn" - which creatures are legal at all is decided by the block
+          record on the Wall already chosen. ``subject_matches`` answers about a
+          candidate alone and could never see it.
+        * **CR 601.2c distinctness.** The same object can't be chosen for two
+          targets of one spell unless the spell says otherwise, so a permanent
+          already taken by an earlier role is not offered to a later one.
+
+        Returns [] once every role is chosen, which is what ends the walk.
+        """
+        roles = spec_roles(spec)
+        if len(chosen) >= len(roles):
+            return []
+        role = roles[len(chosen)]
+        # ``for_cast=False`` even for a spell, and that is not a loosening.
+        # The cast-time probe inside ``_enumerate_targets`` re-enters
+        # ``_validate_cast_targets`` with **one** slot, which for a roles spell
+        # is an incomplete announcement — so it would refuse every candidate,
+        # and the recursion would be asking the whole-announcement gate a
+        # question about a single permanent. The narrower path applies
+        # ``_can_be_targeted``: the identical CR 702.16b/702.11b/shroud check
+        # the cast gate runs over the targets a caster names, plus Wall of
+        # Shadows' "abilities that can target only Walls" question, which it can
+        # answer here because the role *is* the spec.
+        candidates = self._enumerate_targets(
+            caster_index, card, role, for_cast=False,
+            ability_instruction=ability_instruction,
+            source_permanent=source_permanent, ability_source=ability_source,
+        )
+        taken = {id(perm) for perm in chosen if perm is not None}
+        related = self._role_relation_test(role, roles, chosen)
+        options: list[dict] = []
+        for candidate in candidates:
+            perm = self.permanent_at(candidate.get("seat"), candidate.get("index"))
+            if perm is None or id(perm) in taken:
+                continue
+            if related is not None and not related(perm):
+                continue
+            options.append({**candidate, "role": role.get("role")})
+        return options
+
+    def _role_relation_test(self, role: dict, roles: list[dict], chosen: tuple):
+        """The predicate *role*'s dependency imposes, or None when it has none.
+
+        The relation itself is ``engine/targeting.ROLE_RELATION_TESTS``, which
+        the resolution's CR 608.2b re-check reads too — the picker, this gate
+        and that re-check are three questions about one relation, and this repo
+        keeps finding the bug where they were three tables.
+
+        A dependency that table does not implement offers **nothing**, never
+        everything: an unanswerable narrowing must refuse, the same direction
+        ``defending_player_only`` takes in the enumerator below. A role whose
+        earlier target has not been chosen — or has left the battlefield — is
+        in that same position, which ``role_relation_holds`` answers the same
+        way.
+        """
+        if role.get("relation") is None:
+            return None
+        earlier_index = next(
+            (
+                index for index, entry in enumerate(roles)
+                if entry.get("role") == role.get("depends_on")
+            ),
+            None,
+        )
+        earlier = (
+            chosen[earlier_index]
+            if earlier_index is not None and earlier_index < len(chosen)
+            else None
+        )
+        return lambda perm: role_relation_holds(role, earlier, perm)
+
+    def _role_target_walk(
+        self, caster_index: int, card: CardDefinition, spec: dict,
+        chosen: tuple, *, for_cast: bool,
+    ) -> list[dict]:
+        """The whole choice tree of a roles spell, depth-first.
+
+        Each entry is one legal target for the current role with the entries
+        legal *after* it under ``next`` - so the browser can walk the roles in
+        one payload rather than asking the server again between clicks, and so
+        a role 0 candidate that leaves role 1 with nothing to choose is visible
+        as an empty ``next`` rather than as a dead end discovered mid-prompt.
+        """
+        options = self.role_target_options(
+            caster_index, card, spec, chosen, for_cast=for_cast
+        )
+        walked: list[dict] = []
+        for option in options:
+            perm = self.permanent_at(option.get("seat"), option.get("index"))
+            following = self._role_target_walk(
+                caster_index, card, spec, chosen + (perm,), for_cast=for_cast
+            )
+            if not following and len(chosen) + 1 < len(spec_roles(spec)):
+                # CR 601.2c: every target of the spell is chosen, so a first
+                # choice that leaves a later role with no legal object is not a
+                # legal first choice at all. Dropped here rather than offered
+                # and refused after the click.
+                continue
+            walked.append({**option, "next": following})
+        return walked
+
+    def _role_targets_legal(
+        self, caster_index: int, card: CardDefinition, spec: dict,
+        chosen: list, *, for_cast: bool,
+    ) -> bool:
+        """Whether *chosen* - one permanent per role, in role order - is a legal
+        announcement, asked through the very list the picker was built from."""
+        roles = spec_roles(spec)
+        if len(chosen) != len(roles) or any(perm is None for perm in chosen):
+            return False
+        for index in range(len(roles)):
+            options = self.role_target_options(
+                caster_index, card, spec, tuple(chosen[:index]), for_cast=for_cast
+            )
+            if not any(
+                self.permanent_at(option.get("seat"), option.get("index"))
+                is chosen[index]
+                for option in options
+            ):
+                return False
+        return True
 
     def enumerate_targets_for_kind(self, caster_index: int, card: CardDefinition, kind: str, **flags) -> list[dict]:
         """Enumerate legal targets for a pre-classified target ``kind`` (used by the

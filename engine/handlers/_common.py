@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Callable, Sequence
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
+    from ..oracle_types import OracleInstruction
 from ..layer_bridge import printed_shape, printed_supertypes
 from ..oracle_types import BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER
 from ..models import Permanent, PlayerState
@@ -55,7 +56,10 @@ def resolve_amount(raw: object, x_value: int | None) -> int:
 
 
 
-def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: dict) -> int:
+def count_from_payload(
+    game: "Game", context: "OracleExecutionContext", spec: dict,
+    instruction: "OracleInstruction | None" = None,
+) -> int:
     """Evaluate an ``x_from_count`` spec at *resolution*.
 
     ``owner`` names whose zone is read — "you" is the effect's controller,
@@ -96,7 +100,7 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
         return counters_on(source, str(counters))
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):
-        return _characteristic_of_object(game, context, characteristic)
+        return _characteristic_of_object(game, context, characteristic, instruction)
     owner = context.caster if spec.get("owner", "you") == "you" else (context.target or context.caster)
     return evaluate_count(
         game, owner, spec,
@@ -105,7 +109,8 @@ def count_from_payload(game: "Game", context: "OracleExecutionContext", spec: di
 
 
 def _characteristic_of_object(
-    game: "Game", context: "OracleExecutionContext", spec: dict
+    game: "Game", context: "OracleExecutionContext", spec: dict,
+    instruction: "OracleInstruction | None" = None,
 ) -> int:
     """"…where X is **its** mana value" / "**its toughness minus 1**" — one
     named object's characteristic, plus whatever constant the clause printed.
@@ -136,11 +141,24 @@ def _characteristic_of_object(
         if cast_card is None:
             return 0
         return max(0, int(getattr(cast_card, "cmc", 0) or 0) + offset)
-    perm = resolve_target_permanent(
-        game, context, predicate=lambda p: True, fallback_on_invalid_choice=False
-    )
-    if perm is None:
-        return 0
+    # "…where X is the power of **that blocked creature**" (Glyph of Delusion).
+    # A sentence naming two targets of different kinds cannot be asked for "the
+    # target": the clause said which, the lowering matched the printed words to
+    # a role, and this reads that role's own slot. Absent for every one-target
+    # sentence, which keeps the common path exactly as it was.
+    role = spec.get("role")
+    if role is not None:
+        perm = resolve_role_permanent(
+            game, context, (instruction.payload if instruction is not None else {}), role
+        )
+        if perm is None:
+            return 0
+    else:
+        perm = resolve_target_permanent(
+            game, context, predicate=lambda p: True, fallback_on_invalid_choice=False
+        )
+        if perm is None:
+            return 0
     if name == "power":
         value = int(perm.effective_power)
     elif name == "toughness":
@@ -779,6 +797,92 @@ def block_pair_permanents(game, context) -> list:
         ]
     victim = resolve_target_permanent(game, context, fallback_players=())
     return [victim] if victim is not None else []
+
+
+def roles_still_legal(
+    game: Game, context: OracleExecutionContext, payload: dict, *, observer: int
+) -> bool:
+    """CR 608.2b for a several-**role** spell: is every role still legal?
+
+    Asked once, at resolution, of every role the instruction describes - its
+    printed noun phrase through the same ``subject_matches`` the picker
+    enumerated with, and its dependency through the same
+    ``ROLE_RELATION_TESTS`` the picker narrowed with. Two readers of one table
+    rather than a second re-check written by hand, which is the arrangement
+    this engine keeps finding on the wrong side of.
+
+    The relation is what makes the re-check necessary at all. A one-target
+    spell whose target left is handled by the resolver returning None; a roles
+    spell can have both targets present and the *relation between them* gone -
+    the Wall left and came back, so CR 400.7 made it a new object with no
+    block record, and the creature the caster named is no longer one it
+    blocked.
+    """
+    from ..subject_filters import subject_matches
+    from ..targeting import role_dependency, role_relation_holds
+
+    targets = (payload or {}).get("targets") or {}
+    roles = list(targets.get("roles") or ())
+    resolved: list = []
+    for role in roles:
+        perm = resolve_role_permanent(game, context, payload, role.get("role"))
+        if perm is None or not game.is_on_battlefield(perm):
+            return False
+        if not subject_matches(
+            game, perm, role.get("filter") or {}, observer=observer,
+            source=context.source_permanent,
+        ):
+            return False
+        _relation, depends_on = role_dependency(role)
+        earlier = next(
+            (
+                candidate for candidate, entry in zip(resolved, roles)
+                if entry.get("role") == depends_on
+            ),
+            None,
+        )
+        if not role_relation_holds(role, earlier, perm):
+            return False
+        resolved.append(perm)
+    return bool(roles)
+
+
+def resolve_role_permanent(
+    game: Game,
+    context: OracleExecutionContext,
+    payload: dict,
+    role: str,
+) -> "Permanent | None":
+    """The permanent chosen for one **role** of a several-role spell.
+
+    A roles spell (Glyph of Delusion) carries its chosen targets as one
+    positional list in *dependency* order, and this is the one place a role's
+    name is turned back into its slot - through ``payload_role_slot``, reading
+    the same ``targets`` description the picker and the cast gate read. A
+    handler that counted slots by hand would be a second convention, and the
+    two would disagree the first time a card printed its roles in a different
+    order from the one it depends on.
+
+    Strict, and deliberately so: by id, and with no fallback scan. The singular
+    resolver's "hit something rather than fizzle" is right for a spell with one
+    target and wrong here - a role that no longer resolves is CR 608.2b's
+    illegal target, and falling back would point the effect at a permanent the
+    caster never chose *for that role*. The index form beside the ids answers a
+    caller that has one seat in hand (a test, the AI); the wire always sends
+    ids, because the roles of one spell may sit on two battlefields.
+    """
+    from ..targeting import payload_role_slot
+
+    slot = payload_role_slot(payload, role)
+    if slot is None:
+        return None
+    ids = context.target_permanent_id
+    if isinstance(ids, list) and 0 <= slot < len(ids) and isinstance(ids[slot], int):
+        return game.permanent_by_id(ids[slot])
+    indices = context.target_permanent_index
+    if isinstance(indices, list) and 0 <= slot < len(indices):
+        return game.permanent_at(game.players.index(context.target), indices[slot])
+    return None
 
 
 def resolve_target_permanent(

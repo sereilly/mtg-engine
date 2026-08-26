@@ -190,6 +190,7 @@ def _lower_where_x_characteristic(
     # Decided here, where both the definition and the lowered sentence are in
     # hand, rather than by a resolution-time fallback order that would have to
     # guess when a sentence has both.
+    role = _referent_role(node, inner)
     names_a_spell = any(i.payload.get("bound_to_trigger") for i in inner)
     if names_a_spell and node.definition.characteristic != "mana_value":
         # A spell on the stack has no power or toughness to read (CR 208.1), so
@@ -199,16 +200,107 @@ def _lower_where_x_characteristic(
         raise LoweringError(
             "a spell has no power or toughness to read", node=node
         )
-    return _stamp_x_from_count(
-        inner,
-        {
-            "object_characteristic": {
-                "object": "triggering_spell" if names_a_spell else "target",
-                "characteristic": node.definition.characteristic,
-                "offset": node.definition.offset,
-            }
-        },
+    described: dict[str, object] = {
+        "object": "triggering_spell" if names_a_spell else "target",
+        "characteristic": node.definition.characteristic,
+        "offset": node.definition.offset,
+    }
+    if role is not None:
+        # Which of the sentence's targets the clause reads. Absent for every
+        # one-target sentence, so nothing downstream has to special-case the
+        # common shape — and *present* whenever the sentence named more than
+        # one, because "the target" is not an answer then.
+        described["role"] = role
+    return _stamp_x_from_count(inner, {"object_characteristic": described})
+
+
+#: What a role's own key licenses a printed back-reference to call it. "that
+#: **blocked** creature" is the only way English has to point at the dependent
+#: end of ``blocked_by_role`` without repeating the whole relative clause, and
+#: the adjective has no filter payload of its own (``ObjectFilter.blocked`` is
+#: deliberately unemitted), so it is matched against the *role* rather than
+#: against a permanent. A second dependent relation adds a row.
+_ROLE_BACKREFERENCE_ADJECTIVES: dict[str, str] = {"blocked_by_role": "blocked"}
+
+
+def _target_roles(inner: tuple[OracleInstruction, ...]) -> list[dict]:
+    """The ordered target roles the lowered sentence describes, if any."""
+    for instruction in inner:
+        targets = instruction.payload.get("targets")
+        if isinstance(targets, dict) and targets.get("kind") == "roles":
+            return list(targets.get("roles") or ())
+    return []
+
+
+def _referent_role(node: ast.WhereX, inner: tuple[OracleInstruction, ...]) -> str | None:
+    """Which target role "the power of **that blocked creature**" names.
+
+    None when the sentence named one target — "its" and "that creature" can
+    only mean that one, and the resolution reads it off the single chosen slot
+    as it always has.
+
+    When the sentence named **roles**, a referent is required and must match
+    exactly one of them. Both halves refuse rather than guess: a bare "its"
+    over two targets of different kinds does not say which, and a referent
+    matching both would read a characteristic off whichever slot happened to be
+    first. Either way the card would still compile and still look supported,
+    which is the failure this refusal exists for.
+    """
+    referent = node.definition.referent
+    roles = _target_roles(inner)
+    if not roles:
+        if referent is not None and _referent_beyond_backreference(referent):
+            raise LoweringError(
+                "a where-clause referent this sentence cannot name", node=node
+            )
+        return None
+    if referent is None:
+        raise LoweringError(
+            "this sentence names two targets, so 'its' does not say which",
+            node=node,
+        )
+    if _referent_beyond_backreference(referent):
+        raise LoweringError(
+            "a where-clause referent this sentence cannot name", node=node
+        )
+    matched = [role["role"] for role in roles if _referent_matches_role(referent, role)]
+    if len(matched) != 1:
+        raise LoweringError(
+            "a where-clause referent that names no single target role", node=node
+        )
+    return matched[0]
+
+
+#: The referent fields a printed back-reference may set. Anything else is a
+#: narrowing the match below cannot read, and reading it as though it were
+#: absent would point the clause at a role the card never named.
+_REFERENT_FIELDS = frozenset({"card_types", "subtypes", "blocked"})
+
+
+def _referent_beyond_backreference(referent) -> bool:
+    default = ast.ObjectFilter()
+    return any(
+        field.name not in _REFERENT_FIELDS
+        and getattr(referent, field.name) != getattr(default, field.name)
+        for field in dataclasses.fields(referent)
     )
+
+
+def _referent_matches_role(referent, role: dict) -> bool:
+    """Whether *referent*'s printed words describe *role* and no other."""
+    filt = role.get("filter") or {}
+    if tuple(referent.card_types) != (
+        (filt["type_filter"],) if isinstance(filt.get("type_filter"), str) else ()
+    ):
+        return False
+    if tuple(referent.subtypes) != (
+        (filt["subtype_filter"],) if isinstance(filt.get("subtype_filter"), str) else ()
+    ):
+        return False
+    for key, adjective in _ROLE_BACKREFERENCE_ADJECTIVES.items():
+        if bool(getattr(referent, adjective, False)) != bool(role.get(key)):
+            return False
+    return True
 
 
 def _lower_where_x_this_way(

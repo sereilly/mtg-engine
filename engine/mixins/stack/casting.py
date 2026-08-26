@@ -36,7 +36,8 @@ from ...oracle_types import x_spend_color_from_text
 from ...target_restrictions import forbidden_target
 from ...targeting import bounce_subject_filter, graveyard_target_spec
 from ...subject_filters import filter_head_noun, subject_matches
-from ...targeting import derive_cast_spec, enchant_subject_seat, targets_mana_value_x
+from ...targeting import (derive_cast_spec, enchant_subject_seat, spec_roles,
+                          targets_mana_value_x)
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
 # "creature" uses Permanent.is_creature so animated lands (Kormus Bell / Living
@@ -935,6 +936,35 @@ class SpellCastingMixin:
         where both halves are known.
         """
         return permanent_matches_filter(perm, payload)
+    def _named_role_targets(
+        self, caster_index: int, target_player_index, target_permanent_index,
+        target_permanent_ids,
+    ) -> list:
+        """The permanents a roles announcement named, in role order.
+
+        Ids first, exactly as the CR 702.16b loop below reads them, and for the
+        same reason: the roles of one spell may sit on **two** battlefields - a
+        Wall the defender controls and the attacker it blocked - so a list of
+        slots against one ``target_seat`` cannot address them both. The index
+        form is kept for a caller with one seat in hand (a test, the AI), and a
+        slot that resolves to nothing stays None so the count check above sees a
+        short announcement rather than a silently shifted one.
+        """
+        if target_permanent_ids:
+            return [
+                self.permanent_by_id(permanent_id) if permanent_id is not None else None
+                for permanent_id in target_permanent_ids
+            ]
+        slots = (
+            target_permanent_index
+            if isinstance(target_permanent_index, list)
+            else [target_permanent_index]
+        )
+        seat = (
+            target_player_index if target_player_index is not None else caster_index
+        )
+        return [self.permanent_at(seat, slot) for slot in slots]
+
     def _validate_cast_targets(
         self,
         card: CardDefinition,
@@ -1084,9 +1114,35 @@ class SpellCastingMixin:
             if isinstance(target_permanent_index, list)
             else None
         )
-        maximum = (derive_cast_spec(card, program) or {}).get("max_targets")
+        cast_spec = derive_cast_spec(card, program) or {}
+        maximum = cast_spec.get("max_targets")
         if isinstance(maximum, int) and announced is not None and announced > maximum:
             return False, f"too many targets for {card.name}"
+
+        # A spell naming several targets of **different kinds** (Glyph of
+        # Delusion). Gated here, above every per-kind arm below, because none of
+        # them can see the two facts that make such an announcement legal: the
+        # later target's legality depends on the earlier one, and CR 601.2c
+        # forbids naming one object twice. Both are asked through
+        # ``role_target_options`` — the very call the picker was built from.
+        #
+        # Only a *complete* announcement is checked here, and that is what keeps
+        # the enumeration behind it from recursing: the per-candidate probe
+        # inside ``_enumerate_targets(for_cast=True)`` re-enters this function
+        # with one slot, never a list.
+        roles = spec_roles(cast_spec)
+        if roles:
+            chosen = self._named_role_targets(
+                caster_index, target_player_index, target_permanent_index,
+                target_permanent_ids,
+            )
+            if len(chosen) != len(roles):
+                return False, f"{card.name} requires {len(roles)} targets"
+            if not self._role_targets_legal(
+                caster_index, card, cast_spec, chosen, for_cast=True
+            ):
+                return False, f"no valid target for {card.name}"
+            return True, "valid"
 
         # "…with mana value X" (Spell Blast, Detonate). Here rather than in an
         # arm below, for the same reason the count check is: Detonate prints two

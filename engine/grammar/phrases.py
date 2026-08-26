@@ -343,7 +343,13 @@ def parse_bound_subject(stream: TokenStream) -> "ast.TargetSpec | None":
             return None
         stream.advance()
         return ast.TargetSpec("those", ast.ObjectFilter(card_types=(singular,)))
-    if not stream.accept_word("that"):
+    # "**The** creature gains …" (Glyph of Delusion) is the same back-reference
+    # as "**that** creature", in the older templating that used the definite
+    # article for it. One production for both, because the referent, the
+    # quantifier and every lowering that accepts one are identical — and because
+    # a sentence whose subject is a bare definite noun phrase has nothing else
+    # it could mean: an effect that acts on "a creature" says so.
+    if not stream.accept_word("that", "the"):
         return None
     noun = stream.peek_word()
     if noun is None or noun not in CARD_TYPES:
@@ -795,6 +801,25 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
             if stream.accept_phrase(*phrase):
                 return ast.CharacteristicOfSubject(name, _accept_offset(stream))
         stream.reset(its_mark)
+    # "…where X is **the power of that blocked creature**" (Glyph of Delusion).
+    # The same reading as "its" one branch up, with the referent spelled out
+    # instead of pronominalised — which is what a sentence does when it named
+    # more than one object and "its" would not say which. The phrase is carried
+    # on the node and matched against the sentence's target roles by the
+    # lowering, where the sentence is in hand; refusing to guess is the point,
+    # since a mismatched referent would read a characteristic off the wrong
+    # target and the card would still look supported.
+    named_mark = stream.mark()
+    if stream.accept_word("the"):
+        for phrase, name in _SUBJECT_CHARACTERISTICS:
+            phrase_mark = stream.mark()
+            if stream.accept_phrase(*phrase) and stream.accept_phrase("of", "that"):
+                referent = parse_object_filter(stream)
+                return ast.CharacteristicOfSubject(
+                    name, _accept_offset(stream), referent
+                )
+            stream.reset(phrase_mark)
+    stream.reset(named_mark)
     # "…where X is **twice** the number of white creatures that player
     # controls" (Jovial Evil). A multiplier in front of whatever definition
     # follows, read here so it scales every one of them rather than only the

@@ -421,6 +421,19 @@ def _parse_postmodifiers(
                 if stream.accept_phrase("this", "turn"):
                     d.blocked_by_target_object = blocker
                     continue
+            # "…that **target Wall blocked this turn**" (Glyph of Delusion). The
+            # same relation as the passive clause directly above, printed with
+            # the blocker as the sentence's subject rather than its agent — so
+            # it sets the same field, and everything downstream (the lowering's
+            # hoist, the role picker, the block record the handler reads) is
+            # written once for both voices. Spelling it as its own field would
+            # have been two names for one fact, and the second would need its
+            # own reader everywhere the first already has one.
+            elif stream.accept_word("target"):
+                blocker = parse_filter(stream)
+                if stream.accept_phrase("blocked", "this", "turn"):
+                    d.blocked_by_target_object = blocker
+                    continue
             elif stream.accept_phrase("dealt", "damage", "to"):
                 if accept_source_reference(stream) and stream.accept_phrase(
                     "this", "turn"
