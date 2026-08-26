@@ -82,9 +82,16 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
     # form stays with the random handler below, whose contract it is.
     if node.player.kind == "you":
         amount = _amount_payload(node.count)
-        if node.at_random or not isinstance(amount, int):
+        # "Discard **X** cards, then …" (Recall). The count may be the cast's X:
+        # `discard_controller_cards` sizes its prompt through `resolve_amount`,
+        # which reads `"x"` off the context, so the variable form is the same
+        # handler with the same payload key rather than a second kind. What
+        # stays refused is "at random" — who picks is what separates this
+        # handler from `discard_x_target_cards`, and lowering a chosen discard
+        # onto the random one takes the choice the card leaves its controller.
+        if node.at_random or not isinstance(amount, (int, str)):
             raise LoweringError(
-                "the controller discard is chosen and fixed-count", node=node
+                "the controller discard is chosen, and counted or X", node=node
             )
         payload: dict[str, object] = {"amount": amount}
         # "Discard a **creature** card" (Crypt Lurker). Gated by the same reader

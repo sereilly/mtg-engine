@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ._core import (
+    Amount,
     Duration,
     ManaCost,
     PlayerRef,
@@ -221,6 +222,17 @@ class ReturnToZone:
     # are different questions, and the pool prints cards that answer only the
     # second.
     under_control_of: PlayerRef | None = None
+    # "Return a card from your graveyard to your hand **for each card discarded
+    # this way**." (Recall.) How many times the printed subject is returned —
+    # a repetition of the whole clause, not a narrowing of it, which is why it
+    # is an `Amount` here rather than a bigger `count` on the subject: the
+    # subject stays "a card", and the number the sentence multiplies it by is
+    # not known until an earlier step of the same resolution has run.
+    #
+    # Recorded rather than folded away, because a card printing it and a card
+    # not printing it are different cards; lowering refuses any shape it cannot
+    # repeat, so the clause is never parsed and then dropped.
+    repetitions: Amount | None = None
 
 
 @dataclass(frozen=True)

@@ -1190,18 +1190,28 @@ class PendingChoicesMixin:
             if not _resolve_one_discard(self, choice.player_index, hand_index, to_library):
                 return False
         self.discard_pending_choice(choice)
-        self._draw_that_many_after_discard(choice, len(chosen))
+        self._after_discard_answered(choice, len(chosen))
         return True
 
-    def _draw_that_many_after_discard(self, choice: PendingChoice, discarded: int) -> None:
-        """"…then draw that many cards" — the follow-on the discard prompt was
-        armed with (Kinetic Augur).
+    def _after_discard_answered(self, choice: PendingChoice, discarded: int) -> None:
+        """Everything that reads *how many* cards were actually discarded.
 
-        Here rather than in a later instruction because "that many" is the
-        prompt's own answer: nothing downstream of a queued choice can read a
-        number the player has not given yet. Discarding nothing draws nothing,
-        which is what "that many" says.
+        One place, because both answer paths — a seat's own picks and the
+        non-interactive default — reach it, and the number is knowable nowhere
+        else: nothing downstream of a queued choice can read a count the player
+        has not given yet.
+
+        Two readers today. "…then draw that many cards" (Kinetic Augur) is the
+        fused shape, whose follow-on the prompt was armed with. The other is the
+        ordinary back-reference: a discard that recorded its count into the
+        resolution scratchpad lets "…for each card discarded this way" (Recall)
+        be a later step of an ordinary ``sequence`` rather than a second fused
+        kind. Discarding nothing records a zero, which is what both sentences
+        say.
         """
+        results = choice.data.get("_results")
+        if results is not None:
+            results["discarded_count"] = discarded
         player = self.players[choice.player_index]
         if choice.data.get("draw_that_many") and discarded > 0:
             # CR 614.5: a draw a replacement effect *created* is not replaced
@@ -1316,7 +1326,7 @@ class PendingChoicesMixin:
         # The stated policy for "up to" is to take the whole offer: this pairing
         # only ever prints with a draw behind it, so discarding fewer is
         # strictly less card selection for the same cards.
-        self._draw_that_many_after_discard(choice, discarded)
+        self._after_discard_answered(choice, discarded)
 
     def auto_resolve_pending_discard(self) -> None:
         """Resolve a pending discard with a default choice (the lowest-index cards,
@@ -2988,6 +2998,12 @@ register_choice(
     blocked_detail="complete discard before other actions",
     blocks_every_seat=True,
     spectator_visible=True,
+    # "Discard X cards, then <do something for each card discarded this way>"
+    # (Recall) is the shape: the step behind the discard has to see the cards
+    # that were actually discarded, not the hand as it stood when the prompt was
+    # armed. CR 608.2 / CR 117.3b — nothing else in the resolution happens until
+    # the last of its prompts is answered.
+    suspends=True,
 )
 
 register_choice(

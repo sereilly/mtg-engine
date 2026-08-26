@@ -511,3 +511,55 @@ def test_616_1e_a_suspended_combat_does_not_advance_to_end_of_combat():
     assert game.combat_damage_resolved
     assert game.current_step == "end_of_combat", "and the step closed once it was done"
     assert game.resume_stack == [] and not game.effect_suspended
+
+
+# ---------------------------------------------------------------------------
+# A discard suspends the resolution it is a step of (round 29)
+# ---------------------------------------------------------------------------
+#
+# CR 608.2 makes a resolution a sequence of steps and CR 117.3b hands priority
+# back only when it is over. A prompt part-way through it therefore stops the
+# steps *behind* it as well: a discard's answer is what the next step of the
+# same sentence works from ("…for each card discarded this way"), and running
+# that step against the hand as it stood when the prompt was armed reads a
+# number the player has not given yet.
+#
+# The `discard` ChoiceSpec used to be `suspends=False`, which is exactly that
+# bug with nothing pointing at it — the step behind the prompt ran, saw nothing
+# had been discarded, and did nothing.
+
+
+@pytest.mark.cr("608.2", "117.3b")
+def test_a_discard_stops_the_steps_queued_behind_it(set_pool):
+    """Recall's return runs only once the discard has been answered."""
+    pool = set_pool("LEG")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Recall"], CARDS_BY_NAME["Giant Growth"]],
+        graveyard=[CARDS_BY_NAME["Black Lotus"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+
+    assert game._cast_onto_stack(0, "Recall", x_value=1).supported
+    game.priority_player_index = 0
+    game.pass_priority(0)
+    game.pass_priority(1)
+
+    # Step one asked; steps two and three are recorded, not run.
+    assert [c.kind for c in game.pending_choices] == ["discard"]
+    assert game.effect_suspended is True
+    assert game.resume_stack, "the rest of the sequence is owed"
+    assert [c.name for c in p1.hand] == ["Giant Growth"]
+    assert p1.exile == [], "the third step has not run either"
+
+    game.resolve_pending_choice("discard", 0, hand_indices=[0], to_library=False)
+
+    # Answering resumed them, innermost first, and the return saw the graveyard
+    # the discard had just filled.
+    assert [c.kind for c in game.pending_choices] == ["search_library"]
+    assert sorted(c.name for c in p1.graveyard) == ["Black Lotus", "Giant Growth"]

@@ -160,6 +160,63 @@ def _parse_for_each(stream: TokenStream) -> ast.DiedThisTurn | None:
     return ast.DiedThisTurn(filt)
 
 
+# "for each card **discarded this way**" — the printed participles that name a
+# set an *earlier step of this same effect* produced, and the resolution
+# scratchpad key that step records its size under. Data rather than branches for
+# this file's stated reason, and narrow on purpose: the noun and the participle
+# are checked together, so "for each creature discarded this way" is a sentence
+# nobody printed and refuses instead of quietly counting cards.
+_THIS_WAY_COUNTS: dict[tuple[str, str], str] = {
+    ("card", "discarded"): "discarded_count",
+}
+
+
+def _parse_for_each_this_way(stream: TokenStream) -> ast.ThatMuch | None:
+    """``for each <noun> <participle> this way`` — a trailing repetition clause
+    whose number is one earlier step's result.
+
+    A *count*, not a set, which is why it produces :class:`ast.ThatMuch` rather
+    than the ``ObjectFilter`` / :class:`ast.DiedThisTurn` that
+    :func:`_parse_for_each` above returns. The two clauses look alike and ask
+    different questions: "for each creature that died this turn" iterates a
+    window of the turn's history that anything may have contributed to, and this
+    one counts exactly what the sentence in front of it did.
+
+    "This way" is required rather than defaulted, for :func:`_parse_for_each`'s
+    reason: without the words the clause would name some other set, and letting
+    them be absent would let them be *deleted* with no change to the parse.
+    Lowering then refuses unless a step of the same effect really records the
+    key — with no producer the words name nothing, and a zero is a number the
+    card never printed.
+
+    Returning None leaves the cursor where it was, so a caller that does not
+    find the clause still owes the rest of its line to full-token consumption.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    noun = stream.peek()
+    if noun is None or noun.kind != WORD:
+        stream.reset(mark)
+        return None
+    singular = noun.text[:-1] if noun.text.endswith("s") else noun.text
+    stream.next()
+    participle = stream.peek()
+    key = (
+        _THIS_WAY_COUNTS.get((singular, participle.text))
+        if participle is not None and participle.kind == WORD
+        else None
+    )
+    if key is None:
+        stream.reset(mark)
+        return None
+    stream.next()
+    if not stream.accept_phrase("this", "way"):
+        stream.reset(mark)
+        return None
+    return ast.ThatMuch(key)
+
+
 def parse_subject_filter(phrase: str, *, plural: bool = False) -> ast.ObjectFilter | None:
     """The set of objects a printed noun phrase names, or None if it refuses.
 

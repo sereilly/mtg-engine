@@ -5229,7 +5229,13 @@ function renderSearchLibraryModal(info) {
   // The zones this search may look in, each with its cards and — the engine's
   // answer, not a second reading of the restriction here — which of them it may
   // find. A library-only search is the one-entry case it always was.
-  const searchesGraveyard = (info.zones || ["library"]).includes("graveyard");
+  const searchZones = info.zones || ["library"];
+  const searchesGraveyard = searchZones.includes("graveyard");
+  // And the library half is conditional for the same reason the graveyard half
+  // is: "return a card from your graveyard to your hand" (Recall) never looks
+  // in the library, so showing an empty library grid beside the real picker
+  // says the search reached a zone it did not.
+  const searchesLibrary = searchZones.includes("library");
   const zones = [
     ...(searchesGraveyard
       ? [{
@@ -5240,13 +5246,15 @@ function renderSearchLibraryModal(info) {
           headingId: "searchLibraryGraveyardHeading",
         }]
       : []),
-    {
-      zone: "library",
-      cards: info.cards || [],
-      legalIndices: info.legal_indices,
-      gridId: "searchLibraryGrid",
-      headingId: "searchLibraryLibraryHeading",
-    },
+    ...(searchesLibrary
+      ? [{
+          zone: "library",
+          cards: info.cards || [],
+          legalIndices: info.legal_indices,
+          gridId: "searchLibraryGrid",
+          headingId: "searchLibraryLibraryHeading",
+        }]
+      : []),
   ].map((entry) => ({
     ...entry,
     // The engine re-checks the answer, so this is presentation — but offering
@@ -5272,7 +5280,11 @@ function renderSearchLibraryModal(info) {
 
   const title = document.getElementById("searchLibraryTitle");
   if (title) {
-    title.textContent = searchesGraveyard ? "Search Library and Graveyard" : "Search Library";
+    // Name the piles this search reads, in the order it reads them — a
+    // graveyard-only pick (Recall) is not a library search and must not say so.
+    title.textContent = searchesLibrary
+      ? (searchesGraveyard ? "Search Library and Graveyard" : "Search Library")
+      : "Choose from Graveyard";
   }
   // A counted search whose printed slots differ (Cultivate) asks where each
   // find goes as its own prompt, so this one only names the slots when they
@@ -5395,11 +5407,19 @@ function renderSearchLibraryModal(info) {
     // Headings only earn their space when there are two piles to tell apart.
     const showHeadings = zones.length > 1;
     for (const entry of zones) buildZoneGrid(entry, showHeadings);
-    // A library-only search leaves the graveyard grid out of the document flow
-    // entirely rather than as an empty box under a hidden heading.
-    if (!showHeadings) {
-      document.getElementById("searchLibraryGraveyardGrid")?.classList.add("hidden");
-      document.getElementById("searchLibraryGraveyardHeading")?.classList.add("hidden");
+    // Whichever pile this search does not read leaves the document flow
+    // entirely rather than sitting there as an empty box under a hidden
+    // heading. Written against the zones the search actually has, not against
+    // "there is only one of them": a graveyard-only search (Recall) also has
+    // one zone, and the old spelling hid the single grid it needed.
+    const shown = new Set(zones.map((entry) => entry.gridId));
+    for (const [gridId, headingId] of [
+      ["searchLibraryGraveyardGrid", "searchLibraryGraveyardHeading"],
+      ["searchLibraryGrid", "searchLibraryLibraryHeading"],
+    ]) {
+      if (shown.has(gridId)) continue;
+      document.getElementById(gridId)?.classList.add("hidden");
+      document.getElementById(headingId)?.classList.add("hidden");
     }
   }
 

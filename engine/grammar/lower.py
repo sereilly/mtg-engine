@@ -338,7 +338,10 @@ def lower_statement(
         return _lower_discard(statement, event)
 
     if isinstance(statement, ast.ReturnToZone):
-        return _lower_return_to_zone(statement, event)
+        # `produced` is what makes "…for each card discarded this way" legal:
+        # the clause names a set an earlier step of this same effect made, so it
+        # is admitted only where a step really recorded one.
+        return _lower_return_to_zone(statement, event, produced)
 
     if isinstance(statement, ast.PhaseOut):
         return _lower_phase_out(statement)

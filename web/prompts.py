@@ -203,11 +203,25 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
         # engine has known since the search was armed; this is it saying so.
         "destination": choice.data.get("destination", "hand"),
         "enters_tapped": bool(choice.data.get("enters_tapped")),
-        "cards": [ctx.serialize_card(card) for card in caster.library],
-        "legal_indices": [
-            index for index, card in enumerate(caster.library)
-            if search_matches(card, choice.data)
-        ],
+        # The library half, and *only* when the search was armed to look there.
+        # A search of the graveyard alone (Recall's "return a card from your
+        # graveyard to your hand") looks in a zone that is already public, and
+        # sending the library beside it would put a hidden zone on screen with
+        # every card in it marked legal — the engine refuses such a pick, so the
+        # player would be shown a face-up library and a button that does
+        # nothing. `zones` has said which zones since searches grew a second
+        # one; this is the payload reading it.
+        "cards": (
+            [ctx.serialize_card(card) for card in caster.library]
+            if "library" in zones else []
+        ),
+        "legal_indices": (
+            [
+                index for index, card in enumerate(caster.library)
+                if search_matches(card, choice.data)
+            ]
+            if "library" in zones else []
+        ),
     }
     # A counted search ("up to two basic land cards", Cultivate) is answered
     # whole: the client multi-selects up to `max_picks` and sends one pick

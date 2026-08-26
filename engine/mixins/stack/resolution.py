@@ -671,7 +671,7 @@ class StackResolutionMixin:
             held = self.resolving_stack_item
             if held is not None and held.card is card and self.choices_for_stack_item(held):
                 held.finish_resolution = finish
-                self.log.append(f"{card.name} is resolving, awaiting a choice")
+                self._log_spell_awaiting_choice(card)
                 return
             self._bin_spell_card(
                 caster, card,
@@ -686,6 +686,26 @@ class StackResolutionMixin:
         # needed the same care for its own reason, and is the reason `finish`
         # was a separable step to begin with.
         run_resumable(self, [apply_text, finish], lambda step: step())
+        # The one thing that may legitimately follow a resumable loop: a note
+        # that it *stopped*. ``finish`` is where a held spell says so, and a
+        # suspending prompt (a scry, a search, and since discards suspend, a
+        # Mind Rot) never reaches ``finish`` — ``run_resumable`` holds it back
+        # until the answer lands. Without this the log went quiet exactly where
+        # the player is being asked something. It runs only on the suspended
+        # path, so it cannot double up with ``finish``'s line, and it records
+        # nothing the resumption needs to redo.
+        if self.effect_suspended:
+            held = self.resolving_stack_item
+            if held is not None and held.card is card and self.choices_for_stack_item(held):
+                self._log_spell_awaiting_choice(card)
+
+    def _log_spell_awaiting_choice(self, card) -> None:
+        """CR 608.2: the spell is still resolving while a prompt it armed is
+        owed. The ability half of this line is ``_log_ability_outcome``; both
+        exist so "resolved" is never claimed of a resolution that has not
+        finished."""
+        self.log.append(f"{card.name} is resolving, awaiting a choice")
+
     def _apply_self_enters_battlefield_triggers(
         self,
         controller_index: int,

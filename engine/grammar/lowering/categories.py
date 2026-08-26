@@ -395,6 +395,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exile_self": "zones",
     "exile_target_graveyard_card": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
+    # "…return a card from your graveyard to your hand **for each card
+    # discarded this way**." (Recall.) The same zone change, counted by an
+    # earlier step's answer and chosen while the spell resolves rather than at
+    # cast time. Same category, so GRAMMAR_CATEGORIES is unchanged.
+    "return_chosen_cards_from_graveyard_to_hand": "zones",
     "reanimate_creature": "zones",
     # A card returning *itself* from the graveyard (Silversmote Ghoul). Same
     # category as every other zone change: what differs is which object moves,
@@ -467,6 +472,12 @@ _PRODUCES: dict[str, str] = {
     # it and the conditionals after it read the record, rather than each
     # sentence flipping a coin of its own.
     "flip_coin": "coin_flip",
+    # "Discard X cards, **then** return a card from your graveyard to your hand
+    # **for each card discarded this way**." (Recall.) The prompt records how
+    # many were actually discarded when it is answered, which is the only place
+    # the number exists — the hand the step was handed is not the hand the
+    # player chose from.
+    "discard_controller_cards": "discarded_count",
     # "Remove any number of +1/+1 counters … create **that many** … tokens"
     # (Tetravus). The removal records how many it took, under the key the token
     # maker's "that many" already reads.

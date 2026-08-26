@@ -20,7 +20,8 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
-from ._events import EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS
+from ._events import (EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS,
+                      _back_reference_payload)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     _describe_targets,
@@ -82,7 +83,9 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
 
 
 def _lower_return_to_zone(
-    node: ast.ReturnToZone, event: str | None = None
+    node: ast.ReturnToZone,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Return <object> [from <zone>] to <zone>" — Raise Dead, Regrowth,
     Resurrection and Unsummon.
@@ -109,6 +112,46 @@ def _lower_return_to_zone(
     if node.also_stack:
         return (OracleInstruction("return_spell_or_creature_to_hand", "", {}),)
     subject = node.subject
+    if node.repetitions is not None:
+        # "Return a card from your graveyard to your hand **for each card
+        # discarded this way**." (Recall.) A count nobody knows until an earlier
+        # step of this resolution has been answered, so the cards cannot be
+        # chosen as targets when the spell is cast (CR 601.2c) — they are picked
+        # while it resolves, out of the chooser's own graveyard, which is a
+        # public zone with nothing for targeting to protect.
+        #
+        # Admitted in exactly the shape the handler performs, and refused
+        # otherwise: a clause that parsed and then lowered onto the single-card
+        # return would silently return one card however many were discarded.
+        if not (
+            isinstance(subject, ast.TargetSpec)
+            and not subject.targeted
+            and subject.quantifier == "a"
+            and subject.count == 1
+            and subject.filter.is_card
+            and subject.filter.zone == "graveyard"
+            and subject.filter.zone_owner is not None
+            and subject.filter.zone_owner.kind == "you"
+            and node.to.name == "hand"
+            and node.to.owner is not None
+            and node.to.owner.kind == "you"
+        ):
+            raise LoweringError(
+                "no repeated return handler for this shape", node=node
+            )
+        if _reads_no_return_restriction(subject.filter):
+            raise LoweringError("no return handler honours this restriction", node=node)
+        payload: dict[str, object] = dict(_graveyard_to_hand_payload(subject.filter))
+        # Where the number comes from, decided in the one place that decides it
+        # for every back-reference — and refused outright when no step of this
+        # effect records the key, because "for each card discarded this way"
+        # with no discard in front of it names nothing at all.
+        payload.update(_back_reference_payload(node.repetitions, produced, event))
+        return (
+            OracleInstruction(
+                "return_chosen_cards_from_graveyard_to_hand", "", payload
+            ),
+        )
     # "Return up to two target creatures to their owners' hands." (Read the
     # Tides' second mode.) Same instruction as the single-target bounce — the
     # effect per creature is identical — described with the several-targets

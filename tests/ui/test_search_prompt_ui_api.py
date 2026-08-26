@@ -352,3 +352,58 @@ def test_a_zone_the_search_was_not_armed_with_is_refused():
     assert resp.status_code == 400
     assert [c.name for c in game.players[0].graveyard] == ["Mox Pearl"], "untouched"
     assert _state(sid)["search_library"] is not None, "still owed"
+
+
+# ---------------------------------------------------------------------------
+# A graveyard-only pick (round 29)
+# ---------------------------------------------------------------------------
+#
+# Recall's "return a card from your graveyard to your hand" is answered through
+# this prompt, armed over the graveyard *alone* — the first such arming. The
+# library half of the payload is conditional for that reason: the engine refuses
+# a library index for a search that may not look there, so sending the library
+# beside it would put a hidden zone on screen with every card in it marked legal
+# and a button that does nothing.
+
+
+def _r29_graveyard_only_session():
+    sid, _sess, game = _session()
+    game.clear_pending_choices("search_library")
+    game.players[0].graveyard = [_CARDS["Mox Pearl"], _CARDS["Grizzly Bears"]]
+    game.arm_pending_choice(
+        "search_library", 0,
+        count=1, card_type="any", zones=("graveyard",),
+        restrictions={}, destination="hand",
+        destinations=[], tapped=[], enters_tapped=False, untap_found_if=None,
+        up_to=False, reveal=False, card_name="Recall",
+    )
+    return sid, game
+
+
+def test_r29_a_graveyard_only_pick_does_not_show_the_library():
+    sid, game = _r29_graveyard_only_session()
+
+    prompt = _state(sid)["search_library"]
+
+    assert prompt["zones"] == ["graveyard"]
+    assert prompt["cards"] == [] and prompt["legal_indices"] == []
+    assert [c["name"] for c in prompt["graveyard_cards"]] == ["Mox Pearl", "Grizzly Bears"]
+    assert prompt["legal_graveyard_indices"] == [0, 1]
+
+
+def test_r29_a_graveyard_only_pick_puts_the_card_in_hand():
+    sid, game = _r29_graveyard_only_session()
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "search_library_confirm",
+            "hand_index": 0,
+            "search_zone": "graveyard",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    assert "Mox Pearl" in [c.name for c in game.players[0].hand]
+    assert _state(sid)["search_library"] is None

@@ -182,7 +182,11 @@ _UNTAPPED_PERMANENTS = "untapped_permanents"
 # a bare back-reference resolves against this narrower set. A producer added
 # there and not here fails safe: the bare reading refuses rather than reading a
 # number out of something that is not one.
-_PRODUCED_QUANTITIES: frozenset[str] = frozenset({"damage_dealt"})
+_PRODUCED_QUANTITIES: frozenset[str] = frozenset({
+    "damage_dealt",
+    # How many cards a discard this effect asked for actually went (Recall).
+    "discarded_count",
+})
 
 # The scratchpad keys that hold *permanents*, by id — what an earlier step of
 # this effect acted on rather than a number it computed. A clause reading a

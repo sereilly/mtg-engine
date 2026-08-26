@@ -101,8 +101,8 @@ class ChoiceSpec:
                         answering resumes it. Set it for any prompt whose answer
                         decides what a **later step of the same resolution**
                         sees. Opt-in rather than universal because the kinds
-                        that complete inline (``sacrifice``, ``discard``,
-                        ``mana_payment``) have callers written around finishing
+                        that complete inline (``mana_payment``,
+                        ``hand_reveal``) have callers written around finishing
                         immediately.
     """
 

@@ -16,7 +16,8 @@ from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDEX, match_longest)
 from ..phrases import (
-    _accept_number, _parse_mana_payment, _parse_zone, parse_subject_filter_at,
+    _accept_number, _parse_for_each_this_way, _parse_mana_payment, _parse_zone,
+    parse_subject_filter_at,
 )
 
 
@@ -169,9 +170,14 @@ def _parse_return(stream: TokenStream) -> ast.Statement:
     from_zone: ast.Zone | None = None
     if isinstance(subject, ast.TargetSpec) and subject.filter.zone != "battlefield":
         from_zone = ast.Zone(subject.filter.zone, subject.filter.zone_owner)
+    # "…**for each card discarded this way**." (Recall.) A repetition of the
+    # whole return, so it is read here at the end of the clause and carried on
+    # the node; lowering refuses a shape it cannot repeat rather than dropping
+    # the words.
+    repetitions = _parse_for_each_this_way(stream)
     return ast.ReturnToZone(
         subject, destination, from_zone, entering_tapped=entering_tapped,
-        under_control_of=under_control_of,
+        under_control_of=under_control_of, repetitions=repetitions,
     )
 
 

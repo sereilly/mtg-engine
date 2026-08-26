@@ -893,6 +893,70 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     return True, "resolved"
 
 
+@effect_handler("return_chosen_cards_from_graveyard_to_hand")
+def return_chosen_cards_from_graveyard_to_hand(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Return a card from your graveyard to your hand **for each card
+    discarded this way**." (Recall.)
+
+    Chosen while the spell resolves, not targeted at cast time (CR 601.2c): how
+    many cards there are to return is the answer to a prompt this same
+    resolution armed, so the picks could not have been named when the spell went
+    on the stack. Nothing is lost by that — the cards are in the chooser's own
+    graveyard, a public zone with no shroud, no protection and nothing for
+    targeting to protect.
+
+    The picker is the search prompt, pointed at the graveyard. Not a second
+    prompt kind, because the question is the one that prompt already asks —
+    "choose up to N cards from this zone, and here is what may be chosen" — and
+    it already suspends the resolution, already has a non-interactive default and
+    is already rendered. What the printed sentence adds is *where the number
+    comes from*.
+
+    Fewer cards than the number asked for is a legal outcome (CR 608.2b): the
+    count is capped at what the graveyard holds, and an empty graveyard returns
+    nothing rather than arming a prompt with nothing in it.
+    """
+    caster = context.caster
+    source_key = instruction.payload.get("amount_from")
+    if source_key is not None:
+        amount = max(0, int(context.results.get(source_key, 0) or 0))
+    else:
+        amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+
+    def _eligible(card) -> bool:
+        return graveyard_card_matches(instruction.payload, card)
+
+    available = sum(1 for card in caster.graveyard if _eligible(card))
+    amount = min(amount, available)
+    if amount <= 0:
+        game.log.append(f"{caster.name} returns no cards from their graveyard")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "search_library", game.players.index(caster),
+        count=amount,
+        card_type=instruction.payload.get("card_type") or "any",
+        zones=("graveyard",),
+        restrictions={},
+        destination="hand",
+        # One slot per card the sentence asks for, all of them the hand. Two or
+        # more slots is what puts the prompt on its counted path, where the
+        # whole answer arrives at once.
+        destinations=["hand"] * amount,
+        tapped=[False] * amount,
+        card_name=context.card.name if context.card is not None else "",
+        enters_tapped=False,
+        untap_found_if=None,
+        up_to=False,
+        reveal=False,
+    )
+    game.log.append(
+        f"{caster.name} chooses {amount} card(s) from their graveyard to return"
+    )
+    return True, "resolved"
+
+
 @effect_handler("reanimate_creature")
 def reanimate_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -2248,6 +2312,10 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     amount = min(
         resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(eligible)
     )
+    # Recorded before the prompt, and again with the real number when it is
+    # answered: "…for each card discarded this way" has to read a zero when
+    # there was nothing to discard, not a key the scratchpad never grew.
+    context.results["discarded_count"] = 0
     if amount <= 0:
         game.log.append(f"{caster.name} has no cards to discard")
         return True, "resolved"
@@ -2257,6 +2325,11 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
         count=amount,
         filter=described,
         allow_top_of_library=game._controls_top_of_library_discard(caster),
+        # The live scratchpad, so the answer can record how many were actually
+        # discarded for the steps queued behind this prompt (see
+        # ``_after_discard_answered``). Private: it holds engine objects and is
+        # none of a client's business.
+        _results=context.results,
     )
     game.log.append(f"{caster.name} must choose {amount} card(s) to discard")
     return True, "pending_discard"

@@ -209,9 +209,14 @@ def test_arming_a_suspending_kind_stops_the_resolution_it_is_part_of():
 
 def test_arming_a_non_suspending_kind_leaves_the_resolution_running():
     """Opt-in, not universal: the kinds that complete inline have callers
-    written around finishing immediately, and flipping them is its own job."""
+    written around finishing immediately, and flipping them is its own job.
+
+    ``discard`` used to be the example here and now suspends (Recall's "then
+    return a card ... for each card discarded this way" is a later step of the
+    same resolution). ``mana_payment`` is the remaining shape: Power Sink's
+    payment decides nothing a later step of its own resolution reads."""
     game = _game_with_library()
-    game.arm_pending_choice("discard", 0, count=1)
+    game.arm_pending_choice("mana_payment", 0, amount=2)
     assert game.effect_suspended is False
 
 
@@ -252,6 +257,10 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
     suspending = {kind for kind, spec in CHOICE_SPECS.items() if spec.suspends}
     assert suspending == {
         "effect_order",     # CR 616.1e — the event itself has not happened yet
+        # "Discard X cards, **then** return a card from your graveyard to your
+        # hand for each card discarded this way" (Recall): the answer is the
+        # count and the identity the next step of the same sentence works from.
+        "discard",
         "scry",             # arranges the library a later draw reads
         "search_library",   # removes a card from it and shuffles the rest
         "reorder_library",  # same, by permutation

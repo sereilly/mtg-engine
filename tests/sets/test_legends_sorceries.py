@@ -634,3 +634,148 @@ def test_part_water_tells_the_picker_its_count_is_the_announced_x(set_pool):
         card = set_pool("LEG")[name]
         spec = derive_cast_spec(card, compile_card_oracle(card))
         assert spec == {"kind": "creature", "x_targets": True}, name
+
+
+# ---------------------------------------------------------------------------
+# Recall (round 29) — a discard whose answer is the next step's number
+# ---------------------------------------------------------------------------
+#
+# The card the suspending discard unlocks. "Discard X cards, then return a card
+# from your graveyard to your hand for each card discarded this way. Exile
+# Recall." is three ordinary instructions in a `sequence`: nothing is fused, and
+# the number the second step works from is the answer to the first step's
+# prompt (CR 608.2 — the resolution is not over until its last instruction is
+# done, so nothing behind the prompt may run before it is answered).
+
+
+def _r29_recall_game(set_pool, *, hand_extra, graveyard, interactive=(0, 1)):
+    """A duel with Recall in P1's hand, plus the cards each half of it needs."""
+    pool = set_pool("LEG")
+    from tests.helpers import CARDS_BY_NAME
+
+    def _card(name):
+        return pool.get(name) or CARDS_BY_NAME[name]
+
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Recall"]] + [_card(n) for n in hand_extra],
+        graveyard=[_card(n) for n in graveyard],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+    return game, p1, p2
+
+
+def _r29_cast_recall(game, x_value):
+    assert game._cast_onto_stack(0, "Recall", x_value=x_value).supported
+    game.priority_player_index = 0
+    game.pass_priority(0)
+    return game.pass_priority(1)
+
+
+def test_recall_holds_its_resolution_open_while_the_discard_is_owed(set_pool):
+    """The return must not run against the graveyard the discard has not filled
+    yet, and the card must not be in exile while the prompt is still on screen
+    (CR 608.2n)."""
+    game, p1, _p2 = _r29_recall_game(
+        set_pool, hand_extra=["Giant Growth", "Healing Salve"], graveyard=["Black Lotus"]
+    )
+
+    assert _r29_cast_recall(game, 2) == "awaiting_choice"
+
+    assert [c.kind for c in game.pending_choices] == ["discard"]
+    assert [(i.card.name, i.resolution_held) for i in game.stack] == [("Recall", True)]
+    assert p1.exile == []
+    assert [c.name for c in p1.graveyard] == ["Black Lotus"]
+
+
+def test_recall_returns_one_card_for_each_card_actually_discarded(set_pool):
+    """Two discarded, two returned — and the cards just discarded are legal
+    picks, because by then they are in the graveyard."""
+    game, p1, _p2 = _r29_recall_game(
+        set_pool,
+        hand_extra=["Giant Growth", "Healing Salve"],
+        graveyard=["Black Lotus", "Mox Ruby"],
+    )
+    _r29_cast_recall(game, 2)
+
+    assert game.resolve_pending_choice(
+        "discard", 0, hand_indices=[0, 1], to_library=False
+    )
+    # The next step of the same resolution asks which cards come back.
+    choice = game.pending_choices[0]
+    assert choice.kind == "search_library"
+    assert choice.data["zones"] == ("graveyard",)
+    assert len(choice.data["destinations"]) == 2
+
+    assert game.resolve_pending_choice(
+        "search_library", 0,
+        picks=[{"zone": "graveyard", "index": 0}, {"zone": "graveyard", "index": 1}],
+    )
+
+    assert [c.name for c in p1.hand] == ["Black Lotus", "Mox Ruby"]
+    assert game.pending_choices == []
+    assert game.resume_stack == []
+
+
+def test_recall_exiles_itself_instead_of_going_to_the_graveyard(set_pool):
+    """"Exile Recall." is the last step of the sequence, so it runs after the
+    resumption — and CR 608.2n's move is the one that honours it."""
+    game, p1, _p2 = _r29_recall_game(
+        set_pool, hand_extra=["Giant Growth"], graveyard=["Black Lotus"]
+    )
+    _r29_cast_recall(game, 1)
+    game.resolve_pending_choice("discard", 0, hand_indices=[0], to_library=False)
+    # One card to return is the *single-find* spelling of the same prompt — the
+    # counted answer is for two slots or more (see `_resolve_search_library`).
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="graveyard"
+    )
+
+    assert [c.name for c in p1.exile] == ["Recall"]
+    assert "Recall" not in [c.name for c in p1.graveyard]
+    assert game.stack == []
+
+
+def test_recall_for_zero_returns_nothing_and_still_exiles_itself(set_pool):
+    """X=0 discards nothing, so "for each card discarded this way" is zero —
+    not "one", and not the whole graveyard."""
+    game, p1, _p2 = _r29_recall_game(
+        set_pool, hand_extra=["Giant Growth"], graveyard=["Black Lotus", "Mox Ruby"]
+    )
+
+    _r29_cast_recall(game, 0)
+
+    assert game.pending_choices == []
+    assert [c.name for c in p1.hand] == ["Giant Growth"]
+    assert [c.name for c in p1.graveyard] == ["Black Lotus", "Mox Ruby"]
+    assert [c.name for c in p1.exile] == ["Recall"]
+
+
+def test_a_non_interactive_seat_answers_both_prompts_and_finishes(set_pool):
+    """A suspending prompt nobody answers is a hang, not a test failure: the
+    AI drain has to carry the whole resolution through both of Recall's."""
+    game, p1, _p2 = _r29_recall_game(
+        set_pool,
+        hand_extra=["Giant Growth", "Healing Salve"],
+        graveyard=["Black Lotus"],
+        interactive=(),
+    )
+
+    _r29_cast_recall(game, 1)
+    for _ in range(6):
+        if not game.pending_choices:
+            break
+        game.auto_resolve_pending_choices()
+
+    assert game.pending_choices == []
+    assert game.stack == []
+    assert game.resume_stack == []
+    assert game.effect_suspended is False
+    assert len(p1.hand) == 2
+    assert [c.name for c in p1.exile] == ["Recall"]
