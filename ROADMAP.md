@@ -2168,3 +2168,108 @@ denominator, which is the measure working. Suite 7,383 → **7,430**, every
 
 `lowering/damage.py` split its prevention half out at 1,011 lines.
 `nouns.py` (999) and `lowering/_common.py` (992) are next.
+
+## LEG round 25: a mechanic, and a removal that looked independent of the grant it undid
+
+*(2026-08-25.)* Sixth parallel round. Ten cards, LEG 243 → 253, and the round's
+best find is in the layer system rather than in any card.
+
+**Banding:** the five "bands with other" lands, Master of the Hunt, Shelkin
+Brownie (and Tolaria's second ability, which was inert while the card counted).
+**Walls:** Wall of Caltrops, Petra Sphinx.
+**Spells:** Blood Lust.
+
+### "Bands with other" exists now
+Round 24's land gate stopped admitting a land whose static nothing reads, which
+turned five cards from silently-inert to honestly-unsupported. This round makes
+them work. `engine/banding.py` is the one place the quality is read, and the
+quality is a **printed noun phrase** parsed into the filter payload
+`subject_matches` already tests — `"bands with other Zombies"` needs no code,
+and a quality the matcher cannot answer refuses the card.
+
+Three combat readers, because CR 702.22 states the rule three times: the second
+band form at declaration (no member cap, every member a [quality] creature),
+702.22j's blocking pair, and 702.22k falling out of the declaration once the new
+form is accepted. Checked as an *alternative* to the plain form rather than by
+loosening its counts — which is what keeps a plain band from silently gaining a
+cap it does not have.
+
+### CR 613.8a was reading the wrong question
+`_signature` compared **what the object ends up like** rather than **what the
+effect does**. So any two grants in a layer looked mutually dependent, and — the
+part that bites — **a removal looked independent of the grant it undoes**: the
+object has no flying either way. `_apply_group` applies the first independent
+effect, so the removal went first and the grant put the ability straight back.
+
+Layer 6 had never held two grants *and* a removal until a granted band arrived,
+which is why nothing had caught it. The fix probes the set-valued action against
+emptied sets and records set-scalars absolutely; two CR-cited tests pin it. This
+is the change in the round with reach beyond it — anything touching CR 613
+should rebase onto it rather than around it.
+
+### Blood Lust, declined twice, was three generalisations
+Not new machinery: `SubjectPowerIs` widened to `SubjectCharacteristicIs` (the
+characteristic is a field; the subject is a full `TargetSpec`, so a condition can
+name the spell's own target), `ManaValueOfSubject` widened to
+`CharacteristicOfSubject` with an **offset** — the `minus 1` is payload for the
+reason `BoardCount.base` is, and dropping it gives −X where X is the whole
+toughness, i.e. the arm printed specifically *not* to kill the creature — and
+the `Otherwise` rider folds onto the `Conditional` that already had the field.
+
+The test that matters is the layer-7 one: a 2/2 given +0/+3 takes the **flat**
+arm, because the toughness is the computed one and not the printed card.
+
+### Two more already-broken things
+* **Tolaria's "Activate only during any upkeep step" was unenforced** — the row
+  in `activation_restrictions.py` matched only Armageddon Clock's verbless
+  spelling, so the second card to print the clause could activate in any step.
+  That is precisely the failure that module exists for.
+* `oracle.py`'s land branch **checked for** a `lord_buff` instruction its round-24
+  gate wanted and never **emitted** it.
+
+### Two orderings worth keeping
+Petra Sphinx turns its card over **inside the choice resolver**, not in the
+handler: revealing it while the prompt is open would show the chooser what to
+name. And Wall of Caltrops' condition refuses under any trigger but
+`creature_blocks`, because only a block event stamps `blocked_permanent_ids` —
+elsewhere the evaluator reads an absent key and answers False forever while the
+card compiles clean.
+
+### A card that is not implementable
+**Falling Star** — "Flip Falling Star onto the playing area from a height of at
+least one foot" is a physical-dexterity action on physical cards (CR 104.1's
+outside-the-game territory). There is no playing area, no geometry for "lands
+on", no honest reading of "doesn't turn completely over", and every substitute
+is a different card. It stays unsupported **permanently**, which is an answer
+rather than a deferral. Recorded here so no future round spends a probe on it.
+
+### Also not landed
+**Infinite Authority** — re-probed against the new delayed-trigger machinery and
+still four separate gaps, not one; any three landing without the fourth is a
+card that compiles supported and does part of what it says. **Glyph of
+Delusion** — granted *quoted* abilities do not exist as a mechanism. **Recall** —
+a `PendingChoice` cannot carry the rest of its resolution (`run_resumable`
+resumes a CR 616.1 replacement choice, not a pending choice), which is exactly
+why `discard_then_draw_that_many` exists as a fused kind with a hardcoded key.
+**Backdraft** — round 24's Reverberation finding again: no stable identity for a
+spell reaching a damage event.
+
+### Integration
+Three conflicts. The interesting one was a **payload-key rename racing a node
+addition** — one branch renamed `SubjectPowerIs`, another added a node beside
+the old name — which only the serial merge could see. `tests/sets/test_legends_creatures.py`
+passed the 2,600-line readability cap and split at a **round boundary** into
+`test_legends_creatures_late_rounds.py`, per `tests/sets/README.md`: the type
+axis has no room left when every card in both files is a creature.
+
+Before the batch, two modules at the 1,000-line guard were split serially:
+`lowering/_common.py` (992 → 751, `_lower_condition` becoming
+`lowering/conditions.py`, the mirror of the `ast/conditions.py` split) and
+`nouns.py` (999 → 943, by moving out what it shares *upward*). The second is a
+reprieve, not a fix: `parse_object_filter` is a single **795-line function** and
+is what actually grows.
+
+### Numbers
+LEG 243 → **253** of 310 (78.4% → 81.6%); LEG parse 72.4% → 74.7%, lowers 68.4%
+→ 69.8%, executes 41.3% → 42.7%. Shipped pool 734/734 throughout. Suite 7,430 →
+**7,490**, every `--check` green, no hooks added. LEG hollow lines: 17.

@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 89.2% | 89.2% | 61.7% | 67 |
 | 3ED | 296 | 389 | 82.3% | 81.0% | 45.5% | 160 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 72.4% | 68.4% | 41.3% | 164 |
+| LEG *(measured)* | 310 | 431 | 74.7% | 69.8% | 42.7% | 169 |
 | **All (shipped)** | **1618** | **2286** | **82.5%** | **81.3%** | **48.6%** | **966** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,18 +34,20 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 204 | 96 | expected a subject |  |
-| 121 | 51 | unrecognized effect verb |  |
+| 202 | 94 | expected a subject |  |
+| 116 | 49 | unrecognized effect verb |  |
 | 60 | 34 | unconsumed text |  |
-| 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
+| 29 | 14 | granted ability in quotes | phase 3 (quoted abilities) |
 | 10 | 6 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 9 | 5 | expected a keyword ability |  |
 | 8 | 4 | expected 'the number of' in a where-clause |  |
 | 8 | 3 | expected a colour or a creature body after 'becomes' |  |
 | 7 | 4 | expected 'a' |  |
 | 6 | 3 | no lowering for RawEffect |  |
+| 5 | 2 | expected 'card' |  |
 | 5 | 5 | expected 'unless defending player controls' |  |
+| 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | expected 'that' |  |
 | 4 | 2 | a spell whose whole effect is optional has no prompt that outlives its resolution |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
@@ -57,8 +59,6 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | 2 | 1 | expected something to shield |  |
 | 2 | 2 | unsupported destroy quantifier |  |
 | 2 | 2 | expected what to remove a counter from as a cost |  |
-| 2 | 2 | expected 'counter or counters' |  |
-| 1 | 1 | a destroy sweep over a source relation stays with its card hook until the probe review takes it |  |
 
 ## Cards executing through the grammar
 
@@ -222,6 +222,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{W}: Enchanted creature gets +1/+1 until end of turn.`
 - **Blight**
   - `When enchanted land becomes tapped, destroy it.`
+- **Blood Lust**
+  - `If target creature has toughness 5 or greater, it gets +4/-4 until end of turn. Otherwise, it gets +4/-X until end of turn, where X is its toughness minus 1.`
 - **Bloodfell Caves**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {B} or {R}.`
@@ -1093,6 +1095,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Massacre Wurm**
   - `When this creature enters, creatures your opponents control get -2/-2 until end of turn.`
   - `Whenever a creature an opponent controls dies, that player loses 2 life.`
+- **Master of the Hunt**
+  - `{2}{G}{G}: Create a 1/1 green Wolf creature token named Wolves of the Hunt. It has "bands with other creatures named Wolves of the Hunt." (Any creatures named Wolves of the Hunt can attack in a band as long as at least one has "bands with other creatures named Wolves of the Hunt." Bands are blocked as a group. If at least two creatures named Wolves of the Hunt you control, one of which has "bands with other creatures named Wolves of the Hunt," are blocking or being blocked by the same creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
 - **Mazemind Tome**
   - `{T}, Put a page counter on this artifact: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `{2}, {T}, Put a page counter on this artifact: Draw a card.`
@@ -1227,6 +1231,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Pestilent Haze**
   - `• All creatures get -2/-2 until end of turn.`
   - `• Remove two loyalty counters from each planeswalker.`
+- **Petra Sphinx**
+  - `{T}: Target player chooses a card name, then reveals the top card of their library. If that card has the chosen name, that player puts it into their hand. If it doesn't, the player puts it into their graveyard.`
 - **Phantasmal Forces**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
@@ -1550,6 +1556,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Shatterstorm**
   - `Destroy all artifacts. They can't be regenerated.`
   - `Destroy all artifacts. They can't be regenerated.`
+- **Shelkin Brownie**
+  - `{T}: Target creature loses all "bands with other" abilities until end of turn.`
 - **Shield Wall**
   - `Creatures you control get +0/+2 until end of turn.`
 - **Shipwreck Dowser**
@@ -1794,6 +1802,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Target creature gets +4/+4 until end of turn.`
 - **Tolaria**
   - `{T}: Add {U}.`
+  - `{T}: Target creature loses banding and all "bands with other" abilities until end of turn. Activate only during any upkeep step.`
 - **Tolarian Kraken**
   - `Whenever you draw a card, you may pay {1}. When you do, you may tap or untap target creature.`
 - **Tor Wauki**
@@ -1926,6 +1935,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{G}: Regenerate this creature.`
   - `{G}: Regenerate this creature.`
   - `{G}: Regenerate this creature.`
+- **Wall of Caltrops**
+  - `Whenever this creature blocks a creature, if at least one other Wall creature is blocking that creature and no non-Wall creatures are blocking that creature, this creature gains banding until end of turn. (If any creatures with banding you control are blocking a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by.)`
 - **Wall of Dust**
   - `Whenever this creature blocks a creature, that creature can't attack during its controller's next turn.`
 - **Wall of Fire**

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**306 / 611 tracked rules covered (50%)** — 1437 tests, 0 unannotated.
+**306 / 611 tracked rules covered (50%)** — 1449 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -779,8 +779,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [ ] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each...
 - [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(16 tests, subrules be)*
-- [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(6 tests, subrules abc)*
-- [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(4 tests)*
+- [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(8 tests, subrules abc)*
+- [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [ ] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p...
 - [ ] **613.11** Some continuous effects affect game rules rather than objects. For example, effects may modify a ...
 
@@ -886,7 +886,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.18** Shroud *(3 tests, subrules a)*
 - [x] **702.19** Trample *(9 tests, subrules bf)*
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
-- [x] **702.22** Banding *(25 tests, subrules acdefghjk)*
+- [x] **702.22** Banding *(35 tests, subrules abcdefghjk)*
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
 - [x] **702.25** Flanking *(3 tests, subrules a)*
 - [x] **702.26** Phasing *(5 tests, subrules ad)*
