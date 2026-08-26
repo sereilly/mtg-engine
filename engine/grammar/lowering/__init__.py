@@ -74,6 +74,7 @@ from .damage import (
     _lower_damage_unless_pay,
     _lower_damage,
     _lower_damage_conjunction,
+    _lower_redirect_damage,
 )
 from .prevention import (
     _lower_prevent_damage,
@@ -251,6 +252,7 @@ __all__ = [
     "_lower_damage",
     "_lower_damage_conjunction",
     "_lower_prevent_damage",
+    "_lower_redirect_damage",
     "_lower_prevent_all",
     "_fused_tap_any_number_then_pump",
     "_fused_two_target_pump",

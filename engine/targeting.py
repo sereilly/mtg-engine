@@ -274,6 +274,15 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "arm_mirror_damage": {
         "kind": "permanent", "source_of_choice": True, "also_stack": True,
     },
+    # Nova Pentacle: "The next time **a source of your choice** would deal damage
+    # to you this turn…". The same prompt those two run — a permanent on any
+    # battlefield or a spell on the stack — because it is the same printed
+    # phrase. The creature that takes the redirected damage is *not* here: an
+    # opponent picks it (CR 601.2c's chooser is not always the controller), so
+    # it is a prompt the resolution arms rather than one this picker runs.
+    "redirect_damage_from_chosen_source_until_eot": {
+        "kind": "permanent", "source_of_choice": True, "also_stack": True,
+    },
     # "As an additional cost to cast this spell, sacrifice a creature" used to
     # be keyed here, by the instruction Sacrifice and Metamorphosis compile to.
     # It is a *cost*, so `derive_cast_spec` now reads it off `cast_costs` and
@@ -613,6 +622,11 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
     "target_gains_life": _life_gain_spec,
     "counter_top_stack_spell": _counter_spec,
+    # Reverberation names a spell on the stack the same way a counter does, and
+    # narrows it the same way ("target **sorcery** spell"), so it derives the
+    # same picker — the spec is about what is being *chosen*, not about what is
+    # then done to it.
+    "redirect_damage_from_target_spell_until_eot": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "set_base_pt_target_until_eot": _set_base_pt_spec,

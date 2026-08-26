@@ -991,3 +991,114 @@ def test_north_star_does_not_pay_for_an_activated_ability(set_pool):
     ).supported
     assert p1.spend_mana_as_though_grants == [{"spells": 1, "any_type": True}]
     assert p1.mana_pool["W"] == 1, "nothing was paid"
+
+
+
+# ---------------------------------------------------------------------------
+# Nova Pentacle (round 26) — the next damage from a chosen source, moved onto a
+# creature the *opponent* picks
+# ---------------------------------------------------------------------------
+
+
+def _pentacle_game(set_pool):
+    """Seat 0 holds the Pentacle and a creature of its own; seat 1 holds the
+    source the Pentacle will name."""
+    from tests.helpers import _mk_creature_card
+
+    pentacle = Permanent(card=set_pool("LEG")["Nova Pentacle"])
+    mine = Permanent(card=_mk_creature_card("Ox", 1, 4))
+    theirs = Permanent(card=_mk_creature_card("Pinger", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[pentacle, mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    p1.mana_pool.update({"generic": 3})
+    return game, p1, mine, theirs
+
+
+def _arm_pentacle(game):
+    result = game.activate_permanent_ability(
+        0, "Nova Pentacle", source_seat=1, source_permanent_index=0
+    )
+    assert result.supported, result
+    return result
+
+
+def test_nova_pentacle_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Nova Pentacle"])
+
+    assert program.supported
+    steps = program.activated_abilities[0].instruction.payload["steps"]
+    # The opponent's pick is a prompt the resolution arms, and the redirect
+    # behind it reads the answer — two steps of one sentence, in printed order.
+    assert [step.kind for step in steps] == [
+        "choose_permanent", "redirect_damage_from_chosen_source_until_eot"
+    ]
+
+
+def test_nova_pentacle_moves_the_chosen_sources_damage_onto_a_creature(set_pool):
+    """"…that damage is dealt to target creature of an opponent's choice
+    instead." The player takes none of it and the creature takes all of it —
+    a redirect, not a shield."""
+    game, p1, mine, theirs = _pentacle_game(set_pool)
+    _arm_pentacle(game)
+
+    game._deal_damage_to_player(p1, 2, source=theirs)
+
+    assert p1.life == 20
+    assert mine.damage_marked == 2
+
+
+def test_nova_pentacle_moves_one_instance_only(set_pool):
+    """"The **next time**…" — one damage event, however much of the turn is
+    left."""
+    game, p1, mine, theirs = _pentacle_game(set_pool)
+    _arm_pentacle(game)
+
+    game._deal_damage_to_player(p1, 2, source=theirs)
+    game._deal_damage_to_player(p1, 3, source=theirs)
+
+    assert mine.damage_marked == 2
+    assert p1.life == 17
+
+
+def test_nova_pentacle_answers_only_the_source_that_was_chosen(set_pool):
+    """"a source of your choice" is one object (CR 615.8's phrase, on a
+    redirect). Another creature's damage is not it."""
+    from tests.helpers import _mk_creature_card
+
+    game, p1, mine, _theirs = _pentacle_game(set_pool)
+    other = Permanent(card=_mk_creature_card("Other", 3, 3))
+    game.players[1].battlefield.append(other)
+    game._sync_control()
+    _arm_pentacle(game)
+
+    game._deal_damage_to_player(p1, 3, source=other)
+
+    assert p1.life == 17
+    assert mine.damage_marked == 0
+
+
+def test_nova_pentacle_asks_the_opponent_who_takes_the_damage(set_pool):
+    """"…of an **opponent's** choice." The prompt is owed by the other seat, not
+    by the activating player — the one thing about this card that the ordinary
+    target picker cannot express, since the picker in front of an activation is
+    the activating player's."""
+    game, _p1, mine, theirs = _pentacle_game(set_pool)
+    game.interactive_seats = {1}
+
+    _arm_pentacle(game)
+
+    owed = game.pending_choices_of("permanent_choice")
+    assert len(owed) == 1
+    assert owed[0].player_index == 1, "the opponent chooses"
+    offered = {perm.card.name for perm in game.live_permanent_choices(owed[0])}
+    assert offered == {"Ox", "Pinger"}, "every creature, on either battlefield"
+
+    assert game.confirm_permanent_choice(1, theirs.permanent_id)
+    game._settle()
+    game._deal_damage_to_player(game.players[0], 2, source=theirs)
+
+    assert theirs.damage_marked == 2, "the creature the opponent picked"
+    assert mine.damage_marked == 0

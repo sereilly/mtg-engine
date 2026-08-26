@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from ..shields import (
     make_source_type_shield,
+    make_targeting_source_shield,
     add_shield,
     make_capped_charge,
     make_capped_source,
@@ -400,4 +401,31 @@ def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstructio
             f"all {'combat ' if combat_only else ''}damage {creature.card.name} "
             f"would deal this turn is prevented ({context.card.name})"
         )
+    return True, "resolved"
+
+
+@effect_handler("prevent_damage_from_targeting_sources_until_eot")
+def prevent_damage_from_targeting_sources_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Silhouette: "Choose target creature. If a spell or ability that targets
+    that creature would cause a source to deal damage to that creature this
+    turn, prevent that damage."
+
+    The spell's own chosen creature (CR 601.2c — the first sentence is the
+    choosing) carries the shield, so nothing here re-reads the text or picks a
+    creature of its own. With the target gone the spell simply does nothing,
+    which is CR 608.2b rather than a failure.
+    """
+    target = resolve_target_permanent(game, context, fallback_players=())
+    if target is None:
+        game.log.append(f"{context.card.name}: its target is gone")
+        return True, "resolved"
+    add_shield(
+        target,
+        make_targeting_source_shield(context.card.name if context.card else None),
+    )
+    game.log.append(
+        f"{target.card.name} is shielded from spells and abilities that target it"
+    )
     return True, "resolved"

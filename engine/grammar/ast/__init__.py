@@ -106,6 +106,7 @@ from .damage import (
     DamageUnlessPay,
     Fight,
     PreventDamage,
+    RedirectDamage,
 )
 from .characteristics import (
     Pump,
@@ -305,6 +306,7 @@ __all__ = [
     "DamageUnlessPay",
     "Fight",
     "PreventDamage",
+    "RedirectDamage",
     # characteristics
     "Pump",
     "SetBasePT",

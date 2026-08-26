@@ -72,6 +72,7 @@ from .shields import (
     PREVENT_AND_GAIN_LIFE,
     PREVENT_FROM_COLOR,
     PREVENT_FROM_SUBJECT,
+    PREVENT_FROM_TARGETING_SOURCE,
     PREVENT_NEXT_N,
     Shield,
     drop_spent,
@@ -100,6 +101,11 @@ SOURCE_TYPE_BLANKET = 25
 # handed rather than one a permanent prints, but a blanket all the same — no
 # charges, so it sits with the others here and ahead of every consumable.
 SUBJECT_BLANKET = 26
+# "If a spell or ability that targets that creature would cause a source to deal
+# damage to that creature this turn, prevent that damage." (Silhouette.) A third
+# blanket, beside the other two and for the same reason: no charges, so applying
+# it costs its recipient nothing.
+TARGETING_BLANKET = 27
 SOURCE_CAP = 100  # Forcefield against a chosen attacker
 GENERIC_CAP = 200  # Forcefield with no chosen attacker
 SOURCE_SHIELD = 300  # Reverse Damage against a chosen source
@@ -421,6 +427,28 @@ def _source_in_subject(game, shield: Shield, source) -> bool:
     )
 
 
+def _object_targets_recipient(game, recipient) -> bool:
+    """Whether the spell or ability now resolving targets *recipient*.
+
+    ``Game.resolving_targets`` is the seam ``_execute_oracle_instruction``
+    pushes around every instruction, and it is the only place the answer lives:
+    a spell reaches the damage paths as its printed ``CardDefinition``, which
+    records nothing about what was chosen, and the stack object is popped before
+    its instructions run.
+
+    Spells **and** abilities, unlike ``_spell_targets_recipient`` beside it:
+    Bronze Horse's static says "spells that target it", and this reads a card
+    that says "a spell or ability", which is the same seam asked without the
+    narrowing rather than a second mechanism. Combat damage is caused by no
+    resolving object at all, so it is outside this by construction.
+    """
+    permanent_id = getattr(recipient, "permanent_id", None)
+    if permanent_id is None:
+        return False
+    chosen = getattr(game, "resolving_targets", None) or ()
+    return bool(chosen) and permanent_id in chosen[-1]
+
+
 def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
     """Shields of *kind* on the event's recipient that could modify this event.
 
@@ -437,6 +465,12 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
         if chosen is not None and (shield.source is not None) != chosen:
             continue
         if not _source_matches(game, shield, event.get("source")):
+            continue
+        if shield.targets_recipient and not _object_targets_recipient(game, recipient):
+            # Checked here rather than in `_source_matches`, and the difference
+            # is real: this is not a property of the source but a relation
+            # between the *resolving object* and the recipient, and only the
+            # event knows who the recipient is.
             continue
         if shield.would_prevent(amount) <= 0:
             continue
@@ -658,6 +692,22 @@ def _prevent_from_subject(game, event: dict) -> PreventionOutcome | None:
     since gained flying, or has left combat, is no longer described by it.
     """
     return _spend(game, event, PREVENT_FROM_SUBJECT, rider=_log_subject_prevention)
+
+
+@prevention_effect(
+    TARGETING_BLANKET, applies=_arms(PREVENT_FROM_TARGETING_SOURCE)
+)
+def _prevent_from_targeting_source(game, event: dict) -> PreventionOutcome | None:
+    """Silhouette: "If a spell or ability that targets that creature would cause
+    a source to deal damage to that creature this turn, prevent that damage."
+
+    A blanket, so every qualifying event this turn is prevented in full and the
+    cleanup sweep is what ends it. What qualifies is rechecked when the damage
+    would be dealt (CR 615.9) — a burn spell aimed elsewhere that splashes onto
+    this creature is not "a spell that targets that creature", and combat damage
+    never is.
+    """
+    return _spend(game, event, PREVENT_FROM_TARGETING_SOURCE)
 
 
 def _log_pool_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:

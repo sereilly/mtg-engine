@@ -11,6 +11,7 @@ from ..delayed_triggers import fire_delayed_triggers
 from ..models import Permanent
 from ..pt import remove_temporary_pt
 from ..oracle import compile_card_oracle
+from ..damage_redirects import clear_redirects
 from ..shields import END_OF_COMBAT, clear_shields
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
@@ -47,8 +48,10 @@ class EndOfCombatStepMixin:
             # Which shields those are is data on the shield, so this sweep does
             # not have to know that Forcefield's is the only one.
             clear_shields(player, END_OF_COMBAT)
+            clear_redirects(player, END_OF_COMBAT)
             for permanent in self.controlled_by(player):
                 clear_shields(permanent, END_OF_COMBAT)
+                clear_redirects(permanent, END_OF_COMBAT)
         self._reset_combat_state(clear_damage_marked=False)
         if self._receives_priority(step):
             self._resolve_priority_window()

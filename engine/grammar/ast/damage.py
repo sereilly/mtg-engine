@@ -74,6 +74,43 @@ class DamageUnlessPay:
 
 
 @dataclass(frozen=True)
+class RedirectDamage:
+    """"All damage that would be dealt to you this turn by <source> is dealt to
+    <recipient> instead." (Shimian Night Stalker, Nova Pentacle — CR 614.9.)
+
+    Its own node rather than a flag on :class:`PreventDamage`, because a
+    redirection is not a prevention: the damage is still dealt, in full, by the
+    same source, and only its recipient changes. Sharing the node would put the
+    two one boolean apart in the AST and one mistake apart in every reader —
+    and a redirect read as a shield loses lifelink, the damage triggers and the
+    dealt-damage records all at once.
+
+    to             -- the recipient whose damage moves; None when the sentence
+                      names only the source ("all damage that would be dealt
+                      this turn **by** target sorcery spell", Reverberation)
+    new_recipient  -- who takes it instead
+    dealt_by       -- the source whose damage moves, when the sentence chooses
+                      one; None means every source, as the printed class form
+                      ("by unblocked creatures") has
+    from_chosen_source -- "a source of your choice" (CR 615.8's phrase, printed
+                      here on a redirect): the source is picked as the ability is
+                      activated rather than being a target of it
+    one_shot       -- "**The next time** a source …", one instance rather than
+                      every one for the duration
+    chooser        -- "…of an opponent's choice", the same rider
+                      :class:`DealDamage` carries and for the same reason
+    """
+
+    to: Recipient | None = None
+    new_recipient: Recipient | None = None
+    dealt_by: Recipient | None = None
+    from_chosen_source: bool = False
+    duration: Duration = field(default_factory=Duration)
+    one_shot: bool = False
+    chooser: PlayerRef | None = None
+
+
+@dataclass(frozen=True)
 class PreventDamage:
     amount: Amount
     to: Recipient | None = None
@@ -101,3 +138,11 @@ class PreventDamage:
     # been taught the conjunction refuses it by name instead of shielding only
     # the first source, which is the silent half of the card.
     dealt_by_others: tuple[Recipient, ...] = ()
+    # "If **a spell or ability that targets that creature** would cause a source
+    # to deal damage to that creature this turn, prevent that damage."
+    # (Silhouette.) Not a `from_filter`, and the difference is the card: the
+    # source may be anything the spell causes to deal the damage, and what is
+    # narrowed is the *resolving object* that caused it. A filter written over
+    # the source would shield the creature from every spell of that description
+    # instead of from the ones aimed at it.
+    from_targeting_source: bool = False

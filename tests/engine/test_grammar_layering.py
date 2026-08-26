@@ -87,7 +87,12 @@ PARSE_LAYERS = [
     # thousand-line guard below — above `phrases`, whose shared fragments it
     # reads, and below everything that reads a whole line.
     "triggers",
-    "effects", "conditions", "statements", "costs", "parser",
+    "effects", "conditions",
+    # Delayed triggered abilities, and the opener that binds one. Below
+    # `statements`, which hands it `parse_statement` rather than being
+    # imported back — a delayed trigger contains a whole statement.
+    "delayed",
+    "statements", "costs", "parser",
 ]
 LOWER_LAYERS = ["lowering", "statics", "lower"]
 

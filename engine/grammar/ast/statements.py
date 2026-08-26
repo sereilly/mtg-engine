@@ -36,6 +36,7 @@ from .damage import (
     Fight,
     DealDamage,
     PreventDamage,
+    RedirectDamage,
 )
 from .characteristics import (
     BecomeColor,
@@ -155,6 +156,7 @@ Effect = Union[
     ExileGraveyardUntilLeaves, CastFromExiledWith,
     PhaseOut,
     AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
+    RedirectDamage,
     SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
     ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
     RevealHandAndChoose,
