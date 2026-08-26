@@ -77,6 +77,11 @@ PARSE_LAYERS = [
     # cards pushed that file past the guard below.
     "paragraphs",
     "phrases",
+    # The "…, where X is …" clause. Above `phrases`, whose word tables and
+    # literal reader it uses, and split out of it at the guard the round two
+    # branches both added a definition. The name re-forms the mirror
+    # `lowering/where_x.py` has had since round 23.
+    "where_x",
     # Which object a bare "it" in an effect names. Under `triggers` because
     # only one of its two rebinders is about a trigger and neither needs a
     # production: the walk is about the shape of the AST, so it imports `ast`

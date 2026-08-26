@@ -18,8 +18,9 @@ from ..errors import GrammarError
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS)
+from ..where_x import _parse_where_x_is
 from ..phrases import (
-    _parse_duration, _parse_mana_payment, _parse_where_x_is, parse_bound_subject,
+    _parse_duration, _parse_mana_payment, parse_bound_subject,
 )
 
 

@@ -35,6 +35,7 @@ from .references import parse_player_ref, parse_recipient
 from .vocabulary import CARD_TYPES
 from .stream import TokenStream
 from .conditions import _parse_condition
+from .where_x import parse_where_x_definition
 from .subject_verb import parse_subject_verb
 from .rebinding import rebind_pronoun_to_condition_target
 from .phrases import (
@@ -42,7 +43,6 @@ from .phrases import (
     _parse_can_attack_as_though,
     _parse_duration,
     _parse_mana_payment,
-    parse_where_x_definition,
 )
 from .effects import (
     _parse_add_mana,

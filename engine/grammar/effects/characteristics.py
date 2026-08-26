@@ -20,7 +20,8 @@ from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE
 
 from ..phrases import (is_pt_counter, _parse_can_attack_as_though, _parse_duration,
                        _parse_for_each, _parse_keywords,
-                       parse_pair_ordinal_subject, parse_where_x_definition)
+                       parse_pair_ordinal_subject)
+from ..where_x import parse_where_x_definition
 
 
 def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
