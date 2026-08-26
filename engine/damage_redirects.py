@@ -181,6 +181,32 @@ def live_recipient(game, redirect: DamageRedirect):
     return None if getattr(target, "lost", False) else target
 
 
+def resolving_object_redirects(game) -> list[DamageRedirect]:
+    """The redirects hanging off the stack object whose instructions are running.
+
+    Reverberation — "All damage that would be dealt this turn by target sorcery
+    spell is dealt to that spell's controller instead" — is a redirect with no
+    protected recipient at all: it moves whatever that *one spell* would deal, to
+    whoever is damaged. So its record hangs off the spell, which is the same rule
+    every other record follows (it lives on the object it watches), and it is
+    reached through ``Game.resolving_items`` rather than by matching the damage's
+    source.
+
+    **That is the only way a spell can be recognised.** A spell's damage source
+    is its printed ``CardDefinition`` (CR 109.5) — one object per *card*, handed
+    out once per copy by the deck builder — so a record matching on the source
+    would move a second copy's damage too, on a card that named one. A
+    ``StackItem`` is one object per cast, and this seam is where it is knowable.
+
+    Empty while a resolution waits on a prompt, so damage dealt after a
+    CR 616.1e question was asked mid-resolution is outside this. The direction is
+    the safe one — the damage lands where it would have without the redirect —
+    and it is stated rather than hidden.
+    """
+    items = getattr(game, "resolving_items", None) or ()
+    return redirects_on(items[-1]) if items else []
+
+
 def applicable_redirect(game, recipient, source) -> DamageRedirect | None:
     """The record that would move this damage, or None. Pure.
 
@@ -191,7 +217,7 @@ def applicable_redirect(game, recipient, source) -> DamageRedirect | None:
     wants an order of its own in ``engine/replacements.py`` rather than a
     second reading here.
     """
-    for redirect in redirects_on(recipient):
+    for redirect in list(redirects_on(recipient)) + resolving_object_redirects(game):
         if redirect.spent or redirect.applying:
             continue
         if not source_matches(redirect.source, source):

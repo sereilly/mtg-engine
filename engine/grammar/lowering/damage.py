@@ -758,6 +758,13 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
       pointing at nothing, and CR 614.9 makes that a redirect that silently does
       nothing at all.
     """
+    if node.to is None:
+        # "All damage that would be dealt this turn **by target sorcery spell**
+        # is dealt to that spell's controller instead." (Reverberation.) The one
+        # printed shape with no protected recipient: it names only the source,
+        # so it moves whatever that spell would deal, to whoever it would have
+        # damaged.
+        return _lower_spell_damage_redirect(node)
     if not _is_you(node.to):
         raise LoweringError(
             "a redirect is armed on its controller; no handler protects "
@@ -831,3 +838,62 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
             ),
         ) + instructions
     return instructions
+
+
+def _lower_spell_damage_redirect(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Reverberation: "All damage that would be dealt this turn by target
+    sorcery spell is dealt to that spell's controller instead."
+
+    A spell rather than a permanent on the source end, which is the whole reason
+    this is its own instruction: a spell is chosen from the stack, and it is
+    recognised at damage time by the *cast* rather than by the source object —
+    see ``engine/damage_redirects.resolving_object_redirects``.
+
+    "That spell's controller" reaches lowering as a bare "that player", because
+    the possessive names an object the sentence has already named — and the
+    sentence named exactly one, the spell. So the recipient is the spell's
+    controller by the only reading available, and any other player reference
+    refuses rather than being resolved to a seat nobody chose.
+    """
+    spec = node.dealt_by
+    if (
+        not isinstance(spec, ast.TargetSpec)
+        or spec.quantifier != "target"
+        or spec.filter.zone != "stack"
+    ):
+        raise LoweringError(
+            "a redirect with no protected recipient moves one chosen spell's "
+            "damage",
+            node=node,
+        )
+    if not isinstance(node.new_recipient, ast.PlayerRef) or node.new_recipient.kind != "that_player":
+        raise LoweringError(
+            "no handler resolves this redirect's new recipient", node=node
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
+    if not spec.filter.card_types:
+        # "target **sorcery** spell". Without a type this reads "target spell",
+        # which is a strictly wider card — and the handler tests the chosen
+        # spell against this union at resolution (CR 608.2b), so an empty one
+        # would admit every spell on the stack.
+        raise LoweringError("this spell redirect names no kind of spell", node=node)
+    # "zone" is the printed word "spell" itself — the noun parser records it
+    # when a type is followed by that word — and it is checked above rather than
+    # dropped here.
+    if _restrictions_beyond(spec.filter, frozenset({"card_types", "zone"})):
+        raise LoweringError(
+            "the spell redirect narrows its target by type and nothing else",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "redirect_damage_from_target_spell_until_eot", "",
+            {
+                "new_recipient": "spell_controller",
+                "card_types": list(spec.filter.card_types),
+            },
+        ),
+    )

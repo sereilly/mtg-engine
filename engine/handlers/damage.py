@@ -1016,3 +1016,55 @@ def redirect_damage_until_eot(
         f"is dealt to {new_recipient.card.name} instead"
     )
     return True, "resolved"
+
+
+@effect_handler("redirect_damage_from_target_spell_until_eot")
+def redirect_damage_from_target_spell_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Reverberation: "All damage that would be dealt this turn by target
+    sorcery spell is dealt to that spell's controller instead."
+
+    The record hangs off the **stack item**, not off a recipient and not off the
+    card, and that is the whole of what makes this card possible. A spell's
+    damage source is its printed ``CardDefinition`` (CR 109.5) — one object per
+    card, handed out once per copy by the deck builder — so a record matching on
+    the source would move a *second* copy's damage too. A ``StackItem`` is one
+    object per cast, and ``Game.resolving_items`` is where the damage paths can
+    reach it (see ``engine/damage_redirects.resolving_object_redirects``).
+
+    The chosen spell's type is re-checked here rather than trusted from the
+    cast: CR 608.2b asks whether the target is still legal when the spell
+    resolves, and a spell that has changed type in between is one this card no
+    longer names.
+    """
+    item = context.stack_target
+    card_name = getattr(context.card, "name", "")
+    if item is None or not any(entry is item for entry in game.stack):
+        game.log.append(f"{card_name}: the spell it named is no longer on the stack")
+        return True, "resolved"
+    wanted = instruction.payload.get("card_types") or ()
+    if wanted and getattr(item.card, "primary_type", None) not in wanted:
+        game.log.append(
+            f"{card_name}: {item.card.name} is no longer "
+            f"{'/'.join(str(t) for t in wanted)} spell it named"
+        )
+        return True, "resolved"
+    controller = game.players[item.caster_index]
+    add_redirect(
+        item,
+        DamageRedirect(
+            new_recipient=controller,
+            # The spell's own card, so that damage *another* source deals while
+            # this one resolves — a sorcery that has a creature deal it — stays
+            # where it was dealt. The cast is what the record is found by; the
+            # card is what it answers to.
+            source=item.card,
+            source_name=card_name or None,
+        ),
+    )
+    game.log.append(
+        f"{card_name}: damage {item.card.name} would deal is dealt to "
+        f"{controller.name} instead"
+    )
+    return True, "resolved"

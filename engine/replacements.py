@@ -690,6 +690,9 @@ def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
     finally:
         redirect.applying = False
     drop_spent(recipient)
+    for items in (getattr(game, "resolving_items", None) or (),):
+        for item in items:
+            drop_spent(item)
     from_name = getattr(recipient, "name", None) or getattr(
         getattr(recipient, "card", None), "name", "it"
     )

@@ -375,6 +375,16 @@ class Game(
     # instructions run -- so it is recorded for the duration at the one
     # dispatch point that knows it.
     resolving_targets: list = field(default_factory=list)
+    # The stack object whose instructions are running, pushed and popped around
+    # one resolution. The third fact of the same kind as the two above, and it
+    # answers the one question neither can: **which cast** is resolving. A
+    # spell's damage source is its printed ``CardDefinition`` — literally the
+    # same object for every copy in a deck — so "that spell" (Reverberation)
+    # cannot be recognised from the source at all, while a ``StackItem`` is one
+    # object per cast. Empty outside a resolution, and empty again while one
+    # waits on a prompt, which is the honest answer both times: nothing is
+    # running.
+    resolving_items: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

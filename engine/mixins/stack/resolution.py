@@ -270,9 +270,15 @@ class StackResolutionMixin:
         woc_before = self.pending_choice_of("word_of_command")
         previous_resolving = self.resolving_stack_item
         self.resolving_stack_item = item if pause_for_choices else None
+        # `resolving_items` is which *cast* is running (see Game), pushed here
+        # for the same reason `resolving_seats` is pushed around an instruction:
+        # this is the one place that knows, and everything below reaches the
+        # damage paths with a bare CardDefinition that cannot say.
+        self.resolving_items.append(item)
         try:
             self._run_stack_item_resolution(item)
         finally:
+            self.resolving_items.pop()
             self.resolving_stack_item = previous_resolving
         # Power Sink armed a pending "pay {X} or be countered" for the targeted
         # spell's controller. On the human priority path leave it for the prompt;

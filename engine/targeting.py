@@ -620,6 +620,11 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
     "target_gains_life": _life_gain_spec,
     "counter_top_stack_spell": _counter_spec,
+    # Reverberation names a spell on the stack the same way a counter does, and
+    # narrows it the same way ("target **sorcery** spell"), so it derives the
+    # same picker — the spec is about what is being *chosen*, not about what is
+    # then done to it.
+    "redirect_damage_from_target_spell_until_eot": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "set_base_pt_target_until_eot": _set_base_pt_spec,

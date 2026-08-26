@@ -1835,3 +1835,101 @@ def test_silhouette_shield_expires_with_the_turn(set_pool):
     game._settle()
 
     assert victim.damage_marked == 3
+
+
+# ---------------------------------------------------------------------------
+# Reverberation (round 26) — a redirect that names a *spell*
+# ---------------------------------------------------------------------------
+
+
+def _reverberation_board(set_pool, copies: int = 2):
+    """A player holding Reverberation, and an opponent holding *copies* of one
+    damage sorcery — two copies deliberately, because they are literally one
+    ``CardDefinition`` and telling them apart is the whole difficulty."""
+    lea = set_pool("LEA")
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Reverberation"]])
+    p2 = PlayerState(name="P2", hand=[lea["Disintegrate"]] * copies)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(1)
+    game._close_current_priority_step()
+    return game, p1, p2
+
+
+def test_reverberation_compiles_supported(set_pool):
+    from engine.targeting import derive_cast_spec
+
+    card = set_pool("LEG")["Reverberation"]
+    program = compile_card_oracle(card)
+
+    assert program.supported, program.reason
+    assert program.instructions[0].kind == "redirect_damage_from_target_spell_until_eot"
+    # The picker is the one a counterspell derives, narrowed the same way: the
+    # spec describes what is *chosen*, not what is then done to it.
+    assert derive_cast_spec(card, program) == {
+        "kind": "stack", "stack_card_types": ["sorcery"],
+    }
+
+
+def test_reverberation_sends_the_sorcerys_damage_to_its_controller(set_pool):
+    game, p1, p2 = _reverberation_board(set_pool)
+    game.queue_from_hand(1, "Disintegrate", target_player_index=0, x_value=3)
+
+    result = game.cast_from_hand(0, "Reverberation", target_stack_index=0)
+    game.resolve_stack()
+
+    assert result.supported, result
+    assert p1.life == 20, "none of it reached the player it was aimed at"
+    assert p2.life == 17, "and all of it reached the spell's controller"
+
+
+def test_reverberation_does_not_move_a_second_copy_of_the_same_card(set_pool):
+    """The reason this card waited: a spell's damage source is its printed
+    ``CardDefinition`` (CR 109.5), one object per *card*, so two copies in one
+    deck are the same object and a record matching on the source would move
+    both. The record hangs off the ``StackItem`` — one object per cast — and is
+    reached through ``Game.resolving_items``."""
+    game, p1, p2 = _reverberation_board(set_pool)
+    game.queue_from_hand(1, "Disintegrate", target_player_index=0, x_value=3)
+    game.cast_from_hand(0, "Reverberation", target_stack_index=0)
+    game.resolve_stack()
+    assert (p1.life, p2.life) == (20, 17)
+
+    game.queue_from_hand(1, "Disintegrate", target_player_index=0, x_value=2)
+    game.resolve_stack()
+
+    assert p1.life == 18, "the second cast is a different spell"
+    assert p2.life == 17
+
+
+def test_reverberation_leaves_a_spell_it_did_not_name_alone(set_pool):
+    game, p1, p2 = _reverberation_board(set_pool, copies=1)
+    p2.hand.append(set_pool("LEA")["Lightning Bolt"])
+    game.queue_from_hand(1, "Disintegrate", target_player_index=0, x_value=3)
+    game.cast_from_hand(0, "Reverberation", target_stack_index=0)
+    game.resolve_stack()
+
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+    game.resolve_stack()
+
+    assert p1.life == 17, "the Bolt is not the sorcery Reverberation named"
+
+
+def test_reverberation_named_spell_gone_arms_nothing(set_pool):
+    """CR 608.2b: with its target no longer on the stack there is nothing to
+    record, and a record armed anyway would move the next sorcery's damage
+    instead."""
+    game, p1, p2 = _reverberation_board(set_pool)
+    game.queue_from_hand(1, "Disintegrate", target_player_index=0, x_value=3)
+    stale = game.stack[0]
+    game.resolve_stack()
+    assert p1.life == 17
+
+    game.cast_from_hand(0, "Reverberation", target_stack_index=0)
+    game.resolve_stack()
+    game.queue_from_hand(1, "Disintegrate", target_player_index=0, x_value=2)
+    game.resolve_stack()
+
+    assert stale not in game.stack
+    assert p1.life == 15, "the later sorcery was never the one it named"
+    assert p2.life == 20

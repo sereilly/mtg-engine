@@ -198,6 +198,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # contention set.
     "redirect_damage_from_target_until_eot": "damage",
     "redirect_damage_from_chosen_source_until_eot": "damage",
+    "redirect_damage_from_target_spell_until_eot": "damage",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets
     # (Dwarven Song and its four siblings). Same category: what differs is how
