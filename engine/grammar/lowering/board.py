@@ -455,13 +455,27 @@ def _lower_doesnt_untap_next_step(
       ``_back_reference_payload`` applies to "that much".
     """
     subject = node.subject
-    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "those":
+    # "**It** doesn't untap during its controller's next two untap steps."
+    # (Telekinesis.) The singular twin of "those creatures": the bare pronoun,
+    # which after a sentence that tapped something names what was tapped. It is
+    # told apart from "this creature" by carrying no noun at all — the printed
+    # word for the source is a noun phrase, and reading them as one would point
+    # the marker at the ability's own permanent.
+    bare_pronoun = (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "this"
+        and subject.filter.is_source
+        and subject.filter.to_payload() == {}
+    )
+    if not bare_pronoun and (
+        not isinstance(subject, ast.TargetSpec) or subject.quantifier != "those"
+    ):
         raise LoweringError(
             "this sentence acts on the objects the previous one chose, and its "
             "subject does not name them",
             node=node,
         )
-    if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+    if not bare_pronoun and _restrictions_beyond(subject.filter, frozenset({"card_types"})):
         raise LoweringError(
             "a bound plural carries no narrowing the marker could honour", node=node
         )
@@ -470,9 +484,16 @@ def _lower_doesnt_untap_next_step(
             f"back-reference to {_TAPPED_PERMANENTS!r} with no producer in this effect",
             node=node,
         )
+    if node.count < 1:
+        raise LoweringError("a skipped-untap count of none is no restriction", node=node)
     return (
         OracleInstruction(
-            "skip_next_untap", "", {"permanents_from": _TAPPED_PERMANENTS}
+            "skip_next_untap", "",
+            # ``untap_steps``, not ``steps``: that name is reserved — it is
+            # where ``engine/handlers/control_flow.py`` carries a composed
+            # effect's nested instructions, and every reader that walks a
+            # program recurses into it.
+            {"permanents_from": _TAPPED_PERMANENTS, "untap_steps": node.count},
         ),
     )
 

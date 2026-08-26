@@ -330,7 +330,15 @@ class UntapStepMixin:
         # not yet the "next untap step" the spell named and the marker waits for
         # one that does.
         for permanent in self.controlled_by(player_index):
-            permanent.metadata.pop("skip_next_untap", None)
+            # A count, not a flag: "its controller's next **two** untap steps"
+            # (Telekinesis) spends one of them here and waits for the other, and
+            # the marker is forgotten only when the last is spent. `True` from
+            # any older record counts as one.
+            held = int(permanent.metadata.get("skip_next_untap") or 0) - 1
+            if held > 0:
+                permanent.metadata["skip_next_untap"] = held
+            else:
+                permanent.metadata.pop("skip_next_untap", None)
 
         self.log.append(f"{player.name} untapped {untapped} permanent(s)")
         self._on_step_or_phase_end(phase, step)

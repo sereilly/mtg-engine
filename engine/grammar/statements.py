@@ -27,6 +27,7 @@ from .vocabulary import CARD_TYPES
 from .stream import TokenStream
 from .conditions import _parse_condition
 from .phrases import (
+    parse_bound_subject,
     _parse_can_attack_as_though,
     _parse_duration,
     _parse_mana_payment,
@@ -90,41 +91,6 @@ from .effects import (
 # ---------------------------------------------------------------------------
 # Statement productions
 # ---------------------------------------------------------------------------
-
-
-def _parse_bound_subject(stream: TokenStream) -> ast.TargetSpec | None:
-    """``that <card type>`` / ``those <card type>s`` as a sentence's subject, or
-    None if that is not what is at the cursor.
-
-    The plural is a *different quantifier*, not the singular with a count: "that
-    creature" is the one object the previous sentence chose and "those creatures"
-    is however many it chose — which for an "up to N" may be two, one or none.
-    Keeping them apart is what stops a lowering written for one bound object
-    receiving a list.
-
-    Both are refused by default everywhere, which is what makes reading them in
-    the shared subject position safe: no lowering accepts "that" or "those"
-    unless it says so (``_is_target`` and ``_names_several_targets`` both answer
-    False), so a sentence reaching one fails **by name** rather than failing to
-    parse. A parse error would blame the subject for a missing production.
-    """
-    mark = stream.mark()
-    if stream.accept_word("those"):
-        noun = stream.peek_word()
-        singular = noun[:-1] if noun and noun.endswith("s") else noun
-        if singular is None or singular not in CARD_TYPES:
-            stream.reset(mark)
-            return None
-        stream.advance()
-        return ast.TargetSpec("those", ast.ObjectFilter(card_types=(singular,)))
-    if not stream.accept_word("that"):
-        return None
-    noun = stream.peek_word()
-    if noun is None or noun not in CARD_TYPES:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
 
 
 def _parse_subject_verb(
@@ -355,7 +321,7 @@ def _parse_subject_verb(
         # creature**'s controller**" is a *player* reference it already reads,
         # and a bound-subject reader that got there first would eat the noun and
         # strand the possessive — which is exactly what it did to Gloom Sower.
-        source_spec = parse_recipient(stream) or _parse_bound_subject(stream)
+        source_spec = parse_recipient(stream) or parse_bound_subject(stream)
 
     if source_spec is None:
         stream.reset(mark)

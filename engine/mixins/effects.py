@@ -337,20 +337,28 @@ class EffectsMixin:
 
     def _tap_or_untap_target(
         self, target: PlayerState, make_tapped: bool, target_permanent_index: int | None = None
-    ) -> bool:
+    ) -> "Permanent | None":
+        """The permanent this tapped or untapped, or None if there was none.
+
+        The object rather than a bare success flag, because the sentence after
+        this one may be about it ("Tap target creature. **It** doesn't untap
+        …", Telekinesis) and the caller has no other way to name what was
+        chosen — reconstructing it would be a second copy of the choice, free
+        to disagree with the first.
+        """
         # Honor an explicitly chosen permanent (Twiddle: "tap or untap target
         # artifact, creature, or land" — the player picks which one, on either
         # battlefield). Fall back to the first permanent only when no explicit
         # choice was supplied (AI/headless).
         chosen = pick_target_permanent(target, target_permanent_index, predicate=lambda p: True)
         if chosen is None:
-            return False
+            return None
         chosen.tapped = make_tapped
         if make_tapped:
             # Illusionary Mask: a face-down creature that becomes tapped is
             # turned face up (no-op for everything else).
             self._turn_face_up(chosen)
-        return True
+        return chosen
 
     def _grant_regeneration_shield(
         self,

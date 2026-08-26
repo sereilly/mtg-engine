@@ -855,12 +855,24 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
             raise LoweringError(
                 "the directional combat shield lasts exactly this turn", node=node
             )
-        if not isinstance(node.dealt_by, ast.TargetSpec) or node.dealt_by.quantifier != "target":
+        spec = node.dealt_by
+        if not isinstance(spec, ast.TargetSpec) or spec.quantifier not in ("target", "that"):
             raise LoweringError(
                 "no handler prevents the damage of an untargeted source", node=node
             )
         payload: dict[str, object] = {"combat_only": bool(node.combat_only)}
-        _describe_targets(payload, node.dealt_by)
+        if spec.quantifier == "target":
+            _describe_targets(payload, spec)
+        # "…dealt by **that creature** this turn" (Telekinesis): the object the
+        # sentence in front of it already targeted, not a second choice — so no
+        # ``targets`` description is emitted and the handler shields the
+        # ability's one target. A bound object carries no narrowing to honour,
+        # which is why a restated adjective refuses rather than being dropped.
+        elif _restrictions_beyond(spec.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound object carries no narrowing the shield could honour",
+                node=node,
+            )
         return (
             OracleInstruction("prevent_damage_by_target_until_eot", "", payload),
         )

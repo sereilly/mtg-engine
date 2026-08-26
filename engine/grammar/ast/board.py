@@ -138,9 +138,15 @@ class DoesntUntapNextStep:
     printed sentence is the permanent restriction ``engine/auras.py`` already
     derives for Paralyze, so a production that would still match with the word
     deleted implements a strictly larger effect than the card prints.
+
+    ``count`` is the printed number of steps — "next **two** untap steps"
+    (Telekinesis). A number, not a second node: how many of the same turn-based
+    action the restriction survives is the one thing that differs, and a card
+    printing three would need no code.
     """
 
     subject: Recipient
+    count: int = 1
 
 
 @dataclass(frozen=True)

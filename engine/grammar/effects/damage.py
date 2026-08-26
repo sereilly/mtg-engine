@@ -18,7 +18,9 @@ from ..errors import GrammarError
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS)
-from ..phrases import _parse_duration, _parse_mana_payment, _parse_where_x_is
+from ..phrases import (
+    _parse_duration, _parse_mana_payment, _parse_where_x_is, parse_bound_subject,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +342,13 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
         # "…that would be dealt **by** target creature this turn." The word is
         # the whole difference between a creature that cannot be hurt and one
         # that cannot hurt anything, so it is read rather than skipped.
-        dealt_by = parse_recipient(stream)
+        #
+        # ``parse_recipient`` first and the bound reader second, the order
+        # ``statements.py`` uses for the same pair: "that creature**'s
+        # controller**" is a player reference the first already reads, and a
+        # bound reader that got there first would eat the noun and strand the
+        # possessive.
+        dealt_by = parse_recipient(stream) or parse_bound_subject(stream)
         if dealt_by is None:
             raise stream.error("expected whose damage to prevent")
     duration = _parse_duration(stream)
@@ -361,7 +369,7 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
     # appear: a shield naming who is protected *and* whose damage is stopped is
     # a narrower effect than either half, and dropping one would widen it.
     if dealt_by is None and stream.accept_word("by"):
-        dealt_by = parse_recipient(stream)
+        dealt_by = parse_recipient(stream) or parse_bound_subject(stream)
         if dealt_by is None:
             raise stream.error("expected whose damage to prevent")
     return ast.PreventDamage(
