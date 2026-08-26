@@ -22,6 +22,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "hurricane_damage": "damage",
     "deal_damage_each_creature_and_player": "damage",
     "deal_damage_each_attacking_creature": "damage",
+    "deal_damage_to_recorded_permanents": "damage",
     "deal_damage_and_opponent_choice": "damage",
     "self_damage_unless_pay": "damage",
     # Dispatched by the (trigger condition, instruction kind) registry in

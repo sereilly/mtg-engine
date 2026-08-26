@@ -631,6 +631,49 @@ def deal_damage_each_attacking_creature(
     return True, "resolved"
 
 
+@effect_handler("deal_damage_to_recorded_permanents")
+def deal_damage_to_recorded_permanents(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Tap X target creatures. Winter Blast deals 2 damage to each of **those
+    creatures with flying**."
+
+    Not a sweep and not a target: the recipients are whatever an earlier step of
+    this same effect recorded (CR 611.2c fixed the set when the effect began),
+    narrowed by the printed adjective. By id, because a permanent may have left
+    in between (CR 400.7) and a slot would by then address whichever creature
+    slid into it; one that has left is simply not damaged, which is what an
+    empty record means.
+    """
+    from ..subject_filters import subject_matches
+
+    card = context.card
+    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    described = instruction.payload.get("filter") or {}
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    recorded = (context.results or {}).get(
+        str(instruction.payload.get("permanents_from", ""))
+    ) or ()
+    struck = []
+    for permanent_id in recorded:
+        permanent = game.permanent_by_id(permanent_id)
+        if permanent is None:
+            continue
+        if not subject_matches(
+            game, permanent, described,
+            observer=observer, source=context.source_permanent,
+        ):
+            continue
+        game._mark_damage_on_permanent(permanent, damage, source=card)
+        struck.append(permanent.card.name)
+    game.log.append(
+        f"{card.name} dealt {damage} damage to {', '.join(struck)}"
+        if struck else f"{card.name} found none of those permanents to damage"
+    )
+    return True, "resolved"
+
+
 @effect_handler("self_damage_unless_pay")
 def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Hasran Ogress: "Whenever this creature attacks, it deals 3 damage to

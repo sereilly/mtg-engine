@@ -430,3 +430,74 @@ def test_energy_tap_will_not_tap_a_creature_its_caster_does_not_control(set_pool
 
     assert theirs.tapped is False
     assert p1.mana_pool.get("C", 0) != 6
+
+
+# ---------------------------------------------------------------------------
+# Winter Blast (round 23) — "Tap X target creatures. Winter Blast deals 2
+# damage to each of those creatures with flying."
+#
+# The second sentence names no targets at all: its recipients are the set the
+# first sentence tapped (CR 611.2c), narrowed by a printed adjective. That
+# adjective is the whole point — dropped, the spell would burn every creature
+# it tapped.
+# ---------------------------------------------------------------------------
+
+
+def _flier(name: str):
+    from engine.models import CardDefinition
+
+    return CardDefinition(
+        name=name, mana_cost="{2}{U}", cmc=3.0, type_line="Creature - Bird",
+        oracle_text="Flying", colors=("U",), color_identity=("U",),
+        keywords=("Flying",), produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bird",
+             "power": "1", "toughness": "3"},
+    )
+
+
+def _winter_blast_game(set_pool):
+    from engine import Game, PlayerState
+    from engine.models import Permanent
+
+    bird = Permanent(card=_flier("Bird"))
+    bear = Permanent(card=_energy_tap_creature("Bear", "{1}{G}", 2.0))
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Winter Blast"]])
+    p2 = PlayerState(name="P2", battlefield=[bird, bear])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    return game, p1, p2, bird, bear
+
+
+def test_winter_blast_taps_x_creatures_and_burns_only_the_fliers(set_pool):
+    game, _p1, _p2, bird, bear = _winter_blast_game(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Winter Blast", x_value=2,
+        target_player_index=1, target_permanent_index=[0, 1],
+    )
+    game._settle()
+
+    assert result.supported is True
+    assert bird.tapped is True and bear.tapped is True
+    # The adjective, which is the only thing separating the two: a lowering
+    # that dropped it would have dealt 2 to the Bear as well.
+    assert bird.damage_marked == 2
+    assert bear.damage_marked == 0
+
+
+def test_winter_blast_burns_nothing_it_did_not_tap(set_pool):
+    """"Those creatures" is the set the first sentence acted on, not every
+    flier on the board — a flier left untapped takes nothing."""
+    game, _p1, _p2, bird, bear = _winter_blast_game(set_pool)
+
+    game.cast_from_hand(
+        0, "Winter Blast", x_value=1,
+        target_player_index=1, target_permanent_index=[1],
+    )
+    game._settle()
+
+    assert bear.tapped is True
+    assert bird.tapped is False
+    assert bird.damage_marked == 0

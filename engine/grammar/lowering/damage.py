@@ -34,6 +34,7 @@ from ._events import (
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
+    _RECORDED_PERMANENTS,
 )
 
 
@@ -637,6 +638,45 @@ def _lower_damage(
         several: dict[str, object] = dict(payload)
         _describe_several_targets(several, recipient)
         return (OracleInstruction("deal_damage", "", several),)
+    elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier == "those":
+        # "Tap X target creatures. Winter Blast deals 2 damage to each of
+        # **those creatures with flying**." The recipients are not chosen here
+        # at all: they are whatever the sentence in front of this one acted on
+        # (CR 611.2c fixed that set when the effect began), narrowed by the
+        # printed adjective. So there is no target description and no picker —
+        # the handler reads the record and applies the filter.
+        if _RECORDED_PERMANENTS.isdisjoint(produced):
+            raise LoweringError(
+                "\"those creatures\" names objects nothing in this effect "
+                "recorded",
+                node=node,
+            )
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if len(recorded) != 1:
+            raise LoweringError(
+                "\"those creatures\" is ambiguous: several earlier steps "
+                "recorded objects",
+                node=node,
+            )
+        if back_reference or bonus:
+            raise LoweringError(
+                "a bound-set damage cannot carry a computed amount", node=node
+            )
+        described = _filter_payload(recipient.filter)
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the bound-set damage cannot test this restriction", node=node
+            )
+        return (
+            OracleInstruction(
+                "deal_damage_to_recorded_permanents", "",
+                {
+                    "amount": amount,
+                    "permanents_from": recorded[0],
+                    "filter": described,
+                },
+            ),
+        )
     elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier not in (
         "any_target", "target", "this"
     ):
