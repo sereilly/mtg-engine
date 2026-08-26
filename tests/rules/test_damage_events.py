@@ -20,6 +20,7 @@ import pytest
 
 from engine import PlayerState
 from engine.control import change_control
+from engine.damage_redirects import DamageRedirect, add_redirect, redirects_on
 from engine.damage_events import (
     _assert_one_order_space,
     damage_candidates,
@@ -492,3 +493,107 @@ def test_every_damage_event_carries_the_seat_without_its_caller_filling_it_in():
     deal_damage(game, event)
 
     assert event["source_seat"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Redirection (CR 614.9) — the half of 120.4b that moves damage rather than
+# removing it
+# ---------------------------------------------------------------------------
+
+
+def _redirect_board(*, lifelink: bool = False):
+    """A player with a redirect armed onto their own creature, and the source
+    whose damage it moves."""
+    taker = Permanent(card=_mk_creature_card("Taker", 2, 5))
+    card = _mk_creature_card("Pinger", 3, 3)
+    if lifelink:
+        card = replace(card, keywords=("lifelink",))
+    pinger = Permanent(card=card)
+    p1 = PlayerState(name="P1", battlefield=[taker])
+    p2 = PlayerState(name="P2", battlefield=[pinger])
+    game = Game(players=[p1, p2])
+    add_redirect(p1, DamageRedirect(new_recipient=taker, source=pinger))
+    return game, p1, p2, taker, pinger
+
+
+@pytest.mark.cr("614.9", "120.4b")
+def test_a_redirect_moves_the_damage_rather_than_preventing_it():
+    """The whole distinction. The damage is still dealt, in full, by the same
+    source — only its recipient changed."""
+    game, p1, _p2, taker, pinger = _redirect_board()
+
+    game._deal_damage_to_player(p1, 3, source=pinger)
+
+    assert p1.life == 20, "the redirected damage never reached the player"
+    assert taker.damage_marked == 3, "and all of it reached the creature"
+
+
+@pytest.mark.cr("614.9", "702.15b", "120.3f")
+def test_redirected_damage_still_gains_its_source_lifelink():
+    """A redirect written as "prevent, then deal fresh damage" would lose this,
+    and it is the number that says whether the engine treats CR 614.9 as a
+    replacement or as a shield: the damage was *dealt*, so lifelink gains from
+    it (CR 120.3f)."""
+    game, p1, p2, _taker, pinger = _redirect_board(lifelink=True)
+    before = p2.life
+
+    game._deal_damage_to_player(p1, 3, source=pinger)
+
+    assert p2.life == before + 3
+
+
+@pytest.mark.cr("614.9")
+def test_a_redirect_whose_new_recipient_has_left_does_nothing():
+    """CR 614.9 in its own words: if the permanent is no longer on the
+    battlefield when the damage would be redirected, the effect does nothing —
+    which is damage dealt to the *original* recipient, not damage prevented."""
+    game, p1, _p2, taker, pinger = _redirect_board()
+    game.remove_from_battlefield(taker)
+
+    game._deal_damage_to_player(p1, 3, source=pinger)
+
+    assert p1.life == 17
+    assert taker.damage_marked == 0
+
+
+@pytest.mark.cr("614.9", "400.7")
+def test_a_redirect_answers_only_the_source_it_named():
+    """A second copy of the chosen creature's card is a different source. Two
+    permanents of one card share a single ``CardDefinition``, so a redirect
+    matching on the card would move damage the player never pointed at."""
+    game, p1, p2, taker, pinger = _redirect_board()
+    twin = Permanent(card=pinger.card)
+    p2.battlefield.append(twin)
+
+    game._deal_damage_to_player(p1, 3, source=twin)
+
+    assert p1.life == 17, "the twin's damage is not the chosen source's"
+    assert taker.damage_marked == 0
+
+
+@pytest.mark.cr("614.9", "615.3")
+def test_a_one_shot_redirect_moves_one_instance_and_no_more():
+    """"The **next time** a source … would deal damage" (Nova Pentacle): one
+    instance, not every instance for the turn."""
+    game, p1, _p2, taker, pinger = _redirect_board()
+    redirects_on(p1)[0].uses = 1
+
+    game._deal_damage_to_player(p1, 2, source=pinger)
+    game._deal_damage_to_player(p1, 2, source=pinger)
+
+    assert taker.damage_marked == 2
+    assert p1.life == 18
+
+
+@pytest.mark.cr("616.1", "614.9")
+def test_the_predicate_does_not_spend_the_record_it_is_asked_about():
+    """CR 616.1 counts the applicable effects before applying one, so asking
+    must not consume. Purity is what lets the choice be *asked* at all."""
+    game, p1, _p2, _taker, pinger = _redirect_board()
+    redirects_on(p1)[0].uses = 1
+    event = {"recipient": p1, "amount": 2, "source": pinger, "combat": False}
+
+    applicable = [c for c in damage_candidates(p1) if c.applies(game, event)]
+
+    assert applicable, "the redirect is in contention"
+    assert redirects_on(p1)[0].uses == 1, "and asking left it unspent"

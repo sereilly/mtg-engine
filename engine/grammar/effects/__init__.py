@@ -31,7 +31,8 @@ from .damage import (
     _parse_damage_rider_sentence,
     _parse_prevent,
     _parse_prevent_all,
-    _parse_colour_source_prevention,
+    _parse_source_of_choice_effect,
+    _parse_damage_redirect,
 )
 from .characteristics import (
     _parse_double,
@@ -112,7 +113,8 @@ __all__ = [
     "_parse_damage_rider_sentence",
     "_parse_prevent",
     "_parse_prevent_all",
-    "_parse_colour_source_prevention",
+    "_parse_source_of_choice_effect",
+    "_parse_damage_redirect",
     "_parse_gets",
     "_parse_gains",
     "_parse_loses",

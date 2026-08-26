@@ -42,7 +42,8 @@ from .effects import (
     _parse_cast_permission,
     _parse_change_base_pt,
     _parse_change_text,
-    _parse_colour_source_prevention,
+    _parse_source_of_choice_effect,
+    _parse_damage_redirect,
     _parse_counter,
     _parse_create_token,
     _parse_damage,
@@ -110,9 +111,16 @@ def _parse_subject_verb(
     # "The next time a <colour> source of your choice would deal damage to you
     # this turn, prevent that damage." opens with a noun phrase rather than a
     # verb, so it is tried before the subject-verb shapes below.
-    colour_shield = _parse_colour_source_prevention(stream)
+    colour_shield = _parse_source_of_choice_effect(stream)
     if colour_shield is not None:
         return colour_shield
+    # "All damage that would be dealt to you this turn by target attacking
+    # creature is dealt to this creature instead." (Shimian Night Stalker.) A
+    # noun phrase in front of the verb, like the one above, and refusing without
+    # consuming so every other sentence opening "All …" is untouched.
+    redirect = _parse_damage_redirect(stream)
+    if redirect is not None:
+        return redirect
     # "The game is a draw." — a subjectless sentence, tried before the noun
     # phrase for the same reason the colour shield is.
     game_draw = _parse_game_is_a_draw(stream)

@@ -1139,3 +1139,124 @@ def test_shelkin_brownie_breaks_up_the_wolf_band(set_pool):
 
     ok, _ = game.declare_attackers(0, [1, 2], bands=[[1, 2]])
     assert not ok
+
+
+# ---------------------------------------------------------------------------
+# Shimian Night Stalker (round 26) — damage redirected, not prevented
+# ---------------------------------------------------------------------------
+
+
+def _night_stalker_combat(set_pool, attackers=(2, 3)):
+    """The Stalker's controller (seat 0) being attacked by *attackers*, each a
+    vanilla creature of that power, with the ability's {B} already in the pool.
+
+    The attack is declared before the ability is activated, because the ability
+    names a *target attacking creature* — there is nothing legal to point it at
+    until the attackers step has run.
+    """
+    stalker = Permanent(card=set_pool("LEG")["Shimian Night Stalker"])
+    raiders = [
+        Permanent(card=_vanilla(f"Raider {index}", power, power))
+        for index, power in enumerate(attackers)
+    ]
+    p1 = PlayerState(name="P1", battlefield=[stalker])
+    p2 = PlayerState(name="P2", battlefield=raiders)
+    game = Game(players=[p1, p2])
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    ok, msg = game.declare_attackers(1, list(range(len(raiders))))
+    assert ok, msg
+    p1.mana_pool.update({"B": 1})
+    return game, p1, stalker, raiders
+
+
+def _through_combat_damage(game):
+    game.advance_combat_phase()   # declare_blockers
+    ok, msg = game.declare_blockers(0, {})
+    assert ok, msg
+    game.advance_combat_phase()   # combat_damage
+    game._settle()
+
+
+def test_shimian_night_stalker_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Shimian Night Stalker"])
+
+    assert program.supported
+    ability = program.activated_abilities[0]
+    assert ability.instruction.kind == "redirect_damage_from_target_until_eot"
+
+
+def test_shimian_night_stalker_takes_the_named_attackers_damage(set_pool):
+    """"All damage that would be dealt to you this turn by target attacking
+    creature is dealt to this creature instead." The damage is *moved*: the
+    player takes none of it and the Stalker is marked with all of it."""
+    game, p1, stalker, _raiders = _night_stalker_combat(set_pool, attackers=(2,))
+    result = game.activate_permanent_ability(
+        0, "Shimian Night Stalker", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result
+
+    _through_combat_damage(game)
+
+    assert p1.life == 20
+    assert stalker.damage_marked == 2
+
+
+def test_shimian_night_stalker_leaves_every_other_attacker_alone(set_pool):
+    """The narrowing is the card. One attacker was named; the other's damage
+    goes through untouched, which is what says the target was honoured rather
+    than dropped."""
+    game, p1, stalker, _raiders = _night_stalker_combat(set_pool, attackers=(2, 3))
+    game.activate_permanent_ability(
+        0, "Shimian Night Stalker", target_player_index=1, target_permanent_index=0
+    )
+
+    _through_combat_damage(game)
+
+    assert p1.life == 17, "only the unnamed raider's 3 damage arrived"
+    assert stalker.damage_marked == 2
+
+
+def test_shimian_night_stalker_redirects_damage_outside_combat_too(set_pool):
+    """"All damage", not "all combat damage". An ability of the named creature
+    is redirected exactly as its combat damage is."""
+    game, p1, stalker, raiders = _night_stalker_combat(set_pool, attackers=(2,))
+    game.activate_permanent_ability(
+        0, "Shimian Night Stalker", target_player_index=1, target_permanent_index=0
+    )
+
+    game._deal_damage_to_player(p1, 4, source=raiders[0])
+
+    assert p1.life == 20
+    assert stalker.damage_marked == 4
+
+
+def test_shimian_night_stalker_gone_means_the_damage_lands_as_normal(set_pool):
+    """CR 614.9: with nothing to redirect the damage *to*, the effect does
+    nothing — which is the player taking it, not the damage disappearing."""
+    game, p1, stalker, raiders = _night_stalker_combat(set_pool, attackers=(2,))
+    game.activate_permanent_ability(
+        0, "Shimian Night Stalker", target_player_index=1, target_permanent_index=0
+    )
+    game.remove_from_battlefield(stalker)
+
+    game._deal_damage_to_player(p1, 4, source=raiders[0])
+
+    assert p1.life == 16
+
+
+def test_shimian_night_stalker_redirect_expires_with_the_turn(set_pool):
+    """"…this turn." The record carries its own lifetime, so the cleanup sweep
+    ends it without a turn step naming this card."""
+    game, p1, stalker, raiders = _night_stalker_combat(set_pool, attackers=(2,))
+    game.activate_permanent_ability(
+        0, "Shimian Night Stalker", target_player_index=1, target_permanent_index=0
+    )
+    game.resolve_cleanup_step(1)
+
+    game._deal_damage_to_player(p1, 4, source=raiders[0])
+
+    assert p1.life == 16
+    assert stalker.damage_marked == 0

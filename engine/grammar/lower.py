@@ -110,6 +110,7 @@ from .lowering import (
     _lower_scry,
     _lower_modal_head,
     _lower_prevent_damage,
+    _lower_redirect_damage,
     _lower_become_creature,
     _lower_pump,
     _lower_player_gets_counters,
@@ -295,6 +296,9 @@ def lower_statement(
 
     if isinstance(statement, ast.PreventDamage):
         return _lower_prevent_damage(statement)
+
+    if isinstance(statement, ast.RedirectDamage):
+        return _lower_redirect_damage(statement)
 
     if isinstance(statement, ast.Regenerate):
         return _lower_regenerate(statement)

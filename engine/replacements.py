@@ -75,7 +75,13 @@ from .effect_ordering import (
     apply_in_order,
     choose_effect,
 )
+from .damage_redirects import (
+    applicable_redirect,
+    drop_spent,
+    live_recipient,
+)
 from .hand_locks import lock_card_in_hand
+from .models import PlayerState
 from .replacement_choices import (
     ReplacementChoice,
     offer_replacement_choice,
@@ -113,6 +119,14 @@ REPLACEMENTS: dict[str, list[Candidate]] = {}
 REDIRECT_WHOLE_EVENT = 1  # Jade Monolith, Veteran Bodyguard
 REDIRECT_ONE_POINT = 2  # Personal Incarnation
 SOURCE_TYPE_SHIELD = 3  # Desert Nomads / Camel
+# The general recorded redirect (engine/damage_redirects.py) — Shimian Night
+# Stalker, Nova Pentacle. Behind the two card-specific redirects above only
+# because they were here first; no card in this pool puts two redirects on one
+# recipient, and the day one does it wants a slot chosen on purpose rather than
+# this one reused. Still ahead of every prevention shield (10-600 in
+# engine/prevention.py), for the reason stated above: a shield spent on damage
+# that then leaves for someone else is a shield spent on nothing.
+RECORDED_REDIRECT = 4
 
 # …and multipliers go *after* the shields, at the far end of the shared space.
 # CR 616.1e gives the choice to the affected player, and this is the order they
@@ -612,6 +626,78 @@ def _redirect_one_damage_to_owner(game, payload: dict) -> ReplacementOutcome | N
         game._deal_damage_to_player(owner, 1)
         game.log.append(f"1 damage redirected from {permanent.card.name} to {owner.name}")
     return ReplacementOutcome(new_amount=amount - 1)
+
+
+def _recorded_redirect(game, payload: dict):
+    """The general redirect record that would move this damage, or None. Pure —
+    see ``engine/damage_redirects.py`` for why the predicate may not spend one."""
+    if payload["amount"] <= 0:
+        return None
+    return applicable_redirect(game, payload["recipient"], payload.get("source"))
+
+
+def _applies_recorded_redirect(game, payload: dict) -> bool:
+    return _recorded_redirect(game, payload) is not None
+
+
+@replacement_effect(
+    "damage_to_player", RECORDED_REDIRECT, applies=_applies_recorded_redirect
+)
+@replacement_effect(
+    "damage_to_creature", RECORDED_REDIRECT, applies=_applies_recorded_redirect
+)
+def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
+    """CR 614.9: the damage is dealt to another recipient instead.
+
+    One interceptor for both ends of the event, registered twice, because a
+    redirect is one effect that happens to be printed with a player on one side
+    (Shimian Night Stalker moves *your* damage onto a creature) or a permanent
+    (Jade Monolith's shape, moving a creature's onto a player). Which of the two
+    kinds the event is says nothing about what the record does.
+
+    **The damage is dealt, not prevented.** It is handed to the ordinary damage
+    path for its new recipient with the same source, so lifelink (CR 120.3f),
+    "whenever ~ deals damage" triggers, deathtouch and the dealt-damage records
+    all see it exactly as they would have seen the original event — none of which
+    a prevention-plus-fresh-damage spelling would get right. The original event
+    is then consumed, which is what stops the same damage landing twice.
+
+    The combat flag travels with it: damage redirected during the combat damage
+    step is still combat damage (CR 510.2 does not stop being true because the
+    recipient changed), so a Fog or a Circle still sees what it should.
+    """
+    redirect = _recorded_redirect(game, payload)
+    if redirect is None:  # pragma: no cover - the predicate just said otherwise
+        return None
+    recipient = payload["recipient"]
+    new_recipient = live_recipient(game, redirect)
+    amount = payload["amount"]
+    source = payload.get("source")
+    redirect.spend()
+    # Held while the hand-off runs so a pair of records aimed at each other
+    # cannot recurse: the new event runs the whole contention set again, and an
+    # unspent record with no uses limit would still be applicable.
+    redirect.applying = True
+    try:
+        if isinstance(new_recipient, PlayerState):
+            game._deal_damage_to_player(new_recipient, amount, source=source)
+            taker = new_recipient.name
+        else:
+            game._mark_damage_on_permanent(
+                new_recipient, amount, source=source, combat=bool(payload.get("combat"))
+            )
+            taker = new_recipient.card.name
+    finally:
+        redirect.applying = False
+    drop_spent(recipient)
+    from_name = getattr(recipient, "name", None) or getattr(
+        getattr(recipient, "card", None), "name", "it"
+    )
+    game.log.append(
+        f"{amount} damage to {from_name} is dealt to {taker} instead"
+        + (f" ({redirect.source_name})" if redirect.source_name else "")
+    )
+    return ReplacementOutcome(replaced=True)
 
 
 def _is_desert(source) -> bool:

@@ -140,6 +140,33 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
     return out
 
 
+def _chooser_seat(game, payload: dict, context) -> int | None:
+    """Whose choice this is (CR 601.2c does not make it always the controller's).
+
+    "…of **an opponent's** choice" (Nova Pentacle) hands the pick to the other
+    seat, and that is payload rather than a second instruction kind: the prompt,
+    the candidate rule and the recorded answer are identical either way, and
+    only the seat asked differs. A card printing "target opponent chooses" needs
+    no code here.
+
+    None when the named chooser does not exist — a lone survivor has no opponent
+    — which the caller reports as a choice nobody could make rather than
+    defaulting to the controller, who is exactly the seat the card said must not
+    choose.
+    """
+    caster_seat = game.players.index(context.caster)
+    if payload.get("chooser") != "opponent":
+        return caster_seat
+    return next(
+        (
+            index
+            for index, player in enumerate(game.players)
+            if index != caster_seat and not player.lost
+        ),
+        None,
+    )
+
+
 @effect_handler("choose_permanent")
 def choose_permanent(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext
@@ -153,7 +180,12 @@ def choose_permanent(
     payload = instruction.payload
     result_key = payload["result_key"]
     context.results[result_key] = None
-    seat = game.players.index(context.caster)
+    seat = _chooser_seat(game, payload, context)
+    if seat is None:
+        game.log.append(
+            f"{getattr(context.card, 'name', '')}: there is nobody to make the choice"
+        )
+        return True, "resolved"
     candidates = permanent_choice_candidates(game, payload, context)
     card_name = getattr(context.card, "name", "")
     if not candidates:

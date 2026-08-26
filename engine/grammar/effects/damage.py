@@ -394,10 +394,20 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
     )
 
 
-def _parse_colour_source_prevention(stream: TokenStream) -> ast.PreventDamage | None:
+def _parse_source_of_choice_effect(
+    stream: TokenStream,
+) -> "ast.PreventDamage | ast.RedirectDamage | None":
     """"The next time a <colour> source of your choice would deal damage to you
-    this turn, prevent that damage." — the Circles of Protection, and Reverse
-    Damage with no colour word.
+    this turn, **prevent that damage**." — the Circles of Protection, and
+    Reverse Damage with no colour word.
+
+    …or "…, **that damage is dealt to target creature of an opponent's choice
+    instead**" (Nova Pentacle). One production, because everything up to the
+    comma is the same printed sentence: CR 615.8's "a source of your choice" is
+    a way of *naming* the damage, and what the card then does with it — prevent
+    it, or move it — is the clause after. Splitting them would be two
+    productions racing on the same seven words, and the second would only ever
+    be reached by the first rewinding.
 
     A whole-instance shield, not a numeric one; the amount is fixed at 1 because
     the handler counts shields, not damage.
@@ -449,8 +459,26 @@ def _parse_colour_source_prevention(stream: TokenStream) -> ast.PreventDamage | 
     if recipient is None:
         stream.reset(mark)
         return None
-    _parse_duration(stream)
+    duration = _parse_duration(stream)
     stream.accept_punct(",")
+    if stream.accept_phrase("that", "damage", "is", "dealt", "to"):
+        # Nova Pentacle. The damage is *moved*, so this leaves with a
+        # RedirectDamage: nothing about it is a shield, and the one thing the
+        # two share is how the source was named.
+        new_recipient = parse_recipient(stream)
+        if new_recipient is None:
+            raise stream.error("expected who takes the redirected damage")
+        chooser = _parse_opponents_choice(stream)
+        if not stream.accept_word("instead"):
+            raise stream.error("expected 'instead' to end a redirection effect")
+        return ast.RedirectDamage(
+            to=recipient,
+            new_recipient=new_recipient,
+            from_chosen_source=True,
+            duration=duration,
+            one_shot=True,
+            chooser=chooser,
+        )
     if not stream.accept_phrase("prevent", "that", "damage"):
         stream.reset(mark)
         return None
@@ -461,3 +489,69 @@ def _parse_colour_source_prevention(stream: TokenStream) -> ast.PreventDamage | 
     else:
         filt = ast.ObjectFilter()
     return ast.PreventDamage(ast.Fixed(1), to=recipient, from_filter=filt)
+
+
+def _parse_opponents_choice(stream: TokenStream) -> "ast.PlayerRef | None":
+    """"…of an opponent's choice" — the rider that hands the pick to the other
+    seat. The same three words :func:`_parse_damage`'s second clause reads, in
+    one place because two productions now read them."""
+    if stream.accept_phrase("of", "an", "opponent", "'s", "choice"):
+        return ast.PlayerRef("target_opponent")
+    return None
+
+
+def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
+    """"All damage that would be dealt to <recipient> <duration> by <source> is
+    dealt to <recipient> instead." (Shimian Night Stalker; Reverberation prints
+    the same sentence naming only the source.)
+
+    A redirection (CR 614.9), not a prevention: what changes is who the damage
+    is dealt to, and the shield productions above must not be reached for it.
+
+    Non-consuming until the shape is settled, because "All damage that would be
+    dealt to you by unblocked creatures is dealt to this creature instead" is
+    also the tail of a static ability ``engine/replacements.py`` implements
+    whole, and a production that consumed the opening of every "All …" sentence
+    would refuse lines other readers claim. Once "is dealt to" has been read the
+    sentence is a redirect and nothing else, so from there it raises.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("all", "damage", "that", "would", "be", "dealt"):
+        stream.reset(mark)
+        return None
+    to: ast.Recipient | None = None
+    if stream.accept_word("to"):
+        to = parse_recipient(stream) or parse_bound_subject(stream)
+        if to is None:
+            stream.reset(mark)
+            return None
+    # The printed order puts the duration on either side of the source clause —
+    # "dealt to you **this turn** by target attacking creature" and "dealt
+    # **this turn** by target sorcery spell" are the same sentence — so it is
+    # read on both sides rather than the card failing on word order, exactly as
+    # the blanket shield above reads its own.
+    duration = _parse_duration(stream)
+    dealt_by: ast.Recipient | None = None
+    if stream.accept_word("by"):
+        dealt_by = parse_recipient(stream) or parse_bound_subject(stream)
+        if dealt_by is None:
+            stream.reset(mark)
+            return None
+    if duration == ast.Duration():
+        duration = _parse_duration(stream)
+    if not stream.accept_phrase("is", "dealt", "to"):
+        stream.reset(mark)
+        return None
+    new_recipient = parse_recipient(stream) or parse_bound_subject(stream)
+    if new_recipient is None:
+        raise stream.error("expected who takes the redirected damage")
+    chooser = _parse_opponents_choice(stream)
+    if not stream.accept_word("instead"):
+        raise stream.error("expected 'instead' to end a redirection effect")
+    return ast.RedirectDamage(
+        to=to,
+        new_recipient=new_recipient,
+        dealt_by=dealt_by,
+        duration=duration,
+        chooser=chooser,
+    )

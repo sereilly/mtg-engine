@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..damage_redirects import DamageRedirect, add_redirect
 from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
@@ -932,5 +933,86 @@ def target_bites_target(game, instruction, context):
             f"{biter.card.name} deals {dealt} damage to {bitten.card.name}"
         ),
         asks=True,
+    )
+    return True, "resolved"
+
+
+@effect_handler(
+    "redirect_damage_from_target_until_eot",
+    "redirect_damage_from_chosen_source_until_eot",
+)
+def redirect_damage_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Arm a CR 614.9 redirection on this ability's controller.
+
+    Shimian Night Stalker: "All damage that would be dealt to you this turn by
+    target attacking creature is dealt to this creature instead."
+    Nova Pentacle: "The next time a source of your choice would deal damage to
+    you this turn, that damage is dealt to target creature of an opponent's
+    choice instead."
+
+    One handler for both kinds, because what differs is only how the moved
+    damage's source was named — a target the picker ran over, or the chosen
+    source recorded at activation. The record itself
+    (``engine/damage_redirects.py``) says nothing about which card armed it.
+
+    **Nothing is armed unless every piece of the sentence resolved.** A record
+    with no source watches *every* source and a record with no new recipient
+    watches for nothing; both are strictly wider or strictly emptier than the
+    card, and either one would report a card working while it does something
+    else. The one deliberate exception is a chosen source that was never
+    recorded — AI and headless activations pick no source at all — where the
+    record falls back to the next damage from any source, exactly as Reverse
+    Damage's and Jade Monolith's fallbacks do, because the effect is spent on
+    one instance either way.
+    """
+    payload = instruction.payload
+    caster = context.caster
+    card_name = getattr(context.card, "name", "")
+    targets_source = instruction.kind == "redirect_damage_from_target_until_eot"
+
+    if payload.get("new_recipient") == "source":
+        new_recipient = context.source_permanent
+    else:
+        chosen_id = context.results.get(payload.get("result_key"))
+        new_recipient = (
+            game.permanent_by_id(chosen_id) if isinstance(chosen_id, int) else None
+        )
+    if new_recipient is None or not game.is_on_battlefield(new_recipient):
+        game.log.append(f"{card_name}: nothing is there to take the damage")
+        return True, "resolved"
+
+    if targets_source:
+        described = (payload.get("targets") or {}).get("filter") or {}
+        moved_source = resolve_target_permanent(
+            game,
+            context,
+            predicate=lambda perm: permanent_matches_filter(perm, described),
+            # No scan-the-board fallback: a redirect armed on a creature nobody
+            # named moves damage the player never chose to move.
+            fallback_players=(),
+        )
+        if moved_source is None:
+            game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+            return True, "resolved"
+    else:
+        moved_source = context.choices.get("chosen_source")
+
+    add_redirect(
+        caster,
+        DamageRedirect(
+            new_recipient=new_recipient,
+            source=moved_source,
+            uses=payload.get("uses"),
+            source_name=card_name or None,
+        ),
+    )
+    source_name = getattr(
+        getattr(moved_source, "card", moved_source), "name", "any source"
+    )
+    game.log.append(
+        f"{card_name}: damage {source_name} would deal to {caster.name} this turn "
+        f"is dealt to {new_recipient.card.name} instead"
     )
     return True, "resolved"

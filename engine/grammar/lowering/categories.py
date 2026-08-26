@@ -191,6 +191,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "prevent_damage_by_target_until_eot": "prevention",
     "prevent_damage_to_target_until_eot": "prevention",
     "grant_source_class_prevention_shield": "prevention",
+    # A redirect is *not* a prevention (CR 614.9): the damage is still
+    # dealt, by the same source, to somebody else. Categorised with the
+    # damage it moves rather than with the shields it sits beside in the
+    # contention set.
+    "redirect_damage_from_target_until_eot": "damage",
+    "redirect_damage_from_chosen_source_until_eot": "damage",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets
     # (Dwarven Song and its four siblings). Same category: what differs is how

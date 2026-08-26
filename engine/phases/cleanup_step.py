@@ -17,6 +17,7 @@ from ..keywords import (clear_until_eot_granted_ability_lines,
 from ..control import end_until_eot_control_changes
 from ..layer_bridge import GAINED_TYPES
 from ..mixins._constants import _EOT_METADATA_KEYS
+from ..damage_redirects import clear_redirects
 from ..shields import clear_shields
 from ..pt import remove_temporary_pt
 
@@ -102,6 +103,9 @@ class CleanupStepMixin:
             # over the collection rather than a line per card-named field —
             # which is also why a new kind of shield needs no line here.
             clear_shields(player)
+            # CR 614.9's redirects expire with the turn for the same reason and
+            # by the same one sweep (engine/damage_redirects.py).
+            clear_redirects(player)
             player.mirror_damage_charges = 0
             player.mirror_damage_sources = []
             player.channel_active_until_eot = False
@@ -109,6 +113,7 @@ class CleanupStepMixin:
             for permanent in self.controlled_by(player):
                 permanent.damage_marked = 0
                 clear_shields(permanent)
+                clear_redirects(permanent)
                 # 614.8 / 701.19a: an unused regeneration shield lasts only until
                 # the end of the turn it was created.
                 permanent.regeneration_shield = 0
