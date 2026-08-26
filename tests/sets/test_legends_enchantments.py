@@ -867,3 +867,94 @@ def test_underworld_dreams_damages_the_seat_that_drew_not_the_first_opponent(set
     assert p3.life == 19
     assert p2.life == 20
     assert p1.life == 20
+
+
+# ---------------------------------------------------------------------------
+# Invoke Prejudice (round 21) — "Whenever an opponent casts a creature spell
+# that doesn't share a color with a creature you control, counter that spell
+# unless that player pays {X}, where X is its mana value."
+#
+# Three things had to be true at once: the condition's colour comparison
+# (CR 105.2) against a board rather than against a word, "that spell" meaning
+# what "it" means when a *trigger* bound it, and the event carrying the spell it
+# fired on so the counter has something to find.
+# ---------------------------------------------------------------------------
+
+
+def _prejudice_creature(name: str, colors: tuple[str, ...]) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="{2}", cmc=2.0, type_line="Creature — Bear",
+        oracle_text="", colors=colors, color_identity=colors, keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _prejudice_game(set_pool, mine: tuple[str, ...], theirs: tuple[str, ...], mana: dict):
+    guard = Permanent(card=_prejudice_creature("Guard", mine))
+    prejudice = Permanent(card=set_pool("LEG")["Invoke Prejudice"])
+    p1 = PlayerState(name="P1", battlefield=[guard, prejudice])
+    p2 = PlayerState(name="P2", hand=[_prejudice_creature("Threat", theirs)])
+    game = Game(players=[p1, p2])
+    game.start_turn(1)
+    # After the turn starts: a pool empties at every step boundary (CR 500.4).
+    p2.mana_pool.update(mana)
+    game.cast_from_hand(1, "Threat")
+    game._settle()
+    return game, p1, p2
+
+
+def test_invoke_prejudice_compiles_its_colour_comparison_as_a_board(set_pool):
+    """The narrowing is a *noun phrase*, not a colour word — what it compares
+    against is whatever is on the battlefield when the spell is cast."""
+    program = compile_card_oracle(set_pool("LEG")["Invoke Prejudice"])
+    assert program.supported, program.reason
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "opponent_casts_spell"
+    assert trigger.condition.payload["cast_type"] == "creature"
+    assert trigger.condition.payload["unshared_color_filter"] == {
+        "type_filter": "creature", "controller": "you",
+    }
+    assert trigger.instruction.payload["bound_to_trigger"] is True
+    assert trigger.instruction.payload["x_from_count"] == {
+        "object_mana_value": "triggering_spell"
+    }
+
+
+def test_invoke_prejudice_counters_an_unshared_colour_that_goes_unpaid(set_pool):
+    """"…counter **that spell**." The words used to demand an "instead" and mean
+    Lofty Denial's replacement amount; here they mean the spell the trigger's own
+    condition bound, exactly as "counter it" does elsewhere."""
+    game, _p1, p2 = _prejudice_game(set_pool, ("G",), ("U",), {})
+
+    assert not game.stack
+    assert [c.name for c in p2.graveyard] == ["Threat"]
+    assert not any(p.card.name == "Threat" for p in p2.battlefield)
+
+
+def test_invoke_prejudice_lets_a_paid_spell_through(set_pool):
+    """"…unless that player pays {X}, where X is **its** mana value." The tax is
+    sized from the countered spell, so a caster holding it keeps the creature."""
+    game, _p1, p2 = _prejudice_game(set_pool, ("G",), ("U",), {"generic": 2})
+
+    assert [p.card.name for p in p2.battlefield] == ["Threat"]
+    assert any("is not countered" in line for line in game.log)
+
+
+def test_invoke_prejudice_stays_silent_on_a_shared_colour(set_pool):
+    """The narrowing in the direction that matters. A trigger that ignored it
+    would tax every creature spell an opponent casts — a strictly harsher card,
+    and one that never announces itself as wrong."""
+    game, _p1, p2 = _prejudice_game(set_pool, ("G",), ("G",), {})
+
+    assert [p.card.name for p in p2.battlefield] == ["Threat"]
+    assert not any("Invoke Prejudice" in line for line in game.log)
+
+
+def test_invoke_prejudice_taxes_a_colorless_spell(set_pool):
+    """CR 105.2: colours are a set, so a colourless spell shares a colour with
+    nothing — which is what makes an artifact creature answer this trigger."""
+    game, _p1, p2 = _prejudice_game(set_pool, ("G",), (), {})
+
+    assert [c.name for c in p2.graveyard] == ["Threat"]

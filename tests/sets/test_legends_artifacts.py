@@ -147,3 +147,93 @@ def test_arena_releases_the_legends_when_it_leaves(set_pool):
     game.resolve_untap_step(0)
 
     assert not my_legend.tapped
+
+
+# ---------------------------------------------------------------------------
+# Ring of Immortals (round 21) — Avoid Fate's sentence as an activated ability.
+# The same production, the same payload and the same handler; what is different
+# is that a cost is paid before the target is chosen (CR 602.2b), so the
+# narrowing has to be enforced by the activation gate as well as at resolution.
+# ---------------------------------------------------------------------------
+
+
+def _ring_game(set_pool, threat: str, seat: int):
+    pool = set_pool("LEG")
+    mine = Permanent(card=_bear("Mine"))
+    ring = Permanent(card=pool["Ring of Immortals"])
+    theirs = Permanent(card=_bear("Theirs"))
+    p1 = PlayerState(name="P1", battlefield=[mine, ring])
+    p2 = PlayerState(name="P2", hand=[pool[threat]], battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.start_turn(1)
+    queued = game.queue_from_hand(
+        1, threat, target_player_index=seat, target_permanent_index=0
+    )
+    assert queued.supported, queued.details
+    p1.mana_pool.update({"generic": 3})
+    return game, ring, p1, p2
+
+
+def test_ring_of_immortals_is_the_same_sentence_as_avoid_fate(set_pool):
+    """One production, two cards. The ability's instruction is byte-identical to
+    the spell's, which is what "the printed class is payload" buys."""
+    pool = set_pool("LEG")
+    ring = compile_card_oracle(pool["Ring of Immortals"])
+    assert ring.supported, ring.reason
+    (ability,) = ring.activated_abilities
+    assert ability.supported
+    spell = compile_card_oracle(pool["Avoid Fate"])
+    counter = next(i for i in spell.instructions if i.kind == "counter_top_stack_spell")
+    assert ability.instruction.kind == counter.kind
+    assert ability.instruction.payload == counter.payload
+    assert ability.cost.requires_tap and ability.cost.mana["generic"] == 3
+
+
+def test_ring_of_immortals_counters_an_aura_aimed_at_your_permanent(set_pool):
+    game, ring, _p1, p2 = _ring_game(set_pool, "Divine Transformation", 0)
+
+    result = game.queue_permanent_ability(0, "Ring of Immortals", target_stack_index=0)
+    game.resolve_stack()
+    game._settle()
+
+    assert result.supported, result.details
+    assert ring.tapped
+    assert not game.stack
+    assert [c.name for c in p2.graveyard] == ["Divine Transformation"]
+
+
+def test_ring_of_immortals_refuses_to_activate_with_nothing_it_may_counter(set_pool):
+    """CR 602.2b: the target is chosen as the ability is activated, so a board
+    with no legal one refuses the activation *before* any cost is paid. The
+    round-17 shape: an ability that armed, took the tap and then countered
+    nothing would look like it worked."""
+    game, ring, p1, p2 = _ring_game(set_pool, "Transmutation", 1)
+
+    result = game.queue_permanent_ability(0, "Ring of Immortals", target_stack_index=0)
+
+    assert not result.supported
+    assert not ring.tapped, "nothing was paid"
+    assert p1.mana_pool.get("generic", 0) == 3
+    game.resolve_stack()
+    game._settle()
+    assert any("Transmutation switched" in line for line in game.log)
+
+
+def test_ring_of_immortals_offers_only_what_it_could_counter(set_pool):
+    """The picker and the handler read one payload through one pair of readers,
+    so the list a player is shown is exactly the list the counter would act on."""
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("LEG")
+    program = compile_card_oracle(pool["Ring of Immortals"])
+    spec = derive_activation_spec(program.activated_abilities[0])
+    assert spec == {
+        "kind": "stack",
+        "stack_any_classes": [["card_type", "instant"], ["subtype", "aura"]],
+        "stack_targets_filter": {"controller": "you"},
+    }
+
+    game, _ring, _p1, _p2 = _ring_game(set_pool, "Psychic Purge", 0)
+    assert game._enumerate_targets(
+        0, pool["Ring of Immortals"], spec, for_cast=False
+    ) == [], "a sorcery is outside the printed class union"

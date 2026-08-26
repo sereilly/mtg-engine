@@ -21,7 +21,8 @@ from __future__ import annotations
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import PT, SELF, WORD, render
+from .lexer import PT, SELF, WORD
+from .names import parse_card_name
 from .stream import TokenStream
 from .vocabulary import (
     ALL_SUBTYPES,
@@ -309,6 +310,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     saw_head = False
     type_match = "any"
     subtype_match = "any"
+    any_classes: tuple[tuple[str, str], ...] = ()
+    targets_object: ast.ObjectFilter | None = None
 
     # --- an ability on the stack ----------------------------------------
     # "activated or triggered ability" / "activated ability" / "triggered
@@ -466,6 +469,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # "artifact or enchantment" and "artifact, creature, or land" list
             # alternatives. All three are type unions as far as matching goes,
             # so one loop covers them — the separators are optional.
+            cross_axis: list[tuple[str, str]] = []
             while True:
                 probe = stream.mark()
                 separated = stream.accept_punct(",")
@@ -487,8 +491,34 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                         type_match = "all"
                     stream.advance()
                     continue
+                # "instant or **Aura** spell" (Avoid Fate, Ring of Immortals).
+                # The alternatives straddle two axes — a card type and a
+                # subtype (CR 205.2 against CR 205.3) — so the union cannot be
+                # collected into `card_types`, and collecting the subtype into
+                # `subtypes` beside it would describe an instant that is *also*
+                # an Aura, which nothing is. Only after a separator: an
+                # adjacent subtype is a conjunction, and the branch below reads
+                # it as one.
+                if separated:
+                    alternative = _match_subtype(stream, 0)
+                    if alternative is not None:
+                        cross_axis.append(("subtype", alternative[0]))
+                        stream.advance(alternative[1])
+                        continue
                 stream.reset(probe)
                 break
+            if cross_axis:
+                if type_match == "all":
+                    # "artifact creature or Aura" — a conjunction and a union in
+                    # one phrase. No card prints it and one field cannot hold
+                    # both readings, so it refuses rather than picking one.
+                    raise stream.error(
+                        "a class union cannot also be a conjunction of types"
+                    )
+                any_classes = tuple(
+                    [("card_type", name) for name in card_types] + cross_axis
+                )
+                card_types = []
             is_card = _accept_card_noun(stream)
             # "target instant or sorcery **spell**" (Miscast): the head noun
             # after a type union may be "spell", naming an object on the stack
@@ -809,6 +839,15 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # — so it is a flag the one lowering written for it reads, and every
             # other one refuses (see ``ObjectFilter``). "This turn" is required:
             # without it the sentence says something the record cannot answer.
+            # "…**that targets a permanent you control**" (Avoid Fate, Ring
+            # of Immortals). What the object *chose*, which is a question only
+            # a spell or an ability on the stack can be asked — so the inner
+            # noun phrase is parsed in full and recorded whole, and every
+            # lowering not written for it refuses the field by name.
+            elif stream.accept_word("targets"):
+                stream.accept_word("a", "an")
+                targets_object = parse_object_filter(stream)
+                continue
             elif stream.accept_phrase("dealt", "damage", "to"):
                 if accept_source_reference(stream) and stream.accept_phrase(
                     "this", "turn"
@@ -921,6 +960,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         with_keywords=tuple(with_keywords),
         without_keywords=tuple(without_keywords),
         not_ability_targeted_by_same_name=not_ability_targeted_by_same_name,
+        any_classes=any_classes,
+        targets_object=targets_object,
         created_with_source=created_with_source,
         controller=controller,
         owner=owned_by,
@@ -953,45 +994,3 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
 __all__ = [
     "accept_source_reference", "parse_card_name", "parse_object_filter",
 ]
-
-
-# Words that cannot be part of a card's name here because they start the next
-# clause of the printed template. A name scan running past one of them would
-# swallow "and/or a card named Igneous Cur" into the first name and report
-# Alpine Houndmaster as a card that finds one card — so the scan stops, and the
-# production then refuses the line at "put".
-#
-# The verbs are stops because a *subject* can carry a name too: "Creatures you
-# control named Kobolds of Kher Keep get +2/+2" (Rohgahh of Kher Keep) ends the
-# name where the sentence's verb begins, and without the stop the scan swallowed
-# "get +2/+2" and the statement parser found no verb at all. No card in the pool
-# has any of these words in its name (checked against every set file), so the
-# stop can only end a scan the verb was never part of.
-_NAME_STOPS = ("reveal", "put", "then", "and", "or", "in", "get", "gets", "has", "have")
-
-
-def parse_card_name(stream: TokenStream) -> str:
-    """The card name after ``named``, wherever a noun phrase carries one.
-
-    Read token by token rather than as one word, because a legendary name
-    carries the same punctuation the sentence does — "Chandra, Flame's
-    Catalyst, reveal it," holds two commas and only the second ends the name. A
-    comma is taken as part of the name only when a name word follows it, and
-    the rendered text is compared through ``search_filters.name_key``, which
-    ignores punctuation and case on both sides.
-    """
-    start = stream.mark()
-    while not stream.exhausted:
-        if stream.at_punct(".") or stream.at_word(*_NAME_STOPS):
-            break
-        if stream.at_punct(","):
-            mark = stream.mark()
-            stream.advance()
-            if stream.exhausted or stream.at_punct(".") or stream.at_word(*_NAME_STOPS):
-                stream.reset(mark)
-                break
-            continue
-        stream.advance()
-    if stream.mark() == start:
-        raise stream.error("expected the name the search is for")
-    return render(stream.tokens[start:stream.mark()])

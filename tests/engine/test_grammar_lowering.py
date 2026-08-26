@@ -3589,10 +3589,11 @@ def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
             condition, _ = _parse_trigger_condition(normalize_creature_line(line))
             if condition is None:
                 continue
-            described = [
-                value for key, value in condition.payload.items()
+            described = {
+                key[: -len("_filter")]: value
+                for key, value in condition.payload.items()
                 if key.endswith("_filter")
-            ]
+            }
             if not described:
                 continue
             lexed = tokenize(line, card_name=card.name)
@@ -3604,9 +3605,43 @@ def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
                 )
                 continue
             checked += 1
-            if _filter_payload(subject) != described[0]:
+            # A condition may delimit more than one noun phrase: "a creature
+            # spell that doesn't share a color with **a creature you control**"
+            # (Invoke Prejudice) names the set the trigger fires on *and* the
+            # set it is compared against. Those are paired by the stem the
+            # table's `_subject` group gave them; whatever `_filter` key is left
+            # over is the subject, and that is what `TriggerEvent.subject` has
+            # to match. Pairing by name is the point — a grammar that consumed
+            # the extra phrase and recorded nothing would leave the dispatcher
+            # testing a narrowing the parse claimed it had read.
+            named = dict(getattr(event, "narrowings", ()) or ())
+            for stem, filt in named.items():
+                if stem not in described:
+                    disagreements.append(
+                        f"{card.name}: {line}\n    the grammar read a {stem!r} "
+                        "narrowing the table did not"
+                    )
+                elif _filter_payload(filt) != described[stem]:
+                    disagreements.append(
+                        f"{card.name}: {line}\n    table {stem}:   {described[stem]}"
+                        f"\n    grammar {stem}: {_filter_payload(filt)}"
+                    )
+            # Deduplicated by value: a `_pair_subject` group fans one printed
+            # phrase out to two keys on purpose ("blocks or becomes blocked by
+            # a non-Wall creature" describes both halves of one relation), and
+            # two keys holding the same filter are still one subject.
+            remaining = []
+            for stem, value in described.items():
+                if stem not in named and value not in remaining:
+                    remaining.append(value)
+            if len(remaining) > 1:
                 disagreements.append(
-                    f"{card.name}: {line}\n    table:   {described[0]}"
+                    f"{card.name}: {line}\n    the table read {len(remaining)} "
+                    "unnamed subjects; the grammar has one"
+                )
+            elif remaining and _filter_payload(subject) != remaining[0]:
+                disagreements.append(
+                    f"{card.name}: {line}\n    table:   {remaining[0]}"
                     f"\n    grammar: {_filter_payload(subject)}"
                 )
     assert not disagreements, (
@@ -4059,3 +4094,117 @@ def test_a_lone_state_adjective_is_not_a_union():
     [instruction] = compiled.instructions
     assert instruction.payload.get("tapped_only") is True
     assert "any_states" not in instruction.payload
+
+
+# ---------------------------------------------------------------------------
+# A printed "or" between a card type and a subtype is one union across two axes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "phrase,expected",
+    [
+        # Avoid Fate and Ring of Immortals, the printing this exists for.
+        ("instant or Aura", [["card_type", "instant"], ["subtype", "aura"]]),
+        # Invented, and deliberately: a rule matching the pair above literally
+        # would pass a test that only named it. What the union is made of is
+        # payload, exactly as a colour list or a state pair is.
+        ("sorcery or Equipment", [["card_type", "sorcery"], ["subtype", "equipment"]]),
+        (
+            "instant or sorcery or Aura",
+            [["card_type", "instant"], ["card_type", "sorcery"], ["subtype", "aura"]],
+        ),
+    ],
+)
+def test_a_class_union_crossing_two_axes_carries_both(phrase, expected):
+    compiled = compile_line(f"Counter target {phrase} spell.", card_name="Test")
+
+    assert compiled.lowered, compiled.failure_reason
+    [instruction] = compiled.instructions
+    assert instruction.payload["any_classes"] == expected
+    # Never split across the two fields it straddles: every matcher ANDs them,
+    # so "an instant that is also an Aura" is a set nothing is in.
+    assert "card_types" not in instruction.payload
+    assert "subtype_filter" not in instruction.payload
+
+
+def test_a_single_axis_union_is_not_a_class_union():
+    """"instant or sorcery" lives on one axis and the type key already means
+    "any of these" — routing it through the cross-axis form would be a second
+    answer to a question that already has one."""
+    compiled = compile_line("Counter target instant or sorcery spell.", card_name="Test")
+
+    assert compiled.lowered, compiled.failure_reason
+    [instruction] = compiled.instructions
+    assert instruction.payload["card_types"] == ["instant", "sorcery"]
+    assert "any_classes" not in instruction.payload
+
+
+def test_a_class_union_must_name_a_spell():
+    """Without the printed "spell" the phrase names a permanent, and the word
+    would be droppable — the dropped-rider shape the deletion probe reports."""
+    compiled = compile_line("Counter target instant or Aura.", card_name="Test")
+
+    assert not compiled.lowered
+
+
+def test_a_counter_narrowed_by_what_its_target_chose():
+    """"…that targets a permanent you control" — a restriction on the chosen
+    spell's own targets, carried as a nested filter the handler tests."""
+    compiled = compile_line(
+        "Counter target spell that targets a permanent you control.", card_name="Test"
+    )
+
+    assert compiled.lowered, compiled.failure_reason
+    [instruction] = compiled.instructions
+    assert instruction.payload["targets_filter"] == {"controller": "you"}
+
+
+def test_a_counter_refuses_a_target_narrowing_nothing_can_test():
+    """The narrowing is the whole card, so an inner phrase the matcher cannot
+    answer refuses the line rather than countering more widely than it says."""
+    compiled = compile_line(
+        "Counter target spell that targets a creature blocking this creature.",
+        card_name="Test",
+    )
+
+    assert not compiled.lowered
+
+
+# ---------------------------------------------------------------------------
+# "Counter that spell" is a bound reference; "instead" is the replacement
+# ---------------------------------------------------------------------------
+
+
+def test_counter_that_spell_is_bound_not_a_replacement():
+    """Invoke Prejudice prints the words about the spell its own *trigger*
+    bound, with no earlier sentence at all. Reading "that spell" as Lofty
+    Denial's replacement amount made that construction unreachable."""
+    compiled = compile_line(
+        "Counter that spell unless that player pays {3}.", card_name="Test"
+    )
+
+    assert compiled.lowered, compiled.failure_reason
+    [instruction] = compiled.instructions
+    assert instruction.payload["bound_to_trigger"] is True
+    assert instruction.payload["unless_pays_amount"] == 3
+
+
+def test_a_replacement_amount_with_nothing_to_replace_refuses():
+    """"…pays {4} **instead**" on its own replaces an amount no sentence named.
+    Lowering it as an ordinary counter would print a card that asks for one
+    amount where it says two."""
+    compiled = compile_line(
+        "Counter that spell unless its controller pays {4} instead.", card_name="Test"
+    )
+
+    assert not compiled.lowered
+
+
+def test_instead_is_refused_on_a_chosen_target():
+    """A counter that picks its own spell has no earlier amount to replace."""
+    compiled = compile_line(
+        "Counter target spell unless its controller pays {4} instead.", card_name="Test"
+    )
+
+    assert not compiled.lowered

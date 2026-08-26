@@ -465,6 +465,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # below is its strict prefix.
     ("opponent_casts_spell",
      r"whenever an opponent casts a spell from anywhere other than their (?P<not_from_zone>hand)"),
+    # "…a creature spell **that doesn't share a color with a creature you
+    # control**" (Invoke Prejudice). A narrowing that is not about the spell
+    # alone: it compares the spell's colours (CR 105.2) against a *set of
+    # permanents* the printed noun phrase names, so the phrase is delimited as a
+    # `_subject` group and the board it describes is payload. Before the type
+    # row above's twin, whose pattern is its strict prefix.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell "
+     r"that doesn't share a color with (?P<unshared_color_subject>an? [^,]+)"),
     # "Whenever an opponent casts an artifact spell" (Citanul Druid) — the
     # type narrowing again, on the opponent-scoped kind. Before the bare row.
     ("opponent_casts_spell",

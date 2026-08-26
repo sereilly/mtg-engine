@@ -466,3 +466,101 @@ def test_divine_offering_gains_nothing_for_a_zero_cost_artifact(set_pool):
 
     assert p2.battlefield == []
     assert p1.life == 20
+
+
+# ---------------------------------------------------------------------------
+# Avoid Fate (round 21) — "Counter target instant or Aura spell that targets a
+# permanent you control." Two narrowings on one sentence: a union of classes
+# that straddles the card-type and subtype axes (CR 205.2/205.3), and a
+# restriction on what the chosen spell itself chose (CR 601.2c).
+# ---------------------------------------------------------------------------
+
+
+def _avoid_fate_game(set_pool, threat: str, seat: int):
+    """Seat 1 puts *threat* on the stack aimed at the creature *seat* controls;
+    seat 0 holds Avoid Fate and a creature of its own."""
+    pool = set_pool("LEG")
+    mine = Permanent(card=_creature("Mine"))
+    theirs = Permanent(card=_creature("Theirs"))
+    p1 = PlayerState(name="P1", hand=[pool["Avoid Fate"]], battlefield=[mine])
+    p2 = PlayerState(name="P2", hand=[pool[threat]], battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    queued = game.queue_from_hand(
+        1, threat, target_player_index=seat, target_permanent_index=0
+    )
+    assert queued.supported, queued.details
+    return game, p1, p2
+
+
+def test_avoid_fate_compiles_the_union_across_both_axes(set_pool):
+    """"instant or Aura" is one union over two axes. Recorded as a card type and
+    a subtype side by side it would describe an instant that is also an Aura —
+    a set nothing is in, so the card would counter nothing at all."""
+    program = compile_card_oracle(set_pool("LEG")["Avoid Fate"])
+    assert program.supported, program.reason
+    counter = next(i for i in program.instructions if i.kind == "counter_top_stack_spell")
+    assert counter.payload["any_classes"] == [
+        ["card_type", "instant"], ["subtype", "aura"]
+    ]
+    assert "card_types" not in counter.payload
+    assert "subtype_filter" not in counter.payload
+    assert counter.payload["targets_filter"] == {"controller": "you"}
+
+
+def test_avoid_fate_counters_an_aura_aimed_at_your_permanent(set_pool):
+    """An Aura is not an instant, and the whole point of the union is that it is
+    countered anyway."""
+    game, _p1, p2 = _avoid_fate_game(set_pool, "Divine Transformation", 0)
+
+    result = game.cast_from_hand(0, "Avoid Fate", target_stack_index=0)
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game.stack
+    assert [c.name for c in p2.graveyard] == ["Divine Transformation"]
+
+
+def test_avoid_fate_counters_an_instant_aimed_at_your_permanent(set_pool):
+    """The other half of the union, on the other axis."""
+    game, _p1, p2 = _avoid_fate_game(set_pool, "Transmutation", 0)
+
+    result = game.cast_from_hand(0, "Avoid Fate", target_stack_index=0)
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game.stack
+    assert "Transmutation" in [c.name for c in p2.graveyard]
+
+
+def test_avoid_fate_leaves_a_spell_aimed_at_a_permanent_you_do_not_control(set_pool):
+    """The narrowing is the card. A counter that ignored it would counter every
+    instant on the stack, which is a strictly better and different card — so the
+    spell has to *resolve*, and its effect has to land."""
+    game, _p1, p2 = _avoid_fate_game(set_pool, "Transmutation", 1)
+    theirs = p2.battlefield[0]
+
+    result = game.cast_from_hand(0, "Avoid Fate", target_stack_index=0)
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game.stack
+    assert theirs.card.name == "Theirs"
+    assert any(
+        "Transmutation switched" in line for line in game.log
+    ), "the spell outside the narrowing resolved"
+
+
+def test_avoid_fate_leaves_a_sorcery_alone(set_pool):
+    """A sorcery aimed at your own permanent satisfies the second narrowing and
+    fails the first — the two are tested separately, so neither can carry the
+    other."""
+    game, p1, _p2 = _avoid_fate_game(set_pool, "Psychic Purge", 0)
+
+    result = game.cast_from_hand(0, "Avoid Fate", target_stack_index=0)
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game.stack
+    assert any(
+        "Psychic Purge dealt 1 damage to Mine" in line for line in game.log
+    ), "a sorcery is outside the printed class union"
