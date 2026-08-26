@@ -378,6 +378,28 @@ def _parse_look_pick_tail(
     )
 
 
+def _parse_look_other_library_tail(
+    stream: TokenStream, count, owner: ast.PlayerRef
+) -> ast.Statement:
+    """The rest of "Look at the top five cards of target player's library. You
+    may then have that player shuffle that library." (Visions.)
+
+    The shuffle sentence is read here rather than as a statement of its own
+    because "that library" is the one the look just named — parsed apart it
+    would have to guess a player, and guessing which library gets shuffled is
+    the one mistake this card can make. The tail is optional: a card that only
+    looks is this same effect without its offer, and refusing it would refuse a
+    shape the node already represents.
+    """
+    mark = stream.mark()
+    if stream.accept_punct(".") and stream.accept_phrase(
+        "you", "may", "then", "have", "that", "player", "shuffle", "that", "library"
+    ):
+        return ast.LookAtLibraryTop(count, owner, may_shuffle=True)
+    stream.reset(mark)
+    return ast.LookAtLibraryTop(count, owner)
+
+
 def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     """``Look at <player>'s hand.`` (Glasses of Urza.)
 
@@ -407,8 +429,25 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         return _parse_look_pick_tail(stream, ast.ThatMuch(None))
     if stream.accept_phrase("the", "top"):
         count = parse_amount(stream)
-        for word in ("cards", "of", "your", "library"):
-            stream.expect_word(word)
+        stream.expect_word("cards")
+        stream.expect_word("of")
+        # Whose library, read rather than assumed to be the word "your": "the
+        # top five cards of **target player's** library" (Visions) is this same
+        # sentence about somebody else's deck. Everything below — the pick, the
+        # bottoming, the cast-zone rider — is only ever about your own library,
+        # which is why the other library's tail is read separately.
+        if stream.accept_word("your"):
+            owner = ast.PlayerRef("you")
+        else:
+            owner = parse_player_ref(stream)
+            # The lexer splits "player's" into "player" + "'s"; the marker is
+            # consumed here for the reason `_parse_look_at_hand`'s is — a token
+            # left behind fails the line's full-token consumption.
+            if owner is None or not stream.accept_word("'s"):
+                raise stream.error("expected whose library is looked at")
+        stream.expect_word("library")
+        if owner.kind != "you":
+            return _parse_look_other_library_tail(stream, count, owner)
         if not stream.accept_punct("."):
             raise stream.error("expected the sorting sentence after the look")
         # Garruk's Harbinger's optional, filtered pick shares this position with
@@ -513,11 +552,16 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     graveyard = bool(stream.accept_phrase("and", "or", "graveyard"))
     stream.expect_word("for")
     # "…for **up to two** basic land cards, reveal those cards, put one onto the
-    # battlefield tapped and the other into your hand" (Cultivate). A counted
-    # search, read here so the count and the destinations are parsed together —
-    # they are the same fact, one entry per find.
-    if stream.accept_phrase("up", "to", "two"):
-        return _parse_two_card_search(stream, graveyard)
+    # battlefield tapped and the other into your hand" (Cultivate), and "…for
+    # **up to three** basic land cards, reveal them, put them into your hand"
+    # (Land Tax). A counted search, read here so the count and the destinations
+    # are parsed together — they are the same fact, one entry per find, and a
+    # count read without them is a search that finds three and places one.
+    if stream.accept_phrase("up", "to"):
+        count = parse_amount(stream)
+        if not isinstance(count, ast.Fixed) or count.value < 1:
+            raise stream.error("expected how many cards the search may find")
+        return _parse_counted_search(stream, graveyard, count.value)
     if not stream.accept_word("a", "an"):
         raise stream.error("a search for more than one card has no representation")
     # "a card named X" is read by the noun parser, like every other restriction
@@ -654,31 +698,56 @@ def _parse_search_untap_rider(stream: TokenStream):
     return ast.Comparison("ge", amount), counted
 
 
-def _parse_two_card_search(stream: TokenStream, graveyard: bool) -> ast.Statement:
-    """The tail of ``Search your library for up to two <filter>, reveal those
-    cards, put one <zone> and the other <zone>, then shuffle.`` (Cultivate.)
+def _parse_counted_search(
+    stream: TokenStream, graveyard: bool, count: int
+) -> ast.Statement:
+    """The tail of ``Search your library for up to <N> <filter>, reveal <them>,
+    <where they go>, then shuffle.`` (Cultivate, Land Tax.)
 
     Split from the singular production rather than branched inside it, because
-    every clause after the count is *different*: "those cards" not "it", two
-    destinations joined by "and the other", and an entry state on the first.
-    Sharing the code would mean a chain of `if two:` through a production whose
-    whole job is to read one shape.
+    every clause after the count is *different*: "those cards" not "it", a
+    plural destination clause, and an entry state per find. Sharing the code
+    would mean a chain of `if counted:` through a production whose whole job is
+    to read one shape.
 
-    Both destinations are required. A card that puts one somewhere and says
-    nothing about the second find is a different effect, and defaulting the
+    Two destination clauses, and which one a card prints is what the *count*
+    decides. "Put **them** into your hand" sends every find to the same place,
+    so the zone is read once and repeated per find. "Put **one** … and the
+    other …" names a zone per find, which only a two-card search can spell —
+    and both of its halves are required, because a card that places one find
+    and says nothing about the second is a different effect, and defaulting the
     second to the first is how a search silently puts two lands on the
     battlefield.
     """
     filt = parse_object_filter(stream)
     stream.accept_punct(",")
-    # "reveal those cards," — the plural of the singular production's "reveal
-    # it", and recorded the same way: the finds are shown to every player.
+    # "reveal those cards," / "reveal them," — the plural of the singular
+    # production's "reveal it", recorded the same way: the finds are shown to
+    # every player (CR 701.20).
     reveal = bool(stream.accept_word("reveal"))
     if reveal:
-        if not stream.accept_phrase("those", "cards"):
+        if not stream.accept_phrase("those", "cards") and not stream.accept_word("them"):
             raise stream.error("expected 'those cards' after the plural reveal")
         stream.accept_punct(",")
     stream.expect_word("put")
+    if stream.accept_word("them"):
+        stream.expect_word("into", "onto")
+        destination = _parse_zone(stream)
+        tapped = bool(stream.accept_word("tapped"))
+        stream.accept_punct(",")
+        stream.accept_word("then")
+        stream.expect_word("shuffle")
+        return ast.SearchLibrary(
+            ast.PlayerRef("you"), filt, destination, graveyard,
+            extra_destinations=(destination,) * (count - 1),
+            tapped=(tapped,) * count,
+            up_to=True,
+            reveal=reveal,
+        )
+    if count != 2:
+        raise stream.error(
+            "a search naming a destination per find can only be spelled for two"
+        )
     stream.expect_word("one")
     stream.expect_word("into", "onto")
     first = _parse_zone(stream)

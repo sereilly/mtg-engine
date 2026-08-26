@@ -12,7 +12,7 @@ should own the other's vocabulary.
 import dataclasses
 
 from .. import ast
-from ..references import parse_recipient
+from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, SUBTYPE_INDEX, match_longest)
 from ..phrases import (
@@ -465,6 +465,50 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
         stream.reset(mark)
         return None
     return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"))
+
+
+def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | None:
+    """``Each player shuffles the cards from their hand into their library,
+    then draws that many cards.`` (Winds of Change.)
+
+    Read here beside the graveyard shuffle for the reason that one is read
+    outside the subject-verb loop: the sentence's object is a *zone*, not a set
+    of objects a filter could test, so the reader that expects a noun phrase has
+    nothing to take.
+
+    The possessive has to agree with the subject, which is what makes this the
+    sentence it looks like: "each player shuffles the cards from **your** hand"
+    would be a different effect, and consuming the word without reading it would
+    compile that card onto this one — the check `_parse_shuffle_graveyard_into_library`
+    makes for the same reason.
+
+    The draw is part of this production rather than a sentence after it: "that
+    many" is the number of cards the shuffle just moved, which nothing else in
+    the line knows. Parsed apart it would be a draw with no producer, and a
+    producerless back-reference reads as zero.
+    """
+    mark = stream.mark()
+    player = parse_player_ref(stream)
+    if player is None or not stream.accept_word("shuffles", "shuffle"):
+        stream.reset(mark)
+        return None
+    whose = "your" if player.kind == "you" else "their"
+    # "shuffles **the cards from** their hand" is the current wording and
+    # "shuffles their hand" the older one; they name the same cards, so the
+    # phrase is optional rather than a second production.
+    stream.accept_phrase("the", "cards", "from")
+    if not stream.accept_phrase(whose, "hand", "into", whose, "library"):
+        stream.reset(mark)
+        return None
+    then_draw = False
+    probe = stream.mark()
+    if stream.accept_punct(",") and stream.accept_phrase(
+        "then", "draws" if whose == "their" else "draw", "that", "many", "cards"
+    ):
+        then_draw = True
+    else:
+        stream.reset(probe)
+    return ast.ShuffleHandIntoLibrary(player, then_draw=then_draw)
 
 
 def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:

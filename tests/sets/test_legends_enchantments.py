@@ -958,3 +958,91 @@ def test_invoke_prejudice_taxes_a_colorless_spell(set_pool):
     game, _p1, p2 = _prejudice_game(set_pool, ("G",), (), {})
 
     assert [c.name for c in p2.graveyard] == ["Threat"]
+
+# ---------------------------------------------------------------------------
+# Land Tax (round 21) — an intervening-if upkeep trigger over an optional
+# counted search. CR 603.4, CR 701.19, CR 701.20.
+# ---------------------------------------------------------------------------
+
+
+def _land_tax(set_pool, catalog_by_name, *, opponent_lands: int, own_lands: int):
+    plains = catalog_by_name["Plains"]
+    forest = catalog_by_name["Forest"]
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=set_pool("LEG")["Land Tax"])]
+        + [Permanent(card=plains) for _ in range(own_lands)],
+        library=[plains, forest, plains, catalog_by_name["Black Lotus"], plains],
+    )
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=forest) for _ in range(opponent_lands)]
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.resolve_upkeep(0)
+    game._settle()
+    return game, p1, p2
+
+
+def test_land_tax_offers_a_three_card_search_when_an_opponent_is_ahead(
+    set_pool, catalog_by_name
+):
+    """The whole printed sentence: the intervening if is met, the offer is
+    made, and the search that follows it finds three rather than one."""
+    game, p1, _p2 = _land_tax(set_pool, catalog_by_name, opponent_lands=2, own_lands=0)
+
+    assert [entry["card_name"] for entry in game.pending_optional_pays] == ["Land Tax"]
+    assert game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    prompt = game.pending_search_library
+    assert prompt is not None, game.log
+    assert prompt["count"] == 3
+    assert prompt["up_to"] is True
+    assert prompt["destinations"] == ["hand", "hand", "hand"]
+    assert prompt["restrictions"] == {"supertypes": ["basic"]}
+
+
+def test_land_tax_puts_all_three_finds_into_the_hand(set_pool, catalog_by_name):
+    """Every find goes to the same place, so all three arrive — a count read
+    without its destinations would have found three and placed one."""
+    game, p1, _p2 = _land_tax(set_pool, catalog_by_name, opponent_lands=2, own_lands=0)
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert game.confirm_search_library_picks(
+        0,
+        [
+            {"zone": "library", "index": 0},
+            {"zone": "library", "index": 2},
+            {"zone": "library", "index": 4},
+        ],
+    )
+    game._settle()
+
+    assert [card.name for card in p1.hand] == ["Plains", "Plains", "Plains"], game.log
+    assert sorted(card.name for card in p1.library) == ["Black Lotus", "Forest"]
+
+
+def test_land_tax_does_not_trigger_without_the_land_advantage(
+    set_pool, catalog_by_name
+):
+    """"If an opponent controls more lands than you" is checked, not decorative
+    — with the counts the other way round no offer is made at all."""
+    game, p1, _p2 = _land_tax(set_pool, catalog_by_name, opponent_lands=0, own_lands=3)
+
+    assert game.pending_optional_pays == [], game.log
+    assert p1.hand == []
+
+
+def test_land_tax_refuses_a_pick_that_is_not_a_basic_land(set_pool, catalog_by_name):
+    """The restriction reaches the picker rather than only the prompt label:
+    naming the Black Lotus is rejected, and the search is still owed."""
+    game, p1, _p2 = _land_tax(set_pool, catalog_by_name, opponent_lands=2, own_lands=0)
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    assert not game.confirm_search_library_picks(0, [{"zone": "library", "index": 3}])
+    assert p1.hand == []
+    assert game.pending_search_library is not None

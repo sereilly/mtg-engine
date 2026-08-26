@@ -6,6 +6,7 @@ See tests/sets/README.md for the convention.
 from __future__ import annotations
 
 from engine import Game, PlayerState
+from engine.models import CardDefinition
 
 
 # ---------------------------------------------------------------------------
@@ -201,3 +202,151 @@ def test_the_damage_counts_the_deaths_rather_than_the_survivors(set_pool):
         "Bog Wraith", "Scathe Zombies",
     ]
     assert p1.life == 16, game.log
+
+
+# ---------------------------------------------------------------------------
+# Winds of Change (round 21) — "each player shuffles the cards from their hand
+# into their library, then draws that many cards". CR 701.19, CR 121.
+# ---------------------------------------------------------------------------
+
+
+def _blank(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Sorcery", oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Sorcery"},
+    )
+
+
+def _winds(set_pool, first_hand: int, second_hand: int):
+    p1 = PlayerState(
+        name="P1",
+        hand=[set_pool("LEG")["Winds of Change"]]
+        + [_blank(f"A{i}") for i in range(first_hand)],
+        library=[_blank(f"L{i}") for i in range(20)],
+    )
+    p2 = PlayerState(
+        name="P2",
+        hand=[_blank(f"B{i}") for i in range(second_hand)],
+        library=[_blank(f"M{i}") for i in range(20)],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def test_every_hand_is_refilled_to_the_size_it_had(set_pool):
+    """"That many" is each player's own hand size, not the caster's — two seats
+    with different hands each end with what they started with."""
+    game, p1, p2 = _winds(set_pool, first_hand=2, second_hand=5)
+
+    result = game.cast_from_hand(0, "Winds of Change")
+    game._settle()
+
+    assert result.supported, result.details
+    # The spell itself left the hand to go on the stack, so P1 shuffled 2.
+    assert len(p1.hand) == 2, game.log
+    assert len(p2.hand) == 5, game.log
+
+
+def test_the_old_hands_went_into_the_libraries_rather_than_away(set_pool):
+    """A shuffle-into is a move, and the cards have to still be there — a
+    handler that cleared the hand and drew would pass every count above."""
+    game, p1, p2 = _winds(set_pool, first_hand=2, second_hand=5)
+
+    game.cast_from_hand(0, "Winds of Change")
+    game._settle()
+
+    everywhere = {card.name for card in p1.hand + p1.library}
+    assert {"A0", "A1"} <= everywhere, game.log
+    assert len(p1.library) == 20
+    assert len(p2.library) == 20
+
+
+def test_an_empty_hand_still_shuffles_the_library_and_draws_nothing(set_pool):
+    """Zero is a number, and the shuffle is not conditional on it: the seat with
+    nothing in hand shuffles its library all the same (that is the printed
+    action), and draws none — the library keeps every card it had."""
+    game, p1, p2 = _winds(set_pool, first_hand=0, second_hand=0)
+    before = sorted(card.name for card in p2.library)
+
+    game.cast_from_hand(0, "Winds of Change")
+    game._settle()
+
+    assert p2.hand == []
+    assert sorted(card.name for card in p2.library) == before, game.log
+    assert len(p2.library) == 20
+
+
+# ---------------------------------------------------------------------------
+# Visions (round 21) — look at the top five cards of a library you do not own,
+# then offer its owner's shuffle. CR 701.19.
+# ---------------------------------------------------------------------------
+
+
+def _visions(set_pool, library: int = 8):
+    p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Visions"]])
+    p2 = PlayerState(name="P2", library=[_blank(f"L{i}") for i in range(library)])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    return game, p1, p2
+
+
+def test_visions_shows_the_caster_the_top_five_of_the_target_s_library(set_pool):
+    """The prompt is raised in front of the *caster* and reads the *target's*
+    library — the two seats a look at someone else's deck can confuse."""
+    game, p1, p2 = _visions(set_pool)
+
+    result = game.cast_from_hand(0, "Visions", target_player_index=1)
+    game._settle()
+
+    assert result.supported, result.details
+    pending = game.pending_reorder_library
+    assert pending is not None, game.log
+    assert pending["caster_index"] == 0
+    assert pending["target_index"] == 1
+    assert pending["top_count"] == 5
+    assert pending["may_shuffle"] is True
+
+
+def test_visions_cannot_rearrange_what_it_looked_at(set_pool):
+    """Visions only *looks*. The permission is enforced in the engine rather
+    than by hiding the drag handles, so an answer that names another order
+    leaves the library exactly as it was."""
+    game, p1, p2 = _visions(set_pool)
+    game.cast_from_hand(0, "Visions", target_player_index=1)
+    game._settle()
+    before = [card.name for card in p2.library]
+
+    assert game.confirm_reorder_library(0, [4, 3, 2, 1, 0], shuffle=False)
+
+    assert [card.name for card in p2.library] == before, game.log
+
+
+def test_visions_shuffles_the_library_it_looked_at_when_the_caster_says_so(set_pool):
+    """The offer is the second half of the printed sentence, and the library it
+    shuffles is the target's — the caster's is untouched."""
+    game, p1, p2 = _visions(set_pool)
+    p1.library = [_blank(f"K{i}") for i in range(6)]
+    game.cast_from_hand(0, "Visions", target_player_index=1)
+    game._settle()
+    theirs = [card.name for card in p2.library]
+    mine = [card.name for card in p1.library]
+
+    assert game.confirm_reorder_library(0, [0, 1, 2, 3, 4], shuffle=True)
+
+    assert sorted(card.name for card in p2.library) == sorted(theirs)
+    assert [card.name for card in p2.library] != theirs, game.log
+    assert [card.name for card in p1.library] == mine
+
+
+def test_visions_looks_at_a_short_library_without_reaching_past_it(set_pool):
+    """Fewer than five cards is not a failure — the look stops at what is
+    there, the way a mill does (CR 704.5b is about drawing, not looking)."""
+    game, p1, p2 = _visions(set_pool, library=2)
+
+    game.cast_from_hand(0, "Visions", target_player_index=1)
+    game._settle()
+
+    assert game.pending_reorder_library["top_count"] == 2, game.log

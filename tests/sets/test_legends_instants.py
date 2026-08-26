@@ -564,3 +564,53 @@ def test_avoid_fate_leaves_a_sorcery_alone(set_pool):
     assert any(
         "Psychic Purge dealt 1 damage to Mine" in line for line in game.log
     ), "a sorcery is outside the printed class union"
+
+# ---------------------------------------------------------------------------
+# Storm Seeker (round 21) — "damage … equal to the number of cards in **that
+# player's** hand". The possessive is a back-reference to the damage's target,
+# and reading it as the caster is the whole bug this card can have.
+# ---------------------------------------------------------------------------
+
+
+def _spell_card(name: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Sorcery", oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Sorcery"},
+    )
+
+
+def _storm_seeker(set_pool, caster_hand: int, target_hand: int):
+    p1 = PlayerState(
+        name="P1",
+        hand=[set_pool("LEG")["Storm Seeker"]]
+        + [_spell_card(f"A{i}") for i in range(caster_hand)],
+    )
+    p2 = PlayerState(name="P2", hand=[_spell_card(f"B{i}") for i in range(target_hand)])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def test_storm_seeker_counts_the_targets_hand(set_pool):
+    """Four cards opposite, four damage — and the caster's own six-card hand is
+    not what the sentence asked about."""
+    game, p1, p2 = _storm_seeker(set_pool, caster_hand=6, target_hand=4)
+
+    result = game.cast_from_hand(0, "Storm Seeker", target_player_index=1)
+    game._settle()
+
+    assert result.supported, result.details
+    assert p2.life == 16, game.log
+    assert p1.life == 20
+
+
+def test_storm_seeker_deals_nothing_to_an_empty_hand(set_pool):
+    """Zero cards is zero damage rather than a fallback amount — the control on
+    a count that answers with a default when it finds nothing."""
+    game, p1, p2 = _storm_seeker(set_pool, caster_hand=3, target_hand=0)
+
+    game.cast_from_hand(0, "Storm Seeker", target_player_index=1)
+    game._settle()
+
+    assert p2.life == 20, game.log

@@ -302,6 +302,7 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # a seat, and never looks at the battlefield.
     "mill_target_player": {"kind": "player"},
     "look_at_target_hand": {"kind": "player"},
+    "look_at_target_library_top": {"kind": "player"},
     "discard_target_cards": {"kind": "player"},
     # "Search **target opponent's** graveyard, hand, and library …"
     # (Necromentia). The searched player is a target chosen as the spell is cast

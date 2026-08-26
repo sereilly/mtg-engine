@@ -5718,8 +5718,23 @@ function renderReorderLibraryModal(info) {
     reorderLibraryCurrentOrder = cards.map((_, i) => i);
   }
 
+  // Visions looks at the top of a library without putting the cards back in an
+  // order of its choosing. The engine ignores whatever order such a prompt
+  // sends, so a drag affordance here would promise something that never
+  // happens.
+  const canReorder = info.may_reorder !== false;
+  const titleEl = document.getElementById("reorderLibraryTitle");
+  if (titleEl) titleEl.textContent = canReorder ? "Reorder Top of Library" : "Top of Library";
+  const subtitleEl = document.getElementById("reorderLibrarySubtitle");
+  if (subtitleEl) {
+    subtitleEl.textContent = canReorder
+      ? "Drag cards to rearrange. The leftmost card will be on top of the library."
+      : `The top ${cards.length} card${cards.length === 1 ? "" : "s"} of ${info.target_name || "that player"}'s library, top first.`;
+  }
+
   const container = document.getElementById("reorderLibraryCards");
   const confirmBtn = document.getElementById("reorderLibraryConfirmBtn");
+  if (confirmBtn) confirmBtn.textContent = canReorder ? "Confirm Order" : "Done";
   const shuffleBtn = document.getElementById("reorderLibraryShuffleBtn");
 
   let dragSrcSlot = null;
@@ -5735,7 +5750,7 @@ function renderReorderLibraryModal(info) {
 
       const item = document.createElement("div");
       item.className = "reorder-card-item";
-      item.draggable = true;
+      item.draggable = canReorder;
       item.dataset.slotPos = slotPos;
 
       if (card.image_uri) {
@@ -5755,6 +5770,12 @@ function renderReorderLibraryModal(info) {
       nameEl.className = "reorder-card-item-name";
       nameEl.textContent = card.name;
       item.appendChild(nameEl);
+
+      if (!canReorder) {
+        slot.appendChild(item);
+        container.appendChild(slot);
+        return;
+      }
 
       item.addEventListener("dragstart", (e) => {
         dragSrcSlot = slotPos;

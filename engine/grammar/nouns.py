@@ -746,13 +746,15 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             owner: ast.PlayerRef | None = None
             if stream.accept_word("your"):
                 owner = ast.PlayerRef("you")
-            elif stream.accept_word("their"):
+            # "their <zone>", and the spelled-out "that player's <zone>" (Storm
+            # Seeker): one node for both, because `parse_player_ref` already reads
+            # "they" as an alias of "that player", and a second kind here would be
+            # a second answer every count lowering had to learn.
+            elif stream.accept_word("their") or stream.accept_phrase("that", "player", "'s"):
                 owner = ast.PlayerRef("owner")
-            # "from **target player's** graveyard" (Drafna's Restoration). A
-            # chosen player rather than a fixed one, and a *second* target on
-            # the same line — the cards are targets too. Recorded so a handler
-            # that only reads the caster's own graveyard refuses the line
-            # instead of searching the wrong pile.
+            # "from **target player's** graveyard" (Drafna's Restoration): a
+            # chosen player rather than a fixed one, and a *second* target on the
+            # same line — the cards are targets too.
             elif stream.accept_phrase("target", "player", "'s"):
                 owner = ast.PlayerRef("target_player")
             else:

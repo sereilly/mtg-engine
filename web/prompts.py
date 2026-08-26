@@ -425,6 +425,10 @@ def _reorder_library(ctx: PromptContext, choices: list) -> dict:
         "target_seat": choice.data["target_index"],
         "top_count": top_count,
         "may_shuffle": bool(choice.data.get("may_shuffle")),
+        # False for a look that only shows the cards (Visions). The engine
+        # ignores the order sent for such a prompt either way; this is what
+        # stops the UI offering a rearrangement that will not happen.
+        "may_reorder": bool(choice.data.get("may_reorder", True)),
         "target_name": target.name,
         "cards": [ctx.serialize_card(card) for card in target.library[:top_count]],
     }

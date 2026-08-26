@@ -99,6 +99,7 @@ from .lowering import (
     _lower_exile_graveyard,
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
+    _lower_look_at_library_top,
     _lower_lose_game,
     _lower_lose_life,
     _lower_mill,
@@ -121,6 +122,7 @@ from .lowering import (
     _lower_sacrifice,
     _lower_sacrifice_expansion_permanents,
     _lower_shuffle_graveyard_into_library,
+    _lower_shuffle_hand_into_library,
     _lower_destroy_unless_pay,
     _lower_sacrifice_unless_pay,
     _lower_cast_from_exiled_with,
@@ -343,6 +345,8 @@ def lower_statement(
         return _lower_gain_type(statement)
     if isinstance(statement, ast.ShuffleGraveyardIntoLibrary):
         return _lower_shuffle_graveyard_into_library(statement)
+    if isinstance(statement, ast.ShuffleHandIntoLibrary):
+        return _lower_shuffle_hand_into_library(statement)
 
     if isinstance(statement, ast.RevealHandAndChoose):
         return _lower_reveal_hand_and_choose(statement)
@@ -350,6 +354,8 @@ def lower_statement(
         return _lower_exile_graveyard(statement)
     if isinstance(statement, ast.LookAtHand):
         return _lower_look_at_hand(statement)
+    if isinstance(statement, ast.LookAtLibraryTop):
+        return _lower_look_at_library_top(statement)
 
     if isinstance(statement, ast.SearchLibrary):
         return _lower_search_library(statement)

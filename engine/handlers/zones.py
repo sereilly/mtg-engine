@@ -325,6 +325,42 @@ def reorder_target_library_top(game: Game, instruction: OracleInstruction, conte
     return True, "pending_reorder_library"
 
 
+@effect_handler("look_at_target_library_top")
+def look_at_target_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Look at the top five cards of target player's library. You may then
+    have that player shuffle that library." (Visions.)
+
+    The same prompt ``reorder_target_library_top`` above raises, with the
+    rearranging switched off — the two cards look at the same pile and offer
+    the same shuffle, and Visions simply never gets to put the cards back in an
+    order of its choosing. ``may_reorder`` is enforced in
+    ``Game._resolve_reorder_library`` rather than only in the UI: a permission
+    the client alone honours is a rule nothing enforces.
+
+    How many cards and whether the shuffle is offered are read off the payload,
+    where the sentence put them.
+    """
+    caster = context.caster
+    target = context.target
+    if target is None:
+        return False, "no target player"
+    top_count = min(
+        resolve_amount(instruction.payload.get("amount", 0), context.x_value),
+        len(target.library),
+    )
+    game.arm_pending_choice(
+        "reorder_library", game.players.index(caster),
+        target_index=game.players.index(target),
+        top_count=top_count,
+        may_shuffle=bool(instruction.payload.get("may_shuffle")),
+        may_reorder=False,
+    )
+    game.log.append(
+        f"{caster.name} is looking at the top {top_count} cards of {target.name}'s library"
+    )
+    return True, "pending_reorder_library"
+
+
 @effect_handler("discard_target_cards")
 def discard_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
@@ -2228,6 +2264,45 @@ def return_spell_or_creature_to_hand(game: Game, instruction: OracleInstruction,
     game.log.append(
         "Returned creature to hand" if bounced else f"{context.card.name}: nothing was returned"
     )
+    return True, "resolved"
+
+
+@effect_handler("shuffle_hand_into_library")
+def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Winds of Change: "Each player shuffles the cards from their hand into
+    their library, then draws that many cards."
+
+    CR 701.19 — the cards move and the library is shuffled as one action, so
+    the count the draw reads is taken *before* the move and nothing can observe
+    a half-moved zone. Each player is one whole shuffle-then-draw: the libraries
+    are separate, so no seat's draw can see another's cards whichever order the
+    loop runs in.
+
+    The draw goes through ``_draw_with_replacements``. A player whose draw is
+    replaced (Aladdin's Lamp, Teferi's Ageless Insight) gets that replacement
+    here exactly as they would in their draw step; ``PlayerState.draw`` would
+    skip every armed one.
+    """
+    whose = str(instruction.payload.get("whose", "you"))
+    if whose == "each_player":
+        players = [player for player in game.players if not player.lost]
+    elif whose == "you":
+        players = [context.caster]
+    else:  # pragma: no cover - the lowering admits no other subject
+        return False, "no player to shuffle"
+    then_draw = bool(instruction.payload.get("then_draw"))
+    for player in players:
+        moved = len(player.hand)
+        player.library.extend(player.hand)
+        player.hand.clear()
+        # Through the module-level RNG every other shuffle uses, so a seeded run
+        # stays reproducible (the determinism invariant).
+        random.shuffle(player.library)
+        game.log.append(
+            f"{player.name} shuffled {moved} card(s) from their hand into their library"
+        )
+        if then_draw and moved:
+            game._draw_with_replacements(player, moved)
     return True, "resolved"
 
 

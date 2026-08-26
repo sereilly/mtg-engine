@@ -1059,6 +1059,13 @@ class PendingChoicesMixin:
         top_count = choice.data["top_count"]
         top = target.library[:top_count]
         rest = target.library[top_count:]
+        # "Look at the top five cards of target player's library" (Visions) and
+        # nothing else — the looker learns the order but never gets to change
+        # it. Enforced here rather than by hiding the drag handles: a
+        # permission only the client honours is a rule nothing enforces, and
+        # this prompt is answered by whatever the wire sends.
+        if not choice.data.get("may_reorder", True):
+            new_order = list(range(top_count))
         if len(new_order) != top_count or sorted(new_order) != list(range(top_count)):
             return False
         target.library = [top[i] for i in new_order] + rest

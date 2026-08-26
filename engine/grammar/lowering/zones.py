@@ -712,3 +712,29 @@ def _lower_shuffle_graveyard_into_library(
             "shuffle_graveyard_into_library", "", {"whose": node.whose.kind}
         ),
     )
+
+
+def _lower_shuffle_hand_into_library(
+    node: ast.ShuffleHandIntoLibrary,
+) -> tuple[OracleInstruction, ...]:
+    """Winds of Change.
+
+    Whose hands move is payload, the way the graveyard shuffle above carries
+    whose graveyard does — and the draw rides the same instruction rather than
+    following it, because the number it draws is the number this move made.
+    Only the two subjects the handler loops over are admitted: "target player"
+    would name a seat the handler does not resolve, and a subject it cannot
+    resolve is a shuffle taken on the wrong library.
+    """
+    if node.whose.kind not in ("each_player", "you"):
+        raise LoweringError(
+            f"no handler shuffles {node.whose.kind!r}'s hand into their library",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "shuffle_hand_into_library",
+            "",
+            {"whose": node.whose.kind, "then_draw": node.then_draw},
+        ),
+    )

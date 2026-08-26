@@ -33,6 +33,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "pump_target_while_source_tapped": "pump",
     "sacrifice_expansion_permanents": "destruction",
     "shuffle_graveyard_into_library": "zones",
+    "shuffle_hand_into_library": "zones",
     "gain_type": "characteristics",
     "restrict_untap_while_source_tapped": "tapping",
     "arm_self_action_at_next_end_step": "destruction",
@@ -221,6 +222,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exile_target_graveyard": "zones",
     "reveal_hand_and_choose": "zones",
     "look_at_target_hand": "zones",
+    "look_at_target_library_top": "zones",
     # A library search moves a card between hidden zones — same module, same
     # category as the other zone-change handlers.
     "search_library": "zones",

@@ -285,6 +285,22 @@ class ShuffleGraveyardIntoLibrary:
 
 
 @dataclass(frozen=True)
+class ShuffleHandIntoLibrary:
+    """``Each player shuffles the cards from their hand into their library,
+    then draws that many cards.`` (Winds of Change.)
+
+    Beside the graveyard shuffle above and for the same reason: a whole zone
+    moves, and the shuffle is part of the move rather than a rider on it
+    (CR 701.19). ``then_draw`` is on the node instead of being a second
+    statement because "that many" is the number the shuffle just moved — a
+    count nothing else in the sentence knows, so a draw parsed apart from it
+    would have no producer to read.
+    """
+    whose: PlayerRef
+    then_draw: bool = False
+
+
+@dataclass(frozen=True)
 class DoesntUntapWhileSourceTapped:
     """``<subject> doesn't untap during its controller's untap step **for as
     long as this creature remains tapped**.`` (Phyrexian Gremlins.)
