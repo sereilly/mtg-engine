@@ -1276,3 +1276,61 @@ def test_untapping_a_knowledge_vault_keeps_its_pile(set_pool):
 
     assert [c.name for c in p1.exile] == ["Hell's Caretaker"]
     assert p1.graveyard == []
+
+
+# ---------------------------------------------------------------------------
+# Voodoo Doll (round 34) — a trigger that lowered to nothing until "destroy
+# this artifact" had an instruction behind it.
+# ---------------------------------------------------------------------------
+
+
+def _r34_doll(set_pool, *, tapped: bool, pins: int = 3):
+    """A Voodoo Doll with *pins* pin counters already on it, at its
+    controller's end step. Its own builder rather than a shared one because the
+    turn must *not* be started here: the untap step would untap the tapped
+    case, which is the whole distinction the card draws."""
+    doll = Permanent(card=set_pool("LEG")["Voodoo Doll"])
+    doll.metadata["summoning_sick"] = False
+    doll.entered_turn = -5
+    doll.tapped = tapped
+    doll.metadata["pin_counters"] = pins
+    p1 = PlayerState(name="P1", battlefield=[doll])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.turn = 3
+    game.active_player_index = 0
+    return game, doll, p1
+
+
+def test_voodoo_doll_kills_itself_and_its_controller_at_end_step(set_pool):
+    """"At the beginning of your end step, if this artifact is untapped,
+    destroy this artifact and it deals damage to you equal to the number of pin
+    counters on it."
+
+    The whole sentence used to lower to nothing — the destroy half refused on
+    its "this artifact" subject, so the ability compiled to ``None`` and the
+    card sat in the pool with a trigger that never did anything.
+    """
+    game, doll, p1 = _r34_doll(set_pool, tapped=False)
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert doll not in p1.battlefield
+    assert p1.life == 17, "3 pin counters, 3 damage"
+
+
+def test_a_tapped_voodoo_doll_is_left_alone(set_pool):
+    """CR 603.4's intervening-if: "**if this artifact is untapped**".
+
+    Checked as the trigger would fire, so a tapped Doll's ability never goes on
+    the stack at all — which is why the card is worth tapping for its own
+    activated ability.
+    """
+    game, doll, p1 = _r34_doll(set_pool, tapped=True)
+
+    game.resolve_end_step(0)
+    assert game.stack == [], "a false intervening-if is not a trigger"
+    game._settle()
+
+    assert doll in p1.battlefield
+    assert p1.life == 20
