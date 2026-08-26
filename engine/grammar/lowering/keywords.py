@@ -22,6 +22,7 @@ from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS, NUMERIC_ARGUMENT_KEYWORDS
 from ._common import (
+    _describe_several_targets,
     _describe_targets,
     _durationless_reason,
     _restrictions_beyond,
@@ -143,6 +144,23 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         if not node.subject.filter.card_types:
             team_payload["every_permanent"] = True
         return (OracleInstruction("grant_team_keyword_until_eot", "", team_payload),)
+    # "**X** target creatures gain islandwalk until end of turn." (Part Water.)
+    # Several chosen targets rather than one, which is a property of the noun
+    # phrase and not of the effect — so it is the same instruction with a
+    # several-target description, and the handler grants to each. Described
+    # through `_describe_several_targets`, which is the opt-in a handler that
+    # reads a list makes; describing it the ordinary way would raise a
+    # multi-slot picker in front of a one-target resolution and drop every
+    # choice after the first.
+    if _names_several_targets(node.subject):
+        assert isinstance(node.subject, ast.TargetSpec)
+        for keyword in node.keywords:
+            _check_grantable(keyword, node)
+        several_payload: dict[str, object] = {"keywords": tuple(node.keywords)}
+        _describe_several_targets(several_payload, node.subject)
+        return (
+            OracleInstruction("grant_target_keyword_until_eot", "", several_payload),
+        )
     scope = "self" if _is_source(node.subject) else ("target" if _is_target(node.subject) else None)
     if scope is None:
         raise LoweringError("unsupported keyword-grant subject", node=node)

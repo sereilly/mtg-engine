@@ -909,6 +909,15 @@ def _from_targets_payload(targets) -> dict | None:
     count = targets.get("count")
     if isinstance(count, int) and count > 1:
         flags = {**flags, "max_targets": count}
+    elif count == "x":
+        # "**X** target creatures" (Part Water, Winter Blast). The count is the
+        # announced X, so there is no number here to be a maximum — and saying
+        # nothing at all left the picker on its one-target default, which is
+        # how Winter Blast came to tap a single creature in the browser while
+        # its handler had read a list since round 23. Reported as a flag rather
+        # than a number: how many the caster may name depends on what they can
+        # pay, which is knowable at the picker and nowhere earlier.
+        flags = {**flags, "x_targets": True}
     elif targets.get("unbounded"):
         # "One or more target creatures" names no maximum. `legality.py` turns
         # this into a `max_targets` once it knows how many legal targets exist,

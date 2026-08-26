@@ -10,11 +10,13 @@ thousand-line guard; they shared no helper with anything here.
 life" is two instructions in a sequence rather than a fused kind.
 """
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-from ...oracle_types import X_FROM_COUNT
+from ...oracle_types import X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
 from ._common import (
     _REST_OF_TURN,
     _describe_several_targets,
@@ -121,6 +123,42 @@ _BOARD_COUNTS_WITH_BASE = frozenset(
 )
 
 
+# Recipients that are a *list of seats* rather than one. "…equal to the number
+# of Islands **that player** controls" (Typhoon) is counted once per seat, so
+# the phrase is only lowerable onto a handler branch that loops — these two —
+# and refuses anywhere else rather than counting the caster's Islands and
+# dealing one number to everybody.
+_LOOPED_PLAYER_RECIPIENTS = frozenset({"each_player", "each_opponent"})
+
+
+def _per_recipient_count(node: ast.DealDamage) -> dict | None:
+    """The count spec for "…equal to the number of <filter> **that player**
+    controls", or None when the clause does not narrow to the recipient.
+
+    The controller narrowing is stripped before :func:`count_spec` sees it, for
+    the reason that function refuses it: nothing downstream tests a controller
+    key, so the count has to be *scoped* to a player instead of *filtered* by
+    one. Scoping it is exactly what the per-recipient loop does.
+    """
+    assert isinstance(node.amount, ast.CountOf)
+    filt = node.amount.filter
+    if filt.controller != "that_player":
+        return None
+    if filt.zone_owner is not None:
+        # The phrase would then name two different players — the zone's owner
+        # and "that player" — and only one of them can be the recipient.
+        raise LoweringError(
+            "a per-recipient count cannot also name a zone owner", node=node
+        )
+    spec = count_spec(dataclasses.replace(filt, controller=None), node)
+    # `owner` is how the *single*-X evaluator picks a seat, and this spec is
+    # never read through that path — the loop hands it each recipient directly.
+    # Dropped rather than left saying "you", which is the one seat the phrase
+    # certainly does not mean.
+    spec.pop("owner", None)
+    return spec
+
+
 def _damaged_player_is(recipients: tuple[ast.Recipient, ...], kind: str) -> bool:
     """Whether the damage lands on exactly one player reference of *kind*."""
     return (
@@ -155,6 +193,25 @@ def _lower_counted_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]
     if len(node.recipients) != 1:
         raise LoweringError("a counted damage reaches one recipient", node=node)
     recipient = node.recipients[0]
+    # "…deals damage to each opponent equal to the number of Islands **that
+    # player** controls" (Typhoon). One number per seat, so it travels on its
+    # own key and only onto the two recipients whose handler branch loops.
+    if isinstance(recipient, ast.PlayerRef):
+        per_recipient = _per_recipient_count(node)
+        if per_recipient is not None:
+            if recipient.kind not in _LOOPED_PLAYER_RECIPIENTS:
+                raise LoweringError(
+                    "no handler counts this damage per recipient", node=node
+                )
+            return (
+                OracleInstruction(
+                    "deal_damage", "",
+                    {
+                        "recipient": recipient.kind,
+                        X_FROM_COUNT_PER_RECIPIENT: per_recipient,
+                    },
+                ),
+            )
     # "any target" (CR 115.4) is a quantifier of its own, not a narrower
     # "target": it admits a player, a planeswalker or a creature, which is
     # exactly what `deal_damage`'s resolver already picks between.

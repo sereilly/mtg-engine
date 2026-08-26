@@ -18,6 +18,17 @@ from typing import Any
 # string agreed in two places is exactly the second copy that drifts.
 X_FROM_COUNT = "x_from_count"
 
+# The same clause, but counted **once per recipient**: "…deals damage to each
+# opponent equal to the number of Islands **that player** controls" (Typhoon).
+# A separate key rather than an `owner` value on the spec above, because the
+# substitution in `_execute_oracle_instruction` resolves `X_FROM_COUNT` into a
+# single `context.x_value` before any handler runs — there is exactly one X, and
+# this phrase has one number per seat. A handler that loops seats reads this
+# instead; a handler that does not never sees the key, so a lowering may only
+# emit it for a recipient whose handler loops (engine/grammar/lowering/damage.py
+# checks that, and refuses otherwise).
+X_FROM_COUNT_PER_RECIPIENT = "x_from_count_per_recipient"
+
 # The payload key an effect carries when the object it acts on was **bound by
 # the firing trigger** rather than chosen as a target — "…that creature becomes
 # green" under a block trigger (Aisling Leprechaun). Here for the same reason as
