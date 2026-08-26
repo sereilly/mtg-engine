@@ -133,6 +133,25 @@ class DiedThisWay:
 
 
 @dataclass(frozen=True)
+class DestroyedThisWay:
+    """"if **that creature was destroyed this way**" (Infinite Authority).
+
+    The third reading of "this way", and the one that asks a yes/no question
+    rather than naming a set: did the destruction an earlier step of this same
+    effect *set up* actually take place? Its own node rather than a flag on
+    :class:`DiedThisWay` because that one iterates objects a sweep already
+    destroyed while this one is checked later — the delayed ability that asks it
+    fires at the end step, and what it is asking about happened at end of combat
+    in between.
+
+    Refused without a producer like every other back-reference here: with no
+    earlier step that armed a destruction, the words name nothing and the
+    condition would answer False forever on a card reporting itself supported.
+    """
+    subject: "ObjectFilter" = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
 class ChosenThisWay:
     """"for each of **those cards**" (Sylvan Library).
 
@@ -389,8 +408,8 @@ class ItHappened:
 
 
 Condition = Union[
-    EveryOf, CoinFlipResult, Controls, DiscardedCardWas, IsState,
-    StartedTheTurnState, DiedThisTurn,
+    EveryOf, CoinFlipResult, Controls, DestroyedThisWay, DiscardedCardWas,
+    IsState, StartedTheTurnState, DiedThisTurn,
     ObjectHasKeyword,
     HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,

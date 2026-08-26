@@ -491,6 +491,16 @@ def test_serendib_djinn_sacrificed_when_no_lands_remain(arn_by_name):
 # ===========================================================================
 
 def test_rukh_egg_arms_delayed_token_on_death(arn_by_name):
+    """"When this creature dies, create a … token … **at the beginning of the
+    next end step**."
+
+    The delay is a delayed triggered ability the death trigger creates
+    (CR 603.7), not an obligation queued beside the game. It used to be the
+    latter — a ``pending_end_step_tokens`` list on ``Game``, filled inline by
+    the graveyard move — and the grammar reads the trailing delay now, so the
+    death trigger goes on the stack like any other and arms the entry when it
+    resolves.
+    """
     egg = arn_by_name["Rukh Egg"]
     perm = Permanent(card=egg)
     p1 = PlayerState(name="P1", battlefield=[perm])
@@ -499,14 +509,12 @@ def test_rukh_egg_arms_delayed_token_on_death(arn_by_name):
 
     p1.battlefield.remove(perm)
     game._permanent_to_graveyard(p1, perm)
+    # Nothing is armed until the trigger resolves (CR 603.3b).
+    assert game.delayed_triggers == []
+    game.resolve_stack(pause_for_choices=True)
 
-    assert len(game.pending_end_step_tokens) == 1
-    spec = game.pending_end_step_tokens[0]
-    # CR 111.4: the printed line does not name the token, so it is "Bird Token".
-    assert spec["name"] == "Bird Token"
-    assert spec["power"] == 4 and spec["toughness"] == 4
-    assert spec["colors"] == ("R",)
-    assert spec["keywords"] == ("Flying",)
+    assert [entry.event for entry in game.delayed_triggers] == ["next_end_step"]
+    assert game.delayed_triggers[0].controller_index == 0
 
 
 def test_rukh_egg_token_appears_at_end_step(arn_by_name):
@@ -518,7 +526,9 @@ def test_rukh_egg_token_appears_at_end_step(arn_by_name):
 
     p1.battlefield.remove(perm)
     game._permanent_to_graveyard(p1, perm)
+    game.resolve_stack(pause_for_choices=True)
     game.resolve_end_step(0)
+    game.resolve_stack(pause_for_choices=True)
 
     bird = next((p for p in p1.battlefield if p.card.name == "Bird Token"), None)
     assert bird is not None
@@ -526,7 +536,8 @@ def test_rukh_egg_token_appears_at_end_step(arn_by_name):
     assert bird.effective_power == 4
     assert bird.effective_toughness == 4
     assert "Flying" in bird.card.keywords
-    assert game.pending_end_step_tokens == []
+    # CR 603.7b: a "when …" delay fires once and is gone.
+    assert game.delayed_triggers == []
 
 
 # ===========================================================================

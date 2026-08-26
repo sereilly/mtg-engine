@@ -499,6 +499,13 @@ _PRODUCES: dict[str, str] = {
     # that **died this way**." (Hellfire.) A sweep records how many permanents
     # it actually destroyed, which is the only place a later clause can read
     # that set from — by then the board no longer holds it.
+    # "…destroy the other creature at end of combat. At the beginning of the
+    # next end step, **if that creature was destroyed this way**, …" (Infinite
+    # Authority.) The delayed destroy records which creature it marked and which
+    # one the trigger was about, because the sentence after it names both and by
+    # then neither is anything the board can be asked for — the victim is in a
+    # graveyard and the pair the trigger bound is long past.
+    "delayed_destroy_blocked_or_blocker": "end_of_combat_destruction",
     "destroy_all_creatures": "destroyed_this_way",
     "destroy_all_artifacts": "destroyed_this_way",
     "destroy_all_enchantments": "destroyed_this_way",

@@ -67,6 +67,14 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # it is one event with two printed wordings, not two events.
     (("at", "end", "of", "combat"),
      "next_end_of_combat", True, "end_of_turn", True),
+    # "At the beginning of **the next end step**, …" (Infinite Authority).
+    # Nobody's in particular: CR 513.1 gives every turn one end step, and the
+    # next one there is belongs to whoever's turn it happens to be. So the fire
+    # site announces it unseated, and the entry waits for the step rather than
+    # expiring with the turn — an ability created during the end step itself
+    # would otherwise be swept away before the step it names arrives.
+    (("at", "the", "beginning", "of", "the", "next", "end", "step"),
+     "next_end_step", True, "until_it_triggers", False),
     # "At the beginning of your next upkeep, …" (Giant Slug, Hazezon Tamar).
     # The controller's own upkeep, however many turns away — so it waits for
     # the step rather than expiring with the turn.
@@ -107,7 +115,7 @@ def delay_binds_an_object(may_bind: bool, effect) -> bool:
 
 
 def _names_a_bound_object(node) -> bool:
-    if isinstance(node, ast.TargetSpec) and node.quantifier == "that":
+    if isinstance(node, ast.TargetSpec) and node.quantifier in ("that", "other", "first"):
         return True
     if dataclasses.is_dataclass(node) and not isinstance(node, type):
         for field in dataclasses.fields(node):

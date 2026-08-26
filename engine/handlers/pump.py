@@ -625,6 +625,24 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     # printing "-0/-1" is this instruction with a different word in it.
     kind = str(instruction.payload.get("counter", "+1/+1"))
 
+    # "…put a +1/+1 counter on **the first creature**." (Infinite Authority.)
+    # No target was ever chosen: the sentence names one half of the pair a block
+    # trigger bound, and the ids were frozen when the earlier step of this same
+    # effect armed the destruction. Read by id, so a creature that left and came
+    # back is a different object (CR 400.7) and gets nothing.
+    pair_member = instruction.payload.get("pair_member")
+    if pair_member:
+        bound = (context.trigger_context or {}).get(
+            instruction.payload.get("produced_by")
+        ) or {}
+        creature = game.permanent_by_id(bound.get("own_id"))
+        if creature is None:
+            game.log.append(f"{card.name}: the creature it names is gone")
+            return True, "no target"
+        game.place_pt_counters(creature, kind)
+        game.log.append(f"{creature.card.name} gets a {kind} counter ({card.name})")
+        return True, "resolved"
+
     if isinstance(maximum, int) and maximum > 1:
         filters = targets.get("filter") or {}
         # The filter decides which permanents qualify, including "you control" —

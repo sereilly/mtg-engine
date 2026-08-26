@@ -292,6 +292,26 @@ def _lower_condition(
             "state": condition.state,
             "negated": condition.negated,
         }
+    if isinstance(condition, ast.DestroyedThisWay):
+        # A back-reference names its producer or refuses, as the coin flip above
+        # does: with no earlier step of this effect that armed a destruction,
+        # "this way" names nothing and `evaluate_condition` would quietly answer
+        # False on a card reporting itself supported.
+        if "end_of_combat_destruction" not in produced:
+            raise LoweringError(
+                "'destroyed this way' with no earlier step in this effect that "
+                "set up a destruction",
+                node=condition,
+            )
+        if condition.subject.to_payload() != {"type_filter": "creature"}:
+            raise LoweringError(
+                "'destroyed this way' names what the earlier step marked and "
+                "cannot be narrowed further",
+                node=condition,
+            )
+        # Named rather than implied, exactly as the loop over "died this way"
+        # names its key: the record is what ties the two sentences together.
+        return {"kind": "destroyed_this_way", "key": "end_of_combat_destruction"}
     if isinstance(condition, ast.DiedThisTurn):
         return {"kind": "died_this_turn", "filter": condition.filter.to_payload()}
     if isinstance(condition, ast.ReturnedToHandThisTurn):

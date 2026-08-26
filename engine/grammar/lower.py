@@ -210,12 +210,20 @@ def lower_statement(
     players.
 
     *whole_effect* is the distinction that was hiding inside the unthreaded
-    parameter, and it is a different question: three lowerings pick between two
+    parameter, and it is a different question: some lowerings pick between two
     engine *dispatch* paths by the trigger kind (the upkeep pay-or-else
-    registry, the delayed block-pair destroy, an Aura's mana trigger), and each
-    of those registries dispatches on the ability's whole instruction. A nested
-    occurrence is not that instruction, so those readers see None and refuse
-    rather than emitting a kind nothing will reach.
+    registry, an Aura's mana trigger), and each of those registries dispatches
+    on the ability's whole instruction. A nested occurrence is not that
+    instruction, so those readers see None and refuse rather than emitting a
+    kind nothing will reach.
+
+    The delayed block-pair destroy used to be filtered here too and is not any
+    more: it asks the event whether the trigger bound *one* creature, which is
+    a fact about the trigger rather than about where in the sentence the clause
+    sits, and the kind it produces reaches its handler through the ordinary
+    dict dispatch however deeply it is nested. Filtered, it refused Infinite
+    Authority — a trigger whose effect is two sentences, so the destroy lowers
+    under a `Sequence` and saw no event at all.
     """
     dispatch_event = event if whole_effect else None
     # The narrowing follows the kind through the same gate: a nested
@@ -241,7 +249,7 @@ def lower_statement(
     if isinstance(statement, ast.LoseKeyword):
         return _lower_lose_keyword(statement, dispatch_event)
     if isinstance(statement, ast.PutCounter):
-        return _lower_put_counter(statement, dispatch_event)
+        return _lower_put_counter(statement, dispatch_event, produced)
     if isinstance(statement, ast.PlayerGetsCounters):
         return _lower_player_gets_counters(statement, event)
     if isinstance(statement, ast.DoublePower):
@@ -261,7 +269,15 @@ def lower_statement(
     if isinstance(statement, ast.PayLife):
         return _lower_pay_life(statement)
     if isinstance(statement, ast.Destroy):
-        return _lower_destroy(statement, dispatch_event, dispatch_subject)
+        # The **unfiltered** event, and this is the one of the three that is not
+        # a dispatch question. `_lower_delayed_destroy` reads it to ask whether
+        # the trigger bound one creature (CR 509.3c/509.3d) — a fact about the
+        # trigger, true of every clause under it — and the instruction it
+        # produces is dispatched by kind through `EFFECT_HANDLERS` like any
+        # other, nested or not. Gated on `whole_effect` it refused Infinite
+        # Authority, whose "destroy the other creature at end of combat" is the
+        # first of a trigger's *two* sentences and so lowers under a `Sequence`.
+        return _lower_destroy(statement, event, event_subject)
     if isinstance(statement, ast.DoesntUntapNextStep):
         # `produced` is the whole gate: this sentence acts on what an earlier
         # step of the same effect recorded, so it refuses when nothing did.
@@ -663,8 +679,13 @@ def lower_statement(
             if fused is not None:
                 return fused
         _refuse_unfused_distinctness(statement.steps)
+        # The narrowing travels with the kind, as it does everywhere else it is
+        # threaded: a trigger's noun phrase is as true of the second sentence of
+        # its effect as of the first, and dropped here it left
+        # `binds_block_pair` unable to tell a bound pair from a bare firing.
         return _lower_steps(
-            statement.steps, produced, event, lower_statement=lower_statement
+            statement.steps, produced, event, event_subject,
+            lower_statement=lower_statement,
         )
 
     if isinstance(statement, ast.Conditional):

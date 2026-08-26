@@ -540,13 +540,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 named='Kobolds of Kher Keep',
             ),
     },
-    'Rukh Egg': {
-        'when this creature dies, create a 4/4 red bird creature token with '
-        'flying at the beginning of the next end step':
-            _line('arm_end_step_token', 'triggered_token', name='Bird Token',
-                power=4, toughness=4, type_line='Creature — Bird',
-                colors=('R',), keywords=('Flying',)),
-    },
     'Serendib Djinn': {
         "at the beginning of your upkeep, sacrifice a land. if you sacrifice an "
         "island this way, this creature deals 3 damage to you":

@@ -19,7 +19,8 @@ from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX, match_longest)
 
 from ..phrases import (is_pt_counter, _parse_can_attack_as_though, _parse_duration,
-                       _parse_for_each, _parse_keywords, parse_where_x_definition)
+                       _parse_for_each, _parse_keywords,
+                       parse_pair_ordinal_subject, parse_where_x_definition)
 
 
 def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -448,12 +449,19 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     # choice, and teaching the shared noun parser the phrase would hand it to
     # every line that prints those words. The lowering is what checks a binder
     # actually exists.
+    # "…put a +1/+1 counter on **the first** creature." (Infinite Authority.)
+    # The same kind of back-reference with a pair to pick from, read through the
+    # one shared ordinal production so this clause and the "destroy the other
+    # creature" one in the same sentence cannot disagree about which is which.
+    subject: ast.Recipient | None = parse_pair_ordinal_subject(stream)
     bound = stream.mark()
-    if stream.accept_word("that"):
+    if subject is not None:
+        pass
+    elif stream.accept_word("that"):
         bound_noun = stream.peek_word()
         if bound_noun is not None and bound_noun in CARD_TYPES:
             stream.advance()
-            subject: ast.Recipient | None = ast.TargetSpec(
+            subject = ast.TargetSpec(
                 "that", ast.ObjectFilter(card_types=(bound_noun,))
             )
         else:

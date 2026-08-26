@@ -235,6 +235,7 @@ class TurnManagementMixin:
         # answer either way.
         expire_hand_locks(self)
         self.creatures_died_this_turn = 0
+        self.destroyed_at_end_of_combat_this_turn = []
         self.nontoken_creatures_died_this_turn = 0
         self.permanents_to_hand_this_turn = {}
         # Aladdin's Lamp: an armed "next draw this turn" replacement expires

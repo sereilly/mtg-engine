@@ -14,7 +14,7 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
-from ..phrases import is_pt_counter
+from ..phrases import PAIR_ORDINALS, is_pt_counter
 from ._common import (
     PRIMARY_TARGET_ROLE,
     _amount_payload,
@@ -46,7 +46,9 @@ def _amount_value(amount) -> int:
 
 
 def _lower_put_counter(
-    node: ast.PutCounter, event: str | None = None
+    node: ast.PutCounter,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) The source's
     # own loyalty lives on the permanent (metadata["loyalty_counters"],
@@ -346,6 +348,44 @@ def _lower_put_counter(
     if _is_source(node.subject):
         return (
             OracleInstruction("add_counter_to_self", "", {"power": 1, "toughness": 1}),
+        )
+    # "…put a +1/+1 counter on **the first** creature." (Infinite Authority.)
+    # One member of the pair a block trigger bound, named by position. Nothing
+    # is chosen: the ids were frozen when the earlier step of this same effect
+    # armed the destruction, and `produced` is what proves that step ran — the
+    # phrase names nothing on its own, and an unbound pair member would send the
+    # counter to whatever the stack item happened to be pointing at.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in PAIR_ORDINALS
+    ):
+        if node.subject.quantifier != "first":
+            # "the other creature" under this producer is the one the earlier
+            # step marked for destruction; a counter on it is a sentence no card
+            # prints and nothing here would carry out.
+            raise LoweringError(
+                "only the trigger's own creature takes a counter this way",
+                node=node,
+            )
+        if "end_of_combat_destruction" not in produced:
+            raise LoweringError(
+                "a pair member with no earlier step in this effect that bound "
+                "a pair", node=node,
+            )
+        if node.subject.filter.to_payload() != {"type_filter": "creature"}:
+            raise LoweringError(
+                "a bound pair member names what the trigger bound and cannot "
+                "be narrowed further", node=node,
+            )
+        return (
+            OracleInstruction(
+                "add_counter_to_target", "",
+                {
+                    "power": 1, "toughness": 1,
+                    "pair_member": node.subject.quantifier,
+                    "produced_by": "end_of_combat_destruction",
+                },
+            ),
         )
     if _names_several_targets(node.subject):
         # "Put a +1/+1 counter on each of up to two target creatures" (Basri's

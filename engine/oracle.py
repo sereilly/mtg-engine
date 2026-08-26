@@ -305,6 +305,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # a bespoke fire site to match, which is why Abomination's identical
     # sentence with one word changed compiled unsupported. Same lesson as the
     # land type in combat_restrictions.py and the threshold in round 14.
+    # "Whenever **enchanted creature** blocks or becomes blocked by …"
+    # (Infinite Authority). The same joined event about the same creature, with
+    # the source's own spelling below it — which permanent's ability is watching
+    # is the narrowing, and it is payload, exactly as `combatant_attached` is on
+    # `creature_attacks_or_blocks`. The two combat fire sites read the key and
+    # scan the combatant's attachments beside its own abilities.
+    ("creature_blocks_or_blocked_by",
+     r"whenever enchanted (?P<combatant_attached>[a-z]+) blocks or becomes blocked by"
+     r" (?P<block_pair_subject>(?:a|another) [^,]+)"),
     ("creature_blocks_or_blocked_by",
      r"whenever this creature blocks or becomes blocked by (?P<block_pair_subject>(?:a|another) [^,]+)"),
     # "Whenever **enchanted creature** attacks or blocks" (Imprison). One kind

@@ -332,12 +332,16 @@ def test_game_carries_no_per_card_pending_field():
         name for name in Game.__dataclass_fields__
         if name.startswith("pending_")
     }
-    # ``pending_choices`` is the queue; the other two are delayed *effects* with
-    # no decision in them — a token that appears at the next end step, and a
-    # life loss that happens unless paid for before a draw step.
+    # ``pending_choices`` is the queue; the other two are delayed *effects*
+    # with no decision in them.
+    #
+    # ``pending_end_step_tokens`` used to be a third: Rukh Egg's "create a
+    # token at the beginning of the next end step", queued at the Game level
+    # and drained by the end step. The grammar reads that delay now, so the
+    # trigger goes on the stack (CR 603.3) and arms an ordinary delayed
+    # ability — one fewer per-card field, and the field is gone with it.
     assert fields == {
         "pending_choices",
         "pending_replacement_choices",
-        "pending_end_step_tokens",
         "pending_draw_step_life_loss",
     }, fields

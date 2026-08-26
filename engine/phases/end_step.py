@@ -6,10 +6,15 @@ from __future__ import annotations
 delayed end-of-turn destruction (e.g. creatures forced to attack that didn't),
 Scavenging Ghoul corpse counters, and Pestilence-style "sacrifice if no
 creatures" triggers. The active player then receives priority.
+
+Delayed abilities that name **the next end step** (CR 603.7) are announced here
+too — Rukh Egg's token, Infinite Authority's counter. They belong to whoever
+created them and fire at the next end step there is, so the announcement takes
+no seat.
 """
 
+from ..delayed_triggers import fire_delayed_triggers
 from ..models import Permanent
-from ..tokens import make_token_card
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 # Instruction kinds this step enqueues under the ``end_step`` trigger condition,
@@ -67,23 +72,11 @@ class EndStepMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
 
-        # Rukh Egg: tokens armed by a "dies" trigger appear now, regardless of
-        # whose turn it is (CR 603.3 delayed triggers use their own fixed
-        # timing, not "your end step").
-        pending_tokens = self.pending_end_step_tokens
-        self.pending_end_step_tokens = []
-        for spec in pending_tokens:
-            controller_index = spec["controller_index"]
-            if not (0 <= controller_index < len(self.players)):
-                continue
-            token_card = make_token_card(
-                spec["name"], spec["power"], spec["toughness"], spec["type_line"],
-                colors=spec.get("colors", ()), keywords=spec.get("keywords", ()),
-            )
-            self._put_permanent_onto_battlefield(
-                controller_index, Permanent(card=token_card, metadata={"is_token": True}), None
-            )
-            self.log.append(f"{self.players[controller_index].name}'s {token_card.name} token entered the battlefield")
+        # "At the beginning of **the next end step**, …" (Infinite Authority).
+        # CR 513.1 gives every turn one end step, and the ability names the next
+        # one there is rather than one of its controller's — so no seat narrows
+        # this, unlike the upkeep announcement, which names "your" next upkeep.
+        fire_delayed_triggers(self, "next_end_step")
 
         def _delayed_eot_removal(permanent: Permanent) -> bool:
             # Nettling Imp / Siren's Call: destroy creatures that were

@@ -192,6 +192,14 @@ TRIGGERED_LABELS: dict[str, str] = {
     "deal_damage": "spell_pattern",
     "deal_damage_equal_to_swamps": "upkeep_effect",
     "delayed_destroy_blocked_or_blocker": "triggered_delayed_destroy",
+    # "…create a 4/4 red Bird creature token with flying **at the beginning of
+    # the next end step**." (Rukh Egg.) A shipped card whose instruction kind
+    # changed: the delay used to be a `Game`-level queue behind an
+    # `arm_end_step_token` hook, and the grammar reads the trailing delay now.
+    # The label is what the report and the web payload have always shown for it
+    # — a triggered ability that creates something — so the card is not
+    # re-bucketed by the change underneath it.
+    "create_delayed_trigger": "triggered_token",
     "opponent_discards_random_card_on_damage": "triggered_discard",
     "sacrifice_self": "triggered_sacrifice",
     # "When this Aura enters, tap enchanted creature." (Paralyze, Venarian
