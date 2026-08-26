@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
+                                arm_delayed_trigger)
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
@@ -44,30 +46,77 @@ def create_emblem(game: Game, instruction: OracleInstruction, context: OracleExe
     return True, "resolved"
 
 
+@effect_handler("choose_target_permanent")
+def choose_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose target creature." (Reincarnation, Glyph of Life.)
+
+    Nothing happens here, and nothing should: the target was chosen as the
+    spell was cast (CR 601.2c), and this sentence prints no effect. The
+    instruction exists so ``engine/targeting.py`` can see what the spell
+    targets in the compiled program — the sentence that *uses* the chosen
+    creature is the next one, which reads the same context.
+
+    It still refuses when the target is gone (CR 608.2b), so the log says the
+    spell found nothing rather than saying nothing at all.
+    """
+    if resolve_target_permanent(game, context) is None:
+        game.log.append(f"{context.card.name} had no legal target")
+        return True, "no target"
+    return True, "resolved"
+
+
 @effect_handler("create_delayed_trigger")
 def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """A resolving ability creating a delayed triggered ability (CR 603.7):
-    "Whenever one or more nontoken creatures attack this turn, …" (Basri Ket's
-    −2). The entry waits on ``game.delayed_triggers``; the declare-attackers
-    step fires it, and cleanup clears "this turn" entries."""
+    """A resolving spell or ability creating a delayed triggered ability
+    (CR 603.7) — Basri Ket's −2, Mana Drain's mana, Reincarnation's death
+    watch. Every field of the entry is payload; what it is *about* is bound
+    here, while the creating effect still knows.
+
+    ``engine/delayed_triggers.py`` holds the entry, the registry of events that
+    have a fire site, and the one routine that fires them.
+    """
     payload = instruction.payload
-    game.delayed_triggers.append({
-        "controller_index": game.players.index(context.caster),
-        "event": payload.get("event", "creatures_attack"),
-        "batch": bool(payload.get("batch")),
-        "nontoken": bool(payload.get("nontoken")),
-        # "…whenever **a creature you control with power 2 or less** deals
-        # combat damage to a player" (Subira). The narrowing travels as the same
-        # filter payload every other one does; both fire sites ask
-        # `subject_matches`, which has the seat "you control" needs. Empty means
-        # no narrowing, which is what Basri Ket's entries carry.
-        "attacker_filter": dict(payload.get("attacker_filter") or {}),
-        "instruction": payload.get("instruction"),
-        "source_name": context.card.name,
-        "card": context.card,
-        "duration": payload.get("duration", "end_of_turn"),
-    })
-    game.log.append(f"{context.card.name} set up a delayed trigger for this turn")
+    seat = game.players.index(context.caster)
+    # CR 603.7c: "that creature" is the permanent this spell targeted, read now
+    # — by resolution time of the *delayed* ability it may be in a graveyard,
+    # and an index would by then address whatever slid into its slot.
+    bound_id = None
+    if payload.get("binds_target"):
+        bound = resolve_target_permanent(game, context)
+        if bound is None:
+            # The target is gone (CR 608.2b): there is nothing for the delayed
+            # ability to be about, so none is created.
+            game.log.append(f"{context.card.name} had no creature to watch")
+            return True, "no target"
+        bound_id = bound.permanent_id
+    # CR 608.2h's last-known information, frozen at creation. The resolution
+    # scratchpad *is* what
+    # this effect's earlier steps knew — Mana Drain's countered spell and its
+    # mana value — and by the time the ability fires, a phase or a turn later,
+    # not one of those objects is still where it was. Frozen whole rather than
+    # key by key, because a list of which values a delayed ability might read
+    # is a list that goes stale the moment a new one prints.
+    captured = dict(context.results or {})
+    arm_delayed_trigger(game, DelayedTrigger(
+        controller_index=seat,
+        event=payload.get("event", "creatures_attack"),
+        instruction=payload.get("instruction"),
+        source_name=context.card.name,
+        card=context.card,
+        bound_permanent_id=bound_id,
+        captured=captured,
+        # "…whenever **a creature you control with power 2 or less** attacks"
+        # (Subira). The narrowing travels as the same filter payload every
+        # other one does; the fire sites ask `subject_matches`, which has the
+        # seat "you control" needs. Empty means no narrowing.
+        subject_filter=dict(payload.get("subject_filter") or {}),
+        agent_filter=dict(payload.get("agent_filter") or {}),
+        once=bool(payload.get("once")),
+        duration=payload.get("duration", END_OF_TURN),
+        batch=bool(payload.get("batch")),
+        nontoken=bool(payload.get("nontoken")),
+    ))
+    game.log.append(f"{context.card.name} created a delayed triggered ability")
     return True, "resolved"
 
 

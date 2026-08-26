@@ -193,7 +193,15 @@ class DeclareAttackersStepMixin:
         count of matching attackers; a per-creature entry fires once per
         matching attacker, with that attacker as the trigger's source so its
         "on it" resolves to the creature. Entries stay armed for every combat
-        this turn — cleanup clears them."""
+        this turn — cleanup clears them.
+
+        This is the one delayed event whose firing is not one announcement per
+        object, so it keeps its own site rather than calling
+        ``fire_delayed_triggers``: an attack is a single event about a *set* of
+        creatures, and the batch spelling turns that set into one number.
+        The entry object, the trigger-event builder and the expiry rule are
+        still the shared ones.
+        """
         if not self.delayed_triggers:
             return
         controller = self.players[controller_index]
@@ -207,55 +215,34 @@ class DeclareAttackersStepMixin:
         defending = next(iter(sorted(self.combat_defending_players())), None)
         events: list[dict] = []
         for entry in list(self.delayed_triggers):
-            if entry.get("event") != "creatures_attack":
+            if entry.instruction is None:
                 continue
             # "…whenever **a creature you control with power 2 or less**
-            # attacks" (Subira's shape, on the attack event). The narrowing is a
-            # filter payload like every other, asked through `subject_matches`
-            # because "you control" is a seat comparison the object alone cannot
-            # answer (CR 109.5). `nontoken` stays its own key: it predates this
-            # and the two payloads are not the same shape.
-            described = entry.get("attacker_filter") or {}
+            # attacks" (Subira's shape, on the attack event). `matches` asks
+            # the entry's own narrowing through `subject_matches`, because
+            # "you control" is a seat comparison the object alone cannot
+            # answer (CR 109.5). `nontoken` stays its own key: it predates
+            # this and the two payloads are not the same shape.
             matching = [
                 perm for perm in attackers
-                if not (entry.get("nontoken") and perm.metadata.get("is_token"))
-                and subject_matches(
-                    self, perm, described,
-                    observer=int(entry.get("controller_index", controller_index)),
-                )
+                if not (entry.nontoken and perm.metadata.get("is_token"))
+                and entry.matches(self, "creatures_attack", perm)
             ]
             if not matching:
                 continue
-            seat = int(entry.get("controller_index", controller_index))
-            instruction = entry.get("instruction")
-            if instruction is None:
-                continue
-            if entry.get("batch"):
-                events.append({
-                    "controller_index": seat,
-                    "source_permanent": None,
-                    "card": entry.get("card"),
-                    "instruction": instruction,
-                    "effect_kind": "triggered_delayed",
-                    "ability_text": entry.get("source_name", "delayed trigger"),
-                    "trigger_context": {
-                        "trigger_count": len(matching),
-                        "trigger_defending_player_index": defending,
-                    },
-                })
+            if entry.batch:
+                events.append(entry.trigger_event(trigger_context={
+                    "trigger_count": len(matching),
+                    "trigger_defending_player_index": defending,
+                }))
             else:
                 for perm in matching:
-                    events.append({
-                        "controller_index": seat,
-                        "source_permanent": perm,
-                        "card": entry.get("card"),
-                        "instruction": instruction,
-                        "effect_kind": "triggered_delayed",
-                        "ability_text": entry.get("source_name", "delayed trigger"),
-                        "trigger_context": {
+                    events.append(entry.trigger_event(
+                        source_permanent=perm,
+                        trigger_context={
                             "trigger_defending_player_index": defending,
                         },
-                    })
+                    ))
         if events:
             self._enqueue_triggered_batch(events)
 

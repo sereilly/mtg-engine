@@ -12,6 +12,7 @@ from ..control import (
     has_control_change,
     set_base_controller,
 )
+from ..delayed_triggers import fire_delayed_triggers
 from ..events import emit
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
@@ -650,6 +651,21 @@ class GameHelpersMixin:
         if permanent.card.primary_type == "creature":
             self._fire_creature_dies_triggers(permanent)
         self._fire_permanent_dies_triggers(permanent)
+        # "When that creature dies this turn, …" (Reincarnation). A delayed
+        # ability (CR 603.7) belongs to no permanent, so neither of the scans
+        # above can reach it — and this is the seam every death already passes
+        # through. The owner's seat rides the context because CR 603.10 says
+        # the ability uses the information the game had: by resolution the card
+        # is in a graveyard, which has no controller and cannot say whose
+        # battlefield it left.
+        fire_delayed_triggers(
+            self, "bound_permanent_dies", subject=permanent,
+            trigger_context={
+                "event_subject_owner": self.owner_index_of(permanent),
+                "event_subject_controller": self.controller_index_of(permanent),
+                "dead_name": permanent.card.name,
+            },
+        )
 
         leave_hook = ON_LEAVE_BATTLEFIELD.get(permanent.card.name)
         if leave_hook is not None:

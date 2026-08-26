@@ -18,7 +18,9 @@ from ._common import (
 )
 
 
-def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:
+def _lower_add_mana(
+    node: ast.AddMana, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """Emit the mana as structured pips rather than clause text.
 
     "Add one mana of any color" (Birds of Paradise, Celestial Prism) is the one
@@ -46,6 +48,27 @@ def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:
     # `bonus` is 0 here and 1 on Metamorphosis's "1 plus …"; it is on the
     # payload for the same reason the colour is, so a card printing either
     # needs no code.
+    # "…add an amount of {C} equal to that spell's mana value." (Mana Drain.)
+    # The number is not on this clause at all: it was recorded by the sentence
+    # that countered the spell, and the delayed ability created between them
+    # froze the scratchpad (CR 608.2h). So the clause refuses unless an earlier
+    # step of the same effect actually produced it — a back-reference with no
+    # producer would add nothing while reporting itself supported.
+    if node.from_countered_spell:
+        if "countered_spell_mana_value" not in produced:
+            raise LoweringError(
+                "\"that spell's mana value\" names a spell nothing in this "
+                "effect countered", node=node,
+            )
+        return (
+            OracleInstruction(
+                "add_mana_from_text", "",
+                {
+                    "symbol": node.from_countered_spell,
+                    "count_from_trigger": "countered_spell_mana_value",
+                },
+            ),
+        )
     if node.from_sacrificed_cost:
         return (
             OracleInstruction(

@@ -33,7 +33,7 @@ from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
                             untapped_mana_lands)
-from ...search_filters import search_matches
+from ...search_filters import landing_seat, search_matches, searched_seat
 from ...subject_filters import subject_matches
 
 class PendingChoicesMixin:
@@ -436,7 +436,11 @@ class PendingChoicesMixin:
     def _resolve_search_library(
         self, choice: PendingChoice, library_index: int, zone: str = "library"
     ) -> bool:
-        caster = self.players[choice.player_index]
+        # Who chooses and whose zone is looked in are two questions, and
+        # Reincarnation prints them as two players: its controller picks the
+        # card (CR 608.2c) out of the graveyard of the dead creature's owner.
+        # The default is the chooser's own zone, which is every other card.
+        caster = self.players[searched_seat(choice.data, choice.player_index)]
         zones = tuple(choice.data.get("zones", ("library",)))
         if zone == "none":
             # Fail-to-find ends the whole search, not one find of it: CR 701.19b
@@ -502,7 +506,11 @@ class PendingChoicesMixin:
             from ...models import Permanent as _Permanent
 
             found = _Permanent(card=card, tapped=enters_tapped)
-            self._put_permanent_onto_battlefield(choice.player_index, found, None)
+            # "…under the control of that creature's owner." Whose battlefield
+            # again defaults to the chooser's, which is every other card.
+            self._put_permanent_onto_battlefield(
+                landing_seat(choice.data, choice.player_index), found, None
+            )
             # "Then if you control four or more lands, untap that land."
             # (Fabled Passage.) Counted *after* the land has entered, which is
             # when the printed "then" happens — so the land counts itself. Through

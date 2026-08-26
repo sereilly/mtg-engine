@@ -265,6 +265,7 @@ def _announce(game, event: dict, dealt: int) -> None:
     controller's seat.
     """
     from .events import emit
+    from .delayed_triggers import fire_delayed_triggers
 
     recipient = event["recipient"]
     source = event.get("source")
@@ -298,6 +299,24 @@ def _announce(game, event: dict, dealt: int) -> None:
         if seat is not None:
             payload["defending_player_index"] = seat
     emit(game, "damage_dealt", **payload)
+    if not isinstance(recipient, PlayerState):
+        # "Whenever that creature is dealt damage by an attacking creature this
+        # turn, …" (Glyph of Life) — a delayed ability (CR 603.7) belongs to no
+        # permanent, so the scan `emit` runs cannot reach it. Here rather than
+        # beside one of the three `_fire_dealt_damage_triggers` call sites, for
+        # the reason this whole function exists: those are three sites and this
+        # is the seam they all pass through, and it is the only place that
+        # knows **what dealt** the damage as well as what took it.
+        fire_delayed_triggers(
+            game, "bound_permanent_dealt_damage",
+            subject=recipient,
+            # A spell's source is the card as printed (CR 109.5), which is not
+            # a permanent and cannot answer "an attacking creature". The
+            # narrowing then refuses it, which is right: a Lightning Bolt is
+            # not an attacking creature.
+            agent=source if isinstance(source, Permanent) else None,
+            trigger_context={"damage_dealt": dealt},
+        )
 
 
 def _process_results(game, event: dict, dealt: int) -> int:

@@ -12,6 +12,7 @@ the stack here, and only from the precombat entry — the second main phase is n
 a first one, and the same method serves both.
 """
 
+from ..delayed_triggers import fire_delayed_triggers
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 
@@ -23,6 +24,14 @@ class PrecombatMainPhaseMixin:
         self._on_step_or_phase_begin(phase, step)
         if precombat:
             self._fire_first_main_phase_triggers()
+        # "At the beginning of your next main phase, …" (Mana Drain). Both main
+        # phases, because "next" means the next one there is — and scoped to
+        # the entry's own controller, which is what "your" says: a main phase
+        # belongs to the active player, so an ability an opponent created is
+        # not waiting for this one.
+        fire_delayed_triggers(
+            self, "controllers_next_main_phase", seat=self.active_player_index
+        )
         if self._receives_priority(step):
             self.start_priority_window(self.active_player_index)
 

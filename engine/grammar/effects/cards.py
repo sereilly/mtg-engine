@@ -203,6 +203,14 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
         if stream.at_kind(MANA):
             symbol_token = stream.next()
             symbol = symbol_token.text.strip("{}")
+            # "…equal to **that spell's** mana value." (Mana Drain.) The other
+            # object this printed shape back-refers to; the noun is read rather
+            # than skipped, because "that spell" and "that creature" would be
+            # two different back-references and only one of them is recorded.
+            if stream.accept_phrase("equal", "to", "that", "spell", "'s", "mana", "value"):
+                return ast.AddMana(
+                    (), source_text=_clause(), from_countered_spell=symbol,
+                )
             if stream.accept_phrase("equal", "to", "the", "sacrificed") and stream.peek_word():
                 # The noun repeats what the cost already named ("artifact"), so
                 # it is consumed rather than re-read: the cost decided what was

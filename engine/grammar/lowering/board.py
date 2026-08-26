@@ -30,6 +30,7 @@ from ._common import (
 )
 from ._events import (
     binds_block_pair,
+    _BOUND_OBJECT_DELAYED_EVENTS,
     _UNTAPPED_PERMANENTS,
 )
 
@@ -109,6 +110,33 @@ def _lower_destroy(
         # "all" exactly as it did for every other destroy sweep), and until
         # that review the refusal hands the line back to
         # `card_hooks.CARD_LINE_INSTRUCTIONS`, which implements it in full.
+        # "Destroy all creatures that were blocked by that creature this
+        # turn." (Glyph of Doom.) A relation to the object the delayed ability
+        # was bound to, which `permanent_matches_filter` cannot answer — it is
+        # a record on *that* creature, not a characteristic of these — so it
+        # travels as its own payload key and the handler resolves it.
+        #
+        # Refused under any other event, and refused *before* the generic paths
+        # below, because `_filter_payload` does not carry the field: falling
+        # through would leave the sweep with card types alone and destroy every
+        # creature on the battlefield. That is the same shape as the colour
+        # dropped from `Destroy all black creatures`, and the reason this
+        # branch is a branch rather than a payload key.
+        if filt.blocked_by_bound_object:
+            if event not in _BOUND_OBJECT_DELAYED_EVENTS:
+                raise LoweringError(
+                    "\"that creature\" names the object a delayed ability was "
+                    "bound to, and this event binds none", node=node,
+                )
+            blocked_payload = _filter_payload(filt)
+            if object_only_filter(blocked_payload) is None:
+                raise LoweringError("no sweep handler for this narrowing", node=node)
+            blocked_payload["blocked_by_bound_object"] = True
+            if node.no_regen:
+                blocked_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_all_matching", "", blocked_payload),
+            )
         if filt.in_combat_with_source or filt.dealt_damage_to_source_this_turn:
             raise LoweringError(
                 "a destroy sweep over a source relation stays with its card "

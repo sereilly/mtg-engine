@@ -106,6 +106,7 @@ from .cards import (
     Shuffle,
 )
 from .stack import (
+    ChooseTarget,
     CopyThatSpell,
     CounterAbility,
     CounterSpell,
@@ -141,7 +142,7 @@ Effect = Union[
     ExileUntilLeavesOrUntaps, Tap, Untap,
     TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
     DelayedSelfAction, Attach, ExchangeControl,
-    Regenerate, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, CreateToken, CreateCopyToken, AddMana,
+    Regenerate, ChooseTarget, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     RevealTop, RevealUntil, NameAndStrip,
     ExileGraveyardUntilLeaves, CastFromExiledWith,
@@ -267,7 +268,50 @@ class WhereX:
     definition: Amount
 
 
-Statement = Union[Sequence, Conjunction, Conditional, May, ForEach, WhereX, Effect]
+@dataclass(frozen=True)
+class CreateDelayedTrigger:
+    """A delayed triggered ability the sentence **creates** (CR 603.7).
+
+    ``When that creature dies this turn, …`` (Reincarnation), ``At the
+    beginning of your next main phase, …`` (Mana Drain), ``Whenever that
+    creature is dealt damage by an attacking creature this turn, …`` (Glyph of
+    Life). The effect does not happen now; an ability that will do it waits for
+    ``event``.
+
+    Here beside `May` and `ForEach` rather than in a family, and for their
+    reason: it wraps a whole `Statement`, so it cannot live below the roof that
+    closes over one.
+
+    Every field is payload, and each one is a printed word:
+
+    * ``once`` is CR 603.7b — "when" is one-shot, "whenever … this turn"
+      has a stated duration and is not;
+    * ``duration`` is "this turn" against a named future step, which is how
+      long an ability that never triggers survives;
+    * ``binds_target`` is "**that** creature" — the delayed ability is about
+      the object the creating spell targeted (CR 603.7c);
+    * ``agent`` is the second noun phrase some events print ("dealt damage
+      **by an attacking creature**"), narrowing what did the thing rather than
+      what it was done to.
+
+    ``event`` is a key of ``engine/delayed_triggers.DELAYED_EVENTS``, checked
+    when the sentence is lowered: an event no site announces is an ability that
+    would wait forever, which is worse than a refused line.
+    """
+    event: str
+    effect: "Statement"
+    once: bool = True
+    duration: str = "end_of_turn"
+    binds_target: bool = False
+    #: The noun phrase "that <noun>" printed for the bound object. The id binds
+    #: it exactly, so this re-states rather than narrows — carried and tested
+    #: anyway, because a word consumed and never read could be deleted with no
+    #: change to what the card does.
+    subject: ObjectFilter | None = None
+    agent: ObjectFilter | None = None
+
+
+Statement = Union[Sequence, Conjunction, Conditional, May, ForEach, WhereX, CreateDelayedTrigger, Effect]
 
 
 # ---------------------------------------------------------------------------

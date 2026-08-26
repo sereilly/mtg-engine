@@ -317,6 +317,17 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # dispatch it.
     "remove_from_combat": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
+    # "Choose target creature." — a sentence whose whole content is CR 601.2c's
+    # choosing of targets, printed by a spell whose *next* sentence says what
+    # becomes of what it chose. Its own category rather than borrowing one,
+    # because it touches nothing: it is the targeting, and saying otherwise
+    # would let the report claim the spell destroys or pumps something.
+    "choose_target_permanent": "targeting",
+    # A delayed triggered ability (CR 603.7). The category is the *creating*
+    # act; what the ability does when it fires is its inner instruction's, read
+    # through `_nested_instructions` below for the reason `choose_one`'s
+    # options are.
+    "create_delayed_trigger": "delayed_triggers",
     "counter_stack_ability": "counterspells",
     # Double Vision. Its own category name would be a family of one; copying a
     # spell on the stack is the same family as countering one.
@@ -383,6 +394,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
 # `lower.py`) read it to thread what each step records forward.
 _PRODUCES: dict[str, str] = {
     "deal_damage": "damage_dealt",
+    # "Counter target spell. … an amount of {C} equal to **that spell's** mana
+    # value." (Mana Drain.) The countered spell's mana value — the one thing
+    # about it that survives the counter, and only because the counter wrote it
+    # down.
+    "counter_top_stack_spell": "countered_spell_mana_value",
     # "Destroy all nonblack creatures. … where X is the number of creatures
     # that **died this way**." (Hellfire.) A sweep records how many permanents
     # it actually destroyed, which is the only place a later clause can read
@@ -483,6 +499,14 @@ def _nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruct
     actually do; giving it a category of its own would say the *choosing* is the
     effect.
     """
+    if instruction.kind == "create_delayed_trigger":
+        # A delayed ability's effect is one instruction rather than a list, so
+        # it cannot ride `_WRAPPER_KINDS` above — but it is a wrapper all the
+        # same, and an inner effect no category gates must ungate the line that
+        # arms it. An entry with no instruction is an ability that would fire
+        # into nothing, which is the empty-wrapper refusal below.
+        inner = instruction.payload.get("instruction")
+        return (inner,) if inner is not None else ()
     if instruction.kind == "choose_one":
         return tuple(
             mode["instruction"] for mode in instruction.payload.get("modes") or ()

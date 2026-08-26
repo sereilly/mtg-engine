@@ -92,8 +92,16 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
             or _singular(noun) == "ability"
         ):
             stream.advance()
-            if stream.accept_word("'s") and stream.accept_word("controller"):
-                return ast.PlayerRef("that_player")
+            if stream.accept_word("'s"):
+                if stream.accept_word("controller"):
+                    return ast.PlayerRef("that_player")
+                # "…under the control of **that creature's owner**"
+                # (Reincarnation). Ownership is CR 108.3 and never changes;
+                # control is CR 613 layer 2 and does, so the two words are two
+                # referents and reading one as the other would put the card
+                # back under whoever had stolen the creature.
+                if stream.accept_word("owner"):
+                    return ast.PlayerRef("owner")
         stream.reset(probe)
 
     stream.reset(mark)

@@ -7,6 +7,7 @@ Cockatrice/Thicket Basilisk delayed destruction) while "attacked or blocked this
 combat" is still known, then clears until-end-of-combat effects and combat state.
 """
 
+from ..delayed_triggers import fire_delayed_triggers
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..shields import END_OF_COMBAT, clear_shields
@@ -23,6 +24,10 @@ class EndOfCombatStepMixin:
         # End-of-combat triggered abilities fire before combat state is cleared,
         # while "attacked or blocked this combat" is still known.
         self._fire_end_of_combat_triggers()
+        # "At this turn's next end of combat, …" (Glyph of Doom) — a delayed
+        # ability (CR 603.7), which belongs to no permanent and so is invisible
+        # to the battlefield scan above.
+        fire_delayed_triggers(self, "next_end_of_combat")
         for permanent in self.all_permanents():
             if permanent.metadata.get("animate_until_end_of_combat"):
                 permanent.metadata.pop("animate_until_end_of_combat", None)

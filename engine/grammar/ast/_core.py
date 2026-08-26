@@ -429,6 +429,16 @@ class ObjectFilter:
     # resolves the set from the fire-time combat record instead, and any
     # other lowering that meets it refuses by name.
     blocking_source: bool = False
+    # "…all creatures that were **blocked by that creature this turn**"
+    # (Glyph of Doom). A history relative to the object a delayed triggered
+    # ability was bound to, answered from the block record that creature
+    # carries rather than from any characteristic of the creatures swept — so,
+    # like `dealt_damage_to_source_this_turn` above it, it is a flag the one
+    # lowering written for it reads and every other lowering refuses by name.
+    # "This turn" is required and "that creature" is required: a turn holds
+    # several combats, and without a bound object the phrase names a blocker
+    # nobody recorded.
+    blocked_by_bound_object: bool = False
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.

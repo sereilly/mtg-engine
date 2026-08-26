@@ -213,6 +213,14 @@ class ReturnToZone:
     # text, which CR 603.6d makes a static ability, and this permanent is not
     # printed with one.
     entering_tapped: bool = False
+    # "…to the battlefield **under the control of that creature's owner**."
+    # (Reincarnation.) CR 110.2: a permanent enters under the control of the
+    # spell's controller unless the effect says otherwise, and this is an
+    # effect saying otherwise. Its own field rather than the destination
+    # zone's owner: "which battlefield" and "who controls what lands there"
+    # are different questions, and the pool prints cards that answer only the
+    # second.
+    under_control_of: PlayerRef | None = None
 
 
 @dataclass(frozen=True)

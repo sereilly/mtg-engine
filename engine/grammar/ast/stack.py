@@ -21,6 +21,30 @@ from ._core import (
 
 
 @dataclass(frozen=True)
+class ChooseTarget:
+    """``Choose target creature.`` / ``Choose target Wall creature.``
+    (Reincarnation, Glyph of Life, Glyph of Doom.)
+
+    A sentence whose *whole* content is CR 601.2c's choosing of targets. It
+    does nothing on resolution — what happens to the chosen creature is the
+    next sentence, which creates a delayed triggered ability about it — and
+    that is why it is a node rather than a prefix folded into that sentence:
+    the target is chosen as the spell is **cast**, hours of game time before
+    the delayed ability exists.
+
+    Here in the stack family for the same reason ``ModalNode`` is: a target is
+    chosen while the object is being put on the stack (CR 601.2c, CR 602.2b),
+    never during resolution.
+
+    It is never parsed on its own. The production requires the sentence that
+    binds the chosen creature to follow it, because a spell whose only
+    instruction is this one would target a creature, resolve, and do nothing at
+    all while reporting itself supported.
+    """
+    subject: TargetSpec
+
+
+@dataclass(frozen=True)
 class CounterAbility:
     """``Counter target activated or triggered ability.`` (Sublime Epiphany.)
 

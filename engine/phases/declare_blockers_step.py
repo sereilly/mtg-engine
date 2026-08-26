@@ -248,6 +248,20 @@ class DeclareBlockersStepMixin:
         for blocker_idx in assignments:
             if 0 <= blocker_idx < len(defender.battlefield):
                 defender.battlefield[blocker_idx].metadata["blocked_this_combat"] = True
+        # "…all creatures that were blocked by that creature **this turn**"
+        # (Glyph of Doom). `blocked_this_combat` above cannot answer it: that
+        # flag is cleared by `end_combat` and says only *that* the creature
+        # blocked, not what. A turn may hold several combats and the sentence
+        # spans all of them, so the pair is recorded per turn and by id — an
+        # index renumbers the moment anything leaves (CR 400.7) — and swept
+        # with the rest of the turn's records at cleanup.
+        for _blocker_idx, blocker, blocked in self._resolved_block_pairs(
+            controller_index, assignments
+        ):
+            record = blocker.metadata.setdefault("blocked_attacker_ids_this_turn", [])
+            for _attacker_idx, attacker in blocked:
+                if attacker.permanent_id not in record:
+                    record.append(attacker.permanent_id)
         self._prune_combat_state()
         # CR 802.4: blocks lock in only once every defending player has declared
         # (or been auto-skipped) in APNAP order — not after this one defender.

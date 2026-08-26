@@ -120,3 +120,28 @@ def search_matches(card, data: dict) -> bool:
         if compare is None or not compare(card.cmc, mana_value["value"]):
             return False
     return True
+
+
+def searched_seat(data: dict, chooser_seat: int) -> int:
+    """**Whose** zone a search or a graveyard pick looks in.
+
+    Almost always the seat answering the prompt, which is why this was a
+    hard-coded ``choice.player_index`` in four places — but "whose zone" and
+    "who chooses" are two questions, and Reincarnation prints them as two
+    players: its controller picks the card (CR 608.2c) out of the graveyard of
+    the creature's *owner*. A seat spelled into the code rather than carried as
+    payload is exactly the narrowing this repo keeps finding dropped, so it is
+    one default in one place and every reader asks it.
+    """
+    return int(data.get("zone_seat", chooser_seat))
+
+
+def landing_seat(data: dict, chooser_seat: int) -> int:
+    """**Whose** battlefield a find that goes there enters under.
+
+    Its own question again: "put it onto the battlefield" defaults to the
+    chooser's own side, and "under the control of that creature's owner" does
+    not. CR 400.7 makes it a new object either way; which seat controls it is
+    what this decides.
+    """
+    return int(data.get("battlefield_seat", searched_seat(data, chooser_seat)))

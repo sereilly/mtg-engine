@@ -20,6 +20,7 @@ import dataclasses
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ._events import EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS
 from ._common import (
     _describe_targets,
     _filter_payload,
@@ -79,7 +80,9 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     return {"any_card": card_type is None, "card_type": card_type}
 
 
-def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ...]:
+def _lower_return_to_zone(
+    node: ast.ReturnToZone, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """"Return <object> [from <zone>] to <zone>" — Raise Dead, Regrowth,
     Resurrection and Unsummon.
 
@@ -221,6 +224,57 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
             OracleInstruction(
                 "return_creature_from_graveyard_to_hand", "",
                 _graveyard_to_hand_payload(subject.filter),
+            ),
+        )
+    # "Return a creature card from **its owner's** graveyard to the battlefield
+    # **under the control of that creature's owner**." (Reincarnation.)
+    #
+    # Both possessives name one player and it is neither of the two a return
+    # normally knows: not the chooser (CR 608.2c makes that the ability's
+    # controller, who picks the card) and not the card's own owner in the
+    # tautological sense (CR 404.2 puts every card in its owner's graveyard, so
+    # that reading would admit every graveyard on the table). They name the
+    # object *this sentence is about* — the creature the delayed ability was
+    # bound to — which is why this shape is admitted only under an event whose
+    # fire site actually froze that owner. Under any other trigger the words
+    # name a player nobody recorded.
+    #
+    # It lowers to the ordinary open-zone pick, with the two seats as payload:
+    # the picker, the AI and the resolver all read them through
+    # `engine.search_filters.searched_seat` / `landing_seat`, so one answer
+    # decides whose graveyard is shown and whose battlefield receives.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "a"
+        and subject.count == 1
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+        and subject.filter.zone_owner is not None
+        and subject.filter.zone_owner.kind == "owner"
+        and node.to.name == "battlefield"
+        and node.under_control_of is not None
+        and node.under_control_of.kind == "owner"
+    ):
+        if event not in _EVENT_SUBJECT_OWNERS:
+            raise LoweringError(
+                "\"its owner\" names the object this sentence is about, and no "
+                "trigger here recorded one",
+                node=node,
+            )
+        if node.entering_tapped or _reads_no_return_restriction(subject.filter):
+            raise LoweringError("no return handler honours this restriction", node=node)
+        if len(subject.filter.card_types) != 1:
+            raise LoweringError("the graveyard pick reads one card type", node=node)
+        return (
+            OracleInstruction(
+                "search_library", "",
+                {
+                    "zones": ("graveyard",),
+                    "card_type": subject.filter.card_types[0],
+                    "destination": "battlefield",
+                    "zone_owner": EVENT_SUBJECT_OWNER,
+                    "battlefield_owner": EVENT_SUBJECT_OWNER,
+                },
             ),
         )
     if not _is_target(subject):

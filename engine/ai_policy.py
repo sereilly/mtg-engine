@@ -25,7 +25,7 @@ from .auras import aura_restriction_active
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import x_spend_color_from_text
-from .search_filters import search_matches
+from .search_filters import search_matches, searched_seat
 from .targeting import derive_activation_spec, derive_cast_spec
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
@@ -545,7 +545,11 @@ def choose_search_cards(
     """
     from .search_filters import name_key
 
-    player = game.players[player_index]
+    # The zone the search looks in, which is not always the chooser's own —
+    # see `searched_seat`. An AI reading its own graveyard for a card the
+    # effect takes from someone else's would answer with an index the resolver
+    # then refuses, which is the fail-to-find.
+    player = game.players[searched_seat(data, player_index)]
     working = dict(data)
     picks: list[dict] = []
     taken: set[tuple[str, int]] = set()
