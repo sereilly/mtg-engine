@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**306 / 611 tracked rules covered (50%)** — 1449 tests, 0 unannotated.
+**306 / 611 tracked rules covered (50%)** — 1460 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -154,7 +154,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 106. Mana
 
-- [x] **106.1** Mana is the primary resource in the game. Players spend mana to pay costs, usually when casting s... *(2 tests, subrules b)*
+- [x] **106.1** Mana is the primary resource in the game. Players spend mana to pay costs, usually when casting s... *(3 tests, subrules b)*
 - [ ] **106.2** Mana is represented by mana symbols (see rule 107.4). Mana symbols also represent mana costs (see...
 - [x] **106.3** Mana is produced by the effects of mana abilities (see rule 605). It may also be produced by the ... *(2 tests)*
 - [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(4 tests)*
@@ -296,7 +296,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
-- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(4 tests, subrules abc)*
+- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(5 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
 - [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(1 tests)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
@@ -322,8 +322,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **120.1** Objects can deal damage to battles, creatures, planeswalkers, and players. This is generally detr...
 - [ ] **120.2** Any object can deal damage.
-- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(4 tests, subrules acf)*
-- [x] **120.4** Damage is processed in a four-part sequence. *(9 tests, subrules bc)*
+- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(5 tests, subrules acf)*
+- [x] **120.4** Damage is processed in a four-part sequence. *(10 tests, subrules bc)*
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
 - [x] **120.7** The source of damage is the object that dealt it. If an effect requires a player to choose a sour... *(1 tests)*
@@ -483,7 +483,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(5 tests)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(6 tests)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(93 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(96 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -738,7 +738,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **609.1** An effect is something that happens in the game as a result of a spell or ability. When a spell, ... *(3 tests)*
 - [x] **609.2** Effects apply only to permanents unless the instruction’s text states otherwise or they clearly c... *(3 tests)*
 - [x] **609.3** If an effect attempts to do something impossible, it does only as much as possible. *(4 tests)*
-- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(2 tests)*
+- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(4 tests)*
 - [ ] **609.5** If an effect could result in a tie, the text of the spell or ability that created the effect will...
 - [ ] **609.6** Some continuous effects are replacement effects or prevention effects. See rules 614 and 615.
 - [ ] **609.7** Some effects apply to damage from a source—for example, “The next time a red source of your choic...
@@ -794,7 +794,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(5 tests)*
 - [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(4 tests, subrules a)*
 - [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
-- [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(2 tests)*
+- [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(8 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(4 tests, subrules a)*
 - [ ] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus...
 - [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(3 tests)*
@@ -808,7 +808,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(14 tests, subrules a)*
 - [ ] **615.2** Many prevention effects apply to damage from a source. See rule 609.7.
-- [x] **615.3** There are no special restrictions on casting a spell or activating an ability that generates a pr... *(3 tests)*
+- [x] **615.3** There are no special restrictions on casting a spell or activating an ability that generates a pr... *(4 tests)*
 - [ ] **615.4** Prevention effects must exist before the appropriate damage event occurs—they can’t “go back in t...
 - [x] **615.5** Some prevention effects also include an additional effect, which may refer to the amount of damag... *(1 tests)*
 - [x] **615.6** If damage that would be dealt is prevented, it never happens. A modified event may occur instead,... *(1 tests)*
@@ -822,7 +822,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(32 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(33 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
@@ -880,7 +880,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.11** Hexproof *(2 tests, subrules bd)*
 - [x] **702.12** Indestructible *(2 tests, subrules b)*
 - [x] **702.14** Landwalk *(9 tests, subrules abc)*
-- [x] **702.15** Lifelink *(6 tests, subrules b)*
+- [x] **702.15** Lifelink *(7 tests, subrules b)*
 - [x] **702.16** Protection *(40 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(3 tests, subrules a)*

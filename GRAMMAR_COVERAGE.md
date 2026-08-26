@@ -23,7 +23,7 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 | ATQ | 85 | 120 | 89.2% | 89.2% | 61.7% | 67 |
 | 3ED | 296 | 389 | 82.3% | 81.0% | 45.5% | 160 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| LEG *(measured)* | 310 | 431 | 74.7% | 69.8% | 42.7% | 169 |
+| LEG *(measured)* | 310 | 431 | 76.8% | 71.9% | 44.5% | 177 |
 | **All (shipped)** | **1618** | **2286** | **82.5%** | **81.3%** | **48.6%** | **966** |
 
 *(measured)* — LEG are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -34,17 +34,17 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 202 | 94 | expected a subject |  |
-| 116 | 49 | unrecognized effect verb |  |
+| 197 | 89 | expected a subject |  |
+| 115 | 48 | unrecognized effect verb |  |
 | 60 | 34 | unconsumed text |  |
 | 34 | 34 | unrecognized activation cost |  |
-| 29 | 14 | granted ability in quotes | phase 3 (quoted abilities) |
+| 28 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 10 | 6 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 9 | 5 | expected a keyword ability |  |
 | 8 | 4 | expected 'the number of' in a where-clause |  |
 | 8 | 3 | expected a colour or a creature body after 'becomes' |  |
-| 7 | 4 | expected 'a' |  |
 | 6 | 3 | no lowering for RawEffect |  |
+| 6 | 3 | expected 'a' |  |
 | 5 | 2 | expected 'card' |  |
 | 5 | 5 | expected 'unless defending player controls' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
@@ -986,6 +986,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Draw a card. Activate only if you have exactly seven cards in hand.`
 - **Life Goes On**
   - `You gain 4 life. If a creature died this turn, you gain 8 life instead.`
+- **Life Matrix**
+  - `{4}, {T}: Put a matrix counter on target creature and that creature gains "Remove a matrix counter from this creature: Regenerate this creature." Activate only during your upkeep.`
 - **Lifeblood**
   - `Whenever a Mountain an opponent controls becomes tapped, you gain 1 life.`
 - **Lifeforce**
@@ -1152,6 +1154,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Add {U}.`
 - **Mystic Skyfish**
   - `Whenever you draw your second card each turn, this creature gains flying until end of turn.`
+- **Nebuchadnezzar**
+  - `{X}, {T}: Choose a card name. Target opponent reveals X cards at random from their hand. Then that player discards all cards with that name revealed this way. Activate only during your turn.`
 - **Necromentia**
   - `Choose a card name other than a basic land card name. Search target opponent's graveyard, hand, and library for any number of cards with that name and exile them. That player shuffles, then creates a 2/2 black Zombie creature token for each card exiled from their hand this way.`
 - **Nether Void**
@@ -1170,11 +1174,15 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
 - **Nine Lives**
   - `When there are nine or more incarnation counters on this enchantment, exile it.`
   - `When this enchantment leaves the battlefield, you lose the game.`
+- **North Star**
+  - `{4}, {T}: For one spell this turn, you may spend mana as though it were mana of any type to pay that spell's mana cost. (Additional costs are still paid normally.)`
 - **Northern Paladin**
   - `{W}{W}, {T}: Destroy target black permanent.`
   - `{W}{W}, {T}: Destroy target black permanent.`
   - `{W}{W}, {T}: Destroy target black permanent.`
   - `{W}{W}, {T}: Destroy target black permanent.`
+- **Nova Pentacle**
+  - `{3}, {T}: The next time a source of your choice would deal damage to you this turn, that damage is dealt to target creature of an opponent's choice instead.`
 - **Oasis**
   - `{T}: Prevent the next 1 damage that would be dealt to target creature this turn.`
 - **Obelisk of Undoing**
@@ -1319,6 +1327,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `• Destroy target Aura attached to a land.`
 - **Pyrotechnics**
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
+- **Quarum Trench Gnomes**
+  - `{T}: If target Plains is tapped for mana, it produces colorless mana instead of white mana. (This effect lasts indefinitely.)`
 - **Quirion Dryad**
   - `Whenever you cast a spell that's white, blue, black, or red, put a +1/+1 counter on this creature.`
 - **Rabid Wombat**
@@ -1396,6 +1406,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `• Destroy target artifact.`
   - `• Destroy target enchantment.`
   - `• Exile target card from a graveyard.`
+- **Reverberation**
+  - `All damage that would be dealt this turn by target sorcery spell is dealt to that spell's controller instead.`
 - **Revitalize**
   - `You gain 3 life.`
   - `Draw a card.`
@@ -1560,6 +1572,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `{T}: Target creature loses all "bands with other" abilities until end of turn.`
 - **Shield Wall**
   - `Creatures you control get +0/+2 until end of turn.`
+- **Shimian Night Stalker**
+  - `{B}, {T}: All damage that would be dealt to you this turn by target attacking creature is dealt to this creature instead.`
 - **Shipwreck Dowser**
   - `When this creature enters, return target instant or sorcery card from your graveyard to your hand.`
 - **Shivan Dragon**
@@ -1573,6 +1587,8 @@ Categories currently switched on: `attachments, characteristics, chosen_numbers,
   - `Whenever this creature attacks, you may tap any number of untapped creatures you control. This creature gets +1/+1 until end of turn for each creature tapped this way.`
 - **Silent Dart**
   - `{4}, {T}, Sacrifice this artifact: It deals 3 damage to target creature.`
+- **Silhouette**
+  - `Choose target creature. If a spell or ability that targets that creature would cause a source to deal damage to that creature this turn, prevent that damage.`
 - **Silversmote Ghoul**
   - `At the beginning of your end step, if you gained 3 or more life this turn, return this card from your graveyard to the battlefield tapped.`
   - `{1}{B}, Sacrifice this creature: Draw a card.`

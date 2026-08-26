@@ -2273,3 +2273,115 @@ is what actually grows.
 LEG 243 → **253** of 310 (78.4% → 81.6%); LEG parse 72.4% → 74.7%, lowers 68.4%
 → 69.8%, executes 41.3% → 42.7%. Shipped pool 734/734 throughout. Suite 7,430 →
 **7,490**, every `--check` green, no hooks added. LEG hollow lines: 17.
+
+## LEG round 26: a grant is a printed line, and a cast is an object
+
+*(2026-08-26.)* Seventh parallel round. Ten cards, LEG 253 → 263, and one card
+that two previous rounds were right to refuse.
+
+**Granted:** Life Matrix, The Tabernacle at Pendrell Vale.
+**Redirect:** Shimian Night Stalker, Nova Pentacle, Silhouette, Reverberation.
+**Mana:** Mana Matrix, Quarum Trench Gnomes, North Star, Nebuchadnezzar.
+
+### An ability granted as quoted text is the printed line
+`GRANTED_ABILITY_LINES` records the text as printed, `Permanent.effective_card`
+folds it into the rules text, and `compile_card_oracle` reads it from there like
+any printed ability. Nothing downstream — the activation enumerator, the upkeep
+step, the trigger scans, the web payload, the coverage scripts — had to learn
+that a spell granted it. That is the difference between a mechanism and a
+special case, and it is why two cards landed on it the same day it was built.
+
+The support gate is the same shape: it compiles the quoted text on a probe card
+that says nothing else, which is exactly what `effective_card` will hand the
+compiler, so a grant the engine cannot perform never reports supported.
+
+### Reverberation, refused twice, landed on the seam it was waiting for
+Rounds 24 and 25 both declined it, and both were right: `payload["source"]` for
+a spell is the shared `CardDefinition`, so keying a redirect on `(card, seat)`
+would move a *second* copy of the same sorcery too. `Game.resolving_items` — one
+object per **cast**, pushed at a single site — is the identity that was missing.
+The test that matters casts the same sorcery twice and asserts the second copy
+is untouched.
+
+And it is a **redirect, not a prevention**: the damage is dealt with the same
+source, so lifelink, damage triggers, deathtouch and the dealt-damage records
+all see it. A rules test gains the three life that proves it. A residual is
+written into the code rather than hidden: `resolving_items` is empty while a
+resolution waits on a prompt, so damage dealt after a mid-resolution question
+falls outside the record, in the safe direction.
+
+### Four more "a card's word spelled into code"
+* `cost_modifiers.py` read exactly **one** card type where Mana Matrix prints
+  two, so half the discount was silently dropped. It is a tuple now; a card
+  printing three needs no change.
+* `global_statics.py` had `all artifacts have "…"` and `all creatures have "…"`
+  as two rows; the noun is payload.
+* `add_named_counter_to_target` — a named counter could only land on the
+  ability's own source.
+* The counter-removal activation cost was a substring test for `"remove a
+  **corpse** counter from this creature"` *and* a check that the ability
+  regenerated. Without fixing it, Life Matrix's granted ability was free and
+  endlessly repeatable.
+
+### Two bugs from a full stop inside quotation marks
+Magic prints the sentence's period *inside* the quotes. The sentence loop needed
+a bare `.` to see a boundary, so anything behind a quote read as unconsumed
+text — and `activation_restrictions._clauses` left the next sentence starting
+with the quote character, so Life Matrix's "Activate only during your upkeep"
+matched nothing and went **unenforced**. An ability working more often than the
+card allows is exactly what that module exists to prevent.
+
+### Where a value must be an index, not an object
+Nebuchadnezzar's random reveal samples **indices**, because two copies of a card
+share a `CardDefinition` and sampling objects collapses them. That is round 24's
+finding applied by an agent that was told the fact and worked out the
+consequence.
+
+### Integration
+Four conflicts, all additive. One new hazard: **same-named test helpers survive
+a clean textual merge and fail at runtime.** Two branches each defined
+`_matrix_game` — Life Matrix's and Mana Matrix's — with different signatures,
+and the later shadowed the earlier. Resolving a test-file conflict now includes
+checking for duplicate helper definitions.
+
+Three branches all added statement-level productions, pushing
+`engine/grammar/statements.py` to 1,015. It split along the boundary it had
+already drawn — "Delayed triggered abilities (CR 603.7)" — into
+`engine/grammar/delayed.py`, with `parse_statement` passed in as a parameter.
+That inversion is now the standard move here: `lowering/where_x.py`,
+`postmodifiers.py` and this file all take their recursion as an argument rather
+than importing upward.
+
+Before the batch, `parse_object_filter` was decomposed at last — a single
+795-line function inside a 967-line `nouns.py`. The two halves are different
+readings: leading adjectives narrow the *kind* of object, one word against a
+vocabulary; a postmodifier names a **relation**, which is why it recurses and
+the adjective loop does not, and why it is the half that grows. What kept them
+together was state, not cohesion — 47 locals, of which the postmodifier section
+touched 45 — so they are one mutable `_FilterDraft` now. The 180 accumulator
+references were rewritten **by AST position**, not search-and-replace, because
+several of the names are common words (`named`, `power`, `zone`).
+`nouns.py` 967 → 562.
+
+### Not landed
+**Stangg** — three stacked blockers, one of them memorable: the lexer collapses
+the *token's* name into a SELF token, because "Stangg Twin" contains the card's
+own name. Also needs a token supertype (the AST deliberately raises on a
+legendary token) and a "leaves the battlefield" delayed event in two binding
+directions. **Glyph of Delusion**, **Johan**, **Gabriel Angelfire** — each needs
+a distinct thing the granted-ability mechanism does not supply.
+
+### Flagged
+`upkeep_pay_or_destroy_self` is not in `_UPKEEP_PAY_KINDS`, so a human is never
+*asked* whether to pay the Tabernacle's or Cosmic Horror's cost — the engine
+pays when able. The prompt is keyed by card name, which a board-wide grant
+collides on, so surfacing it is its own round.
+
+`legality.activation_target_refusal` does not enforce `opponents_only` on a
+directly-named `target_player_index`; only the picker does. Harmless today (the
+handler guards it) but it is a gate and a dispatch disagreeing.
+
+### Numbers
+LEG 253 → **263** of 310 (81.6% → 84.8%); LEG parse 74.7% → 76.8%, lowers 69.8%
+→ 71.9%, executes 42.7% → 44.5%. Shipped pool 734/734 throughout. Suite 7,490 →
+**7,559**, every `--check` green, no hooks added.
