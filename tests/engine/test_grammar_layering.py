@@ -178,7 +178,7 @@ def test_families_import_only_their_package_shared_module(package, shared, roof)
     same reason `_common` is rather than by taxonomy: six families read a table
     keyed by trigger-condition kind, and a fragment several families need is not
     one family's property. `ast/` keeps `_core`, the vocabulary its nodes are
-    built from.
+    built from, and `conditions` beside it for the reason above.
 
     `roof` names the modules that sit *above* the families rather than below
     them; they are exempted here and checked by their own test. Only `ast/` has
@@ -208,7 +208,10 @@ def test_the_ast_roof_only_reaches_downward():
     family importing `statements` fails there, and `statements` importing the
     package's own `__init__` (the way to smuggle in a cycle) fails here.
     """
-    allowed = {"_core", *AST_FAMILIES}
+    # `conditions` is shared with `_core` rather than a family: a condition is
+    # built from every part of `_core` while nothing in `_core` is built from a
+    # condition, and every family that lowers a conditional reads one.
+    allowed = {"_core", "conditions", *AST_FAMILIES}
     violations = [
         f"ast/statements.py:{line} imports {target or '__init__'}"
         for line, target, _is_sibling in _imports(GRAMMAR / "ast" / "statements.py")

@@ -22,10 +22,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Union
 
+from .conditions import Condition
+from .conditions import DiedThisTurn
 from ._core import (
-    Condition,
     Cost,
-    DiedThisTurn,
     Duration,
     ObjectFilter,
     PlayerRef,
