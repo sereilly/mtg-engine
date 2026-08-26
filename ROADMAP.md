@@ -203,6 +203,13 @@ against `compile_line` before citing it.
    ignored restriction on a trigger is not a narrower card, it is a card firing
    on everything (`TESTABLE_SUBJECT_FILTER_KEYS`, round 34). Same rule for a
    search filter, a picker filter and a cost the charger cannot express.
+   **And the question has to recurse as far as the filter nests.** A noun
+   phrase can carry another noun phrase — "Auras attached to permanents you
+   control" — and a set difference over the outer payload's keys answers
+   "testable" for the nested one whatever it says. That is a gate and its
+   dispatch reading two different things again, with the nesting hiding the
+   difference; `untestable_filter_keys` recurses exactly where the matcher does
+   (round 35).
 3. **A fire site that enumerates instruction kinds cannot be complete** — it is
    only as complete as the last card that touched it. Onulet never gained a
    point of life across four shipped sets because its kind was not in a list
