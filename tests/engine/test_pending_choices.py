@@ -304,6 +304,13 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # acts on the object the repetition is currently on, so the next
         # iteration is a later step that must wait for this answer.
         "mode_choice",
+        # "Choose a player who cast one or more sorcery spells this turn.
+        # Backdraft deals damage to **that player** equal to half the damage
+        # dealt by **one of those** sorcery spells this turn." The first answer
+        # narrows the second prompt and the second answer sizes the damage, so
+        # both are steps a later step of the same resolution reads.
+        "player_choice",
+        "cast_choice",
     }, suspending
 
 

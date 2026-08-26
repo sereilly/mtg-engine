@@ -20,7 +20,11 @@ from dataclasses import replace
 
 from ..pt import pt_counter_deltas
 from . import ast
-from .amounts import accept_counters_on_source
+from .amounts import (
+    accept_added_base,
+    accept_counters_on_source,
+    accept_damage_dealt_this_turn,
+)
 from .errors import GrammarError
 from .lexer import (MANA, NUMBER, PUNCT, QUOTE, WORD, tokenize)
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
@@ -880,6 +884,14 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
     if factor is not None:
         scaled = parse_where_x_definition_body(stream)
         return ast.Times(factor, scaled)
+    # "…where X is **3 plus** the amount of damage dealt …" (Blazing Effigy).
+    # A constant added to whatever definition follows, read here beside the
+    # multiplier and for its reason: the sum is not a property of any one
+    # alternative below, and folding it into one would leave every other
+    # definition unable to carry a base the card printed.
+    base = accept_added_base(stream)
+    if base is not None:
+        return ast.Plus(ast.Fixed(base), parse_where_x_definition_body(stream))
     return parse_where_x_definition_body(stream)
 
 
@@ -918,6 +930,13 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     a definition.
     """
     stream.accept_word("the")
+    # "…the **amount of damage dealt to this creature this turn by other
+    # sources named ~**" (Blazing Effigy). A history rather than an aggregate
+    # over a noun phrase, so it is read before the three below: what it names
+    # is over by the time the clause is asked, and none of them could see it.
+    dealt = accept_damage_dealt_this_turn(stream)
+    if dealt is not None:
+        return dealt
     # Three aggregates over one noun phrase, and the words are what tell them
     # apart: "the number of" counts the objects, "the greatest power among"
     # takes a maximum over them (Carrion Grub).

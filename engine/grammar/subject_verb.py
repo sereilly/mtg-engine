@@ -33,6 +33,7 @@ from .effects import (
     _parse_add_mana, _parse_ante, _parse_assigns_no_combat_damage, _parse_attach,
     _parse_becomes, _parse_cant_attack_or_block, _parse_change_base_pt,
     _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_number,
+    _parse_choose_player_who_cast,
     _parse_counter, _parse_create_token,
     _parse_damage, _parse_damage_redirect, _parse_destroy, _parse_discard,
     _parse_doesnt_untap_next_step, _parse_double, _parse_draw, _parse_enchant,
@@ -283,6 +284,13 @@ def parse_subject_verb(
         chosen_number = _parse_choose_number(stream)
         if chosen_number is not None:
             return chosen_number
+        # "Choose a player who cast one or more sorcery spells this turn."
+        # (Backdraft.) Non-consuming on refusal for the reason every "choose"
+        # production here is: the word opens several unrelated sentences, and a
+        # production that ate part of one would take the whole line with it.
+        chosen_player = _parse_choose_player_who_cast(stream)
+        if chosen_player is not None:
+            return chosen_player
         # "Choose two cards in your hand drawn this turn." (Sylvan Library.)
         # Also non-consuming on refusal — it declines anything that is not a
         # pick out of a hand, so the naming productions below keep their say.

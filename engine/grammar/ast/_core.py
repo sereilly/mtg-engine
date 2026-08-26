@@ -242,7 +242,48 @@ class CountersOnSource:
     kind: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject]
+@dataclass(frozen=True)
+class DamageDealtThisTurn:
+    """"the amount of damage dealt to this creature this turn by other sources
+    named ~" (Blazing Effigy) — a *history*, not anything on a board.
+
+    Its own node beside :class:`CountOf` for the reason :class:`CountOfDeaths`
+    is one: what it names is over. The damage marked on a creature is wiped when
+    it leaves the battlefield, and this clause is printed on a dies-trigger — so
+    reading it as a board quantity would answer zero on every card that could
+    ever print it. ``engine/damage_ledger.py`` is the record it reads.
+
+    Every field is payload, because every one of them is a word the card
+    printed. *source_name* is ``"self"`` — the SELF token, the card naming
+    itself — and never a spelled-out name, which is what keeps a card name out
+    of the engine (``tests/engine/test_card_name_reads.py``). *others_only* is
+    CR 109.5's "**other** sources": an identity comparison against the ability's
+    own source, the same narrowing "another creature" already carries.
+    """
+    recipient: str = "source"
+    source_name: str = "self"
+    others_only: bool = False
+
+
+@dataclass(frozen=True)
+class DamageDealtByChosenCast:
+    """"the damage dealt by **one of those** sorcery spells this turn"
+    (Backdraft) — a history, narrowed by a choice the resolution makes.
+
+    "Those" is a back-reference to the set an earlier sentence described ("a
+    player who cast one or more sorcery spells this turn"), so lowering refuses
+    it without that producer: with no earlier choice the phrase names nothing,
+    and the zero it would otherwise read is a number the card never printed.
+
+    Beside :class:`DamageDealtThisTurn` and not inside it, because the two are
+    narrowed on opposite axes: that one fixes the *recipient* and asks which
+    sources hit it, this one fixes a single **cast** and asks what it dealt.
+    One node reading either would need a key for every field of both.
+    """
+    card_type: str
+
+
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
 
 
 # ---------------------------------------------------------------------------

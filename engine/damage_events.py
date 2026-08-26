@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from .control import base_controller
+from .damage_ledger import record_damage
 from .effect_ordering import Candidate, affected_seat, apply_in_order
 from .models import Permanent, PlayerState
 from .prevention import shield_candidates, spent
@@ -235,6 +236,13 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     dealt = max(0, event["amount"])
     if consumed or dealt <= 0:
         return DamageOutcome(consumed=consumed, dealt=0, result=0)
+    # The turn's record of what each source dealt (engine/damage_ledger.py).
+    # Here rather than at any damage path, for the reason `source_seat` above is
+    # derived here: this is the one place every damage event passes through, and
+    # a history written at the fire sites is a history with as many places to
+    # forget it as there are sites. CR 120.4b's `dealt`, not 120.4c's result —
+    # "the amount of damage dealt to this creature" is what was dealt.
+    record_damage(game, event, dealt)
     result = _process_results(game, event, dealt)
     _announce(game, event, dealt)
     return DamageOutcome(consumed=False, dealt=dealt, result=result)

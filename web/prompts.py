@@ -973,6 +973,45 @@ def _least_power_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("player_choice")
+def _player_choice(ctx: PromptContext, choices: list) -> dict:
+    """Backdraft: "Choose a player who cast one or more sorcery spells this
+    turn." The seats are re-derived through the engine's own liveness test, so
+    a player who has left the game since the prompt was armed is not offered."""
+    choice = choices[0]
+    live = ctx.game.live_player_choices(choice)
+    return {
+        "card_name": choice.data.get("card_name", ""),
+        "prompt": choice.data.get("prompt", "Choose a player."),
+        "options": [
+            {"seat": seat, "name": ctx.game.players[seat].name} for seat in live
+        ],
+    }
+
+
+@prompt_renderer("cast_choice")
+def _cast_choice(ctx: PromptContext, choices: list) -> dict:
+    """Backdraft: "…one of those sorcery spells this turn." Each option carries
+    what that cast dealt, which is what the choice is actually between — and is
+    public information, since the damage was dealt in the open."""
+    data = choices[0].data
+    options = list(data.get("options") or ())
+    names = list(data.get("names") or ())
+    damages = list(data.get("damages") or ())
+    return {
+        "card_name": data.get("card_name", ""),
+        "prompt": data.get("prompt", "Choose a spell."),
+        "options": [
+            {
+                "index": index,
+                "name": names[position] if position < len(names) else "",
+                "damage": damages[position] if position < len(damages) else 0,
+            }
+            for position, index in enumerate(options)
+        ],
+    }
+
+
 @prompt_renderer("lamp_draw")
 def _lamp_draw(ctx: PromptContext, choices: list) -> dict:
     """Aladdin's Lamp: the looked-at cards are still on top of the library until

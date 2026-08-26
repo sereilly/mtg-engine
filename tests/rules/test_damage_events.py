@@ -597,3 +597,91 @@ def test_the_predicate_does_not_spend_the_record_it_is_asked_about():
 
     assert applicable, "the redirect is in contention"
     assert redirects_on(p1)[0].uses == 1, "and asking left it unspent"
+
+
+# ---------------------------------------------------------------------------
+# The turn's record of what each source dealt — engine/damage_ledger.py
+# ---------------------------------------------------------------------------
+
+
+def _ledger_board():
+    p1 = PlayerState(name="P1", life=20)
+    p2 = PlayerState(name="P2", life=20)
+    return Game(players=[p1, p2]), p1, p2
+
+
+@pytest.mark.cr("120.4b", "120.8")
+def test_the_ledger_records_what_was_dealt_and_ignores_a_zero_event():
+    """CR 120.4b is the number the record keeps — what was *dealt*, before
+    CR 120.4c turns it into a result. A 0-damage event is no damage event at
+    all (CR 120.8), so it leaves no row: one would let a later clause join
+    against a source that dealt nothing."""
+    from engine.damage_ledger import ledger
+
+    game, p1, _p2 = _ledger_board()
+    deal_damage(game, {"recipient": p1, "amount": 3, "source": None, "combat": False})
+    deal_damage(game, {"recipient": p1, "amount": 0, "source": None, "combat": False})
+
+    assert [entry.amount for entry in ledger(game).entries] == [3]
+
+
+@pytest.mark.cr("107.1a")
+def test_a_halved_amount_rounds_the_way_the_card_says():
+    """CR 107.1a: an effect that could generate a fraction says which way to
+    round, and the words ride the computed amount rather than the card. Read
+    through the one evaluator every computed quantity uses, so the rounding
+    cannot be honoured at one return site and dropped at another."""
+    from engine.handlers._common import count_from_payload
+    from engine.game_types import OracleExecutionContext
+
+    game, p1, p2 = _ledger_board()
+    context = OracleExecutionContext(caster=p1, target=p2, card=None)
+    context.results["damage_dealt_by_chosen_cast"] = 5
+
+    spec = {"back_reference": "damage_dealt_by_chosen_cast"}
+    assert count_from_payload(game, context, dict(spec, half="down")) == 2
+    assert count_from_payload(game, context, dict(spec, half="up")) == 3
+    assert count_from_payload(game, context, spec) == 5
+
+
+@pytest.mark.cr("107.2")
+def test_an_undetermined_amount_is_zero():
+    """CR 107.2: a number that cannot be determined is 0. "The damage dealt by
+    one of those sorcery spells this turn" with no such spell names nothing,
+    and the reader answers 0 rather than raising or guessing."""
+    from engine.handlers._common import count_from_payload
+    from engine.game_types import OracleExecutionContext
+
+    game, p1, p2 = _ledger_board()
+    context = OracleExecutionContext(caster=p1, target=p2, card=None)
+
+    spec = {"back_reference": "damage_dealt_by_chosen_cast", "half": "down"}
+    assert count_from_payload(game, context, spec) == 0
+
+
+@pytest.mark.cr("109.5", "400.7")
+def test_two_casts_of_one_card_are_two_rows():
+    """A spell's damage source is its printed card (CR 109.5), which is one
+    object shared by every copy — so the record keys a spell's damage on the
+    stack object, one per cast. Without that, "one of those sorcery spells"
+    could not tell two copies apart."""
+    from engine.damage_ledger import damage_dealt_by_cast, ledger, record_cast
+
+    game, p1, p2 = _ledger_board()
+    card = object()
+    first, second = type("Item", (), {})(), type("Item", (), {})()
+    first.card = second.card = card
+    first.caster_index = second.caster_index = 0
+    record_cast(game, first)
+    record_cast(game, second)
+
+    game.resolving_items.append(first)
+    deal_damage(game, {"recipient": p2, "amount": 4, "source": card, "combat": False})
+    game.resolving_items.pop()
+    game.resolving_items.append(second)
+    deal_damage(game, {"recipient": p2, "amount": 2, "source": card, "combat": False})
+    game.resolving_items.pop()
+
+    assert damage_dealt_by_cast(game, first) == 4
+    assert damage_dealt_by_cast(game, second) == 2
+    assert len(ledger(game).entries) == 2

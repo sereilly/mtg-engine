@@ -250,6 +250,12 @@ class TurnManagementMixin:
         # would announce every card of the new turn's first draw all over again.
         self.second_draw_fired_this_turn = set()
         self.draws_announced_this_turn = {}
+        # The turn's damage-and-cast record (engine/damage_ledger.py). Cleared
+        # here beside `spells_cast_this_turn` below, because it is the same
+        # "this turn": Blazing Effigy's "damage dealt to this creature this
+        # turn" and Backdraft's "one of those sorcery spells this turn" are one
+        # window, and a record outliving it would read last turn's board.
+        self.damage_ledger.clear()
         for player in self.players:
             player.damage_taken_this_turn = 0
             player.artifact_damage_taken_this_turn = 0

@@ -16,7 +16,7 @@ from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND
 from ...oracle_types import OracleInstruction
-from ._events import CREATED_TOKEN
+from ._events import CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER, CREATED_TOKEN
 INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage": "damage",
     "earthquake_damage": "damage",
@@ -481,6 +481,16 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the reason the coin flip has one: the number is a *value* a player picks,
     # and what reads it back is a different sentence with a category of its own.
     "choose_number": "chosen_numbers",
+    # "Choose a player who cast one or more sorcery spells this turn."
+    # (Backdraft.) Its own category for the reason the number above has one: the
+    # choice is a *value* a player picks and the sentence that reads it back has
+    # a category of its own — here, damage. A choice sharing the category of
+    # what reads it would let one switch gate half of a two-sentence card.
+    "choose_player_who_cast": "chosen_players",
+    # "…the damage dealt by **one of those** sorcery spells this turn." The
+    # second half of the same decision, and a separate step because it is a
+    # separate question: which player, then which of their spells.
+    "choose_cast_this_turn": "chosen_players",
     "create_emblem": "tokens",
     # Optional actions. Parsed and lowered, not switched on — see _WRAPPER_KINDS.
     "may": "optional",
@@ -493,6 +503,16 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
 # `lower.py`) read it to thread what each step records forward.
 _PRODUCES: dict[str, str] = {
     "deal_damage": "damage_dealt",
+    # "Choose a player who cast one or more sorcery spells this turn.
+    # Backdraft deals damage to **that player** …" The seat is the whole of what
+    # the first sentence does, and the only place the second can read it: a
+    # chosen player is not a target and nothing on a board records the choice.
+    "choose_player_who_cast": CHOSEN_PLAYER,
+    # "…equal to half the damage dealt by **one of those** sorcery spells this
+    # turn." The pick records what the chosen cast dealt, because by the time
+    # this is asked the spell has resolved and left the stack — the ledger is
+    # the record, and this is which row of it the player named.
+    "choose_cast_this_turn": CHOSEN_CAST_DAMAGE,
     # "Counter target spell. … an amount of {C} equal to **that spell's** mana
     # value." (Mana Drain.) The countered spell's mana value — the one thing
     # about it that survives the counter, and only because the counter wrote it

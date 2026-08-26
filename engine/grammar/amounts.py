@@ -9,7 +9,7 @@ place here and an unknown quantity word is an error, not a zero.
 from __future__ import annotations
 
 from . import ast
-from .lexer import NUMBER, PT, WORD
+from .lexer import NUMBER, PT, SELF, WORD
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
 
@@ -46,10 +46,19 @@ def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> a
             stream.advance()
             inner = _parse_counted_amount(stream, back_reference=back_reference)
             rounding = "down"
+            # "…, rounded down" (Backdraft) prints a comma in front of the
+            # rider; "half X rounded up" does not. One reader for both, and the
+            # comma is put back when what follows it is a different clause —
+            # eating it unconditionally would take the separator a later
+            # production needs.
+            comma = stream.mark()
+            had_comma = stream.accept_punct(",")
             if stream.accept_word("rounded"):
                 rounding = "up" if stream.accept_word("up") else (
                     "down" if stream.accept_word("down") else "down"
                 )
+            elif had_comma:
+                stream.reset(comma)
             return ast.Half(inner, rounding)
         if word == "that":
             mark = stream.mark()
@@ -134,6 +143,13 @@ def _parse_counted_amount(
 
         return ast.CountOf(parse_object_filter(stream))
     stream.reset(mark)
+    # "half **the damage dealt by one of those sorcery spells this turn**"
+    # (Backdraft). A history narrowed by a choice, not a count of anything, so
+    # it is read here where "half" can take it — the same position "the number
+    # of" is read from, for the same reason.
+    chosen = accept_damage_dealt_by_chosen_cast(stream)
+    if chosen is not None:
+        return chosen
     return parse_amount(stream, back_reference=back_reference)
 
 
@@ -273,3 +289,98 @@ def parse_comparison(stream: TokenStream) -> ast.Comparison:
             return ast.Comparison(_COMPARISON_WORDS[word], amount)
         raise stream.error("expected 'less' or 'greater'")
     return ast.Comparison("eq", amount)
+
+
+def accept_damage_dealt_this_turn(
+    stream: TokenStream,
+) -> "ast.DamageDealtThisTurn | None":
+    """``amount of damage dealt to <the source> this turn by [other] sources
+    named <this card>`` — or None, cursor unmoved, when the words are not this.
+
+    Blazing Effigy's where-clause. Called with the leading "the" already
+    consumed, from the one reader of a where-clause definition, so the phrase
+    means the same wherever a card prints it.
+
+    Every narrowing is read rather than assumed, and the production refuses the
+    moment one of them is missing. "This turn" is the ledger's window and a
+    clause without it is asking about a different one; "other" is CR 109.5's
+    identity exclusion and dropping it would count the creature's own damage to
+    itself; and the name must be the SELF token — the card naming itself — so a
+    clause comparing against some *other* printed name refuses here instead of
+    quietly being read as this one. That last refusal is the dropped-rider bug
+    with a card name on it.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("amount", "of", "damage", "dealt", "to"):
+        stream.reset(mark)
+        return None
+    # Late import for the reason `_parse_counted_amount` gives: the noun-side
+    # modules depend on this one, so the cycle is broken at call time.
+    from .readers import accept_source_reference
+
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("this", "turn", "by"):
+        stream.reset(mark)
+        return None
+    others_only = bool(stream.accept_word("other"))
+    if not (stream.accept_word("sources", "source") and stream.accept_word("named")):
+        stream.reset(mark)
+        return None
+    if stream.accept_kind(SELF) is None:
+        stream.reset(mark)
+        return None
+    return ast.DamageDealtThisTurn(others_only=others_only)
+
+
+def accept_added_base(stream: TokenStream) -> int | None:
+    """``<number> plus`` in front of a quantity — the constant it is added to.
+
+    "…where X is **3 plus** the amount of damage dealt …" (Blazing Effigy). The
+    number is payload for the reason every other printed number in this file is:
+    a card printing "2 plus" is the same shape with one digit changed, and
+    spelling the 3 into the phrase would make every other one a non-match.
+
+    Returns None with the cursor where it found it, so a definition that does
+    not open with a sum keeps the refusal it already had.
+    """
+    mark = stream.mark()
+    token = stream.peek()
+    if token is not None and token.kind == NUMBER:
+        stream.advance()
+        if stream.accept_word("plus"):
+            return int(token.text)
+    stream.reset(mark)
+    return None
+
+
+def accept_damage_dealt_by_chosen_cast(
+    stream: TokenStream,
+) -> "ast.DamageDealtByChosenCast | None":
+    """``the damage dealt by one of those <type> spells this turn`` — or None,
+    cursor unmoved, when the words are not this.
+
+    Backdraft's amount. "One of those" is a back-reference to the set an earlier
+    sentence described, and it is a *choice* rather than a sum: the whole point
+    of the words is that the spells are several and one of them is picked. The
+    lowering is where that choice becomes a step, and where the missing
+    producer is refused.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "damage", "dealt", "by", "one", "of", "those"):
+        stream.reset(mark)
+        return None
+    # Late import for the reason every other reader in this module gives: the
+    # vocabulary side depends on this one, so the cycle is broken at call time.
+    from .vocabulary import CARD_TYPES, singular
+
+    word = stream.peek_word()
+    if word is None or singular(word) not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("spells", "this", "turn"):
+        stream.reset(mark)
+        return None
+    return ast.DamageDealtByChosenCast(singular(word))

@@ -253,6 +253,31 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             then=_report_subject, asks=True,
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "chosen_player":
+        # "Choose a player who cast one or more sorcery spells this turn.
+        # Backdraft deals damage to **that player** …" The seat an earlier step
+        # of this same resolution chose, read out of the scratchpad rather than
+        # off `context.target`: nothing was targeted, so the target slot holds
+        # whatever a targetless resolution defaults to — which in a
+        # three-player game is not the player who was chosen. No record means
+        # the sentence in front chose nobody, and no damage is dealt rather
+        # than a guess being damaged.
+        seat = context.results.get("chosen_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no player was chosen, no damage dealt")
+            return True, "resolved"
+        chosen = game.players[seat]
+
+        def _report_chosen(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            if dealt:
+                game.log.append(f"{card.name} dealt {dealt} damage to {chosen.name}")
+
+        game._deal_damage_to_player(
+            chosen, damage, source=source_permanent or card,
+            then=_report_chosen, asks=True,
+        )
+        return True, "resolved"
     if instruction.payload.get("recipient") == "target_player":
         # "…to target player" / "…to that artifact's controller" — the seat the
         # resolution context carries, taken *because the clause names a player*

@@ -1104,7 +1104,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2340,6 +2340,22 @@ function getLeastPowerChoiceInfo(state = currentState) {
   return info;
 }
 
+// Backdraft: "Choose a player who cast one or more sorcery spells this turn."
+function getPlayerChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.player_choice;
+  if (!info || !Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
+// Backdraft: "...the damage dealt by one of those sorcery spells this turn."
+function getCastChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.cast_choice;
+  if (!info || !Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 // Liliana's Scrounger: which planeswalker receives the loyalty counter.
 function getLoyaltyRecipientInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -3073,6 +3089,7 @@ function isAnyPromptActive(state = currentState) {
   if (getEffectOrderInfo(state)) return true;
   if (getLandTypeChoiceInfo(state)) return true;
   if (getBodyChoiceInfo(state)) return true;
+  if (getPlayerChoiceInfo(state) || getCastChoiceInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
   if (getMultiblockInfo(state)) return true;
@@ -3097,7 +3114,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -4287,6 +4304,70 @@ function applyBodyChoicePrompt(info) {
         hand_index: Number(btn.dataset.bodyIndex),
       });
     });
+  });
+}
+
+// Backdraft's two decisions: which player, then which of their spells. Both are
+// button lists rather than board targeting -- neither names anything on a
+// battlefield, and the spells being chosen between have already resolved.
+function applyChoiceButtonPrompt(info, { title, action, field, labelOf }) {
+  const panel = q("activationPanel");
+  const titleEl = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  titleEl.textContent = title;
+  body.textContent = `${info.card_name || ""}: ${info.prompt || ""}`.trim();
+  const buttons = info.options
+    .map((option) => {
+      const value = field === "chosen_seat" ? option.seat : option.index;
+      return (
+        `<button type="button" class="prompt-choice-btn" data-choice-value="${value}">` +
+        `${escapeHtml(labelOf(option))}</button>`
+      );
+    })
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-choice-value]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action,
+        [field]: Number(btn.dataset.choiceValue),
+      });
+    });
+  });
+}
+
+function applyPlayerChoicePrompt(info) {
+  applyChoiceButtonPrompt(info, {
+    title: "Choose a player",
+    action: "player_choice_confirm",
+    field: "chosen_seat",
+    labelOf: (option) => option.name,
+  });
+}
+
+function applyCastChoicePrompt(info) {
+  applyChoiceButtonPrompt(info, {
+    title: "Choose a spell",
+    action: "cast_choice_confirm",
+    field: "cast_index",
+    // The damage each one dealt is what the choice is between, so it is on the
+    // button rather than in a log the player would have to reconstruct.
+    labelOf: (option) => `${option.name} (${option.damage} damage)`,
   });
 }
 
@@ -6643,6 +6724,18 @@ function renderActivationPrompt() {
   const bodyChoiceInfo = getBodyChoiceInfo();
   if (bodyChoiceInfo) {
     applyBodyChoicePrompt(bodyChoiceInfo);
+    return;
+  }
+
+  const playerChoiceInfo = getPlayerChoiceInfo();
+  if (playerChoiceInfo) {
+    applyPlayerChoicePrompt(playerChoiceInfo);
+    return;
+  }
+
+  const castChoiceInfo = getCastChoiceInfo();
+  if (castChoiceInfo) {
+    applyCastChoicePrompt(castChoiceInfo);
     return;
   }
 

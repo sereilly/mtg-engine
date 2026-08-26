@@ -38,6 +38,7 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .derived import derived_instruction_for_line
 from .errors import LoweringError
+from .lowering._events import CHOSEN_PLAYER
 from .lowering.where_x import lower_where_x
 from .statics import _lower_static_ability
 from .lowering.control_flow import (
@@ -565,6 +566,23 @@ def lower_statement(
             OracleInstruction(
                 "choose_number", "",
                 {"minimum": statement.minimum, "maximum": statement.maximum},
+            ),
+        )
+
+    if isinstance(statement, ast.ChoosePlayerWhoCast):
+        # "Choose a player who cast one or more sorcery spells this turn."
+        # (Backdraft.) The choice and nothing else: what the chosen player is
+        # *for* is the sentence after it, which reads the seat this one records
+        # (`_PRODUCES`) — the same shape the coin flip below has, and for the
+        # same reason.
+        return (
+            OracleInstruction(
+                "choose_player_who_cast", "",
+                {
+                    "card_type": statement.card_type,
+                    "minimum": statement.minimum,
+                    "result_key": CHOSEN_PLAYER,
+                },
             ),
         )
 
