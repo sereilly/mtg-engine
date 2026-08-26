@@ -387,6 +387,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # inline by Game.tap_land_for_mana, not through EFFECT_HANDLERS on the
     # stack, because CR 605.4a says a triggered mana ability never uses it.
     "add_mana_for_tapped_land": "mana",
+    # "If target Plains is tapped for mana, it produces colorless mana instead
+    # of white mana." (Quarum Trench Gnomes.) A CR 611.2 continuous effect on
+    # one land rather than a production of mana — the same category because
+    # what it changes is the land's mana ability, and nothing else in the
+    # engine asks about that.
+    "produce_mana_instead": "mana",
     "create_token": "tokens",
     "create_copy_token": "tokens",
     # Flipping a coin (CR 705). Its own category rather than sharing one with

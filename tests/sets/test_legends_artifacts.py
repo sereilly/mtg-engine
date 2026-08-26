@@ -681,3 +681,83 @@ def test_al_abaras_carpet_shield_expires_with_the_turn(set_pool):
 
     game.resolve_cleanup_step(0)
     assert _dealt(game, p1, 3, ground) == 3
+
+
+# ---------------------------------------------------------------------------
+# Mana Matrix (round 26) — a printed *list* of card types on a reduction
+# ---------------------------------------------------------------------------
+
+
+def _matrix_game(set_pool, battlefield, hand, *, seat=0, **mana):
+    pool = set_pool("LEG")
+    players = [PlayerState(name="P1"), PlayerState(name="P2")]
+    players[0].battlefield = [Permanent(card=pool[n]) for n in battlefield]
+    players[seat].hand = [pool[n] for n in hand]
+    for player in players:
+        player.library = [pool["Karakas"]] * 6
+    game = Game(players=players)
+    game.enforce_mana_costs = True
+    game.active_player_index = seat
+    players[seat].mana_pool = {
+        sym: mana.get(sym, 0) for sym in ("W", "U", "B", "R", "G", "C")
+    }
+    return game, players[seat]
+
+
+def test_mana_matrix_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Mana Matrix"])
+    assert program.supported, program.reason
+
+
+def test_mana_matrix_discounts_an_instant_and_spends_the_reduced_mana(set_pool):
+    """Divine Offering is {1}{W}; the Matrix takes {2} off a cost with {1} of
+    generic, so one white mana pays for it — and the pool afterwards is what
+    proves the discount was applied at payment rather than only computed."""
+    game, caster = _matrix_game(
+        set_pool, ["Mana Matrix"], ["Divine Offering"], W=1,
+    )
+
+    assert game.queue_from_hand(0, "Divine Offering").supported
+    assert caster.mana_pool["W"] == 0, "the {W} pip is still paid"
+    assert sum(caster.mana_pool.values()) == 0
+
+    bare, _ = _matrix_game(set_pool, [], ["Divine Offering"], W=1)
+    assert not bare.queue_from_hand(0, "Divine Offering").supported
+
+
+def test_mana_matrix_reads_both_printed_types(set_pool):
+    """"Instant **and** enchantment spells" is an alternation, so both halves
+    of the list have to be discounted — a pattern that read one type would
+    silently drop the other."""
+    # Greater Realm of Preservation is {1}{W}; {2} less leaves {W}.
+    enchantment, _ = _matrix_game(
+        set_pool, ["Mana Matrix"], ["Greater Realm of Preservation"], W=1,
+    )
+    assert enchantment.queue_from_hand(0, "Greater Realm of Preservation").supported
+
+    bare, _ = _matrix_game(set_pool, [], ["Greater Realm of Preservation"], W=1)
+    assert not bare.queue_from_hand(0, "Greater Realm of Preservation").supported
+
+
+def test_mana_matrix_does_not_discount_a_type_it_does_not_name(set_pool):
+    """A creature spell is neither of the two printed types. Fallen Angel is
+    {3}{B}{B}; this is exactly the mana a {2} discount would make enough."""
+    game, _ = _matrix_game(set_pool, ["Mana Matrix"], ["Fallen Angel"], B=2, C=1)
+    assert not game.queue_from_hand(0, "Fallen Angel").supported
+
+
+def test_mana_matrix_never_reduces_a_coloured_pip(set_pool):
+    """CR 118.7a: a generic reduction touches only the generic component, and
+    it clamps at zero rather than spilling onto a pip. Divine Offering is
+    {1}{W} and the Matrix offers {2}: the {1} goes, the {W} stays, so a single
+    colorless mana still cannot pay for it."""
+    game, _ = _matrix_game(set_pool, ["Mana Matrix"], ["Divine Offering"], C=1)
+    assert not game.queue_from_hand(0, "Divine Offering").supported
+
+
+def test_mana_matrix_does_not_discount_an_opponents_spell(set_pool):
+    """"…spells **you cast**" is the Matrix's controller (CR 109.5)."""
+    game, _ = _matrix_game(
+        set_pool, ["Mana Matrix"], ["Divine Offering"], seat=1, W=1,
+    )
+    assert not game.queue_from_hand(1, "Divine Offering").supported

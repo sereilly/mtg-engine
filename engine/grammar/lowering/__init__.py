@@ -12,7 +12,8 @@ template has one home on each side — prowess parses in
     board            destruction, bouncing, tapping, control, exile
     cards            draw, discard, mill, scry
     library          search, reveal, look-at, exile linkage — the hidden zones
-    mana             "Add {G}" and the tapped-land mana trigger
+    mana             "Add {G}", the tapped-land mana trigger, and a standing
+                     change to what a land produces
     stack            countering
     combat           can't-attack / can't-be-blocked
     game             tokens, life, winning, extra turns
@@ -156,6 +157,7 @@ from .mana import (
     _lower_add_mana,
     _TAPPED_LAND_MANA_RECIPIENTS,
     _lower_add_mana_for_tapped_land,
+    _lower_produces_mana_instead,
 )
 from .library import (
     _lower_reveal_top,
@@ -311,6 +313,7 @@ __all__ = [
     "_lower_add_mana",
     "_TAPPED_LAND_MANA_RECIPIENTS",
     "_lower_add_mana_for_tapped_land",
+    "_lower_produces_mana_instead",
     "_lower_double_power",
     "_lower_switch_pt",
     "_fused_prepare_then_interact",

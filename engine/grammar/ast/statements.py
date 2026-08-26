@@ -79,9 +79,12 @@ from .board import (
     DoesntUntapNextStep,
     Untap,
 )
-from .cards import (
+from .mana import (
     AddMana,
     AddManaForTappedLand,
+    ProducesManaInstead,
+)
+from .cards import (
     CastPermission,
     Discard,
     Draw,
@@ -148,7 +151,7 @@ Effect = Union[
     RevealTop, RevealUntil, NameAndStrip, NameThenRevealTop,
     ExileGraveyardUntilLeaves, CastFromExiledWith,
     PhaseOut,
-    AddManaForTappedLand, PreventDamage,
+    AddManaForTappedLand, ProducesManaInstead, PreventDamage,
     SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
     ExileTopOfLibrary, ExileGraveyard, CastPermission, LookTopPickToHand,
     RevealHandAndChoose,

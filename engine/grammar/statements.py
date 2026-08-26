@@ -68,6 +68,7 @@ from .effects import (
     _parse_scry,
     _parse_modal_head,
     _parse_player_adds_mana,
+    _parse_produces_instead,
     _parse_prevent,
     _parse_double,
     _parse_switch_pt,
@@ -571,6 +572,19 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         except GrammarError:
             pass
         stream.reset(mark)
+
+    # "If target Plains is tapped for mana, it produces colorless mana instead
+    # of white mana." (Quarum Trench Gnomes.) The printed shape opens like an
+    # ordinary conditional, but its "condition" is not one: nothing is tested
+    # when the ability resolves, and the arm is a standing change to what the
+    # land will produce later. Read before the conditional below, which would
+    # take the clause as an intervening-if over a sentence it has no production
+    # for — and refuses without consuming, so every other "if" keeps its
+    # reading.
+    if stream.at_word("if"):
+        produces = _parse_produces_instead(stream)
+        if produces is not None:
+            return produces
 
     # "if <condition>, <statement>"
     if stream.at_word("if"):

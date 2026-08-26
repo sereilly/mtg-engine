@@ -150,13 +150,16 @@ from .board import (
     DestroyUnlessPay,
     SacrificeUnlessPay,
 )
+from .mana import (
+    AddMana,
+    AddManaForTappedLand,
+    ProducesManaInstead,
+)
 from .cards import (
     Draw,
     Discard,
     Mill,
     Scry,
-    AddMana,
-    AddManaForTappedLand,
     CastPermission,
     ExileGraveyard,
     RevealHandAndChoose,
@@ -342,6 +345,7 @@ __all__ = [
     "Scry",
     "AddMana",
     "AddManaForTappedLand",
+    "ProducesManaInstead",
     "CastPermission",
     "ExileGraveyard",
     "RevealHandAndChoose",

@@ -91,7 +91,7 @@ PARSE_LAYERS = [
 ]
 LOWER_LAYERS = ["lowering", "statics", "lower"]
 
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game"]
+EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -100,8 +100,11 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # for — one home per template per side, findable from the family name.
 # `library` and `mana` split out of `lowering/cards.py` the same way when it
 # reached 959 of the 1,000 lines: the hidden-zone flows and mana production
-# each lower to far more than their parse halves read. If `effects/cards.py`
-# ever splits, reuse these names so the mirror re-forms instead of forking.
+# each lower to far more than their parse halves read. `mana` is no longer one
+# of the asymmetric ones — `effects/cards.py` and `ast/cards.py` reached the cap
+# in their turn and split off the same family under the same name, which is the
+# mirror re-forming exactly as this note asked for. `library` still has no parse
+# half, and `effects/cards.py` keeps the search flows for that reason.
 # `counters` split out of `lowering/characteristics.py` at 975 lines, the day
 # before a set ingest: a counter (CR 122) is a marker on an object, not a
 # characteristic of it, and the two halves shared no imports. `keywords` split
@@ -112,7 +115,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # two-source shield landed. The parse side keeps prevention with damage because
 # the two read the same recipient and duration vocabulary; the lowering halves
 # share not one helper, which is the same asymmetry the families above record.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "mana", "counters", "keywords", "tapping", "prevention", "where_x"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "library", "counters", "keywords", "tapping", "prevention", "where_x"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 

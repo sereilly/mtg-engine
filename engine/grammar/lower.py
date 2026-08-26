@@ -65,6 +65,7 @@ from .lowering import (
     _fused_exile_then_controller_life,
     _lower_add_mana,
     _lower_add_mana_for_tapped_land,
+    _lower_produces_mana_instead,
     _lower_become_color,
     _lower_gain_type,
     _lower_cant_be,
@@ -258,6 +259,8 @@ def lower_statement(
         return _lower_add_mana(statement, produced)
     if isinstance(statement, ast.AddManaForTappedLand):
         return _lower_add_mana_for_tapped_land(statement, dispatch_event)
+    if isinstance(statement, ast.ProducesManaInstead):
+        return _lower_produces_mana_instead(statement)
     if isinstance(statement, ast.CreateCopyToken):
         return _lower_create_copy_token(statement)
 

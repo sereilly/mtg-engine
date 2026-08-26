@@ -1139,3 +1139,104 @@ def test_shelkin_brownie_breaks_up_the_wolf_band(set_pool):
 
     ok, _ = game.declare_attackers(0, [1, 2], bands=[[1, 2]])
     assert not ok
+
+
+# ---------------------------------------------------------------------------
+# Quarum Trench Gnomes (round 26) — a standing change to what a land produces
+# ---------------------------------------------------------------------------
+
+
+def _gnomes_game(set_pool, land_name="Plains", extra=()):
+    pool = set_pool("LEG")
+    gnomes = Permanent(card=pool["Quarum Trench Gnomes"])
+    lands = [Permanent(card=set_pool("LEA")[land_name])]
+    lands += [Permanent(card=set_pool("LEA")[name]) for name in extra]
+    p1 = PlayerState(name="P1", battlefield=[gnomes, *lands])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    gnomes.summoning_sick = False
+    return game, p1, gnomes, lands
+
+
+def _aim_gnomes(game, index):
+    result = game.activate_permanent_ability(
+        0, "Quarum Trench Gnomes", permanent_index=0,
+        target_permanent_index=index, target_player_index=0,
+    )
+    game._settle()
+    return result
+
+
+def test_quarum_trench_gnomes_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Quarum Trench Gnomes"])
+    assert program.supported, program.reason
+
+
+def test_quarum_trench_gnomes_turns_a_plains_colorless(set_pool):
+    """The whole card: tap the Gnomes, then tap the Plains and see what came
+    out. Asking the compiler alone would have been happy with an ability that
+    resolved and changed nothing."""
+    game, p1, _gnomes, lands = _gnomes_game(set_pool)
+    plains = lands[0]
+    assert plains.effective_produced_mana == ("W",)
+
+    assert _aim_gnomes(game, 1).supported
+    assert plains.effective_produced_mana == ("C",)
+
+    p1.mana_pool = {sym: 0 for sym in ("W", "U", "B", "R", "G", "C")}
+    game.tap_land_for_mana(0, "Plains", permanent_index=1)
+    assert p1.mana_pool["C"] == 1
+    assert p1.mana_pool["W"] == 0, "the white mana is replaced, not added to"
+
+
+def test_quarum_trench_gnomes_changes_only_the_land_it_named(set_pool):
+    """"Target Plains" is one land, not the type — a second Plains keeps making
+    white, which is what separates this from a board-wide static."""
+    game, p1, _gnomes, lands = _gnomes_game(set_pool, extra=("Plains",))
+
+    assert _aim_gnomes(game, 1).supported
+
+    assert lands[0].effective_produced_mana == ("C",)
+    assert lands[1].effective_produced_mana == ("W",), "the other Plains is untouched"
+
+
+def test_quarum_trench_gnomes_refuses_a_land_that_is_not_a_plains(set_pool):
+    """The printed noun narrows the target, and the gate that reads it is the
+    one the picker reads (CR 602.2b) — so the ability is refused with the
+    Gnomes still untapped rather than activated onto a land it cannot change."""
+    game, _p1, gnomes, lands = _gnomes_game(set_pool, land_name="Swamp")
+
+    result = _aim_gnomes(game, 1)
+
+    assert not result.supported
+    assert not gnomes.tapped, "nothing was paid"
+    assert lands[0].effective_produced_mana == ("B",)
+
+
+def test_quarum_trench_gnomes_effect_lasts_past_the_turn(set_pool):
+    """"(This effect lasts indefinitely.)" — no duration, so no cleanup sweep
+    takes it back."""
+    game, p1, _gnomes, lands = _gnomes_game(set_pool)
+    assert _aim_gnomes(game, 1).supported
+
+    game.resolve_cleanup_step(0)
+    game.start_turn(1)
+    game.start_turn(0)
+
+    assert lands[0].effective_produced_mana == ("C",)
+
+
+def test_quarum_trench_gnomes_swap_is_read_by_the_payment_planner(set_pool):
+    """`plan_payment` asks what a land can produce through the same property,
+    so a Plains the Gnomes have changed no longer pays a {W} pip."""
+    from engine.mana_payment import plan_payment
+
+    game, p1, _gnomes, lands = _gnomes_game(set_pool)
+    empty = {sym: 0 for sym in ("W", "U", "B", "R", "G", "C")}
+    assert plan_payment(empty, lands, {"W": 1}) is not None
+
+    assert _aim_gnomes(game, 1).supported
+
+    assert plan_payment(empty, lands, {"W": 1}) is None
+    assert plan_payment(empty, lands, {"generic": 1}) is not None
