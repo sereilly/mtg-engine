@@ -16,31 +16,9 @@ from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDEX, match_longest)
 from ..phrases import (
-    _accept_number, _parse_for_each_this_way, _parse_mana_payment, _parse_zone,
-    parse_subject_filter_at,
+    _accept_number, _accept_self_reference, _parse_for_each_this_way,
+    _parse_mana_payment, _parse_zone, parse_subject_filter_at,
 )
-
-
-def _accept_self_reference(stream: TokenStream) -> bool:
-    """Consume one reference to the ability's own source, or leave the cursor.
-
-    Two printed spellings: "this <noun>" (Willow Satyr, The Wretched), and the
-    card naming itself — which the lexer has already collapsed to one SELF
-    token (Rubinia Soulsinger's "you control Rubinia Soulsinger"). The noun
-    after "this" names the source's own type and adds nothing a payload would
-    carry, but it still has to be consumed for the line to be accounted for in
-    full.
-    """
-    token = stream.peek()
-    if token is not None and token.kind == "self":
-        stream.advance()
-        return True
-    mark = stream.mark()
-    if stream.accept_word("this") and stream.peek_word() is not None:
-        stream.advance()
-        return True
-    stream.reset(mark)
-    return False
 
 
 def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:

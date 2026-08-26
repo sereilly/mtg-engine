@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
+from ..linked_exile import LEAVES, UNTAPPED, link_exiled_card, linked_entries, take_linked_entries
 from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
@@ -1945,14 +1946,36 @@ def exile_top_of_library(game: Game, instruction: OracleInstruction, context: Or
     """"Exile the top three cards of your library." (Chandra, Heart of Fire's
     +1.) The exiled cards are recorded under ``exiled_cards`` for the same
     resolution's "you may play cards exiled this way" to read — the exile is
-    what makes that sentence mean anything."""
+    what makes that sentence mean anything.
+
+    They are *also* recorded as exiled **with** the ability's source, when the
+    source is a permanent (CR 610.3, engine/linked_exile.py). Nothing ends that
+    link on its own — the entries carry no ``ends_on`` — so it is inert for
+    Chandra and it is everything for Knowledge Vault, whose other two abilities
+    are the only things that ever move the pile.
+
+    ``face down`` (CR 406.3) needs that record to mean anything: two copies of
+    one card in a deck are the same ``CardDefinition`` object, so the record of
+    the exiling is the only sound answer to "which exiled card is hidden". With
+    no permanent to hold it the rider cannot be carried out, and the exile does
+    not happen at all rather than happening face up — the same refusal the
+    other linked exiles make when they have nothing to be linked to.
+    """
     caster = context.caster
     amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    face_down = bool(instruction.payload.get("face_down"))
+    source = context.source_permanent
+    if face_down and source is None:
+        game.log.append("the face-down exile has no permanent to be linked to")
+        return True, "resolved"
+    owner_index = game.players.index(caster)
     exiled = []
     for _ in range(min(amount, len(caster.library))):
         card = caster.library.pop(0)
         caster.exile.append(card)
         exiled.append(card)
+        if source is not None:
+            link_exiled_card(source, card, owner_index, face_down=face_down)
     context.results["exiled_cards"] = exiled
     if exiled:
         game.log.append(
@@ -1961,6 +1984,51 @@ def exile_top_of_library(game: Game, instruction: OracleInstruction, context: Or
         )
     else:
         game.log.append(f"{caster.name} has no cards left to exile")
+    return True, "resolved"
+
+
+@effect_handler("put_exiled_with_source")
+def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put all cards exiled with this artifact into their owner's hand."
+    (Knowledge Vault's ``{0}``; its trigger says "…with it into their owner's
+    graveyard".)
+
+    The pile is drained, not copied: once the cards have moved they are no
+    longer exiled with anything, and the record is what the *other* linked
+    ability reads. Knowledge Vault is exactly that case — the ``{0}`` ability
+    sacrifices the artifact, which puts its leaves-the-battlefield trigger on
+    the stack, and the trigger has to find an empty pile a moment later rather
+    than pulling the same cards out of the hand they just reached.
+
+    Reading the record off ``context.source_permanent`` is also what lets it
+    survive the sacrifice: the record lives on the ``Permanent`` object, and
+    that object is still the one the resolution is holding after it has left
+    the battlefield (CR 400.7 makes any *returning* permanent a new object, so
+    an id would not do).
+    """
+    source = context.source_permanent
+    entries = take_linked_entries(source)
+    if not entries:
+        name = context.card.name if context.card is not None else "that permanent"
+        game.log.append(f"nothing is exiled with {name}")
+        return True, "resolved"
+    zone = str(instruction.payload.get("zone", "hand"))
+    moved: list[str] = []
+    onto_battlefield = False
+    for entry in entries:
+        owner = game.players[int(entry["owner_index"])]
+        if entry["card"] not in owner.exile:
+            # It has already left exile by some other route; a card put back
+            # from nowhere is a card this effect created.
+            continue
+        # The one placement, shared with the automatic return: a hand or a
+        # library goes through the CR 903.9b seam rather than being appended.
+        onto_battlefield |= game.leave_linked_exile(entry, zone) is not None
+        moved.append(entry["card"].name)
+    if moved:
+        game.log.append(f"{', '.join(moved)} go to their owner's {zone}")
+        if onto_battlefield:
+            game._recompute_continuous_effects()
     return True, "resolved"
 
 
@@ -2017,12 +2085,12 @@ def exile_graveyard_until_leaves(game: Game, instruction: OracleInstruction, con
     if not taken:
         game.log.append(f"{caster.name} has no matching card in their graveyard")
         return True, "resolved"
-    held = list(source.metadata.get("exiled_until_leaves") or ())
     for card in taken:
         caster.graveyard.remove(card)
         caster.exile.append(card)
-        held.append({"owner_index": owner_index, "card": card, "to": "graveyard"})
-    source.metadata["exiled_until_leaves"] = held
+        link_exiled_card(
+            source, card, owner_index, to="graveyard", ends_on=(LEAVES,)
+        )
     game.log.append(
         f"{source.card.name} exiles {', '.join(card.name for card in taken)} "
         f"from {caster.name}'s graveyard"
@@ -2102,7 +2170,6 @@ def exile_until_leaves_or_untaps(
         game.log.append(f"{context.card.name}: no valid creature to exile")
         return True, "resolved"
     auras = list(auras_attached_to(victim))
-    held = list(source.metadata.get("exiled_until_leaves") or ())
     entries = [
         {
             "owner_index": game.owner_index_of(victim) or 0,
@@ -2126,7 +2193,15 @@ def exile_until_leaves_or_untaps(
     game.remove_all_from_battlefield([victim, *auras])
     for entry, permanent in zip(entries, [victim, *auras]):
         game.players[int(entry["owner_index"])].exile.append(permanent.card)
-    source.metadata["exiled_until_leaves"] = held + entries
+        link_exiled_card(
+            source, permanent.card, entry["owner_index"],
+            to="battlefield",
+            # The one ability in the pool whose exile ends on *either* event.
+            ends_on=(LEAVES, UNTAPPED),
+            tapped=bool(entry.get("tapped")),
+            counters=entry.get("counters"),
+            attach_to_returned=bool(entry.get("attach_to_returned")),
+        )
     game.log.append(
         f"{context.card.name} exiled {victim.card.name}"
         + (f" and {len(auras)} Aura(s)" if auras else "")
@@ -2175,9 +2250,8 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         source = context.source_permanent
         described = dict(payload.get("filter") or {})
         alternatives = (described,) if described else ()
-        held = list((source.metadata.get("exiled_until_leaves") or ()) if source else ())
         cards = [
-            entry["card"] for entry in held
+            entry["card"] for entry in linked_entries(source)
             if int(entry.get("owner_index", -1)) == caster_index
             and card_matches_any(entry["card"], alternatives)
         ]

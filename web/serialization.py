@@ -737,6 +737,41 @@ def _hand_revealed_to_viewer(game: Game, viewer_seat: int | None, seat: int) -> 
     return False
 
 
+def _exile_payload(
+    game: Game, player: PlayerState, viewer_seat: int | None, seat: int
+) -> list:
+    """The exile zone as a viewer sees it — face-down cards as card backs.
+
+    Exile is a public zone, but a card put there **face down** (CR 406.3) is
+    hidden from every player, its owner included: Knowledge Vault's ``{2}, {T}``
+    says nothing about looking. So the hiding is not per viewer, and the
+    ``<hidden>`` placeholder is the same one a concealed hand uses.
+
+    Which cards those are is read from the linked-exile record
+    (engine/linked_exile.py) rather than from a flag on the card, because two
+    copies of one card in a deck are the *same* ``CardDefinition`` object — the
+    record of the exiling is the only thing that can tell one from the other.
+    The count of face-down entries is what is honoured, one per matching
+    position, so a face-up copy of a card also exiled face down still shows.
+    """
+    from engine.linked_exile import face_down_exiled_cards
+
+    owed: dict[int, int] = {}
+    for card in face_down_exiled_cards(game, seat):
+        owed[id(card)] = owed.get(id(card), 0) + 1
+    payload: list = []
+    for card in player.exile:
+        if owed.get(id(card), 0) > 0:
+            owed[id(card)] -= 1
+            payload.append("<hidden>")
+            continue
+        payload.append(
+            _serialize_card(card, game, seat) if viewer_seat == seat
+            else _serialize_card(card)
+        )
+    return payload
+
+
 def _serialize_player(
     player: PlayerState,
     viewer_seat: int | None,
@@ -830,10 +865,7 @@ def _serialize_player(
             _serialize_card(card, game, seat) if viewer_seat == seat else _serialize_card(card)
             for card in player.graveyard
         ], player.graveyard),
-        "exile": _crowned([
-            _serialize_card(card, game, seat) if viewer_seat == seat else _serialize_card(card)
-            for card in player.exile
-        ], player.exile),
+        "exile": _crowned(_exile_payload(game, player, viewer_seat, seat), player.exile),
         # The ante zone (CR 407) — public, like exile. Empty unless an ante card
         # (Contract from Below, Demonic Attorney, Jeweled Bird) has resolved.
         "ante": [_serialize_card(card) for card in player.ante],

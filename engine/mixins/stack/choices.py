@@ -1275,6 +1275,7 @@ class PendingChoicesMixin:
         only here — Duress discards it, and the exile ending arrives with the
         card that needs it."""
         from ...handlers.zones import _resolve_one_discard
+        from ...linked_exile import LEAVES, link_exiled_card
 
         fate = str(choice.data.get("fate", "discard"))
         if fate == "discard":
@@ -1293,9 +1294,9 @@ class PendingChoicesMixin:
             return False
         card = victim.hand.pop(hand_index)
         victim.exile.append(card)
-        held = list(source.metadata.get("exiled_until_leaves") or ())
-        held.append({"owner_index": victim_index, "card": card})
-        source.metadata["exiled_until_leaves"] = held
+        link_exiled_card(
+            source, card, victim_index, to="hand", ends_on=(LEAVES,)
+        )
         self.log.append(
             f"{card.name} is exiled until {source.card.name} leaves the battlefield"
         )

@@ -850,6 +850,12 @@ def sacrifice_self(game: Game, instruction: OracleInstruction, context: OracleEx
     (CR 608.2b does as much as possible), not a failure: the rest of the
     resolution still runs.
 
+    Whether it happened is recorded under ``sacrificed_self``, the same shape
+    ``exile_self`` uses and for the same reason: "Sacrifice this artifact. **If
+    you do**, …" (Knowledge Vault) asks about the step before it, and a step
+    that records nothing gives the branch nothing to test — the whole ability
+    refuses to lower rather than guessing that it always happened.
+
     This kind used to have **no handler at all**: every card compiling it was
     a "when you control no Islands/lands" state trigger the CR 603.8 sweep in
     ``mixins/game_ending.py`` performs itself, and the generic dispatch
@@ -861,6 +867,7 @@ def sacrifice_self(game: Game, instruction: OracleInstruction, context: OracleEx
         game.log.append(f"{context.card.name}: nothing left to sacrifice")
         return True, "resolved"
     if game.sacrifice_permanent(source) is not None:
+        context.results["sacrificed_self"] = True
         game.log.append(f"{context.card.name} was sacrificed")
     return True, "resolved"
 

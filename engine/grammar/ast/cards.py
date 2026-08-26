@@ -221,8 +221,33 @@ class ExileTopOfLibrary:
     +1.) Always the controller's own library — no card prints another player's
     — and the exiled cards are recorded for a following sentence's "cards
     exiled this way" to read, which is the reason this is not a Mill with a
-    different destination."""
+    different destination.
+
+    *face_down* is Knowledge Vault's rider (CR 406.3): the cards go to exile
+    face down, so no player may look at them. It rides the node rather than
+    becoming a second statement because it is a property of the exiling, not an
+    effect after it — a face-up exile followed by a "turn them face down" is
+    not what the card says.
+    """
     count: Amount
+    face_down: bool = False
+
+
+@dataclass(frozen=True)
+class PutExiledWithSource:
+    """``Put all cards exiled with this artifact into their owner's hand.``
+    (Knowledge Vault, both of its linked abilities — the other one says
+    "exiled with **it**" and lands in their owner's graveyard.)
+
+    A *linked* ability (CR 610.3): the pile it names is exactly the cards the
+    source's own earlier ability exiled, which is why there is nothing here to
+    filter and no target to pick — the record answers "which cards", and the
+    only thing printed that varies is where they land.
+
+    That is why *zone* is a payload field and not part of a kind name: a second
+    card printing the same sentence with a different destination needs no code.
+    """
+    zone: Zone
 
 
 @dataclass(frozen=True)

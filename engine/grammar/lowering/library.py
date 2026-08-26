@@ -340,7 +340,44 @@ def _lower_exile_top_of_library(node: ast.ExileTopOfLibrary) -> tuple[OracleInst
         raise LoweringError(
             "the top-of-library exile handler takes a fixed count", node=node
         )
-    return (OracleInstruction("exile_top_of_library", "", {"amount": amount}),)
+    payload: dict = {"amount": amount}
+    if node.face_down:
+        payload["face_down"] = True
+    return (OracleInstruction("exile_top_of_library", "", payload),)
+
+
+#: Where a linked pile can be sent. Payload, not part of the kind: a second
+#: card printing the sentence with another destination needs no code. A zone
+#: outside this refuses, because a pile put somewhere the handler cannot reach
+#: is a pile silently left in exile. A library is deliberately not here: a card
+#: put into one has to go somewhere in it, and no printing of this sentence says
+#: where.
+_LINKED_EXILE_DESTINATIONS = frozenset({"hand", "graveyard", "battlefield"})
+
+
+def _lower_put_exiled_with_source(
+    node: ast.PutExiledWithSource,
+) -> tuple[OracleInstruction, ...]:
+    """"Put all cards exiled with this artifact into their owner's hand."
+    (Knowledge Vault.)
+
+    The owner reference is checked rather than dropped: every printing of this
+    sentence sends each card to *its own* owner's zone (CR 400.3), and a
+    wording naming one player would be a different effect the handler does not
+    implement.
+    """
+    zone = node.zone
+    if zone.name not in _LINKED_EXILE_DESTINATIONS:
+        raise LoweringError(
+            f"a linked exile cannot be put into the {zone.name}", node=node
+        )
+    if zone.owner is None or zone.owner.kind != "owner":
+        raise LoweringError(
+            "a linked exile goes to each card's own owner's zone", node=node
+        )
+    return (
+        OracleInstruction("put_exiled_with_source", "", {"zone": zone.name}),
+    )
 
 
 # Restrictions the exile-search picker tests (engine/search_filters.py's
