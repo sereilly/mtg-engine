@@ -681,3 +681,112 @@ def test_al_abaras_carpet_shield_expires_with_the_turn(set_pool):
 
     game.resolve_cleanup_step(0)
     assert _dealt(game, p1, 3, ground) == 3
+
+
+# ---------------------------------------------------------------------------
+# Life Matrix (round 26) - an ability granted to another permanent as quoted text
+# ---------------------------------------------------------------------------
+
+
+def _matrix_game(set_pool):
+    """Life Matrix, a creature to grant to, and a creature to leave alone."""
+    matrix = Permanent(card=set_pool("LEG")["Life Matrix"])
+    granted = Permanent(card=set_pool("LEG")["Barbary Apes"])
+    other = Permanent(card=set_pool("LEG")["Barbary Apes"])
+    p1 = PlayerState(name="P1", battlefield=[matrix, granted, other])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._set_phase_and_step("beginning", "upkeep")
+    return game, matrix, granted, other
+
+
+def test_life_matrix_compiles_supported(set_pool):
+    program = compile_card_oracle(set_pool("LEG")["Life Matrix"])
+    assert program.supported, program.reason
+
+    (ability,) = program.activated_abilities
+    steps = ability.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "add_named_counter_to_target", "grant_target_ability_text",
+    ]
+    # The counter's word and the granted ability's text are both payload.
+    assert steps[0].payload["counter"] == "matrix"
+    assert steps[1].payload["abilities"] == (
+        "Remove a matrix counter from this creature: Regenerate this creature",
+    )
+    # No printed duration, so the grant lasts as long as the creature does
+    # (CR 611.2c).
+    assert steps[1].payload["until_eot"] is False
+
+
+def test_life_matrix_grants_an_ability_that_can_then_be_activated(set_pool):
+    """The point of the round: the granted ability is not just recorded, it is
+    *usable*, and using it spends the counter the same sentence placed."""
+    game, _matrix, granted, other = _matrix_game(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Life Matrix", target_player_index=0,
+        target_permanent_ids=[granted.permanent_id],
+    )
+    game._settle()
+    assert result.supported, result.reason
+    assert granted.metadata["matrix_counters"] == 1
+
+    used = game.activate_permanent_ability(
+        0, "Barbary Apes", permanent_index=1,
+    )
+    game._settle()
+
+    assert used.supported, used.reason
+    assert granted.regeneration_shield == 1
+    # CR 602.1a: the counter removal is the cost, so it is spent.
+    assert granted.metadata["matrix_counters"] == 0
+    assert other.regeneration_shield == 0
+
+
+def test_the_granted_ability_is_unactivatable_with_no_counter_left(set_pool):
+    game, _matrix, granted, _other = _matrix_game(set_pool)
+    game.activate_permanent_ability(
+        0, "Life Matrix", target_player_index=0,
+        target_permanent_ids=[granted.permanent_id],
+    )
+    game._settle()
+    game.activate_permanent_ability(0, "Barbary Apes", permanent_index=1)
+    game._settle()
+
+    again = game.activate_permanent_ability(
+        0, "Barbary Apes", permanent_index=1,
+    )
+
+    assert not again.supported
+    assert granted.regeneration_shield == 1
+
+
+def test_a_creature_that_was_not_granted_it_has_no_such_ability(set_pool):
+    """The grant is per-permanent, and the two Apes are the same card."""
+    game, _matrix, granted, other = _matrix_game(set_pool)
+    game.activate_permanent_ability(
+        0, "Life Matrix", target_player_index=0,
+        target_permanent_ids=[granted.permanent_id],
+    )
+    game._settle()
+
+    assert compile_card_oracle(granted.effective_card).activated_abilities
+    assert not compile_card_oracle(other.effective_card).activated_abilities
+    assert "matrix_counters" not in other.metadata
+
+
+def test_life_matrix_is_refused_outside_your_upkeep(set_pool):
+    """"Activate only during your upkeep." The clause sits behind a closing
+    quotation mark, which is exactly why it used to go unenforced."""
+    game, _matrix, granted, _other = _matrix_game(set_pool)
+    game._set_phase_and_step("precombat_main", "precombat_main")
+
+    result = game.activate_permanent_ability(
+        0, "Life Matrix", target_player_index=0,
+        target_permanent_ids=[granted.permanent_id],
+    )
+
+    assert not result.supported
+    assert "matrix_counters" not in granted.metadata

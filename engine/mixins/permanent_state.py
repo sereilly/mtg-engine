@@ -865,8 +865,11 @@ class PermanentStateMixin:
         direction: a board-wide effect applying to the wrong side is worse than
         one that does not apply.
         """
-        if static.applies_to == "artifact":
-            return permanent.has_type("artifact")
+        if static.applies_to in ("artifact", "creature"):
+            # Through the layer-6/4 accessors rather than the printed line, so
+            # an animated land is a creature to The Tabernacle at Pendrell Vale
+            # and a Clone of an artifact is an artifact to Energy Flux.
+            return permanent.has_type(static.applies_to)
         if static.applies_to == "noncreature_artifact":
             printed = permanent.card.type_line.lower()
             return "artifact" in printed and "creature" not in printed

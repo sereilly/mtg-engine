@@ -354,18 +354,28 @@ class AbilityActivationMixin:
             self.log.append(target_refusal)
             return SimulationResult(permanent.card.name, False, "unsupported", target_refusal)
 
-        # Scavenging Ghoul: 'Remove a corpse counter from this creature: Regenerate
-        # this creature.' — the counter removal is the activation cost.
-        if (
-            ability.instruction.kind == "grant_regeneration_to_self"
-            and "remove a corpse counter from this creature" in program.normalized_text
-        ):
-            corpse_counters = int(permanent.metadata.get("corpse_counters", 0))
-            if corpse_counters <= 0:
-                details = f"{permanent.card.name} has no corpse counters to remove"
+        # "Remove a <kind> counter from this creature" (Scavenging Ghoul; the
+        # ability Life Matrix grants) - CR 602.1a: a counter removal is an
+        # activation cost, so it is checked and charged before the ability goes
+        # on the stack, and an ability whose source has none may not be
+        # activated at all.
+        #
+        # This was a substring test for the words "remove a **corpse** counter
+        # from this creature" beside a check that the ability regenerated. Both
+        # halves were the first card that reached it: the counter's kind is
+        # payload (CR 122.1's kinds are open), and what the ability *does* is
+        # not the cost's business. An ability granted with any other counter's
+        # word paid nothing and could be activated for ever.
+        if ability.cost.remove_counter:
+            from ...named_counters import counters_key, counters_on
+
+            kind = ability.cost.remove_counter
+            held = counters_on(permanent, kind)
+            if held <= 0:
+                details = f"{permanent.card.name} has no {kind} counters to remove"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
-            permanent.metadata["corpse_counters"] = corpse_counters - 1
+            permanent.metadata[counters_key(kind)] = held - 1
 
         # Per-ability timing restrictions are scoped to the *selected* ability's
         # own clause, not the whole card. Rock Hydra's "Activate only during your

@@ -75,8 +75,16 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         # captured and re-emitted rather than described: anything else would be
         # this module deciding what "sacrifice unless you pay" means, which the
         # upkeep tables already know.
-        re.compile(r"^all artifacts have \"(?P<ability>.+)\"$"),
-        GlobalStatic(name="energy_flux", applies_to="artifact"),
+        # **Which permanents it reaches is payload too.** Energy Flux and The
+        # Tabernacle at Pendrell Vale differ in one printed noun, and a second
+        # row for the second noun would be this module deciding that "all
+        # creatures have …" is a different mechanism from "all artifacts have
+        # …". It is the same mechanism over a different set, so the noun is
+        # payload — read into ``applies_to`` by ``global_static_for`` below,
+        # the one place a printed plural becomes the singular type word
+        # ``_global_static_applies`` tests.
+        re.compile(r"^all (?P<scope>artifacts|creatures) have \"(?P<ability>.+)\"$"),
+        GlobalStatic(name="granted_board_wide_ability", applies_to=""),
     ),
     (
         re.compile(
@@ -122,9 +130,13 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
                 )
             granted = groups.get("ability")
             if granted:
+                # "all creatures" names the type `creature`; the plural is
+                # printed English, not a key. Singularised here rather than in
+                # the predicate, so each type word has one spelling.
+                scope = groups.get("scope")
                 return GlobalStatic(
                     name=static.name,
-                    applies_to=static.applies_to,
+                    applies_to=(scope[:-1] if scope else static.applies_to),
                     removes_abilities=static.removes_abilities,
                     adds_creature_type=static.adds_creature_type,
                     pt_from_mana_value=static.pt_from_mana_value,

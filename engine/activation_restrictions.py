@@ -266,7 +266,16 @@ def _clauses(text: str) -> list[str]:
     found: list[str] = []
     for raw_line in (text or "").splitlines():
         for sentence in raw_line.split("."):
-            cleaned = sentence.strip().lower()
+            # Quotation marks are stripped with the whitespace, because a
+            # sentence boundary can fall immediately after a closing quote:
+            # "…gains "Remove a matrix counter from this creature: Regenerate
+            # this creature." **Activate only during your upkeep.**" (Life
+            # Matrix) prints its full stop *inside* the quotes, so the split
+            # leaves the next sentence starting with the quote character. Left
+            # in, the clause matched nothing and the timing went unenforced --
+            # which is this module's own opening paragraph, in the one shape
+            # anchoring the pattern cannot catch.
+            cleaned = sentence.strip().strip('"“”').strip().lower()
             # "Any player may activate this ability **but** only during any
             # upkeep step." (Armageddon Clock.) The permission and the timing
             # share a sentence, joined by "but"; the tail is the restriction and

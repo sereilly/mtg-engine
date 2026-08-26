@@ -733,6 +733,46 @@ def add_named_counter_to_self(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("add_named_counter_to_target")
+def add_named_counter_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put a matrix counter on target creature." (Life Matrix.)
+
+    The chosen-permanent twin of ``add_named_counter_to_self``, and the same
+    ignorance: the counter's word is payload and what it *means* is whatever the
+    card's other lines — here, an ability the same sentence grants — say about
+    it.
+
+    The printed noun phrase is enforced here as well as at announcement,
+    through ``subject_matches`` rather than a property read, because "you
+    control" and "another" are questions about the board rather than about the
+    card. A picker and a resolution that disagree are a target the player may
+    announce and the effect then declines to affect.
+    """
+    from ..named_counters import add_counters
+    from ..subject_filters import subject_matches
+
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(context.caster)
+    source = context.source_permanent
+    target = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, filters, observer=observer, source=source
+        ),
+    )
+    if target is None:
+        game.log.append(f"{context.card.name}: no valid permanent for a counter")
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", ""))
+    count = int(instruction.payload.get("count", 1))
+    total = add_counters(target, counter, count)
+    game.log.append(
+        f"{target.card.name} gets a {counter} counter ({total} total)"
+        f" ({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("add_named_counter_to_attached")
 def add_named_counter_to_attached(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…tap enchanted creature and put X sleep counters on **it**." (Venarian

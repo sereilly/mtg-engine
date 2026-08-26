@@ -125,6 +125,44 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
                 {"counter": node.counter, "count": node.count.value},
             ),
         )
+    # The same CR 122.1 marker on a permanent the ability **chose** ("put a
+    # matrix counter on target creature", Life Matrix). The self branch above
+    # says it lands only on the source because that is the only permanent a
+    # placement can name without a picker — this is the picker, so the noun
+    # phrase is payload and the counter's word stays payload too.
+    #
+    # Gated on `TESTABLE_SUBJECT_FILTER_KEYS` for the reason CLAUDE.md records:
+    # a restriction the matcher cannot test is one the resolution would ignore,
+    # which offers the player a wider set of targets than the card prints. A
+    # phrase with no card type is refused for the same reason the loyalty picker
+    # refuses one — it would offer every permanent on the board.
+    if (
+        not is_pt_counter(node.counter)
+        and not node.up_to
+        and _is_target(node.subject)
+        and not _names_several_targets(node.subject)
+    ):
+        assert isinstance(node.subject, ast.TargetSpec)
+        if not isinstance(node.count, ast.Fixed):
+            raise LoweringError(
+                "a named counter is placed a fixed number at a time", node=node
+            )
+        if not node.subject.filter.card_types:
+            raise LoweringError(
+                "a named-counter target with no card type would offer every "
+                "permanent",
+                node=node,
+            )
+        payload: dict[str, object] = {
+            "counter": node.counter, "count": node.count.value,
+        }
+        _describe_targets(payload, node.subject)
+        described = (payload.get("targets") or {}).get("filter") or {}
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the named-counter target cannot test this restriction", node=node
+            )
+        return (OracleInstruction("add_named_counter_to_target", "", payload),)
     # "Put up to X +1/+0 counters on this creature. This ability can't cause the
     # total number of +1/+0 counters on this creature to be greater than N."
     # (Clockwork Beast prints seven, Clockwork Avian four.) The cap is payload,
