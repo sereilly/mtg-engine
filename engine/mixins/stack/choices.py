@@ -67,6 +67,19 @@ class PendingChoicesMixin:
             and "_stack_item" not in choice.data
         ):
             choice.data["_stack_item"] = self.resolving_stack_item
+        # Which seat's spell or ability armed this prompt (CR 109.5). Stamped
+        # here for the same two reasons `_stack_item` is: the arming sites are
+        # handlers that know nothing about the stack, and the prompt that a
+        # resolution owes is often armed by the *answer* to an earlier one.
+        #
+        # Read at arm time and not at answer time, because by the time a seat
+        # answers, the resolution that armed the prompt has returned and
+        # `resolving_seats` is empty — which reads as "nothing caused this".
+        # Psychic Purge is the card that notices: "when a spell or ability an
+        # opponent controls causes you to discard this card" is a question about
+        # the seat that armed the discard, asked from inside the answer.
+        if self.resolving_seats and "_cause_seat" not in choice.data:
+            choice.data["_cause_seat"] = self.resolving_seats[-1]
         # A queued choice of a ``suspends`` kind is itself the suspension: the
         # steps behind it in this resolution have not run, and running them now
         # would let them see a board the answer has not shaped yet (Opt drawing

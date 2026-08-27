@@ -218,7 +218,11 @@ class UpkeepEffectsMixin:
 
         if controller.hand:
             discarded = controller.hand.pop(0)
-            controller.graveyard.append(discarded)
+            # Through the one discard seam, not a bare graveyard append: this
+            # skipped Library of Leng's CR 701.9c replacement *and* the card's
+            # own discard trigger, which is what a second spelling of a move
+            # always costs.
+            self._discard_card(controller, discarded)
             self.log.append(
                 f"{controller.name} discarded {discarded.name} to {permanent.card.name}"
             )
@@ -389,7 +393,7 @@ class UpkeepEffectsMixin:
         creature untaps again on its controller's next untap step with nothing
         to clear.
         """
-        from ..named_counters import counters_key, counters_on
+        from ..named_counters import counters_on, remove_counters
 
         permanent = ctx.permanent
         attached = permanent.metadata.get("attached_to")
@@ -401,7 +405,7 @@ class UpkeepEffectsMixin:
         current = counters_on(attached, counter)
         if current <= 0:
             return
-        attached.metadata[counters_key(counter)] = current - 1
+        remove_counters(attached, counter)
         self.log.append(
             f"{permanent.card.name}: removed a {counter} counter from "
             f"{attached.card.name} ({current - 1} left)"

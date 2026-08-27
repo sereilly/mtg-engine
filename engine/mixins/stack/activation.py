@@ -15,8 +15,8 @@ from ...activation_permissions import (activation_permission_denial,
                                         card_widens_activation)
 from ...activation_restrictions import (
     activation_denial,
-    already_activated_this_turn,
-    limits_to_once_each_turn,
+    activations_allowed_each_turn,
+    at_activation_limit,
     mark_activated_this_turn,
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
@@ -380,7 +380,7 @@ class AbilityActivationMixin:
         # word paid nothing and could be activated for ever.
         counters_removed_for_cost = 0
         if ability.cost.remove_counter:
-            from ...named_counters import counters_key, counters_on
+            from ...named_counters import counters_on, remove_counters
 
             kind = ability.cost.remove_counter
             held = counters_on(permanent, kind)
@@ -404,7 +404,9 @@ class AbilityActivationMixin:
                     self.log.append(details)
                     return SimulationResult(permanent.card.name, False, "unsupported", details)
                 counters_removed_for_cost = int(wanted)
-            permanent.metadata[counters_key(kind)] = held - counters_removed_for_cost
+            # Through the one removal seam, so a cost that takes the last
+            # counter off is the same event as an effect that does.
+            remove_counters(permanent, kind, counters_removed_for_cost)
 
         # Per-ability timing restrictions are scoped to the *selected* ability's
         # own clause, not the whole card. Rock Hydra's "Activate only during your
@@ -512,16 +514,20 @@ class AbilityActivationMixin:
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         # The timing half of "Activate only during your turn and only once each
-        # turn" is in the restriction table above; the *once* half is
-        # per-permanent state rather than a property of the game, so the stamp
-        # stays here with the state it reads. **Which lines are limited is the
+        # turn" is in the restriction table above; the *count* half is
+        # per-permanent state rather than a property of the game, so the tally
+        # stays here with the state it reads. **How limited a line is, is the
         # table's answer**, not a substring test beside it: the bare clause
-        # (Dream Coat) is a row there now, and a reader here spelling the words
-        # itself is the second representation that lets a refusal and a stamp
-        # disagree about the same sentence.
-        once_each_turn = limits_to_once_each_turn(ability_lower)
-        if once_each_turn and already_activated_this_turn(self, permanent):
-            details = f"{permanent.card.name}'s ability can only be activated once each turn"
+        # (Dream Coat), the tails, and Vampire Bats' "no more than twice" all
+        # come back from one reader, and a reader here spelling the words itself
+        # is the second representation that lets a refusal and a tally disagree
+        # about the same sentence.
+        activation_cap = activations_allowed_each_turn(ability_lower)
+        if at_activation_limit(self, permanent, ability_lower):
+            details = (
+                f"{permanent.card.name}'s ability can only be activated "
+                f"{activation_cap} time(s) each turn"
+            )
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
@@ -869,8 +875,8 @@ class AbilityActivationMixin:
                 subject=permanent, seat=controller_index,
             )
 
-        # All guards/costs passed — mark a "once each turn" ability as used.
-        if once_each_turn:
+        # All guards/costs passed — tally an activation of a capped ability.
+        if activation_cap is not None:
             mark_activated_this_turn(self, permanent)
 
         # CR 606.4: a loyalty symbol is a cost to put on or remove that many

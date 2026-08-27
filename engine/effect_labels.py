@@ -331,6 +331,12 @@ TRIGGERED_LABELS: dict[str, str] = {
     "draw_then_discard_self": "triggered_draw",
     "exile_graveyard_until_leaves": "triggered_exile",
     "exile_self": "triggered_exile",
+    # "…the game is a draw." (Divine Intervention, at Legends' promotion.) Its
+    # own bucket rather than a life one: the ability ends the game, and the
+    # report reading it as `spell_pattern` would have said the card does
+    # nothing recognisable — which is what it did until the trigger had a
+    # dispatcher at all.
+    "game_is_draw": "triggered_game_end",
     # Battering Ram's banding, added at Antiquities' promotion. A keyword
     # granted until end of combat is the same bucket the activated table gives
     # one granted until end of turn.

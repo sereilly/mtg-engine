@@ -65,7 +65,7 @@ from typing import Any, Callable, Optional
 
 from .effect_ordering import Candidate
 from .models import PlayerState
-from .named_counters import add_counters, counters_key, counters_on
+from .named_counters import add_counters, counters_on, remove_counters
 from .pt import remove_plus1_counters
 from .shields import (
     PREVENT_ALL_BUT,
@@ -1158,7 +1158,7 @@ def _remove_counter_per_damage(game, event: dict) -> PreventionOutcome | None:
         have = counters_on(permanent, counter)
         removed = min(event["amount"], have)
         if removed > 0:
-            permanent.metadata[counters_key(counter)] = have - removed
+            remove_counters(permanent, counter, removed)
     if removed <= 0:
         return None
     game.log.append(

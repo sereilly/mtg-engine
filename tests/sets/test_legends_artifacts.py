@@ -1614,3 +1614,57 @@ def test_sword_of_the_ages_sacrificing_nothing_deals_nothing(set_pool):
     assert p2.life == 20
     assert [p.card.name for p in p1.battlefield] == ["Ogre"]
     assert [c.name for c in p1.exile] == ["Sword of the Ages"]
+
+
+# ---------------------------------------------------------------------------
+# Forethought Amulet (Phase 4 parse-coverage round) — a CR 614 damage cap
+# ---------------------------------------------------------------------------
+
+
+def _amulet_game(set_pool, with_amulet: bool):
+    pool = set_pool("LEG")
+    perms = [Permanent(card=pool["Forethought Amulet"])] if with_amulet else []
+    game = Game(players=[
+        PlayerState(name="P1"),
+        PlayerState(name="P2", battlefield=perms),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._sync_control()
+    return game
+
+
+def test_forethought_amulet_caps_instant_and_sorcery_damage(catalog_by_name, set_pool):
+    """"If an instant or sorcery source would deal 3 or more damage to you, it
+    deals 2 damage to you instead."
+
+    A CR 614 replacement with no interceptor behind it until this round: the
+    card compiled supported on its upkeep line while the half a player buys it
+    for did nothing. Capped at the *dealt* number (CR 120.4b), not at the life
+    lost — which is what separates it from Ali from Cairo.
+    """
+    game = _amulet_game(set_pool, with_amulet=True)
+    game.players[0].hand.append(catalog_by_name["Lightning Bolt"])
+    assert game.queue_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    game._settle()
+    assert game.players[1].life == 18
+
+    # Below the threshold, the Amulet does nothing — a 2-damage burn is still 2.
+    bare = _amulet_game(set_pool, with_amulet=False)
+    bare.players[0].hand.append(catalog_by_name["Lightning Bolt"])
+    bare.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    bare._settle()
+    assert bare.players[1].life == 17, "no Amulet, no cap"
+
+
+def test_forethought_amulet_ignores_a_source_of_the_wrong_class(catalog_by_name, set_pool):
+    """The source class is part of the printed sentence, not decoration: an
+    artifact's ping is not an instant or sorcery source, so nothing is capped.
+    A cap that fired on every source would be a strictly better card."""
+    game = _amulet_game(set_pool, with_amulet=True)
+    rod = Permanent(card=catalog_by_name["Rod of Ruin"])
+    game.players[0].battlefield.append(rod)
+    game._sync_control()
+    assert game.queue_permanent_ability(0, "Rod of Ruin", target_player_index=1).supported
+    game._settle()
+    assert game.players[1].life == 19

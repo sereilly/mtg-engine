@@ -184,6 +184,14 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "leaves_battlefield": "when this creature leaves the battlefield",
     "dies": "when this creature dies",
     "becomes_target": "when this creature becomes the target of a spell",
+    # Legends' two, added at its promotion. Both are announced away from a call
+    # site — the first from the record `named_counters.remove_counters` writes
+    # (removal has four sites), the second from the discard seam, which is the
+    # only place a card's own from-hand trigger (CR 113.6d) is in view.
+    "last_counter_removed":
+        "when you remove the last intervention counter from this enchantment",
+    "discarded_by_opponent_effect":
+        "when a spell or ability an opponent controls causes you to discard this card",
     "no_islands": "when you control no islands",
     "no_lands": "when you control no lands",
     # at

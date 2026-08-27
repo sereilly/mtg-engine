@@ -706,7 +706,7 @@ class GameEndingMixin:
         # and the trigger still enqueues before any player next gets priority,
         # which is when a triggered ability is noticed anyway (CR 603.3b).
         from ..events import emit
-        from ..named_counters import counters_on
+        from ..named_counters import EMPTIED_KINDS_MARK, counters_on
 
         for seat, player in enumerate(self.players):
             if seat in self.second_draw_fired_this_turn or player.lost:
@@ -743,6 +743,48 @@ class GameEndingMixin:
                 # player" in the effect resolves to (CR 603.10 — the trigger
                 # freezes it, because by resolution the turn may have moved on).
                 emit(self, "draws_card", seat=seat, event_subject_player=seat)
+
+        # "When you remove the last intervention counter from this enchantment,
+        # the game is a draw." (Divine Intervention.) An *event* trigger, not a
+        # state one — but the event has four call sites (the removal handler, an
+        # activation cost, an upkeep registry entry and a damage shield), so the
+        # announcement reads the record `named_counters.remove_counters` writes
+        # rather than being repeated at each of them. Exactly the argument the
+        # draw triggers above are written with, and the card that pays for
+        # getting it wrong is this one: its whole text is the draw.
+        #
+        # The record is drained as it is read, which is what makes this an event
+        # and not a state: a permanent sitting at zero counters announces once,
+        # and only for a removal that actually happened.
+        for permanent in list(self.all_permanents()):
+            emptied = permanent.metadata.get(EMPTIED_KINDS_MARK)
+            if not emptied:
+                continue
+            for trig in compile_card_oracle(
+                permanent.effective_card
+            ).triggered_abilities:
+                if trig.condition.kind != "last_counter_removed":
+                    continue
+                kind = str(trig.condition.payload.get("counter_kind", ""))
+                if kind not in emptied:
+                    continue
+                seat = self.controller_index_of(permanent)
+                if seat is None or trig.instruction is None:
+                    continue
+                self._enqueue_triggered_batch([{
+                    "controller_index": seat,
+                    "source_permanent": permanent,
+                    "card": permanent.card,
+                    "instruction": trig.instruction,
+                    "effect_kind": trig.effect_kind,
+                    "ability_text": trig.source_line,
+                    "trigger_context": {},
+                }])
+                any_changed = True
+            # Drained whether or not a trigger wanted it: the record is about
+            # what happened, and a permanent nobody is asking about must not
+            # accumulate one that fires the day it gains the ability.
+            permanent.metadata.pop(EMPTIED_KINDS_MARK, None)
 
         # "When there are four or more page counters on this artifact, …"
         # (Mazemind Tome.) CR 603.8's *state* trigger: it fires whenever the

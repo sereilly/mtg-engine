@@ -821,6 +821,32 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         named_tap = _parse_named_subject_tap_event(stream, "when")
         if named_tap is not None:
             return named_tap
+        # "When you remove the last intervention counter from this enchantment"
+        # (Divine Intervention). Read here as well as in `engine/oracle.py`'s
+        # table for the reason stated above the threshold trigger: both front
+        # ends see the whole line, and a condition only one of them reads leaves
+        # the other refusing the effect behind it.
+        mark_removal = stream.mark()
+        if stream.accept_phrase("you", "remove", "the", "last"):
+            kind = stream.peek_word()
+            if kind:
+                stream.advance()
+                if stream.accept_word("counter") and stream.accept_word("from"):
+                    if stream.at_kind(SELF) or stream.at_word("this"):
+                        stream.advance()
+                        stream.accept_word(
+                            "artifact", "creature", "enchantment",
+                            "permanent", "land",
+                        )
+                        return ast.TriggerEvent("last_counter_removed", "when")
+        stream.reset(mark_removal)
+        # "When a spell or ability an opponent controls causes you to discard
+        # this card" (Psychic Purge). Read on both front ends, same reason.
+        if stream.accept_phrase(
+            "a", "spell", "or", "ability", "an", "opponent", "controls",
+            "causes", "you", "to", "discard", "this", "card",
+        ):
+            return ast.TriggerEvent("discarded_by_opponent_effect", "when")
         if stream.accept_phrase("you", "control", "no", "islands"):
             return ast.TriggerEvent("no_islands", "when")
         if stream.accept_phrase("you", "control", "no", "lands"):

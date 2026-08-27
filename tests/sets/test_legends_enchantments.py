@@ -2547,3 +2547,47 @@ def test_infinite_authority_fires_on_the_becomes_blocked_half_too(set_pool):
     game.resolve_end_step(0)
     game.resolve_stack(pause_for_choices=True)
     assert (attacker.effective_power, attacker.effective_toughness) == (2, 6)
+
+
+# ---------------------------------------------------------------------------
+# Divine Intervention (Phase 4 parse-coverage round) — the draw it exists for
+# ---------------------------------------------------------------------------
+
+
+def test_divine_intervention_draws_the_game_on_the_last_counter(set_pool):
+    """"When you remove the last intervention counter from this enchantment,
+    the game is a draw." (CR 104.4c.)
+
+    The whole card. Until this round the trigger's condition parsed on neither
+    front end, so the enchantment entered with two counters, spent them one an
+    upkeep, and then sat there — supported, silent, and doing nothing at all.
+
+    Announced from the state-based sweep off the record
+    `named_counters.remove_counters` writes, because counter removal has four
+    call sites and a list of fire sites is only as complete as the last card
+    that touched it.
+    """
+    pool = set_pool("LEG")
+    filler = [_creature("Filler", 1, 1)] * 30
+    intervention = Permanent(card=pool["Divine Intervention"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[intervention], library=list(filler)),
+        PlayerState(name="P2", library=list(filler)),
+    ])
+    game.enforce_mana_costs = False
+    game._initialize_permanent_state(intervention, 0, 1)
+    game._sync_control()
+    assert intervention.metadata.get("intervention_counters") == 2
+
+    game.start_turn(0)
+    game._settle()
+    assert not game.is_draw, "one counter left — the game goes on"
+
+    game.start_next_turn()   # the opponent's turn: no upkeep trigger of ours
+    game._settle()
+    assert not game.is_draw
+
+    game.start_next_turn()   # the last counter comes off
+    game._settle()
+    assert intervention.metadata.get("intervention_counters") == 0
+    assert game.is_draw

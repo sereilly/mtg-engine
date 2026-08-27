@@ -235,16 +235,16 @@ def test_602_5_once_each_turn_standing_alone_is_a_row_of_its_own():
     Phyrexia) could not read it standing alone, so the clause was unreadable
     while the words were nonetheless enforced by a substring test beside the
     table -- one fact with two representations. Both halves ask
-    `limits_to_once_each_turn` now, over the state the permanent carries.
+    `activations_allowed_each_turn` now, over the state the permanent carries.
     """
     from engine.activation_restrictions import (
-        limits_to_once_each_turn,
+        activations_allowed_each_turn,
         mark_activated_this_turn,
     )
 
     game, _p1, _p2, coat = _board("Dream Coat")
     line = next(l for l in coat.card.oracle_text.splitlines() if "Activate only" in l)
-    assert limits_to_once_each_turn(line)
+    assert activations_allowed_each_turn(line) == 1
 
     assert activation_denial(game, 0, coat, line) is None
     mark_activated_this_turn(game, coat)
@@ -259,14 +259,60 @@ def test_602_5_the_once_each_turn_tail_is_still_read_as_the_same_clause():
     """Instill Energy prints the limit as a *tail* on a timing clause. The
     reader the stamp uses has to see all three printed spellings, or a card ends
     up stamped and never refused, or refused and never stamped."""
-    from engine.activation_restrictions import limits_to_once_each_turn
+    from engine.activation_restrictions import activations_allowed_each_turn
 
-    assert limits_to_once_each_turn(
+    assert activations_allowed_each_turn(
         "{0}: Untap enchanted creature. Activate only during your turn and only "
         "once each turn."
-    )
-    assert limits_to_once_each_turn(
+    ) == 1
+    assert activations_allowed_each_turn(
         "Sacrifice a creature: Destroy target artifact. Activate only during "
         "your upkeep and only once each turn."
+    ) == 1
+    assert activations_allowed_each_turn("{T}: Add {C}.") is None
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_a_printed_cap_above_one_is_the_same_clause_with_a_number():
+    """"Activate no more than twice each turn." (Vampire Bats.)
+
+    The only clause in the pool that does not begin "Activate only", which is
+    how it slipped every reader: `_clauses` collected by that prefix, so the
+    support gate had nothing to refuse, and the grammar's restriction production
+    consumed the sentence verbatim without asking this table. The ability was a
+    {B} pump with no cap at all.
+
+    The number is payload, so the row is every printed frequency -- and a
+    frequency this module cannot read leaves the clause unmatched, which is what
+    keeps the card unsupported rather than uncapped.
+    """
+    from engine.activation_restrictions import (
+        activation_restriction_line,
+        activations_allowed_each_turn,
+        mark_activated_this_turn,
     )
-    assert not limits_to_once_each_turn("{T}: Add {C}.")
+
+    line = (
+        "{B}: This creature gets +1/+0 until end of turn. "
+        "Activate no more than twice each turn."
+    )
+    assert activations_allowed_each_turn(line) == 2
+    assert activation_restriction_line("Activate no more than twice each turn.")
+    assert (
+        activations_allowed_each_turn(
+            "{T}: Draw a card. Activate no more than three times each turn."
+        )
+        == 3
+    )
+    assert not activation_restriction_line("Activate no more than a bunch each turn.")
+
+    game, _p1, _p2, bats = _board("Vampire Bats")
+    assert activation_denial(game, 0, bats, line) is None
+    mark_activated_this_turn(game, bats)
+    assert activation_denial(game, 0, bats, line) is None
+    mark_activated_this_turn(game, bats)
+    assert activation_denial(game, 0, bats, line) == (
+        "already activated as many times as it may be this turn"
+    )
+    game.turn += 1
+    assert activation_denial(game, 0, bats, line) is None

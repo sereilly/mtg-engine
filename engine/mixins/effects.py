@@ -933,6 +933,61 @@ class EffectsMixin:
         )
         if not consumed:
             player.graveyard.append(card)
+        self._announce_discard_triggers(player, card)
+
+    def _announce_discard_triggers(
+        self, player: PlayerState, card, cause_seat: int | None = None
+    ) -> None:
+        """CR 113.6d: a triggered ability of the discarded card itself.
+
+        "When a spell or ability an opponent controls causes you to discard this
+        card, that player loses 5 life." (Psychic Purge.) The ability functions
+        from the **hand**, so nothing on the battlefield carries it and no
+        board scan would find it — the card being discarded is the source, and
+        this seam is the only place it is in view.
+
+        Announced whether or not a replacement consumed the move: Library of
+        Leng changes where a discarded card goes (CR 701.9c), it does not stop
+        the card being discarded.
+
+        "A spell or ability an opponent controls" is CR 109.5's question, and
+        `resolving_seats` is the engine's answer to it — the same stack the
+        damage seam derives `damage_source_seat` from. An empty stack means the
+        discard was not caused by a spell or ability at all (a cleanup-step
+        discard, a cost the player paid themselves), which is exactly when this
+        trigger must not fire.
+
+        *cause_seat* is for the discard that happens when a **prompt** is
+        answered: the resolution that armed it has already returned, so
+        `resolving_seats` is empty by then and the caller passes the seat it
+        read off the choice's own stack item instead.
+        """
+        causer = cause_seat
+        if causer is None:
+            causer = self.resolving_seats[-1] if self.resolving_seats else None
+        if not isinstance(causer, int) or not (0 <= causer < len(self.players)):
+            return
+        # By identity, not `players.index`: PlayerState is a value-compared
+        # dataclass, so two seats holding the same cards match each other.
+        seat = next(
+            (i for i, seated in enumerate(self.players) if seated is player), None
+        )
+        if seat is None or seat == causer:
+            return
+        for trig in compile_card_oracle(card).triggered_abilities:
+            if trig.condition.kind != "discarded_by_opponent_effect":
+                continue
+            if not trig.supported or trig.instruction is None:
+                continue
+            self._enqueue_triggered_ability(
+                controller_index=seat,
+                card=card,
+                instruction=trig.instruction,
+                effect_kind=trig.effect_kind,
+                ability_text=trig.source_line,
+                target_player_index=causer,
+                trigger_context={"event_subject_player": causer},
+            )
 
     def _gain_life(self, target: PlayerState, amount: int, source_name: str | None = None) -> None:
         """Apply a life gain, honoring 'If you would gain life, draw that many cards

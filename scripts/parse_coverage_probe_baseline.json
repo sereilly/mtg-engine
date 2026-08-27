@@ -1,5 +1,21 @@
 [
  {
+  "card": "Acid Rain",
+  "clause": "destroy all forests",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "All Hallow's Eve",
+  "clause": "if this card is exiled with a scream counter on it, remove a scream counter from it. if there are no more scream counters on it, put it into your graveyard and each player returns all creature cards from their graveyard to the battlefield",
+  "ignored": [
+   "card",
+   "more",
+   "all"
+  ]
+ },
+ {
   "card": "Animal Sanctuary",
   "clause": "put a +1/+1 counter on target bird, cat, dog, goat, ox, or snake",
   "ignored": [
@@ -7,10 +23,24 @@
   ]
  },
  {
+  "card": "Arena of the Ancients",
+  "clause": "tap all legendary creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Armageddon",
   "clause": "destroy all lands",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Backdraft",
+  "clause": "choose a player who cast one or more sorcery spells this turn. backdraft deals damage to that player equal to half the damage dealt by one of those sorcery spells this turn, rounded down",
+  "ignored": [
+   "down"
   ]
  },
  {
@@ -25,6 +55,20 @@
   "clause": "you may have target creature get +2/+0 until end of turn",
   "ignored": [
    "have"
+  ]
+ },
+ {
+  "card": "Blazing Effigy",
+  "clause": "it deals x damage to target creature, where x is 3 plus the amount of damage dealt to this creature this turn by other sources named blazing effigy",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Brine Hag",
+  "clause": "change the base power and toughness of all creatures that dealt damage to it this turn to 0/2",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -43,11 +87,33 @@
   ]
  },
  {
+  "card": "Cleanse",
+  "clause": "destroy all black creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Eureka",
+  "clause": "starting with you, each player may put a permanent card from their hand onto the battlefield. repeat this process until no one puts a card onto the battlefield",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Experimental Overload",
   "clause": "create an x/x blue and red weird creature token, where x is the number of instant and sorcery cards in your graveyard. then you may return an instant or sorcery card from your graveyard to your hand. exile experimental overload",
   "ignored": [
    "cards",
    "or"
+  ]
+ },
+ {
+  "card": "Feint",
+  "clause": "tap all creatures blocking target attacking creature. prevent all combat damage that would be dealt this turn by that creature and each creature blocking it",
+  "ignored": [
+   "all",
+   "each"
   ]
  },
  {
@@ -73,6 +139,34 @@
   ]
  },
  {
+  "card": "Gabriel Angelfire",
+  "clause": "choose flying, first strike, trample, or rampage 3. gabriel angelfire gains that ability until your next upkeep",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Gauntlets of Chaos",
+  "clause": "exchange control of target artifact, creature, or land you control and target permanent an opponent controls that shares one of those types with it. if those permanents are exchanged this way, destroy all auras attached to them",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Glyph of Doom",
+  "clause": "choose target wall creature. at this turn's next end of combat, destroy all creatures that were blocked by that creature this turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Glyph of Reincarnation",
+  "clause": "destroy all creatures that were blocked by target wall this turn. they can't be regenerated. for each creature that died this way, put a creature card from the graveyard of the player who controlled that creature the last time it became blocked by that wall onto the battlefield under its owner's control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Goblin Arsonist",
   "clause": "you may have it deal 1 damage to any target",
   "ignored": [
@@ -80,10 +174,52 @@
   ]
  },
  {
+  "card": "Hazezon Tamar",
+  "clause": "exile all sand warriors",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Hell Swarm",
+  "clause": "all creatures get -1/-0 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Hellfire",
+  "clause": "destroy all nonblack creatures. hellfire deals x plus 3 damage to you, where x is the number of creatures that died this way",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Icy Manipulator",
   "clause": "tap target artifact, creature, or land",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Johan",
+  "clause": "you may have johan gain \"johan can't attack\" until end of combat. if you do, attacking doesn't cause creatures you control to tap this combat if johan is untapped",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Land's Edge",
+  "clause": "if the discarded card was a land card, this enchantment deals 2 damage to target player or planeswalker",
+  "ignored": [
+   "card,"
+  ]
+ },
+ {
+  "card": "Lesser Werewolf",
+  "clause": "if this creature's power is 1 or more, it gets -1/-0 until end of turn and put a -0/-1 counter on target creature blocking or blocked by this creature",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -122,6 +258,25 @@
   ]
  },
  {
+  "card": "Remove Enchantments",
+  "clause": "return to your hand all enchantments you both own and control, all auras you own attached to permanents you control, and all auras you own attached to attacking creatures your opponents control. then destroy all other enchantments you control, all other auras attached to permanents you control, and all other auras attached to attacking creatures your opponents control",
+  "ignored": [
+   "all",
+   "all",
+   "all",
+   "all",
+   "all",
+   "all"
+  ]
+ },
+ {
+  "card": "Reset",
+  "clause": "untap all lands you control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Riddleform",
   "clause": "you may have this enchantment become a 3/3 sphinx creature with flying in addition to its other types until end of turn",
   "ignored": [
@@ -129,10 +284,25 @@
   ]
  },
  {
+  "card": "Sentinel",
+  "clause": "change this creature's base toughness to 1 plus the power of target creature blocking or blocked by this creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Shatterstorm",
   "clause": "destroy all artifacts. they can't be regenerated",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Shelkin Brownie",
+  "clause": "target creature loses all \"bands with other\" abilities until end of turn",
+  "ignored": [
+   "all",
+   "abilities"
   ]
  },
  {
@@ -147,6 +317,28 @@
   "clause": "another target creature with power 2 or less can't be blocked this turn",
   "ignored": [
    "another"
+  ]
+ },
+ {
+  "card": "Sylvan Library",
+  "clause": "you may draw two additional cards. if you do, choose two cards in your hand drawn this turn. for each of those cards, pay 4 life or put the card on top of your library",
+  "ignored": [
+   "additional"
+  ]
+ },
+ {
+  "card": "The Wretched",
+  "clause": "gain control of all creatures blocking this creature for as long as you control this creature",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Tolaria",
+  "clause": "target creature loses banding and all \"bands with other\" abilities until end of turn",
+  "ignored": [
+   "all",
+   "abilities"
   ]
  },
  {
@@ -203,6 +395,34 @@
   "clause": "this creature gets -1/-1 and gains your choice of banding, flying, first strike, or trample until end of turn",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Voodoo Doll",
+  "clause": "if this artifact is untapped, destroy this artifact and it deals damage to you equal to the number of pin counters on it",
+  "ignored": [
+   "artifact"
+  ]
+ },
+ {
+  "card": "Wall of Caltrops",
+  "clause": "if at least one other wall creature is blocking that creature and no non-wall creatures are blocking that creature, this creature gains banding until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Wall of Tombstones",
+  "clause": "change this creature's base toughness to 1 plus the number of creature cards in your graveyard",
+  "ignored": [
+   "cards"
+  ]
+ },
+ {
+  "card": "Whirling Dervish",
+  "clause": "if this creature dealt damage to an opponent this turn, put a +1/+1 counter on it",
+  "ignored": [
+   "creature"
   ]
  },
  {

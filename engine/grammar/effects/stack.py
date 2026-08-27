@@ -288,11 +288,20 @@ def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestrict
 
     Recorded on the AST and lowered to nothing. The restriction is *enforced*
     from the raw ability text in ``mixins/stack/activation.py``, which reads
-    ``ability.source_line`` — so consuming the sentence here drops no behaviour,
-    it only lets the line satisfy the grammar's full-consumption invariant
-    instead of failing and sending the whole ability back to the legacy rules.
+    ``ability.source_line`` -- so consuming the sentence here drops no behaviour,
+    it only lets the line satisfy the grammar's full-consumption invariant.
+
+    "Drops no behaviour" is true **only of a clause something enforces**, which
+    is why both branches below ask the module that enforces theirs. The
+    permission branch already did; the "Activate ..." branch consumed the rest
+    of the sentence verbatim and asked nothing, so Vampire Bats' "Activate no
+    more than twice each turn" satisfied the invariant against a table with no
+    row for it -- the card compiled supported with an uncapped {B} pump. A
+    clause `engine/activation_restrictions.py` cannot read now leaves the line
+    refused, and the card reports unsupported naming the sentence.
     """
     from ...activation_permissions import permission_clause_readable
+    from ...activation_restrictions import activation_restriction_line
 
     mark = stream.mark()
     stream.accept_punct(".", ";")
@@ -320,8 +329,13 @@ def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestrict
         stream.reset(mark)
         return None
     # Consume the remainder of the sentence verbatim; the enforcing code reads
-    # the original text, so the grammar only has to account for the tokens.
+    # the original text, so the grammar only has to account for the tokens --
+    # but only once that code has said it can read the sentence at all.
     while not stream.exhausted and not stream.at_punct("."):
         words.append(str(stream.next().text))
+    sentence = " ".join(words).replace(" '", "'")
+    if not activation_restriction_line(sentence):
+        stream.reset(mark)
+        return None
     stream.accept_punct(".")
-    return ast.ActivationRestriction(" ".join(words))
+    return ast.ActivationRestriction(sentence)

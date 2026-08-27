@@ -50,6 +50,7 @@ from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
 from engine.oracle_types import OracleInstruction  # noqa: E402
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
+from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import draw_step_bonus_for  # noqa: E402
 from engine.global_statics import global_static_for  # noqa: E402
@@ -60,6 +61,11 @@ from engine.auras import (  # noqa: E402
 from engine.activation_restrictions import (  # noqa: E402
     activation_restriction_line,
 )
+from engine.activation_permissions import (  # noqa: E402
+    permission_clause_readable,
+)
+from engine.cost_x_definitions import cost_x_definition_readable  # noqa: E402
+from engine.revealed_hands import revealed_hands_line  # noqa: E402
 from engine.enter_effects import enter_effect_line  # noqa: E402
 from engine.extra_triggers import extra_trigger_line  # noqa: E402
 from engine.named_protection import named_protection_line  # noqa: E402
@@ -125,8 +131,6 @@ _AURA_STATIC_PATTERNS = (
 
 _MIXIN_TEXT_SCANS = (
     # Literal phrases engine code scans for (site noted per phrase).
-    "if you would gain life, draw that many cards instead",              # replacements.py (Lich)
-    "damage that would reduce your life total to less than 1 reduces it to 1 instead",  # replacements.py (Ali from Cairo)
     "whenever you're dealt damage, sacrifice that many nontoken permanents",  # effects.py (Lich)
     # The tail of that same sentence. `arm_forced_sacrifice(..., reason="Lich",
     # on_short={"kind": "lose"})` in effects.py IS the "if you can't" half — the
@@ -141,7 +145,6 @@ _MIXIN_TEXT_SCANS = (
     "you don't lose the game for having 0 or less life",                 # game_ending.py (Lich)
     "as this enchantment enters, you lose life equal to your life total",  # permanent_state.py:195 (Lich)
     "you have no maximum hand size",                                     # permanent_state.py:189 (Library of Leng)
-    "if an effect causes you to discard a card, discard it, but you may put it on top of your library instead",  # replacements.py discard interceptor (Library of Leng)
     "you may spend white mana as though it were red mana",               # permanent_state.py:192 (Sunglasses of Urza)
     "doesn't untap during your untap step",                              # untap_step.py (Time Vault, Basalt Monolith)
     "you may choose not to untap this creature during your untap step",  # untap_step.py (Old Man of the Sea)
@@ -172,12 +175,14 @@ _ACTIVATION_GATES = (
     "activate only during combat",
     "activate only during the end of combat step",
     "activate only during an opponent's turn, before attackers are declared",
-    # Ifh-Bíff Efreet: enforced (and enabled) in queue_permanent_ability's
-    # source_controller_index path.
-    "any player may activate this ability",
-    # Personal Incarnation: owner-only activation (also lets the owner activate
-    # while an opponent controls the creature).
-    "only this creatures owner may activate this ability",
+    # The two "who may activate" permissions that used to be literals here --
+    # "Any player may activate this ability" (Ifh-Bíff Efreet) and "Only this
+    # creature's owner ..." (Personal Incarnation) -- are gone from this tuple.
+    # They were a second copy of engine/activation_permissions.py's table, which
+    # is what let Clergy of the Holy Nimbus's third spelling read as unclaimed
+    # while the module that enforces it had a row for it. The channel below asks
+    # that module instead, so a permission the engine implements is claimed and
+    # one it does not is not.
 )
 
 
@@ -190,6 +195,15 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("aura enchant noun (oracle_instructions attach)", lambda s: s.startswith("enchant ")),
     ("aura static (oracle_instructions/permanent_state)", lambda s: _matches_any(s, _AURA_STATIC_PATTERNS)),
     ("cast_restrictions.py", lambda s: any(r.phrase in s for r in CAST_RESTRICTIONS)),
+    # A CR 614 replacement effect, in full. `engine/replacements.py`'s
+    # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
+    # asking it is asking the code that carries the line out. Three of these
+    # phrases used to sit in _MIXIN_TEXT_SCANS below as literals — a second copy
+    # of that table, free to drift from it, and the reason Forethought Amulet's
+    # "If an instant or sorcery source would deal 3 or more damage to you…" read
+    # as unclaimed rather than as what it was: a replacement with no interceptor
+    # behind it at all.
+    ("replacements.py", replacement_claims_line),
     # A printed additional cost (CR 601.2b). Not an instruction — a cost is not
     # an effect — so the sentence would read as unclaimed without this, which
     # is what it *should* have read while the phrase sat in the spell-pattern
@@ -241,6 +255,32 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # an instruction — a restriction is not an effect — so the sentence would
     # read as unclaimed without this.
     ("activation_restrictions.py", activation_restriction_line),
+    # CR 602.1a "who may activate" permissions (Clergy of the Holy Nimbus, Ifh-Bíff
+    # Efreet, Personal Incarnation), enforced by engine/activation_permissions.py
+    # in both directions -- it widens the ability to other seats *and* refuses the
+    # seat a permission excludes. Asked of that module rather than listed as
+    # literals beside the activation gates, where two of the three spellings used
+    # to live: a permission is a restriction on someone, so a spelling the table
+    # knows and the claim list does not is a sentence reading unclaimed while the
+    # engine enforces it, and the reverse is a claim with nothing behind it.
+    # Asked through ``permission_clause_readable`` rather than the bare row
+    # match, because Armageddon Clock prints the permission and a timing
+    # restriction joined by "but" in one sentence -- that reader splits the
+    # sentence and asks each table for its own half, which is what the grammar
+    # production consuming the sentence asks too.
+    ("activation_permissions.py", permission_clause_readable),
+    # "X is the number of pin counters on this artifact." (Voodoo Doll.) The
+    # printed definition of an activation cost's X (CR 601.2b), read by the
+    # activation path off the ability's own line from engine/cost_x_definitions.py
+    # -- the same table the grammar refuses an unimplemented definition with. Not
+    # an instruction: a cost is not an effect.
+    ("cost_x_definitions.py", cost_x_definition_readable),
+    # "Players play with their hands revealed." (Revelation.) CR 701.20a, whose
+    # whole effect is who may see what -- so the consumer is the per-seat
+    # serialization in web/serialization.py, reading engine/revealed_hands.py's
+    # board scan. No instruction to point at, and the grammar's registry claim
+    # asks the same function.
+    ("revealed_hands.py", revealed_hands_line),
     # A **delayed** triggered ability the resolving effect creates (CR 603.7):
     # "Whenever a creature attacks this turn, put a +1/+1 counter on it" (Basri,
     # Devoted Paladin). The sentence is that trigger's own text, not this line's
@@ -515,6 +555,7 @@ def _rule_match(
     activated: bool,
     card_name: str | None = None,
     trigger_prefix: str | None = None,
+    cost_prefix: str | None = None,
 ):
     """What parses *clause*, or (None, "unsupported").
 
@@ -563,6 +604,10 @@ def _rule_match(
         in_trigger = compile_grammar_line(f"{trigger_prefix}, {clause}", card_name=card_name)
         if in_trigger.usable:
             return _grammar_instruction(in_trigger), "grammar (read with its trigger)"
+    if cost_prefix:
+        in_cost = compile_grammar_line(f"{cost_prefix}: {clause}", card_name=card_name)
+        if in_cost.usable:
+            return _grammar_instruction(in_cost), "grammar (read with its cost)"
     return None, "unsupported"
 
 
@@ -571,10 +616,11 @@ def _probe(
     activated: bool,
     card_name: str | None = None,
     trigger_prefix: str | None = None,
+    cost_prefix: str | None = None,
 ) -> tuple[str, ...]:
     """Words in *clause* whose deletion leaves the parse identical — i.e.
     words the parser demonstrably ignored."""
-    base_instr, _ = _rule_match(clause, activated, card_name, trigger_prefix)
+    base_instr, _ = _rule_match(clause, activated, card_name, trigger_prefix, cost_prefix)
     if base_instr is None:
         return ()
     words = clause.split()
@@ -583,7 +629,7 @@ def _probe(
         if word.lower().strip(".,;:'\"") in _PROBE_STOPWORDS:
             continue
         shorter = " ".join(words[:i] + words[i + 1:])
-        instr, _ = _rule_match(shorter, activated, card_name, trigger_prefix)
+        instr, _ = _rule_match(shorter, activated, card_name, trigger_prefix, cost_prefix)
         if instr is not None and instr == base_instr:
             ignored.append(word)
     return tuple(ignored)
@@ -649,6 +695,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         activated: bool,
         owner_kind: str | None = None,
         trigger_prefix: str | None = None,
+        cost_prefix: str | None = None,
     ) -> None:
         # A trailing sentence the owning rule's HANDLER implements (declared
         # in HANDLER_CLAIMS) is claimed by that handler.
@@ -657,12 +704,16 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         ):
             coverage.claims.append((sentence, f"handler ← {owner_kind}"))
             return
-        instruction, _ = _rule_match(sentence, activated, card.name, trigger_prefix)
+        instruction, _ = _rule_match(
+            sentence, activated, card.name, trigger_prefix, cost_prefix
+        )
         if instruction is not None:
             seen_kinds.add(instruction.kind)
             coverage.claims.append((sentence, f"parse rule → {instruction.kind}"))
             if run_probe:
-                ignored = _probe(sentence, activated, card.name, trigger_prefix)
+                ignored = _probe(
+                    sentence, activated, card.name, trigger_prefix, cost_prefix
+                )
                 if ignored:
                     coverage.probe_findings.append((sentence, ignored))
             return
@@ -693,13 +744,18 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         coverage.unclaimed.append(sentence)
 
     def claim_clause(
-        clause: str, activated: bool, trigger_prefix: str | None = None
+        clause: str,
+        activated: bool,
+        trigger_prefix: str | None = None,
+        cost_prefix: str | None = None,
     ) -> None:
         clause = clause.strip(" .")
         if not clause:
             return
         sents = _sentences(clause)
-        instruction, kind = _rule_match(clause, activated, card.name, trigger_prefix)
+        instruction, kind = _rule_match(
+            clause, activated, card.name, trigger_prefix, cost_prefix
+        )
         if instruction is not None and len(sents) > 1:
             # A rule matched the whole clause — but a substring-anchored rule
             # may only have needed the first sentence(s). Claim the MINIMAL
@@ -712,7 +768,9 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             # the produced instruction is identical. The instruction is what
             # decides whether the trailing sentences mattered.
             def _same(text: str) -> bool:
-                instr, _ = _rule_match(text, activated, card.name, trigger_prefix)
+                instr, _ = _rule_match(
+                    text, activated, card.name, trigger_prefix, cost_prefix
+                )
                 return instr is not None and instr == instruction
 
             for k in range(1, len(sents) + 1):
@@ -733,25 +791,33 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             claimed_text = ". ".join(claimed)
             coverage.claims.append((claimed_text, f"parse rule → {instruction.kind}"))
             if run_probe:
-                ignored = _probe(claimed_text, activated, card.name, trigger_prefix)
+                ignored = _probe(
+                    claimed_text, activated, card.name, trigger_prefix, cost_prefix
+                )
                 if ignored:
                     coverage.probe_findings.append((claimed_text, ignored))
             for sentence in rest:
                 claim_sentence(
                     sentence, activated,
                     owner_kind=instruction.kind, trigger_prefix=trigger_prefix,
+                    cost_prefix=cost_prefix,
                 )
             return
         if instruction is not None:
             seen_kinds.add(instruction.kind)
             coverage.claims.append((clause, f"parse rule → {instruction.kind}"))
             if run_probe:
-                ignored = _probe(clause, activated, card.name, trigger_prefix)
+                ignored = _probe(
+                    clause, activated, card.name, trigger_prefix, cost_prefix
+                )
                 if ignored:
                     coverage.probe_findings.append((clause, ignored))
             return
         for sentence in sents:
-            claim_sentence(sentence, activated, trigger_prefix=trigger_prefix)
+            claim_sentence(
+                sentence, activated,
+                trigger_prefix=trigger_prefix, cost_prefix=cost_prefix,
+            )
 
     text = expand_ability_lines(
         card.oracle_text or "", card_name=card.name, legendary=card.is_legendary
@@ -853,8 +919,22 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
                 else:
                     coverage.unclaimed.append(normalized)
                 continue
-            coverage.claims.append((normalized.split(":", 1)[0], "activation cost"))
-            claim_clause(ability.normalized_effect, activated=True)
+            cost_clause = normalized.split(":", 1)[0]
+            coverage.claims.append((cost_clause, "activation cost"))
+            # The cost goes back to the effect as a prefix, the exact mirror of
+            # *trigger_prefix* above and for the same reason. An activation cost
+            # is paid before the ability goes on the stack (CR 602.2b), so what
+            # it ate is a record the effect may read back — "If the discarded
+            # card was a land card…" (Land's Edge) names a card only the
+            # "Discard a card:" cost binds, and `lower_ability` seeds it from
+            # `_COST_PRODUCES` with both halves of the colon in view. Read
+            # without its cost the clause refuses, so the sentence looked
+            # unclaimed while the compiler was reading it exactly this way. The
+            # probe re-parses through the same path, so deleting "land" from it
+            # still has to change the parse.
+            claim_clause(
+                ability.normalized_effect, activated=True, cost_prefix=cost_clause,
+            )
             continue
 
         claim_clause(normalized, activated=False)

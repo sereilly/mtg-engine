@@ -401,13 +401,28 @@ def test_activation_restriction_does_not_leak_into_the_effect():
     resolution."""
     from engine.grammar import compile_line
 
+    # The card's own clause, because the restriction production now asks
+    # `engine/activation_restrictions.py` whether the sentence is one the engine
+    # enforces. The invented "five or fewer" clause this test used to carry is
+    # not, and the line refuses with it — which is the point of the second half
+    # below rather than a failure of the first.
     with_restriction = compile_line(
-        "{T}: Draw a card. Activate only if you have five or fewer cards in hand.",
+        "{T}: Draw a card. Activate only if you have exactly seven cards in hand.",
         card_name="Library of Alexandria",
     )
     without = compile_line("{T}: Draw a card.", card_name="Test")
 
     assert with_restriction.instructions == without.instructions
+
+    # …and a restriction nothing enforces refuses the whole line rather than
+    # being consumed verbatim. Vampire Bats' "Activate no more than twice each
+    # turn" was consumed that way, against a table with no row for it, so the
+    # card compiled supported with an uncapped ability.
+    unreadable = compile_line(
+        "{T}: Draw a card. Activate only if you have five or fewer cards in hand.",
+        card_name="Test",
+    )
+    assert not unreadable.usable
 
 
 # ---------------------------------------------------------------------------

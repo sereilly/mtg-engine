@@ -1593,3 +1593,65 @@ def test_a_non_interactive_payer_with_floating_mana_keeps_the_original_target(
     assert p2.mana_pool.get("R", 0) == 0, "the floating mana was spent"
     assert p1.life == 20, "the default is to keep the target, not to re-aim"
     assert p2.battlefield == [], game.log
+
+
+# ---------------------------------------------------------------------------
+# Psychic Purge (Phase 4 parse-coverage round) — a trigger that works from hand
+# ---------------------------------------------------------------------------
+
+
+def _purge_game(set_pool, catalog_by_name, discard_spell: str):
+    """P1 casts *discard_spell* at P2, who holds nothing but Psychic Purge."""
+    filler = [_mk_card("Filler")] * 20
+    game = Game(players=[
+        PlayerState(name="P1", library=list(filler)),
+        PlayerState(name="P2", library=list(filler),
+                    hand=[set_pool("LEG")["Psychic Purge"]]),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game.players[0].hand.append(catalog_by_name[discard_spell])
+    assert game.queue_from_hand(0, discard_spell, target_player_index=1).supported
+    game._settle()
+    for _ in range(6):
+        if not game.pending_choices:
+            break
+        game.take_choice_default(game.pending_choices[0])
+        game._settle()
+    return game
+
+
+def test_psychic_purge_punishes_the_opponent_who_made_you_discard_it(
+    set_pool, catalog_by_name
+):
+    """"When a spell or ability an opponent controls causes you to discard this
+    card, that player loses 5 life." (CR 113.6d: an ability that functions from
+    the hand.)
+
+    Nothing announced it before this round — the condition parsed on neither
+    front end, so the card was a 1-damage sorcery with a dead second line. The
+    announcement lives at the discard seam because that is the only place the
+    card being discarded is in view; nothing on the battlefield carries the
+    ability, so no board scan would ever find it.
+    """
+    game = _purge_game(set_pool, catalog_by_name, "Mind Rot")
+    assert [c.name for c in game.players[1].graveyard] == ["Psychic Purge"]
+    assert game.players[0].life == 15
+
+
+def test_psychic_purge_stays_quiet_when_you_discard_it_yourself(
+    set_pool, catalog_by_name
+):
+    """"A spell or ability **an opponent controls**" is the whole condition. A
+    cleanup-step discard is caused by no spell at all, so the seat that armed
+    the discard is nobody and the trigger must not fire — a trigger that fired
+    on any discard would drain its own controller."""
+    game = Game(players=[
+        PlayerState(name="P1"),
+        PlayerState(name="P2", hand=[set_pool("LEG")["Psychic Purge"]]),
+    ])
+    game.enforce_mana_costs = False
+    game._discard_card(game.players[1], game.players[1].hand.pop())
+    game._settle()
+    assert game.players[0].life == 20
+    assert game.players[1].life == 20

@@ -127,6 +127,17 @@ SOURCE_TYPE_SHIELD = 3  # Desert Nomads / Camel
 # engine/prevention.py), for the reason stated above: a shield spent on damage
 # that then leaves for someone else is a shield spent on nothing.
 RECORDED_REDIRECT = 4
+# "If an instant or sorcery source would deal 3 or more damage to you, it deals
+# 2 damage to you instead." (Forethought Amulet.) A cap on the damage *dealt*
+# (CR 120.4b), so it shares this space — and it goes **before** the prevention
+# shields at 10-600 for the reason redirects do, read the other way round: a
+# shield spent first absorbs its points from the printed damage and the cap then
+# takes what is left down to 2 anyway, where the cap spent first leaves the
+# shield its points for the next source. Six from a sorcery against "prevent the
+# next 3" is 0 dealt with the cap first and 2 dealt with the shield first. CR
+# 616.1e permits either; the default should not be the one that costs the player
+# two life and a shield.
+DAMAGE_SOURCE_CAP = 5  # Forethought Amulet
 
 # …and multipliers go *after* the shields, at the far end of the shared space.
 # CR 616.1e gives the choice to the affected player, and this is the order they
@@ -480,6 +491,102 @@ def redirect_to_self_source_class(line: str) -> str | None:
     redirected and what is claimed cannot drift.
     """
     return _match_group(_REDIRECT_TO_SELF, line, "source_class")
+
+
+#: "If an **instant or sorcery** source would deal **3** or more damage to you,
+#: it deals **2** damage to you instead." (Forethought Amulet.) All three of the
+#: bold parts are payload, for the reason every parameter in this engine is: a
+#: card printing a different source class, threshold or cap is the same
+#: sentence. The class is spelled as the card spells it and split on "or" below,
+#: so "an artifact source" and "an instant or sorcery source" are one row.
+_SOURCE_DAMAGE_CAP = re.compile(
+    r"^if an? (?P<source_class>[a-z ]+?) source would deal (?P<threshold>\d+) or "
+    r"more damage to you, it deals (?P<capped>\d+) damage to you instead$"
+)
+
+
+def source_damage_cap(line: str) -> tuple[tuple[str, ...], int, int] | None:
+    """``(source types, threshold, capped amount)`` *line* imposes, or None.
+
+    One matcher, asked by the interceptor below and by
+    :func:`replacement_claims_line`, so what is capped and what is claimed
+    cannot drift. The types come back as a tuple because the printed class may
+    name several ("an instant or sorcery source") and every one of them answers
+    the class.
+    """
+    match = _SOURCE_DAMAGE_CAP.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    types = tuple(
+        word.strip() for word in match.group("source_class").split(" or ") if word.strip()
+    )
+    # A class naming no readable type refuses the line rather than capping
+    # everything: `source_has_type` answers False for a word it does not know,
+    # so an unread class would be a cap that never fires — the silent shape this
+    # module's claim reader exists to keep out of the supported pool.
+    if not types:
+        return None
+    return types, int(match.group("threshold")), int(match.group("capped"))
+
+
+def _capped_source_damage(game, payload: dict) -> int | None:
+    """The amount a printed source cap would leave, or None when none applies.
+
+    Both the applicability predicate and the effect call this, which is what
+    keeps applicability *pure* (CR 616.1f re-asks the contenders after each
+    applied effect, so an effect that answered "do I apply?" by applying itself
+    would make them uncountable).
+    """
+    from .prevention import source_has_type
+
+    recipient = payload["recipient"]
+    amount = payload["amount"]
+    source = payload.get("source")
+    if amount <= 0 or not hasattr(recipient, "life"):
+        return None
+    best: int | None = None
+    for permanent in game.controlled_by(recipient):
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            read = source_damage_cap(line)
+            if read is None:
+                continue
+            types, threshold, capped = read
+            if amount < threshold or capped >= amount:
+                continue
+            if not any(source_has_type(game, source, word) for word in types):
+                continue
+            best = capped if best is None else min(best, capped)
+    return best
+
+
+def _applies_source_damage_cap(game, payload: dict) -> bool:
+    return _capped_source_damage(game, payload) is not None
+
+
+@replacement_effect(
+    "damage_to_player", DAMAGE_SOURCE_CAP, applies=_applies_source_damage_cap
+)
+def _cap_damage_from_source_class(game, payload: dict) -> ReplacementOutcome | None:
+    """Forethought Amulet: "If an instant or sorcery source would deal 3 or more
+    damage to you, it deals 2 damage to you instead."
+
+    A CR 120.4b effect — it changes the damage *dealt*, not its result, so the
+    capped number is what lifelink gains and what a "deals damage to a player"
+    trigger sees. That is the difference from Ali from Cairo two entries up,
+    which caps the life lost and leaves the damage whole.
+
+    "To you" is the Amulet's controller (CR 109.5), which is why the scan is over
+    the recipient's own battlefield: an opponent's Amulet does nothing for the
+    player being burned.
+    """
+    capped = _capped_source_damage(game, payload)
+    game.log.append(
+        f"{payload['recipient'].name} takes {capped} damage instead of "
+        f"{payload['amount']} (source cap)"
+    )
+    return ReplacementOutcome(new_amount=capped)
 
 
 def _match_group(pattern, line: str, group: str) -> str | None:
@@ -1495,4 +1602,8 @@ def replacement_claims_line(line: str) -> bool:
     # payload — and asked of the same reader the interceptor uses, so a class
     # it cannot answer leaves the line unclaimed rather than admitted with the
     # redirect silently not firing.
-    return redirect_to_self_source_class(normalized) is not None
+    if redirect_to_self_source_class(normalized) is not None:
+        return True
+    # "If an instant or sorcery source would deal 3 or more damage to you…"
+    # (Forethought Amulet), the same arrangement for the same reason.
+    return source_damage_cap(normalized) is not None

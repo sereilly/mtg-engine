@@ -134,11 +134,53 @@ def add_counters(permanent, kind: str, count: int = 1) -> int:
     return total
 
 
+#: The kinds of counter a permanent has been emptied of and not yet announced
+#: for. Written by :func:`remove_counters`, drained by the state-based sweep in
+#: ``engine/mixins/game_ending.py``.
+#:
+#: A record rather than an announcement, because removal has four call sites --
+#: the ``remove_counter_from_self`` handler, an activation cost, an upkeep
+#: registry entry and a damage shield -- and a list of fire sites is only ever
+#: as complete as the last card that touched it. That is the same argument the
+#: draw and second-draw triggers in that file are written with, and Divine
+#: Intervention is the card that would have paid for getting it wrong: its whole
+#: text is "the game is a draw" when the last counter comes off.
+EMPTIED_KINDS_MARK = "_counter_kinds_emptied"
+
+
+def remove_counters(permanent, kind: str, count: int = 1) -> int:
+    """Take *count* counters of *kind* off *permanent*; returns the new total.
+
+    The twin of :func:`add_counters` and the one write that takes counters away.
+    Removing from zero is a no-op, not a negative count, and removing more than
+    are there takes what is there (CR 608.2b: do as much as possible).
+
+    Through ``pt.pt_counter_key``, the same reader :func:`counters_on` uses, so
+    "how many are on it" and "take one off" address the same store. Callers with
+    a +1/+1 or -1/-1 counter in hand still want ``pt.remove_plus1_counters``:
+    those have rules meaning (layer 7d) and a persistent P/T channel beside the
+    record, which this function does not touch.
+    """
+    from .pt import pt_counter_key
+
+    current = counters_on(permanent, kind)
+    if count <= 0 or current <= 0:
+        return current
+    total = max(0, current - count)
+    permanent.metadata[pt_counter_key(kind)] = total
+    if total == 0:
+        emptied = set(permanent.metadata.get(EMPTIED_KINDS_MARK) or ())
+        permanent.metadata[EMPTIED_KINDS_MARK] = emptied | {kind}
+    return total
+
+
 __all__ = [
     "CAP_CLAIM",
+    "EMPTIED_KINDS_MARK",
     "add_counters",
     "counter_cap",
     "counter_cap_line",
     "counters_key",
     "counters_on",
+    "remove_counters",
 ]

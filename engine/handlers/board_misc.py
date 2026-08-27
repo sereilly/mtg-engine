@@ -9,7 +9,7 @@ from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
 from ..oracle_types import OracleInstruction
 from ..exiled_records import source_object
-from ..named_counters import counters_on
+from ..named_counters import counters_on, remove_counters
 from ..pt import pt_counter_key, set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import CREATED_TOKEN_RESULT_KEY, make_token_card
@@ -941,7 +941,6 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
     # rules meaning is recorded (CR 122.1a) — reading ``"<kind>_counters"``
     # here would answer zero for exactly those kinds, silently, because a
     # missing key is a legal zero.
-    key = pt_counter_key(counter)
     current = counters_on(permanent, counter)
     if current <= 0:
         # The record "if you can't" reads (Cocoon): removing from zero is a
@@ -950,10 +949,13 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
         game.log.append(f"{permanent.card.name} has no {counter} counter to remove")
         return True, "resolved"
     context.results["removed_counter"] = True
-    permanent.metadata[key] = current - 1
+    # Through the one removal seam (`named_counters.remove_counters`), which is
+    # also what records that this was the *last* counter of its kind — Divine
+    # Intervention's trigger reads that record from the state-based sweep.
+    left = remove_counters(permanent, counter)
     game.log.append(
         f"Removed a {counter} counter from {permanent.card.name} "
-        f"({permanent.metadata[key]} left)"
+        f"({left} left)"
     )
     return True, "resolved"
 

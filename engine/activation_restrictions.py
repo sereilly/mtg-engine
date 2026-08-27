@@ -171,33 +171,112 @@ def _controlled_since_your_last_turn(game: "Game", controller_index: int, source
     return bool(game._controlled_since_turn_start(source))
 
 
-#: The metadata key a "once each turn" activation stamps on its permanent, and
-#: the one both readers of that clause share. The refusal and the stamp used to
+#: The metadata key a per-turn-limited activation tallies on its permanent, and
+#: the one every reader of that clause shares. The refusal and the stamp used to
 #: agree by both spelling the words, which is one fact with two representations
 #: -- the shape this whole module exists to collapse.
-ONCE_EACH_TURN_MARK = "ability_used_turn"
+#:
+#: The value is ``{"turn": <turn>, "count": <activations>}`` rather than a bare
+#: turn number, because "once" is not the only cap a card prints: Vampire Bats
+#: says "Activate no more than **twice** each turn", and a stamp that can only
+#: record *that* it happened cannot answer how often. Both entries are plain
+#: ints, so the value survives the Debug Menu's raw-state round trip.
+ACTIVATION_TALLY_MARK = "ability_activations_this_turn"
+
+#: How a printed frequency reads as a number. Two irregular spellings and a
+#: numbered family -- "once", "twice", "three times" -- which is all English
+#: prints for this clause.
+_FREQUENCY_WORDS = {"once": 1, "twice": 2}
+
+#: "Activate no more than twice each turn." (Vampire Bats.) The frequency is
+#: payload, exactly like the step in `_before_step` and the counter word in
+#: `_at_least_that_many_counters`: a card printed "no more than three times"
+#: needs no row of its own.
+_PRINTED_FREQUENCY = r"(?P<freq>once|twice|[a-z0-9]+ times)"
 
 
-def limits_to_once_each_turn(ability_text: str) -> bool:
-    """Whether this printed ability line may be activated only once a turn.
+def _frequency_value(word: str) -> int | None:
+    """A printed frequency as a number, or None when it is not one this reads."""
+    from .oracle_types import _NUMBER_WORDS
 
-    Three printed spellings, one question: the bare clause (Dream Coat) and the
-    tail on a timing clause (Instill Energy's "during your turn and only once
-    each turn", Gate to Phyrexia's upkeep one). `mixins/stack/activation.py`
-    asks this both to refuse a second activation and to stamp the first, so the
-    row below and the stamp cannot disagree about which lines are limited.
+    cleaned = " ".join((word or "").lower().split())
+    if cleaned in _FREQUENCY_WORDS:
+        return _FREQUENCY_WORDS[cleaned]
+    if cleaned.endswith(" times"):
+        head = cleaned[: -len(" times")]
+        count = int(head) if head.isdigit() else _NUMBER_WORDS.get(head)
+        if count:
+            return count
+    return None
+
+
+#: The clause shapes that cap how often one permanent's ability may be activated
+#: in a turn, as ``(pattern, group)``. The bare "once" spellings carry no group
+#: and mean one; the "no more than" spelling names its own number. Read by
+#: :func:`activations_allowed_each_turn`, which is the *only* answer to "is this
+#: line capped, and at what" -- the refusal, the tally and the rows below all
+#: come through it.
+_ACTIVATION_LIMIT_SHAPES: tuple[tuple["re.Pattern[str]", "str | None"], ...] = (
+    # The bare clause (Dream Coat) and the tail on a timing clause (Instill
+    # Energy's "during your turn and only once each turn", Gate to Phyrexia's
+    # upkeep one). Searched rather than anchored because the tail really is one.
+    (re.compile(r"once each turn"), None),
+    (re.compile(r"^activate no more than " + _PRINTED_FREQUENCY + r" each turn$"), "freq"),
+)
+
+
+def activations_allowed_each_turn(ability_text: str) -> int | None:
+    """How many times a turn this printed ability line may be activated.
+
+    ``None`` is not zero and not one: it means the card prints no cap at all,
+    which is every ability in the pool but these. The lowest cap wins when a
+    line prints more than one, because two caps on one line are both true.
+
+    `mixins/stack/activation.py` asks this both to refuse an activation past the
+    cap and to tally the ones it allows, so the rows below and the tally cannot
+    disagree about which lines are limited or about how limited they are.
     """
-    return any("once each turn" in clause for clause in _clauses(ability_text))
+    limits: list[int] = []
+    for clause in _clauses(ability_text):
+        for pattern, group in _ACTIVATION_LIMIT_SHAPES:
+            found = pattern.search(clause)
+            if found is None:
+                continue
+            value = 1 if group is None else _frequency_value(found.group(group))
+            if value is not None:
+                limits.append(value)
+    return min(limits) if limits else None
+
+
+def activations_this_turn(game: "Game", source) -> int:
+    """How many capped activations *source* has already made this turn.
+
+    The one read of the tally :func:`mark_activated_this_turn` writes, shared by
+    the rows below and by `mixins/stack/activation.py`'s refusal -- so the key is
+    spelled once and the two cannot drift. A permanent that is gone has made
+    none (CR 400.7: what comes back is a new object).
+    """
+    if source is None:
+        return 0
+    tally = source.metadata.get(ACTIVATION_TALLY_MARK)
+    if not isinstance(tally, dict) or tally.get("turn") != game.turn:
+        return 0
+    return int(tally.get("count", 0))
 
 
 def already_activated_this_turn(game: "Game", source) -> bool:
-    """Whether *source* has already used a once-a-turn ability this turn.
+    """Whether *source* has used a capped ability at all this turn."""
+    return activations_this_turn(game, source) >= 1
 
-    The one read of the stamp mark_activated_this_turn writes, shared by
-    the row below and by `mixins/stack/activation.py`'s refusal -- so the key is
-    spelled once and the two cannot drift.
+
+def at_activation_limit(game: "Game", source, ability_text: str) -> bool:
+    """Whether this line's printed per-turn cap is already spent.
+
+    Asked of the line and the permanent together, because the cap is printed on
+    the line and the tally is state on the permanent.
     """
-    return source is not None and source.metadata.get(ONCE_EACH_TURN_MARK) == game.turn
+    limit = activations_allowed_each_turn(ability_text)
+    return limit is not None and activations_this_turn(game, source) >= limit
 
 
 def _not_yet_activated_this_turn(game: "Game", controller_index: int, source) -> bool:
@@ -211,10 +290,29 @@ def _not_yet_activated_this_turn(game: "Game", controller_index: int, source) ->
     return not already_activated_this_turn(game, source)
 
 
+def _below_printed_activation_limit(
+    game: "Game", controller_index: int, source, match
+) -> bool:
+    """"Activate no more than twice each turn." (Vampire Bats.)
+
+    The number is read off the match, so this row is every printed frequency of
+    the clause rather than the one Legends happens to print. A frequency the
+    reader above cannot turn into a number never reaches here: the pattern only
+    delimits the word, and an unreadable one leaves the clause unmatched and its
+    card unsupported.
+    """
+    limit = _frequency_value(match.group("freq"))
+    return limit is not None and activations_this_turn(game, source) < limit
+
+
 def mark_activated_this_turn(game: "Game", source) -> None:
-    """Stamp a permanent whose ability is limited to one activation a turn."""
-    if source is not None:
-        source.metadata[ONCE_EACH_TURN_MARK] = game.turn
+    """Tally one activation of a permanent whose ability prints a per-turn cap."""
+    if source is None:
+        return
+    already = activations_this_turn(game, source)
+    source.metadata[ACTIVATION_TALLY_MARK] = {
+        "turn": game.turn, "count": already + 1,
+    }
 
 
 def _turn_positions() -> dict[str, int]:
@@ -394,6 +492,19 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         _not_yet_activated_this_turn,
         "only once each turn",
     ),
+    # "Activate no more than twice each turn." (Vampire Bats.) The *only* clause
+    # in the pool that does not begin "Activate only", and the one that showed
+    # `_clauses` was collecting by that prefix rather than by the verb: the
+    # sentence was not a clause here, so the support gate had nothing to refuse
+    # and the grammar consumed it verbatim -- a {B} pump with no cap at all,
+    # supported, silent, and wrong in its controller's favour every turn. The
+    # frequency is payload, so this row is "no more than <n> each turn".
+    ActivationRestriction(
+        re.compile(r"^activate no more than " + _PRINTED_FREQUENCY + r" each turn$"),
+        _below_printed_activation_limit,
+        "already activated as many times as it may be this turn",
+        reads_payload=True,
+    ),
     # "Activate only before the combat damage step." (Angus Mackenzie.) The step
     # alternation is built from the engine's own turn structure, so the step is
     # payload and a step the engine does not have leaves the clause unmatched.
@@ -452,7 +563,13 @@ def _clauses(text: str) -> list[str]:
             # "**Only** during any upkeep step" (Armageddon Clock) drops the
             # verb; every other printed clause keeps it. Both spellings are the
             # same kind of sentence, so both are collected.
-            if cleaned.startswith("activate only") or cleaned.startswith("only during"):
+            # By the **verb**, not by "activate only": "Activate no more than
+            # twice each turn" (Vampire Bats) is the same kind of sentence and
+            # the prefix test did not collect it, so neither the support gate
+            # nor `activation_denial` ever saw it. Collecting it is what lets a
+            # printed clause with no row here refuse its card instead of being
+            # dropped.
+            if cleaned.startswith("activate ") or cleaned.startswith("only during"):
                 found.append(cleaned)
     return found
 

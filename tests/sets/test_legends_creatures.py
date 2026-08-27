@@ -1614,3 +1614,50 @@ def test_psionic_entitys_self_damage_does_not_land_on_its_own_target(set_pool):
     assert victim.damage_marked == 2
     assert not any(p.card.name == "Psionic Entity" for p in game.players[0].battlefield)
     assert game.players[1].life == 20
+
+
+# ---------------------------------------------------------------------------
+# Vampire Bats (Phase 4 parse-coverage round) — a printed cap above one
+# ---------------------------------------------------------------------------
+
+
+def test_vampire_bats_pump_is_capped_at_twice_a_turn(set_pool):
+    """"{B}: This creature gets +1/+0 until end of turn. **Activate no more
+    than twice each turn.**"
+
+    The only clause in the pool that does not begin "Activate only", and it
+    slipped every reader: `activation_restrictions._clauses` collected by that
+    prefix so the support gate had nothing to refuse, and the grammar's
+    restriction production consumed the sentence verbatim without asking the
+    table that enforces it. The ability was an uncapped {B} pump on a card that
+    reported supported — an ability that works more often than the card allows,
+    which is the failure that shows as nothing at all.
+    """
+    pool = set_pool("LEG")
+    bats = Permanent(card=pool["Vampire Bats"])
+    deck = [_vanilla("Filler", 1, 1)] * 20
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bats], library=list(deck)),
+        PlayerState(name="P2", library=list(deck)),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._sync_control()
+
+    assert game.queue_permanent_ability(0, "Vampire Bats").supported
+    game._settle()
+    assert game.queue_permanent_ability(0, "Vampire Bats").supported
+    game._settle()
+    # A 0/1 to begin with, so two activations make it a 2/1.
+    assert bats.effective_power == 2
+
+    third = game.queue_permanent_ability(0, "Vampire Bats")
+    game._settle()
+    assert not third.supported
+    assert "as many times as it may be this turn" in (third.details or "")
+    assert bats.effective_power == 2
+
+    # The cap is per turn, so the next turn clears the tally.
+    game.start_next_turn()
+    game.start_next_turn()
+    assert game.queue_permanent_ability(0, "Vampire Bats").supported

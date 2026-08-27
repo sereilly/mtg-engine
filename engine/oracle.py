@@ -688,6 +688,21 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("counters_reach_threshold",
      r"when there are (?P<counter_count>[a-z]+) or more (?P<counter_kind>[a-z]+) counters on this "
      r"(?:artifact|creature|enchantment|permanent|land)"),
+    # "When you remove the last intervention counter from this enchantment, …"
+    # (Divine Intervention.) The counter word is payload, like the threshold
+    # trigger above it. Announced from the same state-based sweep and for the
+    # same reason the draw triggers are: removal has four call sites, so the
+    # record `named_counters.remove_counters` writes is what the sweep reads.
+    ("last_counter_removed",
+     r"when you remove the last (?P<counter_kind>[a-z]+) counter from this "
+     r"(?:artifact|creature|enchantment|permanent|land)"),
+    # "When a spell or ability an opponent controls causes you to discard this
+    # card, …" (Psychic Purge.) CR 113.6d: an ability that functions from the
+    # hand. The one discard seam (`Game._discard_card`) is what announces it,
+    # and CR 109.5's "an opponent" is read off the seat resolving the spell or
+    # ability that caused the discard.
+    ("discarded_by_opponent_effect",
+     r"when a spell or ability an opponent controls causes you to discard this card"),
     ("no_islands",                  r"when you control no islands"),
     ("no_lands",                    r"when you control no lands"),
 )

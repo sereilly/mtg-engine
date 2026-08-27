@@ -489,6 +489,22 @@ def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_libr
     else:
         player.graveyard.append(card)
         game.log.append(f"{player.name} discarded {card.name}")
+    # The discarded card's own trigger (CR 113.6d, Psychic Purge). This is the
+    # *second* place a card is discarded — `Game._discard_card` is the other —
+    # and the two differ because this one already performed Library of Leng's
+    # replacement itself, by offering the destination. So the announcement is
+    # its own call rather than a third spelling of the move, and it is here
+    # because a trigger honoured on one path and not the other is the shape
+    # that hides.
+    #
+    # The causing seat comes off the prompt (`_cause_seat`, stamped by
+    # `arm_pending_choice` from the resolving stack): by the time a prompt is
+    # answered the resolution that armed it has returned, so `resolving_seats`
+    # is empty and reading it here would say "nobody caused this".
+    game._announce_discard_triggers(
+        player, card,
+        cause_seat=(choice.data.get("_cause_seat") if choice is not None else None),
+    )
     return True
 
 
