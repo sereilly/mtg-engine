@@ -12,25 +12,23 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**76 of 734 supported cards (10.4%)** carry at least one name-keyed entry, across **82 entries** in 7 registries. The pool is 734 cards, 100.0% supported.
+**74 of 1044 supported cards (7.1%)** carry at least one name-keyed entry, across **80 entries** in 7 registries. The pool is 1044 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **2,917 hand-written entries** covering **2,704 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **2,001 hand-written entries** covering **1,851 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 45 (15.5%) | 388 | 42 (10.8%) | 49 | 16.9 |
-| LEB | 292 | 292 (100.0%) | 45 (15.4%) | 389 | 42 (10.8%) | 49 | 16.8 |
-| 2ED | 292 | 292 (100.0%) | 45 (15.4%) | 389 | 42 (10.8%) | 49 | 16.8 |
-| ARN | 78 | 78 (100.0%) | 27 (34.6%) | 107 | 25 (23.4%) | 29 | 37.2 |
+| LEA | 290 | 290 (100.0%) | 44 (15.2%) | 388 | 41 (10.6%) | 48 | 16.6 |
+| LEB | 292 | 292 (100.0%) | 44 (15.1%) | 389 | 41 (10.5%) | 48 | 16.4 |
+| 2ED | 292 | 292 (100.0%) | 44 (15.1%) | 389 | 41 (10.5%) | 48 | 16.4 |
+| ARN | 78 | 78 (100.0%) | 24 (30.8%) | 107 | 22 (20.6%) | 26 | 33.3 |
 | ATQ | 85 | 85 (100.0%) | 4 (4.7%) | 120 | 4 (3.3%) | 4 | 4.7 |
-| 3ED | 296 | 296 (100.0%) | 41 (13.9%) | 389 | 39 (10.0%) | 44 | 14.9 |
+| 3ED | 296 | 296 (100.0%) | 40 (13.5%) | 389 | 38 (9.8%) | 43 | 14.5 |
+| LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| LEG *(measured)* | 310 | 296 (95.5%) | 2 (0.7%) | 410 | 2 (0.5%) | 2 | 0.7 |
-| **ALL (shipped, deduped)** | **734** | **734 (100.0%)** | **76 (10.4%)** | **1119** | **71 (6.3%)** | **82** | **11.2** |
-
-*(measured)* — LEG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
+| **ALL (shipped, deduped)** | **1044** | **1044 (100.0%)** | **74 (7.1%)** | **1549** | **69 (4.5%)** | **80** | **7.7** |
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so four of these rows are one data point wearing four hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 
@@ -38,7 +36,7 @@ Held at this rate, supporting the 26,113-card release line would need about **2,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 72 | 73 |
+| `CARD_LINE_INSTRUCTIONS` | 68 | 69 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ENCHANTED_LAND_TAPPED_FOR_MANA` | 1 | 1 |
@@ -64,7 +62,6 @@ Held at this rate, supporting the 26,113-card release line would need about **2,
 - **Cyclopean Tomb** (`CARD_LINE_INSTRUCTIONS`, `ON_LEAVE_BATTLEFIELD`) — 1 line
 - **Darkpact** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Demonic Hordes** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Diamond Valley** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Dragon Whelp** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Drain Life** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Drain Power** (`CARD_LINE_INSTRUCTIONS`) — 1 line
@@ -102,7 +99,6 @@ Held at this rate, supporting the 26,113-card release line would need about **2,
 - **Nettling Imp** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Old Man of the Sea** (`CARD_LINE_INSTRUCTIONS`, `ON_LEAVE_BATTLEFIELD`) — 1 line
 - **Oubliette** (`CARD_LINE_INSTRUCTIONS`, `ON_LEAVE_BATTLEFIELD`) — 1 line
-- **Paralyze** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Personal Incarnation** (`CARD_LINE_INSTRUCTIONS`) — 2 lines
 - **Pestilence** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Power Leak** (`CARD_LINE_INSTRUCTIONS`) — 1 line
@@ -113,8 +109,6 @@ Held at this rate, supporting the 26,113-card release line would need about **2,
 - **Reverse Polarity** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Ring of Ma'rûf** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Rohgahh of Kher Keep** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Rukh Egg** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Sandals of Abdallah** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Serendib Djinn** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Shahrazad** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Simulacrum** (`CARD_LINE_INSTRUCTIONS`) — 1 line

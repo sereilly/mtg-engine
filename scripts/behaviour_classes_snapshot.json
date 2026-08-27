@@ -1,33 +1,68 @@
 [
   [
+    "Barbary Apes",
+    "Barktooth Warbeard",
     "Craw Wurm",
+    "Crimson Kobolds",
+    "Crookshank Kobolds",
+    "Durkwood Boars",
     "Earth Elemental",
     "Fire Elemental",
     "Garruk's Gorehorn",
     "Gray Ogre",
     "Grizzly Bears",
+    "Headless Horseman",
     "Hill Giant",
     "Hurloon Minotaur",
     "Ironroot Treefolk",
+    "Jasmine Boreal",
+    "Jedit Ojanen",
+    "Jerrard of the Closed Fist",
+    "Kasimir the Lone Wolf",
+    "Keepers of the Faith",
+    "Kobolds of Kher Keep",
+    "Lady Orca",
     "Merfolk of the Pearl Trident",
     "Mons's Goblin Raiders",
+    "Moss Monster",
     "Onakke Ogre",
     "Pearled Unicorn",
+    "Raging Bull",
     "Savannah Lions",
     "Scathe Zombies",
+    "Sir Shandlar of Eberyn",
+    "Sivitri Scarzam",
     "Staunch Shieldmate",
+    "The Lady of the Mountain",
+    "Tobias Andrion",
+    "Torsten Von Ursus",
     "Walking Corpse",
     "Water Elemental",
     "Wishcoin Crab"
   ],
   [
     "Air Elemental",
+    "Azure Drake",
     "Bird Maiden",
     "Concordia Pegasus",
     "Flying Men",
     "Phantom Monster",
     "Roc of Kher Ridges",
     "Scryb Sprites"
+  ],
+  [
+    "Adventurers' Guildhouse",
+    "Cathedral of Serra",
+    "Mountain Stronghold",
+    "Seafarer's Quay",
+    "Unholy Citadel"
+  ],
+  [
+    "Aerathi Berserker",
+    "Frost Giant",
+    "Hunding Gjornersen",
+    "Marhault Elsdragon",
+    "Wolverine Pack"
   ],
   [
     "Black Ward",
@@ -51,10 +86,41 @@
     "Wooden Sphere"
   ],
   [
+    "Dwarven Song",
+    "Heaven's Gate",
+    "Sea Kings' Blessing",
+    "Sylvan Paradise",
+    "Touch of Darkness"
+  ],
+  [
+    "Wall of Earth",
+    "Wall of Heat",
+    "Wall of Ice",
+    "Wall of Stone",
+    "Wall of Wood"
+  ],
+  [
     "Deathlace",
     "Lifelace",
     "Purelace",
     "Thoughtlace"
+  ],
+  [
+    "Divine Transformation",
+    "Giant Strength",
+    "Holy Strength",
+    "Unholy Strength"
+  ],
+  [
+    "Elvish Archers",
+    "Hornet Cobra",
+    "Ramirez DePietro",
+    "Stone-Throwing Devils"
+  ],
+  [
+    "Darkness",
+    "Fog",
+    "Holy Day"
   ],
   [
     "Granite Gargoyle",
@@ -65,11 +131,6 @@
     "Ice Storm",
     "Sinkhole",
     "Stone Rain"
-  ],
-  [
-    "Wall of Ice",
-    "Wall of Stone",
-    "Wall of Wood"
   ],
   [
     "Aladdin's Ring",
@@ -92,8 +153,20 @@
     "Red Elemental Blast"
   ],
   [
+    "Bog Wraith",
+    "Lost Soul"
+  ],
+  [
+    "Burn Bright",
+    "Shield Wall"
+  ],
+  [
     "Cancel",
     "Counterspell"
+  ],
+  [
+    "Cat Warriors",
+    "Shanodin Dryads"
   ],
   [
     "Colossal Dreadmaw",
@@ -104,16 +177,12 @@
     "Sea Serpent"
   ],
   [
-    "Elvish Archers",
-    "Stone-Throwing Devils"
+    "Devouring Deep",
+    "Segovian Leviathan"
   ],
   [
     "Giant Growth",
     "Titanic Growth"
-  ],
-  [
-    "Holy Strength",
-    "Unholy Strength"
   ],
   [
     "Moorish Cavalry",
