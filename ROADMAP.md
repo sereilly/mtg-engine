@@ -2517,3 +2517,67 @@ compile on its own yet.
 ### Numbers
 LEG 276 → **277** of 310. Shipped pool 734/734 throughout. Suite 7,613 →
 **7,621**, every `--check` green, no hooks added and none needed.
+
+## Legends: rounds 29–36 and promotion (Phases 3–4)
+
+*(2026-08-26.)* The set closes at **310/310 supported**, promoted to `sets` at
+index 6. Rounds 29–36 ran three groups in parallel each; the per-round detail
+is in the commits, and what follows is what the tail of a set actually looks
+like.
+
+### What the tail cost
+Card counts per round fell — 10, 5, 5, 4, 3, 3, 4, 3 — while the *mechanism*
+count did not. From round 29 on, every group's headline deliverable was a
+consolidation rather than a card: one record with one writer replacing a
+metadata key written in three places (`linked_exile`), one decision replacing a
+shield check written at both destruction paths (`regeneration`), one table
+replacing four copies of two literals (`activation_permissions`), one call that
+is both gate and picker (`modal_triggers`, then `role_target_options`).
+
+That is the honest shape of a set's last third: the cards left are the ones
+whose gaps are subsystems, and the subsystems are mostly *already half-built
+and disagreeing with themselves*.
+
+### The bug class this set was made of
+**One fact with two representations and one reader each.** Eleven consecutive
+rounds had it as the headline finding, and the instances are worth listing
+because the shape repeats and the symptoms do not:
+
+* every Aura printing "when enchanted creature dies" was handed **Creature
+  Bond's** effect — claim and dispatcher both keyed on the parsed condition
+* `become_untapped` ended **every** linked exile in the game, so Idol of
+  Endurance's pile went to the graveyard a turn after it was exiled
+* the picker's per-kind if-chain was fixed and shipped nothing, because the
+  *same thirteen kinds* were written out again one function above it — twelve
+  shipped cards were offering illegal targets in the browser
+* `Game.effect_suspended` was a boolean where several seats can owe a decision,
+  so Bad Deal applied its life loss while an opponent still held their hand
+* a duration reached by a **boolean** in three separate modules
+* "is the game waiting?" answerable from three different records
+* and, at promotion, three of the four remaining instances were **inside the
+  guards written to catch it**
+
+### Numbers
+LEG 121/310 at ingest (39.0%) → **310/310**. Shipped pool 734 → **1,044**
+cards, 1044/1044 supported. Suite 7,276 → **8,617**. Hooked cards 11.0% →
+**7.1%**; hook entries 88 → **69**, and every one of the nineteen retired died
+because the code underneath it grew up — `test_card_lines.py` failed on the
+corpse — rather than being deleted by hand. LEG hollow lines 17 → **0**;
+pool-wide `--hollow-lines` is 3, all non-LEG triggered abilities carried by
+text-keyed registries with behavioural tests.
+
+### Two cards worth recording
+**Falling Star** was declared permanently unimplementable in round 25 (CR
+104.1: flip the physical card onto a table from a height of at least one foot).
+It ships, by substitution — one to three creatures chosen at random. The
+decision that made it honest was noticing Falling Star is the *second* card of
+that shape: Chaos Orb has simulated its own flip with an inline `random.sample`
+since LEA, so the choice was never "invent a house rule", it was "match the one
+that exists or grow a second that drifts from it". `engine/dexterity.py` is
+that one place, named for what it is.
+
+**Blazing Effigy** was declined three times on a sound argument — its three
+phrases occur exactly once each across 1,044 cards, so the ledger served one
+card. It shipped in round 35 because the *arithmetic around it* changed: at
+303/310 every unsupported card gated the promotion, and Backdraft wanted the
+same record keyed differently. A refusal can expire without anything failing.

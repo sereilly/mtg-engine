@@ -45,6 +45,18 @@ refused it; that refusal was an agent *sandbox* reading the worktree's
 `.git`-file redirect into the main repo as a write outside itself — a
 property of the harness's managed isolation, not of git. Create worktrees
 with plain `git worktree add <dir> -b <branch>` and point agents at them.
+
+**Two merge hazards where taking either side passes the suite.** Resolving a
+conflict by picking a side is safe only when one side is the whole truth, and
+Legends produced two rounds where it was not. Two branches **deleted a
+different entry at the same spot** in a registry, so git presented each side as
+"keeping" the other's deletion — taking either resurrects a dead entry, green.
+And two branches **rewrote the same function**, each carrying a fix the other
+lacked (one made a loop resumable and corrected an arity bug, the other taught
+it to iterate a recorded set) — taking either silently drops the other's fix.
+Read both sides for what each *adds*, and union unless they genuinely
+contradict. Same reason the duplicate-helper scan exists: a clean textual merge
+is not a clean merge.
 Where worktrees are unavailable, fan out **design** instead:
 each agent verifies its group against the live compiler and returns an
 exact spec — file, function, current code, replacement code, tests — and
@@ -225,6 +237,45 @@ measured set so per-card tests can land as the cards do. **Exit:**
    that it accepted "creatures with three heads" as a keyword filter — which,
    in a whitelist, is a creature nothing can legally block. The positive cases
    all passed.
+
+   **A refusal site is a work-list entry, not a diagnosis — record which
+   *layer* each failure is in.** `--refusals` names where the parser stopped,
+   which is often the generic error for an unfinished line and names a
+   production that already works. Legends lost three rounds to this: a scoping
+   note written from a refusal site was carried between rounds and was wrong
+   four times running, always the same way — the failure attributed to the
+   nearest interesting-looking clause rather than the one that failed. Probing
+   each sentence individually and writing down *parse / lowering / no handler /
+   gate* turned three "needs a subsystem" estimates into work already done, and
+   the reverse once (a gap reported as one piece was two, in two layers).
+   Treat an inherited estimate as a lead, and ask the next reader to correct
+   it rather than to trust it.
+
+   **A refusal can expire without anything failing.** A gate that declines for
+   a reason that later stops being true keeps declining, silently and in the
+   direction of doing less, and no test goes red. Legends found two: a
+   "whole effect is optional" refusal whose stated reason (the prompt rode a
+   queue only a triggered ability drained) stopped holding two rounds later,
+   and a cost/benefit refusal that was correct at forty cards left and wrong at
+   seven. When a round builds machinery near an old decline, re-probe the
+   decline.
+
+   **A decline that names the exact missing piece is a mechanism, not an
+   absence.** Infinite Authority was declined by seven rounds and landed
+   without a round of its own: each decline listed its gaps, and other cards
+   that needed those pieces built them until the card fell out. The
+   distinction that makes this work is between "too big for this round" and
+   "here are the four things, individually named" — only the second
+   compounds.
+
+   **A guard that iterates a hand-maintained list needs an assertion that the
+   list is complete.** Otherwise a new entry escapes the guard by being
+   forgotten — silently, with the suite green. Three were found in one day of
+   Legends work (the grammar layer order, the family lists, and the same
+   family guard catching a family added an hour later), and at promotion three
+   more turned out to be second copies *inside* guards written to catch second
+   copies.
+
 2. Every card lands with a focused test in `tests/sets/test_<set>_cards.py`
    (conventions and the split-by-type rule: `tests/sets/README.md`). A new
    set needs zero `tests/conftest.py` changes; the fixture factory covers any
@@ -232,7 +283,10 @@ measured set so per-card tests can land as the cards do. **Exit:**
 3. Between rounds: the supported count from `support_report.py --set <CODE>`
    must have risen; regenerate the trackers; run any `--accept` only after
    reading the diff it blesses. **And the exit is two numbers, not one**:
-   `--hollow-lines` must also reach zero. A card is supported when *any* of its
+   `--hollow-lines` must also reach zero — **check it every round, not at the
+   end**. Legends reached 310/310 supported with fourteen abilities still
+   instruction-less, and only Phase 4 caught them; each was a card that
+   compiled, reported supported, and did nothing when activated. A card is supported when *any* of its
    lines is, so a set can read 85/85 with three cards doing less than they
    print — Antiquities did, for thirty rounds. Take the split a grammar size
    guard asks for when it fires, too: the family boundary is easiest to see
@@ -254,6 +308,25 @@ no-hollow-support, behaviour classes — and `parse_coverage.py` sees the set
 for the first time (measured sets are invisible to it), so parse debt
 surfaces here by construction. Read every new finding before accepting
 anything.
+
+**Expect two kinds of failure and do not guess which is which — run the card.**
+Legends' rehearsal turned eleven guards red and the split was the opposite of
+intuition in both directions. Fourteen abilities the hollow-lines report named
+were **genuinely inert** — compiling, reporting supported, doing nothing when
+activated — while twelve static lines that looked broken were **all working**,
+and it was the guard that had gone stale (it kept a hand-written copy of the
+compiler's derivation-table list: 13 tables where the compiler has 18). A third
+category came from `parse_coverage.py` seeing the set for the first time: four
+clauses nothing implemented at all, one an uncapped activation limit on a card
+reporting supported. The report's own footer states the test — give the
+behaviour a game and watch it happen — and it is the only way to tell the three
+apart.
+
+**Read the guards themselves as suspects.** Four second-copies-of-one-fact came
+out of this rehearsal and three were *inside* guards written to catch exactly
+that, each inventing a disagreement it then reported. A guard that re-spells
+the thing it checks is the most expensive kind, because its failures look like
+real findings.
 
 The checklist, each line naming its guard:
 
@@ -498,3 +571,25 @@ of those shares only an opening phrase. Legends was designed before templating
 existed, so the generalise-first rule runs out of general work earlier than in a
 modern set — which is a fact about this set to plan around, not a reason to
 abandon the rule.
+
+**LEG — 2026-08-26 (ingest through promotion; 121 → 310, shipped at round 36).**
+The longest set so far and the one that most tested the phase text. Phase 3
+gained four paragraphs, all from things that cost rounds: a refusal site is a
+work-list entry and the *layer* of each failure is what to record (a scoping
+note carried between rounds was wrong four times running, always by blaming the
+nearest interesting clause); a refusal can expire without anything failing, so
+re-probe an old decline when machinery lands near it; a decline that names its
+exact gaps compounds where "too big" does not (Infinite Authority landed after
+seven of them without a round of its own); and a guard iterating a
+hand-maintained list needs an assertion that the list is complete — three were
+found in one day. Phase 3's exit gained "check `--hollow-lines` every round":
+the set reached 310/310 supported with fourteen abilities still
+instruction-less. Phase 4 gained the rehearsal's real shape — fourteen hollow
+abilities genuinely inert, twelve failing static lines all working with a stale
+guard behind them, and four clauses nothing implemented at all — plus the
+instruction to read guards as suspects, since three of the four second-copies
+found at promotion were inside guards written to catch second copies. The
+parallel section gained two merge hazards where taking either side leaves the
+suite green. Known gaps: still empty. Phase 5 stands open — Legends' 310 cards
+have no in-game result, joining M21 and Antiquities, and the three
+promoted-before-verification sets are now the whole backlog.
